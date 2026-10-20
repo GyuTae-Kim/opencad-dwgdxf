@@ -322,7 +322,7 @@ class DesignCenter {
       let el: HTMLElement;
       if (kind === 'block') {
         const cv = h('canvas', {}) as HTMLCanvasElement;
-        el = h('div', { class: `dc-item${this.sel.has(name) ? ' sel' : ''}`, role: 'option', title: name }, cv, h('span', {}, name));
+        el = h('div', { class: `dc-item${this.sel.has(name) ? ' sel' : ''}`, role: 'option', title: name }, cv, h('span', { translate: 'no' }, name));
         pendingThumbs.push([cv, name]);
       } else {
         el = h('div', { class: `dc-row${this.sel.has(name) ? ' sel' : ''}`, role: 'option', title: name }, ...this.rowParts(s.doc, kind, name));
@@ -356,9 +356,9 @@ class DesignCenter {
     const d = this.describe(doc, kind, name, true);
     if (kind === 'layer') {
       const l = doc.layers.get(tableKey(name)) as Layer;
-      return [h('span', { class: 'sw', style: `background:${layerSwatch(l)}` }), h('span', {}, name), h('span', { class: 'd' }, d)];
+      return [h('span', { class: 'sw', style: `background:${layerSwatch(l)}` }), h('span', { translate: 'no' }, name), h('span', { class: 'd' }, d)];
     }
-    return [h('span', {}, name), h('span', { class: 'd' }, d)];
+    return [h('span', { translate: 'no' }, name), h('span', { class: 'd' }, d)];
   }
 
   /** 항목 설명 */

@@ -197,6 +197,7 @@ export class CommandLine {
       if (i === 0) d.className = 'sel';
       d.innerHTML = `<span></span><small></small>`;
       d.firstElementChild!.textContent = it.name;
+      d.lastElementChild!.setAttribute('data-i18n-ui-copy','');
       d.lastElementChild!.textContent = it.title;
       d.addEventListener('mousedown', (ev) => {
         ev.preventDefault();

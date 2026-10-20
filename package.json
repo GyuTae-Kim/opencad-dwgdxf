@@ -7,14 +7,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && npm run check:seo",
+    "build": "tsc --noEmit && vite build && npm run check:seo && npm run check:i18n",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "check:seo": "node tools/check-seo.mjs",
     "update:content-dates": "vite build && node tools/update-content-dates.mjs",
-    "test:seo": "node --test tools/seo.test.mjs"
+    "test:seo": "node --test tools/seo.test.mjs",
+    "check:i18n": "node tools/check-i18n.mjs",
+    "test:i18n": "vitest run tests/i18n.test.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

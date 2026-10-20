@@ -1175,7 +1175,7 @@ export class Shell implements UiHooks {
   /** 접힌 패널: 누르면 패널 내용을 아래로 펼친다 */
   private foldedPanel(p: Panel): HTMLDivElement {
     const ic = p.large?.[0]?.icon ?? p.cols?.[0]?.[0]?.icon ?? 'menu';
-    const btn = h('button', { class: 'rbtn-lg folded', title: `${p.title} 패널 펼치기`, 'aria-haspopup': 'true' }, iconSpan(ic), h('span', {}, `${p.title} ▾`));
+    const btn = h('button', { class: 'rbtn-lg folded', 'data-i18n-ui-copy': '', title: `${p.title} 패널 펼치기`, 'aria-haspopup': 'true' }, iconSpan(ic), h('span', {}, `${p.title} ▾`));
     btn.addEventListener('click', () => {
       document.querySelector('.ribbon-pop')?.remove();
       const pop = h('div', { class: 'ribbon-pop', role: 'dialog', 'aria-label': p.title }, this.panelBody(p), h('div', { class: 'rpanel-title' }, p.title));
@@ -1383,7 +1383,7 @@ export class Shell implements UiHooks {
         app.close(d);
       });
       const dirty = d.session?.dirty;
-      const t = h('div', { class: `filetab ${app.active === d ? 'active' : ''}`, role: 'tab', title: `${d.saveName}${d.size ? ` (${formatBytes(d.size)})` : ''}${dirty ? ' · 저장하지 않은 변경 있음' : ''}` }, h('span', {}, `${d.saveName}${dirty ? ' *' : ''}`), x);
+      const t = h('div', { class: `filetab ${app.active === d ? 'active' : ''}`, role: 'tab', title: `${d.saveName}${d.size ? ` (${formatBytes(d.size)})` : ''}${dirty ? ' · 저장하지 않은 변경 있음' : ''}` }, h('span', { translate: 'no' }, `${d.saveName}${dirty ? ' *' : ''}`), x);
       t.addEventListener('click', () => app.activate(d));
       t.addEventListener('auxclick', (ev) => {
         if ((ev as MouseEvent).button === 1) app.close(d);
@@ -1414,7 +1414,7 @@ export class Shell implements UiHooks {
     for (const l of st.layouts) {
       const key = tableKey(l.blockName);
       const label = key === MODEL_SPACE ? '모형' : l.name;
-      const b = h('button', { class: `layouttab ${st.displaySpace === key ? 'active' : ''}` }, label);
+      const b = h('button', { class: `layouttab ${st.displaySpace === key ? 'active' : ''}`, ...(key !== MODEL_SPACE ? { translate: 'no' } : {}) }, label);
       b.addEventListener('click', () => void app.setSpace(l.blockName));
       b.addEventListener('contextmenu', (ev) => {
         ev.preventDefault();

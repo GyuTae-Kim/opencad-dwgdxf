@@ -1634,6 +1634,9 @@ button.aci.on {
 /* 접힌 리본 패널 */
 .rbtn-lg.folded span:last-child {
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* 태블릿 폭: 접힌 패널을 조금 좁혀 첫 패널(그리기 등)이 펼친 채로 남게 한다(데스크톱은 그대로) */
 #app.layout-tablet > .ribbon > .rpanel:has(> .rpanel-body > .folded) {
@@ -1789,3 +1792,14 @@ button.aci.on {
 .boot-recent-list { display: grid; gap: 8px; min-height: 3.4em; color: var(--text-dim); }
 .boot-recent button { text-align: left; overflow-wrap: anywhere; }
 .boot-start button:disabled { opacity: .65; cursor: wait; }
+
+/* Language changes update UI text without reopening the document. */
+.language-selector { flex: 0 0 auto; max-width: 100px; min-height: 30px; padding: 3px 5px; border: 1px solid currentColor; border-radius: 5px; color: inherit; background: var(--bg, Canvas); font: 12px system-ui, sans-serif; }
+.language-selector-floating { position: fixed; top: 8px; right: 12px; z-index: 100; background: Canvas; color: CanvasText; }
+.language-selector:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+html:lang(ja) { --font: -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; font-family: var(--font); }
+html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-family: var(--font); }
+
+@media (max-width: 767px) {
+  .titlebar { flex-wrap: wrap; height: auto; min-height: 44px; padding-block: 4px; row-gap: 4px; }
+}

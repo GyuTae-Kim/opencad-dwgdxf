@@ -1,3 +1,4 @@
+import { installLocalization } from './app/i18n';
 import './styles.css';
 import { initAnalytics } from './app/analytics';
 import { GA4_MEASUREMENT_ID } from './app/analytics-config';
@@ -8,3 +9,5 @@ if (root) {
   initAnalytics(GA4_MEASUREMENT_ID, 'dwgdxf');
   mountWelcome(root, async () => (await import('./editor')).startEditor(root));
 }
+
+if (root) void installLocalization(root);

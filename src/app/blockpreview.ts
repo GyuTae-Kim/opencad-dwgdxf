@@ -1,3 +1,4 @@
+import { uiText } from './i18n-text';
 /**
  * 블록 미리보기: 기존 장면 생성기(SceneBuilder)로 블록 정의를 선분·삼각형으로 펼쳐 2D 캔버스에 그린다.
  * 다른 도면(디자인센터에서 고른 파일)의 블록도 그 도면을 기준으로 그린다(중첩 블록·문자 포함, 색은 한 가지).
@@ -85,7 +86,7 @@ export function drawGeometry(canvas: HTMLCanvasElement, g: OverlayGeom | null, c
     c.font = '11px sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText('미리보기 없음', w / 2, hgt / 2);
+    c.fillText(uiText('미리보기 없음'), w / 2, hgt / 2);
     c.globalAlpha = 1;
     return;
   }
