@@ -1751,7 +1751,7 @@ export class Shell implements UiHooks {
       iconSpan('folder', 'big'),
       h('strong', { class: 'fine-only' }, 'DXF·DWG 파일을 여기에 끌어다 놓으십시오'),
       h('strong', { class: 'coarse-only' }, 'DXF·DWG 도면을 골라 여십시오'),
-      h('span', {}, '또는'),
+      h('span', { class: 'fine-only' }, '또는'),
       h('button', { class: 'btn primary', onclick: (ev: Event) => (ev.stopPropagation(), this.pickFiles()) }, iconSpan('open'), '파일 열기'),
     );
     drop.addEventListener('click', () => this.pickFiles());
@@ -1778,7 +1778,8 @@ export class Shell implements UiHooks {
           h(
             'div',
             { class: 'start-side' },
-            h('div', { class: 'card' }, h('h3', {}, '새로 그리기'), h('div', { style: 'margin-bottom:8px;color:var(--text-dim)' }, '빈 도면을 만들어 바로 그리기를 시작합니다(Ctrl+N).'), newDrawing),
+            // 휴대폰 보기 모드에서는 새 도면(그리기)을 숨겨 예제 도면이 먼저 보이게 한다
+            h('div', { class: 'card start-new-card' }, h('h3', {}, '새로 그리기'), h('div', { style: 'margin-bottom:8px;color:var(--text-dim)' }, '빈 도면을 만들어 바로 그리기를 시작합니다(Ctrl+N).'), newDrawing),
             h('div', { class: 'card' }, h('h3', {}, '최근 문서'), this.recentList),
             h('div', { class: 'card' }, h('h3', {}, '처음이라면'), h('div', { style: 'margin-bottom:8px;color:var(--text-dim)' }, '예제 도면으로 기능을 둘러볼 수 있습니다.'), sample),
             h(

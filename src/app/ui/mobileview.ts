@@ -133,7 +133,8 @@ export class MobileView {
       return b;
     });
     const layers = btn('layers', '도면층', '도면층 켜고 끄기', () => host.openPalette('layers'));
-    const dims = btn('dimlist', '치수 목록', '치수 목록(표시 값과 실제 길이 비교)', () => host.openPalette('dims'));
+    // 이름은 짧게(영어 등에서도 한 줄에 들어가게), 자세한 뜻은 제목 풍선
+    const dims = btn('dimlist', '치수', '치수 목록(표시 값과 실제 길이 비교)', () => host.openPalette('dims'));
     this.bar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': '보기 도구' }, fit, ...measures, layers, dims);
     this.card = h('div', { class: 'mview-card', role: 'status', 'aria-live': 'polite', hidden: true });
     app.cmd.watchers.add({
@@ -201,6 +202,8 @@ export class MobileView {
   private render(): void {
     const app = this.app;
     const card = this.card;
+    // 도면이 없으면 보기 단추는 누를 수 없다(누르면 "열린 도면이 없습니다"만 나온다)
+    for (const b of this.bar.querySelectorAll('button')) b.disabled = !app.active;
     if (!app.viewOnly || !app.active) {
       card.hidden = true;
       return;
