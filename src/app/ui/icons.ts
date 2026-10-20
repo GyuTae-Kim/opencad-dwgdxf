@@ -62,6 +62,7 @@ export const ICONS: Record<string, string> = {
   chevron: S('<path d="M9 6l6 6-6 6"/>'),
   plus: S('<path d="M12 5v14M5 12h14"/>'),
   eye: S('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+  pencil: S('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
   eyeOff: S('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><path d="M4 20L20 4"/>'),
   sun: S('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6L19 19M5 19l1.4-1.4M17.6 6.4L19 5"/>'),
   snow: S('<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7"/>'),

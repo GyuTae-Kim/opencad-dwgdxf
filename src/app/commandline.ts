@@ -20,6 +20,11 @@ export interface CommandLineHost {
   repeat(): void;
 }
 
+export interface CommandLineWatcher {
+  prompt?(text: string): void;
+  print?(text: string, cls?: 'err' | 'res'): void;
+}
+
 export class CommandLine {
   readonly el: HTMLDivElement;
   private readonly hist: HTMLDivElement;
@@ -110,6 +115,18 @@ export class CommandLine {
     this.finish(false);
   }
 
+  /** 빈 입력의 Enter(프롬프트의 <기본값> 고르기·마치기). 명령이 없으면 아무것도 하지 않는다(직전 명령 반복 없이) */
+  pressEnter(): void {
+    this.clearInput();
+    if (this.promptEl.hidden) return;
+    this.submit('');
+  }
+
+  /** 프롬프트 키워드 고르기(대괄호 안 키워드를 누른 것과 같다) */
+  chooseKeyword(key: string): void {
+    this.host.keyword(key);
+  }
+
   /** Esc와 같다: 입력을 비우고 취소(Ctrl+\\) */
   escape(): void {
     this.clearInput();
@@ -123,9 +140,19 @@ export class CommandLine {
 
   /** 출력을 지켜보는 고리(스크립트 실행기가 오류 출력을 알아챈다) */
   onPrint: ((text: string, cls?: 'err' | 'res') => void) | null = null;
+  /** 프롬프트·출력을 함께 지켜보는 쪽(휴대폰 보기 모드의 측정 띠). onPrint와 달리 여럿이 붙는다 */
+  readonly watchers = new Set<CommandLineWatcher>();
+
+  /** 지금 프롬프트(없으면 빈 글) */
+  get prompt(): string {
+    return this.promptText;
+  }
+
+  private promptText = '';
 
   print(text: string, cls?: 'err' | 'res'): void {
     this.onPrint?.(text, cls);
+    for (const w of this.watchers) w.print?.(text, cls);
     const div = document.createElement('div');
     if (cls) div.className = cls;
     div.textContent = text;
@@ -136,6 +163,8 @@ export class CommandLine {
 
   /** "점 지정 또는 [윈도우(W)/이전(P)] <범위>:" 형식. 대괄호 안 키워드는 눌러서 고를 수 있다 */
   setPrompt(text: string): void {
+    this.promptText = text;
+    for (const w of this.watchers) w.prompt?.(text);
     this.promptEl.textContent = '';
     if (!text) {
       this.promptEl.hidden = true;

@@ -13,6 +13,7 @@ import type { Camera, DocState, Tile } from './docstate';
 import type { LoadPreview } from './loadpreview';
 import { type OverlayScene, type PaperInfo, type ViewportXf, layoutViewports, paperInfo, viewportXf } from './scene';
 import type { DisplayList } from '../render/displaylist';
+import { AIM_HOLD_MS, aimPoint } from './aim';
 import { DEFAULT_SETTINGS, RightClickTimer, type Settings, crosshairArm, gripHalf, showSnapMarker, snapMarkerRadius, timedRightClick, wheelZoom } from './settings';
 
 export interface Pt {
@@ -62,6 +63,8 @@ export interface OverlayState {
   marks: { p: Pt; text?: string }[];
   /** 커서 옆 동적 입력 문구 */
   tip: string | null;
+  /** 정밀 조준 중(터치 길게 누르기): 커서에 고리를 두르고 툴팁은 커서 위에(아래에는 손가락) */
+  aim: boolean;
 }
 
 export interface GridInfo {
@@ -120,6 +123,17 @@ export class CadView {
   private lastMiddle = 0;
   private touches = new Map<number, Pt>();
   private pinch: { d: number; mid: Pt; cam: Camera; world: Pt } | null = null;
+  /** 정밀 조준 중인 손가락과 길게 누르기 타이머. 떼어 누르기를 넘기는 동안은 aimRelease */
+  private aim: { id: number } | null = null;
+  private aimTimer = 0;
+  private aimRelease = false;
+  /** 길게 눌러 정밀 조준을 쓸지(앱: 휴대폰 보기 모드이거나 명령이 입력을 기다릴 때). 없으면 쓰지 않는다 */
+  aimEnabled: (() => boolean) | null = null;
+
+  /** 정밀 조준 중인지(조준을 떼어 넘기는 누르기 포함) — 앱은 이때 터치여도 커서·스냅 미리보기를 보인다 */
+  get aiming(): boolean {
+    return !!this.aim || this.aimRelease;
+  }
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -1128,6 +1142,17 @@ export class CadView {
       g.lineTo(x, y + L);
       g.stroke();
       g.strokeRect(x - o.pickbox, y - o.pickbox, o.pickbox * 2, o.pickbox * 2);
+      // 정밀 조준: 손가락 위 십자선을 고리로 두른다(흰 테두리로 어느 바탕에서도 보이게)
+      if (o.aim) {
+        g.beginPath();
+        g.arc(x, y, 18, 0, Math.PI * 2);
+        g.lineWidth = 4;
+        g.strokeStyle = dark ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.8)';
+        g.stroke();
+        g.lineWidth = 1.5;
+        g.strokeStyle = '#ffb347';
+        g.stroke();
+      }
       g.restore();
     }
     if (o.dynFields?.length && o.cursor) this.drawDynFields(g, o.cursor, o.tip ?? '', o.dynFields);
@@ -1139,7 +1164,8 @@ export class CadView {
       const tw = Math.max(tip ? g.measureText(tip).width : 0, typed ? g.measureText(typed).width + 8 : 0);
       const hgt = (tip ? 20 : 0) + (typed ? 22 : 0);
       const x = Math.min(o.cursor.x + 18, this.w - tw - 14);
-      const y = Math.min(o.cursor.y + 22, this.h - hgt - 4);
+      // 정밀 조준이면 십자선 위(아래에는 손가락이 있다)
+      const y = o.aim ? Math.max(4, o.cursor.y - 26 - hgt) : Math.min(o.cursor.y + 22, this.h - hgt - 4);
       if (tip) {
         g.fillStyle = 'rgba(37,44,54,0.95)';
         g.strokeStyle = '#5b6a7e';
@@ -1175,7 +1201,8 @@ export class CadView {
     const boxW = Math.max(total, tw);
     const hgt = (tip ? 22 : 0) + 20;
     const x = Math.min(c.x + 18, this.w - boxW - 4);
-    let y = Math.min(c.y + 22, this.h - hgt - 4);
+    // 정밀 조준이면 십자선 위(아래에는 손가락이 있다)
+    let y = this.overlay.aim ? Math.max(4, c.y - 26 - hgt) : Math.min(c.y + 22, this.h - hgt - 4);
     if (tip) {
       g.fillStyle = 'rgba(37,44,54,0.95)';
       g.strokeStyle = '#5b6a7e';
@@ -1236,6 +1263,8 @@ export class CadView {
     const el = this.el;
     el.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
+      // 길게 눌러 조준하는 동안(안드로이드는 길게 누르면 메뉴를 보낸다) 메뉴를 띄우지 않는다
+      if (this.aim) return;
       const p = this.local(ev);
       const w = this.screenToWorld(p.x, p.y);
       const dur = timedRightClick(this.prefs);
@@ -1290,10 +1319,12 @@ export class CadView {
         this.touches.set(ev.pointerId, p);
         el.setPointerCapture(ev.pointerId);
         if (this.touches.size === 2) {
+          this.cancelAim();
           this.leftDown = null;
           this.startPinch();
         } else if (this.touches.size === 1) {
           this.leftDown = { x: p.x, y: p.y, dragging: false };
+          this.armAim(ev);
         }
         return;
       }
@@ -1334,6 +1365,11 @@ export class CadView {
       const p = this.local(ev);
       if (ev.pointerType === 'touch') {
         if (this.touches.has(ev.pointerId)) this.touches.set(ev.pointerId, p);
+        // 정밀 조준: 화면을 옮기지 않고 손가락 위 십자선을 옮긴다
+        if (this.aim && this.aim.id === ev.pointerId) {
+          this.aimMove(p, ev);
+          return;
+        }
         if (this.pinch && this.touches.size >= 2) {
           this.movePinch();
           return;
@@ -1345,6 +1381,7 @@ export class CadView {
             // 한 손가락 끌기 = 화면 이동
             if (!this.leftDown.dragging) this.panning = { x: this.leftDown.x, y: this.leftDown.y, cam: { ...this.camera() } };
             this.leftDown.dragging = true;
+            clearTimeout(this.aimTimer);
           }
         }
       }
@@ -1367,9 +1404,15 @@ export class CadView {
       }
       this.events?.move(world, p, ev);
     });
-    const up = (ev: PointerEvent) => {
+    // 취소된 포인터(브라우저 몸짓 등)는 누르기로 치지 않는다
+    const up = (ev: PointerEvent, cancel: boolean) => {
       const p = this.local(ev);
       if (ev.pointerType === 'touch') {
+        clearTimeout(this.aimTimer);
+        if (this.aim && this.aim.id === ev.pointerId) {
+          this.finishAim(p, ev, cancel);
+          return;
+        }
         this.touches.delete(ev.pointerId);
         if (this.touches.size < 2) this.pinch = null;
         if (this.panning && this.touches.size === 0) {
@@ -1380,7 +1423,7 @@ export class CadView {
         }
         if (this.leftDown && !this.leftDown.dragging && this.touches.size === 0) {
           this.leftDown = null;
-          this.events?.click(this.screenToWorld(p.x, p.y), p, ev);
+          if (!cancel) this.events?.click(this.screenToWorld(p.x, p.y), p, ev);
         }
         if (this.touches.size === 0) this.leftDown = null;
         return;
@@ -1395,11 +1438,11 @@ export class CadView {
         const ld = this.leftDown;
         this.leftDown = null;
         if (ld.dragging) this.events?.drag(ld, p, true, ev);
-        else this.events?.click(this.screenToWorld(p.x, p.y), p, ev);
+        else if (!cancel) this.events?.click(this.screenToWorld(p.x, p.y), p, ev);
       }
     };
-    el.addEventListener('pointerup', up);
-    el.addEventListener('pointercancel', up);
+    el.addEventListener('pointerup', (ev) => up(ev, false));
+    el.addEventListener('pointercancel', (ev) => up(ev, true));
     el.addEventListener('dblclick', (ev) => {
       const p = this.local(ev);
       const tl = this.tiled();
@@ -1423,6 +1466,64 @@ export class CadView {
   }
 
   private spaceHeld = false;
+
+  /** 한 손가락을 눌렀을 때: 움직이지 않고 AIM_HOLD_MS 동안 누르고 있으면 정밀 조준 */
+  private armAim(down: PointerEvent): void {
+    clearTimeout(this.aimTimer);
+    if (!this.aimEnabled?.()) return;
+    const id = down.pointerId;
+    this.aimTimer = window.setTimeout(() => {
+      const ld = this.leftDown;
+      const p = this.touches.get(id);
+      if (!ld || ld.dragging || this.touches.size !== 1 || !p || this.pinch) return;
+      this.aim = { id };
+      this.overlay.aim = true;
+      // 짧은 떨림으로 조준이 시작됐음을 알린다(지원하는 기기만)
+      try {
+        navigator.vibrate?.(12);
+      } catch {
+        /* 진동을 막은 브라우저 */
+      }
+      this.aimMove(p, down);
+    }, AIM_HOLD_MS);
+  }
+
+  /** 십자선을 손가락 위로 옮기고 앱에 커서 이동으로 알린다(스냅·툴팁 미리보기) */
+  private aimMove(p: Pt, ev: PointerEvent): void {
+    const a = aimPoint(p);
+    this.events?.move(this.screenToWorld(a.x, a.y), a, ev);
+    this.requestOverlay();
+  }
+
+  /** 조준 중인 손가락을 떼면 십자선 자리를 누른 것으로 친다(취소면 그냥 끝낸다) */
+  private finishAim(p: Pt, ev: PointerEvent, cancel: boolean): void {
+    const a = aimPoint(p);
+    this.aim = null;
+    this.touches.delete(ev.pointerId);
+    this.leftDown = null;
+    this.pinch = null;
+    if (!cancel) {
+      this.aimRelease = true;
+      try {
+        this.events?.click(this.screenToWorld(a.x, a.y), a, ev);
+      } finally {
+        this.aimRelease = false;
+      }
+    }
+    this.overlay.aim = false;
+    this.overlay.cursor = null;
+    this.requestOverlay();
+  }
+
+  /** 둘째 손가락이 닿으면 조준을 그만둔다(누르기로 치지 않고, 두 손가락 확대·이동으로) */
+  private cancelAim(): void {
+    clearTimeout(this.aimTimer);
+    if (!this.aim) return;
+    this.aim = null;
+    this.overlay.aim = false;
+    this.overlay.cursor = null;
+    this.requestOverlay();
+  }
 
   private startPinch(): void {
     const [a, b] = [...this.touches.values()] as [Pt, Pt];
@@ -1483,6 +1584,7 @@ export function emptyOverlay(): OverlayState {
     preview: [],
     marks: [],
     tip: null,
+    aim: false,
   };
 }
 

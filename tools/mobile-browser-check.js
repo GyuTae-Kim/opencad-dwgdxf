@@ -9,7 +9,11 @@ async (page) => {
   await fresh();
   assert(await page.getByRole('main').count() === 1, 'CAD workspace has main landmark');
   assert(await page.evaluate(() => !!window.opencad && performance.getEntriesByType('resource').some(r=>/editor-.*\.js/.test(r.name))), 'CAD loads automatically on a normal visit');
-  assert(await page.locator('.filetabs').isVisible() && await page.locator('.ribbon-tabs').isVisible(), 'CAD file tabs and ribbon are visible before opening a file');
+  assert(await page.locator('.filetabs').isVisible() && await page.locator('.viewbar').isVisible() && !(await page.locator('.ribbon-tabs').isVisible()), 'Phone starts in view mode: file tabs and view toolbar, no editing ribbon');
+  await page.getByRole('button',{name:'편집 화면으로',exact:true}).click();
+  assert(await page.locator('.ribbon-tabs').isVisible() && !(await page.locator('.viewbar').isVisible()), 'Edit screen shows the ribbon');
+  await page.getByRole('button',{name:'휴대폰 보기 모드로',exact:true}).click();
+  assert(await page.locator('.viewbar').isVisible(), 'Back to phone view mode');
   await page.locator('input[type=file]').setInputFiles([]);
   assert(await page.evaluate(() => window.opencad.docs.length===0 && !window.opencad.active), 'Cancelling picker leaves CAD ready without creating a document');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No mobile horizontal overflow');
@@ -17,6 +21,10 @@ async (page) => {
   await page.getByRole('button',{name:'예제 도면 열기',exact:true}).click();
   await loaded();
   assert(await page.evaluate(() => window.opencad.docs.length === 1 && ['LINE','SAVEAS','DXFOUT','MEASUREGEOM','NEW'].every(name=>window.opencad.findCommand(name))), 'Sample and complete command registry');
+  await page.getByRole('button',{name:'두 점 사이 거리 재기',exact:true}).click();
+  await page.locator('.mview-card .mv-prompt').filter({hasText:'첫 번째 점 지정:'}).waitFor();
+  await page.locator('.mview-card').getByRole('button',{name:'취소',exact:true}).click();
+  assert(await page.evaluate(() => !window.opencad.busyCommand), 'Measure bar cancels the command without a keyboard');
   await page.screenshot({path:'.runtime/performance/editor-mobile.png'});
   await fresh();
   await page.getByRole('button',{name:'새 도면 (mm)',exact:true}).click(); await loaded();
