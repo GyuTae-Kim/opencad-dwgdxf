@@ -890,7 +890,7 @@ export class Shell implements UiHooks {
   private app!: App;
   palette!: Palette;
   readonly recent = new RecentStore();
-  private readonly workspace: HTMLDivElement;
+  private readonly workspace: HTMLElement;
   private readonly guide: HTMLElement | null;
   private readonly root: HTMLElement;
   /** 리본을 작업 영역 위에 겹쳐 펼치는 배치(좁거나 낮은 화면) */
@@ -907,7 +907,7 @@ export class Shell implements UiHooks {
     this.ribbonTabs = h('div', { class: 'ribbon-tabs', role: 'tablist' });
     this.ribbon = h('div', { class: 'ribbon' });
     this.fileTabs = h('div', { class: 'filetabs' });
-    this.workspace = h('div', { class: 'workspace' });
+    this.workspace = h('main', { class: 'workspace' });
     this.drawingHost = h('div', { style: 'position:relative;display:flex;flex:1;min-width:0' });
     this.start = h('div', { class: 'start' });
     this.busyText = h('div');
