@@ -94,6 +94,7 @@ export function startEditor(root: HTMLElement): EditorActions {
     );
     throw e;
   }
+  root.addEventListener('languagechange', () => app.view.requestRender());
   app.ui = shell;
   shell.attach(app);
   registerCommands(app);

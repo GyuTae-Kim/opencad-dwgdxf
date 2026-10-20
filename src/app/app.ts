@@ -279,7 +279,6 @@ export class App {
     this.fontLib = new OutlineLibrary(fontBase);
     this.text = new TextEngine(this.fontLib);
     this.view = new CadView(drawingParent);
-    document.getElementById('app')?.addEventListener('languagechange', () => this.view.requestRender());
     this.edits = new EditManager(this);
     this.cmd = new CommandLine(drawingParent, {
       submit: (t) => this.onInput(t, true),
