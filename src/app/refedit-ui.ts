@@ -1,3 +1,4 @@
+import { uiText } from './i18n-text';
 /**
  * 참조 편집 화면 요소: "참조 편집" 대화상자(참조 식별 — 참조 이름 트리·미리보기·경로·중첩 객체 선택 방법, 설정 — 세 항목)와
  * 편집 중에 도면 영역 위에 뜨는 "참조 편집" 띠(작업 세트에 추가·제거, 변경 사항 저장·취소).
@@ -87,7 +88,7 @@ function drawPreview(cv: HTMLCanvasElement, g: OverlayGeom | null): void {
     c.fillStyle = '#7d8796';
     c.font = '12px sans-serif';
     c.textAlign = 'center';
-    c.fillText('미리보기 없음', w / 2, hh / 2);
+    c.fillText(uiText('미리보기 없음'), w / 2, hh / 2);
     return;
   }
   let minX = Infinity;

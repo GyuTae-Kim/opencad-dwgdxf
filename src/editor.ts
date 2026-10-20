@@ -94,6 +94,7 @@ export function startEditor(root: HTMLElement): EditorActions {
     );
     throw e;
   }
+  root.addEventListener('languagechange', () => app.view.requestRender());
   app.ui = shell;
   shell.attach(app);
   registerCommands(app);
@@ -268,7 +269,7 @@ export function startEditor(root: HTMLElement): EditorActions {
           h(
             'table',
             { class: 'grid' },
-            h('tbody', {}, ...cmds.map((c) => h('tr', {}, h('td', { style: 'font-family:var(--mono)' }, c.name), h('td', { style: 'font-family:var(--mono);color:var(--text-dim)' }, (c.aliases ?? []).join(', ')), h('td', {}, c.title)))),
+            h('tbody', {}, ...cmds.map((c) => h('tr', {}, h('td', { style: 'font-family:var(--mono)' }, c.name), h('td', { style: 'font-family:var(--mono);color:var(--text-dim)' }, (c.aliases ?? []).join(', ')), h('td', { 'data-i18n-ui-copy': '' }, c.title)))),
           ),
           h('h4', { style: 'margin:14px 0 6px' }, '점 입력'),
           h('div', { style: 'color:var(--text-dim)' }, '100,50 (절대 좌표) · @20,0 (직전 점에서 상대) · @30<45 (거리<각도) · 숫자만 입력하면 커서 방향으로 그 거리'),

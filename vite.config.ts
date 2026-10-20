@@ -1,3 +1,4 @@
+import { siteLocalization } from './tools/localization-plugin.mjs';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
@@ -7,7 +8,7 @@ import { renderMetadata, sitemapXml } from './tools/site-metadata.mjs';
 function siteMetadata(): Plugin {
   return {
     name: 'opencad-site-metadata',
-    transformIndexHtml: { order: 'pre', handler: (html) => html.replace('<!-- site-metadata -->', renderMetadata()) },
+    transformIndexHtml: { order: 'pre', handler: (html) => html.replace('<!-- site-metadata -->', '<!-- localized-metadata:start -->' + renderMetadata() + '<!-- localized-metadata:end -->') },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (!/^\/(?:opencad-dwgdxf\/)?sitemap\.xml(?:\?|$)/.test(req.url ?? '')) return next();
@@ -55,7 +56,7 @@ function pdfjsAssets(): Plugin {
 export default defineConfig({
   // GitHub Pages 프로젝트 사이트 경로(https://gyutae-kim.github.io/opencad-dwgdxf/)
   base: './',
-  plugins: [siteMetadata(), pdfjsAssets()],
+  plugins: [siteLocalization(), siteMetadata(), pdfjsAssets()],
   build: {
     target: 'es2022',
     sourcemap: true,
