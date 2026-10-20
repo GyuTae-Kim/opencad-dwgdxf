@@ -1803,3 +1803,12 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
 @media (max-width: 767px) {
   .titlebar { flex-wrap: wrap; height: auto; min-height: 44px; padding-block: 4px; row-gap: 4px; }
 }
+
+/* Show a compact loading status until the CAD shell takes over automatically. */
+.site-intro.boot-loading {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  width: 100%;
+}
+.site-intro.boot-loading > :not(.boot-status) { display: none; }

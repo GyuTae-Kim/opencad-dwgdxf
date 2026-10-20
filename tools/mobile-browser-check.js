@@ -1,30 +1,31 @@
 async (page) => {
-  const origin = 'http://127.0.0.1:4321/';
+  const origin = new URL('./', page.url()).href;
   const assert = (value, message) => { if (!value) throw new Error(message); };
   const loaded = () => page.waitForFunction(() => window.opencad?.active, undefined, {timeout:30000});
-  const fresh = async (query='') => { await page.goto(origin+query); await page.getByRole('button',{name:'예제 도면 열기',exact:true}).waitFor(); };
+  const workspaceReady = () => page.waitForFunction(() => window.opencad && !document.getElementById('app').hasAttribute('aria-busy'), undefined, {timeout:30000});
+  const fresh = async (query='') => { await page.goto(origin+query); await workspaceReady(); };
   await loaded();
   assert(await page.evaluate(() => window.opencad.docs.length===1), 'Native file picker opened exactly once');
   await fresh();
-  assert(await page.locator('main').count() === 1, 'Welcome has main landmark');
-  assert(await page.evaluate(() => !window.opencad && !performance.getEntriesByType('resource').some(r=>/editor-.*\.js/.test(r.name))), 'CAD must not download before intent');
+  assert(await page.getByRole('main').count() === 1, 'CAD workspace has main landmark');
+  assert(await page.evaluate(() => !!window.opencad && performance.getEntriesByType('resource').some(r=>/editor-.*\.js/.test(r.name))), 'CAD loads automatically on a normal visit');
+  assert(await page.locator('.filetabs').isVisible() && await page.locator('.ribbon-tabs').isVisible(), 'CAD file tabs and ribbon are visible before opening a file');
   await page.locator('input[type=file]').setInputFiles([]);
-  assert(await page.evaluate(() => !window.opencad), 'Cancelling picker must leave welcome intact');
+  assert(await page.evaluate(() => window.opencad.docs.length===0 && !window.opencad.active), 'Cancelling picker leaves CAD ready without creating a document');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No mobile horizontal overflow');
-  await page.screenshot({path:'.runtime/performance/welcome-mobile.png'});
+  await page.screenshot({path:'.runtime/performance/workspace-mobile.png'});
   await page.getByRole('button',{name:'예제 도면 열기',exact:true}).click();
   await loaded();
   assert(await page.evaluate(() => window.opencad.docs.length === 1 && ['LINE','SAVEAS','DXFOUT','MEASUREGEOM','NEW'].every(name=>window.opencad.findCommand(name))), 'Sample and complete command registry');
   await page.screenshot({path:'.runtime/performance/editor-mobile.png'});
   await fresh();
-  await page.getByRole('button',{name:'새 도면',exact:true}).click();
-  await page.getByRole('button',{name:'만들기',exact:true}).click(); await loaded();
+  await page.getByRole('button',{name:'새 도면 (mm)',exact:true}).click(); await loaded();
   assert(await page.evaluate(() => window.opencad.docs.length===1), 'New drawing created');
   await fresh();
   await page.locator('input[type=file]').setInputFiles('public/samples/opencad-sample.dxf'); await loaded();
   assert(await page.evaluate(() => window.opencad.docs.length===1), 'File picker opened exactly once');
   await fresh();
-  await page.getByRole('button',{name:'opencad-sample.dxf',exact:true}).click(); await loaded();
+  await page.locator('.recent button').filter({hasText:'opencad-sample.dxf'}).click(); await loaded();
   assert(await page.evaluate(() => window.opencad.docs.length===1), 'IndexedDB recent file reopened');
   await fresh();
   await page.evaluate(async () => {
@@ -37,12 +38,12 @@ async (page) => {
   await page.goto(origin+'?sample'); await loaded();
   await page.goto(origin+'?open=samples%2Fopencad-sample.dxf'); await loaded();
   assert(await page.evaluate(() => window.opencad.docs.length===1), 'URL launch preserved');
-  await fresh();
   await page.route('**/editor-*.js', (route) => route.abort());
-  await page.getByRole('button',{name:'예제 도면 열기',exact:true}).click();
+  await page.goto(origin);
   await page.getByRole('alert').waitFor();
   await page.unroute('**/editor-*.js');
   await page.getByRole('button',{name:'새로고침',exact:true}).click();
+  await workspaceReady();
   await page.getByRole('button',{name:'예제 도면 열기',exact:true}).click(); await loaded();
   return 'MOBILE_BROWSER_CHECK_PASSED';
 }
