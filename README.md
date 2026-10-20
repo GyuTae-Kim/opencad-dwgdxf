@@ -156,6 +156,8 @@ npm run build
 
 시작 화면의 사용 안내에서 [DWG·DXF 열기](https://gyutae-kim.github.io/opencad/guides/open-dwg-dxf)와 [측정·PDF 출력](https://gyutae-kim.github.io/opencad/guides/measure-export)으로 이동할 수 있습니다. 안내 링크는 JavaScript 실행 전 HTML과 실행 후 시작 화면에 함께 제공됩니다.
 
+주소를 열면 별도의 소개 화면에서 버튼을 누르지 않아도 리본·파일 탭·작업 영역을 갖춘 CAD 화면으로 바로 진입합니다. 도구막대의 열기(Ctrl+O), 시작 탭의 파일 열기·최근 문서·예제 도면, 드래그 앤 드롭을 사용합니다. `?sample`과 `?open=주소`는 기존대로 해당 도면을 바로 엽니다. 편집기를 내려받지 못하면 정적 사용 안내와 새로고침 버튼을 표시합니다.
+
 2D 해석 워커는 첫 엔진 요청에서 시작합니다. 저장해 둔 SHX 글꼴을 복원하는 경우에도 엔진 요청이 발생할 수 있습니다. 워커 초기화 메시지가 파일 요청보다 먼저 전달되며, 이후 요청은 같은 워커를 재사용합니다. 메인 UI 번들은 별도로 로드되므로 이 변경을 모바일 Core Web Vitals 개선 수치로 해석하지 않습니다.
 
 
