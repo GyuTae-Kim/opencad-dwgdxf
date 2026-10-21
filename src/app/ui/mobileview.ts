@@ -197,7 +197,10 @@ const MEASURES: { name: string; ico: string; label: string; title: string }[] = 
 /** MEASURERADIUS는 MEASUREGEOM으로 돈다 */
 const RUNS_AS: Record<string, string> = { MEASURERADIUS: 'MEASUREGEOM' };
 
-/** 보기 단추 이름 글자 단계(styles.css): 기본 12px, .tight 11.5px, .tighter 10.5px, .tightest 10.5px에 단추 최소 폭 40px(높이 44px 그대로) */
+/**
+ * 보기 단추 이름 글자 단계(styles.css): 기본 12px, .tight 11.5px, .tighter 10.5px, .tightest 10px에 단추 최소 폭 40px·옆 여백을 줄이고
+ * 더 보기는 44px(높이 44px 그대로)
+ */
 const FIT_STEPS = ['tight', 'tighter', 'tightest'] as const;
 
 /** 보기 단추 줄: 기본 글자로 넘치면 한 단계씩 작게. 가장 작게도 넘치면 줄이 가로로 밀린다. 고른 단계를 돌려준다 */

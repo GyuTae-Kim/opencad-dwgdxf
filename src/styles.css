@@ -1924,9 +1924,18 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
   font-size: 10.5px;
   letter-spacing: -0.2px;
 }
-/* 그래도 넘치면(360px 폭 독일어 등) 단추 최소 폭만 줄인다 — 누르는 높이 44px는 그대로 */
+/* 그래도 넘치면(360px 폭 독일어 등) 단추 최소 폭·옆 여백·글자를 조금 더 줄인다 — 누르는 높이 44px는 그대로 */
 .viewbar.tightest .vb-btn {
   min-width: 40px;
+  padding: 2px 1px;
+}
+.viewbar.tightest .vb-btn .vb-lbl {
+  font-size: 10px;
+  letter-spacing: -0.3px;
+}
+#app.view-mode > .viewbar.tightest {
+  padding-left: 0;
+  padding-right: 0;
 }
 /* 아이콘(높이 100%)의 최소 폭이 단추 높이를 따라가지 않게 크기를 정한다 */
 .viewbar.tightest .vb-btn svg {
@@ -1934,8 +1943,9 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
   width: 24px;
   height: 24px;
 }
+/* 더 보기는 가장 좁은 단계에서도 손가락 크기(44px) — 위에서 줄인 폭으로 한 줄에 든다(360px 독일어 확인) */
 .viewbar.tightest .vb-btn.vb-more {
-  min-width: 30px;
+  min-width: 44px;
 }
 .vb-btn.on {
   background: var(--accent-soft);
@@ -2157,22 +2167,35 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
   overflow-x: auto;
   scrollbar-width: none;
 }
+/* 보이는 알약은 30px, 누르는 자리는 손가락 크기 44px(알약은 ::before로 그린다) */
 .mv-snap {
+  position: relative;
+  isolation: isolate;
   flex: 0 0 auto;
-  height: 30px;
+  height: 44px;
   padding: 0 10px;
-  border: 1px solid var(--border-soft);
-  border-radius: 15px;
+  border: 0;
   background: transparent;
   color: var(--text-dim);
   font-size: 12px;
   white-space: nowrap;
   cursor: pointer;
 }
+.mv-snap::before {
+  content: '';
+  position: absolute;
+  inset: 7px 0;
+  z-index: -1;
+  border: 1px solid var(--border-soft);
+  border-radius: 15px;
+  background: transparent;
+}
 .mv-snap.on {
+  color: var(--text);
+}
+.mv-snap.on::before {
   border-color: var(--accent);
   background: var(--accent-soft);
-  color: var(--text);
 }
 .mv-chip.primary {
   border-color: var(--accent);
