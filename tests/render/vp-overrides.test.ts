@@ -84,3 +84,15 @@ describe.skipIf(!existsSync(F(files[0]!)))('AutoCAD 도면의 재지정', () => 
     expect(seen).toBe(1);
   });
 });
+
+describe.skipIf(!existsSync(F(files[1]!)))('재지정 표 다시 읽기', () => {
+  it('도면층 이름을 바꾸면(객체 수는 같다) 새 이름으로 재지정을 다시 읽는다', () => {
+    const doc = load(files[1]!);
+    expect([...viewportOverrides(doc, '2D2')!.keys()].sort()).toEqual(['A2BLUE', 'A2RED']);
+    const red = doc.layers.get('A2RED')!;
+    doc.layers.delete('A2RED');
+    doc.layers.set(tableKey('A2NEW'), { ...red, name: 'A2NEW' });
+    expect([...viewportOverrides(doc, '2D2')!.keys()].sort()).toEqual(['A2BLUE', 'A2NEW']);
+    expect(viewportOverrides(doc, '2D2')!.get('A2NEW')!.aci).toBe(6);
+  });
+});

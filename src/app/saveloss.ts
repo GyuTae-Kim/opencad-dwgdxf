@@ -68,14 +68,16 @@ export function saveLosses(warnings: readonly ReadWarning[]): SaveLoss[] {
     const types = typesOf(w);
     if (ENTITY_DROPS.has(w.code) || CONVERSIONS.has(w.code)) {
       const d = w.detail as { types?: Record<string, number> } | undefined;
-      const count = d?.types ? Object.values(d.types).reduce((a, b) => a + (Number(b) || 0), 0) : (w.count ?? 1);
+      // DWG 쓰기는 종류별 개수만 세고(count 1), DXF 쓰기는 경고마다 count를 센다
+      const count = d?.types ? Math.max(Object.values(d.types).reduce((a, b) => a + (Number(b) || 0), 0), w.count ?? 1) : (w.count ?? 1);
       out.push({ message: w.message, count, types, converted: CONVERSIONS.has(w.code) });
     } else if (OBJECT_DROPS.has(w.code)) {
       const loud = types.filter((t) => !QUIET_OBJECTS.has(t.toUpperCase()));
       // 종류를 모르면(세부 없음) 보인다
       if (types.length && !loud.length) continue;
       const d = w.detail as { types?: Record<string, number> } | undefined;
-      const count = d?.types ? loud.reduce((a, t) => a + (Number(d.types![t]) || 0), 0) : (w.count ?? 1);
+      // 조용히 넘기는 종류(재질 등)는 개수에도 넣지 않는다. 종류별 개수를 모르면 보이는 종류 수만 센다
+      const count = d?.types ? loud.reduce((a, t) => a + (Number(d.types![t]) || 0), 0) : loud.length < types.length ? loud.length : (w.count ?? 1);
       out.push({ message: w.message, count, types: loud, converted: false });
     }
   }

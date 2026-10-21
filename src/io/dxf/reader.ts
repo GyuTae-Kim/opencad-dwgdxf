@@ -228,6 +228,8 @@ export function readDxf(data: Uint8Array, options: DxfReadOptions = {}): CadDocu
           };
           const xref = val(1);
           if (xref !== undefined && str(xref)) b.xrefPath = str(xref);
+          // 외부 참조인데 32(확인됨)가 없으면 불러오지 않은(언로드한) 외부 참조다(AutoCAD DXF로 확인)
+          if (b.flags & 4 && !(b.flags & 32)) b.xrefUnloaded = true;
           const desc = val(4);
           if (desc !== undefined && str(desc)) b.description = str(desc);
           const lay = val(8);

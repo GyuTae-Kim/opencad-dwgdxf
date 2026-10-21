@@ -677,6 +677,7 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
       entities: [],
     };
     if (rec.xrefPath) def.xrefPath = rec.xrefPath;
+    if (rec.unloaded && (rec.isXref || rec.isOverlaid)) def.xrefUnloaded = true;
     if (rec.description) def.description = rec.description;
     if (blk?.layer) def.layer = blk.layer;
     if (rec.endBlk) def.endHandle = hex(rec.endBlk);

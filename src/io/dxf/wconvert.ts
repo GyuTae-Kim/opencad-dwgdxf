@@ -271,7 +271,7 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
     // DWG(R2000~)에서 읽은 SAT 자료: R2000~R2010 DXF(SAT 계열)에는 ACIS 객체 그대로 쓴다
     const sat = (e as AcisEntity).sat;
     if (!r12 && sat && fam(ver) === 'sat' && (e.type === 'REGION' || e.type === '3DSOLID' || e.type === 'BODY')) {
-      return [{ ...e, raw: satDxfTags(sat, e.type), rawVersion: 'AC1024' } as Entity];
+      return [{ ...e, raw: satDxfTags(sat, e.type, ver), rawVersion: `AC${ver}` } as Entity];
     }
     const wires = (e as AcisEntity).wires?.filter((w) => w.length >= 2) ?? [];
     if (wires.length) {

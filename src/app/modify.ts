@@ -2112,13 +2112,9 @@ export function registerModifyCommands(app: App): void {
       do name = `A$C${Math.floor(Math.random() * 0x100000000).toString(16).toUpperCase().padStart(8, '0')}`;
       while (st.doc.blocks.has(tableKey(name)));
       const recordHandle = st.session.newHandle();
-      for (const e of list) {
-        e.handle = st.session.newHandle();
-        e.owner = recordHandle;
-        delete e.xdict;
-        delete e.reactors;
-        if (e.type === 'INSERT') for (const at of e.attribs) at.handle = st.session.newHandle();
-      }
+      // 붙여 넣기·복사와 같게 새 핸들을 주고 원본 본문(dwgRaw)도 버린다. R2013+ ACIS 객체의 원본 본문은
+      // 자료 저장소(AcDs)의 원래 핸들 기록을 가리키므로, 새 핸들로 쓰면 형상 없는 객체가 된다.
+      for (const e of list) prepareNew(st, e, recordHandle);
       const record: BlockRecord = { name, handle: recordHandle, flags: 0, insertUnits: Number(st.doc.header.get('$INSUNITS') ?? 0) || 0, explodable: true, scalable: true };
       const def: BlockDef = {
         name,

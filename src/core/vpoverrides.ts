@@ -27,13 +27,32 @@ const KEYS: [string, number, keyof LayerOverride][] = [
 ];
 
 type Table = Map<string, Map<string, LayerOverride>>;
-const cache = new WeakMap<CadDocument, { sig: string; table: Table }>();
+const cache = new WeakMap<CadDocument, { deps: unknown[]; table: Table }>();
+
+/**
+ * 표가 기댄 것: 도면층 열쇠·도면층 객체·확장 사전·재지정 XRECORD(같은 차례). 편집은 객체를 바꿔 끼우므로 ===로 비교한다
+ * (전에는 객체 수만 보아 도면층 이름을 바꾸면 재지정 색이 사라졌다)
+ */
+function depsOf(doc: CadDocument): unknown[] {
+  const deps: unknown[] = [];
+  for (const [key, layer] of doc.layers) {
+    deps.push(key, layer);
+    const xd = layer.xdict ? (doc.objects.get(layer.xdict) as DictionaryObject | undefined) : undefined;
+    if (!xd?.entries) continue;
+    deps.push(xd);
+    for (const [name] of KEYS) {
+      const h = xd.entries.get(name);
+      deps.push(h ? doc.objects.get(h) : undefined);
+    }
+  }
+  return deps;
+}
 
 /** 문서 전체: 뷰포트 핸들(대문자) → 도면층 키(대문자) → 재지정 */
 export function viewportOverrideTable(doc: CadDocument): Table {
-  const sig = `${doc.objects.size}|${doc.layers.size}`;
+  const deps = depsOf(doc);
   const c = cache.get(doc);
-  if (c && c.sig === sig) return c.table;
+  if (c && c.deps.length === deps.length && c.deps.every((d, i) => d === deps[i])) return c.table;
   const table: Table = new Map();
   for (const [key, layer] of doc.layers) {
     const xd = layer.xdict ? (doc.objects.get(layer.xdict) as DictionaryObject | undefined) : undefined;
@@ -63,7 +82,7 @@ export function viewportOverrideTable(doc: CadDocument): Table {
       }
     }
   }
-  cache.set(doc, { sig, table });
+  cache.set(doc, { deps, table });
   return table;
 }
 

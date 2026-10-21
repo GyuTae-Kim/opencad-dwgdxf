@@ -101,6 +101,21 @@ describe.skipIf(!existsSync(D('samples/sample_AC1015.dwg')))('AutoCAD 표본: �
     const out18 = writeDxf(doc, { version: 'AC1032' });
     expect(out18.warnings.map((w) => w.code)).toContain('entity.acis_as_wires');
   });
+  it('3DSOLID의 DXF 꼬리: R2000·R2004는 AcDbModelerGeometry만, R2007부터 100 AcDb3dSolid와 350(AutoCAD DXF와 같다)', () => {
+    const doc = readDwg(new Uint8Array(readFileSync(D('samples/sample_AC1015.dwg'))));
+    const tail = (ver: 'AC1015' | 'AC1018' | 'AC1021' | 'AC1024') => {
+      const txt = new TextDecoder().decode(writeDxf(doc, { version: ver }).data).split(/\r?\n/).map((l) => l.trim());
+      const i = txt.findIndex((l, k) => l === '3DSOLID' && txt[k - 1] === '0');
+      expect(i).toBeGreaterThan(0);
+      const rec: string[] = [];
+      for (let k = i + 1; k + 1 < txt.length && txt[k] !== '0'; k += 2) if (txt[k] === '100' || txt[k] === '350') rec.push(`${txt[k]}=${txt[k + 1]}`);
+      return rec;
+    };
+    expect(tail('AC1015')).toEqual(['100=AcDbEntity', '100=AcDbModelerGeometry']);
+    expect(tail('AC1018')).toEqual(['100=AcDbEntity', '100=AcDbModelerGeometry']);
+    expect(tail('AC1021')).toEqual(['100=AcDbEntity', '100=AcDbModelerGeometry', '100=AcDb3dSolid', '350=0']);
+    expect(tail('AC1024')).toEqual(['100=AcDbEntity', '100=AcDbModelerGeometry', '100=AcDb3dSolid', '350=0']);
+  });
   it.skipIf(!existsSync(D('samples/sample_AC1014.dwg')))('R14의 SAT 1.06은 DXF로 옮기지 않고 와이어로', () => {
     const doc = readDwg(new Uint8Array(readFileSync(D('samples/sample_AC1014.dwg'))));
     expect(regionOf(doc).sat).toBeUndefined();
@@ -110,6 +125,35 @@ describe.skipIf(!existsSync(D('samples/sample_AC1015.dwg')))('AutoCAD 표본: �
     const doc = readDwg(new Uint8Array(readFileSync(D('samples/sample_AC1027.dwg'))));
     const s = buildSpace(doc, MODEL_SPACE, { text: new TextEngine(null) });
     expect(s.warnings.find((w) => w.code === 'entity.not_drawn')).toBeUndefined();
+  });
+});
+
+describe('망가진 SAT', () => {
+  it('넙스 매듭 겹침이 터무니없으면(10억) 그 곡선은 두 꼭짓점을 잇는 선으로(멈추지 않는다)', () => {
+    const sat = [
+      '400 0 1 0',
+      '@7 OpenCAD 12 ACIS 7.0 NT 24 Thu Oct 22 00:00:00 2026',
+      '1 9.9999999999999995e-07 1e-10',
+      'body $-1 $1 $-1 $-1 #',
+      'lump $-1 $-1 $2 $0 #',
+      'shell $-1 $-1 $-1 $-1 $-1 $1 #',
+      'edge $-1 $4 $5 $-1 $6 forward #',
+      'vertex $-1 $3 $7 #',
+      'vertex $-1 $3 $8 #',
+      'intcurve-curve $-1 forward { exactcur nubs 3 open 2 0 1000000000 1 1000000000 0 0 0 1 0 0 2 0 0 3 0 0 0 } #',
+      'point $-1 0 0 0 #',
+      'point $-1 3 0 0 #',
+      'End-of-ACIS-data',
+    ].join('\n');
+    const t0 = performance.now();
+    const w = satWires(sat);
+    expect(performance.now() - t0).toBeLessThan(1000);
+    expect(round(w)).toEqual([
+      [
+        [0, 0],
+        [3, 0],
+      ],
+    ]);
   });
 });
 
