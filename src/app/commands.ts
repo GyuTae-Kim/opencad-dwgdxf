@@ -9,6 +9,7 @@ import { entityLength, entityProperties, hatchArea, polyArea, ringArea, ringPeri
 import type { Pt } from './view';
 import { h } from './ui/dom';
 import { lwVertices } from '../core/lwpoly';
+import { type MeasureFormat, angleResult, areaResult, distanceResult, radiusResult } from './measure-result';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -32,6 +33,13 @@ const unitSuffix = (app: App) => {
   const a = unitAbbr(app.active!.units.insunits);
   return a ? ` ${a}` : '';
 };
+/** 측정 결과 값(휴대폰 보기 모드의 결과 카드)을 명령행 글과 같은 단위 형식으로 */
+const measureFormat = (app: App): MeasureFormat => ({
+  length: (v) => L(app, v),
+  angle: (a) => formatAngle(a, app.active!.units),
+  area: (v) => area(app, v),
+  unit: unitSuffix(app),
+});
 
 export function registerCommands(app: App): void {
   // ------------------------------------------------------------- 화면
@@ -167,7 +175,7 @@ export function registerCommands(app: App): void {
           const e = app.entity(r.handle);
           const rad = e?.type === 'CIRCLE' || e?.type === 'ARC' ? e.radius : null;
           if (rad === null) ctx.print('호나 원이 아닙니다.', 'err');
-          else ctx.print(`반지름 = ${L(app, rad)}${unitSuffix(app)}\n지름 = ${L(app, rad * 2)}${unitSuffix(app)}`, 'res');
+          else ctx.print(`반지름 = ${L(app, rad)}${unitSuffix(app)}\n지름 = ${L(app, rad * 2)}${unitSuffix(app)}`, 'res', radiusResult(measureFormat(app), rad));
           continue;
         }
         if (mode === 'A') {
@@ -423,8 +431,10 @@ function reportDistance(app: App, ctx: CommandContext, a: Pt, b: Pt): void {
   let ang = Math.atan2(dy, dx);
   if (ang < 0) ang += Math.PI * 2;
   const u = app.active!.units;
-  ctx.print(`거리 = ${L(app, d)}${unitSuffix(app)},  XY 평면에서의 각도 = ${formatAngle(ang, u)},  XY 평면으로부터의 각도 = 0`, 'res');
-  ctx.print(`X 증분 = ${L(app, dx)},  Y 증분 = ${L(app, dy)},  Z 증분 = ${L(app, 0)}`, 'res');
+  // 두 줄이 같은 값을 단다(결과 카드는 한 덩어리로 묶는다)
+  const m = distanceResult(measureFormat(app), dx, dy);
+  ctx.print(`거리 = ${L(app, d)}${unitSuffix(app)},  XY 평면에서의 각도 = ${formatAngle(ang, u)},  XY 평면으로부터의 각도 = 0`, 'res', m);
+  ctx.print(`X 증분 = ${L(app, dx)},  Y 증분 = ${L(app, dy)},  Z 증분 = ${L(app, 0)}`, 'res', m);
   app.view.overlay.marks = [
     { p: a },
     { p: b, text: `${L(app, d)}${unitSuffix(app)}` },
@@ -460,7 +470,8 @@ async function measureAngle(app: App, ctx: CommandContext): Promise<void> {
   if ('handle' in r) {
     const e = app.entity(r.handle)!;
     if (e.type === 'ARC') {
-      ctx.print(`각도 = ${formatAngle(ccwSweep(e.startAngle, e.endAngle), u)}`, 'res');
+      const sweep = ccwSweep(e.startAngle, e.endAngle);
+      ctx.print(`각도 = ${formatAngle(sweep, u)}`, 'res', angleResult(measureFormat(app), sweep));
       return;
     }
     if (e.type === 'LINE') {
@@ -475,15 +486,16 @@ async function measureAngle(app: App, ctx: CommandContext): Promise<void> {
       const a2 = Math.atan2(f.end.y - f.start.y, f.end.x - f.start.x);
       let d = Math.abs(a2 - a1) % Math.PI;
       if (d > Math.PI / 2) d = Math.PI - d;
-      ctx.print(`각도 = ${formatAngle(d, u)}  (보각 ${formatAngle(Math.PI - d, u)})`, 'res');
+      ctx.print(`각도 = ${formatAngle(d, u)}  (보각 ${formatAngle(Math.PI - d, u)})`, 'res', angleResult(measureFormat(app), d, true));
       return;
     }
     if (e.type === 'CIRCLE') {
       const c = e.center;
       const p1 = r.point;
       const p2 = await needPoint(ctx, '각도의 두 번째 끝점 지정:', c);
-      const a = Math.abs(Math.atan2(p2.y - c.y, p2.x - c.x) - Math.atan2(p1.y - c.y, p1.x - c.x));
-      ctx.print(`각도 = ${formatAngle(a > Math.PI ? Math.PI * 2 - a : a, u)}`, 'res');
+      const a0 = Math.abs(Math.atan2(p2.y - c.y, p2.x - c.x) - Math.atan2(p1.y - c.y, p1.x - c.x));
+      const a = a0 > Math.PI ? Math.PI * 2 - a0 : a0;
+      ctx.print(`각도 = ${formatAngle(a, u)}`, 'res', angleResult(measureFormat(app), a));
       return;
     }
     ctx.print('호, 원, 선을 선택하십시오.', 'err');
@@ -495,7 +507,7 @@ async function measureAngle(app: App, ctx: CommandContext): Promise<void> {
   const p2 = await needPoint(ctx, '각도의 두 번째 끝점 지정:', v);
   let a = Math.abs(Math.atan2(p2.y - v.y, p2.x - v.x) - Math.atan2(p1.y - v.y, p1.x - v.x));
   if (a > Math.PI) a = Math.PI * 2 - a;
-  ctx.print(`각도 = ${formatAngle(a, u)}`, 'res');
+  ctx.print(`각도 = ${formatAngle(a, u)}`, 'res', angleResult(measureFormat(app), a));
 }
 
 async function measureArea(app: App, ctx: CommandContext): Promise<void> {
@@ -525,7 +537,7 @@ async function measureArea(app: App, ctx: CommandContext): Promise<void> {
       ctx.print('면적을 잴 수 없는 객체입니다.', 'err');
       return;
     }
-    ctx.print(`면적 = ${a !== null ? area(app, a) : '-'},  둘레 = ${per !== null ? L(app, per) : '-'}`, 'res');
+    ctx.print(`면적 = ${a !== null ? area(app, a) : '-'},  둘레 = ${per !== null ? L(app, per) : '-'}`, 'res', areaResult(measureFormat(app), a, per));
     return;
   }
   const pts: number[] = [];
@@ -544,7 +556,8 @@ async function measureArea(app: App, ctx: CommandContext): Promise<void> {
     return;
   }
   const a = Math.abs(ringArea(pts));
-  ctx.print(`면적 = ${area(app, a)},  둘레 = ${L(app, ringPerimeter(pts))}`, 'res');
+  const per = ringPerimeter(pts);
+  ctx.print(`면적 = ${area(app, a)},  둘레 = ${L(app, per)}`, 'res', areaResult(measureFormat(app), a, per));
   app.view.overlay.rubber = [{ pts, closed: true, fill: true }];
   app.view.overlay.marks = [{ p: { x: pts[0]!, y: pts[1]! }, text: `면적 ${area(app, a)}` }];
   persistMarks(app);

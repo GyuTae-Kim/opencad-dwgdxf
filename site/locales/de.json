@@ -3566,6 +3566,7 @@
   "병합할 도면층의 객체 선택 또는 [": "Objekte auf Ebenen zum Zusammenführen auswählen oder [",
   "병합할 도면층의 객체 선택 또는 [이름(N)]{0}:": "Wählen Sie Objekte auf der Ebene zum Zusammenführen aus oder [name(N)]{0}:",
   "병합할 범위의 반대쪽 셀 선택:": "Wählen Sie Zellen auf gegenüberliegenden Seiten des Bereichs zum Zusammenführen aus:",
+  "보각": "Supplementwinkel",
   "보고서 보기": "Bericht anzeigen",
   "보고서 형식: (예)": "Berichtsformat: (Beispiel)",
   "보기": "Ansicht",

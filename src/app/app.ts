@@ -22,6 +22,7 @@ import { LoadPreview } from './loadpreview';
 import { DocState } from './docstate';
 import { CadView, type OverlayGeom, type Pt, type SnapKind } from './view';
 import { CommandLine, parsePointInput } from './commandline';
+import type { MeasureResult } from './measure-result';
 import { Picker } from './pick';
 import { SELECT_HELP, SELECT_METHODS, SELECT_OPTIONS, runSelectMethod, selectMethodOf } from './selmethod';
 import { DEFAULT_SNAPS, SNAP_NAMES, findSnap } from './snap';
@@ -142,7 +143,8 @@ export type { CommitHook, ContextMenuItem, ContextMenuProvider, EntityClickHandl
 
 export interface CommandContext {
   app: App;
-  print(text: string, cls?: 'err' | 'res'): void;
+  /** measure: 측정 결과 값(명령행 글은 그대로, 휴대폰 보기 모드의 결과 카드가 쓴다) */
+  print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void;
   getPoint(prompt: string, opt?: { base?: Pt | null; keywords?: Keyword[]; rubber?: PointRequest['rubber']; ghost?: PointRequest['ghost']; allowText?: boolean; preferNumber?: boolean }): Promise<PointResult>;
   getEntity(prompt: string, keywords?: Keyword[]): Promise<EntityResult>;
   /** emptyPick: 빈 곳 클릭·좌표 입력도 EmptyPick으로 돌려받는다(기존 호출의 동작은 그대로) */
@@ -453,7 +455,7 @@ export class App {
     this.clearGripHover();
     const ctx: CommandContext = {
       app: this,
-      print: (t, cls) => this.cmd.print(t, cls),
+      print: (t, cls, measure) => this.cmd.print(t, cls, measure),
       getPoint: (prompt, opt) => this.requestPoint(prompt, opt, ctrl.signal),
       getEntity: ((prompt: string, kws?: Keyword[], opt?: EntityOptions) => this.requestEntity(prompt, kws ?? [], ctrl.signal, opt ?? {})) as CommandContext['getEntity'],
       getSelection: (prompt, opt) => this.requestSelection(prompt ?? '객체 선택:', opt ?? {}, ctrl.signal),

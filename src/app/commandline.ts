@@ -6,6 +6,7 @@
  * (입력란은 브라우저의 복사·붙여넣기 메뉴 그대로).
  */
 import { lispUnclosed } from '../edit/lisp/reader';
+import type { MeasureResult } from './measure-result';
 export interface Suggestion {
   name: string;
   title: string;
@@ -22,7 +23,8 @@ export interface CommandLineHost {
 
 export interface CommandLineWatcher {
   prompt?(text: string): void;
-  print?(text: string, cls?: 'err' | 'res'): void;
+  /** measure: 측정 명령이 이 결과 줄과 함께 넘긴 값(휴대폰 보기 모드의 결과 카드) */
+  print?(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void;
 }
 
 export class CommandLine {
@@ -150,9 +152,10 @@ export class CommandLine {
 
   private promptText = '';
 
-  print(text: string, cls?: 'err' | 'res'): void {
+  /** 기록에 한 줄. measure는 지켜보는 쪽에만 넘기고 기록 글은 그대로다 */
+  print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void {
     this.onPrint?.(text, cls);
-    for (const w of this.watchers) w.print?.(text, cls);
+    for (const w of this.watchers) w.print?.(text, cls, measure);
     const div = document.createElement('div');
     if (cls) div.className = cls;
     div.textContent = text;

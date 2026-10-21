@@ -4,6 +4,7 @@
  * 이 모듈은 app.ts를 가져오지 않는다(바꿔 끼우는 동안 순환을 만들지 않는다).
  */
 import type { EditOp } from '../../src/edit/session';
+import type { MeasureResult } from '../../src/app/measure-result';
 
 type Pt = { x: number; y: number };
 
@@ -74,7 +75,7 @@ export class FakeView {
 
 /** CommandLine 대신: 출력·프롬프트를 모은다 */
 export class FakeCommandLine {
-  lines: { text: string; cls?: 'err' | 'res' }[] = [];
+  lines: { text: string; cls?: 'err' | 'res'; measure?: MeasureResult }[] = [];
   prompt = '';
   acceptSpaces = false;
   onPrint: ((text: string, cls?: 'err' | 'res') => void) | null = null;
@@ -87,12 +88,17 @@ export class FakeCommandLine {
   ) {
     void _parent;
   }
-  print(text: string, cls?: 'err' | 'res'): void {
+  /** 프롬프트·출력을 지켜보는 쪽(휴대폰 보기 모드의 측정 띠) */
+  readonly watchers = new Set<{ prompt?(text: string): void; print?(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void }>();
+  /** measure: 측정 명령이 결과 줄과 함께 넘긴 값(있을 때만 남긴다) */
+  print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void {
     this.onPrint?.(text, cls);
-    this.lines.push({ text, cls });
+    for (const w of this.watchers) w.print?.(text, cls, measure);
+    this.lines.push(measure ? { text, cls, measure } : { text, cls });
   }
   setPrompt(text: string): void {
     this.prompt = text;
+    for (const w of this.watchers) w.prompt?.(text);
   }
   typeChar(): void {}
   toggleHistory(): void {}

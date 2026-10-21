@@ -3566,6 +3566,7 @@
   "병합할 도면층의 객체 선택 또는 [": "Select objects on layers to merge or [",
   "병합할 도면층의 객체 선택 또는 [이름(N)]{0}:": "Select objects on layer to merge or [name(N)]{0}:",
   "병합할 범위의 반대쪽 셀 선택:": "Select cells on opposite sides of the range to merge:",
+  "보각": "Supplementary",
   "보고서 보기": "View report",
   "보고서 형식: (예)": "Report Format: (Example)",
   "보기": "View",
