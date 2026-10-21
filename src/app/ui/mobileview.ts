@@ -197,8 +197,8 @@ const MEASURES: { name: string; ico: string; label: string; title: string }[] = 
 /** MEASURERADIUS는 MEASUREGEOM으로 돈다 */
 const RUNS_AS: Record<string, string> = { MEASURERADIUS: 'MEASUREGEOM' };
 
-/** 보기 단추 이름 글자 단계(styles.css): 기본 12px, .tight 11.5px, .tighter 10.5px */
-const FIT_STEPS = ['tight', 'tighter'] as const;
+/** 보기 단추 이름 글자 단계(styles.css): 기본 12px, .tight 11.5px, .tighter 10.5px, .tightest 10.5px에 단추 최소 폭 40px(높이 44px 그대로) */
+const FIT_STEPS = ['tight', 'tighter', 'tightest'] as const;
 
 /** 보기 단추 줄: 기본 글자로 넘치면 한 단계씩 작게. 가장 작게도 넘치면 줄이 가로로 밀린다. 고른 단계를 돌려준다 */
 export function fitLabels(bar: HTMLElement): string {
@@ -262,7 +262,8 @@ export class MobileView {
     // 이름은 짧게(영어 등에서도 한 줄에 들어가게), 자세한 뜻은 제목 풍선
     const dims = btn('dimlist', '치수', '치수 목록(표시 값과 실제 길이 비교)', () => host.openPalette('dims'));
     // 더 보기: 점 좌표(ID), 문자 찾기, 빠진 참조 파일 고르기(외부 참조·이미지·PDF·SHX 글꼴)
-    const more = btn('more', '더 보기', '좌표·찾기·참조 파일', () => {
+    // 이름 없이 아이콘만(좁은 화면에서 다른 단추 이름이 줄지 않게 — 접근 이름은 제목)
+    const more = btn('more', '', '더 보기: 좌표·찾기·참조 파일', () => {
       const r = more.getBoundingClientRect();
       showMenu(r.left, r.bottom + 2, [
         { label: '점 좌표 (ID)', icon: 'id', run: () => this.startMeasure('ID') },
@@ -270,6 +271,8 @@ export class MobileView {
         { label: '참조 파일 고르기(외부 참조·SHX 글꼴)', icon: 'folder', run: () => void this.pickRefFiles() },
       ]);
     });
+    more.classList.add('vb-more');
+    more.querySelector('.vb-lbl')?.remove();
     this.bar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': '보기 도구' }, fit, ...measures, layers, dims, more);
     this.card = h('div', { class: 'mview-card', role: 'status', 'aria-live': 'polite', hidden: true });
     app.cmd.watchers.add({

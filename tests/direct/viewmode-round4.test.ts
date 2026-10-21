@@ -116,7 +116,11 @@ describe('더 보기: 점 좌표·문자 찾기', () => {
   it('점 좌표(ID)는 큰 좌표 값 카드와 다시 재기', async () => {
     const h = setup();
     h.mv.apply(true);
-    const more = h.mv.bar.querySelector<HTMLButtonElement>('button[aria-label="좌표·찾기·참조 파일"]')!;
+    const more = h.mv.bar.querySelector<HTMLButtonElement>('button[aria-label="더 보기: 좌표·찾기·참조 파일"]')!;
+    // 좁은 화면에서 다른 단추 이름이 줄지 않게 아이콘만, 마지막 자리
+    expect(more.classList.contains('vb-more')).toBe(true);
+    expect(more.querySelector('.vb-lbl')).toBeNull();
+    expect(h.mv.bar.lastElementChild).toBe(more);
     more.click();
     const items = vi.mocked(showMenu).mock.calls.at(-1)![2] as { label: string; run: () => void }[];
     expect(items.map((i) => i.label)).toEqual(['점 좌표 (ID)', '문자 찾기', '참조 파일 고르기(외부 참조·SHX 글꼴)']);
