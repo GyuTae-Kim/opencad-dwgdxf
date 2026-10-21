@@ -110,6 +110,22 @@ describe('측정 띠의 객체 스냅 칩', () => {
     h.app.cmd.escape();
     await settle();
   });
+
+  it('편집 화면에서 객체 스냅을 끈 채 들어와 칩으로 켜도, 나가면 편집 화면처럼 꺼진다(스냅 종류도 되돌린다)', async () => {
+    const h = setup();
+    h.app.osnapOn = false;
+    const before = [...h.app.snapModes].sort();
+    h.mv.apply(true);
+    void h.app.run('DIST');
+    await settle();
+    [...h.mv.card.querySelectorAll<HTMLButtonElement>('.mv-snap')].find((b) => b.textContent === '중간점')!.click();
+    expect(h.app.osnapOn).toBe(true);
+    h.app.cmd.escape();
+    await settle();
+    h.mv.apply(false);
+    expect(h.app.osnapOn).toBe(false);
+    expect([...h.app.snapModes].sort()).toEqual(before);
+  });
 });
 
 describe('더 보기: 점 좌표·문자 찾기', () => {

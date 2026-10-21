@@ -241,6 +241,8 @@ export class MobileView {
   private readonly fitted = new WeakSet<object>();
   /** 편집 화면의 객체 스냅(보기 모드를 나가면 되돌린다) */
   private editSnaps: Set<SnapKind> | null = null;
+  /** 들어갈 때 편집 화면의 객체 스냅 켜고 끔(OSNAP) */
+  private editOsnap: boolean | null = null;
   /** 문서마다 찾지 못한 참조(알아보는 중이면 null)와 안내를 닫았는지 */
   private readonly missing = new WeakMap<DocState, MissingRefs | null>();
   private readonly noticeClosed = new WeakSet<DocState>();
@@ -293,10 +295,11 @@ export class MobileView {
 
   /** 기억 없이 모드만 맞춘다(처음 열 때) */
   apply(view: boolean): void {
-    // 보기 모드의 객체 스냅은 따로 기억한다(측정 띠의 칩): 들어갈 때 편집 화면 것을 두고, 나갈 때 되돌린다
+    // 보기 모드의 객체 스냅은 따로 기억한다(측정 띠의 칩): 들어갈 때 편집 화면 것(스냅 종류와 켜고 끔)을 두고, 나갈 때 되돌린다
     const modes = this.app.snapModes;
     if (view && !this.editSnaps) {
       this.editSnaps = new Set(modes);
+      this.editOsnap = this.app.osnapOn;
       const saved = readViewSnaps();
       if (saved) {
         modes.clear();
@@ -306,6 +309,12 @@ export class MobileView {
       modes.clear();
       for (const k of this.editSnaps) modes.add(k);
       this.editSnaps = null;
+      // 보기 모드의 칩이 객체 스냅을 켰어도(편집 화면에서 껐던 경우) 편집 화면 상태로
+      if (this.editOsnap !== null && this.app.osnapOn !== this.editOsnap) {
+        this.app.osnapOn = this.editOsnap;
+        this.app.ui?.refreshStatus?.();
+      }
+      this.editOsnap = null;
     }
     this.app.setViewOnly(view);
     this.root.classList.toggle('view-mode', view);
