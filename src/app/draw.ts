@@ -955,8 +955,10 @@ export function registerDrawCommands(app: App): void {
         const rr = await ctx.getPoint('원의 반지름 지정:', { base: c, allowText: true, rubber: (q) => [{ pts: poly(q).flatMap((p) => [p.x, p.y]), closed: true }] });
         let q: Pt | null = pt(rr);
         if (!q && 'text' in rr) {
+          // 반지름을 입력하면 AutoCAD처럼 아래 변이 수평(내접: 아래 두 꼭짓점이 −90° ± 180°/n, 외접: 아래 변의 중점이 −90°)
           const v = parseFloat(rr.text);
-          if (v > 0) q = { x: c.x + v, y: c.y };
+          const a = circ ? -Math.PI / 2 : -Math.PI / 2 + Math.PI / n;
+          if (v > 0) q = { x: c.x + v * Math.cos(a), y: c.y + v * Math.sin(a) };
         }
         if (!q) return;
         verts = poly(q);
@@ -1007,7 +1009,8 @@ export function registerDrawCommands(app: App): void {
         const ux = major.x / ml;
         const uy = major.y / ml;
         const d = Math.abs(-(q.x - center.x) * uy + (q.y - center.y) * ux);
-        return Math.max(1e-6, Math.min(1, d / ml));
+        // 1보다 크면(다른 축이 더 길면) 아래에서 축을 바꾼다
+        return Math.max(1e-6, d / ml);
       };
       const rr = await ctx.getPoint('다른 축으로 거리를 지정 또는 [회전(R)]:', {
         base: center,
@@ -1019,8 +1022,14 @@ export function registerDrawCommands(app: App): void {
       if ('keyword' in rr) {
         const a = await getAngle(ctx, '장축 주위로 회전 지정', null, 0);
         ratio = Math.max(1e-6, Math.abs(Math.cos(a)));
-      } else if ('text' in rr) ratio = Math.max(1e-6, Math.min(1, parseFloat(rr.text) / ml));
-      else {
+      } else if ('text' in rr) {
+        const v = parseFloat(rr.text);
+        if (!(v > 0)) {
+          ctx.print('다른 축으로 거리는 0보다 커야 합니다.', 'err');
+          return;
+        }
+        ratio = Math.max(1e-6, v / ml);
+      } else {
         const q = pt(rr);
         if (!q) return;
         ratio = ratioOf(q);

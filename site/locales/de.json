@@ -2156,6 +2156,7 @@
   "다른 이름으로 저장(V):": "Speichern unter (V):",
   "다른 이름으로 저장…": "Speichern unter…",
   "다른 점 {0}개": "{0} Unterschiede",
+  "다른 축으로 거리는 0보다 커야 합니다.": "Der Abstand zur anderen Achse muss größer als 0 sein.",
   "다른 축으로 거리를 지정 또는 [": "Abstand zu einer anderen Achse angeben oder [",
   "다른 축으로 거리를 지정 또는 [회전(R)]:": "Abstand in einer anderen Achse oder [Rotation (R)] angeben:",
   "다름": "Anders",

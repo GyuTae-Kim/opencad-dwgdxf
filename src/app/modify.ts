@@ -958,7 +958,8 @@ export function registerModifyCommands(app: App): void {
             ctx.print(res.message ?? '해당 객체를 간격띄우기할 수 없습니다.');
             break;
           }
-          if (erase) res.remove = [...(res.remove ?? []), e.handle];
+          // 잠긴 도면층의 원본은 지우지 않는다(간격띄운 객체만 만든다)
+          if (erase && unlockedOnly(app, [e.handle]).length) res.remove = [...(res.remove ?? []), e.handle];
           const a = commitResults(app, ctx, [res], 'OFFSET');
           steps.push(a.ops);
           if (!multiple) break;

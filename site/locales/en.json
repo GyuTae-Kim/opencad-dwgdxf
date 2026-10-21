@@ -2156,6 +2156,7 @@
   "다른 이름으로 저장(V):": "Save As (V):",
   "다른 이름으로 저장…": "Save As…",
   "다른 점 {0}개": "{0} differences",
+  "다른 축으로 거리는 0보다 커야 합니다.": "The distance to the other axis must be greater than 0.",
   "다른 축으로 거리를 지정 또는 [": "Specify the distance along the other axis or [",
   "다른 축으로 거리를 지정 또는 [회전(R)]:": "Specify distance in another axis or [Rotation (R)]:",
   "다름": "Different",
