@@ -1,6 +1,7 @@
 /** 홈 화면에 추가: 웹 앱 매니페스트와 아이콘(크기·마스크 가능), 공통 head의 연결 */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { localizeHtml, localizeManifest } from '../tools/localization-plugin.mjs';
 
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url));
 /** PNG 머리(IHDR)의 가로·세로와 알파 채널 여부 */
@@ -43,5 +44,28 @@ describe('웹 앱 매니페스트', () => {
       '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
     ])
       expect(html).toContain(tag);
+  });
+
+  it('언어 페이지(<언어>/)는 그 언어 이름의 앱 정보: 그 언어 페이지에서 열고, 범위·아이콘은 앱 뿌리', () => {
+    expect(localizeManifest(manifest, 'ko')).toBe(manifest);
+    for (const lang of ['en', 'ja', 'zh-CN', 'de']) {
+      const m = localizeManifest(manifest, lang);
+      expect(m).toMatchObject({ lang, id: './', start_url: './', scope: '../', display: 'standalone', theme_color: '#252a33' });
+      expect(`${m.name} ${m.short_name} ${m.description}`, lang).not.toMatch(/[가-힣]/);
+      expect(m.short_name.length, lang).toBeLessThanOrEqual(12);
+      expect(m.icons.map((i: { src: string }) => i.src)).toEqual(manifest.icons.map((i: { src: string }) => `../${i.src}`));
+      // <언어>/manifest.webmanifest 기준으로 풀면 시작은 언어 페이지, 범위·아이콘은 앱 뿌리
+      const at = `https://gyutae-kim.github.io/opencad-dwgdxf/${lang}/manifest.webmanifest`;
+      expect(new URL(m.start_url, at).pathname).toBe(`/opencad-dwgdxf/${lang}/`);
+      expect(new URL(m.scope, at).pathname).toBe('/opencad-dwgdxf/');
+      expect(new URL(m.icons[0].src, at).pathname).toBe(`/opencad-dwgdxf/${m.icons[0].src.slice(3)}`);
+    }
+    const html = read('index.html').toString('utf8').replace('<!-- site-metadata -->', '');
+    const en = localizeHtml(html, 'en');
+    expect(en).toContain('<base href="../">');
+    expect(en).toContain('<link rel="manifest" href="./en/manifest.webmanifest" />');
+    expect(en).toContain(`<meta name="apple-mobile-web-app-title" content="${localizeManifest(manifest, 'en').short_name}" />`);
+    expect(en).toContain('<link rel="apple-touch-icon" href="./apple-touch-icon.png" />');
+    expect(localizeHtml(html, 'ko')).toContain('<link rel="manifest" href="./manifest.webmanifest" />');
   });
 });
