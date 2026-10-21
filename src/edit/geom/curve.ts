@@ -485,6 +485,48 @@ export function pathLength(path: Path, s0 = 0, s1 = path.pieces.length): number 
   return L;
 }
 
+/** 조각의 ∫(x dy − y dx). 선·호·타원은 닫힌 식, 넙스는 64칸 가우스 적분 */
+export function pieceAreaTerm(p: Piece): number {
+  switch (p.k) {
+    case 'line':
+      return p.a.x * p.b.y - p.b.x * p.a.y;
+    case 'arc': {
+      const a1 = p.a0 + p.sw;
+      return p.r * p.r * p.sw + p.c.x * p.r * (Math.sin(a1) - Math.sin(p.a0)) - p.c.y * p.r * (Math.cos(a1) - Math.cos(p.a0));
+    }
+    case 'ell': {
+      const q0 = pieceAt(p, 0);
+      const q1 = pieceAt(p, 1);
+      return p.c.x * (q1.y - q0.y) - p.c.y * (q1.x - q0.x) + (p.u.x * p.v.y - p.u.y * p.v.x) * p.dt;
+    }
+    case 'nurbs': {
+      const N = 64;
+      let s = 0;
+      for (let i = 0; i < N; i++)
+        for (const [x, w] of GL5) {
+          const t = (i + (x + 1) / 2) / N;
+          const q = pieceAt(p, t);
+          const d = pieceD1(p, t);
+          s += (w / 2 / N) * (q.x * d.y - q.y * d.x);
+        }
+      return s;
+    }
+  }
+}
+
+/** 경로가 둘러싼 부호 면적(반시계 +). 열린 경로는 끝에서 시작으로 잇는 현으로 닫는다(AutoCAD AREA와 같다) */
+export function pathSignedArea(path: Path): number {
+  if (!path.pieces.length) return 0;
+  let s = 0;
+  for (const p of path.pieces) s += pieceAreaTerm(p);
+  if (!path.closed) {
+    const a = pathEnd(path);
+    const b = pathStart(path);
+    s += a.x * b.y - b.x * a.y;
+  }
+  return s / 2;
+}
+
 /** 경로 시작에서 길이 L인 곳의 s */
 export function pathSAtLength(path: Path, L: number): number {
   let acc = 0;
