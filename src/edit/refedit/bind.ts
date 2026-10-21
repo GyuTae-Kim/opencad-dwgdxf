@@ -57,6 +57,6 @@ export function bindXrefOps(host: CadDocument, blockKey: string, xdoc: CadDocume
       const r = host.blockRecords.get(k);
       if (r) ops.push({ kind: 'blockRecord', key: k, before: r, after: null });
     }
-  ops.push({ kind: 'blockDef', key, before: def, after: { ...def, flags: def.flags & ~(4 | 8 | 16 | 32 | 64), xrefPath: undefined, entities: ents } });
+  ops.push({ kind: 'blockDef', key, before: def, after: { ...def, flags: def.flags & ~(4 | 8 | 16 | 32 | 64), xrefPath: undefined, xrefUnloaded: undefined, entities: ents } });
   return { ops, entities: ents.length, skipped, nested };
 }

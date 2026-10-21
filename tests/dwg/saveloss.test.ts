@@ -44,6 +44,26 @@ describe('손실 목록', () => {
     ]);
     expect(saveLossLines(l)[0]).toBe('이 버전으로 쓸 수 없는 도형 3개를 뺐습니다(원본 자료가 없거나 다른 버전). (3): 3DSOLID, REGION');
   });
+
+  it('DXF 쓰기 경고: 조용히 넘기는 종류(재질 등)는 개수에도 넣지 않는다', () => {
+    const l = saveLosses([{ code: 'object.no_data', message: 'n', count: 30, detail: { items: ['MATERIAL', 'VISUALSTYLE', 'CELLSTYLEMAP'], types: { MATERIAL: 3, VISUALSTYLE: 24, CELLSTYLEMAP: 3 } } }]);
+    expect(l.map((x) => [x.count, x.types])).toEqual([[3, ['CELLSTYLEMAP']]]);
+    // 종류별 개수가 없으면 보이는 종류 수만
+    expect(saveLosses([{ code: 'object.no_data', message: 'n', count: 30, detail: { items: ['MATERIAL', 'CELLSTYLEMAP'] } }]).map((x) => x.count)).toEqual([1]);
+    // DXF 도형 손실은 경고 수(count)
+    expect(saveLosses([{ code: 'entity.acis_dropped', message: 'a', count: 5, detail: { items: ['3DSOLID'], types: { '3DSOLID': 5 } } }]).map((x) => x.count)).toEqual([5]);
+  });
+
+  it.skipIf(!has('accore/made/E4_xref_units_mm_host.r2000.dwg'))('R2000 DWG를 DXF로: 손실 수는 보이는 종류(CELLSTYLEMAP)만 센다', () => {
+    const doc = read('accore/made/E4_xref_units_mm_host.r2000.dwg');
+    const out = writeDxf(doc, { version: 'AC1032' });
+    const w = out.warnings.find((x) => x.code === 'object.no_data')!;
+    const tally = (w.detail as { types: Record<string, number> }).types;
+    const l = saveLosses(out.warnings).find((x) => x.message === w.message)!;
+    expect(l.types).toEqual(['CELLSTYLEMAP']);
+    expect(l.count).toBe(tally.CELLSTYLEMAP);
+    expect(l.count).toBeLessThan(w.count!);
+  });
 });
 
 describe.skipIf(!has('samples/sample_AC1021.dwg'))('AutoCAD 도면을 저장할 때', () => {

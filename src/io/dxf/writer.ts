@@ -4,7 +4,7 @@
  * 구역: HEADER, CLASSES(R2000+), TABLES, BLOCKS, ENTITIES, OBJECTS(R2000+), 그리고 모델이 해석하지 않은 구역(THUMBNAILIMAGE,
  * ACDSDATA 등, 그 구역을 담을 수 있는 버전일 때). 무엇을 어떻게 쓰는지는 WRITER_NOTES.md에 정리했다.
  */
-import type { CadDocument, HeaderValue, ReadWarning, Vec3 } from '../../core/model';
+import type { BlockDef, CadDocument, HeaderValue, ReadWarning, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { STANDARD_CLASSES } from './classes';
 import { DEFAULT_HEADER, HEADER_VARS, R12_HEADER_VARS } from './headervars';
@@ -207,6 +207,12 @@ function writeClasses(s: TagSink, ctx: WriteContext): void {
   w.t(0, 'ENDSEC');
 }
 
+/** BLOCK 70: 외부 참조의 32(확인됨)는 불러온 상태에서만 켠다(불러오지 않음은 xrefUnloaded) */
+export function blockFlags(b: BlockDef): number {
+  if (!(b.flags & 4)) return b.flags;
+  return b.xrefUnloaded ? b.flags & ~32 : b.flags | 32;
+}
+
 function writeBlocks(s: TagSink, ctx: WriteContext): void {
   const w = new TagOut(s, ctx);
   const r12 = w.r12;
@@ -228,7 +234,7 @@ function writeBlocks(s: TagSink, ctx: WriteContext): void {
     w.t(8, b.layer || '0');
     w.sub('AcDbBlockBegin');
     w.t(2, name);
-    w.t(70, b.flags);
+    w.t(70, blockFlags(b));
     w.p3(10, b.basePoint);
     w.t(3, name);
     w.t(1, b.xrefPath ?? '');
