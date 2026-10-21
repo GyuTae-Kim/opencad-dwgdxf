@@ -8,6 +8,7 @@ import { hatchLoops } from '../render/hatch';
 import { decodePercent } from '../text/mtext';
 import { definitionName } from '../edit/dynblock';
 import { lwVertices } from '../core/lwpoly';
+import { childStyleOf } from '../edit/dim/vars';
 
 export const TYPE_NAMES: Record<string, string> = {
   LINE: '선',
@@ -221,10 +222,11 @@ function splineLength(e: Extract<Entity, { type: 'SPLINE' }>): number {
 // 치수
 // ---------------------------------------------------------------------------
 
-export function dimVars(doc: CadDocument, d: { dimStyle: string; overrides?: Record<number, string | number> }): Record<string, number | string> {
+export function dimVars(doc: CadDocument, d: { dimStyle: string; overrides?: Record<number, string | number>; dimType?: number; subtype?: string }): Record<string, number | string> {
   const out: Record<string, number | string> = { ...DIM_VAR_DEFAULTS };
   for (const [k, v] of doc.header) if (k.startsWith('$DIM')) out[k.slice(1)] = v as number | string;
-  const ds = doc.dimStyles.get(tableKey(d.dimStyle));
+  // 그 종류의 하위 스타일(이름$2 등)이 있으면 그것
+  const ds = childStyleOf(doc, d) ?? doc.dimStyles.get(tableKey(d.dimStyle));
   if (ds) Object.assign(out, ds.vars);
   if (d.overrides) for (const [code, v] of Object.entries(d.overrides)) {
     const n = DIM_VAR_CODES[Number(code)];

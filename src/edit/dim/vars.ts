@@ -3,7 +3,7 @@
  * 핸들 값(340~347)은 이름으로 바꾸고, 크기 변수는 DIMSCALE을 곱해 둔다.
  */
 import { DIM_HANDLE_CODES, DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../../core/dimvars';
-import { type CadDocument, type DimensionEntity, type TextStyle, tableKey } from '../../core/model';
+import { type CadDocument, type DimStyle, type DimensionEntity, type TextStyle, tableKey } from '../../core/model';
 
 export type RawVars = Record<string, number | string>;
 
@@ -59,10 +59,30 @@ function xdataVars(doc: CadDocument, xdata: { app: string; items: { code: number
   }
 }
 
+/**
+ * 하위 치수 스타일(AutoCAD "사용 대상"): 부모 이름 뒤 $0 선형·정렬, $2 각도, $3 지름, $4 반지름(꺾기 포함), $6 세로좌표, $7 지시선.
+ * 치수는 부모 스타일을 가리키고, 그 종류의 하위 스타일이 있으면 그 값으로 그린다. 호 길이 치수는 하위 스타일이 없다
+ */
+export function childStyleSuffix(d: { dimType?: number; subtype?: string }): string | null {
+  if (d.subtype === 'LEADER') return '7';
+  if (d.dimType === undefined) return null;
+  if (d.subtype === 'ARC_DIMENSION') return null;
+  if (d.subtype === 'LARGE_RADIAL_DIMENSION') return '4';
+  const t = d.dimType & 7;
+  return t === 0 || t === 1 ? '0' : t === 2 || t === 5 ? '2' : t === 3 ? '3' : t === 4 ? '4' : t === 6 ? '6' : null;
+}
+
+/** 치수 종류에 맞는 하위 스타일(없으면 null) */
+export function childStyleOf(doc: CadDocument, d: { dimStyle: string; dimType?: number; subtype?: string }): DimStyle | null {
+  const suf = childStyleSuffix(d);
+  if (suf === null) return null;
+  return doc.dimStyles.get(tableKey(`${d.dimStyle || 'Standard'}$${suf}`)) ?? null;
+}
+
 /** 치수의 변수 값(스타일 + 재지정). 스타일이 없으면 머리말 $DIM 값을 쓴다. */
-export function rawDimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle' | 'overrides'> & { xdata?: DimensionEntity['xdata'] }): RawVars {
+export function rawDimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle' | 'overrides'> & { xdata?: DimensionEntity['xdata']; dimType?: number; subtype?: string }): RawVars {
   const out: RawVars = { ...DIM_VAR_DEFAULTS };
-  const ds = doc.dimStyles.get(tableKey(d.dimStyle || 'Standard'));
+  const ds = childStyleOf(doc, d) ?? doc.dimStyles.get(tableKey(d.dimStyle || 'Standard'));
   if (ds) {
     Object.assign(out, ds.vars);
     // R14 이전 스타일: DIMUNIT·DIMFIT만 있다
@@ -157,7 +177,7 @@ export interface DimVars {
   txtdirection: number;
 }
 
-export function dimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle' | 'overrides'> & { xdata?: DimensionEntity['xdata'] }): DimVars {
+export function dimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle' | 'overrides'> & { xdata?: DimensionEntity['xdata']; dimType?: number; subtype?: string }): DimVars {
   const r = rawDimVars(doc, d);
   let scale = num(r.DIMSCALE, 1);
   if (!(scale > 0)) scale = 1;

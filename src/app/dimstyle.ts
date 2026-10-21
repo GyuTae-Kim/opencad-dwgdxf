@@ -363,8 +363,28 @@ export function dimStyleRenameOps(st: DocState, from: string, to: string): EditO
       if ((e.type === 'DIMENSION' || e.type === 'LEADER' || e.type === 'TOLERANCE') && tableKey((e as { dimStyle: string }).dimStyle || 'Standard') === fk) ops.push({ kind: 'modify', block: bk, before: e, after: { ...structuredClone(e), dimStyle: to } as Entity });
     }
   if (tableKey(String(doc.header.get('$DIMSTYLE') ?? '')) === fk) ops.push({ kind: 'header', name: '$DIMSTYLE', before: doc.header.get('$DIMSTYLE'), after: to });
+  // 하위 스타일(이름$n)도 새 이름을 따른다
+  for (const [k, c] of doc.dimStyles) {
+    const m = CHILD_RE.exec(c.name);
+    if (!m || tableKey(parentOf(c.name)) !== fk) continue;
+    const nn = `${to}$${m[1]}`;
+    ops.push({ kind: 'dimStyle', key: k, before: c, after: null }, { kind: 'dimStyle', key: tableKey(nn), before: null, after: { ...c, name: nn } });
+  }
   return ops;
 }
+
+/** 하위 치수 스타일 이름(부모$n)과 종류 */
+const CHILD_RE = /\$([0-7])$/;
+const CHILD_KINDS: [string, string][] = [
+  ['', '모든 치수'],
+  ['0', '선형 치수'],
+  ['2', '각도 치수'],
+  ['4', '반지름 치수'],
+  ['3', '지름 치수'],
+  ['6', '세로좌표 치수'],
+  ['7', '지시선 및 공차'],
+];
+const parentOf = (name: string): string => name.replace(CHILD_RE, '');
 
 /** 변수 설명(대화상자 항목 이름) */
 const LABELS = new Map<string, string>(TABS.flatMap(([, fs]) => fs.map((f) => [f.v, f.label] as const)));
@@ -649,8 +669,14 @@ export function registerDimStyleCommands(app: App): void {
           list.append(r);
         };
         for (const s of styles) {
+          if (CHILD_RE.test(s.name) && doc.dimStyles.has(tableKey(parentOf(s.name)))) continue;
           const isCur = tableKey(s.name) === tableKey(cur);
           row(`${s.name}${isCur ? ' (현재)' : ''}${used.get(tableKey(s.name)) ? `  · ${used.get(tableKey(s.name))}` : ''}`, s.name, false);
+          // 하위 스타일은 부모 아래에 종류 이름으로(AutoCAD 목록과 같다)
+          for (const [suf, label] of CHILD_KINDS) {
+            const c = suf ? doc.dimStyles.get(tableKey(`${s.name}$${suf}`)) : undefined;
+            if (c) row(label, c.name, true);
+          }
           if (isCur && Object.keys(ov).length) row('<스타일 재지정>', null, true);
         }
         const base = pickedStyle();
@@ -683,7 +709,8 @@ export function registerDimStyleCommands(app: App): void {
         }
         st.session.commit({ label, ops });
         if (!isNew) {
-          const rg = regenOps(st, next.name);
+          // 하위 스타일을 고치면 부모 스타일을 쓰는 치수를 다시 만든다
+          const rg = regenOps(st, parentOf(next.name));
           if (rg.length) st.session.commit({ label, ops: rg, rebuildNow: true });
         }
       };
@@ -711,12 +738,15 @@ export function registerDimStyleCommands(app: App): void {
           '새 치수 스타일 작성',
           [
             { key: 'name', label: '새 스타일 이름', type: 'text', value: `${base.name} 사본` },
-            { key: 'start', label: '시작', type: 'select', value: base.name, options: [...doc.dimStyles.values()].filter((s) => s.name).map((s) => ({ value: s.name, label: s.name })) },
+            { key: 'start', label: '시작', type: 'select', value: parentOf(base.name), options: [...doc.dimStyles.values()].filter((s) => s.name && !CHILD_RE.test(s.name)).map((s) => ({ value: s.name, label: s.name })) },
             { key: 'anno', label: '주석', type: 'check', value: annotativeFlag(base.xdata) ?? false },
+            // 사용 대상: 모든 치수 = 새 스타일, 그 밖 = 시작 스타일의 하위 스타일(이름$n, 이름 칸은 쓰지 않는다)
+            { key: 'use', label: '사용 대상', type: 'select', value: '', options: CHILD_KINDS.map(([suf, label]) => ({ value: suf, label })) },
           ],
           {
             ok: '계속',
             validate: (x) => {
+              if (x.use) return doc.dimStyles.has(tableKey(`${x.start}$${x.use}`)) ? '그 치수 종류의 하위 스타일이 이미 있습니다.' : null;
               const n = String(x.name).trim();
               if (!n || BAD_NAME.test(n)) return '스타일 이름이 올바르지 않습니다.';
               return doc.dimStyles.has(tableKey(n)) ? '같은 이름의 스타일이 있습니다.' : null;
@@ -725,7 +755,7 @@ export function registerDimStyleCommands(app: App): void {
         );
         if (!v) return;
         const src = doc.dimStyles.get(tableKey(String(v.start))) ?? base;
-        const name = String(v.name).trim();
+        const name = v.use ? `${src.name}$${v.use}` : String(v.name).trim();
         const r = await editDialog(app, `새 치수 스타일: ${name}`, src, styleVars(src), !!v.anno);
         if (!r) return;
         let s: DimStyle = { ...structuredClone(src), name, handle: st.session.newHandle(), flags: 0, vars: r.vars };
@@ -835,7 +865,9 @@ export function registerDimStyleCommands(app: App): void {
           { label: '아니오', value: 'no' },
         ]);
         if (a !== 'yes') return;
-        st.session.commit({ label: 'DIMSTYLE', ops: [{ kind: 'dimStyle', key, before: s, after: null }] });
+        // 부모를 지우면 하위 스타일도 함께
+        const kids = [...doc.dimStyles.entries()].filter(([k]) => CHILD_RE.test(k) && tableKey(parentOf(k)) === key);
+        st.session.commit({ label: 'DIMSTYLE', ops: [{ kind: 'dimStyle', key, before: s, after: null }, ...kids.map(([k, c]) => ({ kind: 'dimStyle' as const, key: k, before: c, after: null }))] });
         picked = curName();
         render();
       };
