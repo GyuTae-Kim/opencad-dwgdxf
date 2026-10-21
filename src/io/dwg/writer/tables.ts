@@ -476,7 +476,8 @@ export class TableWriter {
     d.B(hasAtt);
     d.B(isXref);
     d.B(isOverlaid);
-    if (ver >= R2000) d.B((flags & 32) !== 0);
+    // 불러오지 않음(언로드) 비트. flags의 32는 DXF 뜻(확인됨)이라 쓰지 않는다(읽기 tables.ts).
+    if (ver >= R2000) d.B((isXref || isOverlaid) && def.xrefUnloaded === true);
     // 외부 참조·덧씌우기 블록에는 소유 객체 수·핸들을 쓰지 않는다(AutoCAD와 같게, 읽기 tables.ts)
     const owns = !isXref && !isOverlaid;
     if (ver >= R2004 && owns) d.BL(pb.ents.length);

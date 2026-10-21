@@ -178,6 +178,9 @@ export function clipLoopsToRect(loops: number[][], r: readonly [number, number, 
 
 /**
  * 무늬 선을 경계로 자른다. 결과: 선분 [x0, y0, x1, y1, …], 너무 많으면 null
+ *
+ * 무늬 선 하나마다 모든 경계 변을 보면 선 수 × 변 수라, 촘촘한 해치(선 20만 개)에 변이 많으면(곡선 경계) 몇 초가 걸린다.
+ * 변마다 지나는 선 번호(k) 범위를 미리 구해 k 순으로 쓸어 가며 그 선에 걸칠 수 있는 변만 본다(교차 판정·순서는 그대로).
  */
 export function patternSegments(lines: readonly HatchPatternLine[], loops: number[][], limit = HATCH_LINE_LIMIT): number[] | null {
   const out: number[] = [];
@@ -187,14 +190,39 @@ export function patternSegments(lines: readonly HatchPatternLine[], loops: numbe
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const l of loops)
+  let edgeCount = 0;
+  for (const l of loops) {
+    edgeCount += l.length >> 1;
     for (let i = 0; i < l.length; i += 2) {
       minX = Math.min(minX, l[i]!);
       maxX = Math.max(maxX, l[i]!);
       minY = Math.min(minY, l[i + 1]!);
       maxY = Math.max(maxY, l[i + 1]!);
     }
+  }
+  // 변 끝점(고리마다 마지막 점 → 첫 점으로 닫힌다)
+  const ax = new Float64Array(edgeCount);
+  const ay = new Float64Array(edgeCount);
+  const bx = new Float64Array(edgeCount);
+  const by = new Float64Array(edgeCount);
+  {
+    let e = 0;
+    for (const l of loops) {
+      const n = l.length;
+      for (let i = 0; i < n; i += 2, e++) {
+        const j = (i + 2) % n;
+        ax[e] = l[i]!;
+        ay[e] = l[i + 1]!;
+        bx[e] = l[j]!;
+        by[e] = l[j + 1]!;
+      }
+    }
+  }
   const corners = [minX, minY, maxX, minY, maxX, maxY, minX, maxY];
+  const kLo = new Float64Array(edgeCount);
+  const kHi = new Float64Array(edgeCount);
+  const order = new Int32Array(edgeCount);
+  const active = new Int32Array(edgeCount);
   let count = 0;
   for (const pl of lines) {
     const ux = Math.cos(pl.angle);
@@ -216,32 +244,49 @@ export function patternSegments(lines: readonly HatchPatternLine[], loops: numbe
     let k1 = Math.floor(dMax / spacing);
     if (k0 > k1) [k0, k1] = [k1, k0];
     if (k1 - k0 > limit) return null;
+    // 변마다 걸칠 수 있는 선 번호 범위(반올림 오차만큼 한 칸씩 넉넉히 — 실제 교차는 아래에서 예전 식 그대로 판정)
+    for (let e = 0; e < edgeCount; e++) {
+      const ka = ((ax[e]! - pl.base.x) * nx + (ay[e]! - pl.base.y) * ny) / spacing;
+      const kb = ((bx[e]! - pl.base.x) * nx + (by[e]! - pl.base.y) * ny) / spacing;
+      kLo[e] = Math.floor(Math.min(ka, kb)) - 1;
+      kHi[e] = Math.ceil(Math.max(ka, kb)) + 1;
+      order[e] = e;
+    }
+    order.sort((p, q) => kLo[p]! - kLo[q]!);
+    let next = 0;
+    let nActive = 0;
     const dashes = pl.dashes;
     const period = dashes.reduce((a, b) => a + Math.abs(b), 0);
+    const ts: number[] = [];
     for (let k = k0; k <= k1; k++) {
+      // 이 선에 걸칠 수 있는 변: 새로 들어온 변을 더하고 지나간 변은 뺀다
+      while (next < edgeCount && kLo[order[next]!]! <= k) active[nActive++] = order[next++]!;
+      if (!nActive) {
+        // 다음 변이 시작하는 선까지 건너뛴다
+        if (next >= edgeCount) break;
+        const skip = Math.max(k, Math.floor(kLo[order[next]!]!) - 1);
+        if (skip > k) k = skip;
+        continue;
+      }
       // 선 k의 원점(무늬 시작)
       const ox = pl.base.x + pl.offset.x * k;
       const oy = pl.base.y + pl.offset.y * k;
-      // 모든 경계 변과 교차
-      const ts: number[] = [];
-      for (const l of loops) {
-        const n = l.length;
-        for (let i = 0; i < n; i += 2) {
-          const j = (i + 2) % n;
-          const ax = l[i]!;
-          const ay = l[i + 1]!;
-          const bx = l[j]!;
-          const by = l[j + 1]!;
-          const da = (ax - ox) * nx + (ay - oy) * ny;
-          const db = (bx - ox) * nx + (by - oy) * ny;
-          if ((da > 0) === (db > 0)) continue;
-          if (da === db) continue;
-          const s = da / (da - db);
-          const px = ax + (bx - ax) * s;
-          const py = ay + (by - ay) * s;
-          ts.push((px - ox) * ux + (py - oy) * uy);
-        }
+      ts.length = 0;
+      let w = 0;
+      for (let r = 0; r < nActive; r++) {
+        const e = active[r]!;
+        if (kHi[e]! < k) continue;
+        active[w++] = e;
+        const da = (ax[e]! - ox) * nx + (ay[e]! - oy) * ny;
+        const db = (bx[e]! - ox) * nx + (by[e]! - oy) * ny;
+        if ((da > 0) === (db > 0)) continue;
+        if (da === db) continue;
+        const s = da / (da - db);
+        const px = ax[e]! + (bx[e]! - ax[e]!) * s;
+        const py = ay[e]! + (by[e]! - ay[e]!) * s;
+        ts.push((px - ox) * ux + (py - oy) * uy);
       }
+      nActive = w;
       if (ts.length < 2) continue;
       ts.sort((a, b) => a - b);
       for (let i = 0; i + 1 < ts.length; i += 2) {

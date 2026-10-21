@@ -159,6 +159,8 @@ function textStyle(rec: DxfRecord): TextStyle {
   const { base, tags: t } = split(rec);
   const s: TextStyle = {
     ...base,
+    // 70(1 쉐이프 파일, 4 세로 문자, 16·32 외부 의존)은 AcDbTextStyleTableRecord 하위 클래스에 있다
+    flags: t.int(70, base.flags),
     height: t.num(40),
     widthFactor: t.num(41, 1) || 1,
     oblique: t.num(50) * DEG,
@@ -295,8 +297,12 @@ export function readTableEntry(doc: CadDocument, rec: DxfRecord, th: TableHandle
     }
     case 'STYLE': {
       const s = textStyle(rec);
-      // 쉐이프 파일 항목(70 비트 1)은 이름이 비어 있다.
-      const key = s.name ? tableKey(s.name) : `*SHAPE:${s.handle || s.font}`;
+      // 쉐이프 파일 항목(70 비트 1)은 이름이 비어 있다. 핸들(없으면 글꼴 파일, 겹치면 차례)로 따로 둔다
+      let key = s.name ? tableKey(s.name) : `*SHAPE:${s.handle || s.font}`;
+      if (!s.name) {
+        s.flags |= 1;
+        for (let n = 2; doc.textStyles.has(key); n++) key = `*SHAPE:${s.handle || s.font}#${n}`;
+      }
       doc.textStyles.set(key, s);
       if (s.handle) th.styles.set(s.handle, s.name || key);
       break;

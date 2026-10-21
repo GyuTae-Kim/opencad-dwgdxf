@@ -3,6 +3,7 @@
  * - 축척은 AutoCAD처럼 "용지 단위 a = 도면 단위 b"(INSUNITS와 무관), 실제 축척 안내
  * - 모형 플롯 영역 밖은 같은 용지 위라도 자른다, 배치는 대화상자 보기(영역·축척·자리)로 그리고 도면 공간을 먼저(기본)
  * - PDF: 투명도(그래픽 상태), 도면층(OCG), 같은 스타일 채우기 한 경로, 검색되는 숨은 문자, 자르기 경계의 글자
+ * - 목록에 없는 배치 용지(ARCH D·사용자 크기): PLOT은 "배치 용지"를 그대로 쓴다(A3·Tabloid에 1:1로 놓아 잘리지 않게)
  */
 import { describe, expect, it } from 'vitest';
 import type { CadDocument, Entity } from '../../src/core/model';
@@ -13,8 +14,8 @@ import { TextEngine } from '../../src/text/layout';
 import { DocState } from '../../src/app/docstate';
 import { EditSession } from '../../src/edit/session';
 import { PdfResources, layoutPage, modelPage, pdfContent, pdfDocument } from '../../src/app/export';
-import { scaleMmPerUnit } from '../../src/app/plot';
-import { realScaleNote } from '../../src/app/pagesetup-ui';
+import { initialPlotForm, keepPaperName, layoutView, plotSettingsOfForm, scaleMmPerUnit } from '../../src/app/plot';
+import { type PageForm, realScaleNote } from '../../src/app/pagesetup-ui';
 import { createHatch } from '../../src/edit/hatch/create';
 
 const fakeRenderer = { upload: () => ({}), dispose: () => {} } as never;
@@ -89,13 +90,30 @@ describe('PDF', () => {
     const c = pdfContent(page, [], res);
     expect(c).toContain('3 Tr');
     expect((c.match(/Tj/g) ?? []).length).toBe(3);
-    expect([...res.chars.keys()].map((cp) => String.fromCodePoint(cp)).sort()).toEqual(['A', 'B', 'Ø']);
+    expect(res.glyphs.map((g) => String.fromCodePoint(g.cp)).sort()).toEqual(['A', 'B', 'Ø']);
+    // 글자 폭은 글리프의 실제 전진 폭(예전에는 모두 0.6이라 PDF 보기 프로그램이 낱말 사이에 빈칸을 넣었다)
+    for (const g of res.glyphs) expect(g.adv).toBeGreaterThan(0);
     const pdf = await (await pdfDocument([page], '도면')).text();
     expect(pdf).toContain('/Subtype /Type3');
     expect(pdf).toContain('beginbfchar');
     expect(pdf).toContain('<00d8>');
     expect(pdf).toContain('/OCProperties');
     expect(pdf).toContain('/Title <FEFF');
+  });
+  it('PDF 보기 프로그램(pdf.js)이 숨은 문자를 낱말로 읽는다(글자 폭 = 실제 전진 폭)', async () => {
+    const doc = createNewDocument('metric');
+    const ms = doc.blocks.get(MODEL_SPACE)!;
+    ms.entities.push(ent({ type: 'TEXT', insert: { x: 10, y: 10, z: 0 }, height: 5, text: 'Hello World 12', rotation: 0, widthFactor: 1, oblique: 0, style: 'Standard', generation: 0, halign: 0, valign: 0 } as never));
+    ms.entities.push(ent({ type: 'TEXT', insert: { x: 10, y: 30, z: 0 }, height: 3, text: 'Wall illumination', rotation: 0.4, widthFactor: 0.8, oblique: 0, style: 'Standard', generation: 0, halign: 0, valign: 0 } as never));
+    const st = stateWith(doc);
+    const page = modelPage(st, [-10, -10, 110, 60], 600, 400, 5, 1, { lineweights: true })!;
+    const data = new Uint8Array(await (await pdfDocument([page], 't')).arrayBuffer());
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const pdf = await pdfjs.getDocument({ data, verbosity: 0 }).promise;
+    const tc = await (await pdf.getPage(1)).getTextContent();
+    const text = tc.items.map((it) => ('str' in it ? it.str : '')).join('').replace(/\s+/g, ' ');
+    expect(text).toContain('Hello World 12');
+    expect(text).toContain('Wall illumination');
   });
   it('자르기 경계에 걸친 글자도 남는다(삽입점이 경계 밖)', () => {
     const doc = createNewDocument('metric');
@@ -140,3 +158,42 @@ describe('배치 플롯 보기', () => {
   });
 });
 
+
+describe('목록에 없는 배치 용지(ARCH D)', () => {
+  const defaults: PageForm = { paper: 'A3', landscape: true, upsideDown: false, styleSheet: 'monochrome.ctb', area: 'layout', scale: 'fit', offsetX: 0, offsetY: 0, centered: true, lineweights: true, scaleLineweights: false, paperUnits: 'mm', plotTransparency: false, paperspaceLast: false };
+  function archD() {
+    const doc = createNewDocument('metric');
+    const lay = doc.layouts.find((l) => l.blockName.toUpperCase() === PAPER_SPACE)!;
+    Object.assign(lay.plot, { paperName: 'ARCH_D_(36.00_x_24.00_Inches)', paperWidth: 914.4, paperHeight: 609.6, rotation: 0, paperUnits: 1, margins: [0, 0, 0, 0], scaleNumerator: 1, scaleDenominator: 1, flags: lay.plot.flags & ~16, plotType: 5 });
+    lay.limitsMin = { x: 0, y: 0 };
+    lay.limitsMax = { x: 914.4, y: 609.6 };
+    doc.blocks.get(PAPER_SPACE)!.entities.push(ent({ type: 'LINE', paperSpace: true, start: { x: 0, y: 0, z: 0 }, end: { x: 900, y: 600, z: 0 } } as never));
+    return { doc, lay };
+  }
+  it('대화상자 처음 값은 배치 용지(KEEP)이고, 항목 이름에 매체 이름과 크기를 보인다', () => {
+    const { lay } = archD();
+    const { form, keepLabel } = initialPlotForm(lay, false, undefined, defaults);
+    expect(form.paper).toBe('KEEP');
+    expect(keepLabel).toBe('배치 용지(ARCH D (36.00 x 24.00 Inches), 914.4 × 609.6 mm)');
+    expect(keepPaperName({ paperName: '', paperWidth: 100, paperHeight: 50 })).toBe('100 × 50 mm');
+    // 모형은 목록 용지로
+    expect(initialPlotForm(lay, true, undefined, defaults).form.paper).toBe('A3');
+    // 이전 플롯이 배치 용지였으면 다시 배치 용지
+    const s = plotSettingsOfForm(form, false, false, 'pdf', 1, true);
+    expect(s.keepPaper).toBe(true);
+    expect(initialPlotForm(lay, false, s, defaults).form.paper).toBe('KEEP');
+  });
+  it('배치 용지 그대로 1:1이면 배치 그대로 그리고(잘림 없음), 방향을 바꾸면 용지를 돌린다', () => {
+    const { doc, lay } = archD();
+    const st = stateWith(doc, [MODEL_SPACE, PAPER_SPACE]);
+    const app = { view: {} } as never;
+    const { form } = initialPlotForm(lay, false, undefined, defaults);
+    const s = plotSettingsOfForm({ ...form, scale: '1:1' }, false, false, 'pdf', 1, true);
+    expect(layoutView(app, st, PAPER_SPACE, s, 1)).toBeNull();
+    const turned = layoutView(app, st, PAPER_SPACE, { ...s, landscape: false }, 1)!;
+    expect([turned.width, turned.height].map((v) => +v.toFixed(1))).toEqual([609.6, 914.4]);
+    // 예전처럼 A3로 바꾸면 A3 쪽(420 × 297)에 1:1로 놓여 잘린다
+    const a3 = layoutView(app, st, PAPER_SPACE, { ...s, keepPaper: undefined, paper: 'A3' }, 1)!;
+    expect([a3.width, a3.height]).toEqual([420, 297]);
+  });
+});

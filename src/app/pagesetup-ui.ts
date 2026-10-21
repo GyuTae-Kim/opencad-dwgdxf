@@ -277,8 +277,10 @@ export function realScaleNote(scale: string, paperUnits: 'mm' | 'in', insunits: 
   return `도면 단위가 ${UNIT_NAMES[insunits] ?? insunits}이므로 실제 크기 기준 ${txt}`;
 }
 
-export function pageFields(v: PageForm, model: boolean, insunits = 0): { el: HTMLElement; read(): PageForm; set(f: PageForm): void; onWindow(f: () => void): void } {
-  const paper = selectIn([...(v.paper === 'KEEP' ? [{ value: 'KEEP', label: '지금 용지' }] : []), ...PAPERS.map((x) => ({ value: x.key, label: x.label }))], v.paper, '용지 크기');
+/** keepLabel: 목록에 없는 지금 용지를 그대로 쓰는 항목의 이름(없으면 v.paper가 'KEEP'일 때만 "지금 용지") */
+export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?: string): { el: HTMLElement; read(): PageForm; set(f: PageForm): void; onWindow(f: () => void): void } {
+  const keep = keepLabel ?? (v.paper === 'KEEP' ? '지금 용지' : undefined);
+  const paper = selectIn([...(keep ? [{ value: 'KEEP', label: keep }] : []), ...PAPERS.map((x) => ({ value: x.key, label: x.label }))], v.paper, '용지 크기');
   const sheets = [...new Set([...STYLE_SHEETS, ...ctbList().map((t) => t.name), v.styleSheet])];
   const style = selectIn(sheets.map((x) => ({ value: x, label: x || '없음' })), v.styleSheet, '플롯 스타일 테이블');
   const areaOpts = model
@@ -363,7 +365,7 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0): { el: HTM
     paperspaceLast: psl.checked,
   });
   const set = (f: PageForm) => {
-    if (f.paper !== 'KEEP') paper.value = f.paper;
+    if (f.paper !== 'KEEP' || keep) paper.value = f.paper;
     if (![...style.options].some((o) => o.value === f.styleSheet)) style.append(h('option', { value: f.styleSheet }, f.styleSheet || '없음'));
     style.value = f.styleSheet;
     if ([...area.options].some((o) => o.value === f.area)) area.value = f.area;

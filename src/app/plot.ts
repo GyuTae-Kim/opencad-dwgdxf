@@ -3,7 +3,7 @@
  * PLOT의 "배치에 적용"은 지금 설정을 배치(모형 탭이면 모형)의 페이지 설정으로 도면에 저장한다(명령 취소 한 단계).
  */
 import { ensureLayoutVariants } from './psltscale';
-import { MODEL_SPACE, tableKey } from '../core/model';
+import { type Layout, MODEL_SPACE, tableKey } from '../core/model';
 import type { PlotStyle } from '../render/styles';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
@@ -134,7 +134,7 @@ export function scaleMmPerUnit(s: Pick<PlotSettings, 'scale' | 'paperUnits'>): n
  * 배치를 대화상자 설정(용지·방향·축척·플롯 대상·간격띄우기)으로 플롯할 때의 보기. 배치의 페이지 설정과 같으면(용지 같음, 1:1, 배치 전체) null
  * — 배치 그대로 그린다.
  */
-function layoutView(app: App, st: DocState, space: string, s: PlotSettings, unitsPerMm: number): LayoutPlotView | null {
+export function layoutView(app: App, st: DocState, space: string, s: PlotSettings, unitsPerMm: number): LayoutPlotView | null {
   const lay = st.layoutFor(space);
   if (!lay) return null;
   const scene = st.scenes.get(space);
@@ -142,8 +142,10 @@ function layoutView(app: App, st: DocState, space: string, s: PlotSettings, unit
   const lw = (paper.maxX - paper.minX) * paper.mmPerUnit;
   const lh = (paper.maxY - paper.minY) * paper.mmPerUnit;
   const pp = s.keepPaper ? null : (PAPERS.find((p) => p.key === s.paper) ?? null);
-  const pw = pp ? (s.landscape ? pp.h : pp.w) : lw;
-  const ph = pp ? (s.landscape ? pp.w : pp.h) : lh;
+  // 배치 용지를 그대로 쓸 때도 방향을 바꾸면 돌린다
+  const flip = !pp && s.landscape !== lw >= lh;
+  const pw = pp ? (s.landscape ? pp.h : pp.w) : flip ? lh : lw;
+  const ph = pp ? (s.landscape ? pp.w : pp.h) : flip ? lw : lh;
   const area = s.area ?? 'layout';
   const one = s.scale !== 'fit' && Math.abs(scaleMmPerUnit(s) - paper.mmPerUnit) < 1e-9;
   if (area === 'layout' && one && Math.abs(pw - lw) < 1 && Math.abs(ph - lh) < 1) return null;
@@ -372,11 +374,26 @@ export function plotSettingsOfForm(f: PageForm, model: boolean, allLayouts: bool
   };
 }
 
+/**
+ * PLOT 대화상자의 처음 칸(이전 플롯 → 배치(모형)의 페이지 설정 → 기본값)과 "배치 용지" 항목 이름.
+ * 모형은 목록의 용지로 플롯한다. 배치는 목록에 없는 배치 용지(ARCH D·사용자 크기 등)를 그대로 쓸 수 있다.
+ */
+export function initialPlotForm(layout: Layout | undefined, model: boolean, prev: PlotSettings | undefined, defaults: PageForm): { form: PageForm; keepLabel?: string } {
+  const fromLayout = layout && (!model || layout.plot.pageSetupName || layout.plot.paperWidth > 0) ? pageFormOf(layout.plot, model) : { ...defaults };
+  const keepLabel = !model && layout && fromLayout.paper === 'KEEP' ? `배치 용지(${keepPaperName(layout.plot)})` : undefined;
+  if (fromLayout.paper === 'KEEP' && !keepLabel) fromLayout.paper = defaults.paper;
+  let form: PageForm = prev ? formOfSettings(prev, fromLayout) : fromLayout;
+  if (form.paper === 'KEEP' && !keepLabel) form = { ...form, paper: fromLayout.paper === 'KEEP' ? defaults.paper : fromLayout.paper };
+  if (model && form.area === 'layout') form.area = 'display';
+  if (!model && form.area === 'limits') form.area = 'layout';
+  return { form, keepLabel };
+}
+
 /** 출력 설정 → 플롯 대화상자 칸(이전 플롯) */
 function formOfSettings(s: PlotSettings, base: PageForm): PageForm {
   return {
     ...base,
-    paper: s.paper,
+    paper: s.keepPaper ? 'KEEP' : s.paper,
     landscape: s.landscape,
     scale: s.scale,
     styleSheet: s.ctb ?? (s.plotStyle === 'mono' ? 'monochrome.ctb' : s.plotStyle === 'gray' ? 'Grayscale.ctb' : base.styleSheet),
@@ -444,17 +461,15 @@ async function runPlot(app: App, ctx: CommandContext): Promise<void> {
     plotTransparency: false,
     paperspaceLast: false,
   };
-  const fromLayout = layout && (!model || layout.plot.pageSetupName || layout.plot.paperWidth > 0) ? pageFormOf(layout.plot, model) : defaults;
-  if (fromLayout.paper === 'KEEP') fromLayout.paper = defaults.paper;
-  let form: PageForm = prev ? formOfSettings(prev, fromLayout) : fromLayout;
-  if (model && form.area === 'layout') form.area = 'display';
-  if (!model && form.area === 'limits') form.area = 'layout';
+  const init = initialPlotForm(layout ?? undefined, model, prev, defaults);
+  const keepLabel = init.keepLabel;
+  let form = init.form;
   let device: Device = prev?.format === 'svg' ? 'svg' : 'pdf';
   let copies = prev?.copies ?? 1;
   let allLayouts = prev?.what === 'layouts';
   let setupName = '';
   for (;;) {
-    const r = await plotDialog(app, ctx, { form, model, device, copies, allLayouts, setupName, layoutCount, hasPrev: !!prev });
+    const r = await plotDialog(app, ctx, { form, model, device, copies, allLayouts, setupName, layoutCount, hasPrev: !!prev, keepLabel });
     if (!r) return;
     ({ form, device, copies, allLayouts, setupName } = r);
     if (r.action === 'window') {
@@ -530,13 +545,22 @@ interface PlotDialogState {
   setupName: string;
   layoutCount: number;
   hasPrev: boolean;
+  /** 목록에 없는 배치 용지를 그대로 쓰는 항목의 이름(배치에서만) */
+  keepLabel?: string;
+}
+
+/** 목록에 없는 배치 용지의 이름: 매체 이름과 크기(mm) */
+export function keepPaperName(p: { paperName: string; paperWidth: number; paperHeight: number }): string {
+  const size = `${+p.paperWidth.toFixed(1)} × ${+p.paperHeight.toFixed(1)} mm`;
+  const name = p.paperName.replace(/_/g, ' ').trim();
+  return name ? `${name}, ${size}` : size;
 }
 
 function plotDialog(app: App, ctx: CommandContext, v: PlotDialogState): Promise<(PlotDialogState & { action: 'plot' | 'window' | 'apply' }) | null> {
   const st = app.active!;
   const named = namedPageSetups(st.doc).items.filter((x) => x.model === v.model);
   const setup = selectIn([{ value: '', label: '<없음>' }, ...named.map((x) => ({ value: x.name, label: x.name }))], v.setupName, '페이지 설정 이름');
-  const fields = pageFields(v.form, v.model, Number(st.doc.header.get('$INSUNITS') ?? 0));
+  const fields = pageFields(v.form, v.model, Number(st.doc.header.get('$INSUNITS') ?? 0), v.keepLabel);
   setup.addEventListener('change', () => {
     const it = named.find((x) => x.name === setup.value);
     if (it) fields.set(pageFormOf(it.plot, v.model));

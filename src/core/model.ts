@@ -1001,6 +1001,11 @@ export interface BlockDef {
   /** 70: 1 익명, 2 속성 정의 있음, 4 외부 참조, 8 오버레이, 16 외부 의존, 32 확인됨, 64 참조됨 */
   flags: number;
   xrefPath?: string;
+  /**
+   * 불러오지 않은(언로드한) 외부 참조. DWG 블록 레코드의 "불러오지 않음" 비트에 해당하고,
+   * DXF에서는 70의 32(확인됨)가 없는 외부 참조로 쓴다. flags의 32와 뜻이 반대라 따로 둔다.
+   */
+  xrefUnloaded?: boolean;
   description?: string;
   layer?: string;
   /** 그리기 순서(파일 순서) */
