@@ -3,6 +3,7 @@
  * - 축척은 AutoCAD처럼 "용지 단위 a = 도면 단위 b"(INSUNITS와 무관), 실제 축척 안내
  * - 모형 플롯 영역 밖은 같은 용지 위라도 자른다, 배치는 대화상자 보기(영역·축척·자리)로 그리고 도면 공간을 먼저(기본)
  * - PDF: 투명도(그래픽 상태), 도면층(OCG), 같은 스타일 채우기 한 경로, 검색되는 숨은 문자, 자르기 경계의 글자
+ * - 목록에 없는 배치 용지(ARCH D·사용자 크기): PLOT은 "배치 용지"를 그대로 쓴다(A3·Tabloid에 1:1로 놓아 잘리지 않게)
  */
 import { describe, expect, it } from 'vitest';
 import type { CadDocument, Entity } from '../../src/core/model';
@@ -13,8 +14,8 @@ import { TextEngine } from '../../src/text/layout';
 import { DocState } from '../../src/app/docstate';
 import { EditSession } from '../../src/edit/session';
 import { PdfResources, layoutPage, modelPage, pdfContent, pdfDocument } from '../../src/app/export';
-import { scaleMmPerUnit } from '../../src/app/plot';
-import { realScaleNote } from '../../src/app/pagesetup-ui';
+import { initialPlotForm, keepPaperName, layoutView, plotSettingsOfForm, scaleMmPerUnit } from '../../src/app/plot';
+import { type PageForm, realScaleNote } from '../../src/app/pagesetup-ui';
 import { createHatch } from '../../src/edit/hatch/create';
 
 const fakeRenderer = { upload: () => ({}), dispose: () => {} } as never;
@@ -140,3 +141,42 @@ describe('배치 플롯 보기', () => {
   });
 });
 
+
+describe('목록에 없는 배치 용지(ARCH D)', () => {
+  const defaults: PageForm = { paper: 'A3', landscape: true, upsideDown: false, styleSheet: 'monochrome.ctb', area: 'layout', scale: 'fit', offsetX: 0, offsetY: 0, centered: true, lineweights: true, scaleLineweights: false, paperUnits: 'mm', plotTransparency: false, paperspaceLast: false };
+  function archD() {
+    const doc = createNewDocument('metric');
+    const lay = doc.layouts.find((l) => l.blockName.toUpperCase() === PAPER_SPACE)!;
+    Object.assign(lay.plot, { paperName: 'ARCH_D_(36.00_x_24.00_Inches)', paperWidth: 914.4, paperHeight: 609.6, rotation: 0, paperUnits: 1, margins: [0, 0, 0, 0], scaleNumerator: 1, scaleDenominator: 1, flags: lay.plot.flags & ~16, plotType: 5 });
+    lay.limitsMin = { x: 0, y: 0 };
+    lay.limitsMax = { x: 914.4, y: 609.6 };
+    doc.blocks.get(PAPER_SPACE)!.entities.push(ent({ type: 'LINE', paperSpace: true, start: { x: 0, y: 0, z: 0 }, end: { x: 900, y: 600, z: 0 } } as never));
+    return { doc, lay };
+  }
+  it('대화상자 처음 값은 배치 용지(KEEP)이고, 항목 이름에 매체 이름과 크기를 보인다', () => {
+    const { lay } = archD();
+    const { form, keepLabel } = initialPlotForm(lay, false, undefined, defaults);
+    expect(form.paper).toBe('KEEP');
+    expect(keepLabel).toBe('배치 용지(ARCH D (36.00 x 24.00 Inches), 914.4 × 609.6 mm)');
+    expect(keepPaperName({ paperName: '', paperWidth: 100, paperHeight: 50 })).toBe('100 × 50 mm');
+    // 모형은 목록 용지로
+    expect(initialPlotForm(lay, true, undefined, defaults).form.paper).toBe('A3');
+    // 이전 플롯이 배치 용지였으면 다시 배치 용지
+    const s = plotSettingsOfForm(form, false, false, 'pdf', 1, true);
+    expect(s.keepPaper).toBe(true);
+    expect(initialPlotForm(lay, false, s, defaults).form.paper).toBe('KEEP');
+  });
+  it('배치 용지 그대로 1:1이면 배치 그대로 그리고(잘림 없음), 방향을 바꾸면 용지를 돌린다', () => {
+    const { doc, lay } = archD();
+    const st = stateWith(doc, [MODEL_SPACE, PAPER_SPACE]);
+    const app = { view: {} } as never;
+    const { form } = initialPlotForm(lay, false, undefined, defaults);
+    const s = plotSettingsOfForm({ ...form, scale: '1:1' }, false, false, 'pdf', 1, true);
+    expect(layoutView(app, st, PAPER_SPACE, s, 1)).toBeNull();
+    const turned = layoutView(app, st, PAPER_SPACE, { ...s, landscape: false }, 1)!;
+    expect([turned.width, turned.height].map((v) => +v.toFixed(1))).toEqual([609.6, 914.4]);
+    // 예전처럼 A3로 바꾸면 A3 쪽(420 × 297)에 1:1로 놓여 잘린다
+    const a3 = layoutView(app, st, PAPER_SPACE, { ...s, keepPaper: undefined, paper: 'A3' }, 1)!;
+    expect([a3.width, a3.height]).toEqual([420, 297]);
+  });
+});
