@@ -10,8 +10,17 @@ async (page) => {
   assert(await page.getByRole('main').count() === 1, 'CAD workspace has main landmark');
   assert(await page.evaluate(() => !!window.opencad && performance.getEntriesByType('resource').some(r=>/editor-.*\.js/.test(r.name))), 'CAD loads automatically on a normal visit');
   assert(await page.locator('.filetabs').isVisible() && await page.locator('.viewbar').isVisible() && !(await page.locator('.ribbon-tabs').isVisible()), 'Phone starts in view mode: file tabs and view toolbar, no editing ribbon');
+  assert(await page.locator('.start .lead.view-copy').isVisible() && await page.locator('.start .lead.edit-copy').isHidden(), 'Phone view mode start screen describes viewing and measuring');
+  assert(await page.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY === 'none'), 'Dragging bars cannot pull-to-refresh the open drawing');
+  assert(await page.evaluate(async () => {
+    const link = document.querySelector('link[rel=manifest]');
+    const manifest = await (await fetch(link.href)).json();
+    const icons = await Promise.all([...manifest.icons.map(icon => new URL(icon.src, link.href)), document.querySelector('link[rel=apple-touch-icon]').href].map(url => fetch(url).then(r => r.ok && r.headers.get('content-type') === 'image/png')));
+    return manifest.display === 'standalone' && icons.every(Boolean);
+  }), 'Home-screen manifest and icons load');
   await page.getByRole('button',{name:'편집 화면으로',exact:true}).click();
   assert(await page.locator('.ribbon-tabs').isVisible() && !(await page.locator('.viewbar').isVisible()), 'Edit screen shows the ribbon');
+  assert(await page.locator('.start .lead.edit-copy').isVisible() && await page.locator('.start .lead.view-copy').isHidden(), 'Edit screen keeps the drawing and editing introduction');
   await page.getByRole('button',{name:'휴대폰 보기 모드로',exact:true}).click();
   assert(await page.locator('.viewbar').isVisible(), 'Back to phone view mode');
   await page.locator('input[type=file]').setInputFiles([]);
@@ -25,6 +34,13 @@ async (page) => {
   await page.locator('.mview-card .mv-prompt').filter({hasText:'첫 번째 점 지정:'}).waitFor();
   await page.locator('.mview-card').getByRole('button',{name:'취소',exact:true}).click();
   assert(await page.evaluate(() => !window.opencad.busyCommand), 'Measure bar cancels the command without a keyboard');
+  assert(await page.evaluate(() => ['.app-button','.filetab .x'].every(selector => { const r = document.querySelector(selector).getBoundingClientRect(); return r.width >= 40 && r.height >= 36; })), 'Menu and tab close buttons have 40x36 touch targets');
+  await page.getByRole('button',{name:'두 점 사이 거리 재기',exact:true}).click();
+  const canvas = await page.locator('.workspace canvas').first().boundingBox();
+  await page.touchscreen.tap(canvas.x + canvas.width * 0.3, canvas.y + canvas.height * 0.4);
+  await page.touchscreen.tap(canvas.x + canvas.width * 0.7, canvas.y + canvas.height * 0.6);
+  await page.locator('.mview-card .mv-big').waitFor();
+  assert(/\d/.test(await page.locator('.mview-card .mv-big').textContent()) && /ΔX .*ΔY /.test(await page.locator('.mview-card .mv-sub').textContent()), 'Distance result shows a big value and an angle/ΔX/ΔY line');
   await page.screenshot({path:'.runtime/performance/editor-mobile.png'});
   await fresh();
   assert(await page.locator('.start .start-new-card').isHidden(), 'Phone view mode hides the new-drawing card');
