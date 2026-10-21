@@ -41,6 +41,11 @@ interface Panel {
   custom?: 'layer' | 'props';
 }
 
+/** 리본 단추 풍선 도움말: 아직 없는 명령이면 "준비 중"을 붙인다(원문 한국어 — 화면 언어로는 번역 모듈이 바꾼다) */
+export function ribbonTip(tip: string, known: boolean): string {
+  return known ? tip : `${tip} — 준비 중`;
+}
+
 const RIBBON: { tab: string; panels: Panel[] }[] = [
   {
     tab: '홈',
@@ -1364,7 +1369,7 @@ export class Shell implements UiHooks {
   }
 
   private ribbonButton(b: Btn, large: boolean): HTMLButtonElement {
-    const el = h('button', { class: large ? 'rbtn-lg' : 'rbtn-sm', title: b.tip ?? b.label, 'data-cmd': b.cmd ?? '', 'data-nodoc': b.noDoc ? '1' : '' }, iconSpan(b.icon), large ? h('span', {}, b.label) : b.label);
+    const el = h('button', { class: large ? 'rbtn-lg' : 'rbtn-sm', title: b.tip ?? b.label, 'data-tip': b.tip ?? b.label, 'data-cmd': b.cmd ?? '', 'data-nodoc': b.noDoc ? '1' : '' }, iconSpan(b.icon), large ? h('span', {}, b.label) : b.label);
     el.addEventListener('click', () => {
       if (b.menu) {
         const r = el.getBoundingClientRect();
@@ -1397,7 +1402,13 @@ export class Shell implements UiHooks {
       const c = el.dataset.cmd ?? '';
       const known = !c || !!this.app?.findCommand(c.split(' ')[0]!);
       el.disabled = (!has && !el.dataset.nodoc) || !known;
-      if (!known) el.title = `${el.title.replace(/ — 준비 중$/, '')} — 준비 중`;
+      // 명령이 아직 없으면 "준비 중"을 붙이고, 명령이 생기면(편집기 모듈을 늦게 불러온 뒤) 원래 풍선 도움말로 되돌린다
+      // (번역된 화면에서는 title이 번역문이라 견주지 않고, 마지막으로 쓴 상태만 기억한다)
+      const ready = known ? '1' : '0';
+      if (el.dataset.ready !== ready) {
+        el.dataset.ready = ready;
+        el.title = ribbonTip(el.dataset.tip ?? el.title.replace(/ — 준비 중$/, ''), known);
+      }
       if (c === 'LWDISPLAY') el.classList.toggle('on', this.app.view.lwDisplay);
     }
     this.refreshCombos();
