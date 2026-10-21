@@ -1,7 +1,7 @@
 /** 휴대폰 보기 모드의 순수 함수: 처음 모드, 프롬프트 나누기(키워드·<기본값>), 정보 카드 행, 정밀 조준 자리 */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AIM_OFFSET_PX, aimPoint } from '../../src/app/aim';
-import { infoRows, promptParts, readMobileMode, startInViewMode, storeMobileMode } from '../../src/app/ui/mobileview';
+import { fitLabels, infoRows, promptParts, readMobileMode, startInViewMode, storeMobileMode } from '../../src/app/ui/mobileview';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -66,6 +66,30 @@ describe('휴대폰 보기 모드', () => {
     const dim = infoRows([{ rows: ['치수 종류', '측정값', '표시 문자', '문자 재지정', '치수 스타일'].map((k) => ({ k, v: k })) }]);
     expect(dim.map((r) => r.k)).toEqual(['측정값', '표시 문자', '치수 종류']);
     expect(infoRows([{ rows: [...'ABCDEFGH'].map(() => ({ k: '길이', v: '1' })) }])).toHaveLength(1);
+  });
+
+  it('보기 단추 이름은 12px, 한 줄에 넘칠 때만 11.5px → 10.5px로 한 단계씩 줄인다', () => {
+    // 글자 단계마다 줄의 내용 폭(scrollWidth)이 다른 가짜 막대
+    const bar = (clientWidth: number, widths: Record<string, number>) => {
+      const cls = new Set<string>(['viewbar', 'tighter']);
+      return {
+        clientWidth,
+        get scrollWidth() {
+          return widths[cls.has('tighter') ? 'tighter' : cls.has('tight') ? 'tight' : '']!;
+        },
+        classList: { add: (...c: string[]) => c.forEach((x) => cls.add(x)), remove: (...c: string[]) => c.forEach((x) => cls.delete(x)) },
+        cls,
+      };
+    };
+    const fits = bar(352, { '': 340, tight: 330, tighter: 320 });
+    expect(fitLabels(fits as unknown as HTMLElement)).toBe('');
+    expect([...fits.cls]).toEqual(['viewbar']);
+    const german = bar(352, { '': 376, tight: 350, tighter: 339 });
+    expect(fitLabels(german as unknown as HTMLElement)).toBe('tight');
+    expect([...german.cls]).toEqual(['viewbar', 'tight']);
+    expect(fitLabels(bar(320, { '': 376, tight: 350, tighter: 339 }) as unknown as HTMLElement)).toBe('tighter');
+    // 숨은 막대(편집 화면)는 재지 않는다
+    expect(fitLabels(bar(0, { '': 376, tight: 350, tighter: 339 }) as unknown as HTMLElement)).toBe('');
   });
 
   it('정밀 조준 십자선은 손가락 위, 도면 영역 위 가장자리에서 멈춘다', () => {

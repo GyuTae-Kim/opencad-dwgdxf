@@ -96,6 +96,23 @@ const MEASURES: { name: string; ico: string; label: string; title: string }[] = 
 /** MEASURERADIUS는 MEASUREGEOM으로 돈다 */
 const RUNS_AS: Record<string, string> = { MEASURERADIUS: 'MEASUREGEOM' };
 
+/** 보기 단추 이름 글자 단계(styles.css): 기본 12px, .tight 11.5px, .tighter 10.5px */
+const FIT_STEPS = ['tight', 'tighter'] as const;
+
+/** 보기 단추 줄: 기본 글자로 넘치면 한 단계씩 작게. 가장 작게도 넘치면 줄이 가로로 밀린다. 고른 단계를 돌려준다 */
+export function fitLabels(bar: HTMLElement): string {
+  bar.classList.remove(...FIT_STEPS);
+  const over = () => bar.clientWidth > 0 && bar.scrollWidth > bar.clientWidth + 1;
+  let step = '';
+  for (const s of FIT_STEPS) {
+    if (!over()) break;
+    if (step) bar.classList.remove(step);
+    bar.classList.add(s);
+    step = s;
+  }
+  return step;
+}
+
 export interface MobileViewHost {
   openPalette(tab: string): void;
   closePalette(): void;
@@ -116,6 +133,7 @@ export class MobileView {
   /** 결과 띠를 닫았는지 */
   private dismissed = false;
   private renderQueued = false;
+  private fitQueued = false;
   /** 보기 모드에서 이미 전체 보기로 맞춘 문서(파일에 저장된 화면은 데스크톱 비율이라 휴대폰에서 잘린다) */
   private readonly fitted = new WeakSet<object>();
 
@@ -141,6 +159,10 @@ export class MobileView {
       prompt: () => this.queue(),
       print: (text, cls) => this.onPrint(text, cls),
     });
+    // 이름 길이가 언어·화면 폭마다 달라 보기 단추 줄이 넘칠 때만 글자를 줄인다
+    const refit = () => this.queueFit();
+    if (typeof window !== 'undefined') window.addEventListener('resize', refit);
+    root.addEventListener('languagechange', refit);
   }
 
   /** 보기 모드 켜고 끄기(기억한다) */
@@ -156,6 +178,17 @@ export class MobileView {
     if (!view) this.card.hidden = true;
     this.host.modeChanged();
     this.render();
+    this.queueFit();
+  }
+
+  /** 다음 그리기 전에(번역이 끝난 뒤) 보기 단추 이름을 한 줄에 맞춘다 */
+  private queueFit(): void {
+    if (this.fitQueued || typeof requestAnimationFrame !== 'function') return;
+    this.fitQueued = true;
+    requestAnimationFrame(() => {
+      this.fitQueued = false;
+      fitLabels(this.bar);
+    });
   }
 
   get viewMode(): boolean {

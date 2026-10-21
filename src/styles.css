@@ -1334,6 +1334,14 @@ kbd {
   .titlebar {
     height: 40px;
   }
+  /* 응용프로그램 메뉴 단추: 보이는 크기(30×26)는 그대로, 투명한 테두리로 누르는 곳을 40×36으로 */
+  .app-button {
+    width: 40px;
+    height: 36px;
+    border: 5px solid transparent;
+    border-radius: 9px;
+    background-clip: padding-box;
+  }
   .icon-btn {
     width: 34px;
     height: 34px;
@@ -1355,12 +1363,17 @@ kbd {
     min-height: 58px;
   }
   .filetabs {
-    height: 38px;
+    height: 40px;
   }
+  /* 파일 탭 닫기: 보이는 크기(28×28)는 그대로, 투명한 테두리로 누르는 곳을 40×36으로 */
   .filetab .x {
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 36px;
     padding: 5px;
+    border: solid transparent;
+    border-width: 4px 6px;
+    margin-right: -6px;
+    background-clip: padding-box;
   }
   .layouttabs {
     height: 36px;
@@ -1887,15 +1900,18 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
 }
 .vb-btn .vb-lbl {
   color: var(--text-dim);
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.15;
   white-space: nowrap;
 }
-@media (max-width: 380px) {
-  .vb-btn .vb-lbl {
-    font-size: 10px;
-    letter-spacing: -0.2px;
-  }
+/* 이름이 긴 언어(독일어 등)에서 한 줄에 다 들어가지 않을 때만 한 단계씩 작게(mobileview.ts fitLabels) */
+.viewbar.tight .vb-btn .vb-lbl {
+  font-size: 11.5px;
+  letter-spacing: -0.1px;
+}
+.viewbar.tighter .vb-btn .vb-lbl {
+  font-size: 10.5px;
+  letter-spacing: -0.2px;
 }
 .vb-btn.on {
   background: var(--accent-soft);
