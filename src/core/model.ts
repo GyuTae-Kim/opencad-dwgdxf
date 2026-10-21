@@ -787,7 +787,22 @@ export interface AcisEntity extends EntityBase {
   rawVersion?: string;
   /** DWG(R2000~)에서 읽은 SAT 자료(감춤을 푼 글, 머리말 포함) — R2000~R2010 DXF로 쓸 때 ACIS 객체로 남긴다 */
   sat?: string;
+  /** REGION: 모서리(wires와 같은 차례)의 정확한 곡선(모르면 null) — MASSPROP·AREA·EXPLODE가 쓴다 */
+  acisCurves?: (AcisCurve | null)[];
+  /** REGION: 면 → 고리 → 모서리 번호(wires 차례). 같은 면의 안쪽 고리가 구멍이다 */
+  acisLoops?: number[][][];
 }
+
+/**
+ * ACIS 모서리의 정확한 곡선(몸체 변환을 적용한 월드 좌표). 매개변수 s0 → s1이 그 모서리 선(wires)의 처음 → 끝이다.
+ * - line: 선분 a → b
+ * - ell: 타원(원) 호 p(t) = c + u·cos t + v·sin t
+ * - nurbs: 넙스(매듭은 표준 꼴, weights가 있으면 유리)
+ */
+export type AcisCurve =
+  | { k: 'line'; a: Vec3; b: Vec3 }
+  | { k: 'ell'; c: Vec3; u: Vec3; v: Vec3; s0: number; s1: number }
+  | { k: 'nurbs'; degree: number; knots: number[]; ctrl: Vec3[]; weights?: number[]; s0: number; s1: number };
 
 /**
  * 원호 정렬 문자(Express Tools ARCALIGNEDTEXT, AcDbArcAlignedText). 호를 따라 글자마다 놓고 돌린 한 줄 문자.

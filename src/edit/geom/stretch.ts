@@ -302,6 +302,8 @@ function partial(e: Entity, inside: (p: Vec2) => boolean, d: Vec2, doc: CadDocum
       if ((e.raw && e.raw.length) || e.dwgRaw || e.sat) return null;
       const r = cloneEntity(e);
       if (e.wires) r.wires = e.wires.map((w) => w.map((p) => (In(p) ? mv(p, d) : { ...p })));
+      delete r.acisCurves;
+      delete r.acisLoops;
       return { replace: [r] };
     }
     default:

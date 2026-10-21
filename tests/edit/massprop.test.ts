@@ -1,12 +1,15 @@
 /**
  * MASSPROP(2D 영역 질량 특성)과 REGION 면적: 구멍 있는 영역의 면적·도심·관성 모멘트·주 모멘트.
+ * REGION은 ACIS 모서리의 정확한 곡선(원호·넙스)으로 적분하고, 같은 면의 안쪽 고리만 구멍(서로 다른 영역은 더한다).
  * REGION·UNION·SUBTRACT·INTERSECT는 ACIS 형상을 만들어야 해서 대신 쓸 명령을 알린다.
  */
 import { describe, expect, it } from 'vitest';
 import type { Entity } from '../../src/core/model';
 import { entityDefaults } from '../../src/core/model';
-import { massProps, wiresToRings } from '../../src/edit/geom/massprop';
-import { entityRings, objectArea, registerCommands } from '../../src/app/commands';
+import { massProps, massPropsOfGroups, regionGroups, wiresToRings } from '../../src/edit/geom/massprop';
+import { entityRings, massGroups, objectArea, registerCommands } from '../../src/app/commands';
+import { satShape, setAcisShape } from '../../src/io/acis';
+import { circlesFaceSat, halfDiscSat, nurbsCircleSat } from './acis-sat';
 import { circle, line, lw } from './make';
 import { makeHarness } from '../cmds2/harness';
 import type { App } from '../../src/app/app';
@@ -125,5 +128,62 @@ describe('MASSPROP 명령', () => {
       expect(h.printed.at(-1)).toContain('MASSPROP');
       expect(h.printed.at(-1)).toContain('BOUNDARY');
     }
+  });
+});
+
+describe('REGION: ACIS 모서리의 정확한 곡선', () => {
+  const reg = (sat: string): Entity => {
+    const e = { ...entityDefaults(), handle: '', type: 'REGION' } as Entity;
+    setAcisShape(e as never, satShape(sat));
+    return e;
+  };
+  it('원 영역(r = 10): 화면용 다각형이 아니라 정확한 값(AutoCAD MASSPROP과 같은 소수 넷째 자리)', () => {
+    const e = reg(circlesFaceSat([[0, 0, 10]]));
+    const mp = massPropsOfGroups(regionGroups(e as never))!;
+    expect(mp.area).toBeCloseTo(Math.PI * 100, 9);
+    expect(mp.perimeter).toBeCloseTo(Math.PI * 20, 9);
+    expect(mp.ix).toBeCloseTo((Math.PI * 1e4) / 4, 7);
+    expect(mp.iy).toBeCloseTo((Math.PI * 1e4) / 4, 7);
+    expect(mp.box.map((x) => +x.toFixed(9))).toEqual([-10, -10, 10, 10]);
+    // 원은 주 모멘트가 같다: 방향은 X·Y(같은 방향 둘이 아니다)
+    expect(mp.principal.map((p) => p.dir)).toEqual([
+      [1, 0],
+      [0, 1],
+    ]);
+    // 예전(모서리 선 다각형) 값과 다르다
+    expect(Math.abs(massProps(wiresToRings((e as { wires: { x: number; y: number }[][] }).wires))!.area)).toBeLessThan(313.94);
+    expect(objectArea(e)!.a).toBeCloseTo(314.1592654, 6);
+  });
+  it('반원(선 + 원호 반쪽): 면적·도심·둘레', () => {
+    const mp = massPropsOfGroups(regionGroups(reg(halfDiscSat(5)) as never))!;
+    expect(mp.area).toBeCloseTo((Math.PI * 25) / 2, 9);
+    expect(mp.perimeter).toBeCloseTo(Math.PI * 5 + 10, 9);
+    expect(mp.centroid[0]).toBeCloseTo(-20 / (3 * Math.PI), 9);
+    expect(mp.box.map((x) => +x.toFixed(9))).toEqual([-5, -5, 0, 5]);
+  });
+  it('넙스(유리 2차) 원 영역', () => {
+    const mp = massPropsOfGroups(regionGroups(reg(nurbsCircleSat(10)) as never))!;
+    expect(mp.area).toBeCloseTo(Math.PI * 100, 7);
+    expect(mp.perimeter).toBeCloseTo(Math.PI * 20, 7);
+    expect(mp.box.map((x) => +x.toFixed(6))).toEqual([-10, -10, 10, 10]);
+  });
+  it('같은 면의 안쪽 고리는 구멍, 서로 다른 REGION은 더한다(AutoCAD와 같다)', () => {
+    const holed = reg(circlesFaceSat([[0, 0, 10], [0, 0, 2]]));
+    expect((holed as { acisLoops?: number[][][] }).acisLoops).toEqual([[[0], [1]]]);
+    expect(massPropsOfGroups(regionGroups(holed as never))!.area).toBeCloseTo(Math.PI * 96, 9);
+    const two = massGroups([reg(circlesFaceSat([[0, 0, 10]])), reg(circlesFaceSat([[0, 0, 2]]))]);
+    expect(massPropsOfGroups(two.groups)!.area).toBeCloseTo(Math.PI * 104, 9);
+    // 닫힌 객체끼리는 예전처럼 하나의 영역(안쪽은 구멍)
+    const curves = massGroups([circle(0, 0, 10), circle(0, 0, 2)]);
+    expect(massPropsOfGroups(curves.groups)!.area).toBeCloseTo(Math.PI * 96, 3);
+  });
+  it('MASSPROP 명령: 원 영역 면적 314.1593', async () => {
+    const h = makeHarness();
+    (h.app as unknown as { entity(hd: string): Entity | undefined }).entity = (hd: string) => h.doc.entityIndex.get(hd);
+    registerCommands(h.app as App);
+    const r = h.add(reg(circlesFaceSat([[0, 0, 10]])));
+    await h.run('MASSPROP', [{ sel: [r.handle] }, '']);
+    expect(h.printed).toContainEqual(expect.stringMatching(/^면적:\s+314\.1593$/));
+    expect(h.printed).toContainEqual(expect.stringMatching(/^둘레:\s+62\.8319$/));
   });
 });

@@ -2,7 +2,7 @@
 import { type Entity, tableKey } from '../core/model';
 import { entityPath } from '../edit/geom/path';
 import { flattenPiece, pathLength, pathSignedArea, pieceSize } from '../edit/geom/curve';
-import { type MassProps, massProps, wiresToRings } from '../edit/geom/massprop';
+import { type MassProps, type RegionLoop, massPropsOfGroups, regionGroups, ringLoop, wiresToRings } from '../edit/geom/massprop';
 import { baseName, download } from './export';
 import { formatAngle, formatLength, unitAbbr } from '../core/units';
 import { ccwSweep } from '../geom/curves';
@@ -199,18 +199,10 @@ export function registerCommands(app: App): void {
     name: 'MASSPROP',
     title: '질량 특성',
     async run(ctx) {
-      // 영역(REGION)과 닫힌 객체(원·닫힌 폴리선·타원·닫힌 스플라인)를 하나의 영역으로 합쳐 잰다
       const hs = await ctx.getSelection('객체 선택:');
-      const rings: number[][] = [];
-      let skipped = 0;
-      for (const h of hs) {
-        const e = app.entity(h);
-        const r = e ? entityRings(e) : null;
-        if (r) rings.push(...r);
-        else skipped++;
-      }
+      const { groups, skipped } = massGroups(hs.map((h) => app.entity(h)));
       if (skipped) ctx.print(`영역이나 닫힌 객체가 아닌 ${skipped}개는 뺐습니다(3D 솔리드는 2D에서 잴 수 없습니다).`);
-      const mp = massProps(rings);
+      const mp = massPropsOfGroups(groups);
       if (!mp) {
         ctx.print('잴 영역이 없습니다. 영역(REGION)이나 닫힌 객체를 고르십시오.', 'err');
         return;
@@ -554,7 +546,7 @@ async function measureAngle(app: App, ctx: CommandContext): Promise<void> {
 export function objectArea(e: Entity): { a: number | null; per: number | null } | null {
   if (e.type === 'HATCH' || e.type === 'MPOLYGON') return { a: hatchArea(e), per: null };
   if (e.type === 'REGION') {
-    const mp = massProps(wiresToRings(e.wires ?? []));
+    const mp = massPropsOfGroups(regionGroups(e));
     return mp ? { a: Math.abs(mp.area), per: mp.perimeter } : null;
   }
   if (e.type === 'XLINE' || e.type === 'RAY') return null;
@@ -563,6 +555,29 @@ export function objectArea(e: Entity): { a: number | null; per: number | null } 
   // 직선 하나(LINE 등)는 면적이 없다
   if (path.pieces.length === 1 && path.pieces[0]!.k === 'line' && !path.closed) return null;
   return { a: Math.abs(pathSignedArea(path)), per: pathLength(path) };
+}
+
+/**
+ * MASSPROP이 재는 묶음: REGION은 하나씩(ACIS 모서리의 정확한 곡선, 같은 면의 안쪽 고리만 구멍 — 서로 다른 영역은 AutoCAD처럼 더한다),
+ * 닫힌 객체(원·닫힌 폴리선·타원·닫힌 스플라인)는 함께 하나의 영역으로(안에 든 것은 구멍 — 영역을 만들지 못하는 이 앱의 대신 쓰는 방법)
+ */
+export function massGroups(ents: readonly (Entity | null | undefined)[]): { groups: RegionLoop[][]; skipped: number } {
+  const groups: RegionLoop[][] = [];
+  const curves: RegionLoop[] = [];
+  let skipped = 0;
+  for (const e of ents) {
+    if (e?.type === 'REGION') {
+      const g = regionGroups(e);
+      if (g.length) groups.push(...g);
+      else skipped++;
+      continue;
+    }
+    const r = e ? entityRings(e) : null;
+    if (r) curves.push(...r.map(ringLoop));
+    else skipped++;
+  }
+  if (curves.length) groups.push(curves);
+  return { groups, skipped };
 }
 
 /** MASSPROP·면적이 쓰는 닫힌 고리(REGION은 모서리 선을 이어서, 닫힌 곡선은 잘게 나눠서). 닫히지 않았으면 null */

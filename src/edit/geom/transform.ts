@@ -260,6 +260,9 @@ function transformOne(e: Entity, m: Affine, doc: CadDocument, opt: TransformOpti
       if ((e.raw && e.raw.length) || e.dwgRaw || e.sat) return { message: MSG.acis };
       const r = cloneEntity(e);
       if (e.wires) r.wires = e.wires.map((w) => w.map((p) => P3(m, p, opt)));
+      // 정확한 곡선은 옮기지 않았으니 버린다(면적은 옮긴 모서리 선으로)
+      delete r.acisCurves;
+      delete r.acisLoops;
       return same(e, r);
     }
     case 'ARCALIGNEDTEXT':

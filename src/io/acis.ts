@@ -8,7 +8,7 @@
  * 형상은 모서리(edge)마다 시작·끝 꼭짓점(vertex → point)과 곡선(직선·타원·넙스)으로 그린다. 몸체(body)의 변환(transform)을 적용한다.
  * 해석하지 못하는 곡선(교차 곡선 등)은 두 꼭짓점을 잇는 선으로 그린다.
  */
-import type { Vec3 } from '../core/model';
+import type { AcisCurve, Vec3 } from '../core/model';
 
 type Tok = { k: 'ptr'; v: number } | { k: 'num'; v: number; int: boolean } | { k: 'str'; v: string } | { k: 'bool'; v: boolean } | { k: 'sub'; v: '{' | '}' };
 
@@ -303,8 +303,31 @@ function deBoor(c: { degree: number; knots: number[]; ctrl: V[]; weights: number
   return [r[0] / r[3], r[1] / r[3], r[2] / r[3]];
 }
 
-/** 레코드들 → 모서리 선(평면도 3D 점 목록) */
-function edgesOf(recs: Rec[]): Vec3[][] {
+/** 모서리 선과 그 정확한 곡선, 면 → 고리 → 모서리(선 번호) */
+export interface AcisShape {
+  wires: Vec3[][];
+  /** wires와 같은 차례의 정확한 곡선(모르면 null) */
+  curves: (AcisCurve | null)[];
+  /** 면 → 고리 → 모서리 선 번호(고리를 이루는 모서리를 모두 그렸을 때만) */
+  loops: number[][][];
+}
+
+const V3 = (p: V): Vec3 => ({ x: p[0], y: p[1], z: p[2] });
+
+/** 넙스 위에서 점 q에 가장 가까운 매개변수(구간 [lo, hi] 안, 삼분 탐색) */
+function nearestParam(bs: { degree: number; knots: number[]; ctrl: V[]; weights: number[] | null }, q: V, lo: number, hi: number): number {
+  const at = (u: number) => len(sub(deBoor(bs, u), q));
+  for (let i = 0; i < 80 && hi - lo > 1e-15 * (1 + Math.abs(lo)); i++) {
+    const m1 = lo + (hi - lo) / 3;
+    const m2 = hi - (hi - lo) / 3;
+    if (at(m1) < at(m2)) hi = m2;
+    else lo = m1;
+  }
+  return (lo + hi) / 2;
+}
+
+/** 레코드들 → 모서리 선(평면도 3D 점 목록)과 정확한 곡선·면 구성 */
+function shapeOf(recs: Rec[]): AcisShape {
   const at = (i: number | undefined): Rec | undefined => (i === undefined || i < 0 ? undefined : recs[i]);
   const pointOf = (vi: number | undefined): V | null => {
     const v = at(vi);
@@ -340,13 +363,22 @@ function edgesOf(recs: Rec[]): Vec3[][] {
     }
     if (xf) break;
   }
-  const out: Vec3[][] = [];
-  const emit = (pts: V[]) => {
+  const X = (p: V): V => (xf ? xf(p) : p);
+  const O = X([0, 0, 0]);
+  // 방향(벡터)은 변환의 선형 부분만
+  const XV = (v: V): V => (xf ? sub(xf(v), O) : v);
+  const wires: Vec3[][] = [];
+  const curves: (AcisCurve | null)[] = [];
+  /** 모서리 레코드 번호 → 선 번호 */
+  const wireOf = new Map<number, number>();
+  const emit = (ri: number, pts: V[], curve: AcisCurve | null) => {
     if (pts.length < 2) return;
-    out.push(pts.map((p) => (xf ? xf(p) : p)).map(([x, y, z]) => ({ x, y, z })));
+    wireOf.set(ri, wires.length);
+    wires.push(pts.map((p) => V3(X(p))));
+    curves.push(curve);
   };
-  for (const r of recs) {
-    if (r.name !== 'edge') continue;
+  recs.forEach((r, ri) => {
+    if (r.name !== 'edge') return;
     const f = fields(r);
     const vs: number[] = [];
     let curve: Rec | undefined;
@@ -371,7 +403,7 @@ function edgesOf(recs: Rec[]): Vec3[][] {
     }
     const a = pointOf(vs[0]);
     const b = pointOf(vs[1] ?? vs[0]);
-    if (!a || !b) continue;
+    if (!a || !b) return;
     const closed = (vs[1] ?? vs[0]) === vs[0] || len(sub(a, b)) < 1e-9;
     if (curve?.name === 'ellipse-curve') {
       const x = nums(fields(curve));
@@ -403,8 +435,8 @@ function edgesOf(recs: Rec[]): Vec3[][] {
             const st = Math.sin(t);
             pts.push([c[0] + U[0] * ct + V2[0] * st, c[1] + U[1] * ct + V2[1] * st, c[2] + U[2] * ct + V2[2] * st]);
           }
-          emit(pts);
-          continue;
+          emit(ri, pts, { k: 'ell', c: V3(X(c)), u: V3(XV(U)), v: V3(XV(V2)), s0: t0, s1: t0 + sw });
+          return;
         }
       }
     } else if (curve && curve.name !== 'straight-curve') {
@@ -415,9 +447,10 @@ function edgesOf(recs: Rec[]): Vec3[][] {
         const u1 = bs.knots[bs.knots.length - bs.degree - 1]!;
         const samples: { u: number; p: V }[] = [];
         const N = 64;
+        const uMax = u1 - 1e-12 * Math.abs(u1 || 1);
         for (let i = 0; i <= N; i++) {
           const u = u0 + ((u1 - u0) * i) / N;
-          samples.push({ u, p: deBoor(bs, Math.min(u, u1 - 1e-12 * Math.abs(u1 || 1))) });
+          samples.push({ u, p: deBoor(bs, Math.min(u, uMax)) });
         }
         const near = (q: V) => samples.reduce((best, s, i) => (len(sub(s.p, q)) < len(sub(samples[best]!.p, q)) ? i : best), 0);
         let i0 = near(a);
@@ -427,44 +460,109 @@ function edgesOf(recs: Rec[]): Vec3[][] {
           const pts = samples.slice(i0, i1 + 1).map((s) => s.p);
           pts[0] = i0 === near(a) ? a : b;
           pts[pts.length - 1] = pts[0] === a ? b : a;
-          emit(pts);
-          continue;
+          // 정확한 매개변수: 끝점을 곡선에 내린 자리(양 끝 표본이면 곡선 끝)
+          const refine = (i: number, q: V) => (closed || i === 0 || i === N ? samples[i]!.u : nearestParam(bs, q, samples[i - 1]!.u, samples[i + 1]!.u));
+          const s0 = refine(i0, pts[0]!);
+          const s1 = Math.min(refine(i1, pts[pts.length - 1]!), uMax);
+          const nc: AcisCurve = { k: 'nurbs', degree: bs.degree, knots: bs.knots, ctrl: bs.ctrl.map((p) => V3(X(p))), s0, s1 };
+          if (bs.weights) nc.weights = bs.weights;
+          emit(ri, pts, nc);
+          return;
         }
       }
+      if (!closed) emit(ri, [a, b], null);
+      return;
     }
-    if (!closed) emit([a, b]);
+    if (!closed) emit(ri, [a, b], curve?.name === 'straight-curve' ? { k: 'line', a: V3(X(a)), b: V3(X(b)) } : null);
+  });
+  // 면 → 고리 → 모서리: 면의 첫 고리부터 다음 고리로, 고리의 첫 공변(coedge)부터 다음 공변으로
+  const ptrs = (r: Rec | undefined, name: string) => (r ? fields(r).filter((t): t is { k: 'ptr'; v: number } => t.k === 'ptr' && at(t.v)?.name === name).map((t) => t.v) : []);
+  const loops: number[][][] = [];
+  for (const r of recs) {
+    if (r.name !== 'face') continue;
+    const face: number[][] = [];
+    const seenLoop = new Set<number>();
+    let li = ptrs(r, 'loop')[0];
+    let ok = true;
+    for (let guard = 0; li !== undefined && !seenLoop.has(li) && guard < 100000; guard++) {
+      seenLoop.add(li);
+      const loop = at(li)!;
+      const first = ptrs(loop, 'coedge')[0];
+      const edges: number[] = [];
+      const seenCo = new Set<number>();
+      for (let ci = first, g = 0; ci !== undefined && !seenCo.has(ci) && g < 1000000; g++) {
+        seenCo.add(ci);
+        const co = at(ci)!;
+        const e = ptrs(co, 'edge')[0];
+        const w = e === undefined ? undefined : wireOf.get(e);
+        if (w === undefined) ok = false;
+        else edges.push(w);
+        ci = ptrs(co, 'coedge')[0];
+      }
+      if (edges.length) face.push(edges);
+      li = ptrs(loop, 'loop')[0];
+    }
+    if (ok && face.length) loops.push(face);
+    else if (!ok) {
+      // 그리지 못한 모서리가 있는 면이 있으면 면 구성은 쓰지 않는다(모서리 선을 이어 고리를 만든다)
+      return { wires, curves, loops: [] };
+    }
   }
-  return out;
+  return { wires, curves, loops };
 }
 
-/** SAT 글(이미 푼 것) → 모서리 선 */
-export function satWires(text: string): Vec3[][] {
+/** SAT 글(이미 푼 것) → 모서리 선과 곡선 */
+export function satShape(text: string): AcisShape {
   try {
-    return edgesOf(satRecords(text));
+    return shapeOf(satRecords(text));
   } catch {
-    return [];
+    return { wires: [], curves: [], loops: [] };
   }
 }
 
-/** SAB 이진 → 모서리 선(SAB가 아니면 null) */
-export function sabWires(b: Uint8Array): Vec3[][] | null {
+/** SAB 이진 → 모서리 선과 곡선(SAB가 아니면 null) */
+export function sabShape(b: Uint8Array): AcisShape | null {
   try {
     const recs = sabRecords(b);
-    return recs ? edgesOf(recs) : null;
+    return recs ? shapeOf(recs) : null;
   } catch {
     return null;
   }
 }
 
-/** DXF ACIS 객체의 원본 태그(1·3 SAT 줄)에서 모서리 선 */
-export function dxfSatWires(raw: readonly { code: number; value: string | number }[]): Vec3[][] {
+/** SAT 글(이미 푼 것) → 모서리 선 */
+export function satWires(text: string): Vec3[][] {
+  return satShape(text).wires;
+}
+
+/** SAB 이진 → 모서리 선(SAB가 아니면 null) */
+export function sabWires(b: Uint8Array): Vec3[][] | null {
+  return sabShape(b)?.wires ?? null;
+}
+
+/** DXF ACIS 객체의 원본 태그(1·3 SAT 줄)에서 모서리 선과 곡선 */
+export function dxfSatShape(raw: readonly { code: number; value: string | number }[]): AcisShape | null {
   const lines: string[] = [];
   for (const t of raw) {
     if (t.code === 1) lines.push(String(t.value));
     else if (t.code === 3 && lines.length) lines[lines.length - 1] += String(t.value);
   }
-  if (!lines.length) return [];
-  return satWires(lines.map((l) => decodeSatLine(l, true)).join('\n'));
+  if (!lines.length) return null;
+  return satShape(lines.map((l) => decodeSatLine(l, true)).join('\n'));
+}
+
+/** DXF ACIS 객체의 원본 태그(1·3 SAT 줄)에서 모서리 선 */
+export function dxfSatWires(raw: readonly { code: number; value: string | number }[]): Vec3[][] {
+  return dxfSatShape(raw)?.wires ?? [];
+}
+
+/** 모양을 객체에 붙인다: 모서리 선, REGION이면 정확한 곡선과 면 구성도(MASSPROP·AREA·EXPLODE) */
+export function setAcisShape(e: { type: string; wires?: Vec3[][]; acisCurves?: (AcisCurve | null)[]; acisLoops?: number[][][] }, s: AcisShape): void {
+  e.wires = s.wires;
+  if (e.type === 'REGION') {
+    e.acisCurves = s.curves;
+    if (s.loops.length) e.acisLoops = s.loops;
+  }
 }
 
 const ACIS_KINDS = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
@@ -500,22 +598,22 @@ export function dxfAcdsData(tags: readonly { code: number; value: string | numbe
  * 문서의 ACIS 객체에 모서리 선을 붙인다: DXF R2000~R2010은 원본 태그의 SAT, R2013+는 ACDSDATA의 SAB,
  * DWG R2013+는 자료 저장소의 SAB(sab: 핸들 → 바이트). 이미 선이 있으면 그대로
  */
-export function attachAcisWires(doc: { blocks: Map<string, { entities: { type: string; handle: string; raw?: unknown; wires?: Vec3[][] }[] }>; rawSections?: { name: string; tags: { code: number; value: string | number }[] }[] }, sab?: Map<string, Uint8Array>): void {
+export function attachAcisWires(doc: { blocks: Map<string, { entities: { type: string; handle: string; raw?: unknown; wires?: Vec3[][]; acisCurves?: (AcisCurve | null)[]; acisLoops?: number[][][] }[] }>; rawSections?: { name: string; tags: { code: number; value: string | number }[] }[] }, sab?: Map<string, Uint8Array>): void {
   let store = sab ?? null;
   for (const b of doc.blocks.values())
     for (const e of b.entities) {
       if (!ACIS_KINDS.has(e.type) || e.wires?.length) continue;
-      let w: Vec3[][] | null = null;
-      if (Array.isArray(e.raw)) w = dxfSatWires(e.raw as { code: number; value: string | number }[]);
-      if (!w?.length) {
+      let w: AcisShape | null = null;
+      if (Array.isArray(e.raw)) w = dxfSatShape(e.raw as { code: number; value: string | number }[]);
+      if (!w?.wires.length) {
         if (!store) {
           const sec = doc.rawSections?.find((x) => x.name === 'ACDSDATA');
           store = sec ? dxfAcdsData(sec.tags) : new Map();
         }
         const bytes = store.get(e.handle.toUpperCase());
-        if (bytes) w = sabWires(bytes);
+        if (bytes) w = sabShape(bytes);
       }
-      if (w?.length) e.wires = w;
+      if (w?.wires.length) setAcisShape(e, w);
     }
 }
 

@@ -52,7 +52,7 @@ import { cmcToCad, encToCad } from '../color';
 import { lineweightFromIndex } from '../lineweight';
 import { R14, R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
 import { hex } from './nonentities';
-import { decodeSatBytes, sabWires, satWires } from '../../acis';
+import { type AcisShape, decodeSatBytes, sabShape, satShape, setAcisShape } from '../../acis';
 import { readTableCellsOld, readTableContentR24 } from './table';
 import { decodeTableBody } from './tableraw';
 import type { EntCommon, ObjectReader, RawEed } from './reader';
@@ -591,8 +591,8 @@ export function readEntity(or: ObjectReader, names: Names): ParsedEntity {
           try {
             r.pos = start;
             const got = readAcisWires(r, skip);
-            if (got?.wires.length) {
-              e.wires = got.wires;
+            if (got?.shape.wires.length) {
+              setAcisShape(e, got.shape);
               // DXF(R2000~R2010)에 그대로 옮길 SAT는 판 4.0 이상만(R13·R14의 판 1.x는 AutoCAD DXF가 쓰지 않는 판이라 와이어로 쓴다)
               if (got.sat && Number(got.sat.trim().split(/\s+/)[0]) >= 400) e.sat = got.sat;
               break;
@@ -2110,7 +2110,7 @@ function readUnderlay(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: Under
  * ACIS 객체 본문(ODA 명세 20.4.32 3DSOLID): 비었음 B, 모름 B, 판 BS — 판 1이면 (크기 BL, 감춘 SAT 바이트)… 0으로 끝,
  * 판 2이면 SAB(끝 표지까지). 모서리 선만 돌려준다
  */
-function readAcisWires(r: BitReader, lead = 2): { wires: Vec3[][]; sat?: string } | null {
+function readAcisWires(r: BitReader, lead = 2): { shape: AcisShape; sat?: string } | null {
   if (lead >= 1 && r.B()) return null;
   if (lead >= 2) r.B();
   const version = r.BS();
@@ -2124,7 +2124,7 @@ function readAcisWires(r: BitReader, lead = 2): { wires: Vec3[][]; sat?: string 
     }
     if (!parts.length) return null;
     const sat = decodeSatBytes(Uint8Array.from(parts));
-    return { wires: satWires(sat), sat };
+    return { shape: satShape(sat), sat };
   }
   if (version === 2) {
     // SAB: 끝 표지("End-of-ACIS-data"·"End-of-ASM-data")까지
@@ -2136,8 +2136,8 @@ function readAcisWires(r: BitReader, lead = 2): { wires: Vec3[][]; sat?: string 
       // 표지는 "data"로 끝난다: 'a'가 나올 때만 끝 32바이트를 맞춰 본다
       if (c === 0x61 && tail.test(String.fromCharCode(...bytes.slice(-32)))) break;
     }
-    const w = sabWires(Uint8Array.from(bytes));
-    return w ? { wires: w } : null;
+    const w = sabShape(Uint8Array.from(bytes));
+    return w ? { shape: w } : null;
   }
   return null;
 }
