@@ -20,8 +20,8 @@ export type Affine = [number, number, number, number, number, number];
 interface Sink {
   seg(x0: number, y0: number, x1: number, y1: number, style: number): void;
   tri(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, style: number): void;
-  /** 글자 하나(글리프가 나타내는 문자, 글리프 단위 → 출력 좌표 아핀, 그리기 깊이). 검색되는 문자를 쓸 때만 */
-  char?(ch: string, m: Affine, style: number, depth: number): void;
+  /** 글자 하나(글리프가 나타내는 문자, 글리프 단위 → 출력 좌표 아핀, 그리기 깊이, 전진 폭(글리프 단위)). 검색되는 문자를 쓸 때만 */
+  char?(ch: string, m: Affine, style: number, depth: number, advance?: number): void;
 }
 
 /** 표시 목록을 그리기 순서(깊이)대로 내보낸다. m: 도면 → 출력 좌표 */
@@ -86,7 +86,7 @@ export function walk(dl: DisplayList, m: Affine, visible: (s: number) => boolean
         const o0 = X(e, ff);
         const ux = [m[0] * a + m[2] * b, m[1] * a + m[3] * b];
         const uy = [m[0] * c + m[2] * d, m[1] * c + m[3] * d];
-        sink.char(g.ch, [ux[0]!, ux[1]!, uy[0]!, uy[1]!, o0[0], o0[1]], s, depth);
+        sink.char(g.ch, [ux[0]!, ux[1]!, uy[0]!, uy[1]!, o0[0], o0[1]], s, depth, g.adv);
       }
       if (g.kind === 0) {
         const v = gs.fillVerts;
@@ -492,8 +492,13 @@ export class PdfResources {
   readonly layers = new Map<string, number>();
   /** 알파(소수 셋째 자리) → 번호(/GSn) */
   readonly alphas = new Map<string, number>();
-  /** 문자 코드 포인트 → [글꼴 번호, 글꼴 안 코드(1~255)] */
-  readonly chars = new Map<number, [number, number]>();
+  /**
+   * (문자, 전진 폭) → [글꼴 번호, 글꼴 안 코드(1~255)]. 같은 문자라도 글꼴마다 폭이 달라 폭별로 코드를 둔다
+   * — PDF 글꼴의 /Widths가 실제 글자 폭이어야 PDF 보기 프로그램이 낱말을 이어 읽는다(글자 사이에 빈칸이 끼지 않게).
+   */
+  readonly chars = new Map<string, [number, number]>();
+  /** 코드 차례의 (문자, 전진 폭) */
+  readonly glyphs: { cp: number; adv?: number }[] = [];
 
   layer(name: string): number {
     let n = this.layers.get(name);
@@ -507,11 +512,14 @@ export class PdfResources {
     return n;
   }
 
-  char(cp: number): [number, number] {
-    let c = this.chars.get(cp);
+  char(cp: number, adv?: number): [number, number] {
+    const a = adv !== undefined && Number.isFinite(adv) && adv >= 0 ? Math.round(adv * 1000) / 1000 : undefined;
+    const key = `${cp}:${a ?? ''}`;
+    let c = this.chars.get(key);
     if (!c) {
       const i = this.chars.size;
-      this.chars.set(cp, (c = [Math.floor(i / 255), (i % 255) + 1]));
+      this.chars.set(key, (c = [Math.floor(i / 255), (i % 255) + 1]));
+      this.glyphs.push(a !== undefined ? { cp, adv: a } : { cp });
     }
     return c;
   }
@@ -532,7 +540,7 @@ export function pdfContent(page: Page, images: string[] = [], res?: PdfResources
   const ops: string[] = [];
   const H = page.height;
   ops.push('1 1 1 rg', `0 0 ${page.width.toFixed(2)} ${H.toFixed(2)} re f`, '1 J 1 j');
-  const chars: { ch: string; m: Affine; d: number }[] = [];
+  const chars: { ch: string; m: Affine; d: number; adv?: number }[] = [];
   for (const L of page.layers) {
     const styles = L.styles;
     const visible = (s: number) => styles[s * 8 + 5]! > 0;
@@ -613,9 +621,9 @@ export function pdfContent(page: Page, images: string[] = [], res?: PdfResources
           buf.push(`${x0.toFixed(2)} ${(H - y0).toFixed(2)} m ${x1.toFixed(2)} ${(H - y1).toFixed(2)} l ${x2.toFixed(2)} ${(H - y2).toFixed(2)} l h`);
         },
         char: res
-          ? (ch, m, _s, d) => {
+          ? (ch, m, _s, d, adv) => {
               void _s;
-              chars.push({ ch, m, d });
+              chars.push(adv !== undefined ? { ch, m, d, adv } : { ch, m, d });
             }
           : undefined,
       },
@@ -633,7 +641,7 @@ export function pdfContent(page: Page, images: string[] = [], res?: PdfResources
  * 검색·복사되는 숨은 문자(글자 그리기 방식 3): 글자마다 그 글리프 자리에 둔다.
  * 같은 객체의 글자(같은 깊이)끼리 줄 → 줄 안 차례로 놓아 읽는 순서를 맞춘다
  */
-function hiddenText(chars: { ch: string; m: Affine; d: number }[], H: number, res: PdfResources): string[] {
+function hiddenText(chars: { ch: string; m: Affine; d: number; adv?: number }[], H: number, res: PdfResources): string[] {
   const items = chars.map((c) => {
     const ux = Math.hypot(c.m[0], c.m[1]) || 1;
     const dx = c.m[0] / ux;
@@ -646,7 +654,7 @@ function hiddenText(chars: { ch: string; m: Affine; d: number }[], H: number, re
   let font = -1;
   for (const it of items) {
     const cp = it.ch.codePointAt(0)!;
-    const [f, code] = res.char(cp);
+    const [f, code] = res.char(cp, it.adv);
     if (f !== font) {
       out.push(`/T${f} 1 Tf`);
       font = f;
@@ -776,20 +784,24 @@ function buildPdf(pages: { w: number; h: number; content: Uint8Array; flate: boo
   }
   layerNames.forEach((name, i) => obj(ocgObj[i]!, `<< /Type /OCG /Name ${pdfText(name)} >>`));
   alphaList.forEach((a, i) => obj(gsObj[i]!, `<< /Type /ExtGState /ca ${a} /CA ${a} >>`));
-  // 검색용 글꼴(Type3, 빈 글리프 — 문자 그리기 방식 3이라 보이지 않는다). 글꼴마다 255자
-  const byFont: number[][] = [];
-  for (const [cp, [f, code]] of res.chars) (byFont[f] ??= [])[code] = cp;
+  // 검색용 글꼴(Type3, 빈 글리프 — 문자 그리기 방식 3이라 보이지 않는다). 글꼴마다 255자.
+  // 코드 → (문자, 전진 폭)은 들어온 차례로 글꼴마다 255개씩. /Widths는 글리프의 실제 전진 폭(문자 높이 단위 — Tm이 글리프 축이라 그대로)
+  const byFont: { cp: number; adv?: number }[][] = [];
+  res.glyphs.forEach((g, i) => ((byFont[Math.floor(i / 255)] ??= [])[(i % 255) + 1] = g));
   fontObj.forEach((o, f) => {
     const codes = byFont[f] ?? [];
     const last = codes.length - 1;
     const names = [];
     for (let c = 1; c <= last; c++) names.push(`/g${c}`);
     const widths = [];
-    for (let c = 1; c <= last; c++) widths.push(codes[c] && codes[c]! >= 0x1100 ? 1 : 0.6);
+    for (let c = 1; c <= last; c++) {
+      const g = codes[c];
+      widths.push(g?.adv !== undefined ? +g.adv.toFixed(3) : g && g.cp >= 0x1100 ? 1 : 0.6);
+    }
     obj(o, `<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1 1] /FontMatrix [1 0 0 1 0 0] /CharProcs << ${names.map((g) => `${g} ${o + 2} 0 R`).join(' ')} >> /Encoding << /Type /Encoding /Differences [1 ${names.join(' ')}] >> /FirstChar 1 /LastChar ${last} /Widths [${widths.join(' ')}] /ToUnicode ${o + 1} 0 R /Resources << >> >>`);
     const map: string[] = [];
     for (let c = 1; c <= last; c++) {
-      const cp = codes[c];
+      const cp = codes[c]?.cp;
       if (cp === undefined) continue;
       let u = '';
       for (const unit of String.fromCodePoint(cp)) for (let k = 0; k < unit.length; k++) u += unit.charCodeAt(k).toString(16).padStart(4, '0');

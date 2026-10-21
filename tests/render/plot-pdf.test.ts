@@ -90,13 +90,30 @@ describe('PDF', () => {
     const c = pdfContent(page, [], res);
     expect(c).toContain('3 Tr');
     expect((c.match(/Tj/g) ?? []).length).toBe(3);
-    expect([...res.chars.keys()].map((cp) => String.fromCodePoint(cp)).sort()).toEqual(['A', 'B', 'Ø']);
+    expect(res.glyphs.map((g) => String.fromCodePoint(g.cp)).sort()).toEqual(['A', 'B', 'Ø']);
+    // 글자 폭은 글리프의 실제 전진 폭(예전에는 모두 0.6이라 PDF 보기 프로그램이 낱말 사이에 빈칸을 넣었다)
+    for (const g of res.glyphs) expect(g.adv).toBeGreaterThan(0);
     const pdf = await (await pdfDocument([page], '도면')).text();
     expect(pdf).toContain('/Subtype /Type3');
     expect(pdf).toContain('beginbfchar');
     expect(pdf).toContain('<00d8>');
     expect(pdf).toContain('/OCProperties');
     expect(pdf).toContain('/Title <FEFF');
+  });
+  it('PDF 보기 프로그램(pdf.js)이 숨은 문자를 낱말로 읽는다(글자 폭 = 실제 전진 폭)', async () => {
+    const doc = createNewDocument('metric');
+    const ms = doc.blocks.get(MODEL_SPACE)!;
+    ms.entities.push(ent({ type: 'TEXT', insert: { x: 10, y: 10, z: 0 }, height: 5, text: 'Hello World 12', rotation: 0, widthFactor: 1, oblique: 0, style: 'Standard', generation: 0, halign: 0, valign: 0 } as never));
+    ms.entities.push(ent({ type: 'TEXT', insert: { x: 10, y: 30, z: 0 }, height: 3, text: 'Wall illumination', rotation: 0.4, widthFactor: 0.8, oblique: 0, style: 'Standard', generation: 0, halign: 0, valign: 0 } as never));
+    const st = stateWith(doc);
+    const page = modelPage(st, [-10, -10, 110, 60], 600, 400, 5, 1, { lineweights: true })!;
+    const data = new Uint8Array(await (await pdfDocument([page], 't')).arrayBuffer());
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const pdf = await pdfjs.getDocument({ data, isEvalSupported: false, verbosity: 0 }).promise;
+    const tc = await (await pdf.getPage(1)).getTextContent();
+    const text = tc.items.map((it) => ('str' in it ? it.str : '')).join('').replace(/\s+/g, ' ');
+    expect(text).toContain('Hello World 12');
+    expect(text).toContain('Wall illumination');
   });
   it('자르기 경계에 걸친 글자도 남는다(삽입점이 경계 밖)', () => {
     const doc = createNewDocument('metric');
