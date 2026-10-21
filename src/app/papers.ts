@@ -70,7 +70,11 @@ export function paperKeyOfSize(w: number, h: number): string | null {
   return PAPERS.find((x) => Math.abs(x.w - a) < 1 && Math.abs(x.h - b) < 1)?.key ?? null;
 }
 
-const INCH_NAMES: Record<string, string> = { LETTER: 'Letter', LEGAL: 'Legal', TABLOID: 'ANSI_B', ANSIC: 'ANSI_C', ANSID: 'ANSI_D', ANSIE: 'ANSI_E' };
+/**
+ * 인치 용지의 매체 이름. Letter는 DWG To PDF.pc3의 정식 이름 ANSI_A(AutoCAD Imperial 견본 도면의 페이지 설정 50개가 이 이름,
+ * "Letter_(…)"는 시스템 프린터식 이름이라 PC3 이름으로 둔다)
+ */
+const INCH_NAMES: Record<string, string> = { LETTER: 'ANSI_A', LEGAL: 'Legal', TABLOID: 'ANSI_B', ANSIC: 'ANSI_C', ANSID: 'ANSI_D', ANSIE: 'ANSI_E' };
 
 /** AutoCAD식 용지 이름(DWG To PDF.pc3, w·h는 놓인 방향 그대로) */
 export function mediaName(key: string, w: number, h: number): string {

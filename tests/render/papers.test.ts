@@ -35,6 +35,9 @@ describe('용지 표', () => {
     expect(mediaName('ISOB4', 250, 353)).toBe('ISO_full_bleed_B4_(250.00_x_353.00_MM)');
     expect(mediaName('ARCHD', 914.4, 609.6)).toBe('ARCH_full_bleed_D_(36.00_x_24.00_Inches)');
     expect(mediaName('JISB4', 257, 364)).toBe('JIS_B4_(257.00_x_364.00_MM)');
+    // Letter는 DWG To PDF.pc3의 정식 이름(AutoCAD Imperial 견본 도면의 페이지 설정과 같다)
+    expect(mediaName('LETTER', 215.9, 279.4)).toBe('ANSI_A_(8.50_x_11.00_Inches)');
+    expect(mediaName('TABLOID', 431.8, 279.4)).toBe('ANSI_B_(17.00_x_11.00_Inches)');
     expect(mediaName('USER_297x420', 420, 297)).toBe('UserDefinedMetric_(420.00_x_297.00_MM)');
     expect(mediaName('A3', 420, 297)).toBe('ISO_full_bleed_A3_(420.00_x_297.00_MM)');
   });
