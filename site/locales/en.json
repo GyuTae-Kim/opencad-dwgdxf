@@ -3112,6 +3112,7 @@
   "무늬 이름 입력 또는 [": "Enter pattern name or [",
   "무늬 이름 입력 또는 [?/단색(S)/사용자 정의(U)] <{0}>:": "Enter pattern name or [?/Solid Color (S)/Custom (U)] <{0}>:",
   "무늬가 너무 촘촘한 해치는 무늬를 생략했습니다.": "The pattern that was too dense was omitted.",
+  "무늬가 아주 촘촘한 해치는 멀리서 볼 때 경계와 성긴 무늬로 그리고, 확대하면 보이는 곳을 원래 간격으로 그립니다.": "Hatches with very dense patterns are drawn as their boundary and a sparser pattern when zoomed out; zooming in redraws the visible area at the original spacing.",
   "무늬를 만들지 못했습니다": "Failed to create pattern",
   "무늬에 대한 각도 지정 <{0}>:": "Specifies the angle for the pattern <{0}>:",
   "무늬에 대한 축척 지정 <{0}>:": "Specifies scale for pattern <{0}>:",

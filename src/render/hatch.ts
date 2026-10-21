@@ -129,8 +129,52 @@ export function triangulateLoops(loops: number[][]): number[] {
   return out;
 }
 
-/** 무늬 선이 너무 많으면 그리지 않는다 */
-export const HATCH_LINE_LIMIT = 40000;
+/** 한 해치를 그릴 무늬 선 수의 상한(넘으면 성기게 그리고, 확대하면 보이는 곳만 원래 간격으로 — build.ts) */
+export const HATCH_LINE_LIMIT = 200000;
+
+/** 해치를 만들 때 무늬 선 수의 상한(AutoCAD HPMAXLINES 기본값) */
+export const HATCH_CREATE_LIMIT = 1000000;
+
+/** 무늬 선 간격을 f배로(너무 촘촘한 해치를 멀리서 볼 때 성기게 그린다) */
+export function spreadPattern(lines: readonly HatchPatternLine[], f: number): HatchPatternLine[] {
+  return lines.map((l) => ({ ...l, offset: { x: l.offset.x * f, y: l.offset.y * f } }));
+}
+
+/** 고리(평평한 [x, y, …])들을 사각형으로 자른다(서덜랜드-호지먼 — 홀짝 채우기에 그대로 쓸 수 있다) */
+export function clipLoopsToRect(loops: number[][], r: readonly [number, number, number, number]): number[][] {
+  const out: number[][] = [];
+  for (const loop of loops) {
+    let pts: number[] = loop;
+    const sides: [number, number, number][] = [
+      [0, r[0], 1],
+      [0, r[2], -1],
+      [1, r[1], 1],
+      [1, r[3], -1],
+    ];
+    for (const [axis, v, sign] of sides) {
+      const next: number[] = [];
+      const n = pts.length / 2;
+      for (let i = 0; i < n; i++) {
+        const ax = pts[i * 2]!;
+        const ay = pts[i * 2 + 1]!;
+        const j = (i + 1) % n;
+        const bx = pts[j * 2]!;
+        const by = pts[j * 2 + 1]!;
+        const ia = ((axis ? ay : ax) - v) * sign >= 0;
+        const ib = ((axis ? by : bx) - v) * sign >= 0;
+        if (ia !== ib) {
+          const t = (v - (axis ? ay : ax)) / ((axis ? by : bx) - (axis ? ay : ax));
+          next.push(ax + (bx - ax) * t, ay + (by - ay) * t);
+        }
+        if (ib) next.push(bx, by);
+      }
+      pts = next;
+      if (pts.length < 6) break;
+    }
+    if (pts.length >= 6) out.push(pts);
+  }
+  return out;
+}
 
 /**
  * 무늬 선을 경계로 자른다. 결과: 선분 [x0, y0, x1, y1, …], 너무 많으면 null

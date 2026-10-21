@@ -9,7 +9,7 @@
 import type { Entity, HatchEntity } from '../core/model';
 import { hasPatternOrigin, hatchBoundaryEntities, hatchWithBoundary, relinkReactors, withHatchOrigin } from '../edit/editcmds2/hatch';
 import type { EditOp } from '../edit/session';
-import { HATCH_LINE_LIMIT } from '../render/hatch';
+import { HATCH_CREATE_LIMIT } from '../render/hatch';
 import type { App, CommandContext } from './app';
 import { addEntities, currentProps } from './draw';
 import { unlockedOnly } from './layers';
@@ -86,7 +86,7 @@ export function registerEditCmds2Hatch(app: App): void {
         ctx.print('선택된 경계 객체가 없습니다.');
         return;
       }
-      const n = hatchWithBoundary(st.doc, h, ents, h.associative, HATCH_LINE_LIMIT);
+      const n = hatchWithBoundary(st.doc, h, ents, h.associative, HATCH_CREATE_LIMIT);
       if (typeof n === 'string') {
         ctx.print(n, 'err');
         return;

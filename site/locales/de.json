@@ -3112,6 +3112,7 @@
   "무늬 이름 입력 또는 [": "Musternamen eingeben oder [",
   "무늬 이름 입력 또는 [?/단색(S)/사용자 정의(U)] <{0}>:": "Musternamen eingeben oder [?/Volltonfarbe (S)/Benutzerdefiniert (U)] <{0}>:",
   "무늬가 너무 촘촘한 해치는 무늬를 생략했습니다.": "Das zu dichte Muster wurde weggelassen.",
+  "무늬가 아주 촘촘한 해치는 멀리서 볼 때 경계와 성긴 무늬로 그리고, 확대하면 보이는 곳을 원래 간격으로 그립니다.": "Schraffuren mit sehr dichtem Muster werden in der Übersicht als Umgrenzung mit gröberem Muster gezeichnet; beim Vergrößern wird der sichtbare Bereich mit dem ursprünglichen Abstand neu gezeichnet.",
   "무늬를 만들지 못했습니다": "Muster konnte nicht erstellt werden",
   "무늬에 대한 각도 지정 <{0}>:": "Gibt den Winkel für das Muster <{0}> an:",
   "무늬에 대한 축척 지정 <{0}>:": "Gibt den Maßstab für Muster <{0}> an:",

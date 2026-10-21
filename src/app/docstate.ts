@@ -71,6 +71,8 @@ export class DocState {
   readonly selection = new Set<string>();
   units: UnitSettings;
   readonly warnings: { code: string; message: string; count?: number }[] = [];
+  /** 성기게 그린 촘촘한 해치가 있는 공간(장면 열쇠) */
+  readonly denseHatch = new Set<string>();
   layerVersion = 0;
   readonly buildPending = new Map<string, Promise<void>>();
 
@@ -144,6 +146,9 @@ export class DocState {
     }
     this.sceneLayerNames.set(key, names);
     for (const w of msg.warnings) this.warnings.push({ code: w.code, message: warningText(w.code), count: w.count });
+    // 무늬가 너무 촘촘해 성기게 그린 해치가 있는 공간: 확대하면 세부 장면이 보이는 곳만 원래 간격으로 다시 그린다
+    if (msg.warnings.some((w) => w.code === 'hatch.pattern_truncated')) this.denseHatch.add(key);
+    else this.denseHatch.delete(key);
     return s;
   }
 
@@ -195,7 +200,7 @@ export function warningText(code: string): string {
     case 'xref.not_loaded':
       return '외부 참조 파일은 열지 않았습니다.';
     case 'hatch.pattern_truncated':
-      return '무늬가 너무 촘촘한 해치는 무늬를 생략했습니다.';
+      return '무늬가 아주 촘촘한 해치는 멀리서 볼 때 경계와 성긴 무늬로 그리고, 확대하면 보이는 곳을 원래 간격으로 그립니다.';
     case 'shape.unsupported':
       return '도형 파일(SHX)이 없어 쉐이프 객체를 그리지 못했습니다. SHXFONTS로 도형 파일을 불러올 수 있습니다.';
     case 'dimension.generated':
