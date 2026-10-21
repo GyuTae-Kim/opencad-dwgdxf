@@ -441,6 +441,14 @@ export function purgeable(app: App): { layers: string[]; linetypes: string[]; te
       }
     }
   }
+  // 자식 치수 스타일(부모$0~$7: 각도·지름·반지름 등 치수 종류별 값)은 부모가 쓰이면 쓰인다 — 이 앱도 새 치수에 자식 값을 쓴다.
+  // 자식이 쓰이면 부모도 남긴다
+  for (const k of d.dimStyles.keys()) {
+    const m = /^(.*)\$[0-7]$/.exec(k);
+    if (!m) continue;
+    if (usedDs.has(m[1]!)) usedDs.add(k);
+    else if (usedDs.has(k)) usedDs.add(m[1]!);
+  }
   // 문자 무늬가 있는 선종류가 쓰는 문자 스타일
   for (const lt of d.linetypes.values()) for (const el of lt.elements ?? []) if (el.styleHandle) for (const ts of d.textStyles.values()) if (ts.handle === el.styleHandle) usedTs.add(tableKey(ts.name));
   // 쓰이지 않는 블록 안의 객체가 쓰는 블록·도면층은 아직 쓰이는 것으로 본다(한 번 더 PURGE하면 지워진다)

@@ -216,4 +216,24 @@ describe('PURGE 셀프 리뷰 수정', () => {
     expect(s.undoTop()?.label).toBe('BAD');
     expect(s.canRedo()).toBe(false);
   });
+  it('부모 치수 스타일이 쓰이면 자식(부모$0~$7)도 쓰인다', async () => {
+    const h = makeHarness((doc) => {
+      fill(doc);
+      const std = doc.dimStyles.get('STANDARD') ?? [...doc.dimStyles.values()][0]!;
+      for (const nm of ['ISO-25', 'ISO-25$2', 'ISO-25$3', 'LONE', 'LONE$2', 'KID-ONLY', 'KID-ONLY$4'])
+        doc.dimStyles.set(nm.toUpperCase(), { ...structuredClone(std), name: nm, handle: '' });
+      const dim = { ...line(0, 0, 1, 0), type: 'DIMENSION', handle: 'D1', dimStyle: 'ISO-25' } as unknown as Entity;
+      const kidDim = { ...line(0, 0, 1, 0), type: 'DIMENSION', handle: 'D2', dimStyle: 'KID-ONLY$4' } as unknown as Entity;
+      for (const e of [dim, kidDim]) {
+        doc.blocks.get(MODEL_SPACE)!.entities.push(e);
+        doc.entityIndex.set(e.handle, e);
+      }
+    });
+    const { purgeable } = await import('../../src/app/editcmds');
+    const ds = purgeable(h.app).dimStyles;
+    expect(ds).not.toContain('ISO-25$2');
+    expect(ds).not.toContain('ISO-25$3');
+    expect(ds).not.toContain('KID-ONLY');
+    expect(ds).toEqual(expect.arrayContaining(['LONE', 'LONE$2']));
+  });
 });
