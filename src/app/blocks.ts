@@ -4,6 +4,7 @@
 import type { AttribEntity, BlockDef, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { cloneEntity } from '../edit/session';
+import { isDynamicDefinition } from '../edit/dynblock';
 import type { App, CommandContext } from './app';
 import { ask, form } from './ui/dom';
 import { registerBlockDefine } from './blockdefine';
@@ -98,9 +99,24 @@ export function registerBlockCommands(app: App): void {
         { ok: '확인', note: '블록 편집기에서 그리기·수정 명령으로 블록 정의를 고칩니다. 닫으면 이 블록의 모든 참조가 바뀝니다.' },
       );
       if (!v) return;
-      if (await app.openBlockEditor(String(v.name))) ctx.print(`블록 편집기: ${String(v.name)}. 끝내려면 BCLOSE를 입력하십시오.`);
+      if (await app.openBlockEditor(String(v.name))) {
+        ctx.print(`블록 편집기: ${String(v.name)}. 끝내려면 BCLOSE를 입력하십시오.`);
+        // 동적 블록: 형상은 고치되 매개변수·동작·가시성 상태는 손대지 않는다(만들기·고치기는 BPARAMETER 안내)
+        if (isDynamicDefinition(app.active!.doc, tableKey(String(v.name)))) ctx.print(DYN_EDIT_NOTE);
+      }
     },
   });
+  // 동적 블록 작성(매개변수·동작·가시성 상태): 아직 하지 않는다 — 이유와 대신 쓸 길을 알린다
+  for (const [name, aliases, title] of DYN_AUTHORING) {
+    app.register({
+      name,
+      aliases,
+      title,
+      run(ctx) {
+        ctx.print(`${name}: ${DYN_AUTHORING_NOTE}`, 'err');
+      },
+    });
+  }
   app.register({
     name: 'BSAVE',
     title: '블록 저장',
@@ -138,6 +154,24 @@ export function registerBlockCommands(app: App): void {
     },
   });
 }
+
+/** AutoCAD 블록 편집기의 동적 블록 작성 명령(이 웹 버전은 안내만) */
+const DYN_AUTHORING: [string, string[], string][] = [
+  ['BPARAMETER', ['PARAM'], '블록 매개변수'],
+  ['BACTION', ['AC'], '블록 동작'],
+  ['BACTIONTOOL', [], '동작 도구'],
+  ['BVSTATE', [], '가시성 상태'],
+  ['BVHIDE', [], '가시성 숨기기'],
+  ['BVSHOW', [], '가시성 보이기'],
+  ['BLOOKUPTABLE', [], '조회 테이블'],
+  ['BCPARAMETER', ['CPARAM'], '구속 매개변수'],
+  ['BTESTBLOCK', [], '블록 테스트'],
+];
+
+const DYN_AUTHORING_NOTE =
+  '동적 블록의 매개변수·동작·가시성 상태 작성은 이 웹 버전에서 아직 할 수 없습니다. AutoCAD가 쓰는 평가 그래프(매개변수·그립·동작 노드와 연결, 객체 표지, 참조 표현)를 새로 만들어야 하는데, 이 앱이 만든 그래프를 AutoCAD가 받아들이는지 확인할 수 없어서입니다. 이미 있는 동적 블록은 특성 팔레트·그립·-DYNPROPS로 값을 바꾸고 RESETBLOCK으로 되돌릴 수 있습니다.';
+
+const DYN_EDIT_NOTE = '동적 블록 정의입니다. 형상은 고칠 수 있지만 매개변수·동작·가시성 상태는 이 웹 버전에서 만들거나 고칠 수 없어 그대로 둡니다.';
 
 /** 블록 참조의 속성을 향상된 속성 편집기(속성·문자 옵션·특성 탭)로 고친다 */
 export async function editAttributes(app: App, ctx: CommandContext | null, handle: string): Promise<boolean> {
