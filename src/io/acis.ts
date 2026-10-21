@@ -256,11 +256,13 @@ function bsCurve(t: Tok[]): { degree: number; knots: number[]; ctrl: V[]; weight
     if (t[j]?.k === 'str') j++; // open | closed | periodic
     const kc = n(j++);
     if (!(degree >= 1 && kc >= 2)) return null;
+    // 망가진 자료에 대비해 차수·매듭 수·겹침을 제한한다(겹침은 차수 + 1까지, 매듭은 남은 토큰 수까지)
+    if (degree > 32 || kc > t.length) return null;
     const knots: number[] = [];
     for (let k = 0; k < kc; k++) {
       const kv = n(j++);
       const m = n(j++);
-      if (!Number.isFinite(kv) || !(m >= 1)) return null;
+      if (!Number.isFinite(kv) || !(m >= 1) || m > degree + 1 || !Number.isInteger(m)) return null;
       for (let q = 0; q < m; q++) knots.push(kv);
     }
     // 조정점 수 = 매듭 수 − 차수 − 1(ACIS는 양 끝 매듭을 하나 덜 적는다: 겹침 차수 → 표준 매듭은 앞뒤에 하나씩 더)
@@ -631,8 +633,11 @@ export function encodeSatLine(s: string): string {
   return out;
 }
 
-/** SAT 글 → DXF 원본 태그(AcDbModelerGeometry 70 1, 줄마다 1, 255자 넘으면 3으로 이어서) */
-export function satDxfTags(sat: string, type: string): { code: number; value: string | number }[] {
+/**
+ * SAT 글 → DXF 원본 태그(AcDbModelerGeometry 70 1, 줄마다 1, 255자 넘으면 3으로 이어서).
+ * 3DSOLID는 AutoCAD처럼 R2007(AC1021)부터 `100 AcDb3dSolid`와 기록 객체 핸들 `350`(없으면 0)을 붙인다 — R2000·R2004 DXF에는 없다.
+ */
+export function satDxfTags(sat: string, type: string, ver = 1024): { code: number; value: string | number }[] {
   const tags: { code: number; value: string | number }[] = [{ code: 100, value: 'AcDbModelerGeometry' }, { code: 70, value: 1 }];
   for (const line of sat.split(/\r?\n/)) {
     if (!line.trim()) continue;
@@ -640,6 +645,6 @@ export function satDxfTags(sat: string, type: string): { code: number; value: st
     tags.push({ code: 1, value: enc.slice(0, 255) });
     for (let i = 255; i < enc.length; i += 255) tags.push({ code: 3, value: enc.slice(i, i + 255) });
   }
-  if (type === '3DSOLID') tags.push({ code: 100, value: 'AcDb3dSolid' });
+  if (type === '3DSOLID' && ver >= 1021) tags.push({ code: 100, value: 'AcDb3dSolid' }, { code: 350, value: '0' });
   return tags;
 }
