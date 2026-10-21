@@ -5,6 +5,7 @@
 import earcut from 'earcut';
 import type { Font } from 'opentype.js';
 import { STROKE_CAP_HEIGHT, STROKE_GLYPHS } from './strokefont-data';
+import { gdtGlyph } from '../edit/annot/tolerance';
 
 export interface GlyphGeom {
   /** 전진 폭(문자 높이 단위) */
@@ -92,6 +93,63 @@ class StrokeFace implements FontFace {
 }
 
 export const strokeFace: FontFace = new StrokeFace();
+
+/**
+ * GDT 글꼴(gdt.shx·amgdt.shx) 대신: 소문자 a~z를 기하 공차 기호(직각도 b, 위치도 j, 지름 n, Ⓜ m …)로 그린다.
+ * 기호 모양은 TOLERANCE와 같은 이 프로젝트의 단선 도형(edit/annot/tolerance.ts gdtGlyph). 그 밖의 글자는 다음 글꼴이 맡는다
+ */
+class GdtFace implements FontFace {
+  readonly kind = 'stroke' as const;
+  readonly descent = strokeFace.descent;
+  private readonly glyphs = new Map<number, GlyphGeom | null>();
+
+  has(code: number): boolean {
+    return !!this.glyph(code);
+  }
+
+  glyph(code: number): GlyphGeom | null {
+    if (code < 0x61 || code > 0x7a) return null;
+    let g = this.glyphs.get(code);
+    if (g !== undefined) return g;
+    g = null;
+    const strokesIn = gdtGlyph(String.fromCharCode(code));
+    if (strokesIn) {
+      // 기호 상자(가운데 0,0, 크기 1)를 기준선 위 문자 높이 1 칸으로
+      const strokes: Float32Array[] = [];
+      const segs: number[] = [];
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const st of strokesIn) {
+        const pts = st.closed && st.pts.length ? [...st.pts, st.pts[0]!] : st.pts;
+        const f = new Float32Array(pts.length * 2);
+        pts.forEach((p, i) => {
+          const x = p.x + 0.55;
+          const y = p.y + 0.5;
+          f[i * 2] = x;
+          f[i * 2 + 1] = y;
+          minX = Math.min(minX, x);
+          maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y);
+          maxY = Math.max(maxY, y);
+          if (i) segs.push(f[i * 2 - 2]!, f[i * 2 - 1]!, x, y);
+        });
+        strokes.push(f);
+      }
+      g = { advance: 1.1, strokes, segs: new Float32Array(segs), minX, minY, maxX, maxY };
+    }
+    this.glyphs.set(code, g);
+    return g;
+  }
+}
+
+export const gdtFace: FontFace = new GdtFace();
+
+/** GDT 기호 글꼴 이름인지(gdt·amgdt, 확장자 무관) */
+export function isGdtFont(font: string): boolean {
+  return /^(am)?gdt(\.shx)?$/i.test(font.trim().replace(/^.*[\\/]/, ''));
+}
 
 // ---------------------------------------------------------------------------
 // 윤곽 글꼴(조각 단위로 받는다)

@@ -4,7 +4,7 @@
  */
 import type { CadColor, TextStyle } from '../core/model';
 import type { FontFace, GlyphGeom, OutlineLibrary } from './fonts';
-import { latinFamilyOf, strokeFace } from './fonts';
+import { gdtFace, isGdtFont, latinFamilyOf, strokeFace } from './fonts';
 import type { ShxLibrary } from './shx';
 import { type Paragraph, type RunStyle, TOGGLE_OVERLINE, TOGGLE_STRIKE, TOGGLE_UNDERLINE, parseMText, parseTextString } from './mtext';
 
@@ -95,6 +95,12 @@ export class TextEngine {
     const shx = ttfHint === null ? isShxFont(font) : !ttfHint;
     const lib = this.lib;
     const real = shx && this.shx?.size ? this.shx.face(font, bigFont) : null;
+    // GDT 글꼴을 불러오지 않았으면 기하 공차 기호를 이 앱의 도형으로(소문자 a~z), 나머지 글자는 단선 대체 글꼴
+    if (!real && isGdtFont(font)) {
+      const chain: FontFace[] = [gdtFace, strokeFace];
+      if (lib) chain.push(lib.capFace, lib.cjkFace);
+      return { chain, primary: strokeFace };
+    }
     if (real) {
       const chain: FontFace[] = [real, strokeFace];
       if (lib) chain.push(lib.capFace, lib.cjkFace);
@@ -137,6 +143,25 @@ export class TextEngine {
       if (g) return { geom: g, kind: 'stroke' };
     }
     return { geom: strokeFace.glyph(code) ?? strokeFace.glyph(63)!, kind: 'stroke' };
+  }
+
+  /** 세로 문자: 글자마다 줄 가운데에 바로 세워 진행 방향으로 1.3 높이씩(첫 글자 위가 삽입점) */
+  private verticalText(gl: { geom: GlyphGeom; kind: 'stroke' | 'outline' }[], at: { x: number; y: number }, h: number, wf: number, rot: number, oblique: number): TextLayout {
+    const out: TextLayout = { glyphs: [], lines: [], minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    const dx = Math.cos(rot);
+    const dy = Math.sin(rot);
+    const step = 1.3 * h;
+    const sh = Math.tan(oblique);
+    gl.forEach((g, i) => {
+      const cx = at.x + dx * (i + 1) * step;
+      const cy = at.y + dy * (i + 1) * step;
+      const ox = cx - (g.geom.advance * h * wf) / 2;
+      out.glyphs.push({ geom: g.geom, kind: g.kind, m: [h * wf, 0, sh * h, h, ox, cy], color: null });
+      grow(out, ox, cy);
+      grow(out, ox + g.geom.advance * h * wf, cy + h);
+    });
+    if (!gl.length) grow(out, at.x, at.y);
+    return out;
   }
 
   /** 단선 글꼴의 기준선 아래 깊이 */
@@ -218,6 +243,8 @@ export class TextEngine {
       else if (va === 2) dy = -0.5;
       else if (va === 3) dy = -1;
     }
+    // 세로 문자 스타일(STYLE 70 비트 4, SHX 글꼴만): 글자는 바로 세우고 삽입점부터 문자 진행 방향(보통 270°)으로 쌓는다
+    if (p.style && (p.style.flags ?? 0) & 4 && isShxFont(font)) return this.verticalText(gl, p.insert, h, wf, rot, p.oblique || 0);
     const mx = p.generation & 2 ? -1 : 1;
     const my = p.generation & 4 ? -1 : 1;
     const c = Math.cos(rot);
