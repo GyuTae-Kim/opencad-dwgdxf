@@ -601,6 +601,8 @@ export class WCtx {
     // 도형
     let dropped: Record<string, number> = {};
     for (const pb of this.blocks) {
+      // 외부 참조·덧씌우기 블록 레코드는 도형을 소유하지 않는다(내용은 참조 파일에 있다)
+      if (pb.def.flags & 12 && pb !== this.modelBlock && pb !== this.paperBlock) continue;
       for (const e of pb.def.entities) {
         const pe = this.planEntity(e, dropped);
         if (pe) pb.ents.push(pe);

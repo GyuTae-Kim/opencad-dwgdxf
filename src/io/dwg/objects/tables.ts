@@ -289,8 +289,10 @@ export function readBlockHeader(or: ObjectReader): BlockHeaderRec {
   if (isXref) rc.flags |= 4;
   if (isOverlaid) rc.flags |= 8;
   if (ver >= R2000 && r.B() === 1) rc.flags |= 32; // 불러오지 않은 외부 참조
+  // R2004+의 소유 객체 수·핸들은 외부 참조·덧씌우기 블록에는 없다(ODA 명세, AutoCAD가 만든 외부 참조 DWG로 확인)
+  const owns = ver >= R2004 && !isXref && !isOverlaid;
   let ownedCount = 0;
-  if (ver >= R2004) ownedCount = r.BL();
+  if (owns) ownedCount = r.BL();
   const basePoint = r.BD3();
   const xrefPath = r.TV();
   let insertCount = 0;
@@ -329,9 +331,11 @@ export function readBlockHeader(or: ObjectReader): BlockHeaderRec {
     }
   } else {
     owned = [];
-    if (ownedCount < 0 || ownedCount > 10000000) ownedCount = 0;
-    hr.checkCount(ownedCount, 8);
-    for (let i = 0; i < ownedCount; i++) owned.push(hr.H(base));
+    if (owns) {
+      if (ownedCount < 0 || ownedCount > 10000000) ownedCount = 0;
+      hr.checkCount(ownedCount, 8);
+      for (let i = 0; i < ownedCount; i++) owned.push(hr.H(base));
+    }
   }
   const endBlk = hr.H(base);
   let layout = 0;
