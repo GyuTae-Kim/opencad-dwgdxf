@@ -726,7 +726,7 @@ export class CadView {
       const i = layerIdx.get(n);
       if (i !== undefined) frozen.add(i);
     }
-    r.setStyles(model.styleData(vm.layers, 'vp', false, 0xffffff, this.lwDisplay, frozen.size ? frozen : undefined));
+    r.setStyles(model.styleData(vm.layers, vm.ovKey ? `vp|${vm.ovKey}` : 'vp', false, 0xffffff, this.lwDisplay, frozen.size ? frozen : undefined));
     const cam = this.camera();
     const ps = cam.scale * this.dpr; // 종이 단위 → 장치 픽셀
     const k = ps * vx.k;
@@ -741,7 +741,7 @@ export class CadView {
     const vis: [number, number, number, number] = [vx.refX - rad, vx.refY - rad, vx.refX + rad, vx.refY + rad];
     // 모형의 외부 참조(뷰포트 안). 다각형 뷰포트의 스텐실과 겹치지 않게 XCLIP 없는 것만 자르기 없이
     if (model.source.xrefs?.length) {
-      const styles = model.styleData(vm.layers, 'vp', false, 0xffffff, this.lwDisplay, frozen.size ? frozen : undefined);
+      const styles = model.styleData(vm.layers, vm.ovKey ? `vp|${vm.ovKey}` : 'vp', false, 0xffffff, this.lwDisplay, frozen.size ? frozen : undefined);
       const toS = (x: number, y: number): [number, number] => [A[0] * (x - xf.refX) + A[2] * (y - xf.refY) + xf.tx, A[1] * (x - xf.refX) + A[3] * (y - xf.refY) + xf.ty];
       if (this.drawXrefs(model.source, xf, lwScale, false, 0xffffff, styles, toS, vx.frozen, !!vx.clip)) {
         r.setStyles(styles);

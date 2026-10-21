@@ -7,6 +7,7 @@
  * 기본 모형 장면이 바뀌었거나 모형에 아직 다시 그리지 않은 편집이 있으면 변형 장면은 쓰지 않는다.
  */
 import { MODEL_SPACE, tableKey } from '../core/model';
+import { applyLayerOverride, viewportOverrides } from '../core/vpoverrides';
 import type { App } from './app';
 import type { LayerState } from '../render/styles';
 import type { DocState } from './docstate';
@@ -32,6 +33,19 @@ export interface ViewportModel {
   scene: SpaceScene;
   layers: LayerState[];
   index: Map<string, number>;
+  /** 이 뷰포트에 도면층 재지정(VP 색·선가중치·투명도)이 있으면 그 뷰포트 핸들(스타일 캐시 열쇠) */
+  ovKey?: string;
+}
+
+/** 뷰포트별 도면층 재지정을 입힌 도면층 상태 */
+function withOverrides(st: DocState, vx: ViewportXf, m: ViewportModel): ViewportModel {
+  const ov = viewportOverrides(st.doc, vx.vp.handle);
+  if (!ov?.size) return m;
+  const layers = m.layers.map((L) => {
+    const o = L ? ov.get(tableKey(L.name)) : undefined;
+    return o ? applyLayerOverride(L, o) : L;
+  });
+  return { ...m, layers, ovKey: vx.vp.handle };
 }
 
 /** 변형 하나: 선종류 배율(1 = 그대로), 주석 축척(null = 모형과 같다), ANNOALLVISIBLE */
@@ -134,15 +148,15 @@ function baseModel(st: DocState, base: SpaceScene): ViewportModel {
 export function viewportModel(app: App | null, st: DocState, vx: ViewportXf): ViewportModel | null {
   const base = st.scenes.get(MODEL_SPACE);
   if (!base) return null;
-  if (!wanted(st, base)) return baseModel(st, base);
+  if (!wanted(st, base)) return withOverrides(st, vx, baseModel(st, base));
   const spec = variantSpec(st, vx, base);
-  if (trivial(spec)) return baseModel(st, base);
+  if (trivial(spec)) return withOverrides(st, vx, baseModel(st, base));
   const v = st.ltVariants.get(keyOf(spec));
   if (v && v.base === base) {
-    return { scene: v.scene, layers: v.names.map((n) => st.layers.get(n)!), index: new Map(v.names.map((n, i) => [n, i])) };
+    return withOverrides(st, vx, { scene: v.scene, layers: v.names.map((n) => st.layers.get(n)!), index: new Map(v.names.map((n, i) => [n, i])) });
   }
   if (app) scheduleVariants(app, st);
-  return baseModel(st, base);
+  return withOverrides(st, vx, baseModel(st, base));
 }
 
 /** 문서별 변형 요청 타이머(확대·이동 중에는 기다렸다가 멈추면 청한다) */

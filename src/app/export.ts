@@ -267,7 +267,7 @@ export function layoutPage(st: DocState, space: string, unitsPerMm: number, opt:
       const vl: Page['layers'][number] = {
         scene: model,
         m,
-        styles: model.styleData(vm.layers, opt.plotStyle || opt.ctb ? 'vp-plot' : 'vp', false, 0xffffff, opt.lineweights, frozen.size ? frozen : undefined, opt.plotStyle, opt.ctb),
+        styles: model.styleData(vm.layers, `${opt.plotStyle || opt.ctb ? 'vp-plot' : 'vp'}${vm.ovKey ? `|${vm.ovKey}` : ''}`, false, 0xffffff, opt.lineweights, frozen.size ? frozen : undefined, opt.plotStyle, opt.ctb),
         clipPx,
         clipWorld: [vx.refX - rad, vx.refY - rad, vx.refX + rad, vx.refY + rad],
         clipPoly: clipPoly && clipPoly.length >= 6 ? clipPoly : undefined,
