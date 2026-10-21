@@ -2206,6 +2206,14 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
 #app.view-mode .start-new-card {
   display: none;
 }
+/* 시작 화면 소개·지원 범위: 휴대폰 보기 모드는 보기·치수 확인 문구, 편집 화면·데스크톱은 그리기·편집·저장 문구(shell.ts buildStart) */
+.start .view-copy,
+#app.view-mode .start .edit-copy {
+  display: none;
+}
+#app.view-mode .start .view-copy {
+  display: block;
+}
 .vb-btn:disabled {
   opacity: 0.4;
   cursor: default;
