@@ -24,11 +24,12 @@ export interface NamedItem {
   dict: string;
 }
 
-const DICTS: [NamedKind, string, string][] = [
-  ['mleaderStyles', 'ACAD_MLEADERSTYLE', '$CMLEADERSTYLE'],
-  ['tableStyles', 'ACAD_TABLESTYLE', '$CTABLESTYLE'],
-  ['mlineStyles', 'ACAD_MLINESTYLE', '$CMLSTYLE'],
-  ['groups', 'ACAD_GROUP', ''],
+/** 종류, 사전 이름, 현재 스타일 머리말 변수, 현재 스타일 사전 변수(AcDbVariableDictionary의 DICTIONARYVAR — AutoCAD는 여기에 둔다) */
+const DICTS: [NamedKind, string, string, string][] = [
+  ['mleaderStyles', 'ACAD_MLEADERSTYLE', '$CMLEADERSTYLE', 'CMLEADERSTYLE'],
+  ['tableStyles', 'ACAD_TABLESTYLE', '$CTABLESTYLE', 'CTABLESTYLE'],
+  ['mlineStyles', 'ACAD_MLINESTYLE', '$CMLSTYLE', ''],
+  ['groups', 'ACAD_GROUP', '', ''],
 ];
 
 function walkEntities(doc: CadDocument, f: (e: Entity) => void): void {
@@ -54,10 +55,13 @@ export function purgeableNamed(doc: CadDocument): Record<NamedKind, NamedItem[]>
     }
   });
   const out: Record<NamedKind, NamedItem[]> = { mleaderStyles: [], tableStyles: [], mlineStyles: [], groups: [] };
-  for (const [kind, dictName, header] of DICTS) {
+  for (const [kind, dictName, header, dictVar] of DICTS) {
     const d = namedDictionary(doc, dictName);
     if (!d) continue;
-    const cur = header ? tableKey(String(doc.header.get(header) ?? 'Standard')) : '';
+    const cur = new Set<string>();
+    if (header) cur.add(tableKey(String(doc.header.get(header) ?? 'Standard')));
+    const dv = dictVar ? readDictVar(doc, dictVar) : undefined;
+    if (dv) cur.add(tableKey(dv));
     for (const [name, h0] of d.entries) {
       const h = H(h0);
       const o = doc.objects.get(h);
@@ -68,7 +72,7 @@ export function purgeableNamed(doc: CadDocument): Record<NamedKind, NamedItem[]>
         continue;
       }
       const k = tableKey(name);
-      if (k === 'STANDARD' || k === cur || usedH.has(h)) continue;
+      if (k === 'STANDARD' || cur.has(k) || usedH.has(h)) continue;
       if (kind === 'mlineStyles' && usedMline.has(k)) continue;
       out[kind].push({ kind, name, handle: h, dict: d.handle });
     }
@@ -76,14 +80,36 @@ export function purgeableNamed(doc: CadDocument): Record<NamedKind, NamedItem[]>
   return out;
 }
 
-/** 이름 있는 객체 지우기: 객체와 그 사전 항목 */
+/**
+ * 이름 있는 객체 지우기: 객체와 그 사전 항목, 그리고 그 객체의 확장 사전과 그 사전이 소유한 객체(소유자 없는 객체로 남지 않게 —
+ * Mechanical - Metric의 테이블 스타일 확장 사전 134A·1348)
+ */
 export function purgeNamedOps(doc: CadDocument, items: readonly NamedItem[]): EditOp[] {
   const ops: EditOp[] = [];
   const byDict = new Map<string, NamedItem[]>();
+  const gone = new Set<string>();
+  const drop = (h: string, depth: number) => {
+    const o = doc.objects.get(h);
+    if (!o || gone.has(h)) return;
+    gone.add(h);
+    ops.push({ kind: 'object', key: h, before: o, after: null });
+    if (depth > 8) return;
+    if (o.xdict) {
+      const x = normalizeHandle(o.xdict);
+      if (normalizeHandle(doc.objects.get(x)?.owner ?? '') === h) drop(x, depth + 1);
+    }
+    // 사전이 소유한 항목(그 객체의 소유자가 이 사전일 때만)
+    const entries = (o as DictionaryObject).type === 'DICTIONARY' ? (o as DictionaryObject).entries : undefined;
+    if (entries)
+      for (const eh of entries.values()) {
+        const k = normalizeHandle(eh);
+        if (normalizeHandle(doc.objects.get(k)?.owner ?? '') === h) drop(k, depth + 1);
+      }
+  };
   for (const it of items) {
     const o = doc.objects.get(it.handle);
     if (!o) continue;
-    ops.push({ kind: 'object', key: it.handle, before: o, after: null });
+    drop(it.handle, 0);
     const list = byDict.get(it.dict) ?? [];
     list.push(it);
     byDict.set(it.dict, list);

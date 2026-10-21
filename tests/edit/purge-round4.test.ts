@@ -236,4 +236,28 @@ describe('PURGE 셀프 리뷰 수정', () => {
     expect(ds).not.toContain('KID-ONLY');
     expect(ds).toEqual(expect.arrayContaining(['LONE', 'LONE$2']));
   });
+  it('현재 다중 지시선·테이블 스타일은 변수 사전(CMLEADERSTYLE·CTABLESTYLE)도 본다', () => {
+    const doc = createNewDocument('metric');
+    fill(doc);
+    let vars = namedDictionary(doc, 'AcDbVariableDictionary');
+    if (!vars) {
+      vars = { type: 'DICTIONARY', handle: '9EF', owner: doc.rootDictionary, entries: new Map() } as unknown as DictionaryObject;
+      doc.objects.set('9EF', vars);
+      (doc.objects.get(normalizeHandle(doc.rootDictionary!)) as DictionaryObject).entries.set('AcDbVariableDictionary', '9EF');
+    }
+    doc.objects.set('9F0', { type: 'DICTIONARYVAR', handle: '9F0', owner: vars.handle, raw: [{ code: 280, value: 0 }, { code: 1, value: 'Extra' }] } as never);
+    vars.entries.set('CMLEADERSTYLE', '9F0');
+    expect(purgeableNamed(doc).mleaderStyles.map((x) => x.name)).toEqual([]);
+  });
+  it('스타일을 지우면 그 확장 사전과 사전이 소유한 객체도 지운다(소유자 없는 객체로 남지 않게)', () => {
+    const doc = createNewDocument('metric');
+    const ids = fill(doc);
+    const extra = doc.objects.get(ids.extra)!;
+    doc.objects.set('9E0', { type: 'DICTIONARY', handle: '9E0', owner: ids.extra, entries: new Map([['ROUNDTRIP', '9E1']]) } as never);
+    doc.objects.set('9E1', { type: 'XRECORD', handle: '9E1', owner: '9E0', data: [] } as never);
+    extra.xdict = '9E0';
+    const found = purgeableNamed(doc).mleaderStyles;
+    const ops = purgeNamedOps(doc, found);
+    expect(ops.filter((o) => o.kind === 'object' && !(o as { after: unknown }).after).map((o) => (o as { key: string }).key).sort()).toEqual([ids.extra, '9E0', '9E1'].sort());
+  });
 });
