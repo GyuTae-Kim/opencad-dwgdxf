@@ -62,6 +62,7 @@ import { boundaryEdges, contourSegments, openRing, stripOutline, textLineBoxes }
 import { type Affine, type TextEngine, type TextLayout, affMul } from '../text/layout';
 import { type ShxFont, ShxRunner } from '../text/shx';
 import { parseProxyGraphics } from './proxy';
+import { type DimensionGeometry, generateDimensionGeometry } from '../edit/dim/generate';
 import { arcTextDrawParts, arcTextUseProxy } from './arctext';
 import { codepageToEncoding, decoderFor } from '../core/codepage';
 import { mlineDrawing } from '../edit/mline/draw';
@@ -169,6 +170,8 @@ export class SceneBuilder {
   private ltscale = 1;
   private readonly warn = new Map<string, number>();
   private readonly sortCache = new Map<string, Entity[]>();
+  /** 치수 블록이 없는 치수를 그릴 때 만든 화살촉 블록(도면에 없는 AutoCAD 기본 화살촉) */
+  private readonly genBlocks = new Map<string, BlockDef>();
   private readonly styleByHandle = new Map<string, TextStyle>();
   private readonly mlineStyles = new Map<string, MLineStyleObject>();
   private readonly blockByRecord = new Map<string, BlockDef>();
@@ -854,7 +857,7 @@ export class SceneBuilder {
   /** 블록 정의(주석 표현이 쓰는 가상 블록 포함) */
   private blockNamed(name: string): BlockDef | undefined {
     const k = tableKey(name);
-    return this.anno?.blocks.get(k) ?? this.doc.blocks.get(k);
+    return this.anno?.blocks.get(k) ?? this.doc.blocks.get(k) ?? this.genBlocks.get(k);
   }
 
   build(blockName: string): SpaceScene {
@@ -1534,7 +1537,7 @@ export class SceneBuilder {
   }
 
   private insert(e: InsertEntity, ctx: Ctx): void {
-    const b = this.doc.blocks.get(tableKey(e.block));
+    const b = this.doc.blocks.get(tableKey(e.block)) ?? this.genBlocks.get(tableKey(e.block));
     if (!b) {
       this.warnInc('block.missing');
       return;
@@ -1691,6 +1694,24 @@ export class SceneBuilder {
       return;
     }
     this.warnInc('dimension.generated');
+    // 치수 블록이 없는 파일(다른 프로그램이 만든 DXF 등): 치수를 만들 때와 같은 생성기로 치수 스타일·재지정대로 다시 만들어 그린다
+    let geo: DimensionGeometry | null = null;
+    try {
+      geo = generateDimensionGeometry(this.doc, e);
+    } catch {
+      geo = null;
+    }
+    if (geo?.entities.length) {
+      for (const ab of geo.arrowBlocks) {
+        const k = tableKey(ab.name);
+        if (!this.doc.blocks.has(k) && !this.genBlocks.has(k)) this.genBlocks.set(k, { name: ab.name, handle: '', recordHandle: '', basePoint: { x: 0, y: 0, z: 0 }, flags: 0, entities: ab.entities });
+      }
+      const blk: BlockDef = { name: `*DIMGEN${e.handle}`, handle: '', recordHandle: '', basePoint: { x: 0, y: 0, z: 0 }, flags: 1, entities: geo.entities };
+      let m = withOcs(ctx.m, e.extrusion);
+      m = multiply(m, translation(0, 0, e.textMid.z));
+      this.blockContents(blk, e, m, ctx, !!ocsMatrix(e.extrusion));
+      return;
+    }
     this.simpleDimension(e, ctx);
   }
 
