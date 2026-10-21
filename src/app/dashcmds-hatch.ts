@@ -8,6 +8,7 @@
 import type { CadColor, Entity, HatchEntity, HatchGradient, HatchPath } from '../core/model';
 import { entityDefaults, tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
+import { drawOrder, sortentsOp, sortentsTable } from '../edit/draworder';
 import { PATTERNS, boundaryFromEntities, createHatch, detectBoundary, estimatePatternLines, findPattern, reactorLinks } from '../edit/hatch';
 import type { IslandStyle } from '../edit/hatch';
 import { boundaryObjects } from '../edit/geom/bpoly';
@@ -444,6 +445,8 @@ export function registerDashHatchCommands(app: App): void {
       const block = doc.blocks.get(st.space)!;
       const ops: EditOp[] = [];
       let made = 0;
+      // 그리기 순서 표(ACAD_SORTENTS)가 있으면 화면 순서에 새 해치들을 넣어 가며 마지막에 표를 한 번 고친다
+      const visual = sortentsTable(doc, st.space) ? drawOrder(doc, st.space) : null;
       for (const g of groups) {
         const paths = g.flatMap((p) => p.paths);
         const bridged = g.some((p) => p.bridged);
@@ -495,12 +498,24 @@ export function registerDashHatchCommands(app: App): void {
           if (idx.length) index = order === 'E' ? Math.min(...idx) : Math.max(...idx) + 1;
         }
         ops.push({ kind: 'add', block: st.space, entity: hatch, index: Math.min(index + made, block.entities.length + made) });
+        // 그리기 순서 표가 있으면 화면 순서에서도 같은 자리로(경계 뒤·앞, 맨 뒤·앞)
+        if (visual) {
+          let vi = visual.length;
+          if (order === 'B') vi = 0;
+          else if ((order === 'E' || order === 'R') && sources.size) {
+            const idx = visual.map((e, i) => (sources.has(e.handle) ? i : -1)).filter((i) => i >= 0);
+            if (idx.length) vi = order === 'E' ? Math.min(...idx) : Math.max(...idx) + 1;
+          }
+          visual.splice(vi, 0, hatch);
+        }
         for (const l of reactorLinks(doc, hatch)) {
           const owner = st.session.ownerOf(l.before.handle);
           if (owner) ops.push({ kind: 'modify', block: owner, before: l.before, after: l.after });
         }
         made++;
       }
+      const tableOp = visual ? sortentsOp(doc, st.space, visual) : null;
+      if (tableOp) ops.push(tableOp);
       st.session.commit({ label: 'HATCH', ops, group: ctx.group, rebuildNow: true });
       if (retain) {
         const objs = boundaryObjects(

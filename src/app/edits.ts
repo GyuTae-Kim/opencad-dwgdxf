@@ -88,7 +88,9 @@ export class EditManager {
         // 이미지·가리기 테두리 설정(IMAGEFRAME·WIPEOUTFRAME)
         (o.kind === 'object' && /^(RASTERVARIABLES|WIPEOUTVARIABLES)$/.test((o.after ?? o.before)?.type ?? '')) ||
         // 주석 축척(CANNOSCALE 변수 사전, 배치의 ANNOALLVISIBLE)
-        (o.kind === 'object' && /^(DICTIONARYVAR|LAYOUT)$/.test((o.after ?? o.before)?.type ?? '')),
+        (o.kind === 'object' && /^(DICTIONARYVAR|LAYOUT)$/.test((o.after ?? o.before)?.type ?? '')) ||
+        // 그리기 순서 표(DRAWORDER가 목록은 그대로 두고 표만 고칠 때)
+        (o.kind === 'object' && (o.after ?? o.before)?.type === 'SORTENTSTABLE'),
     );
     if (sum.spaces.size || sum.blocksChanged || sum.tablesChanged || drawVars) this.schedule(st, sum.blocksChanged || sum.tablesChanged || drawVars, tx.rebuildNow || drawVars ? 0 : REBUILD_DELAY);
     app.view.requestRender();

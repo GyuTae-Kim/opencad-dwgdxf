@@ -6,6 +6,7 @@ import type { DimensionEntity, Entity, LwPolylineEntity } from '../core/model';
 import { tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { cloneEntity, isLayoutBlock } from '../edit/session';
+import { drawOrder, sortentsOp } from '../edit/draworder';
 import type { App, CommandContext } from './app';
 import type { Pt } from './view';
 import { addHook } from './hooks';
@@ -235,7 +236,26 @@ export function registerEditCommands(app: App): void {
   });
 }
 
-/** 그리기 순서 바꾸기: 고른 객체를 맨 앞(F)·맨 뒤(B)·참조 위(A)·아래(U)로 */
+/** 순서 목록에서 고른 객체를 맨 앞(F)·맨 뒤(B)·참조 위(A)·아래(U)로 옮긴 새 목록. 옮길 자리가 없으면 null */
+function moved(list: readonly Entity[], set: ReadonlySet<string>, mode: 'A' | 'U' | 'F' | 'B', ref: readonly string[]): Entity[] | null {
+  const picked = list.filter((e) => set.has(e.handle));
+  const rest = list.filter((e) => !set.has(e.handle));
+  let at: number;
+  if (mode === 'F') at = rest.length;
+  else if (mode === 'B') at = 0;
+  else {
+    const refSet = new Set(ref);
+    const idx = rest.map((e, i) => (refSet.has(e.handle) ? i : -1)).filter((i) => i >= 0);
+    if (!idx.length) return null;
+    at = mode === 'A' ? Math.max(...idx) + 1 : Math.min(...idx);
+  }
+  return [...rest.slice(0, at), ...picked, ...rest.slice(at)];
+}
+
+/**
+ * 그리기 순서 바꾸기: 고른 객체를 맨 앞(F)·맨 뒤(B)·참조 위(A)·아래(U)로.
+ * 블록에 그리기 순서 표(ACAD_SORTENTS)가 있으면 화면 순서(표 순서)로 계산해 표를 같은 편집 단계에서 고친다(AutoCAD와 같다).
+ */
 export function reorder(app: App, handles: string[], mode: 'A' | 'U' | 'F' | 'B', ref: string[]): number {
   const st = app.active!;
   const ops: EditOp[] = [];
@@ -248,35 +268,32 @@ export function reorder(app: App, handles: string[], mode: 'A' | 'U' | 'F' | 'B'
     if (!l) byBlock.set(b, (l = []));
     l.push(h);
   }
-  let moved = 0;
+  let count = 0;
   for (const [bk, hs] of byBlock) {
     const block = st.doc.blocks.get(bk)!;
     const set = new Set(hs);
     const list = block.entities;
-    const picked = list.filter((e) => set.has(e.handle));
-    const rest = list.filter((e) => !set.has(e.handle));
-    let at: number;
-    if (mode === 'F') at = rest.length;
-    else if (mode === 'B') at = 0;
-    else {
-      const refSet = new Set(ref);
-      const idx = rest.map((e, i) => (refSet.has(e.handle) ? i : -1)).filter((i) => i >= 0);
-      if (!idx.length) continue;
-      at = mode === 'A' ? Math.max(...idx) + 1 : Math.min(...idx);
+    const next = moved(list, set, mode, ref);
+    const visualNext = moved(drawOrder(st.doc, bk), set, mode, ref);
+    const tableOp = visualNext ? sortentsOp(st.doc, bk, visualNext) : null;
+    const listChanged = !!next && !next.every((e, i) => e === list[i]);
+    if (!listChanged && !tableOp) continue;
+    if (listChanged) {
+      // 지우고(뒤에서부터) 새 자리에 넣기(앞에서부터)
+      const at = next!.findIndex((e) => set.has(e.handle));
+      const picked = list.filter((e) => set.has(e.handle));
+      const removes: EditOp[] = [];
+      list.forEach((e, i) => {
+        if (set.has(e.handle)) removes.push({ kind: 'remove', block: bk, entity: e, index: i });
+      });
+      ops.push(...removes.reverse());
+      picked.forEach((e, j) => ops.push({ kind: 'add', block: bk, entity: e, index: at + j }));
     }
-    const next = [...rest.slice(0, at), ...picked, ...rest.slice(at)];
-    if (next.every((e, i) => e === list[i])) continue;
-    // 지우고(뒤에서부터) 새 자리에 넣기(앞에서부터)
-    const removes: EditOp[] = [];
-    list.forEach((e, i) => {
-      if (set.has(e.handle)) removes.push({ kind: 'remove', block: bk, entity: e, index: i });
-    });
-    ops.push(...removes.reverse());
-    picked.forEach((e, j) => ops.push({ kind: 'add', block: bk, entity: e, index: at + j }));
-    moved += picked.length;
+    if (tableOp) ops.push(tableOp);
+    count += hs.length;
   }
   if (ops.length) st.session.commit({ label: 'DRAWORDER', ops, rebuildNow: true });
-  return moved;
+  return count;
 }
 
 /** TEXTEDITMODE(0 단일, 1 다중 — 기본). 도면마다 여는 동안 */

@@ -9,6 +9,7 @@ import { formatLength } from '../core/units';
 import { entityBounds } from '../edit/geom/query';
 import { type Hyperlink, readHyperlink, withHyperlink } from '../edit/hyperlink';
 import type { EditOp } from '../edit/session';
+import { drawOrder, sortentsOp } from '../edit/draworder';
 import { makeBreakline } from '../edit/express/breakline';
 import { type Chain, type GapType, GAP_LABEL, chainDistance, chainsOf, offsetChain, oppositeSide } from '../edit/express/exoffset';
 import { flattenEntity } from '../edit/express/flatten';
@@ -377,8 +378,12 @@ async function runCdorder(app: App, ctx: CommandContext): Promise<void> {
     const block = doc.blocks.get(bk);
     if (!block) continue;
     const next = cdorderList(block.entities, sel, (e) => displayColorKey(e, doc), v.order, v.place);
-    if (!next) continue;
-    ops.push(...reorderOps(bk, block.entities, sel, next, v.place));
+    // 그리기 순서 표(ACAD_SORTENTS)가 있으면 화면 순서로 계산한 차례를 표에도 적는다
+    const visual = cdorderList(drawOrder(doc, bk), sel, (e) => displayColorKey(e, doc), v.order, v.place);
+    const tableOp = visual ? sortentsOp(doc, bk, visual) : null;
+    if (!next && !tableOp) continue;
+    if (next) ops.push(...reorderOps(bk, block.entities, sel, next, v.place));
+    if (tableOp) ops.push(tableOp);
     moved += block.entities.filter((e) => sel.has(e.handle)).length;
   }
   if (ops.length) st.session.commit({ label: 'CDORDER', ops, group: ctx.group, rebuildNow: true });

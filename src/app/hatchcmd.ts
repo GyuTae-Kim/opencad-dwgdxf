@@ -7,6 +7,7 @@ import type { CadColor, CadDocument, Entity, HatchEntity, HatchGradient, HatchPa
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
 import type { EditOp } from '../edit/session';
+import { drawOrder, sortentsInsertOp } from '../edit/draworder';
 import { PATTERNS, boundaryFromEntities, createHatch, detectBoundary, estimatePatternLines, findPattern, reactorLinks } from '../edit/hatch';
 import type { IslandStyle } from '../edit/hatch';
 import { HATCH_LINE_LIMIT } from '../render/hatch';
@@ -334,6 +335,11 @@ async function runHatch(app: App, ctx: CommandContext, gradient: boolean): Promi
     if (sources.has(e.handle) && i < index) index = i;
   });
   const ops: EditOp[] = [{ kind: 'add', block: st.space, entity: hatch, index }];
+  // 그리기 순서 표가 있으면 화면 순서에서도 경계 뒤로
+  const visual = drawOrder(doc, st.space);
+  const vi = visual.findIndex((e) => sources.has(e.handle));
+  const tableOp = sortentsInsertOp(doc, st.space, hatch, vi < 0 ? visual.length : vi);
+  if (tableOp) ops.push(tableOp);
   for (const l of reactorLinks(doc, hatch)) {
     const owner = st.session.ownerOf(l.before.handle);
     if (owner) ops.push({ kind: 'modify', block: owner, before: l.before, after: l.after });
