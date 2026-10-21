@@ -96,14 +96,16 @@ describe('JOIN 닫기', () => {
     expect(all[0]).toMatchObject({ center: { x: 5, y: 5 }, radius: 3 });
     expect(h.printed).toContain('호가 원으로 변환되었습니다.');
   });
-  it('타원형 호 하나를 닫으면 온 타원', async () => {
+  it('타원형 호 하나를 닫으면 온 타원(같은 객체를 고친다 — 핸들이 그대로라 연관·그룹이 끊기지 않는다)', async () => {
     const h = harness();
     const e = h.add(ellipse0(0, 0, 10, 0, 0.5, 0, Math.PI));
     await h.run('JOIN', [{ sel: [e.handle] }, 'L']);
     const all = ents(h);
     expect(all.length).toBe(1);
-    expect(all[0]).toMatchObject({ type: 'ELLIPSE', startParam: 0 });
+    expect(all[0]).toMatchObject({ type: 'ELLIPSE', startParam: 0, handle: e.handle });
     expect((all[0] as { endParam: number }).endParam).toBeCloseTo(2 * Math.PI, 12);
+    h.st.session.undo();
+    expect(ents(h)[0]).toMatchObject({ handle: e.handle, endParam: Math.PI });
   });
   it('호 하나 다음에 같은 원 위의 호를 고르면 결합한다', async () => {
     const h = harness();

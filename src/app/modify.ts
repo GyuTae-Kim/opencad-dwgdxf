@@ -567,13 +567,15 @@ export function importDependencies(st: DocState, src: CadDocument, list: Entity[
 
 // ---------------------------------------------------------------------------
 
-/** JOIN 닫기(L): 호 → 같은 중심·반지름의 원, 타원형 호 → 온 타원(핸들은 새로) */
-function closeArc(e: Entity): Entity | null {
+/**
+ * JOIN 닫기(L): 호 → 같은 중심·반지름의 원(종류가 바뀌어 새 객체), 타원형 호 → 온 타원(같은 객체를 고친다 — 핸들·연관·그룹이 그대로)
+ */
+function closeArc(e: Entity): EditResult | null {
   if (e.type === 'ARC') {
     const { startAngle: _s, endAngle: _e, ...rest } = cloneEntity(e);
-    return { ...rest, type: 'CIRCLE', handle: '' } as Entity;
+    return { remove: [e.handle], add: [{ ...rest, type: 'CIRCLE', handle: '' } as Entity] };
   }
-  if (e.type === 'ELLIPSE') return { ...cloneEntity(e), handle: '', startParam: 0, endParam: 2 * Math.PI } as Entity;
+  if (e.type === 'ELLIPSE') return { replace: [{ ...cloneEntity(e), handle: e.handle, startParam: 0, endParam: 2 * Math.PI } as Entity] };
   return null;
 }
 
@@ -1709,7 +1711,7 @@ export function registerModifyCommands(app: App): void {
           const closed = closeArc(one);
           if (!closed) return;
           st.selection.clear();
-          commitResults(app, ctx, [{ remove: [one.handle], add: [closed] }], 'JOIN');
+          commitResults(app, ctx, [closed], 'JOIN');
           app.refreshSelectionOverlay();
           ctx.print(one.type === 'ARC' ? '호가 원으로 변환되었습니다.' : '타원형 호가 타원으로 변환되었습니다.');
           return;
