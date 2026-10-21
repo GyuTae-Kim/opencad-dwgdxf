@@ -202,6 +202,13 @@ export class App {
   otrackOn = false;
   /** 동적 입력(F12): 커서 옆에 프롬프트·거리·입력 중인 값 */
   dynOn = true;
+  /**
+   * 휴대폰 보기 모드: 보기·치수 확인만(그립 편집·두 번 눌러 편집·도면 영역 오른쪽 클릭 메뉴를 막고, 누르면 그 객체 하나만 고른다).
+   * 화면(리본·명령행 숨김, 보기 단추 줄)은 ui/mobileview.ts가 맡는다
+   */
+  viewOnly = false;
+  /** 정밀 조준 없이 손가락으로 찍은 점: 손가락이 가려 보지 못하므로 객체 스냅 조준창을 넓힌다 */
+  private blindTouch = false;
   private acquired: Acquired[] = [];
   private acqCandidate: { p: Pt; timer: number } | null = null;
   private request: Request | null = null;
@@ -306,6 +313,8 @@ export class App {
       },
       viewportView: (vp, patch) => this.onViewportView(vp, patch),
     });
+    // 길게 눌러 정밀 조준: 보기 모드이거나 명령이 점·객체를 기다릴 때
+    this.view.aimEnabled = () => this.viewOnly || !!this.request;
     this.cmd.onChange = (t) => {
       this.view.overlay.dynInput = this.dynOn && t ? t : null;
       this.updateDynFields();
@@ -1460,6 +1469,15 @@ export class App {
     this.setSelection([], 'replace');
   }
 
+  /** 휴대폰 보기 모드 켜고 끄기: 켜면 진행 중 명령을 그만두고 그립을 치운다 */
+  setViewOnly(on: boolean): void {
+    if (this.viewOnly === on) return;
+    this.viewOnly = on;
+    if (on && this.running) this.cancel();
+    this.refreshSelectionOverlay();
+    this.view.requestOverlay();
+  }
+
   /**
    * 설정을 다시 읽어 화면(view.prefs·선택 상자)에 넣는다. name: 바뀐 변수 — 지금 보이는 그립·미리보기를 그에 맞게 고친다
    * (없으면 처음 읽기)
@@ -1498,8 +1516,8 @@ export class App {
           if (n++ > 3000) break;
           o.selection.push(p.geometry(h));
         }
-        // 그립(GRIPS 0이면 보이지도, 누르지도 않는다)
-        if (st.selection.size <= 200 && gripsOn(this.settings.grips)) {
+        // 그립(GRIPS 0이면 보이지도, 누르지도 않는다. 보기 모드도 없다)
+        if (st.selection.size <= 200 && gripsOn(this.settings.grips) && !this.viewOnly) {
           // 객체별 그립(편집 커널): 누르면 그립 편집(신축·이동·회전·축척·대칭)
           for (const h of st.selection) {
             const e = st.doc.entityIndex.get(h);
@@ -1556,8 +1574,8 @@ export class App {
     const pk = this.picker();
     const modes = this.snapModesFor(r);
     if (pk && modes?.size) {
-      // 조준창(APERTURE, 픽셀)
-      const aperture = this.settings.aperture * this.view.pixelSize();
+      // 조준창(APERTURE, 픽셀). 보지 못하고 손가락으로 찍은 점은 두 배
+      const aperture = this.settings.aperture * this.view.pixelSize() * (this.blindTouch ? 2 : 1);
       const s = findSnap(st.doc, pk, w, aperture, modes, r.base, { ext: this.extAnchors, par: this.parDirs.map((d) => d.dir) });
       if (s) {
         const p = { x: s.x, y: s.y };
@@ -1724,7 +1742,9 @@ export class App {
 
   private onMove(w: Pt, s: Pt, ev: PointerEvent, fromKey = false): void {
     const o = this.view.overlay;
-    o.cursor = ev.pointerType === 'touch' ? null : s;
+    // 터치는 커서가 없다. 정밀 조준(길게 누르기) 중에는 손가락 위 십자선을 마우스 커서처럼 쓴다
+    const aiming = this.view.aiming;
+    o.cursor = ev.pointerType === 'touch' && !aiming ? null : s;
     this.cursorWorld = w;
     this.lastMove = { w, s, ev };
     if (!fromKey) this.shiftHeld = ev.shiftKey;
@@ -1764,7 +1784,7 @@ export class App {
     // 다기능 그립: 선택한 객체의 그립 위(명령 없음)
     if (!r && !this.running && !this.press) this.updateGripHover(w, ev);
     // 선택 미리보기(가만히 있을 때)
-    if (!r && !this.windowStart && !this.press && ev.pointerType !== 'touch') {
+    if (!r && !this.windowStart && !this.press && (ev.pointerType !== 'touch' || aiming)) {
       clearTimeout(this.hoverTimer);
       this.hoverTimer = window.setTimeout(() => this.updateHover(w), 40);
     } else if (r?.kind === 'entity' || r?.kind === 'select') {
@@ -1913,7 +1933,14 @@ export class App {
     const r = this.request;
     if (r?.kind === 'point') {
       this.shiftHeld = ev.shiftKey;
-      const { p, snap } = this.resolvePoint(w);
+      this.blindTouch = ev.pointerType === 'touch' && !this.view.aiming;
+      let resolved: ResolvedPoint;
+      try {
+        resolved = this.resolvePoint(w);
+      } finally {
+        this.blindTouch = false;
+      }
+      const { p, snap } = resolved;
       // 스냅 재지정(NON 말고)이 잡히지 않은 곳이면 다시 묻는다
       const ov = this.snapOverride?.req === r ? this.snapOverride.modes : null;
       if (ov?.size && !snap && !(this.dynOn && this.dyn.locked)) {
@@ -1976,8 +2003,8 @@ export class App {
       this.finishWindow(this.windowStart.screen, s, ev);
       return;
     }
-    // 그립: 누르면 그립 편집, Shift+클릭은 핫 그립 더하기·빼기
-    if (!r && st.selection.size && this.gripList.length && !this.busyCommand) {
+    // 그립: 누르면 그립 편집, Shift+클릭은 핫 그립 더하기·빼기(보기 모드는 그립이 없다)
+    if (!r && !this.viewOnly && st.selection.size && this.gripList.length && !this.busyCommand) {
       const g = this.gripAt(w, ev.pointerType === 'touch');
       // 방금 객체를 고른 클릭과 같은 자리를 곧바로 다시 누르면 두 번 누르기다(AutoCAD처럼 그립 편집 대신 dblclick이 맡는다)
       const lp = this.lastPickClick;
@@ -1995,8 +2022,8 @@ export class App {
     if (h && (ev.ctrlKey || ev.metaKey) && !r && (this.entityClickHandlers.some((f) => f.click(h, w)) || this.linkClick?.(h))) return;
     const pickIt = (h: string) => {
       const hs = this.expandPick([h]);
-      // PICKADD 1·2: 더하기(Shift로 누르면 고른 것은 빼고 아니면 더한다), 0: 바꾸기(Shift 더하기·빼기)
-      this.setSelection(hs, pickMode(this.settings.pickadd, { shift: ev.shiftKey, selected: st.selection.has(h) }));
+      // PICKADD 1·2: 더하기(Shift로 누르면 고른 것은 빼고 아니면 더한다), 0: 바꾸기(Shift 더하기·빼기). 보기 모드는 누른 것 하나(정보 카드)
+      this.setSelection(hs, this.viewOnly ? 'replace' : pickMode(this.settings.pickadd, { shift: ev.shiftKey, selected: st.selection.has(h) }));
       this.clearHover();
       if (!r) this.lastPickClick = { time: performance.now(), screen: s };
     };
@@ -2277,6 +2304,8 @@ export class App {
         }
       }
     }
+    // 보기 모드: 뷰포트 들어가고 나가기만, 객체 편집은 열지 않는다
+    if (this.viewOnly) return;
     const pk = this.picker();
     const h = pk?.pick(w.x, w.y, this.view.overlay.pickbox * this.view.pixelSize());
     if (!h) return;
@@ -2334,6 +2363,8 @@ export class App {
   private onContext(w: Pt, _s: Pt, ev: MouseEvent, held?: number): void {
     void _s;
     closeMenu();
+    // 보기 모드: 편집 명령 메뉴를 띄우지 않는다(안드로이드 길게 누르기도 여기로 온다)
+    if (this.viewOnly) return;
     if (this.windowStart) {
       this.windowStart = null;
       this.view.overlay.windowRect = null;

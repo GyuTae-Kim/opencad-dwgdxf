@@ -18,6 +18,7 @@ import { maximized, maximizedLabel } from '../viewtools-vpmax';
 import { pickColor } from './colorpick';
 import { type MenuItem, dialog, formatBytes, h, iconSpan, showMenu, toast } from './dom';
 import { icon } from './icons';
+import { MobileView, isCoarse, readMobileMode, startInViewMode } from './mobileview';
 import { RecentStore } from '../recent';
 import { type AnnoStatus, annoStatus } from '../annoscale-status';
 import { foldCount, layoutClasses, revealX, ribbonOverlay, statusHidden, watchViewport, wheelToHorizontal } from './layout';
@@ -889,6 +890,8 @@ export class Shell implements UiHooks {
   private activeTab = 0;
   private app!: App;
   palette!: Palette;
+  /** 휴대폰 보기 모드(보기 단추 줄·측정 띠·정보 카드) */
+  mobile!: MobileView;
   readonly recent = new RecentStore();
   private readonly workspace: HTMLElement;
   private readonly guide: HTMLElement | null;
@@ -902,7 +905,8 @@ export class Shell implements UiHooks {
     this.root = root;
     // Keep the same useful guide for static crawlers and the running start screen.
     this.guide = root.querySelector<HTMLElement>('#viewer-guide');
-    this.fileInput = h('input', { type: 'file', accept: '.dxf,.dwg,.scr,.lsp,.DXF,.DWG,.SCR,.LSP', multiple: true, hidden: true });
+    // 손가락 기기(휴대폰)는 확장자만 적은 accept를 시스템 형식으로 못 바꾸면 .dwg·.dxf를 흐리게 막는다(iOS) — 거르지 않고 연 뒤 알린다
+    this.fileInput = h('input', { type: 'file', accept: isCoarse() ? undefined : '.dxf,.dwg,.scr,.lsp,.mnl,.DXF,.DWG,.SCR,.LSP,.MNL', multiple: true, hidden: true });
     this.title = h('div', { class: 'titlebar' });
     this.ribbonTabs = h('div', { class: 'ribbon-tabs', role: 'tablist' });
     this.ribbon = h('div', { class: 'ribbon' });
@@ -955,6 +959,21 @@ export class Shell implements UiHooks {
     new ResizeObserver(() => this.scheduleFitStatus()).observe(this.status);
     watchViewport(this.workspace);
     this.palette = new Palette(app, this.workspace);
+    this.mobile = new MobileView(
+      app,
+      {
+        openPalette: (tab) => this.openPalette(tab),
+        closePalette: () => this.palette.close(),
+        modeChanged: () => {
+          this.applyLayout();
+          this.scheduleFitStatus();
+        },
+      },
+      this.root,
+    );
+    this.root.insertBefore(this.mobile.bar, this.ribbonTabs);
+    this.drawingHost.append(this.mobile.card);
+    this.mobile.apply(startInViewMode(readMobileMode(), isCoarse(), window.innerWidth, window.innerHeight));
     this.buildTitle();
     this.buildRibbon();
     this.buildStatus();
@@ -1042,9 +1061,15 @@ export class Shell implements UiHooks {
       'div',
       { class: 'title-right' },
       h('a', { class: 'portfolio-link', href: 'https://gyutae-kim.github.io/', title: '김규태 포트폴리오로 돌아가기' }, '← 포트폴리오'),
+      // 손가락 기기: 휴대폰 보기 모드 ↔ 편집 화면
+      h('button', { class: 'icon-btn mode-btn view-only', title: '편집 화면으로(리본·명령행)', 'aria-label': '편집 화면으로', html: icon('pencil'), onclick: () => this.mobile.setMode('edit') }),
+      h('button', { class: 'icon-btn mode-btn edit-only', title: '휴대폰 보기 모드로(보기·치수 확인)', 'aria-label': '휴대폰 보기 모드로', html: icon('eye'), onclick: () => this.mobile.setMode('view') }),
       this.iconBtn('help', '도움말 (F1)', () => void app.run('HELP')),
       this.iconBtn('fullscreen', '전체 화면', () => void app.run('FULLSCREEN')),
     );
+    // 전체 화면을 못 쓰는 브라우저(iPhone Safari)에서는 단추를 감춘다
+    const fs = right.lastElementChild as HTMLElement;
+    if (document.fullscreenEnabled === false || typeof document.documentElement.requestFullscreen !== 'function') fs.hidden = true;
     this.title.append(appBtn, qat, titleText, right);
   }
 
@@ -1685,6 +1710,7 @@ export class Shell implements UiHooks {
 
   refreshPalette(): void {
     this.palette?.refresh();
+    this.mobile?.refresh();
   }
 
   openPalette(tab: string): void {
@@ -1723,8 +1749,9 @@ export class Shell implements UiHooks {
       'div',
       { class: 'dropzone', role: 'button', tabindex: 0, 'aria-label': '도면 파일 열기' },
       iconSpan('folder', 'big'),
-      h('strong', {}, 'DXF·DWG 파일을 여기에 끌어다 놓으십시오'),
-      h('span', {}, '또는'),
+      h('strong', { class: 'fine-only' }, 'DXF·DWG 파일을 여기에 끌어다 놓으십시오'),
+      h('strong', { class: 'coarse-only' }, 'DXF·DWG 도면을 골라 여십시오'),
+      h('span', { class: 'fine-only' }, '또는'),
       h('button', { class: 'btn primary', onclick: (ev: Event) => (ev.stopPropagation(), this.pickFiles()) }, iconSpan('open'), '파일 열기'),
     );
     drop.addEventListener('click', () => this.pickFiles());
@@ -1751,7 +1778,8 @@ export class Shell implements UiHooks {
           h(
             'div',
             { class: 'start-side' },
-            h('div', { class: 'card' }, h('h3', {}, '새로 그리기'), h('div', { style: 'margin-bottom:8px;color:var(--text-dim)' }, '빈 도면을 만들어 바로 그리기를 시작합니다(Ctrl+N).'), newDrawing),
+            // 휴대폰 보기 모드에서는 새 도면(그리기)을 숨겨 예제 도면이 먼저 보이게 한다
+            h('div', { class: 'card start-new-card' }, h('h3', {}, '새로 그리기'), h('div', { style: 'margin-bottom:8px;color:var(--text-dim)' }, '빈 도면을 만들어 바로 그리기를 시작합니다(Ctrl+N).'), newDrawing),
             h('div', { class: 'card' }, h('h3', {}, '최근 문서'), this.recentList),
             h('div', { class: 'card' }, h('h3', {}, '처음이라면'), h('div', { style: 'margin-bottom:8px;color:var(--text-dim)' }, '예제 도면으로 기능을 둘러볼 수 있습니다.'), sample),
             h(
