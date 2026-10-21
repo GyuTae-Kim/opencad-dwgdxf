@@ -1646,7 +1646,8 @@ export function registerModifyCommands(app: App): void {
       if (!e1 || !unlockedOnly(app, [r1.handle]).length) continue;
       for (;;) {
         const kws2: Keyword[] = kind === 'fillet' ? [{ key: 'R', label: '반지름' }] : [{ key: 'D', label: '거리' }, { key: 'A', label: '각도' }, { key: 'E', label: '메서드' }];
-        const second = kind === 'fillet' ? '두 번째 객체 선택' : '두 번째 선 선택';
+        // Shift를 누른 채 고르면 반지름(거리) 0으로 구석을 만든다(AutoCAD와 같다)
+        const second = kind === 'fillet' ? '두 번째 객체 선택 또는 Shift 키를 누른 채 선택하여 구석 적용' : '두 번째 선 선택 또는 Shift 키를 누른 채 선택하여 구석 적용';
         const r2 = await ctx.getEntity(`${second} 또는 [${kws2.map((k) => `${k.label}(${k.key})`).join('/')}]:`, kws2);
         if ('keyword' in r2) {
           await option(r2.keyword);
@@ -1655,12 +1656,15 @@ export function registerModifyCommands(app: App): void {
         if (!('handle' in r2)) return;
         const e2 = st.doc.entityIndex.get(r2.handle);
         if (!e2 || !unlockedOnly(app, [r2.handle]).length) break;
+        const sharp = !!r2.shift;
         const res =
           kind === 'fillet'
-            ? fillet(e1, r1.point, e2, r2.point, hnum(st, '$FILLETRAD', 0), { trim })
-            : m.chamferMethod === 'A'
-              ? chamferAngle(e1, r1.point, e2, r2.point, hnum(st, '$CHAMFERC', 0), hnum(st, '$CHAMFERD', 0), { trim })
-              : chamfer(e1, r1.point, e2, r2.point, hnum(st, '$CHAMFERA', 0), hnum(st, '$CHAMFERB', 0), { trim });
+            ? fillet(e1, r1.point, e2, r2.point, sharp ? 0 : hnum(st, '$FILLETRAD', 0), { trim })
+            : sharp
+              ? chamfer(e1, r1.point, e2, r2.point, 0, 0, { trim })
+              : m.chamferMethod === 'A'
+                ? chamferAngle(e1, r1.point, e2, r2.point, hnum(st, '$CHAMFERC', 0), hnum(st, '$CHAMFERD', 0), { trim })
+                : chamfer(e1, r1.point, e2, r2.point, hnum(st, '$CHAMFERA', 0), hnum(st, '$CHAMFERB', 0), { trim });
         if (!res.add?.length && !res.replace?.length && !res.remove?.length) ctx.print(res.message ?? (kind === 'fillet' ? '이 객체는 모깎기할 수 없습니다.' : '이 객체는 모따기할 수 없습니다.'));
         else steps.push(commitResults(app, ctx, [res], label).ops);
         break;

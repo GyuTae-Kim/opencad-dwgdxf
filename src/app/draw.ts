@@ -21,7 +21,7 @@ import { isoCircleEllipse, isoEllipseKeyword } from './viewtools-iso';
 import { packLw, packLwPoints } from '../core/lwpoly';
 import type { DocState } from './docstate';
 import { type KnotParam, fitSplineNurbs, makeCvSpline, makeFitSpline, splineFromFitPolyline } from '../edit/geom/drawgeom';
-import { type RectOptions, arcByCenter,arcByCenterAngle, arcByCenterChord, arcByDirection, arcByRadiusAngle, arcByRadiusEnd, bisectAngle, circleTTR, ellipseAngleToParam, ellipseParamToAngle, offsetLine, rectCorners, rectCornersFit, rectOtherCorner, rectOtherSide, rectVertices } from '../edit/geom/drawgeom';
+import { type RectOptions, arcByCenter, arcByCenterAngle, arcFromBulge, bulgeOfSweep, arcByCenterChord, arcByDirection, arcByRadiusAngle, arcByRadiusEnd, bisectAngle, circleTTR, circleTTT, ellipseAngleToParam, ellipseParamToAngle, offsetLine, rectCorners, rectCornersFit, rectOtherCorner, rectOtherSide, rectVertices } from '../edit/geom/drawgeom';
 import { entityPath } from '../edit/geom/path';
 import { pathNearest } from '../edit/geom/curve';
 
@@ -197,6 +197,12 @@ export function circle3p(a: Pt, b: Pt, c: Pt): { c: Pt; r: number } | null {
   return { c: { x: ux, y: uy }, r: Math.hypot(a.x - ux, a.y - uy) };
 }
 
+/** ARC 이어 그리기(첫 프롬프트 Enter): 문서마다 마지막으로 그린 선·호의 끝점과 그 끝의 진행 방향 */
+const tangentAfter = new WeakMap<DocState, { p: Pt; dir: number }>();
+function setTangent(app: App, p: Pt, dir: number): void {
+  if (app.active) tangentAfter.set(app.active, { p: { x: p.x, y: p.y }, dir });
+}
+
 /** 세 점(시작·중간·끝)으로 호: 반시계 시작각·끝각 */
 function arc3p(a: Pt, m: Pt, b: Pt): { c: Pt; r: number; a0: number; a1: number } | null {
   const k = circle3p(a, m, b);
@@ -251,6 +257,7 @@ export function registerDrawCommands(app: App): void {
           }
           if (r.keyword === 'C') {
             addEntities(app, ctx, [{ ...base(), type: 'LINE', handle: '', start: v3(prev, elev), end: v3(start, elev) } as Entity], 'LINE');
+            setTangent(app, start, ang(prev, start));
             app.lastPoint = start;
             return;
           }
@@ -259,6 +266,7 @@ export function registerDrawCommands(app: App): void {
         const p = pt(r)!;
         if (dist(prev, p) < 1e-12) continue;
         addEntities(app, ctx, [{ ...base(), type: 'LINE', handle: '', start: v3(prev, elev), end: v3(p, elev) } as Entity], 'LINE');
+        setTangent(app, p, ang(prev, p));
         prev = p;
         app.lastPoint = p;
         count++;
@@ -540,31 +548,49 @@ export function registerDrawCommands(app: App): void {
     name: 'CIRCLE',
     aliases: ['C'],
     title: '원',
-    async run(ctx) {
-      const r0 = await ctx.getPoint('원에 대한 중심점 지정 또는 [3점(3P)/2점(2P)/Ttr - 접선 접선 반지름(T)]:', {
-        keywords: [
-          { key: '3P', label: '3점' },
-          { key: '2P', label: '2점' },
-          { key: 'T', label: 'Ttr - 접선 접선 반지름' },
-        ],
-      });
+    async run(ctx, arg) {
+      // 리본의 원 방법(3P·2P·T, 그리고 프롬프트에 없는 TTT — AutoCAD 리본의 접선, 접선, 접선)은 첫 응답으로 받는다
+      const preset = arg?.trim().toUpperCase();
+      const r0: PointResult = preset
+        ? { keyword: preset }
+        : await ctx.getPoint('원에 대한 중심점 지정 또는 [3점(3P)/2점(2P)/Ttr - 접선 접선 반지름(T)]:', {
+            keywords: [
+              { key: '3P', label: '3점' },
+              { key: '2P', label: '2점' },
+              { key: 'T', label: 'Ttr - 접선 접선 반지름' },
+            ],
+          });
       let c: Pt;
       let rad: number;
-      if ('keyword' in r0 && r0.keyword === 'T') {
-        // 접선 두 개와 반지름: 선·호·원(폴리선의 직선·호 구간 포함)을 연장해서 본다
-        const pieceAt = async (prompt: string) => {
-          for (;;) {
-            const r = await ctx.getEntity(prompt);
-            if (!('handle' in r)) return null;
-            const e = app.active!.doc.entityIndex.get(r.handle);
-            const path = e ? entityPath(e) : null;
-            if (path && path.pieces.length) {
-              const piece = path.pieces[pathNearest(path, r.point).i]!;
-              if (piece.k === 'line' || piece.k === 'arc') return { piece, pick: r.point };
-            }
-            ctx.print('선, 호, 원을 선택하십시오.', 'err');
+      // 접선 객체: 선·호·원(폴리선의 직선·호 구간 포함)을 연장해서 본다
+      const pieceAt = async (prompt: string) => {
+        for (;;) {
+          const r = await ctx.getEntity(prompt);
+          if (!('handle' in r)) return null;
+          const e = app.active!.doc.entityIndex.get(r.handle);
+          const path = e ? entityPath(e) : null;
+          if (path && path.pieces.length) {
+            const piece = path.pieces[pathNearest(path, r.point).i]!;
+            if (piece.k === 'line' || piece.k === 'arc') return { piece, pick: r.point };
           }
-        };
+          ctx.print('선, 호, 원을 선택하십시오.', 'err');
+        }
+      };
+      if ('keyword' in r0 && r0.keyword === 'TTT') {
+        const t1 = await pieceAt('원의 첫 번째 접점에 대한 객체 위의 점 지정:');
+        if (!t1) return;
+        const t2 = await pieceAt('원의 두 번째 접점에 대한 객체 위의 점 지정:');
+        if (!t2) return;
+        const t3 = await pieceAt('원의 세 번째 접점에 대한 객체 위의 점 지정:');
+        if (!t3) return;
+        const k = circleTTT([t1, t2, t3]);
+        if (!k) {
+          ctx.print('원이 존재하지 않습니다.', 'err');
+          return;
+        }
+        c = k.c;
+        rad = k.r;
+      } else if ('keyword' in r0 && r0.keyword === 'T') {
         const t1 = await pieceAt('원의 첫 번째 접점에 대한 객체 위의 점 지정:');
         if (!t1) return;
         const t2 = await pieceAt('원의 두 번째 접점에 대한 객체 위의 점 지정:');
@@ -649,120 +675,174 @@ export function registerDrawCommands(app: App): void {
     name: 'ARC',
     aliases: ['A'],
     title: '호',
-    async run(ctx) {
-      const r0 = await ctx.getPoint('호의 시작점 또는 [중심(C)] 지정:', { keywords: [{ key: 'C', label: '중심' }] });
-      let c: Pt;
-      let rad: number;
-      let a0: number;
-      let a1: number;
-      if ('keyword' in r0) {
-        const cp = pt(await ctx.getPoint('호의 중심점 지정:'));
-        if (!cp) return;
-        const sp = pt(await ctx.getPoint('호의 시작점 지정:', { base: cp }));
-        if (!sp) return;
-        c = cp;
-        rad = dist(cp, sp);
-        a0 = ang(cp, sp);
-        const er = await ctx.getPoint('호의 끝점 지정(방향 전환은 Ctrl 키) 또는 [각도(A)/현의 길이(L)]:', {
-          base: cp,
+    async run(ctx, arg) {
+      // 리본의 호 방법(AutoCAD 리본 매크로와 같다): 미리 고른 응답 차례. \ = 사용자 입력, ; = Enter(이어 그리기)
+      const plan = (arg ?? '').trim().split(/\s+/).filter(Boolean);
+      type Opt = Parameters<CommandContext['getPoint']>[1];
+      const ask = async (prompt: string, opt?: Opt): Promise<PointResult> => {
+        const t = plan.shift();
+        if (t && t !== '\\') {
+          ctx.print(`${prompt} ${t === ';' ? '' : t}`);
+          return t === ';' ? { enter: true } : { keyword: t.toUpperCase() };
+        }
+        return ctx.getPoint(prompt, opt);
+      };
+      const elev = currentElevation(app);
+      const preview = (s: Pt, e: Pt, b: number | null) => {
+        const k = b === null ? null : arcFromBulge(s, e, b);
+        return k ? [{ pts: arcPoints(k.c.x, k.c.y, k.r, k.a0, ccwSweep(k.a0, k.a1), k.r * 0.002) }] : [];
+      };
+      /** 시작점 → 끝점, 볼록(+ 반시계)으로 호를 넣는다 */
+      const finish = (s: Pt, e: Pt, b: number | null): void => {
+        const k = b === null ? null : arcFromBulge(s, e, b);
+        if (!k) {
+          ctx.print('호를 만들 수 없습니다.', 'err');
+          return;
+        }
+        addEntities(app, ctx, [{ ...base(), type: 'ARC', handle: '', center: v3(k.c, elev), radius: k.r, startAngle: norm(k.a0), endAngle: norm(k.a1) } as Entity], 'ARC');
+        setTangent(app, k.end, k.endDir);
+        app.lastPoint = k.end;
+      };
+      /** 중심을 정한 뒤: 끝점 또는 [각도(A)/현의 길이(L)] — 시작-중심-…, 중심-시작-… */
+      const byCenter = async (sp: Pt, c: Pt): Promise<void> => {
+        const er = await ask('호의 끝점 지정(방향 전환은 Ctrl 키) 또는 [각도(A)/현의 길이(L)]:', {
+          base: c,
           keywords: [
             { key: 'A', label: '각도' },
             { key: 'L', label: '현의 길이' },
           ],
-          rubber: (q) => [{ pts: arcPoints(c.x, c.y, rad, a0, ccwSweep(a0, ang(c, q)), rad * 0.002) }],
+          rubber: (q) => {
+            const a = arcByCenter(sp, c, q);
+            return a ? preview(sp, a.end, a.bulge) : [];
+          },
         });
         if ('keyword' in er && er.keyword === 'A') {
-          const sw = await getAngle(ctx, '사이각 지정', null, Math.PI / 2);
-          a1 = a0 + sw;
-          if (sw < 0) [a0, a1] = [a1, a0];
-        } else if ('keyword' in er && er.keyword === 'L') {
-          const L = await getDistance(ctx, '현의 길이 지정', null);
-          const sw = 2 * Math.asin(Math.min(1, L / (2 * rad)));
-          a1 = a0 + sw;
-        } else {
-          const ep = pt(er);
-          if (!ep) return;
-          a1 = ang(c, ep);
-        }
-      } else {
-        const sp = pt(r0);
-        if (!sp) return;
-        const mr = await ctx.getPoint('호의 두 번째 점 또는 [중심(C)/끝(E)] 지정:', {
-          base: sp,
-          keywords: [
-            { key: 'C', label: '중심' },
-            { key: 'E', label: '끝' },
-          ],
-        });
-        if ('keyword' in mr && mr.keyword === 'C') {
-          const cp = pt(await ctx.getPoint('호의 중심점 지정:', { base: sp }));
-          if (!cp) return;
-          c = cp;
-          rad = dist(cp, sp);
-          a0 = ang(cp, sp);
-          const ep = pt(await ctx.getPoint('호의 끝점 지정:', { base: cp, rubber: (q) => [{ pts: arcPoints(c.x, c.y, rad, a0, ccwSweep(a0, ang(c, q)), rad * 0.002) }] }));
-          if (!ep) return;
-          a1 = ang(c, ep);
-        } else if ('keyword' in mr && mr.keyword === 'E') {
-          const ep = pt(await ctx.getPoint('호의 끝점 지정:', { base: sp }));
-          if (!ep) return;
-          const cr = await ctx.getPoint('호의 중심점 지정 또는 [각도(A)/방향(D)/반지름(R)]:', {
-            base: ep,
-            keywords: [
-              { key: 'A', label: '각도' },
-              { key: 'R', label: '반지름' },
-            ],
+          const r = await ask('사이각 지정(방향 전환은 Ctrl 키):', {
+            base: c,
+            preferNumber: true,
+            rubber: (q) => {
+              const a = arcByCenterAngle(sp, c, ccwSweep(ang(c, sp), ang(c, q)));
+              return a ? preview(sp, a.end, a.bulge) : [];
+            },
           });
-          if ('keyword' in cr && (cr.keyword === 'A' || cr.keyword === 'R')) {
-            let sw: number;
-            if (cr.keyword === 'A') sw = await getAngle(ctx, '사이각 지정', null, Math.PI / 2);
-            else {
-              const R = await getDistance(ctx, '호의 반지름 지정', ep);
-              const chord = dist(sp, ep);
-              sw = 2 * Math.asin(Math.min(1, chord / (2 * R)));
-            }
-            const chord = dist(sp, ep);
-            rad = chord / (2 * Math.sin(Math.abs(sw) / 2));
-            const mid = { x: (sp.x + ep.x) / 2, y: (sp.y + ep.y) / 2 };
-            const hgt = rad * Math.cos(Math.abs(sw) / 2);
-            const dx = (ep.x - sp.x) / chord;
-            const dy = (ep.y - sp.y) / chord;
-            c = { x: mid.x - dy * hgt, y: mid.y + dx * hgt };
-            a0 = ang(c, sp);
-            a1 = ang(c, ep);
-          } else {
-            const cp = pt(cr);
-            if (!cp) return;
-            c = cp;
-            rad = dist(cp, sp);
-            a0 = ang(cp, sp);
-            a1 = ang(cp, ep);
-          }
-        } else {
-          const mp = pt(mr);
-          if (!mp) return;
-          const ep = pt(
-            await ctx.getPoint('호의 끝점 지정:', {
-              base: mp,
-              rubber: (q) => {
-                const k = arc3p(sp, mp, q);
-                return k ? [{ pts: arcPoints(k.c.x, k.c.y, k.r, k.a0, ccwSweep(k.a0, k.a1), k.r * 0.002) }] : [];
-              },
-            }),
-          );
-          if (!ep) return;
-          const k = arc3p(sp, mp, ep);
-          if (!k) {
-            ctx.print('세 점이 한 직선 위에 있습니다.', 'err');
-            return;
-          }
-          c = k.c;
-          rad = k.r;
-          a0 = k.a0;
-          a1 = k.a1;
+          let sw: number | null = null;
+          if ('text' in r && Number.isFinite(parseFloat(r.text))) sw = (parseFloat(r.text) * Math.PI) / 180;
+          else if ('point' in r) sw = r.ctrl ? ccwSweep(ang(c, sp), ang(c, r.point)) - TAU : ccwSweep(ang(c, sp), ang(c, r.point));
+          const a = sw === null ? null : arcByCenterAngle(sp, c, sw);
+          if (a) finish(sp, a.end, a.bulge);
+          else ctx.print('호를 만들 수 없습니다.', 'err');
+        } else if ('keyword' in er && er.keyword === 'L') {
+          const L = await getDistance(ctx, '현의 길이 지정(방향 전환은 Ctrl 키)', sp);
+          const a = arcByCenterChord(sp, c, L);
+          if (a) finish(sp, a.end, a.bulge);
+          else ctx.print('현의 길이가 지름보다 깁니다.', 'err');
+        } else if ('point' in er) {
+          const a = arcByCenter(sp, c, er.point, !er.ctrl);
+          if (a) finish(sp, a.end, a.bulge);
         }
+      };
+
+      const r0 = await ask('호의 시작점 또는 [중심(C)] 지정:', { keywords: [{ key: 'C', label: '중심' }] });
+      if ('enter' in r0) {
+        // 이어 그리기: 마지막으로 그린 선·호의 끝점에서 그 방향에 접하게
+        const t = tangentAfter.get(app.active!);
+        if (!t) {
+          ctx.print('이어 그릴 선이나 호가 없습니다.', 'err');
+          return;
+        }
+        const r = await ask('호의 끝점 지정(방향 전환은 Ctrl 키):', { base: t.p, rubber: (q) => preview(t.p, q, arcByDirection(t.p, t.dir, q)) });
+        if (!('point' in r)) return;
+        finish(t.p, r.point, arcByDirection(t.p, r.ctrl ? t.dir + Math.PI : t.dir, r.point));
+        return;
       }
-      addEntities(app, ctx, [{ ...base(), type: 'ARC', handle: '', center: v3(c, currentElevation(app)), radius: rad, startAngle: norm(a0), endAngle: norm(a1) } as Entity], 'ARC');
+      if ('keyword' in r0) {
+        // 중심 → 시작점 → 끝점·각도·현의 길이
+        const cp = pt(await ask('호의 중심점 지정:'));
+        if (!cp) return;
+        const sp = pt(await ask('호의 시작점 지정:', { base: cp }));
+        if (!sp) return;
+        await byCenter(sp, cp);
+        return;
+      }
+      const sp = pt(r0);
+      if (!sp) return;
+      const mr = await ask('호의 두 번째 점 또는 [중심(C)/끝(E)] 지정:', {
+        base: sp,
+        keywords: [
+          { key: 'C', label: '중심' },
+          { key: 'E', label: '끝' },
+        ],
+      });
+      if ('keyword' in mr && mr.keyword === 'C') {
+        const cp = pt(await ask('호의 중심점 지정:', { base: sp }));
+        if (!cp) return;
+        await byCenter(sp, cp);
+        return;
+      }
+      if ('keyword' in mr && mr.keyword === 'E') {
+        const ep = pt(await ask('호의 끝점 지정:', { base: sp }));
+        if (!ep) return;
+        const cr = await ask('호의 중심점 지정(방향 전환은 Ctrl 키) 또는 [각도(A)/방향(D)/반지름(R)]:', {
+          base: ep,
+          keywords: [
+            { key: 'A', label: '각도' },
+            { key: 'D', label: '방향' },
+            { key: 'R', label: '반지름' },
+          ],
+          rubber: (q) => {
+            const a = arcByCenter(sp, q, ep);
+            return a ? preview(sp, a.end, a.bulge) : [];
+          },
+        });
+        if ('keyword' in cr && cr.keyword === 'A') {
+          // 사이각: + 반시계, − 시계(점을 찍으면 시작점에서 그 점까지의 각도)
+          const r = await ask('사이각 지정(방향 전환은 Ctrl 키):', { base: sp, preferNumber: true, rubber: (q) => preview(sp, ep, bulgeOfSweep(ang(sp, q))) });
+          let sw: number | null = null;
+          if ('text' in r && Number.isFinite(parseFloat(r.text))) sw = (parseFloat(r.text) * Math.PI) / 180;
+          else if ('point' in r) sw = r.ctrl ? -ang(sp, r.point) : ang(sp, r.point);
+          if (sw === null || Math.abs(sw) < 1e-12 || Math.abs(sw) >= TAU) ctx.print('호를 만들 수 없습니다.', 'err');
+          else finish(sp, ep, bulgeOfSweep(sw));
+        } else if ('keyword' in cr && cr.keyword === 'D') {
+          // 시작점의 접선 방향
+          const r = await ask('호의 시작점에 대한 접선 방향 지정(방향 전환은 Ctrl 키):', { base: sp, preferNumber: true, rubber: (q) => preview(sp, ep, arcByDirection(sp, ang(sp, q), ep)) });
+          let dir: number | null = null;
+          if ('text' in r && Number.isFinite(parseFloat(r.text))) dir = (parseFloat(r.text) * Math.PI) / 180;
+          else if ('point' in r) dir = ang(sp, r.point) + (r.ctrl ? Math.PI : 0);
+          if (dir !== null) finish(sp, ep, arcByDirection(sp, dir, ep));
+        } else if ('keyword' in cr && cr.keyword === 'R') {
+          // 반지름: + 작은 호, − 큰 호(반시계)
+          const R = await getDistance(ctx, '호의 반지름 지정(방향 전환은 Ctrl 키)', ep);
+          const b = arcByRadiusEnd(sp, R, ep);
+          if (b === null) ctx.print('호를 만들 수 없습니다. 반지름이 너무 작습니다.', 'err');
+          else finish(sp, ep, b);
+        } else if ('point' in cr) {
+          // 중심: 시작점에서 반시계(Ctrl이면 시계)로 중심-끝점 방향까지
+          const a = arcByCenter(sp, cr.point, ep, !cr.ctrl);
+          if (a) finish(sp, a.end, a.bulge);
+          else ctx.print('호를 만들 수 없습니다.', 'err');
+        }
+        return;
+      }
+      const mp = pt(mr);
+      if (!mp) return;
+      const ep = pt(
+        await ask('호의 끝점 지정:', {
+          base: mp,
+          rubber: (q) => {
+            const k = arc3p(sp, mp, q);
+            return k ? [{ pts: arcPoints(k.c.x, k.c.y, k.r, k.a0, ccwSweep(k.a0, k.a1), k.r * 0.002) }] : [];
+          },
+        }),
+      );
+      if (!ep) return;
+      const k = arc3p(sp, mp, ep);
+      if (!k) {
+        ctx.print('세 점이 한 직선 위에 있습니다.', 'err');
+        return;
+      }
+      // 세 점: 시작점 → 두 번째 점 → 끝점 차례의 방향
+      const ccw = ccwSweep(ang(k.c, sp), ang(k.c, mp)) <= ccwSweep(ang(k.c, sp), ang(k.c, ep));
+      finish(sp, ep, bulgeOfSweep(ccw ? ccwSweep(ang(k.c, sp), ang(k.c, ep)) : ccwSweep(ang(k.c, sp), ang(k.c, ep)) - TAU));
     },
   });
 

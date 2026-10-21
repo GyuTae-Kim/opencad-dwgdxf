@@ -15,9 +15,9 @@ export function perCommandGroups(h: Harness): Harness {
   const opsInGroup = s.opsInGroup.bind(s);
   s.opsInGroup = (g) => opsInGroup(map(g)!);
   const run = h.run.bind(h);
-  h.run = async (name: string, inputs: Input[]) => {
+  h.run = async (name: string, inputs: Input[], arg?: string) => {
     current++;
-    await run(name, inputs);
+    await run(name, inputs, arg);
   };
   return h;
 }

@@ -57,8 +57,10 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
             tip: '원 (C)',
             menu: [
               { label: '중심, 반지름', cmd: 'CIRCLE', icon: 'circle' },
-              { label: '3점', cmd: 'CIRCLE 3P', icon: 'circle' },
               { label: '2점', cmd: 'CIRCLE 2P', icon: 'circle' },
+              { label: '3점', cmd: 'CIRCLE 3P', icon: 'circle' },
+              { label: '접선, 접선, 반지름', cmd: 'CIRCLE T', icon: 'circle' },
+              { label: '접선, 접선, 접선', cmd: 'CIRCLE TTT', icon: 'circle' },
             ],
           },
           {
@@ -67,8 +69,18 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
             icon: 'arc',
             tip: '호 (A)',
             menu: [
+              // AutoCAD 리본의 호 방법 11가지: ARC에 미리 고른 응답(역슬래시 = 사용자 입력, ; = Enter)
               { label: '3점', cmd: 'ARC', icon: 'arc' },
-              { label: '중심, 시작점, 끝점', cmd: 'ARC C', icon: 'arc' },
+              { label: '시작점, 중심점, 끝점', cmd: 'ARC \\ C', icon: 'arc' },
+              { label: '시작점, 중심점, 각도', cmd: 'ARC \\ C \\ A', icon: 'arc' },
+              { label: '시작점, 중심점, 길이', cmd: 'ARC \\ C \\ L', icon: 'arc' },
+              { label: '시작점, 끝점, 각도', cmd: 'ARC \\ E \\ A', icon: 'arc' },
+              { label: '시작점, 끝점, 방향', cmd: 'ARC \\ E \\ D', icon: 'arc' },
+              { label: '시작점, 끝점, 반지름', cmd: 'ARC \\ E \\ R', icon: 'arc' },
+              { label: '중심점, 시작점, 끝점', cmd: 'ARC C', icon: 'arc' },
+              { label: '중심점, 시작점, 각도', cmd: 'ARC C \\ \\ A', icon: 'arc' },
+              { label: '중심점, 시작점, 길이', cmd: 'ARC C \\ \\ L', icon: 'arc' },
+              { label: '연속', cmd: 'ARC ;', icon: 'arc' },
             ],
           },
         ],

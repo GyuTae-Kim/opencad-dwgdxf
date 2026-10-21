@@ -4,7 +4,7 @@
  * 좌표는 WCS 평면도다.
  */
 import type { Entity, EntityBase, LwVertex, SplineEntity, Vec2, Vec3 } from '../../core/model';
-import { clampedKnots, interpolateFitPoints } from '../../geom/curves';
+import { bulgeArc, clampedKnots, interpolateFitPoints } from '../../geom/curves';
 import type { Piece } from './curve';
 import { pieceNearest } from './curve';
 import { ccwSweep, dist, wrapPi } from './math';
@@ -207,6 +207,107 @@ export function circleTTR(p1: Piece, pick1: Vec2, p2: Piece, pick2: Vec2, r: num
   return best ? { c: best.c, r } : null;
 }
 
+/**
+ * 세 곡선(선·호 조각, 연장해서 본다)에 모두 접하는 원(아폴로니우스 문제 — AutoCAD 리본의 접선, 접선, 접선).
+ * 해가 여럿이면 접점이 고른 점에 가장 가까운 것. 해가 없으면 null.
+ *
+ * 미지수 u = (x, y, r). 선(단위 법선 n): n·(x, y) − n·a = s·r. 원(중심 c, 반지름 R): |(x, y) − c|² = (R + s·r)², s = ±1.
+ * 원 식끼리 빼면 일차식이 되므로 일차식 둘 + 이차식 하나(원이 없으면 일차식 셋)로 푼다.
+ */
+export function circleTTT(picks: readonly { piece: Piece; pick: Vec2 }[]): { c: Vec2; r: number } | null {
+  if (picks.length !== 3) return null;
+  const cs = picks.map((p) => carrier(p.piece));
+  if (cs.some((c) => !c)) return null;
+  const car = cs as NonNullable<ReturnType<typeof carrier>>[];
+  const size = Math.max(1, ...picks.map((p) => Math.hypot(p.pick.x, p.pick.y)));
+  let best: { c: Vec2; r: number; score: number } | null = null;
+  for (let mask = 0; mask < 8; mask++) {
+    const sg = [mask & 1 ? -1 : 1, mask & 2 ? -1 : 1, mask & 4 ? -1 : 1];
+    const lin: number[][] = [];
+    const quad: { cx: number; cy: number; R: number; s: number }[] = [];
+    car.forEach((c, i) => {
+      if (c.k === 'line') {
+        const n = { x: -c.d.y, y: c.d.x };
+        lin.push([n.x, n.y, -sg[i]!, n.x * c.a.x + n.y * c.a.y]);
+      } else quad.push({ cx: c.c.x, cy: c.c.y, R: c.r, s: sg[i]! });
+    });
+    const q0 = quad[0];
+    for (let j = 1; j < quad.length; j++) {
+      const q = quad[j]!;
+      const k0 = q0!.cx ** 2 + q0!.cy ** 2 - q0!.R ** 2;
+      const kj = q.cx ** 2 + q.cy ** 2 - q.R ** 2;
+      lin.push([2 * (q.cx - q0!.cx), 2 * (q.cy - q0!.cy), 2 * (q.s * q.R - q0!.s * q0!.R), kj - k0]);
+    }
+    const sols: [number, number, number][] = [];
+    if (!q0) {
+      const u = solve3(lin);
+      if (u) sols.push(u);
+    } else {
+      const [A, B] = lin as [number[], number[]];
+      // 두 평면의 교선 u = u0 + t·w (w = 법선의 외적, u0 = 최소 노름 해)
+      const w = [A[1]! * B[2]! - A[2]! * B[1]!, A[2]! * B[0]! - A[0]! * B[2]!, A[0]! * B[1]! - A[1]! * B[0]!];
+      const aa = A[0]! ** 2 + A[1]! ** 2 + A[2]! ** 2;
+      const bb = B[0]! ** 2 + B[1]! ** 2 + B[2]! ** 2;
+      const ab = A[0]! * B[0]! + A[1]! * B[1]! + A[2]! * B[2]!;
+      const det = aa * bb - ab * ab;
+      if (!(Math.abs(det) > 1e-18 * Math.max(1, aa * bb))) continue;
+      const l1 = (A[3]! * bb - B[3]! * ab) / det;
+      const l2 = (B[3]! * aa - A[3]! * ab) / det;
+      const u0 = [0, 1, 2].map((i) => l1 * A[i]! + l2 * B[i]!);
+      const g = [-2 * q0.cx, -2 * q0.cy, -2 * q0.s * q0.R];
+      const k0 = q0.cx ** 2 + q0.cy ** 2 - q0.R ** 2;
+      const qa = w[0]! ** 2 + w[1]! ** 2 - w[2]! ** 2;
+      const qb = 2 * (u0[0]! * w[0]! + u0[1]! * w[1]! - u0[2]! * w[2]!) + g[0]! * w[0]! + g[1]! * w[1]! + g[2]! * w[2]!;
+      const qc = u0[0]! ** 2 + u0[1]! ** 2 - u0[2]! ** 2 + g[0]! * u0[0]! + g[1]! * u0[1]! + g[2]! * u0[2]! + k0;
+      const ts: number[] = [];
+      if (Math.abs(qa) < 1e-14 * Math.max(1, Math.abs(qb), Math.abs(qc))) {
+        if (Math.abs(qb) > 1e-18) ts.push(-qc / qb);
+      } else {
+        const disc = qb * qb - 4 * qa * qc;
+        if (disc >= -1e-12 * Math.max(1, qb * qb)) {
+          const sq = Math.sqrt(Math.max(0, disc));
+          ts.push((-qb - sq) / (2 * qa), (-qb + sq) / (2 * qa));
+        }
+      }
+      for (const t of ts) sols.push([u0[0]! + t * w[0]!, u0[1]! + t * w[1]!, u0[2]! + t * w[2]!]);
+    }
+    for (const [x, y, r] of sols) {
+      if (!(r > 1e-9 * size) || !Number.isFinite(x + y + r)) continue;
+      const c = { x, y };
+      let score = 0;
+      let ok = true;
+      car.forEach((cr, i) => {
+        let tp: Vec2;
+        if (cr.k === 'line') {
+          const t = (x - cr.a.x) * cr.d.x + (y - cr.a.y) * cr.d.y;
+          tp = { x: cr.a.x + cr.d.x * t, y: cr.a.y + cr.d.y * t };
+        } else {
+          const dd = dist(c, cr.c);
+          const u = dd > 1e-12 ? { x: (x - cr.c.x) / dd, y: (y - cr.c.y) / dd } : { x: 1, y: 0 };
+          const a = { x: cr.c.x + u.x * cr.r, y: cr.c.y + u.y * cr.r };
+          const b = { x: cr.c.x - u.x * cr.r, y: cr.c.y - u.y * cr.r };
+          tp = Math.abs(dist(a, c) - r) <= Math.abs(dist(b, c) - r) ? a : b;
+        }
+        if (Math.abs(dist(tp, c) - r) > 1e-6 * Math.max(size, r)) ok = false;
+        score += dist(tp, picks[i]!.pick);
+      });
+      if (ok && (!best || score < best.score - 1e-12)) best = { c, r, score };
+    }
+  }
+  return best ? { c: best.c, r: best.r } : null;
+}
+
+/** 3×3 일차 방정식 [a b c | d] 세 줄(크라메르). 특이하면 null */
+function solve3(m: number[][]): [number, number, number] | null {
+  if (m.length !== 3) return null;
+  const D = (a: number[][]) => a[0]![0]! * (a[1]![1]! * a[2]![2]! - a[1]![2]! * a[2]![1]!) - a[0]![1]! * (a[1]![0]! * a[2]![2]! - a[1]![2]! * a[2]![0]!) + a[0]![2]! * (a[1]![0]! * a[2]![1]! - a[1]![1]! * a[2]![0]!);
+  const base = m.map((r) => [r[0]!, r[1]!, r[2]!]);
+  const d = D(base);
+  if (!(Math.abs(d) > 1e-14)) return null;
+  const col = (k: number) => D(base.map((r, i) => r.map((v, j) => (j === k ? m[i]![3]! : v))));
+  return [col(0) / d, col(1) / d, col(2) / d];
+}
+
 // ---------------------------------------------------------------------------
 // XLINE
 // ---------------------------------------------------------------------------
@@ -278,6 +379,19 @@ export function arcByRadiusEnd(start: Vec2, r: number, end: Vec2): number | null
   let sw = 2 * Math.asin(Math.min(1, L / (2 * Math.abs(r))));
   if (r < 0) sw = Math.PI * 2 - sw;
   return bulgeOfSweep(sw);
+}
+
+/**
+ * 시작점 → 끝점과 볼록(+ 반시계, − 시계)으로 ARC 객체 값: 중심·반지름·반시계 시작각·끝각,
+ * 그린 차례의 끝점과 그 접선 방향(이어 그리기). 만들 수 없으면 null
+ */
+export function arcFromBulge(s: Vec2, e: Vec2, bulge: number): { c: Vec2; r: number; a0: number; a1: number; end: Vec2; endDir: number } | null {
+  const k = bulgeArc(s.x, s.y, e.x, e.y, bulge);
+  if (!k || !(k.r > 0) || !Number.isFinite(k.r)) return null;
+  const c = { x: k.cx, y: k.cy };
+  const ae = Math.atan2(e.y - c.y, e.x - c.x);
+  if (k.sweep > 0) return { c, r: k.r, a0: k.a0, a1: k.a0 + k.sweep, end: { ...e }, endDir: ae + Math.PI / 2 };
+  return { c, r: k.r, a0: k.a0 + k.sweep, a1: k.a0, end: { ...e }, endDir: ae - Math.PI / 2 };
 }
 
 /** 시작 접선 방향(라디안)과 끝점으로 호의 볼록 */
