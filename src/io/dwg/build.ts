@@ -28,6 +28,8 @@ import {
   tableKey,
 } from '../../core/model';
 import { finalizeDocument } from '../../core/finalize';
+import { attachAcisWires } from '../acis';
+import { acdsRecords } from './acds';
 import { codepageToEncoding, decoderFor, dwgCodepageName } from '../../core/codepage';
 import { warn, type DwgSections } from './container/types';
 import { cmcToCad } from './color';
@@ -842,6 +844,12 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   opts.onProgress?.(0.95);
   finalizeDocument(doc);
   opts.onProgress?.(1);
+  // R2013+ ACIS 객체의 모서리 선: 자료 저장소(AcDsPrototype_1b)의 SAB에서
+  if (sec.dataStore?.data.length) {
+    attachAcisWires(doc, acdsRecords(sec.dataStore.data));
+    // 원본 본문 지문은 붙인 모서리 선까지 넣어 다시 잰다: 그대로면 원본을 되쓰고, 옮기거나 고치면 되쓰지 않는다(R2000~R2010은 읽을 때 이미 들어 있다)
+    for (const b of doc.blocks.values()) for (const e of b.entities) if (e.dwgRaw && (e as { wires?: unknown }).wires) e.dwgRaw.fingerprint = fingerprint(e);
+  }
   return doc;
 }
 

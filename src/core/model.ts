@@ -785,6 +785,8 @@ export interface AcisEntity extends EntityBase {
   /** DXF에서 읽은 AcDbEntity 다음 원본 태그(ACIS 자료 포함)와 그 파일 버전 */
   raw?: RawTag[];
   rawVersion?: string;
+  /** DWG(R2000~)에서 읽은 SAT 자료(감춤을 푼 글, 머리말 포함) — R2000~R2010 DXF로 쓸 때 ACIS 객체로 남긴다 */
+  sat?: string;
 }
 
 /**

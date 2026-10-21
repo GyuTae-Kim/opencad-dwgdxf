@@ -190,7 +190,7 @@ export function warningText(code: string): string {
     case 'entity.unsupported':
       return '표시하지 않는 객체 종류가 있습니다.';
     case 'entity.not_drawn':
-      return '3D 솔리드·영역·사용자 객체는 이 2D 캐드에서 그리지 않습니다.';
+      return '형상 자료를 풀 수 없는 3D 솔리드·영역과 그림이 없는 사용자 객체는 그리지 않았습니다.';
     case 'entity.failed':
       return '일부 객체를 그리지 못했습니다.';
     case 'block.missing':

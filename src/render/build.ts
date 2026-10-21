@@ -1200,8 +1200,23 @@ export class SceneBuilder {
       case 'REGION':
       case '3DSOLID':
       case 'BODY':
-        this.warnInc('entity.not_drawn');
+      case 'SURFACE':
+      case 'PLANESURFACE':
+      case 'EXTRUDEDSURFACE':
+      case 'LOFTEDSURFACE':
+      case 'REVOLVEDSURFACE':
+      case 'SWEPTSURFACE':
+      case 'NURBSURFACE': {
+        // ACIS 자료에서 뽑은 모서리 선(io/acis.ts — AutoCAD의 와이어프레임처럼). 없으면 그리지 않는다
+        const wires = (e as { wires?: Vec3[][] }).wires;
+        if (!wires?.length) {
+          this.warnInc('entity.not_drawn');
+          return;
+        }
+        const r = this.resolve(e, ctx);
+        for (const w of wires) this.stroke(this.xf3(ctx.m, w.flatMap((p) => [p.x, p.y, p.z])), false, r, ctx);
         return;
+      }
       default:
         return;
     }

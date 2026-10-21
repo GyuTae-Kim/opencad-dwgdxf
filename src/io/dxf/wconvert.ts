@@ -24,6 +24,7 @@ import { ellipsePoints, nurbsPoints, interpolateFitPoints, TAU } from '../../geo
 import { lwVertices } from '../../core/lwpoly';
 import { rawTagsValid } from './tagwriter';
 import { proxyEntities } from '../../edit/geom/proxygeom';
+import { satDxfTags } from '../acis';
 import { codepageToEncoding, decoderFor } from '../../core/codepage';
 import type { WriteContext } from './wcontext';
 
@@ -267,6 +268,11 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
     const a = e as Entity & { raw?: unknown[]; rawVersion?: string };
     const fam = (n: number) => (n <= 1024 ? 'sat' : 'sab');
     if (!r12 && a.raw && a.rawVersion && fam(Number(a.rawVersion.slice(2))) === fam(ver) && rawTagsValid(a.raw as RawTag[])) return null;
+    // DWG(R2000~)에서 읽은 SAT 자료: R2000~R2010 DXF(SAT 계열)에는 ACIS 객체 그대로 쓴다
+    const sat = (e as AcisEntity).sat;
+    if (!r12 && sat && fam(ver) === 'sat' && (e.type === 'REGION' || e.type === '3DSOLID' || e.type === 'BODY')) {
+      return [{ ...e, raw: satDxfTags(sat, e.type), rawVersion: 'AC1024' } as Entity];
+    }
     const wires = (e as AcisEntity).wires?.filter((w) => w.length >= 2) ?? [];
     if (wires.length) {
       // 와이어가 있으면 보이는 모양은 남긴다(3D 폴리선).
