@@ -109,7 +109,7 @@ describe('PDF', () => {
     const page = modelPage(st, [-10, -10, 110, 60], 600, 400, 5, 1, { lineweights: true })!;
     const data = new Uint8Array(await (await pdfDocument([page], 't')).arrayBuffer());
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const pdf = await pdfjs.getDocument({ data, isEvalSupported: false, verbosity: 0 }).promise;
+    const pdf = await pdfjs.getDocument({ data, verbosity: 0 }).promise;
     const tc = await (await pdf.getPage(1)).getTextContent();
     const text = tc.items.map((it) => ('str' in it ? it.str : '')).join('').replace(/\s+/g, ' ');
     expect(text).toContain('Hello World 12');
