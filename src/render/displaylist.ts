@@ -105,7 +105,7 @@ export interface GlyphSet {
   /** 단선 글리프 선분 [x0, y0, x1, y1, …] */
   strokeSegs: Float32Array;
   /** 글리프마다 범위: kind 0 = 윤곽(fillVerts 정점 범위), 1 = 단선(strokeSegs 선분 범위) */
-  glyphs: { kind: 0 | 1; first: number; count: number }[];
+  glyphs: { kind: 0 | 1; first: number; count: number; ch?: string }[];
   /** 글리프 번호 순으로 모은 인스턴스(불투명, 투명) */
   instances: ArrayBuffer;
   /** 글리프마다 [시작, 개수](instances 안) */
@@ -299,7 +299,7 @@ export class DisplayListBuilder {
   private depth = 0;
   // 글리프
   private readonly glyphIds = new Map<object, number>();
-  private readonly glyphDefs: { kind: 0 | 1; data: Float32Array }[] = [];
+  private readonly glyphDefs: { kind: 0 | 1; data: Float32Array; ch?: string }[] = [];
   /** 글리프 인스턴스(들어온 순서): [a, b, c, d, e, f, depth, style](double), 글리프 번호, 투명, 주인 상자 번호 */
   private instF = new Float64Array(8 * 1024);
   private instG = new Int32Array(1024);
@@ -502,7 +502,8 @@ export class DisplayListBuilder {
     let g = this.glyphIds.get(key);
     if (g === undefined) {
       g = this.glyphDefs.length;
-      this.glyphDefs.push({ kind, data });
+      const ch = (key as { ch?: string | null }).ch;
+      this.glyphDefs.push(ch ? { kind, data, ch } : { kind, data });
       this.glyphIds.set(key, g);
     }
     const a = m[0]!;
@@ -783,11 +784,11 @@ export class DisplayListBuilder {
     for (const g of this.glyphDefs) {
       if (g.kind === 0) {
         fillVerts.set(g.data, fo);
-        glyphs.push({ kind: 0, first: fo / 2, count: g.data.length / 2 });
+        glyphs.push({ kind: 0, first: fo / 2, count: g.data.length / 2, ...(g.ch ? { ch: g.ch } : {}) });
         fo += g.data.length;
       } else {
         strokeSegs.set(g.data, so);
-        glyphs.push({ kind: 1, first: so / 4, count: g.data.length / 4 });
+        glyphs.push({ kind: 1, first: so / 4, count: g.data.length / 4, ...(g.ch ? { ch: g.ch } : {}) });
         so += g.data.length;
       }
     }
@@ -1050,11 +1051,11 @@ export class DisplayListBuilder {
       const d = this.glyphDefs[g]!;
       if (d.kind === 0) {
         fillVerts.set(d.data, fo);
-        glyphs.push({ kind: 0, first: fo / 2, count: d.data.length / 2 });
+        glyphs.push({ kind: 0, first: fo / 2, count: d.data.length / 2, ...(d.ch ? { ch: d.ch } : {}) });
         fo += d.data.length;
       } else {
         strokeSegs.set(d.data, so);
-        glyphs.push({ kind: 1, first: so / 4, count: d.data.length / 4 });
+        glyphs.push({ kind: 1, first: so / 4, count: d.data.length / 4, ...(d.ch ? { ch: d.ch } : {}) });
         so += d.data.length;
       }
     }

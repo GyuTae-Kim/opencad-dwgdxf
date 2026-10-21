@@ -21,6 +21,8 @@ export interface GlyphGeom {
   minY: number;
   maxX: number;
   maxY: number;
+  /** 이 모양이 나타내는 문자(배치할 때 정한다, null = 여러 문자가 같은 모양) */
+  ch?: string | null;
 }
 
 export interface FontFace {

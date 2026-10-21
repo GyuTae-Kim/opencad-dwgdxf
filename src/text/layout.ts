@@ -116,6 +116,15 @@ export class TextEngine {
 
   private pick(code: number, f: Faces): { geom: GlyphGeom; kind: 'stroke' | 'outline' } {
     if (code === 0xa0 || code === 9) code = 32;
+    const r = this.pickGlyph(code, f);
+    // 글리프가 나타내는 문자(PDF에 검색되는 문자를 쓸 때). 대체 글리프처럼 여러 문자가 같은 모양이면 문자를 모른다
+    const ch = String.fromCodePoint(code);
+    if (r.geom.ch === undefined) r.geom.ch = ch;
+    else if (r.geom.ch !== ch) r.geom.ch = null;
+    return r;
+  }
+
+  private pickGlyph(code: number, f: Faces): { geom: GlyphGeom; kind: 'stroke' | 'outline' } {
     const cjk = code >= 0x1100;
     for (const face of f.chain) {
       // 한글·한자는 큰 글꼴 크기(cjk)로, 라틴 보충 글자는 대문자 높이 크기(cap)로 찾는다
