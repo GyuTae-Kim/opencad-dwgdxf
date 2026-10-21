@@ -17,7 +17,7 @@ import { askAngleDeg, askInteger, askOption, askReal, askWord, askYN, fmt4 } fro
 import { dimensionBlockOps } from './dimcmds';
 import { purgeable } from './editcmds';
 import { fileNameMode } from './script';
-import { lwCount, lwPoint, lwPoints } from '../core/lwpoly';
+import { type NamedKind, emptyText, purgeNamedOps, purgeRegAppOps, purgeableNamed, purgeableRegApps, removeWhereOps, zeroLength } from '../edit/purge';
 
 function headerOps(doc: { header: Map<string, HeaderValue> }, values: Record<string, HeaderValue>): EditOp[] {
   const ops: EditOp[] = [];
@@ -64,29 +64,17 @@ const PURGE_KINDS: { kind: PurgeKind; key: string; noun: string }[] = [
   { kind: 'textStyles', key: 'ST', noun: '문자 스타일' },
 ];
 
-/** 길이가 0인 형상인가(선·호·원·폴리선) */
-export function zeroLength(e: Entity): boolean {
-  const near = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y) < 1e-10;
-  switch (e.type) {
-    case 'LINE':
-      return near(e.start, e.end);
-    case 'CIRCLE':
-      return e.radius < 1e-10;
-    case 'ARC':
-      return e.radius < 1e-10 || Math.abs(e.endAngle - e.startAngle) < 1e-12;
-    case 'LWPOLYLINE':
-      return lwCount(e) > 0 && lwPoints(e).every((v) => near(v, lwPoint(e, 0)));
-    default:
-      return false;
-  }
-}
+/** 표 항목·블록 밖의 소거 대상(src/edit/purge.ts) */
+const PURGE_EXTRA: { kind: NamedKind | 'regApps'; key: string; noun: string }[] = [
+  { kind: 'groups', key: 'G', noun: '그룹' },
+  { kind: 'mleaderStyles', key: 'MU', noun: '다중 지시선 스타일' },
+  { kind: 'mlineStyles', key: 'M', noun: '다중선 스타일' },
+  { kind: 'tableStyles', key: 'T', noun: '테이블 스타일' },
+  { kind: 'regApps', key: 'R', noun: '등록된 응용프로그램' },
+];
 
-/** 빈 문자 객체인가(공백만 있는 문자·여러 줄 문자) */
-export function emptyText(e: Entity): boolean {
-  if (e.type === 'TEXT') return !e.text.trim();
-  if (e.type === 'MTEXT') return !e.text.replace(/\\P|\\~|\{|\}/g, '').trim();
-  return false;
-}
+// 0 길이 형상·빈 문자 판정은 PURGE 대화상자와 함께 쓴다(src/edit/purge.ts)
+export { emptyText, zeroLength } from '../edit/purge';
 
 async function runDashPurge(app: App, ctx: CommandContext): Promise<void> {
   const st = app.active!;
@@ -100,25 +88,20 @@ async function runDashPurge(app: App, ctx: CommandContext): Promise<void> {
   if (!k) return;
   // 0 길이 형상·빈 문자: 이름을 묻지 않고 지운다
   if (k === 'Z' || k === 'E') {
-    const test = k === 'Z' ? zeroLength : emptyText;
-    const ops: EditOp[] = [];
-    for (const [bk, b] of doc.blocks)
-      b.entities.forEach((e, i) => {
-        if (test(e) && !doc.layers.get(tableKey(e.layer))?.locked) ops.push({ kind: 'remove', block: bk, entity: e, index: i });
-      });
-    ops.reverse();
+    const ops = removeWhereOps(doc, k === 'Z' ? zeroLength : emptyText);
     if (ops.length) st.session.commit({ label: 'PURGE', ops, group: ctx.group });
     ctx.print(k === 'Z' ? `0 길이 형상 ${ops.length}개가 삭제되었습니다.` : `빈 문자 객체 ${ops.length}개가 삭제되었습니다.`);
     return;
   }
   const kinds = k === 'A' ? PURGE_KINDS : PURGE_KINDS.filter((x) => x.key === k);
-  const spec = (await askWord(ctx, '소거할 이름 입력 <*>:')) ?? '*';
-  const verify = await askYN(ctx, '소거할 각 이름을 확인하시겠습니까?', true);
-  if (!kinds.length) {
+  const extras = k === 'A' ? PURGE_EXTRA : PURGE_EXTRA.filter((x) => x.key === k);
+  if (!kinds.length && !extras.length) {
     const label = PURGE_KW.find((x) => x.key === k)?.label ?? k;
-    ctx.print(`${label} 소거는 이 웹 버전에서 지원하지 않습니다(블록·치수 스타일·도면층·선종류·문자 스타일·0 길이 형상·빈 문자 객체만).`);
+    ctx.print(`${label} 소거는 이 웹 버전에서 지원하지 않습니다(재료·플롯 스타일·형태·비주얼 스타일·고립된 데이터는 이 앱이 만들거나 고치지 않습니다).`);
     return;
   }
+  const spec = (await askWord(ctx, '소거할 이름 입력 <*>:')) ?? '*';
+  const verify = await askYN(ctx, '소거할 각 이름을 확인하시겠습니까?', true);
   const found = purgeable(app);
   const table = (kind: PurgeKind) =>
     kind === 'blocks' ? doc.blocks : kind === 'dimStyles' ? doc.dimStyles : kind === 'layers' ? doc.layers : kind === 'linetypes' ? doc.linetypes : doc.textStyles;
@@ -149,6 +132,29 @@ async function runDashPurge(app: App, ctx: CommandContext): Promise<void> {
     }
     if (n) ctx.print(`${noun} ${n}개가 삭제되었습니다.`);
     total += n;
+  }
+  // 다중 지시선·테이블·다중선 스타일, 그룹, 등록된 응용프로그램
+  const named = extras.length ? purgeableNamed(doc) : null;
+  for (const { kind, noun } of extras) {
+    const items: { name: string; key: string }[] =
+      kind === 'regApps' ? purgeableRegApps(doc).map((key) => ({ name: doc.appIds.get(key)?.name ?? key, key })) : named![kind].map((it) => ({ name: it.name, key: it.handle }));
+    const hit = new Set(matchNameList(items.map((x) => x.name), spec).names.map((n) => tableKey(n)));
+    const chosen = items.filter((x) => hit.has(tableKey(x.name)));
+    if (!chosen.length) {
+      if (k !== 'A') ctx.print(`참조되지 않은 ${noun}이(가) 없습니다.`);
+      continue;
+    }
+    const keep: string[] = [];
+    for (const it of chosen) {
+      if (verify && !(await askYN(ctx, `${noun} "${it.name}"을(를) 소거하시겠습니까?`, false))) continue;
+      ctx.print(`${noun} "${it.name}"을(를) 삭제하는 중입니다.`);
+      keep.push(it.key);
+    }
+    if (!keep.length) continue;
+    if (kind === 'regApps') ops.push(...purgeRegAppOps(doc, keep));
+    else ops.push(...purgeNamedOps(doc, named![kind].filter((it) => keep.includes(it.handle))));
+    ctx.print(`${noun} ${keep.length}개가 삭제되었습니다.`);
+    total += keep.length;
   }
   if (ops.length) st.session.commit({ label: 'PURGE', ops, group: ctx.group });
   if (k === 'A' && !total) ctx.print('소거할 항목이 없습니다.');

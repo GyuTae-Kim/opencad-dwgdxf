@@ -1,0 +1,160 @@
+/**
+ * PURGE·-PURGE: 다중 지시선·테이블·다중선 스타일, 빈 그룹, 등록된 응용프로그램, 0 길이 형상과 빈 문자 객체(대화상자).
+ * MATCHPROP 설정(S): 고른 특성만 옮긴다.
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const { formAnswers } = vi.hoisted(() => ({ formAnswers: [] as (Record<string, boolean> | null)[] }));
+vi.mock('../../src/app/ui/dom', async (orig) => ({
+  ...(await orig<object>()),
+  form: vi.fn(async () => formAnswers.shift() ?? null),
+}));
+
+import type { CadDocument, DictionaryObject, Entity, GroupObject } from '../../src/core/model';
+import { MODEL_SPACE, normalizeHandle } from '../../src/core/model';
+import { createNewDocument } from '../../src/core/newdoc';
+import { namedDictionary } from '../../src/edit/layertools/clone';
+import { purgeNamedOps, purgeableNamed, purgeableRegApps } from '../../src/edit/purge';
+import { registerEditCommands, setMatchSettings, MATCH_SETTINGS } from '../../src/app/editcmds';
+import { registerDashTableCommands } from '../../src/app/dashcmds-tables';
+import { makeHarness } from '../cmds2/harness';
+import { line, text } from './make';
+
+/** 새 도면(루트 사전·Standard 스타일들) + 쓰지 않는 스타일·그룹·응용프로그램 */
+function fill(doc: CadDocument): { used: string; extra: string; group: string; ml: string } {
+  Object.assign(doc, createNewDocument('metric'));
+  let n = 0x900;
+  const H = () => (n++).toString(16).toUpperCase();
+  const add = (dictName: string, name: string, obj: Record<string, unknown>) => {
+    const d = namedDictionary(doc, dictName)!;
+    const h = H();
+    doc.objects.set(h, { ...obj, handle: h, owner: d.handle } as never);
+    d.entries.set(name, h);
+    return h;
+  };
+  const extra = add('ACAD_MLEADERSTYLE', 'Extra', { type: 'MLEADERSTYLE', name: 'Extra' });
+  const used = add('ACAD_MLEADERSTYLE', 'Used', { type: 'MLEADERSTYLE', name: 'Used' });
+  const ml = add('ACAD_MLINESTYLE', 'Double', { type: 'MLINESTYLE', name: 'Double' });
+  add('ACAD_MLINESTYLE', 'Kept', { type: 'MLINESTYLE', name: 'Kept' });
+  const group = add('ACAD_GROUP', 'EMPTY', { type: 'GROUP', description: '', unnamed: false, selectable: true, entities: ['DEAD'] });
+  add('ACAD_GROUP', 'FULL', { type: 'GROUP', description: '', unnamed: false, selectable: true, entities: ['A10'] });
+  const ms = doc.blocks.get(MODEL_SPACE)!;
+  const l = { ...line(0, 0, 1, 0), handle: 'A10', xdata: [{ app: 'USEDAPP', items: [] }] } as Entity;
+  const leader = { ...line(0, 0, 0, 1), type: 'MULTILEADER', handle: 'A11', styleHandle: used } as unknown as Entity;
+  const mline = { ...line(0, 0, 0, 1), type: 'MLINE', handle: 'A12', styleName: 'Kept', vertices: [] } as unknown as Entity;
+  for (const e of [l, leader, mline]) {
+    ms.entities.push(e);
+    doc.entityIndex.set(e.handle, e);
+  }
+  for (const nm of ['MYAPP', 'USEDAPP']) doc.appIds.set(nm, { name: nm, handle: H(), flags: 0 });
+  return { used, extra, group, ml };
+}
+
+describe('소거 대상 찾기', () => {
+  it('쓰지 않는 다중 지시선·다중선 스타일과 빈 그룹, 등록된 응용프로그램', () => {
+    const doc = createNewDocument('metric');
+    const ids = fill(doc);
+    const found = purgeableNamed(doc);
+    expect(found.mleaderStyles.map((x) => x.name)).toEqual(['Extra']);
+    expect(found.mlineStyles.map((x) => x.name)).toEqual(['Double']);
+    expect(found.groups.map((x) => x.name)).toEqual(['EMPTY']);
+    expect(found.tableStyles).toEqual([]);
+    const apps = purgeableRegApps(doc);
+    expect(apps).toContain('MYAPP');
+    expect(apps).not.toContain('USEDAPP');
+    expect(apps).not.toContain('ACAD');
+    // 지우면 객체와 사전 항목이 함께 빠진다
+    const ops = purgeNamedOps(doc, found.mleaderStyles);
+    expect(ops.map((o) => o.kind)).toEqual(['object', 'object']);
+    expect(ops[0]).toMatchObject({ key: ids.extra, after: null });
+    const dictAfter = (ops[1] as { after: DictionaryObject }).after;
+    expect([...dictAfter.entries.keys()]).not.toContain('Extra');
+    expect([...dictAfter.entries.keys()]).toContain('Used');
+  });
+});
+
+function harness() {
+  const h = makeHarness((doc) => void fill(doc));
+  registerEditCommands(h.app);
+  registerDashTableCommands(h.app);
+  return h;
+}
+
+describe('-PURGE', () => {
+  it('등록된 응용프로그램(R)', async () => {
+    const h = harness();
+    await h.run('-PURGE', ['R', '*', 'N']);
+    expect(h.doc.appIds.has('MYAPP')).toBe(false);
+    expect(h.doc.appIds.has('USEDAPP')).toBe(true);
+    expect(h.printed).toContain('등록된 응용프로그램 "MYAPP"을(를) 삭제하는 중입니다.');
+  });
+  it('다중 지시선 스타일(MU)·다중선 스타일(M)·그룹(G)', async () => {
+    const h = harness();
+    const extra = namedDictionary(h.doc, 'ACAD_MLEADERSTYLE')!.entries.get('Extra')!;
+    await h.run('-PURGE', ['MU', '*', 'N']);
+    expect(h.doc.objects.has(normalizeHandle(extra))).toBe(false);
+    expect(namedDictionary(h.doc, 'ACAD_MLEADERSTYLE')!.entries.has('Extra')).toBe(false);
+    await h.run('-PURGE', ['M', '*', 'N']);
+    expect(namedDictionary(h.doc, 'ACAD_MLINESTYLE')!.entries.has('Double')).toBe(false);
+    expect(namedDictionary(h.doc, 'ACAD_MLINESTYLE')!.entries.has('Kept')).toBe(true);
+    await h.run('-PURGE', ['G', '*', 'N']);
+    expect(namedDictionary(h.doc, 'ACAD_GROUP')!.entries.has('EMPTY')).toBe(false);
+    expect((h.doc.objects.get(namedDictionary(h.doc, 'ACAD_GROUP')!.entries.get('FULL')!) as GroupObject).type).toBe('GROUP');
+  });
+  it('모두(A)도 새 항목을 지운다', async () => {
+    const h = harness();
+    await h.run('-PURGE', ['A', '*', 'N']);
+    expect(h.doc.appIds.has('MYAPP')).toBe(false);
+    expect(namedDictionary(h.doc, 'ACAD_MLEADERSTYLE')!.entries.has('Extra')).toBe(false);
+  });
+  it('재료처럼 다루지 않는 항목은 알린다', async () => {
+    const h = harness();
+    await h.run('-PURGE', ['MA']);
+    expect(h.printed.some((t) => t.includes('재료 소거는 이 웹 버전에서 지원하지 않습니다'))).toBe(true);
+  });
+});
+
+describe('PURGE 대화상자', () => {
+  it('새 항목과 0 길이 형상·빈 문자 객체(고르면)', async () => {
+    const h = harness();
+    const zero = h.add(line(5, 5, 5, 5));
+    const empty = h.add(text(0, 0, '   '));
+    formAnswers.push({ regApps: true, mleaderStyles: true, mlineStyles: false, groups: true, zeroEmpty: true });
+    await h.run('PURGE', []);
+    expect(h.doc.appIds.has('MYAPP')).toBe(false);
+    expect(namedDictionary(h.doc, 'ACAD_MLEADERSTYLE')!.entries.has('Extra')).toBe(false);
+    expect(namedDictionary(h.doc, 'ACAD_MLINESTYLE')!.entries.has('Double')).toBe(true);
+    expect(namedDictionary(h.doc, 'ACAD_GROUP')!.entries.has('EMPTY')).toBe(false);
+    expect(h.doc.entityIndex.has(zero.handle)).toBe(false);
+    expect(h.doc.entityIndex.has(empty.handle)).toBe(false);
+    expect(h.printed).toContain('0 길이 형상과 빈 문자 객체 2개를 지웠습니다.');
+  });
+  it('0 길이 형상·빈 문자는 기본으로 고르지 않는다', async () => {
+    const h = harness();
+    const zero = h.add(line(5, 5, 5, 5));
+    formAnswers.push({ regApps: true });
+    await h.run('PURGE', []);
+    expect(h.doc.entityIndex.has(zero.handle)).toBe(true);
+  });
+});
+
+describe('MATCHPROP 설정(S)', () => {
+  afterEach(() => setMatchSettings(new Set(MATCH_SETTINGS.map((m) => m.key))));
+  it('끈 특성은 옮기지 않고 설정을 기억한다', async () => {
+    const h = harness();
+    h.doc.layers.set('A', { ...h.doc.layers.get('0')!, name: 'A', handle: 'B01' });
+    const src = h.add({ ...line(0, 0, 1, 0), layer: 'A', color: { aci: 1 } } as Entity);
+    const dst = h.add(line(0, 1, 1, 1));
+    formAnswers.push({ ...Object.fromEntries(MATCH_SETTINGS.map((m) => [m.key, true])), color: false });
+    await h.run('MATCHPROP', [{ pick: src.handle, at: [0.5, 0] }, 'S', { sel: [dst.handle] }, '']);
+    const out = h.doc.entityIndex.get(dst.handle)!;
+    expect(out.layer).toBe('A');
+    expect(out.color).toEqual({ aci: 256 });
+    expect(h.printed.at(-1) ?? '').not.toContain('색상');
+    // 다음 MATCHPROP도 같은 설정
+    const dst2 = h.add(line(0, 2, 1, 2));
+    await h.run('MATCHPROP', [{ pick: src.handle, at: [0.5, 0] }, { sel: [dst2.handle] }, '']);
+    expect(h.doc.entityIndex.get(dst2.handle)!.color).toEqual({ aci: 256 });
+    expect(h.printed.some((t) => t.startsWith('현재 활성 설정: 도면층 선종류'))).toBe(true);
+  });
+});

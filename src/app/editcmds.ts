@@ -12,22 +12,56 @@ import type { Pt } from './view';
 import { addHook } from './hooks';
 import { unlockedOnly } from './layers';
 import { editEntityText, isTextEditable } from './textedit/entity';
-import { form } from './ui/dom';
+import { type FormField, form } from './ui/dom';
+import { loadPref, savePref, selectWithKeywords } from './util2-ui';
+import { emptyText, purgeNamedOps, purgeRegAppOps, purgeableNamed, purgeableRegApps, removeWhereOps, zeroLength } from '../edit/purge';
 import { lwCount, tidyWidths, zeros } from '../core/lwpoly';
+import { uiText } from './i18n-text';
 
-/** MATCHPROP이 옮기는 특성 */
-const MATCH_KEYS = ['layer', 'color', 'linetype', 'ltscale', 'lineweight', 'transparency', 'thickness'] as const;
+/** MATCHPROP 설정(S): AutoCAD 특성 설정 대화상자의 항목. 끈 것은 옮기지 않는다 */
+export const MATCH_SETTINGS: { key: string; label: string; short: string }[] = [
+  { key: 'color', label: '색상', short: '색상' },
+  { key: 'layer', label: '도면층', short: '도면층' },
+  { key: 'linetype', label: '선종류', short: '선종류' },
+  { key: 'ltscale', label: '선종류 축척', short: '선종류축척' },
+  { key: 'lineweight', label: '선가중치', short: '선가중치' },
+  { key: 'transparency', label: '투명도', short: '투명도' },
+  { key: 'thickness', label: '두께', short: '두께' },
+  { key: 'plotStyle', label: '플롯 스타일', short: '플롯스타일' },
+  { key: 'dimension', label: '치수', short: '치수' },
+  { key: 'text', label: '문자', short: '문자' },
+  { key: 'hatch', label: '해치', short: '해치' },
+  { key: 'polyline', label: '폴리선', short: '폴리선' },
+  { key: 'table', label: '테이블', short: '테이블' },
+  { key: 'mleader', label: '다중 지시선', short: '다중지시선' },
+];
+const MATCH_PREF = 'opencad.matchprop.off';
 
-function matchProps(src: Entity, dst: Entity): Entity {
+/** 지금 켠 MATCHPROP 설정(이 브라우저에 기억 — AutoCAD는 레지스트리에 둔다) */
+export function matchSettings(): Set<string> {
+  const off = new Set(loadPref<string[]>(MATCH_PREF, []));
+  return new Set(MATCH_SETTINGS.map((m) => m.key).filter((k) => !off.has(k)));
+}
+
+export function setMatchSettings(on: ReadonlySet<string>): void {
+  savePref(
+    MATCH_PREF,
+    MATCH_SETTINGS.map((m) => m.key).filter((k) => !on.has(k)),
+  );
+}
+
+/** 원본 특성을 대상에 옮긴 사본(켠 설정만) */
+export function matchProps(src: Entity, dst: Entity, on: ReadonlySet<string> = matchSettings()): Entity {
   const c = cloneEntity(dst) as unknown as Record<string, unknown>;
   const s = src as unknown as Record<string, unknown>;
-  for (const k of MATCH_KEYS) {
+  for (const k of ['color', 'layer', 'linetype', 'ltscale', 'lineweight', 'transparency', 'thickness', 'plotStyle'] as const) {
+    if (!on.has(k)) continue;
     if (s[k] === undefined) delete c[k];
     else c[k] = structuredClone(s[k]);
   }
   // 같은 종류끼리는 종류별 특성도(AutoCAD 기본 설정과 같게)
   const textual = (t: string) => t === 'TEXT' || t === 'MTEXT' || t === 'ATTDEF' || t === 'ATTRIB';
-  if (textual(src.type) && textual(dst.type)) {
+  if (on.has('text') && textual(src.type) && textual(dst.type)) {
     c.style = s.style;
     if (src.type === dst.type) {
       c.height = s.height;
@@ -37,19 +71,21 @@ function matchProps(src: Entity, dst: Entity): Entity {
       }
     }
   }
-  if (src.type === 'DIMENSION' && dst.type === 'DIMENSION') {
+  if (on.has('dimension') && src.type === 'DIMENSION' && dst.type === 'DIMENSION') {
     (c as unknown as DimensionEntity).dimStyle = (src as DimensionEntity).dimStyle;
     (c as unknown as DimensionEntity).overrides = structuredClone((src as DimensionEntity).overrides);
   }
-  if (src.type === 'HATCH' && dst.type === 'HATCH') {
+  if (on.has('hatch') && src.type === 'HATCH' && dst.type === 'HATCH') {
     for (const k of ['patternName', 'solid', 'patternType', 'patternAngle', 'patternScale', 'patternDouble', 'patternLines', 'gradient', 'hatchStyle'] as const) c[k] = structuredClone(s[k]);
   }
-  if (src.type === 'LWPOLYLINE' && dst.type === 'LWPOLYLINE') {
+  if (on.has('polyline') && src.type === 'LWPOLYLINE' && dst.type === 'LWPOLYLINE') {
     c.constantWidth = s.constantWidth;
     // 정점 폭도 모두 전역 폭으로(0이면 정점 폭 없음)
     const w = s.constantWidth as number;
     c.widths = tidyWidths(zeros(lwCount(dst as LwPolylineEntity) * 2).fill(w));
   }
+  if (on.has('table') && src.type === 'ACAD_TABLE' && dst.type === 'ACAD_TABLE' && s.tableStyle !== undefined) c.tableStyle = s.tableStyle;
+  if (on.has('mleader') && src.type === 'MULTILEADER' && dst.type === 'MULTILEADER' && s.styleHandle !== undefined) c.styleHandle = s.styleHandle;
   return c as unknown as Entity;
 }
 
@@ -65,10 +101,28 @@ export function registerEditCommands(app: App): void {
       if (!('handle' in r)) return;
       const src = st.doc.entityIndex.get(r.handle);
       if (!src) return;
-      ctx.print(`현재 활성 설정: 색상 도면층 선종류 선종류축척 선가중치 투명도 두께 문자 치수 해치 폴리선`);
+      let on = matchSettings();
+      // 이름 목록은 문장에 끼워 넣으므로 미리 화면 언어로(번역 사전은 문장 틀 "현재 활성 설정: {0}"만 안다)
+      const status = () => ctx.print(`현재 활성 설정: ${MATCH_SETTINGS.filter((m) => on.has(m.key)).map((m) => uiText(m.short)).join(' ')}`);
+      status();
       app.clearSelection();
       for (;;) {
-        const hs = unlockedOnly(app, await ctx.getSelection('대상 객체 선택:', { noPickfirst: true }));
+        const r2 = await selectWithKeywords(ctx, '대상 객체 선택 또는 [설정(S)]:', [{ key: 'S', label: '설정' }], false);
+        if ('keyword' in r2) {
+          // 특성 설정 대화상자: 옮길 특성을 고른다
+          const v = await form(
+            '특성 설정',
+            MATCH_SETTINGS.map((m) => ({ key: m.key, label: m.label, type: 'check' as const, value: on.has(m.key) })),
+            { ok: '확인', note: '고른 특성만 원본에서 대상 객체로 옮깁니다.' },
+          );
+          if (v) {
+            on = new Set(MATCH_SETTINGS.map((m) => m.key).filter((k) => v[k]));
+            setMatchSettings(on);
+          }
+          status();
+          continue;
+        }
+        const hs = unlockedOnly(app, r2);
         if (!hs.length) break;
         const ops: EditOp[] = [];
         for (const h of hs) {
@@ -76,7 +130,7 @@ export function registerEditCommands(app: App): void {
           const e = st.doc.entityIndex.get(h);
           const block = st.session.ownerOf(h);
           if (!e || !block) continue;
-          const c = matchProps(src, e);
+          const c = matchProps(src, e, on);
           if (JSON.stringify(c) !== JSON.stringify(e)) ops.push({ kind: 'modify', block, before: e, after: c });
         }
         app.clearSelection();
@@ -200,20 +254,44 @@ export function registerEditCommands(app: App): void {
     title: '소거',
     async run(ctx) {
       const st = app.active!;
+      const doc = st.doc;
       const found = purgeable(app);
-      const total = found.layers.length + found.linetypes.length + found.textStyles.length + found.dimStyles.length + found.blocks.length;
-      if (!total) {
+      const named = purgeableNamed(doc);
+      const apps = purgeableRegApps(doc);
+      const zeroEmpty = removeWhereOps(doc, (e) => zeroLength(e) || emptyText(e));
+      const counts: Record<string, number> = {
+        blocks: found.blocks.length,
+        layers: found.layers.length,
+        linetypes: found.linetypes.length,
+        textStyles: found.textStyles.length,
+        dimStyles: found.dimStyles.length,
+        mleaderStyles: named.mleaderStyles.length,
+        tableStyles: named.tableStyles.length,
+        mlineStyles: named.mlineStyles.length,
+        groups: named.groups.length,
+        regApps: apps.length,
+      };
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      if (!total && !zeroEmpty.length) {
         ctx.print('소거할 항목이 없습니다.');
         return;
       }
+      const item = (key: string, label: string): FormField => ({ key, label: `${label} (${counts[key]})`, type: 'check', value: counts[key]! > 0 });
       const v = await form(
         '소거',
         [
-          { key: 'blocks', label: `블록 (${found.blocks.length})`, type: 'check', value: found.blocks.length > 0 },
-          { key: 'layers', label: `도면층 (${found.layers.length})`, type: 'check', value: found.layers.length > 0 },
-          { key: 'linetypes', label: `선종류 (${found.linetypes.length})`, type: 'check', value: found.linetypes.length > 0 },
-          { key: 'textStyles', label: `문자 스타일 (${found.textStyles.length})`, type: 'check', value: found.textStyles.length > 0 },
-          { key: 'dimStyles', label: `치수 스타일 (${found.dimStyles.length})`, type: 'check', value: found.dimStyles.length > 0 },
+          item('blocks', '블록'),
+          item('layers', '도면층'),
+          item('linetypes', '선종류'),
+          item('textStyles', '문자 스타일'),
+          item('dimStyles', '치수 스타일'),
+          item('mleaderStyles', '다중 지시선 스타일'),
+          item('tableStyles', '테이블 스타일'),
+          item('mlineStyles', '다중선 스타일'),
+          item('groups', '그룹'),
+          item('regApps', '등록된 응용프로그램'),
+          // AutoCAD처럼 기본은 끔(형상을 지운다)
+          { key: 'zeroEmpty', label: `0 길이 형상과 빈 문자 객체 (${zeroEmpty.length})`, type: 'check', value: false },
         ],
         { ok: '소거', note: '쓰이지 않는 항목만 지웁니다. 명령 취소(U)로 되돌릴 수 있습니다.' },
       );
@@ -229,9 +307,19 @@ export function registerEditCommands(app: App): void {
       if (v.linetypes) for (const k of found.linetypes) ops.push({ kind: 'linetype', key: k, before: st.doc.linetypes.get(k)!, after: null });
       if (v.textStyles) for (const k of found.textStyles) ops.push({ kind: 'textStyle', key: k, before: st.doc.textStyles.get(k)!, after: null });
       if (v.dimStyles) for (const k of found.dimStyles) ops.push({ kind: 'dimStyle', key: k, before: st.doc.dimStyles.get(k)!, after: null });
+      const namedSel = (['mleaderStyles', 'tableStyles', 'mlineStyles', 'groups'] as const).filter((k) => v[k]).flatMap((k) => named[k]);
+      ops.push(...purgeNamedOps(doc, namedSel));
+      if (v.regApps) ops.push(...purgeRegAppOps(doc, apps));
+      let removed = 0;
+      if (v.zeroEmpty) {
+        ops.push(...zeroEmpty);
+        removed = zeroEmpty.length;
+      }
       if (!ops.length) return;
       st.session.commit({ label: 'PURGE', ops });
-      ctx.print(`항목 ${ops.filter((o) => o.kind !== 'blockRecord').length}개를 소거했습니다.`);
+      const items = ops.filter((o) => o.kind !== 'blockRecord' && o.kind !== 'remove' && !(o.kind === 'object' && o.after)).length;
+      ctx.print(`항목 ${items}개를 소거했습니다.`);
+      if (removed) ctx.print(`0 길이 형상과 빈 문자 객체 ${removed}개를 지웠습니다.`);
     },
   });
 }
