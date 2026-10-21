@@ -8,10 +8,12 @@
  * 손가락 기기에서 좁거나 낮은 화면(겹침 리본 배치)이면 처음부터 켜고, 사용자가 고른 모드는 이 브라우저에 기억한다.
  */
 import type { App } from '../app';
+import type { DocState } from '../docstate';
 import type { Entity } from '../../core/model';
+import type { SnapKind } from '../view';
 import { entityProperties, typeName } from '../inquiry';
 import type { MeasureResult } from '../measure-result';
-import { h } from './dom';
+import { h, showMenu, toast } from './dom';
 import { icon } from './icons';
 import { ribbonOverlay } from './layout';
 
@@ -34,6 +36,56 @@ export function storeMobileMode(m: MobileMode): void {
   } catch {
     /* 저장소를 못 쓰는 브라우저 */
   }
+}
+
+/** 보기 모드 측정 띠의 객체 스냅 칩(재는 동안 켜고 끈다) */
+export const VIEW_SNAPS: { kind: SnapKind; label: string }[] = [
+  { kind: 'end', label: '끝점' },
+  { kind: 'mid', label: '중간점' },
+  { kind: 'cen', label: '중심' },
+  { kind: 'int', label: '교차점' },
+  // 데스크톱 이름 '수직'은 다른 곳에서 '세로'로도 번역되므로 칩은 따로 쓴다(수선의 발)
+  { kind: 'per', label: '수직 발' },
+  { kind: 'nea', label: '근처점' },
+];
+const SNAP_KEY = 'opencad-dwgdxf.mobile-snaps';
+
+/** 보기 모드에서 고른 객체 스냅(이 브라우저에 기억). 고른 적이 없으면 null */
+export function readViewSnaps(): SnapKind[] | null {
+  try {
+    const v = localStorage.getItem(SNAP_KEY);
+    if (v === null) return null;
+    const all = new Set<string>(['end', 'mid', 'cen', 'qua', 'int', 'ins', 'nod', 'per', 'nea', 'tan', 'ext', 'gcen', 'app', 'par']);
+    return v.split(',').filter((k) => all.has(k)) as SnapKind[];
+  } catch {
+    return null;
+  }
+}
+
+export function storeViewSnaps(kinds: Iterable<SnapKind>): void {
+  try {
+    localStorage.setItem(SNAP_KEY, [...kinds].join(','));
+  } catch {
+    /* 저장소를 못 쓰는 브라우저 */
+  }
+}
+
+/** 찾지 못한 참조 파일(외부 참조·이미지·PDF·SHX 글꼴) 개수 */
+export interface MissingRefs {
+  xref: number;
+  image: number;
+  pdf: number;
+  shx: number;
+}
+
+/** 빠진 참조 안내 줄들(줄마다 번역 사전의 한 문장) */
+export function missingLines(m: MissingRefs): string[] {
+  const out: string[] = [];
+  if (m.xref) out.push(`외부 참조 ${m.xref}개`);
+  if (m.image) out.push(`이미지 ${m.image}개`);
+  if (m.pdf) out.push(`PDF 참고 ${m.pdf}개`);
+  if (m.shx) out.push(`SHX 글꼴 ${m.shx}개`);
+  return out;
 }
 
 /** 손가락이 주인 기기(휴대폰·태블릿)인지 */
@@ -187,6 +239,11 @@ export class MobileView {
   private fitQueued = false;
   /** 보기 모드에서 이미 전체 보기로 맞춘 문서(파일에 저장된 화면은 데스크톱 비율이라 휴대폰에서 잘린다) */
   private readonly fitted = new WeakSet<object>();
+  /** 편집 화면의 객체 스냅(보기 모드를 나가면 되돌린다) */
+  private editSnaps: Set<SnapKind> | null = null;
+  /** 문서마다 찾지 못한 참조(알아보는 중이면 null)와 안내를 닫았는지 */
+  private readonly missing = new WeakMap<DocState, MissingRefs | null>();
+  private readonly noticeClosed = new WeakSet<DocState>();
 
   constructor(
     private readonly app: App,
@@ -204,7 +261,16 @@ export class MobileView {
     const layers = btn('layers', '도면층', '도면층 켜고 끄기', () => host.openPalette('layers'));
     // 이름은 짧게(영어 등에서도 한 줄에 들어가게), 자세한 뜻은 제목 풍선
     const dims = btn('dimlist', '치수', '치수 목록(표시 값과 실제 길이 비교)', () => host.openPalette('dims'));
-    this.bar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': '보기 도구' }, fit, ...measures, layers, dims);
+    // 더 보기: 점 좌표(ID), 문자 찾기, 빠진 참조 파일 고르기(외부 참조·이미지·PDF·SHX 글꼴)
+    const more = btn('more', '더 보기', '좌표·찾기·참조 파일', () => {
+      const r = more.getBoundingClientRect();
+      showMenu(r.left, r.bottom + 2, [
+        { label: '점 좌표 (ID)', icon: 'id', run: () => this.startMeasure('ID') },
+        { label: '문자 찾기', icon: 'find', run: () => host.openPalette('find') },
+        { label: '참조 파일 고르기(외부 참조·SHX 글꼴)', icon: 'folder', run: () => void this.pickRefFiles() },
+      ]);
+    });
+    this.bar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': '보기 도구' }, fit, ...measures, layers, dims, more);
     this.card = h('div', { class: 'mview-card', role: 'status', 'aria-live': 'polite', hidden: true });
     app.cmd.watchers.add({
       prompt: () => this.queue(),
@@ -224,6 +290,20 @@ export class MobileView {
 
   /** 기억 없이 모드만 맞춘다(처음 열 때) */
   apply(view: boolean): void {
+    // 보기 모드의 객체 스냅은 따로 기억한다(측정 띠의 칩): 들어갈 때 편집 화면 것을 두고, 나갈 때 되돌린다
+    const modes = this.app.snapModes;
+    if (view && !this.editSnaps) {
+      this.editSnaps = new Set(modes);
+      const saved = readViewSnaps();
+      if (saved) {
+        modes.clear();
+        for (const k of saved) modes.add(k);
+      }
+    } else if (!view && this.editSnaps) {
+      modes.clear();
+      for (const k of this.editSnaps) modes.add(k);
+      this.editSnaps = null;
+    }
     this.app.setViewOnly(view);
     this.root.classList.toggle('view-mode', view);
     if (!view) this.card.hidden = true;
@@ -267,6 +347,7 @@ export class MobileView {
       this.rawOpen = false;
       const name = m[1]!;
       if (MEASURES.some((x) => x.name === name || RUNS_AS[x.name] === name)) this.lastMeasure = MEASURES.find((x) => x.name === name)?.name ?? (name === 'MEASUREGEOM' ? 'MEASURERADIUS' : name);
+      else if (name === 'ID') this.lastMeasure = 'ID';
     } else if (cls && !m) {
       for (const line of text.split('\n')) this.lines.push({ text: line, cls, measure });
       if (this.lines.length > 8) this.lines.splice(0, this.lines.length - 8);
@@ -311,7 +392,74 @@ export class MobileView {
       return;
     }
     if (!running && this.renderInfo()) return;
+    if (!running && this.renderNotice(app.active)) return;
     card.hidden = true;
+  }
+
+  /** 찾지 못한 참조 파일 안내(문서마다 한 번, 닫을 수 있다). 보였으면 true */
+  private renderNotice(st: DocState): boolean {
+    if (this.noticeClosed.has(st)) return false;
+    if (!this.missing.has(st)) {
+      this.missing.set(st, null);
+      void this.checkMissing(st);
+      return false;
+    }
+    const m = this.missing.get(st);
+    const lines = m ? missingLines(m) : [];
+    if (!lines.length) return false;
+    const card = this.card;
+    card.classList.add('is-notice');
+    const body = h('div', { class: 'mv-body' }, h('div', { class: 'mv-title' }, h('b', {}, '찾지 못한 참조 파일')), ...lines.map((l) => h('div', { class: 'mv-res' }, l)), h('div', { class: 'mv-res' }, '이 기기에서 파일을 고르면 원래대로 그립니다.'));
+    const acts = h('div', { class: 'mv-acts' }, h('button', { class: 'mv-chip primary', type: 'button', onclick: () => void this.pickRefFiles() }, '파일 고르기'));
+    const close = h('button', {
+      class: 'mv-close',
+      type: 'button',
+      title: '닫기',
+      'aria-label': '닫기',
+      html: icon('close2'),
+      onclick: () => {
+        this.noticeClosed.add(st);
+        this.render();
+      },
+    });
+    card.append(body, close, acts);
+    card.hidden = false;
+    return true;
+  }
+
+  /** 문서가 쓰는 외부 참조·이미지·PDF·SHX 글꼴 중 이 기기에 없는 것을 센다(참조 모듈은 처음 쓸 때 불러온다) */
+  private async checkMissing(st: DocState): Promise<void> {
+    const [refs, shx] = await Promise.all([import('../refs'), import('../shxfonts')]);
+    const miss = refs.docRefs(this.app, st.doc).filter((r) => !r.found);
+    const n = (k: string) => miss.filter((r) => r.kind === k).length;
+    this.missing.set(st, { xref: n('xref'), image: n('image'), pdf: n('pdf'), shx: shx.missingShxFonts(this.app, st.doc).length });
+    this.queue();
+  }
+
+  /** 참조 파일 고르기(손가락 기기에는 폴더 고르기가 없어 파일 여러 개): 확장자대로 외부 참조·이미지·PDF·SHX 글꼴에 잇는다 */
+  private async pickRefFiles(): Promise<void> {
+    const files = await new Promise<File[]>((resolve) => {
+      const input = h('input', { type: 'file', multiple: true, style: 'display:none' }) as HTMLInputElement;
+      const done = (f: File[]) => {
+        resolve(f);
+        input.remove();
+      };
+      input.addEventListener('change', () => done([...(input.files ?? [])]));
+      input.addEventListener('cancel', () => done([]));
+      document.body.append(input);
+      input.click();
+    });
+    if (!files.length) return;
+    const [refs, shx] = await Promise.all([import('../refs'), import('../shxfonts')]);
+    const app = this.app;
+    const xr = await refs.linkXrefFiles(app, files);
+    const img = await refs.linkImageFiles(app, files);
+    const pdf = await refs.linkPdfFiles(app, files);
+    const fonts = await shx.addShxFonts(app, await shx.readShx(files), true);
+    const n = xr.length + img.linked.length + pdf.linked.length + fonts;
+    toast(n ? `파일 ${n}개를 연결했습니다.` : '연결할 수 있는 파일이 없습니다(DWG·DXF·이미지·PDF·SHX).', n ? 'info' : 'warn');
+    for (const d of app.docs) this.missing.delete(d);
+    this.queue();
   }
 
   /** 명령 중: 프롬프트, 키워드·<기본값> 단추, 취소 */
@@ -332,7 +480,31 @@ export class MobileView {
     else if (this.app.pendingInput?.kind === 'select') acts.append(h('button', { class: 'mv-chip primary', type: 'button', title: 'Enter', onclick: () => this.app.cmd.pressEnter() }, '완료'));
     const close = h('button', { class: 'mv-close', type: 'button', title: '취소', 'aria-label': '취소', html: icon('close2'), onclick: () => this.app.cmd.escape() });
     card.append(body, close, acts);
+    // 점을 고를 때: 객체 스냅 칩(끝점·중간점·중심·교차점·수직 발·근처점) — 데스크톱의 제도 상태 막대 대신
+    if (this.app.pendingInput?.kind === 'point') card.append(this.snapChips());
     card.hidden = false;
+  }
+
+  private snapChips(): HTMLElement {
+    const app = this.app;
+    const row = h('div', { class: 'mv-snaps', role: 'group', 'aria-label': '객체 스냅' });
+    for (const s of VIEW_SNAPS) {
+      const on = app.osnapOn && app.snapModes.has(s.kind);
+      const b = h('button', { class: `mv-snap${on ? ' on' : ''}`, type: 'button', 'aria-pressed': on ? 'true' : 'false', title: `객체 스냅: ${s.label}` }, s.label);
+      b.addEventListener('click', () => {
+        if (!app.osnapOn) {
+          // 편집 화면에서 객체 스냅을 껐으면 켜고 이 스냅만
+          app.osnapOn = true;
+          app.snapModes.clear();
+          app.snapModes.add(s.kind);
+        } else if (app.snapModes.has(s.kind)) app.snapModes.delete(s.kind);
+        else app.snapModes.add(s.kind);
+        storeViewSnaps(app.snapModes);
+        this.render();
+      });
+      row.append(b);
+    }
+    return row;
   }
 
   /** 명령이 끝난 뒤: 결과 줄과 다시 재기·닫기 */

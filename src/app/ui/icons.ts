@@ -23,6 +23,7 @@ export const ICONS: Record<string, string> = {
   area: S('<path d="M4 18L7 5l10 2 3 11z" fill="currentColor" fill-opacity=".18"/>'),
   quick: S('<path d="M3 12h18M12 3v18"/><path d="M8 12l-3-2v4zM16 12l3-2v4z" fill="currentColor"/>'),
   id: S('<path d="M12 3v6M12 15v6M3 12h6M15 12h6"/><circle cx="12" cy="12" r="2"/>'),
+  more: S('<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>'),
   list: S('<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h5"/>'),
   props: S('<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M9 9v11"/>'),
   layers: S('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'),

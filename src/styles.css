@@ -2125,6 +2125,31 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
   white-space: nowrap;
   cursor: pointer;
 }
+/* 측정 띠의 객체 스냅 칩: 한 줄, 넘치면 가로로 밀어 본다 */
+.mv-snaps {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mv-snap {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 15px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mv-snap.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
 .mv-chip.primary {
   border-color: var(--accent);
   background: var(--accent);

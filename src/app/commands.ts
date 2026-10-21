@@ -12,7 +12,7 @@ import { type LayerPatch, patchLayers } from './layers';
 import { entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName } from './inquiry';
 import type { Pt } from './view';
 import { h } from './ui/dom';
-import { type MeasureFormat, angleResult, areaResult, distanceResult, radiusResult } from './measure-result';
+import { type MeasureFormat, angleResult, areaResult, distanceResult, pointResult, radiusResult } from './measure-result';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -254,9 +254,11 @@ export function registerCommands(app: App): void {
     title: '점 좌표',
     async run(ctx) {
       const p = await needPoint(ctx, '점 지정:');
-      ctx.print(`X = ${L(app, p.x)}     Y = ${L(app, p.y)}     Z = ${L(app, 0)}`, 'res');
+      ctx.print(`X = ${L(app, p.x)}     Y = ${L(app, p.y)}     Z = ${L(app, 0)}`, 'res', pointResult(measureFormat(app), p.x, p.y));
       app.view.overlay.marks = [{ p, text: `${L(app, p.x)}, ${L(app, p.y)}` }];
       app.view.requestOverlay();
+      // 명령이 끝나도 표시를 잠시 남긴다(DIST처럼 — 휴대폰 보기 모드에서 어디를 쟀는지 보이게)
+      persistMarks(app);
     },
   });
   app.register({
