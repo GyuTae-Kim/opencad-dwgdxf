@@ -75,7 +75,12 @@ export function boundaryObjects(paths: readonly HatchPath[], base: Omit<EntityBa
   const tmpl: LineEntity = { type: 'LINE', ...base, start: { x: 0, y: 0, z }, end: { x: 0, y: 0, z } };
   const out: Entity[] = [];
   for (const p of paths) {
-    const pcs = hatchPathPieces(p);
+    // 반 바퀴보다 큰 호(한 바퀴 원 모서리 등)는 나눈다 — 폴리선 볼록도가 무한대가 되지 않게
+    const pcs = hatchPathPieces(p).flatMap((q): Piece[] => {
+      if (q.k !== 'arc' || Math.abs(q.sw) <= Math.PI + 1e-9) return [q];
+      const n = Math.ceil(Math.abs(q.sw) / Math.PI - 1e-9);
+      return Array.from({ length: n }, (_, i) => ({ ...q, a0: q.a0 + (q.sw * i) / n, sw: q.sw / n }));
+    });
     if (!pcs.length) continue;
     const e = makePolyline(tmpl, pcs, true, z);
     if (e) out.push(e);

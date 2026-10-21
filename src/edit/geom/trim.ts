@@ -3,13 +3,15 @@
  * 고른 점(pick)이 어느 부분을 지우거나 어느 끝을 늘일지 정한다(AutoCAD와 같다).
  * 결과가 원본과 같은 종류면 replace(핸들 유지), 둘로 나뉘면 나머지는 add, 종류가 바뀌면 remove + add.
  */
-import type { CadDocument, Entity, Vec2 } from '../../core/model';
+import type { CadDocument, Entity, HatchEntity, LineEntity, Vec2 } from '../../core/model';
 import { type ArcPiece, type EllPiece, type LinePiece, type Path, type Piece, pathBox, pathLength, pathNearest, pathSAtLength, pathSub, pieceAt, pieceBox, pieceLength, pieceTAtLength, pieceTangent, subPiece } from './curve';
 import { boxesOverlap, edgeBox, edgeSet } from './edges';
 import { intersectPieces } from './intersect';
 import { type Box, TAU, add, dist, mul, sub } from './math';
 import { joinNurbs, lineBezier, beziersToNurbs } from './nurbs';
-import { entityPath, makeLine, makeRay, makeSpline, pieceNurbs, rebuildFrom, tinyPiece } from './path';
+import { entityPath, inherit, makeArc, makeEllipse, makeLine, makeRay, makeSpline, pieceNurbs, rebuildFrom, tinyPiece } from './path';
+import { pathsFillPoint, trimHatchPaths } from '../hatch/boundary';
+import { dissociate, reactorUnlinks } from '../hatch/create';
 import { type EditResult, MSG } from './types';
 import { complement } from './edges';
 
@@ -107,6 +109,9 @@ function isInfinite(path: Path): boolean {
 }
 
 export function trimEntity(e: Entity, cutters: Entity[] | 'all', pick: Vec2, opts: TrimOptions = {}): EditResult {
+  if (e.type === 'HATCH') return trimHatch(e, cutters, pick, opts);
+  const why = unsupportedTrimExtend(e);
+  if (why) return { message: why };
   const path = entityPath(e);
   if (!path) return { message: MSG.cannotTrim };
   const { edges, self } = cutterPieces(e, cutters, opts, path);
@@ -145,6 +150,47 @@ export function trimEntity(e: Entity, cutters: Entity[] | 'all', pick: Vec2, opt
   const keep = pathSub(path, hi, lo);
   if (!keep.length) return { remove: e.handle ? [e.handle] : [] };
   return resultFrom(e, [rebuildFrom(e, keep, path.z, false)]);
+}
+
+/**
+ * 해치 자르기(AutoCAD와 같다): 고른 점이 든 칸(해치 경계와 절단 모서리가 나눈 칸)을 해치에서 뺀다.
+ * 결과는 연관이 끊긴 해치(경계 객체의 반응자도 뺀다), 섬 처리는 홀짝(결과 고리가 남는 곳을 그대로 둘러싼다).
+ */
+function trimHatch(e: HatchEntity, cutters: Entity[] | 'all', pick: Vec2, opts: TrimOptions): EditResult {
+  const doc = opts.doc;
+  if (!doc) return { message: MSG.cannotTrim };
+  const list = cutters === 'all' ? (opts.all ?? []) : cutters;
+  const tmpl: LineEntity = { type: 'LINE', ...inherit(e), start: { x: 0, y: 0, z: 0 }, end: { x: 0, y: 0, z: 0 } };
+  const edges: Entity[] = [];
+  for (const c of list) {
+    if (c === e || (c.handle && c.handle === e.handle)) continue;
+    for (const pc of edgeSet(c, doc, !!opts.extendEdges)) {
+      const x = pieceEntity(tmpl, pc);
+      if (x) edges.push(x);
+    }
+  }
+  const r = trimHatchPaths(doc, e, edges, pick);
+  if (r === null) return { message: MSG.cannotTrimHatch };
+  if (r === 'nocut') return opts.quick ? { remove: e.handle ? [e.handle] : [] } : { message: MSG.noIntersect };
+  if (!r.length) return { remove: e.handle ? [e.handle] : [] };
+  const seed = pathsFillPoint(r);
+  const out: HatchEntity = { ...dissociate({ ...e, paths: r }), hatchStyle: 0, seedPoints: seed ? [seed] : e.seedPoints.map((s) => ({ ...s })) };
+  return { replace: [keepIdentity(e, out), ...reactorUnlinks(doc, e).map((u) => u.after)] };
+}
+
+/** 절단 모서리 조각 → 곡선 객체(무한선은 XLINE·RAY) */
+function pieceEntity(tmpl: LineEntity, p: Piece): Entity | null {
+  if (p.k === 'line') {
+    const d = sub(p.b, p.a);
+    if (p.inf0 && p.inf1) return makeRay(tmpl, p.a, d, 0, 'XLINE');
+    if (p.inf1) return makeRay(tmpl, p.a, d, 0);
+    if (p.inf0) return makeRay(tmpl, p.b, mul(d, -1), 0);
+    return makeLine(tmpl, p.a, p.b);
+  }
+  if (p.k === 'arc') return makeArc(tmpl, p, 0);
+  if (p.k === 'ell') return makeEllipse(tmpl, p, 0);
+  const n = pieceNurbs(p);
+  return n ? makeSpline(tmpl, n) : null;
 }
 
 function trimInfinite(e: Entity, path: Path, params: number[], tp: number, opts: TrimOptions): EditResult {
@@ -221,7 +267,16 @@ function whichEnd(path: Path, pick: Vec2): 'start' | 'end' {
   return at < L / 2 ? 'start' : 'end';
 }
 
+/** AutoCAD는 자르고 늘이지만 이 앱은 아직 못 하는 객체: 대신할 길을 알린다 */
+function unsupportedTrimExtend(e: Entity): string | null {
+  if (e.type === 'MLINE') return MSG.trimMline;
+  if (e.type === 'DIMENSION') return MSG.trimDimension;
+  return null;
+}
+
 export function extendEntity(e: Entity, boundaries: Entity[], pick: Vec2, opts: TrimOptions = {}): EditResult {
+  const why = unsupportedTrimExtend(e);
+  if (why) return { message: why };
   const path = entityPath(e);
   if (!path || path.closed || isInfinite(path) || e.type === 'CIRCLE') return { message: MSG.cannotExtend };
   if (e.type === 'POLYLINE' && e.kind !== '2d' && e.kind !== '3d') return { message: MSG.cannotExtend };

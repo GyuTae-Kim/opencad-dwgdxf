@@ -7,9 +7,11 @@
 import type { CadDocument, Entity, HatchEdge, HatchEntity, HatchPath, Vec2, Vec3 } from '../../core/model';
 import { ocsMatrix } from '../../geom/matrix';
 import { pathLoop } from '../../render/hatch';
-import { type Box, type Curve, TAU, clipXLines, entitiesToCurves, isCircle, pointAt, reverseNurbs, roughBox, splineSub } from './curves';
+import { type Box, type Curve, TAU, clipXLines, derivAt, entitiesToCurves, isCircle, pointAt, reverseNurbs, roughBox, splineSub } from './curves';
 import { Graph, buildGraph, pointInRing, signedArea } from './graph';
 import { bulgeVertices, lwCount, lwVertices, packBulge } from '../../core/lwpoly';
+import { boundaryObjects } from '../geom/bpoly';
+import { inherit } from '../geom/path';
 
 export type IslandStyle = 'normal' | 'outer' | 'ignore';
 
@@ -1063,6 +1065,152 @@ export function rebuildAssociative(doc: CadDocument, hatch: HatchEntity, boundar
     return pathsFillPoint(paths) ?? { ...s };
   });
   return { ...hatch, paths, seedPoints: seeds };
+}
+
+// ---------------------------------------------------------------------------
+// TRIM으로 해치 자르기
+// ---------------------------------------------------------------------------
+
+/**
+ * TRIM으로 해치 자르기(AutoCAD와 같다): 해치 경계와 절단 모서리(cutters, 평면도 곡선 객체)가 나누는 칸 가운데
+ * 고른 점이 든 칸 F(그 안의 섬은 F가 아니다)를 칠한 곳에서 뺀 나머지의 경계 고리들.
+ *
+ * 배치(arrangement)의 반모서리마다 왼쪽 면이 남는지(칠한 곳 안이고 F가 아닌지) 정하고, 왼쪽만 남는 반모서리를
+ * 이어 고리를 만든다. F는 배치의 면 그대로(반모서리 소속)라 오차가 없고, 칠한 곳 판정은 모서리 바로 옆 점을 원래 해치
+ * 경계의 고운 꺾은선과 견준다(홀짝·바깥만·무시 섬 처리). 결과 고리는 홀짝 규칙으로 남는 곳을 정확히 둘러싼다.
+ *
+ * 고른 점이 칠한 곳 밖이거나 경계 위·열린 곳이면 null, 절단 모서리가 F를 나누지 않으면(F의 둘레가 모두 해치 경계) 'nocut',
+ * 남는 것이 없으면 빈 배열.
+ */
+export function trimHatchPaths(doc: CadDocument, hatch: HatchEntity, cutters: readonly Entity[], pick: Vec2): HatchPath[] | 'nocut' | null {
+  const ex = hatch.extrusion;
+  if (ex && (Math.abs(ex.x) > 1e-9 || Math.abs(ex.y) > 1e-9 || ex.z < 0)) return null;
+  if (!hatch.paths.length) return null;
+  // 칠한 곳 판정용 고운 고리
+  const coarse = hatch.paths.map((p) => pathLoop(p, 0));
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const f of coarse)
+    for (let i = 0; i + 1 < f.length; i += 2) {
+      minX = Math.min(minX, f[i]!);
+      maxX = Math.max(maxX, f[i]!);
+      minY = Math.min(minY, f[i + 1]!);
+      maxY = Math.max(maxY, f[i + 1]!);
+    }
+  const S = Math.hypot(maxX - minX, maxY - minY);
+  if (!(S > 0) || !Number.isFinite(S)) return null;
+  const tau = S * 1e-6;
+  const rings = hatch.paths
+    .map((p) => {
+      const f = pathLoop(p, tau);
+      const xs: number[] = [];
+      const ys: number[] = [];
+      for (let i = 0; i + 1 < f.length; i += 2) (xs.push(f[i]!), ys.push(f[i + 1]!));
+      return { xs, ys };
+    })
+    .filter((r) => r.xs.length >= 3);
+  const style = hatch.hatchStyle;
+  const inR = (x: number, y: number): boolean => {
+    let c = 0;
+    for (const r of rings) if (pointInRing(x, y, r.xs, r.ys)) c++;
+    return style === 2 ? c >= 1 : style === 1 ? c === 1 : c % 2 === 1;
+  };
+  if (!inR(pick.x, pick.y)) return null;
+  // 해치 경계를 닫힌 곡선 객체로 바꿔 절단 모서리와 함께 배치를 만든다
+  const loops = boundaryObjects(hatch.paths, inherit(hatch), hatch.elevation ?? 0);
+  const col = collect(doc, [...loops, ...cutters], pick);
+  if (!col) return null;
+  const prep = graphOf(col, col.curves, 0);
+  const region = findRegion(prep, pick, 'normal');
+  if (!region || region === 'on') return null;
+  const g = prep.g;
+  // F를 왼쪽에 둔 반모서리: 바깥 둘레, 붙은 섬과 바로 안의 섬(깊이 1)의 둘레
+  const inF = new Set<number>(region.outer.walk);
+  for (const isl of region.islands) if (isl.depth === 1) for (const h of isl.loop.walk) inF.add(h);
+  const n = g.pieces.length;
+  // 반모서리 왼쪽 바로 옆 점이 칠한 곳인가
+  const sideR = new Uint8Array(n * 2);
+  g.pieces.forEach((p, i) => {
+    const c = g.curves[p.curve]!;
+    const tm = (p.ta + p.tb) / 2;
+    const q = pointAt(c, tm);
+    let d = derivAt(c, tm);
+    let dl = Math.hypot(d.x, d.y);
+    if (!(dl > 1e-300)) {
+      const k = Math.max(0, (p.xs.length >> 1) - 1);
+      d = { x: p.xs[k + 1]! - p.xs[k]!, y: p.ys[k + 1]! - p.ys[k]! };
+      dl = Math.hypot(d.x, d.y);
+      if (!(dl > 1e-300)) return;
+    }
+    const off = Math.max(col.eps * 20, Math.min(S * 1e-5, p.len * 0.05));
+    const nx = (-d.y / dl) * off;
+    const ny = (d.x / dl) * off;
+    sideR[i * 2] = inR(q.x + nx, q.y + ny) ? 1 : 0;
+    sideR[i * 2 + 1] = inR(q.x - nx, q.y - ny) ? 1 : 0;
+  });
+  const kept = (h: number) => sideR[h] === 1 && !inF.has(h);
+  // 절단 모서리가 F를 나누는가: F 둘레 건너편도 칠한 곳인 반모서리가 있다
+  let cut = false;
+  for (const h of inF)
+    if (sideR[h ^ 1] && !inF.has(h ^ 1)) {
+      cut = true;
+      break;
+    }
+  if (!cut) return 'nocut';
+  const boundary = new Uint8Array(n * 2);
+  for (let h = 0; h < n * 2; h++) if (kept(h) && !kept(h ^ 1)) boundary[h] = 1;
+  // 남는 곳을 왼쪽에 두고 잇기: 도착점에서 반대 반모서리부터 시계 방향으로 돌며 처음 만나는 경계 반모서리
+  const used = new Uint8Array(n * 2);
+  const walks: number[][] = [];
+  for (let h0 = 0; h0 < n * 2; h0++) {
+    if (!boundary[h0] || used[h0]) continue;
+    const walk: number[] = [];
+    let h = h0;
+    let ok = false;
+    for (let guard = 0; guard <= n * 2; guard++) {
+      walk.push(h);
+      used[h] = 1;
+      const tw = h ^ 1;
+      const list = g.outs[g.start(tw)]!;
+      const at = g.slot[tw]!;
+      let nx = -1;
+      for (let k = 1; k <= list.length; k++) {
+        const c = list[(((at - k) % list.length) + list.length) % list.length]!;
+        if (boundary[c]) {
+          nx = c;
+          break;
+        }
+      }
+      if (nx < 0) break;
+      if (nx === h0) {
+        ok = true;
+        break;
+      }
+      if (used[nx]) break;
+      h = nx;
+    }
+    if (ok) walks.push(walk);
+  }
+  if (!walks.length) return [];
+  const ls = walks.map((w) => {
+    const r = g.ring(w);
+    const area = signedArea(r.xs, r.ys);
+    const box: Box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    for (let i = 0; i < r.xs.length; i++) {
+      box.minX = Math.min(box.minX, r.xs[i]!);
+      box.maxX = Math.max(box.maxX, r.xs[i]!);
+      box.minY = Math.min(box.minY, r.ys[i]!);
+      box.maxY = Math.max(box.maxY, r.ys[i]!);
+    }
+    return { walk: w, xs: r.xs, ys: r.ys, area: Math.abs(area), box };
+  });
+  const depth = nestDepths(ls);
+  return ls
+    .map((l, i) => ({ l, d: depth[i]! }))
+    .sort((a, b) => a.d - b.d)
+    .map(({ l, d }) => loopToPath(g, l.walk, loopFlags(d, false, true), true));
 }
 
 function nearestLoop(list: Loop[], c: Vec2): Loop | null {
