@@ -27,8 +27,12 @@ async (page) => {
   assert(await page.evaluate(() => !window.opencad.busyCommand), 'Measure bar cancels the command without a keyboard');
   await page.screenshot({path:'.runtime/performance/editor-mobile.png'});
   await fresh();
+  assert(await page.locator('.start .start-new-card').isHidden(), 'Phone view mode hides the new-drawing card');
+  await page.getByRole('button',{name:'편집 화면으로',exact:true}).click();
   await page.getByRole('button',{name:'새 도면 (mm)',exact:true}).click(); await loaded();
-  assert(await page.evaluate(() => window.opencad.docs.length===1), 'New drawing created');
+  assert(await page.evaluate(() => window.opencad.docs.length===1), 'New drawing created from the edit screen');
+  await page.getByRole('button',{name:'휴대폰 보기 모드로',exact:true}).click();
+  assert(await page.locator('.viewbar').isVisible(), 'Back to phone view mode with a drawing open');
   await fresh();
   await page.locator('input[type=file]').setInputFiles('public/samples/opencad-sample.dxf'); await loaded();
   assert(await page.evaluate(() => window.opencad.docs.length===1), 'File picker opened exactly once');
