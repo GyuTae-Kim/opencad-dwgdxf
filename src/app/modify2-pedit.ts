@@ -56,6 +56,8 @@ import {
 import type { App, CommandContext, Keyword } from './app';
 import { commitResults } from './modify';
 import { askNumber, choose, hnum, previewOf } from './modify2-util';
+import { type JoinType, fuzzJoinPrep } from '../edit/geom/fuzzjoin';
+import type { DocState } from './docstate';
 import { unlockedOnly } from './layers';
 import type { Pt } from './view';
 
@@ -77,6 +79,16 @@ function nearestIndex(points: readonly Vec2[], p: Vec2): number {
     }
   });
   return best;
+}
+
+/** PEDIT 여러 개 결합의 퍼지 거리·결합 유형(문서마다 이 세션 동안 기억) */
+const JOIN_TYPE_LABEL: Record<JoinType, string> = { E: '연장', A: '추가', B: '모두' };
+const joinMem = new WeakMap<DocState, { fuzz: number; type: JoinType }>();
+function joinMemOf(app: App): { fuzz: number; type: JoinType } {
+  const st = app.active!;
+  let m = joinMem.get(st);
+  if (!m) joinMem.set(st, (m = { fuzz: 0, type: 'E' }));
+  return m;
 }
 
 function kwsOf(list: [string, string][]): Keyword[] {
@@ -510,8 +522,29 @@ async function peditMulti(app: App, ctx: CommandContext, t: Tools, hs0: string[]
     }
     const ents = hs.map((h) => doc.entityIndex.get(h)).filter((e): e is PolyEntity => !!e && isPolyline(e));
     if (k === 'J') {
-      const list2 = ents.map((e) => (fitKind(e) === 'none' ? e : decurve(e)));
-      const res = joinEntities(list2);
+      // 퍼지 거리와 결합 유형(AutoCAD와 같다): 틈이 퍼지 거리 이하인 끝을 늘이거나 선을 더해 잇는다
+      const jm = joinMemOf(app);
+      let fuzz: number | null = null;
+      for (;;) {
+        ctx.print(`결합 유형 = ${JOIN_TYPE_LABEL[jm.type]}`);
+        const v = await askNumber(ctx, '퍼지 거리 입력 또는 [결합 유형(J)]', jm.fuzz, { min: 0, keywords: [{ key: 'J', label: '결합 유형' }] });
+        if (typeof v === 'number') {
+          fuzz = v;
+          break;
+        }
+        if (v.keyword !== 'J') break;
+        jm.type = (await choose(ctx, `결합 유형 입력 [연장(E)/추가(A)/모두(B)] <${JOIN_TYPE_LABEL[jm.type]}>:`, [{ key: 'E', label: '연장' }, { key: 'A', label: '추가' }, { key: 'B', label: '모두' }], jm.type)) as JoinType;
+      }
+      if (fuzz === null) continue;
+      jm.fuzz = fuzz;
+      let list2: Entity[] = ents.map((e) => (fitKind(e) === 'none' ? e : decurve(e)));
+      if (fuzz > 0) {
+        const prep = fuzzJoinPrep(list2 as PolyEntity[], fuzz, jm.type);
+        list2 = [...prep.polys, ...prep.bridges];
+      }
+      const res0 = joinEntities(list2);
+      // 틈을 이은 선(핸들 없음)은 도면에 없다
+      const res: EditResult = { ...res0, ...(res0.remove ? { remove: res0.remove.filter((x) => x) } : {}) };
       if (!res.replace?.length && !res.add?.length) {
         ctx.print(res.message ?? '결합할 수 있는 객체가 없습니다.');
         continue;

@@ -277,7 +277,7 @@ describe('fillet — 호·원', () => {
 });
 
 describe('fillet — 폴리선', () => {
-  it('끝 세그먼트와 선', () => {
+  it('끝 세그먼트와 선: 모깎기 호와 선이 폴리선에 결합된다(AutoCAD와 같다)', () => {
     const pl = lw([
       [0, 10],
       [0, 0],
@@ -285,11 +285,16 @@ describe('fillet — 폴리선', () => {
     ]);
     const l = line(15, 2, 15, 10);
     const r = fillet(pl, V(5, 0), l, V(15, 8), 2);
+    expect(r.remove).toEqual([l.handle]);
+    expect(byType(r, 'ARC')).toEqual([]);
     const np = (r.replace ?? []).find((e) => e.handle === pl.handle) as LwPolylineEntity;
-    near(lwVertices(np)[2]!, V(13, 0));
-    const nl = (r.replace ?? []).find((e) => e.handle === l.handle) as LineEntity;
-    near(nl.start, P(15, 2));
-    near((byType(r, 'ARC')[0] as ArcEntity).center, P(13, 2));
+    const vs = lwVertices(np);
+    expect(vs.length).toBe(5);
+    near(vs[2]!, V(13, 0));
+    // 모깎기 호(중심 (13, 2), 반지름 2 — 볼록 tan(90°/4))
+    expect(vs[2]!.bulge).toBeCloseTo(Math.tan(Math.PI / 8), 9);
+    near(vs[3]!, V(15, 2));
+    near(vs[4]!, V(15, 10));
   });
   it('가운데 세그먼트는 안내', () => {
     const pl = lw([

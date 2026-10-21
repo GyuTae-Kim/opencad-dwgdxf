@@ -147,6 +147,40 @@ export function mtextPoint(e: MTextEntity, k: number, doc: CadDocument): Vec3 {
   return add3(add3(e.insert, mul3(X, b1.minX - b2.minX)), mul3(Y, b1.minY - b2.minY));
 }
 
+/**
+ * 문자의 글자 상자 네 모서리(평면도 WCS): TRIM·EXTEND가 문자를 절단·경계 모서리로 쓸 때(AutoCAD와 같다).
+ * TEXT·ATTRIB·ATTDEF는 왼쪽 기준선 원점에서 폭 × (하강 ~ 높이), MTEXT는 배치한 글자 상자.
+ */
+export function textOutline(e: Entity, doc: CadDocument): Vec2[] | null {
+  if (isTextLike(e)) {
+    if (!(e.text || ('tag' in e && e.tag))) return null;
+    const f = textFrame(e, doc);
+    if (!(f.W > 0) || !(f.h > 0)) return null;
+    const P = planProj(e.extrusion, e.insert.z);
+    return [
+      [0, -f.desc],
+      [f.W, -f.desc],
+      [f.W, 1],
+      [0, 1],
+    ].map(([u, v]) => {
+      const d = frameApply(f, u!, v!);
+      return affApply(P, { x: f.o.x + d.x, y: f.o.y + d.y });
+    });
+  }
+  if (e.type === 'MTEXT') {
+    const b = mtextLocalBox(e, doc);
+    if (!(b.maxX > b.minX) || !(b.maxY > b.minY)) return null;
+    const { X, Y } = mtextAxes(e);
+    return [
+      [b.minX, b.minY],
+      [b.maxX, b.minY],
+      [b.maxX, b.maxY],
+      [b.minX, b.maxY],
+    ].map(([x, y]) => ({ x: e.insert.x + X.x * x! + Y.x * y!, y: e.insert.y + X.y * x! + Y.y * y! }));
+  }
+  return null;
+}
+
 /** SCALETEXT 기준점(WCS 평면도) */
 export function scaleBasePoint(e: Entity, key: string, doc: CadDocument): Vec2 | null {
   if (isTextLike(e)) {

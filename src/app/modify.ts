@@ -8,6 +8,7 @@ import { entityDefaults, tableKey } from '../core/model';
 import { formatLength } from '../core/units';
 import type { EditOp } from '../edit/session';
 import { cloneEntity } from '../edit/session';
+import { selectWithKeywords } from './util2-ui';
 import {
   type EditResult,
   type LengthenMode,
@@ -565,6 +566,16 @@ export function importDependencies(st: DocState, src: CadDocument, list: Entity[
 }
 
 // ---------------------------------------------------------------------------
+
+/** JOIN 닫기(L): 호 → 같은 중심·반지름의 원, 타원형 호 → 온 타원(핸들은 새로) */
+function closeArc(e: Entity): Entity | null {
+  if (e.type === 'ARC') {
+    const { startAngle: _s, endAngle: _e, ...rest } = cloneEntity(e);
+    return { ...rest, type: 'CIRCLE', handle: '' } as Entity;
+  }
+  if (e.type === 'ELLIPSE') return { ...cloneEntity(e), handle: '', startParam: 0, endParam: 2 * Math.PI } as Entity;
+  return null;
+}
 
 export function registerModifyCommands(app: App): void {
   // ------------------------------------------------------------- MOVE
@@ -1688,7 +1699,25 @@ export function registerModifyCommands(app: App): void {
       const st = app.active!;
       const hs = await selectEditable(app, ctx);
       if (!hs.length) return;
-      const list = hs.map((h) => st.doc.entityIndex.get(h)).filter((e): e is Entity => !!e);
+      let list = hs.map((h) => st.doc.entityIndex.get(h)).filter((e): e is Entity => !!e);
+      // 호·타원형 호 하나만 고르면 원본에 결합할 것을 더 묻거나 닫는다(닫기(L) — 원·타원으로, AutoCAD와 같다)
+      const one = list.length === 1 ? list[0]! : null;
+      const ellArc = one?.type === 'ELLIPSE' && Math.abs(Math.abs(one.endParam - one.startParam) - 2 * Math.PI) > 1e-9;
+      if (one && (one.type === 'ARC' || ellArc)) {
+        const r = await selectWithKeywords(ctx, one.type === 'ARC' ? '원본에 결합할 호 선택 또는 [닫기(L)]:' : '원본에 결합할 타원형 호 선택 또는 [닫기(L)]:', [{ key: 'L', label: '닫기' }], false);
+        if ('keyword' in r) {
+          const closed = closeArc(one);
+          if (!closed) return;
+          st.selection.clear();
+          commitResults(app, ctx, [{ remove: [one.handle], add: [closed] }], 'JOIN');
+          app.refreshSelectionOverlay();
+          ctx.print(one.type === 'ARC' ? '호가 원으로 변환되었습니다.' : '타원형 호가 타원으로 변환되었습니다.');
+          return;
+        }
+        const more = unlockedOnly(app, r).filter((h) => h !== one.handle);
+        if (!more.length) return;
+        list = [one, ...more.map((h) => st.doc.entityIndex.get(h)).filter((e): e is Entity => !!e)];
+      }
       const res = joinEntities(list);
       if (!res.add?.length && !res.replace?.length) {
         ctx.print(res.message ?? '결합할 수 있는 객체가 없습니다.');
