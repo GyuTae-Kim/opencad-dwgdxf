@@ -1558,6 +1558,8 @@ export function writeEntity(s: TagSink, e: Entity, ctx: WriteContext, owner: str
       break;
     case 'OLE2FRAME':
     case 'OLEFRAME':
+      // 원본 태그의 모서리(10·11)는 옮기거나 늘인 지금 자리로 바꿔 쓴다
+      if (e.raw) w.raw(oleRaw(e.raw, e.upperLeft, e.lowerRight));
       break;
     default: {
       const a = e as AcisEntity;
@@ -1586,4 +1588,16 @@ export function entityTags(e: Entity, ctx: WriteContext, owner?: string, paper?:
     writeEntity(sink, x, ctx, own, ps);
   }
   return sink.tags;
+}
+
+/** OLE2FRAME 원본 태그에서 첫 10/20/30·11/21/31(왼쪽 위·오른쪽 아래 모서리)을 지금 값으로 */
+function oleRaw(raw: RawTag[], a: Vec3, b: Vec3): RawTag[] {
+  const done = new Set<number>();
+  return raw.map((t) => {
+    const axis = t.code === 10 || t.code === 11 ? 0 : t.code === 20 || t.code === 21 ? 1 : t.code === 30 || t.code === 31 ? 2 : -1;
+    if (axis < 0 || done.has(t.code)) return t;
+    done.add(t.code);
+    const p = t.code % 10 === 0 ? a : b;
+    return { code: t.code, value: axis === 0 ? p.x : axis === 1 ? p.y : p.z };
+  });
 }

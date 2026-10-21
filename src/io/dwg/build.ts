@@ -98,6 +98,7 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   const doc = createDocument('dwg');
   doc.version = `AC${ver}`;
   doc.warnings = sec.warnings;
+  if (sec.dataStore) doc.dwgDataStore = { version: `AC${ver}`, ...sec.dataStore };
   const warnings = doc.warnings;
   const codepage = dwgCodepageName(sec.codepage);
   doc.codepage = codepage;

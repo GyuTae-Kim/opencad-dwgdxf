@@ -23,6 +23,8 @@ import type {
 import { ellipsePoints, nurbsPoints, interpolateFitPoints, TAU } from '../../geom/curves';
 import { lwVertices } from '../../core/lwpoly';
 import { rawTagsValid } from './tagwriter';
+import { proxyEntities } from '../../edit/geom/proxygeom';
+import { codepageToEncoding, decoderFor } from '../../core/codepage';
 import type { WriteContext } from './wcontext';
 
 const ACIS = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
@@ -275,12 +277,21 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
     return [];
   }
   switch (e.type) {
-    case 'UNKNOWN':
+    case 'UNKNOWN': {
       if (!r12 && e.raw && rawTagsValid(e.raw)) return null;
+      // 원본 태그가 없어도(DWG에서 읽은 사용자 객체) 프록시 그림이 있으면 보이는 모양을 보통 도형으로 남긴다
+      const geo = proxyEntities(e, decoderOf(ctx));
+      if (geo.length) {
+        ctx.warn('entity.proxy_as_geometry', '내용을 알 수 없는 사용자 객체를 그 그림(선·호·문자)으로 바꿔 썼습니다.', e.originalType);
+        return geo.map((x, i) => ({ ...x, handle: i === 0 ? e.handle : '', owner: e.owner }) as Entity);
+      }
       ctx.warn('entity.unknown_dropped', '내용을 알 수 없는 객체를 쓰지 않았습니다.', e.originalType);
       return [];
+    }
     case 'OLE2FRAME':
     case 'OLEFRAME':
+      // DXF에서 읽은 OLE 자료(원본 태그)가 있으면 R2000+에 그대로 쓴다. DWG에서 읽은 OLE는 위치·자료를 DXF로 바꾸지 못한다
+      if (!r12 && e.raw && rawTagsValid(e.raw)) return null;
       ctx.warn('entity.ole_dropped', 'OLE 자료가 없어 OLE 객체를 쓰지 않았습니다.');
       return [];
     case 'SHAPE':
@@ -448,4 +459,10 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
       return null;
   }
   return null;
+}
+
+/** 프록시 그림 문자(코드 페이지) 풀기 */
+function decoderOf(ctx: WriteContext): (b: Uint8Array) => string {
+  const dec = decoderFor(codepageToEncoding(ctx.doc.codepage || 'ANSI_1252'));
+  return (b) => dec.decode(b);
 }

@@ -33,7 +33,8 @@ import type {
 import { MODEL_SPACE, PAPER_SPACE, tableKey } from '../../../core/model';
 import { defaultLayout } from '../../../core/finalize';
 import { DIM_VAR_DEFAULTS } from '../../../core/dimvars';
-import { dwgCodepageName } from '../../../core/codepage';
+import { codepageToEncoding, decoderFor, dwgCodepageName } from '../../../core/codepage';
+import { proxyEntities } from '../../../edit/geom/proxygeom';
 import { fingerprint } from '../rawbody';
 import { R2004, R2007, R2018 } from '../version';
 import { ClassTable } from './classes';
@@ -258,6 +259,8 @@ export class WCtx {
   readonly useRaw: boolean;
   /** DXF 원본 태그의 AutoCAD 연관 배열이 있는지(처음 배열 참조 후보를 볼 때 정한다) */
   private acadArrays: boolean | undefined;
+  /** 프록시 그림으로 바꿔 쓴 사용자 객체 수 */
+  private proxyConverted: number | undefined;
 
   constructor(doc: CadDocument, ver: number, warnings: ReadWarning[], useRaw = true) {
     this.useRaw = useRaw;
@@ -604,6 +607,19 @@ export class WCtx {
       // 외부 참조·덧씌우기 블록 레코드는 도형을 소유하지 않는다(내용은 참조 파일에 있다)
       if (pb.def.flags & 12 && pb !== this.modelBlock && pb !== this.paperBlock) continue;
       for (const e of pb.def.entities) {
+        // 원본 본문으로 쓸 수 없는 사용자 객체: 프록시 그림이 있으면 보이는 모양을 보통 도형으로 남긴다(DXF 쓰기와 같다)
+        if (e.type === 'UNKNOWN' && e.graphics?.length && !(this.useRaw && e.dwgRaw?.version === this.verStr)) {
+          const dec = decoderFor(codepageToEncoding(this.doc.codepage || 'ANSI_1252'));
+          const geo = proxyEntities(e, (b) => dec.decode(b));
+          if (geo.length) {
+            this.proxyConverted = (this.proxyConverted ?? 0) + 1;
+            geo.forEach((x, i) => {
+              const pe = this.planEntity({ ...x, handle: i === 0 ? e.handle : '', owner: e.owner } as Entity, dropped);
+              if (pe) pb.ents.push(pe);
+            });
+            continue;
+          }
+        }
         const pe = this.planEntity(e, dropped);
         if (pe) pb.ents.push(pe);
       }
@@ -619,6 +635,7 @@ export class WCtx {
         return true;
       });
     }
+    if (this.proxyConverted) this.warn('entity.proxy_as_geometry', `내용을 알 수 없는 사용자 객체 ${this.proxyConverted}개를 그 그림(선·호·문자)으로 바꿔 썼습니다.`);
     const n = Object.values(dropped).reduce((a, b) => a + b, 0);
     if (n) this.warn('dwg.write_entity_dropped', `이 버전으로 쓸 수 없는 도형 ${n}개를 뺐습니다(원본 자료가 없거나 다른 버전).`, { types: dropped });
     dropped = {};

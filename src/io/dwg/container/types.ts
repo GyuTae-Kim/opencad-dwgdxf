@@ -21,6 +21,8 @@ export interface DwgSections {
   template?: Uint8Array | null;
   /** AcDb:SummaryInfo(R2004+) */
   summaryInfo?: Uint8Array | null;
+  /** R2013+ 자료 저장소(AcDb:AcDsPrototype_1b: ACIS 형상 등). 해석하지 않고 같은 버전으로 되쓸 때 그대로 둔다 */
+  dataStore?: { data: Uint8Array; compressed: boolean; pageSize: number } | null;
   /** 보안 플래그(R2004+) */
   securityFlags?: number;
   warnings: ReadWarning[];

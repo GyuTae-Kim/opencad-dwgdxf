@@ -13,8 +13,10 @@ import type { SaveFormat } from '../worker/protocol';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { baseName, download } from './export';
-import { form } from './ui/dom';
-import { prefGet } from './mgr-ui';
+import { form, h } from './ui/dom';
+import { prefGet, resultDialog } from './mgr-ui';
+import { type SaveLoss, saveLosses, saveLossLines } from './saveloss';
+import { commandLineMode, inScript } from './script';
 
 interface SaveTarget {
   format: SaveFormat;
@@ -90,6 +92,12 @@ async function write(app: App, ctx: CommandContext, st: DocState, t: SaveTarget,
   } finally {
     app.ui.setBusy(null);
   }
+  // 빠지거나 바뀌는 것이 있으면 파일을 내기 전에 묻는다(원본 파일은 바꾸지 않는다)
+  const losses = saveLosses(res.warnings);
+  if (losses.length && !(await confirmSaveLosses(app, ctx, st, t, losses))) {
+    ctx.print('저장을 취소했습니다.');
+    return false;
+  }
   const blob = new Blob([res.data as BlobPart], { type: t.format === 'dxf' ? 'application/dxf' : 'application/acad' });
   if (t.handle) {
     try {
@@ -115,6 +123,44 @@ async function write(app: App, ctx: CommandContext, st: DocState, t: SaveTarget,
   ctx.print(`${name}을(를) ${label}${t.binary ? ' 이진' : ''} 형식으로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB, ${Math.round(res.ms)}ms).`);
   for (const w of res.warnings.slice(0, 5)) ctx.print(`참고: ${w.message}${w.count ? ` (${w.count})` : ''}`);
   return true;
+}
+
+/**
+ * 저장 전 확인: 이 형식·버전으로 쓰면 빠지거나 바뀌는 것을 보이고 계속할지 묻는다.
+ * 스크립트 안에서는 묻지 않고(입력 줄을 먹지 않게) 명령행에 적기만 한다. CMDDIA 0이면 명령행으로 묻는다.
+ */
+async function confirmSaveLosses(app: App, ctx: CommandContext, st: DocState, t: SaveTarget, losses: SaveLoss[]): Promise<boolean> {
+  const label = SAVE_TYPES.find((x) => x.format === t.format && x.version === t.version)?.label ?? t.version;
+  const orig = st.doc.format === 'dwg' ? SAVE_TYPES.find((x) => x.format === 'dwg' && x.version === st.doc.version) : st.doc.format === 'dxf' ? SAVE_TYPES.find((x) => x.format === 'dxf' && x.version === st.doc.version) : undefined;
+  const hint = orig && (orig.format !== t.format || orig.version !== t.version) ? orig.label : null;
+  const lines = saveLossLines(losses);
+  if (inScript(app)) {
+    for (const l of lines) ctx.print(`참고: ${l}`);
+    return true;
+  }
+  if (commandLineMode(app)) {
+    ctx.print(`${label}(으)로 저장하면 다음이 빠지거나 바뀝니다:`);
+    for (const l of lines) ctx.print(`  ${l}`);
+    if (hint) ctx.print(`원래 형식(${hint})으로 저장하면 남습니다.`);
+    const r = await ctx.getPoint('그래도 저장하시겠습니까? [예(Y)/아니요(N)] <아니요>:', { keywords: [{ key: 'Y', label: '예' }, { key: 'N', label: '아니요' }] });
+    return 'keyword' in r && r.keyword === 'Y';
+  }
+  const list = h(
+    'ul',
+    { class: 'save-loss' },
+    ...losses.map((l) =>
+      h('li', {}, h('span', {}, l.converted ? '바뀜: ' : '빠짐: '), h('span', {}, l.message), h('span', { translate: 'no' }, ` (${l.count})${l.types.length ? ` ${l.types.slice(0, 8).join(', ')}${l.types.length > 8 ? ' …' : ''}` : ''}`)),
+    ),
+  );
+  const body = h(
+    'div',
+    {},
+    h('div', { class: 'mgr-note', 'data-i18n-ui-copy': '' }, `${label}(으)로 저장하면 다음이 빠지거나 바뀝니다. 열어 둔 도면과 원본 파일은 그대로입니다.`),
+    list,
+    hint ? h('div', { class: 'mgr-note', 'data-i18n-ui-copy': '' }, `원래 형식(${hint})으로 저장하면 남습니다.`) : null,
+  );
+  const ok = await resultDialog('저장 전 확인', body, { ok: '그래도 저장', width: 560, submit: () => true });
+  return ok === true;
 }
 
 async function saveAs(app: App, ctx: CommandContext): Promise<void> {

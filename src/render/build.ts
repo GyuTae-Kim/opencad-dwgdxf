@@ -1155,9 +1155,16 @@ export class SceneBuilder {
       }
       case 'OLE2FRAME':
       case 'OLEFRAME': {
-        const r = this.resolve(e, ctx);
         const a = e.upperLeft;
         const b = e.lowerRight;
+        // DWG의 OLE는 위치가 OLE 자료 안에 있어 읽지 못한다(원점의 점으로 그리지 않는다)
+        if (a.x === b.x && a.y === b.y) {
+          this.warnInc('ole.no_position');
+          return;
+        }
+        // 붙여 넣은 내용(OLE 미리 보기 그림)은 풀지 않고 틀만 그린다
+        this.warnInc('ole.frame_only');
+        const r = this.resolve(e, ctx);
         this.out.polyline(this.xf(ctx.m, [a.x, a.y, b.x, a.y, b.x, b.y, a.x, b.y], a.z), true, r.style);
         return;
       }

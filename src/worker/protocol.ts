@@ -53,5 +53,5 @@ export type FromWorker =
   | { type: 'scene'; id: number; docId: number; space: string; scene: SceneMessage }
   /** 점진 빌드의 미리 보기 조각(모형 공간). view: 첫 화면(맞춰 보일 사각형과 여백), 대표점이 없으면 null */
   | { type: 'partial'; id: number; part: PartialScene; view: PreviewView | null }
-  | { type: 'saved'; id: number; data: ArrayBuffer; warnings: { code: string; message: string; count?: number }[]; ms: number }
+  | { type: 'saved'; id: number; data: ArrayBuffer; warnings: { code: string; message: string; count?: number; detail?: Record<string, unknown> }[]; ms: number }
   | { type: 'error'; id: number; code: string; message: string };

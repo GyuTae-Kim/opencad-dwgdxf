@@ -212,8 +212,15 @@ export function writeDwg(doc: CadDocument, options: DwgWriteOptions = {}): DwgWr
       { name: 'AcDb:AuxHeader', data: aux, compressed: true, pageSize: 0x7400 },
       { name: 'AcDb:Header', data: header, compressed: true, pageSize: 0x7400 },
     ];
+    // R2013+ 자료 저장소(ACIS 형상 등): 같은 버전이면 원본 그대로(같은 버전 ACIS 객체는 원본 본문으로 쓰여 이 저장소를 가리킨다)
+    const store = doc.dwgDataStore;
+    if (store && ver >= R2013 && store.version === `AC${ver}` && store.data.length) {
+      sections.push({ name: 'AcDb:AcDsPrototype_1b', data: store.data, compressed: store.compressed, pageSize: store.pageSize || 0x7400 });
+    } else if (store && store.data.length) {
+      warnings.push({ code: 'dwg.write_datastore_dropped', message: '다른 버전으로 저장해 자료 저장소(AcDsPrototype_1b: ACIS 형상 등)를 쓰지 않았습니다.', count: 1 });
+    }
     // 섹션 지도 순서
-    const mapOrder = ['AcDb:Preview', 'AcDb:SummaryInfo', 'AcDb:RevHistory', 'AcDb:AcDbObjects', 'AcDb:ObjFreeSpace', 'AcDb:Template', 'AcDb:Handles', 'AcDb:Classes', 'AcDb:AuxHeader', 'AcDb:Header'];
+    const mapOrder = ['AcDb:Preview', 'AcDb:SummaryInfo', 'AcDb:RevHistory', 'AcDb:AcDbObjects', 'AcDb:ObjFreeSpace', 'AcDb:Template', 'AcDb:Handles', 'AcDb:Classes', 'AcDb:AuxHeader', 'AcDb:Header', ...(sections.some((s) => s.name === 'AcDb:AcDsPrototype_1b') ? ['AcDb:AcDsPrototype_1b'] : [])];
     const ordered = mapOrder.map((n) => sections.find((s) => s.name === n)!);
     data = writeR2004(
       ver,
