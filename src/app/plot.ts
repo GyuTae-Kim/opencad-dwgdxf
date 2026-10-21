@@ -15,22 +15,11 @@ import { type PageForm, layoutPlotOps, pageFields, pageFormOf, pageSettingsOf } 
 import { checkIn, fail, group, numIn, numOf, resultDialog, row, selectIn } from './mgr-ui';
 import { inScript } from './script';
 import { ctbByName, pickCtbFiles } from './ctblib';
+import { PAPERS, paperOf } from './papers';
 import { plotStampOn, setPlotStampOn, stampPages } from './filecmds-stamp';
 
-/** 용지(mm, 세로 방향 폭 × 높이) */
-export const PAPERS: { key: string; label: string; w: number; h: number }[] = [
-  { key: 'A4', label: 'ISO A4 (210 × 297 mm)', w: 210, h: 297 },
-  { key: 'A3', label: 'ISO A3 (297 × 420 mm)', w: 297, h: 420 },
-  { key: 'A2', label: 'ISO A2 (420 × 594 mm)', w: 420, h: 594 },
-  { key: 'A1', label: 'ISO A1 (594 × 841 mm)', w: 594, h: 841 },
-  { key: 'A0', label: 'ISO A0 (841 × 1189 mm)', w: 841, h: 1189 },
-  { key: 'LETTER', label: 'Letter (8.5 × 11 in)', w: 215.9, h: 279.4 },
-  { key: 'LEGAL', label: 'Legal (8.5 × 14 in)', w: 215.9, h: 355.6 },
-  { key: 'TABLOID', label: 'Tabloid / ANSI B (11 × 17 in)', w: 279.4, h: 431.8 },
-  { key: 'ANSIC', label: 'ANSI C (17 × 22 in)', w: 431.8, h: 558.8 },
-  { key: 'ANSID', label: 'ANSI D (22 × 34 in)', w: 558.8, h: 863.6 },
-  { key: 'ANSIE', label: 'ANSI E (34 × 44 in)', w: 863.6, h: 1117.6 },
-];
+/** 용지(mm, 세로 방향 폭 × 높이) — ISO A·B, JIS B, ANSI, ARCH와 사용자 크기(src/app/papers.ts) */
+export { PAPERS } from './papers';
 
 /** 플롯 스타일 표(CTB) 이름 → 출력 색 처리 */
 export function styleSheetPlotStyle(name: string | undefined): PlotStyle | null {
@@ -99,7 +88,7 @@ function modelPlotPage(app: App, st: DocState, s: PlotSettings, unitsPerMm: numb
   } else {
     rect = v.visibleWorld();
   }
-  const paper = PAPERS.find((p) => p.key === s.paper) ?? PAPERS[1]!;
+  const paper = paperOf(s.paper) ?? PAPERS[1]!;
   const pw = s.landscape ? paper.h : paper.w;
   const ph = s.landscape ? paper.w : paper.h;
   const rw = Math.max(1e-9, rect[2] - rect[0]);
@@ -141,7 +130,7 @@ function layoutView(app: App, st: DocState, space: string, s: PlotSettings, unit
   const paper = paperInfo(lay, scene?.bounds ?? null);
   const lw = (paper.maxX - paper.minX) * paper.mmPerUnit;
   const lh = (paper.maxY - paper.minY) * paper.mmPerUnit;
-  const pp = s.keepPaper ? null : (PAPERS.find((p) => p.key === s.paper) ?? null);
+  const pp = s.keepPaper ? null : paperOf(s.paper);
   const pw = pp ? (s.landscape ? pp.h : pp.w) : lw;
   const ph = pp ? (s.landscape ? pp.w : pp.h) : lh;
   const area = s.area ?? 'layout';
@@ -301,34 +290,65 @@ export function registerPlotCommands(app: App): void {
 
   app.register({
     name: 'PUBLISH',
-    title: '배치를 PDF 하나로 게시',
+    title: '여러 도면의 배치를 PDF 하나로 게시',
     async run(ctx) {
       (await import('./fieldcmds')).updateFieldsOn(app, 'plot');
       const st = app.active!;
-      const lays = st.layouts.filter((l) => tableKey(l.blockName) !== MODEL_SPACE).sort((a, b) => a.tabOrder - b.tabOrder);
-      if (!lays.length) {
+      // 시트 목록: 열린 도면마다 배치(지금 도면은 고른 채로), 원하면 모형(범위·맞춤) — AutoCAD PUBLISH의 시트 추가와 같다
+      const sheets = publishSheets(app);
+      // 도면이 하나뿐이고 배치가 없으면 PLOT으로(여러 도면이면 모형끼리도 묶는다)
+      if (app.docs.length < 2 && !sheets.some((x) => !x.model)) {
         ctx.print('배치가 없습니다. 모형은 PLOT으로 출력하십시오.', 'err');
         return;
       }
-      // 게시할 배치 고르기(시트 목록) — 스크립트에서는 모든 배치
-      let chosen = lays.map((l) => tableKey(l.blockName));
+      // 처음 고른 시트: 지금 도면의 배치(배치가 없으면 그 모형)
+      const mineHasLayout = sheets.some((x) => x.st === st && !x.model);
+      const preset = (x: (typeof sheets)[number]) => x.st === st && x.model !== mineHasLayout;
+      let chosen = sheets.filter(preset);
       if (!inScript(app)) {
-        const checks = lays.map((l) => checkIn(true, l.name));
-        const body = h('div', { class: 'mgr-dlg' }, group('게시할 시트', ...lays.map((l, i) => row(l.name, checks[i]!))), h('div', { class: 'mgr-note' }, '고른 배치를 탭 순서대로 PDF 한 파일에 담습니다. 각 배치의 페이지 설정(용지)을 씁니다.'));
-        const r = await resultDialog('게시', body, { ok: '게시(P)', width: 420, submit: () => (checks.some((c) => c.checked) ? lays.filter((_, i) => checks[i]!.checked).map((l) => tableKey(l.blockName)) : fail('게시할 배치를 하나 이상 고르십시오.')) });
+        const checks = sheets.map((x) => checkIn(preset(x), x.label));
+        const many = new Set(sheets.map((x) => x.st)).size > 1;
+        const groups = [...new Set(sheets.map((x) => x.st))].map((d) =>
+          group(
+            many ? baseName(d.saveName) : '게시할 시트',
+            ...sheets.flatMap((x, i) => (x.st === d ? [row(x.model ? '모형(범위, 용지에 맞춤)' : x.name, checks[i]!)] : [])),
+          ),
+        );
+        const note = many ? '고른 시트를 열린 도면 차례, 배치 탭 순서대로 PDF 한 파일에 담습니다. 각 배치의 페이지 설정(용지)을 씁니다.' : '고른 배치를 탭 순서대로 PDF 한 파일에 담습니다. 각 배치의 페이지 설정(용지)을 씁니다.';
+        const body = h('div', { class: 'mgr-dlg' }, ...groups, h('div', { class: 'mgr-note' }, note));
+        const r = await resultDialog('게시', body, { ok: '게시(P)', width: 460, submit: () => (checks.some((c) => c.checked) ? sheets.filter((_, i) => checks[i]!.checked) : fail('게시할 시트를 하나 이상 고르십시오.')) });
         if (!r) return;
         chosen = r;
       }
-      const s: PlotSettings = { ...(lastSettings.get(st) ?? { paper: 'A3', landscape: true, scale: 'fit', plotStyle: 'mono', lineweights: true, format: 'pdf', margin: 5 }), what: 'layouts', layouts: chosen, copies: 1 };
-      const pages = await plotPages(app, st, s, PT_PER_MM);
+      const pages: Page[] = [];
+      const docs = [...new Set(chosen.map((x) => x.st))];
+      for (const d of docs) {
+        const base: PlotSettings = { ...(lastSettings.get(d) ?? { what: 'layouts', paper: d.units.measurement ? 'A3' : 'TABLOID', landscape: true, scale: 'fit', plotStyle: 'mono', lineweights: true, format: 'pdf', margin: 5 }), copies: 1 };
+        const mine = chosen.filter((x) => x.st === d);
+        if (mine.some((x) => x.model)) pages.push(...(await plotPages(app, d, { ...base, what: 'extents', scale: 'fit' }, PT_PER_MM)));
+        const lays = mine.filter((x) => !x.model).map((x) => x.key);
+        if (lays.length) pages.push(...(await plotPages(app, d, { ...base, what: 'layouts', layouts: lays }, PT_PER_MM)));
+      }
       if (!pages.length) {
         ctx.print('배치가 없습니다. 모형은 PLOT으로 출력하십시오.', 'err');
         return;
       }
-      download(await pdfDocument(pages, st.saveName), `${baseName(st.saveName)}-배치.pdf`);
-      ctx.print(`배치 ${pages.length}쪽을 PDF 하나로 저장했습니다.`);
+      const name = docs.length > 1 ? `${baseName(st.saveName)}-게시.pdf` : `${baseName(docs[0]!.saveName)}-배치.pdf`;
+      download(await pdfDocument(pages, docs.length > 1 ? baseName(st.saveName) : docs[0]!.saveName), name);
+      ctx.print(docs.length > 1 ? `도면 ${docs.length}개의 시트 ${pages.length}쪽을 PDF 하나로 저장했습니다.` : `배치 ${pages.length}쪽을 PDF 하나로 저장했습니다.`);
     },
   });
+}
+
+/** PUBLISH 시트 후보: 열린 도면마다 모형 하나와 배치들(탭 순서) */
+export function publishSheets(app: App): { st: DocState; key: string; name: string; label: string; model: boolean }[] {
+  const out: { st: DocState; key: string; name: string; label: string; model: boolean }[] = [];
+  for (const d of app.docs) {
+    const doc = baseName(d.saveName);
+    out.push({ st: d, key: MODEL_SPACE, name: '모형', label: `${doc} - 모형`, model: true });
+    for (const l of d.layouts.filter((x) => tableKey(x.blockName) !== MODEL_SPACE).sort((a, b) => a.tabOrder - b.tabOrder)) out.push({ st: d, key: tableKey(l.blockName), name: l.name, label: `${doc} - ${l.name}`, model: false });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

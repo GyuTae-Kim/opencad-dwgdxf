@@ -751,7 +751,7 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
         title: '플롯',
         large: [
           { cmd: 'PLOT', label: '플롯', icon: 'print', tip: '용지·축척·플롯 스타일을 골라 PDF로 출력 (Ctrl+P)' },
-          { cmd: 'PUBLISH', label: '게시', icon: 'exportPdf', tip: '고른 배치를 PDF 하나로 (PUBLISH)' },
+          { cmd: 'PUBLISH', label: '게시', icon: 'exportPdf', tip: '열린 도면의 배치를 PDF 하나로 (PUBLISH)' },
           { cmd: 'ETRANSMIT', label: '전자 전송', icon: 'folder', tip: '도면과 참조 파일을 zip 하나로' },
         ],
         cols: [

@@ -14,14 +14,10 @@ import { inScript } from './script';
 import { layoutSaveAs, layoutTemplate } from './layoutcmds-file';
 import { runPageSetupManager } from './pagesetup-ui';
 import { runPsetupin } from './dashcmds-plot';
+import { mediaName } from './papers';
 
-const INCH_NAMES: Record<string, string> = { LETTER: 'Letter', LEGAL: 'Legal', TABLOID: 'ANSI_B', ANSIC: 'ANSI_C', ANSID: 'ANSI_D', ANSIE: 'ANSI_E' };
-
-/** AutoCAD식 용지 이름(가로면 긴 변이 먼저) */
-export function mediaName(key: string, w: number, h: number): string {
-  if (/^A\d$/.test(key)) return `ISO_full_bleed_${key}_(${w.toFixed(2)}_x_${h.toFixed(2)}_MM)`;
-  return `${INCH_NAMES[key] ?? key}_(${(w / 25.4).toFixed(2)}_x_${(h / 25.4).toFixed(2)}_Inches)`;
-}
+/** AutoCAD식 용지 이름(src/app/papers.ts) */
+export { mediaName };
 
 /** 새 배치의 기본 플롯 설정 */
 export function defaultPlot(st: DocState): PlotSettings {

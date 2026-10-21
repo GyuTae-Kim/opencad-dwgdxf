@@ -15,6 +15,7 @@ import { baseName } from './export';
 import { createLayer } from './layers';
 import { createLayoutOps, defaultPlot, mediaName, nextLayoutName } from './layoutcmds';
 import { PAPERS, unitMm } from './plot';
+import { paperOf } from './papers';
 import { paperInfo } from './scene';
 import { dialog, h } from './ui/dom';
 import { packLw } from '../core/lwpoly';
@@ -692,7 +693,7 @@ function runWizard(st: DocState): Promise<WizardState | null> {
           break;
         }
         default: {
-          const p = PAPERS.find((x) => x.key === s.paper);
+          const p = paperOf(s.paper);
           pane.append(
             para('새 배치를 만들 준비가 되었습니다. 마침을 누르면 배치를 만들고 그 배치로 전환합니다. 페이지 설정은 PAGESETUP으로 나중에 바꿀 수 있습니다.'),
             h(
@@ -816,7 +817,7 @@ async function layoutWizard(app: App, ctx: CommandContext): Promise<void> {
   if (!s) return;
   await app.edits.flush(st);
   // 페이지 설정
-  const paper = PAPERS.find((x) => x.key === s.paper) ?? PAPERS[1]!;
+  const paper = paperOf(s.paper) ?? PAPERS[1]!;
   const w = s.landscape ? paper.h : paper.w;
   const hgt = s.landscape ? paper.w : paper.h;
   const plot: PlotSettings = { ...defaultPlot(st), printerName: s.printer, paperName: mediaName(paper.key, w, hgt), paperWidth: w, paperHeight: hgt, paperUnits: s.inch ? 0 : 1, rotation: 0, plotType: 5, scaleNumerator: 1, scaleDenominator: 1 };
@@ -847,7 +848,7 @@ async function layoutWizard(app: App, ctx: CommandContext): Promise<void> {
     titleAreas.set(key, area);
   }
   st.session.commit({ label: 'LAYOUTWIZARD', ops, group: ctx.group });
-  ctx.print(`배치 "${s.name}"을(를) 만들었습니다(${PAPERS.find((x) => x.key === s.paper)?.label ?? s.paper}, ${s.landscape ? '가로' : '세로'}${sheet ? `, ISO ${sheet.key} 제목 블록` : ''}).`);
+  ctx.print(`배치 "${s.name}"을(를) 만들었습니다(${paperOf(s.paper)?.label ?? s.paper}, ${s.landscape ? '가로' : '세로'}${sheet ? `, ISO ${sheet.key} 제목 블록` : ''}).`);
   if (s.pick && s.vpMode !== 'none') pendingPick = { st, key, s };
   // 공간을 바꾸면 이 명령은 끝난다. 위치 선택이면 새 배치에서 다시 시작해 두 점을 받는다
   await app.setSpace(layout.blockName);

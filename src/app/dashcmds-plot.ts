@@ -15,6 +15,7 @@ import { askLine, askOption, askWord, askYN, parseReal } from './dashcmds-ask';
 import { DRAWING_ACCEPT, loadedDrawings, pickFiles, readDrawingFile } from './drawingfiles';
 import { PT_PER_MM, baseName, download, exportPageSvg, pdfDocument } from './export';
 import { PAPERS, type PlotSettings, lastSettings, plotPages, styleSheetPlotStyle } from './plot';
+import { mediaName, paperKeyOfSize, paperOf, userPaperKey } from './papers';
 import { fileNameMode } from './script';
 import { ask, form } from './ui/dom';
 
@@ -29,11 +30,19 @@ export function deviceKind(name: string): 'pdf' | 'svg' | 'none' | null {
   return null;
 }
 
-/** 용지 이름 → PAPERS 열쇠(ISO A0~A4, Letter·Legal·ANSI B~E). 모르면 null */
+/** 용지 이름 → 용지 열쇠(ISO A·B, JIS B, Letter·Legal·ANSI B~E, ARCH A~E1, "폭 x 높이"(mm)는 사용자 크기). 모르면 null */
 export function paperKeyOf(text: string): string | null {
   const t = text.toUpperCase().replace(/_/g, ' ').trim();
   const exact = PAPERS.find((p) => p.key === t.replace(/\s+/g, '') || p.label.toUpperCase() === t);
   if (exact) return exact.key;
+  const user = /^(?:(?:사용자|USER)\S*\s*)?\(?\s*(\d+(?:\.\d+)?)\s*[X×*]\s*(\d+(?:\.\d+)?)\s*(?:MM)?\s*\)?$/.exec(t);
+  if (user) return userPaperKey(Number(user[1]), Number(user[2]));
+  const isoB = /ISO\s*(?:FULL BLEED\s*)?B([0-5])\b/.exec(t);
+  if (isoB) return `ISOB${isoB[1]}`;
+  const jis = /JIS\s*B([45])\b/.exec(t);
+  if (jis) return `JISB${jis[1]}`;
+  const arch = /ARCH\s*(?:FULL BLEED\s*)?(E1|[A-E])\b/.exec(t);
+  if (arch) return `ARCH${arch[1]}`;
   const iso = /(?:^|[^A-Z])A([0-4])(?:[^0-9]|$)/.exec(` ${t} `);
   if (iso && !/ANSI/.test(t)) return `A${iso[1]}`;
   if (/LETTER|ANSI A\b/.test(t)) return 'LETTER';
@@ -58,19 +67,9 @@ export function parsePlotScale(text: string): 'fit' | { paper: number; units: nu
   return v !== null && v > 0 ? { paper: v, units: 1 } : null;
 }
 
-/** 페이지 설정의 용지 → PAPERS 열쇠 */
+/** 페이지 설정의 용지 → 용지 열쇠(목록에 없으면 사용자 크기) */
 function keyOfPage(p: PageSettings): string | null {
-  const a = Math.min(p.paperWidth, p.paperHeight);
-  const b = Math.max(p.paperWidth, p.paperHeight);
-  return PAPERS.find((x) => Math.abs(x.w - a) < 1 && Math.abs(x.h - b) < 1)?.key ?? null;
-}
-
-/** AutoCAD식 용지 이름(가로면 회전 1) */
-function mediaName(key: string): string {
-  const p = PAPERS.find((x) => x.key === key)!;
-  if (/^A\d$/.test(key)) return `ISO_full_bleed_${key}_(${p.w.toFixed(2)}_x_${p.h.toFixed(2)}_MM)`;
-  const names: Record<string, string> = { LETTER: 'ANSI_A', LEGAL: 'Legal', TABLOID: 'ANSI_B', ANSIC: 'ANSI_C', ANSID: 'ANSI_D', ANSIE: 'ANSI_E' };
-  return `${names[key] ?? key}_(${(p.w / 25.4).toFixed(2)}_x_${(p.h / 25.4).toFixed(2)}_Inches)`;
+  return paperKeyOfSize(p.paperWidth, p.paperHeight) ?? userPaperKey(p.paperWidth, p.paperHeight);
 }
 
 async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
@@ -166,7 +165,7 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
     await askDevice();
     // 용지
     for (;;) {
-      const cur = PAPERS.find((p) => p.key === s.paper) ?? PAPERS[1]!;
+      const cur = paperOf(s.paper) ?? PAPERS[1]!;
       const t = await askWord(ctx, `용지 크기 또는 [?] 입력 <${cur.label}>:`);
       if (t === '?') {
         for (const p of PAPERS) ctx.print(`  ${p.label}`);
@@ -376,11 +375,11 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
   if (await askYN(ctx, '페이지 설정에 대한 변경 사항 저장', false)) {
     if (!layout) ctx.print('모형 탭의 페이지 설정이 이 도면에 없어 저장하지 않았습니다.');
     else {
-      const p = PAPERS.find((x) => x.key === s.paper)!;
+      const p = paperOf(s.paper) ?? PAPERS[1]!;
       const np: PageSettings = {
         ...structuredClone(layout.plot),
         printerName: kind === 'none' ? 'none_device' : devName,
-        paperName: mediaName(s.paper),
+        paperName: mediaName(p.key, p.w, p.h),
         paperWidth: p.w,
         paperHeight: p.h,
         rotation: s.landscape ? 1 : 0,

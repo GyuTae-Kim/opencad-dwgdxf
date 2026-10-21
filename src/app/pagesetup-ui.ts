@@ -12,7 +12,7 @@ import { rootDictionary } from '../core/framevars';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { PAPERS } from './plot';
-import { mediaName } from './layoutcmds';
+import { mediaName, paperKeyOfSize, paperOf, userPaperKey } from './papers';
 import { paperInfo } from './scene';
 import { ctbList } from './ctblib';
 import { ask, h } from './ui/dom';
@@ -65,7 +65,7 @@ function isLandscapeOf(p: PageSettings): boolean {
 function paperKeyOf(p: PageSettings): string {
   const a = Math.min(p.paperWidth, p.paperHeight);
   const b = Math.max(p.paperWidth, p.paperHeight);
-  return PAPERS.find((x) => Math.abs(x.w - a) < 1 && Math.abs(x.h - b) < 1)?.key ?? '';
+  return paperKeyOfSize(a, b) ?? '';
 }
 
 /** PLOTSETTINGS → 칸 */
@@ -98,7 +98,7 @@ export function pageFormOf(p: PageSettings, model: boolean): PageForm {
 export function pageSettingsOf(base: PageSettings, v: PageForm, model: boolean): PageSettings {
   const p: PageSettings = structuredClone(base);
   if (v.paper !== 'KEEP') {
-    const paper = PAPERS.find((x) => x.key === v.paper)!;
+    const paper = paperOf(v.paper) ?? PAPERS[1]!;
     const w = v.landscape ? paper.h : paper.w;
     const hgt = v.landscape ? paper.w : paper.h;
     p.paperName = mediaName(v.paper, w, hgt);
@@ -278,7 +278,16 @@ export function realScaleNote(scale: string, paperUnits: 'mm' | 'in', insunits: 
 }
 
 export function pageFields(v: PageForm, model: boolean, insunits = 0): { el: HTMLElement; read(): PageForm; set(f: PageForm): void; onWindow(f: () => void): void } {
-  const paper = selectIn([...(v.paper === 'KEEP' ? [{ value: 'KEEP', label: '지금 용지' }] : []), ...PAPERS.map((x) => ({ value: x.key, label: x.label }))], v.paper, '용지 크기');
+  // 용지 목록 + 사용자 크기(폭 × 높이 mm, AutoCAD의 사용자 용지 크기)
+  const userNow = v.paper.startsWith('USER_') ? paperOf(v.paper) : null;
+  const paper = selectIn(
+    [...(v.paper === 'KEEP' ? [{ value: 'KEEP', label: '지금 용지' }] : []), ...PAPERS.map((x) => ({ value: x.key, label: x.label })), { value: 'USER', label: '사용자 크기…' }],
+    userNow ? 'USER' : v.paper,
+    '용지 크기',
+  );
+  const uw = numIn(userNow?.w ?? 420, '사용자 용지 폭(mm)');
+  const uh = numIn(userNow?.h ?? 297, '사용자 용지 높이(mm)');
+  const userRow = h('div', { class: 'paper-user' }, row('폭(mm)', uw), row('높이(mm)', uh));
   const sheets = [...new Set([...STYLE_SHEETS, ...ctbList().map((t) => t.name), v.styleSheet])];
   const style = selectIn(sheets.map((x) => ({ value: x, label: x || '없음' })), v.styleSheet, '플롯 스타일 테이블');
   const areaOpts = model
@@ -327,6 +336,7 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0): { el: HTM
   const upside = checkIn(v.upsideDown, '대칭으로 플롯');
   const sync = () => {
     ox.disabled = oy.disabled = centered.checked;
+    userRow.hidden = paper.value !== 'USER';
     winBtn.disabled = area.value !== 'window';
     for (const o of scale.options) o.textContent = scaleLabel(o.value, units.value);
     real.textContent = realScaleNote(scale.value, units.value as 'mm' | 'in', insunits);
@@ -336,17 +346,18 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0): { el: HTM
   area.addEventListener('change', sync);
   units.addEventListener('change', sync);
   scale.addEventListener('change', sync);
+  paper.addEventListener('change', sync);
   sync();
   const el = h(
     'div',
     { class: 'mgr-dlg' },
-    h('div', { class: 'mgr-cols' }, group('용지 크기(Z)', paper), group('플롯 스타일 테이블(펜 지정)(G)', style)),
+    h('div', { class: 'mgr-cols' }, group('용지 크기(Z)', paper, userRow), group('플롯 스타일 테이블(펜 지정)(G)', style)),
     h('div', { class: 'mgr-cols' }, group('플롯 영역', row('플롯 대상(W)', area), winBtn), group('도면 방향', land, row('대칭으로 플롯(-)', upside))),
     h('div', { class: 'mgr-cols' }, group('플롯 간격띄우기(인쇄 가능 영역의 원점 기준)', row('X(mm)', ox), row('Y(mm)', oy), row('플롯의 중심(C)', centered)), group('플롯 축척', row('축척(S)', scale), row('용지 단위(N)', units), real, row('선가중치 축척(L)', slw))),
     group('플롯 옵션', row('객체의 선가중치 플롯', lw), row('투명도 플롯(T)', tr), ...(model ? [] : [row('도면 공간을 나중에 플롯(J)', psl)])),
   );
   const read = (): PageForm => ({
-    paper: paper.value,
+    paper: paper.value === 'USER' ? (userPaperKey(numOf(uw) || 0, numOf(uh) || 0) ?? 'A3') : paper.value,
     landscape: land.value === 'L',
     upsideDown: upside.checked,
     styleSheet: style.value,
@@ -363,7 +374,14 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0): { el: HTM
     paperspaceLast: psl.checked,
   });
   const set = (f: PageForm) => {
-    if (f.paper !== 'KEEP') paper.value = f.paper;
+    if (f.paper.startsWith('USER_')) {
+      const u = paperOf(f.paper);
+      paper.value = 'USER';
+      if (u) {
+        uw.value = String(u.w);
+        uh.value = String(u.h);
+      }
+    } else if (f.paper !== 'KEEP') paper.value = f.paper;
     if (![...style.options].some((o) => o.value === f.styleSheet)) style.append(h('option', { value: f.styleSheet }, f.styleSheet || '없음'));
     style.value = f.styleSheet;
     if ([...area.options].some((o) => o.value === f.area)) area.value = f.area;
