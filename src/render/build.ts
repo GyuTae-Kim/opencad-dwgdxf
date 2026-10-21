@@ -3,6 +3,7 @@
  * 블록 참조는 펼치고(중첩 16단계까지), 도면층 0·ByBlock 상속, 선종류, 문자, 해치를 처리한다.
  */
 import type {
+  AttribEntity,
   BlockDef,
   CadColor,
   CadDocument,
@@ -1882,11 +1883,32 @@ export class SceneBuilder {
         const bc = bd.color.aci === 0 && bd.color.rgb === undefined ? null : bd.color;
         const parent = bc ? ({ ...e, color: bc } as Entity) : e;
         this.blockContents(blk, parent, mm, ctx);
+        this.mleaderAttributes(e, blk, parent, mm, ctx);
       }
     }
   }
 
   // -------------------------------------------------------------------------
+
+  /**
+   * 블록 내용 다중 지시선의 속성 값(풍선 번호 등): 블록의 ATTDEF(핸들로 찾는다) 자리·스타일에 지시선이 가진 값을 그린다.
+   * 상수 속성은 블록 내용이 이미 그렸다. 블록 안 ATTDEF 자체는 그리지 않는다(inBlock).
+   */
+  private mleaderAttributes(e: MLeaderEntity, blk: BlockDef, parent: Entity, mm: Mat, ctx: Ctx): void {
+    const atts = e.blockAttributes ?? [];
+    if (!atts.length) return;
+    const r = this.resolve(parent, ctx);
+    const child = this.childCtx(parent, ctx, r, mm);
+    child.chain = [...ctx.chain, tableKey(blk.name)];
+    for (const a of atts) {
+      const want = normalizeHandle(a.attdefHandle ?? '');
+      const def = blk.entities.find((x) => x.type === 'ATTDEF' && normalizeHandle(x.handle) === want) as AttribEntity | undefined;
+      if (!def || def.attFlags & 2) continue;
+      const mt = (def as { mtext?: Extract<Entity, { type: 'MTEXT' }> }).mtext;
+      const att = { ...def, type: 'ATTRIB', text: a.text, ...(mt ? { mtext: { ...mt, text: a.text } } : {}) } as unknown as AttribEntity;
+      this.text(att as unknown as TextEntity, child);
+    }
+  }
 
   private hatch(e: HatchEntity, ctx: Ctx): void {
     const r = this.resolve(e, ctx);

@@ -3,7 +3,8 @@
  * 프롬프트는 AutoCAD 2026 한국어판을 따른다. 순서(화살촉 먼저·연결선 먼저·내용 먼저)와 옵션(지시선 유형·연결선·내용 유형·
  * 최대 점 수·첫 번째·두 번째 각도)은 도면마다 세션 동안 유지한다. 여러 줄 문자 내용은 제자리 문자 편집기로 받는다.
  */
-import type { CadDocument, MLeaderEntity, MLeaderStyleObject, Vec3 } from '../core/model';
+import type { AttribEntity, CadDocument, MLeaderEntity, MLeaderStyleObject, Vec3 } from '../core/model';
+import { attributeValues } from './blockinsert';
 import { entityDefaults, tableKey } from '../core/model';
 import { boundsOf } from '../edit/geom/query';
 import type { App, CommandContext, Keyword } from './app';
@@ -446,6 +447,16 @@ export function registerAnnotateCommands(app: App): void {
       }
       const e = makeMLeader(app, arrow!, landing!, text ?? '', h, s, { text, block: s.content === 'B' ? s.block || undefined : undefined, width, vertices: mids });
       if (s.content === 'B' && !s.block) ctx.print('블록 이름이 없어 내용 없이 만듭니다. 옵션(O) › 내용 유형(C)에서 블록을 정하십시오.');
+      // 블록 내용의 속성(풍선 번호 등): INSERT처럼 값을 받아 지시선에 둔다(상수 속성은 블록이 그린다)
+      if (e.contentType === 1 && s.block) {
+        const blk = doc.blocks.get(tableKey(s.block));
+        const defs = blk ? blk.entities.filter((x): x is AttribEntity => x.type === 'ATTDEF' && !((x as AttribEntity).attFlags & 2)) : [];
+        if (blk && defs.length) {
+          const values = await attributeValues(app, ctx, blk);
+          if (!values) return;
+          e.blockAttributes = defs.map((d, index) => ({ attdefHandle: d.handle, index, width: 0, text: values.get(d.tag) ?? d.text }));
+        }
+      }
       addEntities(app, ctx, [e], 'MLEADER');
       if (!doc.textStyles.has(tableKey('Standard')) && !e.textStyleHandle) ctx.print('참고: 문자 스타일 Standard가 없어 기본 글꼴로 그립니다.');
     },
