@@ -38,6 +38,8 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  /* 막대를 아래로 끌어도 당겨서 새로고침(열린 도면을 잃는다)이 일어나지 않게. 시작 화면·팔레트·시트는 자기 안에서 스크롤한다 */
+  overscroll-behavior-y: none;
   background: var(--bg-app);
   color: var(--text);
   font: 12px/1.4 var(--font);
@@ -1332,6 +1334,14 @@ kbd {
   .titlebar {
     height: 40px;
   }
+  /* 응용프로그램 메뉴 단추: 보이는 크기(30×26)는 그대로, 투명한 테두리로 누르는 곳을 40×36으로 */
+  .app-button {
+    width: 40px;
+    height: 36px;
+    border: 5px solid transparent;
+    border-radius: 9px;
+    background-clip: padding-box;
+  }
   .icon-btn {
     width: 34px;
     height: 34px;
@@ -1353,12 +1363,17 @@ kbd {
     min-height: 58px;
   }
   .filetabs {
-    height: 38px;
+    height: 40px;
   }
+  /* 파일 탭 닫기: 보이는 크기(28×28)는 그대로, 투명한 테두리로 누르는 곳을 40×36으로 */
   .filetab .x {
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 36px;
     padding: 5px;
+    border: solid transparent;
+    border-width: 4px 6px;
+    margin-right: -6px;
+    background-clip: padding-box;
   }
   .layouttabs {
     height: 36px;
@@ -1885,15 +1900,18 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
 }
 .vb-btn .vb-lbl {
   color: var(--text-dim);
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.15;
   white-space: nowrap;
 }
-@media (max-width: 380px) {
-  .vb-btn .vb-lbl {
-    font-size: 10px;
-    letter-spacing: -0.2px;
-  }
+/* 이름이 긴 언어(독일어 등)에서 한 줄에 다 들어가지 않을 때만 한 단계씩 작게(mobileview.ts fitLabels) */
+.viewbar.tight .vb-btn .vb-lbl {
+  font-size: 11.5px;
+  letter-spacing: -0.1px;
+}
+.viewbar.tighter .vb-btn .vb-lbl {
+  font-size: 10.5px;
+  letter-spacing: -0.2px;
 }
 .vb-btn.on {
   background: var(--accent-soft);
@@ -1956,6 +1974,104 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
 }
 .mview-card.is-result .mv-res.res:first-child {
   font-size: 15px;
+}
+/* 측정 결과: 작은 이름, 큰 값 한 줄, 보조 줄(각도·ΔX·ΔY …). 누르면 명령행 원문을 펼친다 */
+.mv-measure > summary {
+  display: block;
+  list-style: none;
+  cursor: pointer;
+}
+.mv-measure > summary::-webkit-details-marker {
+  display: none;
+}
+.mv-kind {
+  display: block;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.3;
+}
+/* 펼침 표시(꺾쇠): 접혀 있으면 아래, 펼치면 위 */
+.mv-kind::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 0 3px 7px;
+  border-right: 1.5px solid var(--text-faint);
+  border-bottom: 1.5px solid var(--text-faint);
+  transform: rotate(45deg);
+}
+.mv-measure[open] .mv-kind::after {
+  margin-bottom: 0;
+  transform: rotate(-135deg);
+}
+.mv-big {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.mview-card.is-prompt .mv-big {
+  font-size: 20px;
+}
+.mv-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+.mv-sub b {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mv-raw {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.mview-card.is-prompt .mv-measure {
+  margin-bottom: 6px;
+}
+/* 낮은 화면(가로로 눕힌 휴대폰): 이름·큰 값·보조 줄을 한 줄에, 결과의 "다시 재기"는 닫기 옆에 두어 카드가 도면을 덜 가리게 */
+@media (max-height: 479.98px) {
+  .mv-measure > summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 10px;
+  }
+  .mv-big {
+    font-size: 22px;
+  }
+  .mview-card.is-prompt .mv-big {
+    font-size: 18px;
+  }
+  .mview-card.is-prompt .mv-measure {
+    margin-bottom: 2px;
+  }
+  .mv-sub {
+    margin-top: 0;
+  }
+  .mview-card.is-result {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .mview-card.is-result > .mv-acts {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+  .mview-card.is-result > .mv-close {
+    grid-column: 3;
+    grid-row: 1;
+  }
 }
 .mv-title {
   display: flex;
@@ -2090,7 +2206,26 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
 #app.view-mode .start-new-card {
   display: none;
 }
+/* 시작 화면 소개·지원 범위: 휴대폰 보기 모드는 보기·치수 확인 문구, 편집 화면·데스크톱은 그리기·편집·저장 문구(shell.ts buildStart) */
+.start .view-copy,
+#app.view-mode .start .edit-copy {
+  display: none;
+}
+#app.view-mode .start .view-copy {
+  display: block;
+}
 .vb-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* 홈 화면에 추가해 연 앱(standalone): iOS는 상태 막대가 비쳐 보이므로(black-translucent) 그 높이만큼 비우고 테마 색으로 칠한다.
+   상태 막대가 따로 있는 기기(안드로이드)·브라우저 탭에서는 0 */
+@media (display-mode: standalone) {
+  #app {
+    border-top: env(safe-area-inset-top, 0px) solid #252a33;
+  }
+  .dialog-back {
+    padding-top: max(16px, env(safe-area-inset-top, 0px));
+  }
 }

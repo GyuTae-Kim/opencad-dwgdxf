@@ -2,13 +2,15 @@
  * 휴대폰 보기 모드(app.viewOnly): 휴대폰에서는 그리기·고치기보다 도면을 보고 치수를 확인하는 일이 많으므로,
  * 편집 리본·명령행·제도 상태 막대를 숨기고 다음을 둔다.
  * - 보기 단추 줄: 전체 보기, 거리·반지름·각도·면적 재기, 도면층, 치수 목록(편집 화면과 오가는 단추는 제목 막대)
- * - 측정 띠(도면 아래): 명령의 프롬프트와 키워드·<기본값> 단추(Enter·Esc 대신), 끝나면 결과와 "다시 재기"
+ * - 측정 띠(도면 아래): 명령의 프롬프트와 키워드·<기본값> 단추(Enter·Esc 대신), 끝나면 결과와 "다시 재기".
+ *   측정 결과는 명령이 넘긴 값(measure-result.ts)으로 큰 값 한 줄과 작은 보조 줄로 보이고, 누르면 명령행 원문을 펼친다
  * - 정보 카드: 누른 객체 하나의 길이·반지름·지름·면적·치수 값 같은 치수 정보
  * 손가락 기기에서 좁거나 낮은 화면(겹침 리본 배치)이면 처음부터 켜고, 사용자가 고른 모드는 이 브라우저에 기억한다.
  */
 import type { App } from '../app';
 import type { Entity } from '../../core/model';
 import { entityProperties, typeName } from '../inquiry';
+import type { MeasureResult } from '../measure-result';
 import { h } from './dom';
 import { icon } from './icons';
 import { ribbonOverlay } from './layout';
@@ -86,6 +88,53 @@ export function infoRows(groups: readonly { rows: readonly { k: string; v: strin
   return out;
 }
 
+/** 명령이 남긴 결과·오류 한 줄(측정 명령은 값을 단다) */
+export interface ResultLine {
+  text: string;
+  cls?: 'err' | 'res';
+  measure?: MeasureResult;
+}
+/** 결과 카드의 한 덩어리: 측정 값 하나(그 값을 단 명령행 줄들) 또는 그냥 한 줄 */
+export type ResultBlock = { measure: MeasureResult; text: string[] } | { line: ResultLine };
+
+/** 결과 줄 묶기: 같은 측정 값을 단 이어진 줄(거리·증분 두 줄 등)은 한 덩어리, 나머지는 한 줄씩 */
+export function resultBlocks(lines: readonly ResultLine[]): ResultBlock[] {
+  const out: ResultBlock[] = [];
+  for (const l of lines) {
+    const last = out[out.length - 1];
+    if (l.measure && last && 'measure' in last && last.measure === l.measure) last.text.push(l.text);
+    else if (l.measure) out.push({ measure: l.measure, text: [l.text] });
+    else out.push({ line: l });
+  }
+  return out;
+}
+
+/** 카드에 보일 덩어리: 측정 값이 있으면 마지막 측정과 그 뒤(이어 잰 앞 결과는 빼고), 없으면 모두 */
+export function latestResults(blocks: readonly ResultBlock[]): ResultBlock[] {
+  for (let i = blocks.length - 1; i >= 0; i--) if ('measure' in blocks[i]!) return blocks.slice(i);
+  return [...blocks];
+}
+
+/**
+ * 측정 결과: 이름·큰 값·보조 줄(누르면 명령행 원문을 펼친다). 값은 번역하지 않는다.
+ * 원문은 줄마다 따로 두어야 번역 사전의 줄 문장과 맞는다(여러 줄을 한 title에 넣으면 반쯤만 번역된다)
+ */
+export function measureView(m: MeasureResult, text: readonly string[]): HTMLDetailsElement {
+  const sub = h('span', { class: 'mv-sub' });
+  m.details.forEach((d, i) => {
+    if (i) sub.append(' · ');
+    sub.append(h('span', {}, d.k), ' ', h('b', { 'data-i18n-skip': '' }, d.v));
+  });
+  const summary = h(
+    'summary',
+    {},
+    h('span', { class: 'mv-kind' }, m.label),
+    h('span', { class: 'mv-big', 'data-i18n-skip': '' }, m.value),
+    m.details.length ? sub : null,
+  );
+  return h('details', { class: `mv-measure ${m.kind}` }, summary, h('div', { class: 'mv-raw' }, ...text.map((t) => h('div', {}, t))));
+}
+
 /** 보기 단추 줄의 측정 명령 */
 const MEASURES: { name: string; ico: string; label: string; title: string }[] = [
   { name: 'DIST', ico: 'dist', label: '거리', title: '두 점 사이 거리 재기' },
@@ -95,6 +144,23 @@ const MEASURES: { name: string; ico: string; label: string; title: string }[] = 
 ];
 /** MEASURERADIUS는 MEASUREGEOM으로 돈다 */
 const RUNS_AS: Record<string, string> = { MEASURERADIUS: 'MEASUREGEOM' };
+
+/** 보기 단추 이름 글자 단계(styles.css): 기본 12px, .tight 11.5px, .tighter 10.5px */
+const FIT_STEPS = ['tight', 'tighter'] as const;
+
+/** 보기 단추 줄: 기본 글자로 넘치면 한 단계씩 작게. 가장 작게도 넘치면 줄이 가로로 밀린다. 고른 단계를 돌려준다 */
+export function fitLabels(bar: HTMLElement): string {
+  bar.classList.remove(...FIT_STEPS);
+  const over = () => bar.clientWidth > 0 && bar.scrollWidth > bar.clientWidth + 1;
+  let step = '';
+  for (const s of FIT_STEPS) {
+    if (!over()) break;
+    if (step) bar.classList.remove(step);
+    bar.classList.add(s);
+    step = s;
+  }
+  return step;
+}
 
 export interface MobileViewHost {
   openPalette(tab: string): void;
@@ -110,12 +176,15 @@ export class MobileView {
   readonly card: HTMLDivElement;
   private readonly measureBtns = new Map<string, HTMLButtonElement>();
   /** 지금 명령이 남긴 결과·오류 줄 */
-  private lines: { text: string; cls?: 'err' | 'res' }[] = [];
+  private lines: ResultLine[] = [];
+  /** 측정 결과의 명령행 원문을 펼쳐 두었는지(다시 그려도 그대로) */
+  private rawOpen = false;
   /** 결과를 남긴 명령(다시 재기) */
   private lastMeasure: string | null = null;
   /** 결과 띠를 닫았는지 */
   private dismissed = false;
   private renderQueued = false;
+  private fitQueued = false;
   /** 보기 모드에서 이미 전체 보기로 맞춘 문서(파일에 저장된 화면은 데스크톱 비율이라 휴대폰에서 잘린다) */
   private readonly fitted = new WeakSet<object>();
 
@@ -139,8 +208,12 @@ export class MobileView {
     this.card = h('div', { class: 'mview-card', role: 'status', 'aria-live': 'polite', hidden: true });
     app.cmd.watchers.add({
       prompt: () => this.queue(),
-      print: (text, cls) => this.onPrint(text, cls),
+      print: (text, cls, measure) => this.onPrint(text, cls, measure),
     });
+    // 이름 길이가 언어·화면 폭마다 달라 보기 단추 줄이 넘칠 때만 글자를 줄인다
+    const refit = () => this.queueFit();
+    if (typeof window !== 'undefined') window.addEventListener('resize', refit);
+    root.addEventListener('languagechange', refit);
   }
 
   /** 보기 모드 켜고 끄기(기억한다) */
@@ -156,6 +229,17 @@ export class MobileView {
     if (!view) this.card.hidden = true;
     this.host.modeChanged();
     this.render();
+    this.queueFit();
+  }
+
+  /** 다음 그리기 전에(번역이 끝난 뒤) 보기 단추 이름을 한 줄에 맞춘다 */
+  private queueFit(): void {
+    if (this.fitQueued || typeof requestAnimationFrame !== 'function') return;
+    this.fitQueued = true;
+    requestAnimationFrame(() => {
+      this.fitQueued = false;
+      fitLabels(this.bar);
+    });
   }
 
   get viewMode(): boolean {
@@ -173,17 +257,18 @@ export class MobileView {
     void this.app.run(name);
   }
 
-  private onPrint(text: string, cls?: 'err' | 'res'): void {
+  private onPrint(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void {
     // 새 명령이 시작하면 결과를 비운다(run()이 "명령: 이름"을 먼저 찍는다)
     const m = /^명령: (\S+)/.exec(text);
     // 화면 명령(전체 보기 등)은 재던 결과를 지우지 않는다
     if (m && !/^(ZOOM|PAN$|REGEN)/.test(m[1]!)) {
       this.lines = [];
       this.dismissed = false;
+      this.rawOpen = false;
       const name = m[1]!;
       if (MEASURES.some((x) => x.name === name || RUNS_AS[x.name] === name)) this.lastMeasure = MEASURES.find((x) => x.name === name)?.name ?? (name === 'MEASUREGEOM' ? 'MEASURERADIUS' : name);
     } else if (cls && !m) {
-      for (const line of text.split('\n')) this.lines.push({ text: line, cls });
+      for (const line of text.split('\n')) this.lines.push({ text: line, cls, measure });
       if (this.lines.length > 8) this.lines.splice(0, this.lines.length - 8);
     }
     this.queue();
@@ -235,9 +320,10 @@ export class MobileView {
     const parts = promptParts(prompt);
     card.classList.add('is-prompt');
     const body = h('div', { class: 'mv-body' });
-    // 직전 결과(MEASUREGEOM처럼 이어서 재는 명령)
-    const res = this.lines.filter((l) => l.cls).slice(-2);
-    for (const l of res) body.append(h('div', { class: `mv-res ${l.cls}` }, l.text));
+    // 직전 결과(MEASUREGEOM처럼 이어서 재는 명령): 마지막 측정 값, 없으면 마지막 두 줄
+    const blocks = latestResults(resultBlocks(this.lines));
+    if (blocks.some((b) => 'measure' in b)) for (const b of blocks) body.append(this.resultEl(b));
+    else for (const l of this.lines.slice(-2)) body.append(h('div', { class: `mv-res ${l.cls}` }, l.text));
     body.append(h('div', { class: 'mv-prompt' }, parts.text));
     const acts = h('div', { class: 'mv-acts' });
     // <기본값>이 키워드와 같으면(<객체(O)>) 그 키워드 단추를 앞세우고 따로 두지 않는다
@@ -254,7 +340,7 @@ export class MobileView {
     const card = this.card;
     card.classList.add('is-result');
     const body = h('div', { class: 'mv-body' });
-    for (const l of this.lines) body.append(h('div', { class: `mv-res ${l.cls ?? ''}` }, l.text));
+    for (const b of latestResults(resultBlocks(this.lines))) body.append(this.resultEl(b));
     const acts = h('div', { class: 'mv-acts' });
     const again = this.lastMeasure;
     if (again) acts.append(h('button', { class: 'mv-chip', type: 'button', html: `${icon('undo')}<span>다시 재기</span>`, onclick: () => this.startMeasure(again) }));
@@ -273,6 +359,15 @@ export class MobileView {
       });
     card.append(body, close, acts);
     card.hidden = false;
+  }
+
+  /** 결과 덩어리 하나: 측정 값은 큰 값 카드(펼침 상태를 기억), 나머지는 명령행 글 그대로 */
+  private resultEl(b: ResultBlock): HTMLElement {
+    if ('line' in b) return h('div', { class: `mv-res ${b.line.cls ?? ''}` }, b.line.text);
+    const el = measureView(b.measure, b.text);
+    el.open = this.rawOpen;
+    el.addEventListener('toggle', () => (this.rawOpen = el.open));
+    return el;
   }
 
   /** 고른 객체 하나의 치수 정보. 보였으면 true */
