@@ -90,6 +90,24 @@ function indexEntity(doc: CadDocument, e: Entity, on: boolean): void {
   }
 }
 
+/**
+ * 변경들을 차례로 적용하다 하나라도 실패하면 이미 적용한 것을 되돌리고 그 오류를 다시 던진다 — 문서가 반쯤 바뀐 채로 남지 않게
+ * (명령 취소·다시 실행·확정이 실패해도 명령 취소 목록과 문서가 어긋나지 않는다)
+ */
+export function applyOpsAtomic(doc: CadDocument, ops: readonly EditOp[], summary?: ChangeSummary): void {
+  let i = 0;
+  try {
+    for (; i < ops.length; i++) applyOps(doc, [ops[i]!], summary);
+  } catch (err) {
+    try {
+      applyOps(doc, inverseTransaction({ label: '', ops: ops.slice(0, i) }).ops);
+    } catch {
+      /* 되돌리기도 실패하면 더 할 수 있는 것이 없다 */
+    }
+    throw err;
+  }
+}
+
 /** 변경 하나를 문서에 적용한다(되돌릴 때는 inverse를 적용한다) */
 export function applyOps(doc: CadDocument, ops: readonly EditOp[], summary?: ChangeSummary): void {
   const space = (key: string) => {
@@ -337,7 +355,7 @@ export class EditSession {
     if (this.beforeCommit && tx.ops.length) tx = this.beforeCommit(tx);
     if (!tx.ops.length) return;
     const summary = emptySummary();
-    applyOps(this.doc, tx.ops, summary);
+    applyOpsAtomic(this.doc, tx.ops, summary);
     for (const op of tx.ops) if ((op.kind === 'add' || op.kind === 'modify') && this.ownerCache) this.ownerCache.set(op.kind === 'add' ? op.entity.handle : op.after.handle, op.block);
     const top = this.undoStack[this.undoStack.length - 1];
     if (tx.group !== undefined && top && top.group === tx.group) top.ops.push(...tx.ops);
@@ -361,11 +379,12 @@ export class EditSession {
     const top = this.undoStack[this.undoStack.length - 1];
     if (!top || top.group !== group || !count) return 0;
     const n = Math.min(count, top.ops.length);
-    const ops = top.ops.splice(top.ops.length - n, n);
-    if (!top.ops.length) this.undoStack.pop();
+    const ops = top.ops.slice(top.ops.length - n);
     const inv = inverseTransaction({ label: top.label, ops });
     const summary = emptySummary();
-    applyOps(this.doc, inv.ops, summary);
+    applyOpsAtomic(this.doc, inv.ops, summary);
+    top.ops.splice(top.ops.length - n, n);
+    if (!top.ops.length) this.undoStack.pop();
     this.ownerCache = null;
     this.onApply(inv, summary);
     return n;
@@ -380,11 +399,13 @@ export class EditSession {
   }
 
   undo(): Transaction | null {
-    const tx = this.undoStack.pop();
+    const tx = this.undoStack[this.undoStack.length - 1];
     if (!tx) return null;
     const inv = inverseTransaction(tx);
     const summary = emptySummary();
-    applyOps(this.doc, inv.ops, summary);
+    // 되돌리기가 실패하면 문서는 그대로, 항목도 목록에 남는다(예전에는 항목을 먼저 꺼내 다시 실행도 못 했다)
+    applyOpsAtomic(this.doc, inv.ops, summary);
+    this.undoStack.pop();
     this.redoStack.push(tx);
     this.dirty = this.undoStack.length !== this.savedDepth;
     this.ownerCache = null;
@@ -393,10 +414,11 @@ export class EditSession {
   }
 
   redo(): Transaction | null {
-    const tx = this.redoStack.pop();
+    const tx = this.redoStack[this.redoStack.length - 1];
     if (!tx) return null;
     const summary = emptySummary();
-    applyOps(this.doc, tx.ops, summary);
+    applyOpsAtomic(this.doc, tx.ops, summary);
+    this.redoStack.pop();
     this.undoStack.push(tx);
     this.dirty = this.undoStack.length !== this.savedDepth;
     this.ownerCache = null;

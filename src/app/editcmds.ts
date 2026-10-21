@@ -317,7 +317,9 @@ export function registerEditCommands(app: App): void {
       }
       if (!ops.length) return;
       st.session.commit({ label: 'PURGE', ops });
-      const items = ops.filter((o) => o.kind !== 'blockRecord' && o.kind !== 'remove' && !(o.kind === 'object' && o.after)).length;
+      // 소거한 항목 수: 고른 표 항목·블록·이름 있는 객체·응용프로그램(함께 지운 확장 사전·블록 레코드·사전 항목은 세지 않는다)
+      const tableItems = (['blocks', 'layers', 'linetypes', 'textStyles', 'dimStyles'] as const).reduce((a, k) => a + (v[k] ? found[k].length : 0), 0);
+      const items = tableItems + namedSel.length + (v.regApps ? apps.length : 0);
       ctx.print(`항목 ${items}개를 소거했습니다.`);
       if (removed) ctx.print(`0 길이 형상과 빈 문자 객체 ${removed}개를 지웠습니다.`);
     },

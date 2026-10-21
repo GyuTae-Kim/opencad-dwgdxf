@@ -9,8 +9,9 @@
  */
 import type { CadDocument, DictionaryObject, Entity, GroupObject, XData } from '../core/model';
 import { normalizeHandle, tableKey } from '../core/model';
-import type { EditOp } from './session';
+import { type EditOp, isLayoutBlock } from './session';
 import { namedDictionary } from './layertools/clone';
+import { readDictVar } from './annoscale/vars';
 import { lwCount, lwPoint, lwPoints } from '../core/lwpoly';
 
 export type NamedKind = 'mleaderStyles' | 'tableStyles' | 'mlineStyles' | 'groups';
@@ -148,12 +149,17 @@ export function emptyText(e: Entity): boolean {
   return false;
 }
 
-/** 0 길이 형상·빈 문자 객체 지우기(잠긴 도면층 제외) */
+/**
+ * 0 길이 형상·빈 문자 객체 지우기(잠긴 도면층 제외). 모형·배치 공간만 — AutoCAD처럼 블록 정의(동적 블록·*D·*T 포함) 안은 건드리지 않는다
+ * (동적 블록의 매개변수가 가리키는 0 길이 선을 지우면 원본 그대로 쓰는 동적 블록 객체에 끊긴 참조가 남는다)
+ */
 export function removeWhereOps(doc: CadDocument, test: (e: Entity) => boolean): EditOp[] {
   const ops: EditOp[] = [];
-  for (const [bk, b] of doc.blocks)
+  for (const [bk, b] of doc.blocks) {
+    if (!isLayoutBlock(bk)) continue;
     b.entities.forEach((e, i) => {
       if (test(e) && !doc.layers.get(tableKey(e.layer))?.locked) ops.push({ kind: 'remove', block: bk, entity: e, index: i });
     });
+  }
   return ops.reverse();
 }

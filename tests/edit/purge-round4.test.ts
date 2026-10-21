@@ -158,3 +158,62 @@ describe('MATCHPROP 설정(S)', () => {
     expect(h.printed.some((t) => t.startsWith('현재 활성 설정: 도면층 선종류'))).toBe(true);
   });
 });
+
+describe('PURGE 셀프 리뷰 수정', () => {
+  /** 쓰이지 않는 블록 OLD 안에 0 길이 선·빈 문자·보통 선 */
+  function withOldBlock() {
+    const h = makeHarness((doc) => {
+      fill(doc);
+      const z = { ...line(1, 1, 1, 1), handle: 'B10', owner: 'B2' } as Entity;
+      const t = { ...text(0, 0, '   '), handle: 'B11', owner: 'B2' } as Entity;
+      const l = { ...line(0, 0, 5, 0), handle: 'B12', owner: 'B2' } as Entity;
+      doc.blocks.set('OLD', { name: 'OLD', handle: 'B1', recordHandle: 'B2', basePoint: { x: 0, y: 0, z: 0 }, flags: 0, entities: [z, t, l], endHandle: 'B3' });
+      doc.blockRecords.set('OLD', { name: 'OLD', handle: 'B2', flags: 0, insertUnits: 0, explodable: true, scalable: true });
+      for (const e of [z, t, l]) doc.entityIndex.set(e.handle, e);
+    });
+    registerEditCommands(h.app);
+    registerDashTableCommands(h.app);
+    return h;
+  }
+  it('블록과 0 길이·빈 문자를 함께 소거해도 명령 취소(U)·다시 실행이 된다(블록 안 객체는 건드리지 않는다)', async () => {
+    const h = withOldBlock();
+    const zero = h.add(line(5, 5, 5, 5));
+    formAnswers.push({ blocks: true, zeroEmpty: true });
+    await h.run('PURGE', []);
+    expect(h.doc.blocks.has('OLD')).toBe(false);
+    expect(h.doc.entityIndex.has(zero.handle)).toBe(false);
+    // 블록 안 0 길이 선·빈 문자는 지운 수에 들지 않는다(블록과 함께 사라질 뿐)
+    expect(h.printed).toContain('0 길이 형상과 빈 문자 객체 1개를 지웠습니다.');
+    const tx = h.st.session.undo();
+    expect(tx?.label).toBe('PURGE');
+    expect(h.doc.blocks.get('OLD')!.entities.map((e) => e.handle)).toEqual(['B10', 'B11', 'B12']);
+    expect(h.doc.entityIndex.has(zero.handle)).toBe(true);
+    expect(h.st.session.canRedo()).toBe(true);
+    h.st.session.redo();
+    expect(h.doc.blocks.has('OLD')).toBe(false);
+    expect(h.doc.entityIndex.has(zero.handle)).toBe(false);
+    h.st.session.undo();
+    expect(h.doc.blocks.has('OLD')).toBe(true);
+  });
+  it('0 길이·빈 문자 소거는 모형·배치 공간만(블록 정의 안은 AutoCAD처럼 그대로)', async () => {
+    const h = withOldBlock();
+    formAnswers.push({ zeroEmpty: true });
+    await h.run('PURGE', []);
+    expect(h.doc.blocks.get('OLD')!.entities.map((e) => e.handle)).toEqual(['B10', 'B11', 'B12']);
+  });
+  it('되돌리기가 실패해도 명령 취소 목록과 문서가 어긋나지 않는다', () => {
+    const h = withOldBlock();
+    const s = h.st.session;
+    // 없는 블록에 넣는 작업: 확정하면 실패하고 문서는 그대로
+    const l = { ...line(0, 0, 1, 1), handle: 'C1' } as Entity;
+    expect(() => s.commit({ label: 'X', ops: [{ kind: 'add', block: MODEL_SPACE, entity: l }, { kind: 'add', block: 'NOPE', entity: { ...l, handle: 'C2' } }] })).toThrow();
+    expect(h.doc.entityIndex.has('C1')).toBe(false);
+    expect(s.canUndo()).toBe(false);
+    // 되돌릴 때 실패하는 항목(블록을 먼저 지운 뒤 그 안의 객체를 지운 순서)도 목록에 남고 문서는 그대로
+    s.commit({ label: 'BAD', ops: [{ kind: 'blockDef', key: 'OLD', before: h.doc.blocks.get('OLD')!, after: null }, { kind: 'remove', block: 'OLD', entity: h.doc.entityIndex.get('B12')!, index: 2 }] });
+    expect(() => s.undo()).toThrow();
+    expect(h.doc.blocks.has('OLD')).toBe(false);
+    expect(s.undoTop()?.label).toBe('BAD');
+    expect(s.canRedo()).toBe(false);
+  });
+});
