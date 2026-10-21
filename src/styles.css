@@ -38,6 +38,8 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  /* 막대를 아래로 끌어도 당겨서 새로고침(열린 도면을 잃는다)이 일어나지 않게. 시작 화면·팔레트·시트는 자기 안에서 스크롤한다 */
+  overscroll-behavior-y: none;
   background: var(--bg-app);
   color: var(--text);
   font: 12px/1.4 var(--font);
@@ -2093,4 +2095,15 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
 .vb-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* 홈 화면에 추가해 연 앱(standalone): iOS는 상태 막대가 비쳐 보이므로(black-translucent) 그 높이만큼 비우고 테마 색으로 칠한다.
+   상태 막대가 따로 있는 기기(안드로이드)·브라우저 탭에서는 0 */
+@media (display-mode: standalone) {
+  #app {
+    border-top: env(safe-area-inset-top, 0px) solid #252a33;
+  }
+  .dialog-back {
+    padding-top: max(16px, env(safe-area-inset-top, 0px));
+  }
 }
