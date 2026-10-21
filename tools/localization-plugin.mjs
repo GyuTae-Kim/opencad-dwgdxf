@@ -30,12 +30,17 @@ export function localizeHtml(html, language) {
   }
   return html;
 }
-/** 언어 페이지(<언어>/manifest.webmanifest)의 앱 정보: 이름·설명을 옮기고, 시작 주소는 그 언어 페이지, 범위·아이콘은 앱 뿌리 */
+/**
+ * 언어 페이지(<언어>/manifest.webmanifest)의 앱 정보: 이름·설명을 옮기고, 시작 주소는 그 언어 페이지, 범위·아이콘은 앱 뿌리.
+ * id는 두지 않는다: 브라우저는 id를 start_url의 출처(origin) 기준으로 풀어 "./"가 사이트 뿌리(포트폴리오·다른 OpenCAD 앱과 같은 앱)가 되므로,
+ * 없으면 쓰이는 start_url(/opencad-dwgdxf/<언어>/)이 그 언어 앱의 id가 된다
+ */
 export function localizeManifest(manifest, language) {
   if (language === 'ko') return manifest;
   const up = src => /^[a-z]+:|^\//i.test(src) ? src : '../' + src.replace(/^\.\//, '');
-  return { ...manifest, name: translate(manifest.name, language), short_name: translate(manifest.short_name, language),
-    description: translate(manifest.description, language), lang: language, id: './', start_url: './', scope: '../',
+  const { id: _id, ...rest } = manifest;
+  return { ...rest, name: translate(manifest.name, language), short_name: translate(manifest.short_name, language),
+    description: translate(manifest.description, language), lang: language, start_url: './', scope: '../',
     icons: manifest.icons.map(icon => ({ ...icon, src: up(icon.src) })) };
 }
 export function siteLocalization(){

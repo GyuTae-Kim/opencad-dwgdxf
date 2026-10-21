@@ -1,5 +1,4 @@
 {
-  "id": "./",
   "name": "OpenCAD DWG·DXF 캐드",
   "short_name": "OpenCAD 도면",
   "description": "DWG·DXF 도면을 설치 없이 브라우저에서 열어 보고, 재고, 고쳐 저장하는 무료 2D 캐드입니다. 도면 파일은 서버로 보내지 않습니다.",

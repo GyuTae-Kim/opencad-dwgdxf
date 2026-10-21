@@ -17,6 +17,8 @@ describe('웹 앱 매니페스트', () => {
 
   it('독립 창으로 열고, 시작 주소·범위는 배포 경로 기준(./), 색은 theme-color와 같다', () => {
     expect(manifest).toMatchObject({ start_url: './', scope: './', display: 'standalone', lang: 'ko', theme_color: '#252a33', background_color: '#252a33' });
+    // id를 두지 않아 start_url(앱 주소)이 id가 된다. "./"는 start_url의 출처 기준으로 풀려 사이트 뿌리(다른 앱과 같은 id)가 된다
+    expect(manifest).not.toHaveProperty('id');
     expect(manifest.name).toMatch(/[가-힣]/);
     expect(manifest.short_name.length).toBeLessThanOrEqual(12);
     expect(manifest.description).toMatch(/[가-힣]/);
@@ -50,7 +52,8 @@ describe('웹 앱 매니페스트', () => {
     expect(localizeManifest(manifest, 'ko')).toBe(manifest);
     for (const lang of ['en', 'ja', 'zh-CN', 'de']) {
       const m = localizeManifest(manifest, lang);
-      expect(m).toMatchObject({ lang, id: './', start_url: './', scope: '../', display: 'standalone', theme_color: '#252a33' });
+      expect(m).toMatchObject({ lang, start_url: './', scope: '../', display: 'standalone', theme_color: '#252a33' });
+      expect(m, lang).not.toHaveProperty('id');
       expect(`${m.name} ${m.short_name} ${m.description}`, lang).not.toMatch(/[가-힣]/);
       expect(m.short_name.length, lang).toBeLessThanOrEqual(12);
       expect(m.icons.map((i: { src: string }) => i.src)).toEqual(manifest.icons.map((i: { src: string }) => `../${i.src}`));

@@ -20,6 +20,10 @@ for(const{code}of languages){
  assert.equal(manifest.lang,code);assert.equal(manifest.display,'standalone');
  assert.equal(new URL(manifest.start_url,manifestUrl).href,metadata.url,`${code}: manifest start_url`);
  assert.equal(new URL(manifest.scope,manifestUrl).href,root,`${code}: manifest scope`);
+ // id는 브라우저처럼 start_url의 출처(origin) 기준으로 푼다(없으면 start_url). 앱 경로를 벗어나면 같은 사이트의 다른 앱과 겹친다
+ const startUrl=new URL(manifest.start_url,manifestUrl);
+ const id=manifest.id===undefined?startUrl.href:new URL(manifest.id,startUrl.origin).href;
+ assert.ok(id.startsWith(root),`${code}: manifest id ${id} outside the app`);
  assert.equal(doc.querySelector('meta[name="apple-mobile-web-app-title"]').content,manifest.short_name,`${code}: apple-mobile-web-app-title`);
  for(const icon of manifest.icons)assert.ok(existsSync(file(new URL(icon.src,manifestUrl).href)),`${code}: icon ${icon.src}`);
  assert.ok(existsSync(file(doc.querySelector('link[rel=apple-touch-icon]').href)),`${code}: apple-touch-icon`);
