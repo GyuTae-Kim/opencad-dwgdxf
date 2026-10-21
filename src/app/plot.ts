@@ -219,6 +219,8 @@ async function drawPages(app: App, st: DocState, s: PlotSettings, unitsPerMm: nu
     if (p) pages.push(p);
     return pages;
   }
+  // 모형 장면이 아직 없을 수 있다(PUBLISH가 열어만 둔 다른 도면의 모형 시트 등) — 범위·장면을 쓰기 전에 만든다
+  await app.ensureScene(st, MODEL_SPACE);
   const p = modelPlotPage(app, st, s, unitsPerMm);
   if (p) pages.push(p);
   return pages;
