@@ -9,7 +9,8 @@ import { type GlyphGeom, strokeFace } from '../text/fonts';
 import type { App } from './app';
 import type { DocState } from './docstate';
 import type { Page } from './export';
-import { PAPERS, type PlotSettings } from './plot';
+import type { PlotSettings } from './plot';
+import { paperOf } from './papers';
 import { type SpaceScene, paperInfo } from './scene';
 import { form } from './ui/dom';
 
@@ -54,7 +55,7 @@ const trimNum = (v: number) => String(Math.round(v * 10000) / 10000);
 function pageInfos(st: DocState, s: PlotSettings, count: number): { layout: string; paper: string; scale: string; inset: [number, number, number, number] }[] {
   const model = () => ({
     layout: '모형',
-    paper: PAPERS.find((p) => p.key === s.paper)?.label ?? s.paper,
+    paper: paperOf(s.paper)?.label ?? s.paper,
     scale: s.scale === 'fit' ? '용지에 맞춤' : s.scale,
     inset: [s.margin, s.margin, s.margin, s.margin] as [number, number, number, number],
   });

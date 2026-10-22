@@ -15,7 +15,7 @@ import { boundsOf } from '../../src/edit/geom/query';
 import { newDoc } from '../edit/make';
 import { type CommandFallback, type CommitHook, type DblClickHandler, type EntityClickHandler, type GripMenuProvider, type InputFilter, type PointFilter, bindCommitHooks } from '../../src/app/hooks';
 
-export type Input = string | { click: [number, number]; snap?: string } | { pick: string; at: [number, number] } | { sel: string[] };
+export type Input = string | { click: [number, number]; snap?: string; ctrl?: boolean } | { pick: string; at: [number, number]; shift?: boolean } | { sel: string[] };
 
 export interface Harness {
   app: App;
@@ -27,7 +27,8 @@ export interface Harness {
   /** 누를 때마다 부른 미리보기의 형상 수(빈 미리보기 = 0) */
   ghostSizes: number[];
   add(e: Entity): Entity;
-  run(name: string, inputs: Input[]): Promise<void>;
+  /** arg: 리본처럼 명령에 넘기는 인자(예: 'CIRCLE 3P'의 3P) */
+  run(name: string, inputs: Input[], arg?: string): Promise<void>;
 }
 
 /** 객체까지 거리(곡선은 경로, 그 밖은 범위 상자) */
@@ -126,7 +127,7 @@ export function makeHarness(setup?: (doc: CadDocument) => void): Harness {
       st.session.commit({ label: 'TEST', ops: [{ kind: 'add', block: MODEL_SPACE, entity: e }] });
       return doc.entityIndex.get(e.handle)!;
     },
-    async run(name: string, inputs: Input[]) {
+    async run(name: string, inputs: Input[], arg?: string) {
       const queue = [...inputs];
       const next = (prompt: string): Input => {
         prompts.push(prompt);
@@ -159,7 +160,7 @@ export function makeHarness(setup?: (doc: CadDocument) => void): Harness {
               h.ghosts++;
               h.ghostSizes.push(g.reduce((n, x) => n + x.segs.length, 0));
             }
-            const r: PointResult = { point: p, snap: x.snap ? { kind: x.snap as never } : null };
+            const r: PointResult = { point: p, snap: x.snap ? { kind: x.snap as never } : null, ...(x.ctrl ? { ctrl: true } : {}) };
             overlay.snap = null;
             return r;
           }
@@ -173,7 +174,7 @@ export function makeHarness(setup?: (doc: CadDocument) => void): Harness {
             if (kw) return { keyword: kw.key };
             throw new Error(`객체 프롬프트에 글: ${x} (${prompt})`);
           }
-          if ('pick' in x) return { handle: x.pick, point: { x: x.at[0], y: x.at[1] } };
+          if ('pick' in x) return { handle: x.pick, point: { x: x.at[0], y: x.at[1] }, ...(x.shift ? { shift: true } : {}) };
           throw new Error(`객체 프롬프트에 맞지 않는 입력 (${prompt})`);
         },
         async getSelection(prompt = '객체 선택:', opt = {}) {
@@ -189,7 +190,7 @@ export function makeHarness(setup?: (doc: CadDocument) => void): Harness {
       };
       const c = commands.get(name.toUpperCase());
       if (!c) throw new Error(`명령 없음: ${name}`);
-      await c.run(ctx);
+      await c.run(ctx, arg);
       if (queue.length) throw new Error(`남은 입력 ${queue.length}개: ${JSON.stringify(queue)}`);
     },
   };

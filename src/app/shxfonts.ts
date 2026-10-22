@@ -67,7 +67,7 @@ function pickFiles(folder: boolean): Promise<File[]> {
   });
 }
 
-async function readShx(files: File[]): Promise<{ name: string; data: Uint8Array }[]> {
+export async function readShx(files: File[]): Promise<{ name: string; data: Uint8Array }[]> {
   const out: { name: string; data: Uint8Array }[] = [];
   let total = 0;
   for (const f of files) {

@@ -9,6 +9,7 @@ import { type Affine, type Box, TAU, add, affApply, affMul, affRotate, affScale,
 import { entityPath } from './path';
 import { planProj } from './ocs';
 import { explodeEntity } from './explode';
+import { textOutline } from './textjust';
 
 function segs(points: Vec2[], closed: boolean): LinePiece[] {
   const out: LinePiece[] = [];
@@ -111,6 +112,8 @@ export function edgePieces(e: Entity, doc?: CadDocument, depth = 0): Piece[] {
   }
 }
 
+const TEXT_EDGES = new Set(['TEXT', 'MTEXT', 'ATTRIB', 'ATTDEF']);
+
 /** 조각의 나머지(호 → 원의 나머지, 타원호 → 타원의 나머지) */
 export function complement(p: ArcPiece | EllPiece): Piece {
   if (p.k === 'arc') {
@@ -123,6 +126,11 @@ export function complement(p: ArcPiece | EllPiece): Piece {
 
 /** 모서리 목록(연장 포함) */
 export function edgeSet(e: Entity, doc: CadDocument | undefined, extend: boolean): Piece[] {
+  // 문자는 글자 상자가 절단·경계 모서리다(AutoCAD TRIM·EXTEND와 같다 — 스냅·교점에는 쓰지 않는다)
+  if (TEXT_EDGES.has(e.type)) {
+    const box = doc ? textOutline(e, doc) : null;
+    return box ? segs(box, true) : [];
+  }
   const base = edgePieces(e, doc);
   if (!extend) return base;
   const path = entityPath(e);
@@ -169,6 +177,8 @@ function blockEdgeBox(b: BlockDef, doc: CadDocument, depth: number): Box | null 
   if (c && c.ents.length === b.entities.length && c.ents.every((x, i) => x === b.entities[i])) return c.box;
   const box = emptyBox();
   for (const e of b.entities) {
+    // 블록 안 문자는 블록 참조의 모서리가 아니다(edgePieces)
+    if (TEXT_EDGES.has(e.type)) continue;
     const eb = edgeBox(e, doc, depth + 1);
     if (eb === 'inf' || !eb) continue;
     growBox(box, eb.minX, eb.minY);
@@ -228,6 +238,15 @@ export function edgeBox(e: Entity, doc?: CadDocument, depth = 0): Box | 'inf' | 
           ),
         );
     return mapBox(bb, mats);
+  }
+  // 문자: 글자를 배치하지 않고 넉넉한 범위로 거른다(정확한 상자는 edgeSet이 만든다)
+  if (e.type === 'TEXT' || e.type === 'ATTRIB' || e.type === 'ATTDEF' || e.type === 'MTEXT') {
+    const h = e.height > 0 ? e.height : 2.5;
+    const n = e.text.length + ('tag' in e ? e.tag.length : 0) + 4;
+    const wf = 'widthFactor' in e && e.widthFactor > 0 ? e.widthFactor : 1;
+    const far = 'alignPoint' in e && e.alignPoint ? Math.hypot(e.alignPoint.x - e.insert.x, e.alignPoint.y - e.insert.y) : 0;
+    const R = far + h * n * Math.max(1, wf) * 1.5 + (e.type === 'MTEXT' ? e.width * 2 : 0);
+    return { minX: e.insert.x - R, minY: e.insert.y - R, maxX: e.insert.x + R, maxY: e.insert.y + R };
   }
   const box = emptyBox();
   for (const pc of edgePieces(e, doc, depth)) {

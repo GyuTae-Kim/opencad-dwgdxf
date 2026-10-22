@@ -63,6 +63,7 @@ import { type Affine, type TextEngine, type TextLayout, affMul } from '../text/l
 import { type ShxFont, ShxRunner } from '../text/shx';
 import { parseProxyGraphics } from './proxy';
 import { type DimensionGeometry, generateDimensionGeometry } from '../edit/dim/generate';
+import { childStyleOf } from '../edit/dim/vars';
 import { arcTextDrawParts, arcTextUseProxy } from './arctext';
 import { codepageToEncoding, decoderFor } from '../core/codepage';
 import { mlineDrawing } from '../edit/mline/draw';
@@ -1670,8 +1671,9 @@ export class SceneBuilder {
   // 치수·지시선
   // -------------------------------------------------------------------------
 
-  private dimVars(styleName: string, overrides: Record<number, string | number> | undefined): Record<string, number | string> {
-    const ds: DimStyle | undefined = this.doc.dimStyles.get(tableKey(styleName)) ?? this.doc.dimStyles.get('STANDARD');
+  private dimVars(styleName: string, overrides: Record<number, string | number> | undefined, e?: { dimType?: number; subtype?: string }): Record<string, number | string> {
+    // 그 종류의 하위 스타일(이름$2 등)이 있으면 그것(AutoCAD와 같다)
+    const ds: DimStyle | undefined = (e ? childStyleOf(this.doc, { dimStyle: styleName, ...e }) : null) ?? this.doc.dimStyles.get(tableKey(styleName)) ?? this.doc.dimStyles.get('STANDARD');
     const out: Record<string, number | string> = { ...DIM_VAR_DEFAULTS };
     for (const [k, v] of this.doc.header) if (k.startsWith('$DIM')) out[k.slice(1)] = v as number | string;
     if (ds) Object.assign(out, ds.vars);
@@ -1718,7 +1720,7 @@ export class SceneBuilder {
   /** 치수 블록이 없는 파일: 정의점으로 간단히 그린다 */
   private simpleDimension(e: DimensionEntity, ctx: Ctx): void {
     const r = this.resolve(e, ctx);
-    const v = this.dimVars(e.dimStyle, e.overrides);
+    const v = this.dimVars(e.dimStyle, e.overrides, e);
     const scale = num(v.DIMSCALE, 1) || 1;
     const asz = num(v.DIMASZ, 2.5) * scale;
     const txt = num(v.DIMTXT, 2.5) * scale;
@@ -1825,7 +1827,7 @@ export class SceneBuilder {
 
   private leader(e: LeaderEntity, ctx: Ctx): void {
     const r = this.resolve(e, ctx);
-    const v = this.dimVars(e.dimStyle, e.overrides);
+    const v = this.dimVars(e.dimStyle, e.overrides, { subtype: 'LEADER' });
     if (e.vertices.length < 2) return;
     let pts3: number[];
     if (e.pathType === 1 && e.vertices.length > 2) {

@@ -8,6 +8,7 @@ import { entityDefaults, tableKey } from '../core/model';
 import { formatLength } from '../core/units';
 import type { EditOp } from '../edit/session';
 import { cloneEntity } from '../edit/session';
+import { selectWithKeywords } from './util2-ui';
 import {
   type EditResult,
   type LengthenMode,
@@ -565,6 +566,18 @@ export function importDependencies(st: DocState, src: CadDocument, list: Entity[
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * JOIN 닫기(L): 호 → 같은 중심·반지름의 원(종류가 바뀌어 새 객체), 타원형 호 → 온 타원(같은 객체를 고친다 — 핸들·연관·그룹이 그대로)
+ */
+function closeArc(e: Entity): EditResult | null {
+  if (e.type === 'ARC') {
+    const { startAngle: _s, endAngle: _e, ...rest } = cloneEntity(e);
+    return { remove: [e.handle], add: [{ ...rest, type: 'CIRCLE', handle: '' } as Entity] };
+  }
+  if (e.type === 'ELLIPSE') return { replace: [{ ...cloneEntity(e), handle: e.handle, startParam: 0, endParam: 2 * Math.PI } as Entity] };
+  return null;
+}
 
 export function registerModifyCommands(app: App): void {
   // ------------------------------------------------------------- MOVE
@@ -1646,7 +1659,8 @@ export function registerModifyCommands(app: App): void {
       if (!e1 || !unlockedOnly(app, [r1.handle]).length) continue;
       for (;;) {
         const kws2: Keyword[] = kind === 'fillet' ? [{ key: 'R', label: '반지름' }] : [{ key: 'D', label: '거리' }, { key: 'A', label: '각도' }, { key: 'E', label: '메서드' }];
-        const second = kind === 'fillet' ? '두 번째 객체 선택' : '두 번째 선 선택';
+        // Shift를 누른 채 고르면 반지름(거리) 0으로 구석을 만든다(AutoCAD와 같다)
+        const second = kind === 'fillet' ? '두 번째 객체 선택 또는 Shift 키를 누른 채 선택하여 구석 적용' : '두 번째 선 선택 또는 Shift 키를 누른 채 선택하여 구석 적용';
         const r2 = await ctx.getEntity(`${second} 또는 [${kws2.map((k) => `${k.label}(${k.key})`).join('/')}]:`, kws2);
         if ('keyword' in r2) {
           await option(r2.keyword);
@@ -1655,12 +1669,15 @@ export function registerModifyCommands(app: App): void {
         if (!('handle' in r2)) return;
         const e2 = st.doc.entityIndex.get(r2.handle);
         if (!e2 || !unlockedOnly(app, [r2.handle]).length) break;
+        const sharp = !!r2.shift;
         const res =
           kind === 'fillet'
-            ? fillet(e1, r1.point, e2, r2.point, hnum(st, '$FILLETRAD', 0), { trim })
-            : m.chamferMethod === 'A'
-              ? chamferAngle(e1, r1.point, e2, r2.point, hnum(st, '$CHAMFERC', 0), hnum(st, '$CHAMFERD', 0), { trim })
-              : chamfer(e1, r1.point, e2, r2.point, hnum(st, '$CHAMFERA', 0), hnum(st, '$CHAMFERB', 0), { trim });
+            ? fillet(e1, r1.point, e2, r2.point, sharp ? 0 : hnum(st, '$FILLETRAD', 0), { trim })
+            : sharp
+              ? chamfer(e1, r1.point, e2, r2.point, 0, 0, { trim })
+              : m.chamferMethod === 'A'
+                ? chamferAngle(e1, r1.point, e2, r2.point, hnum(st, '$CHAMFERC', 0), hnum(st, '$CHAMFERD', 0), { trim })
+                : chamfer(e1, r1.point, e2, r2.point, hnum(st, '$CHAMFERA', 0), hnum(st, '$CHAMFERB', 0), { trim });
         if (!res.add?.length && !res.replace?.length && !res.remove?.length) ctx.print(res.message ?? (kind === 'fillet' ? '이 객체는 모깎기할 수 없습니다.' : '이 객체는 모따기할 수 없습니다.'));
         else steps.push(commitResults(app, ctx, [res], label).ops);
         break;
@@ -1684,7 +1701,25 @@ export function registerModifyCommands(app: App): void {
       const st = app.active!;
       const hs = await selectEditable(app, ctx);
       if (!hs.length) return;
-      const list = hs.map((h) => st.doc.entityIndex.get(h)).filter((e): e is Entity => !!e);
+      let list = hs.map((h) => st.doc.entityIndex.get(h)).filter((e): e is Entity => !!e);
+      // 호·타원형 호 하나만 고르면 원본에 결합할 것을 더 묻거나 닫는다(닫기(L) — 원·타원으로, AutoCAD와 같다)
+      const one = list.length === 1 ? list[0]! : null;
+      const ellArc = one?.type === 'ELLIPSE' && Math.abs(Math.abs(one.endParam - one.startParam) - 2 * Math.PI) > 1e-9;
+      if (one && (one.type === 'ARC' || ellArc)) {
+        const r = await selectWithKeywords(ctx, one.type === 'ARC' ? '원본에 결합할 호 선택 또는 [닫기(L)]:' : '원본에 결합할 타원형 호 선택 또는 [닫기(L)]:', [{ key: 'L', label: '닫기' }], false);
+        if ('keyword' in r) {
+          const closed = closeArc(one);
+          if (!closed) return;
+          st.selection.clear();
+          commitResults(app, ctx, [closed], 'JOIN');
+          app.refreshSelectionOverlay();
+          ctx.print(one.type === 'ARC' ? '호가 원으로 변환되었습니다.' : '타원형 호가 타원으로 변환되었습니다.');
+          return;
+        }
+        const more = unlockedOnly(app, r).filter((h) => h !== one.handle);
+        if (!more.length) return;
+        list = [one, ...more.map((h) => st.doc.entityIndex.get(h)).filter((e): e is Entity => !!e)];
+      }
       const res = joinEntities(list);
       if (!res.add?.length && !res.replace?.length) {
         ctx.print(res.message ?? '결합할 수 있는 객체가 없습니다.');

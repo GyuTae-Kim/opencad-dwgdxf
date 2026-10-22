@@ -13,6 +13,7 @@ import { intersectPieces } from './intersect';
 import { TAU, add, angleOf, cross, dist, dot, len, mid, mul, norm, rot90, solve2, sub } from './math';
 import { entityPath, makeArc, makeLine, makePolyline, makeRay, makeSpline, pieceNurbs, rebuildFrom } from './path';
 import { keepIdentity, resultFrom } from './trim';
+import { joinEntities } from './join';
 import { type EditResult, MSG, mergeResults } from './types';
 
 export interface FilletOptions {
@@ -439,7 +440,23 @@ export function fillet(e1: Entity, pick1: Vec2, e2: Entity, pick2: Vec2, radius:
   const z = s1.path.z;
   const extra: Entity[] = sol.arc ? [arcEntity(e1, sol.arc, z)] : [];
   if (!trim) return extra.length ? { add: extra } : { message: MSG.cannotFillet };
-  return twoResults(s1, applyKeep(s1, sol.t1, sol.keep1), s2, applyKeep(s2, sol.t2, sol.keep2), extra);
+  const res = twoResults(s1, applyKeep(s1, sol.t1, sol.keep1), s2, applyKeep(s2, sol.t2, sol.keep2), extra);
+  return joinedToPolyline(e1, e2, res) ?? res;
+}
+
+/** 폴리선과 선·호를 모깎기하면 모깎기 호와 선·호를 그 폴리선에 결합한다(AutoCAD와 같다). 잇지 못하면 null */
+function joinedToPolyline(e1: Entity, e2: Entity, res: EditResult): EditResult | null {
+  const lineArc = (e: Entity) => e.type === 'LINE' || e.type === 'ARC';
+  const pl = isPolyline(e1) && lineArc(e2) ? e1 : isPolyline(e2) && lineArc(e1) ? e2 : null;
+  if (!pl?.handle) return null;
+  const parts = [...(res.replace ?? []), ...(res.add ?? [])];
+  const plOut = parts.find((x) => x.handle === pl.handle);
+  if (!plOut || parts.length < 2) return null;
+  const j = joinEntities([plOut, ...parts.filter((x) => x !== plOut)]);
+  const joined = j.replace?.find((x) => x.handle === pl.handle);
+  if (!joined || j.add?.length || j.replace!.length !== 1) return null;
+  const gone = (j.remove ?? []).filter((h) => h && h !== pl.handle);
+  return { replace: [joined], remove: [...(res.remove ?? []), ...gone] };
 }
 
 // ---------------------------------------------------------------------------

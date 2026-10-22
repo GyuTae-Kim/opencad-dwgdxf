@@ -74,14 +74,14 @@ describe('휴대폰 보기 모드', () => {
     expect(infoRows([{ rows: [...'ABCDEFGH'].map(() => ({ k: '길이', v: '1' })) }])).toHaveLength(1);
   });
 
-  it('보기 단추 이름은 12px, 한 줄에 넘칠 때만 11.5px → 10.5px로 한 단계씩 줄인다', () => {
+  it('보기 단추 이름은 12px, 한 줄에 넘칠 때만 11.5px → 10.5px → 단추 최소 폭 40px로 한 단계씩 줄인다', () => {
     // 글자 단계마다 줄의 내용 폭(scrollWidth)이 다른 가짜 막대
     const bar = (clientWidth: number, widths: Record<string, number>) => {
       const cls = new Set<string>(['viewbar', 'tighter']);
       return {
         clientWidth,
         get scrollWidth() {
-          return widths[cls.has('tighter') ? 'tighter' : cls.has('tight') ? 'tight' : '']!;
+          return widths[cls.has('tightest') ? 'tightest' : cls.has('tighter') ? 'tighter' : cls.has('tight') ? 'tight' : '']!;
         },
         classList: { add: (...c: string[]) => c.forEach((x) => cls.add(x)), remove: (...c: string[]) => c.forEach((x) => cls.delete(x)) },
         cls,
@@ -93,7 +93,12 @@ describe('휴대폰 보기 모드', () => {
     const german = bar(352, { '': 376, tight: 350, tighter: 339 });
     expect(fitLabels(german as unknown as HTMLElement)).toBe('tight');
     expect([...german.cls]).toEqual(['viewbar', 'tight']);
-    expect(fitLabels(bar(320, { '': 376, tight: 350, tighter: 339 }) as unknown as HTMLElement)).toBe('tighter');
+    expect(fitLabels(bar(340, { '': 376, tight: 350, tighter: 339, tightest: 330 }) as unknown as HTMLElement)).toBe('tighter');
+    // 더 보기 단추까지 여덟 개(360px 폭 독일어): 10.5px로도 넘치면 단추 최소 폭을 줄인다
+    const de360 = bar(352, { '': 396, tight: 386, tighter: 373, tightest: 349 });
+    expect(fitLabels(de360 as unknown as HTMLElement)).toBe('tightest');
+    expect([...de360.cls]).toEqual(['viewbar', 'tightest']);
+    expect(fitLabels(bar(320, { '': 376, tight: 350, tighter: 339, tightest: 330 }) as unknown as HTMLElement)).toBe('tightest');
     // 숨은 막대(편집 화면)는 재지 않는다
     expect(fitLabels(bar(0, { '': 376, tight: 350, tighter: 339 }) as unknown as HTMLElement)).toBe('');
   });

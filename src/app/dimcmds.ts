@@ -22,6 +22,7 @@ import {
   rawDimVars,
 } from '../edit/dim';
 import type { DimKindName } from '../edit/dim/format';
+import { angularSpan } from '../edit/dim/angular';
 import { OSNAP, type PointRef, circlePointRef } from '../edit/dim/assoc';
 import type { EditOp } from '../edit/session';
 import type { App, CommandContext, Keyword } from './app';
@@ -321,6 +322,10 @@ export function registerDimCommands(app: App): void {
       let make: ((p: Pt) => DimensionEntity) | null = null;
       // 점 참조 번호 차례: 3점 각도 [13, 14, 15(정점)], 두 선 각도 [13, 14, 15, 10]
       let refs: (PointRef | null)[] = [];
+      // 사분점(Q)에 쓰는 꼭짓점과 재는 범위를 나누는 반직선 각도
+      let vertex: Pt = { x: 0, y: 0 };
+      let bounds: number[] = [];
+      const angTo = (c: { x: number; y: number }, q: { x: number; y: number }) => Math.atan2(q.y - c.y, q.x - c.x);
       const r = await ctx.getEntity('호, 원, 선을 선택하거나 <정점 지정>:');
       if ('enter' in r) {
         const v = await ctx.getPoint('각도 정점 지정:');
@@ -332,6 +337,8 @@ export function registerDimCommands(app: App): void {
         const b = await ctx.getPoint('두 번째 각도 끝점 지정:', { base: v.point });
         if (!('point' in b)) return;
         refs = [ra, pointRef(app, b), rv];
+        vertex = v.point;
+        bounds = [angTo(v.point, a.point), angTo(v.point, b.point)];
         make = (p) => createAngularDimension(doc, v3(v.point), v3(a.point), v3(b.point), v3(p), { text: o.text });
       } else if ('handle' in r) {
         const e = doc.entityIndex.get(r.handle);
@@ -344,17 +351,31 @@ export function registerDimCommands(app: App): void {
             return;
           }
           refs = [objectRef(app, e, OSNAP.END, e.start), objectRef(app, e, OSNAP.END, e.end), objectRef(app, e2, OSNAP.END, e2.start), objectRef(app, e2, OSNAP.END, e2.end)];
+          const d1 = { x: e.end.x - e.start.x, y: e.end.y - e.start.y };
+          const d2 = { x: e2.end.x - e2.start.x, y: e2.end.y - e2.start.y };
+          const den = d1.x * d2.y - d1.y * d2.x;
+          if (Math.abs(den) > 1e-12) {
+            const t = ((e2.start.x - e.start.x) * d2.y - (e2.start.y - e.start.y) * d2.x) / den;
+            vertex = { x: e.start.x + d1.x * t, y: e.start.y + d1.y * t };
+            const h1 = Math.atan2(d1.y, d1.x);
+            const h2 = Math.atan2(d2.y, d2.x);
+            bounds = [h1, h2, h1 + Math.PI, h2 + Math.PI];
+          }
           make = (p) => createAngular2LineDimension(doc, e.start, e.end, e2.start, e2.end, v3(p), { text: o.text });
         } else if (e?.type === 'ARC') {
           const a = { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle), z: 0 };
           const b = { x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle), z: 0 };
           refs = [objectRef(app, e, OSNAP.END, a), objectRef(app, e, OSNAP.END, b), objectRef(app, e, OSNAP.CEN, e.center)];
+          vertex = e.center;
+          bounds = [e.startAngle, e.endAngle];
           make = (p) => createAngularDimension(doc, e.center, a, b, v3(p), { text: o.text });
         } else if (e?.type === 'CIRCLE') {
           const first = r.point;
           const b = await ctx.getPoint('각도의 두 번째 끝점 지정:', { base: e.center });
           if (!('point' in b)) return;
           refs = [circlePointRef(e, first), pointRef(app, b), objectRef(app, e, OSNAP.CEN, e.center)];
+          vertex = e.center;
+          bounds = [angTo(e.center, first), angTo(e.center, b.point)];
           make = (p) => createAngularDimension(doc, e.center, v3(first), v3(b.point), v3(p), { text: o.text });
         } else {
           ctx.print('호, 원, 선을 선택하십시오.', 'err');
@@ -362,13 +383,38 @@ export function registerDimCommands(app: App): void {
         }
       } else return;
       const make0 = make;
-      make = (q: Pt) => withDimOpts(make0(q), o);
+      // 사분점(Q): 재는 각도를 고른 사분면에 묶고, 치수 호 위치가 그 밖이면 문자를 그 자리에 두고 호를 늘인다(AutoCAD와 같다)
+      let quad: Pt | null = null;
+      const sector = (g: number): number => {
+        const rs = bounds.map((a) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)).sort((x, y) => x - y);
+        const gg = ((g % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        let k = rs.length - 1;
+        for (let i = 0; i < rs.length; i++) if (gg >= rs[i]! - 1e-12) k = i;
+        return k;
+      };
+      const makeQ = (q: Pt): DimensionEntity => {
+        if (!quad || bounds.length < 2) return make0(q);
+        const R = Math.hypot(q.x - vertex.x, q.y - vertex.y);
+        const gq = angTo(vertex, quad);
+        const d = make0({ x: vertex.x + R * Math.cos(gq), y: vertex.y + R * Math.sin(gq) });
+        if (sector(angTo(vertex, q)) !== sector(gq)) {
+          d.textMid = v3(q);
+          d.dimType |= 128;
+        }
+        return d;
+      };
+      make = (q: Pt) => withDimOpts(makeQ(q), o);
       for (;;) {
-        const kws: Keyword[] = [{ key: 'M', label: '여러 줄 문자' }, { key: 'T', label: '문자' }, { key: 'A', label: '각도' }];
-        const p = await ctx.getPoint('치수 호 선 위치 지정 또는 [여러 줄 문자(M)/문자(T)/각도(A)]:', { keywords: kws, ghost: preview(app, make) });
+        const kws: Keyword[] = [{ key: 'M', label: '여러 줄 문자' }, { key: 'T', label: '문자' }, { key: 'A', label: '각도' }, { key: 'Q', label: '사분점' }];
+        const p = await ctx.getPoint('치수 호 선 위치 지정 또는 [여러 줄 문자(M)/문자(T)/각도(A)/사분점(Q)]:', { keywords: kws, ghost: preview(app, make) });
         if ('point' in p) {
           addDimension(app, ctx, make(p.point), 'DIMANGULAR', refs);
           return;
+        }
+        if ('keyword' in p && p.keyword === 'Q') {
+          const qp = await ctx.getPoint('사분점 지정:', { base: vertex });
+          if ('point' in qp) quad = qp.point;
+          continue;
         }
         if (!('keyword' in p) || !(await textOption(ctx, p.keyword, o))) return;
       }
@@ -392,10 +438,25 @@ export function registerDimCommands(app: App): void {
     // 호 길이 치수의 부분(P): 호 위 두 점 사이만
     let span: { a0: number; a1: number } | null = null;
     const make = (p: Pt): DimensionEntity => withDimOpts(make1(p), o);
+    // 지시선(L): 90°보다 큰 호에서만(AutoCAD와 같다). 치수 호에서 재는 호로 반지름 방향(문자 쪽 각도)
+    let leader = false;
+    const sweepOf = () => {
+      const a0 = span?.a0 ?? c.a0!;
+      let sw = (span?.a1 ?? c.a1!) - a0;
+      while (sw <= 0) sw += 2 * Math.PI;
+      return { a0, sw };
+    };
     const make1 = (p: Pt): DimensionEntity => {
       if (kind === 'arc') {
         const d = createArcLengthDimension(doc, center, c.r, span?.a0 ?? c.a0!, span?.a1 ?? c.a1!, v3(p), { text: o.text });
         if (span && d.arc) d.arc.partial = true;
+        const R = Math.hypot(p.x - c.c.x, p.y - c.c.y);
+        if (leader && d.arc && Math.abs(R - c.r) > 1e-9) {
+          const { a0, sw } = sweepOf();
+          const th = a0 + sw / 2;
+          d.arc.leader1 = { x: c.c.x + c.r * Math.cos(th), y: c.c.y + c.r * Math.sin(th), z: center.z };
+          d.arc.leader2 = { x: c.c.x + R * Math.cos(th), y: c.c.y + R * Math.sin(th), z: center.z };
+        }
         return d;
       }
       const a = Math.atan2(p.y - c.c.y, p.x - c.c.x);
@@ -407,10 +468,17 @@ export function registerDimCommands(app: App): void {
       return d;
     };
     const what = kind === 'arc' ? '호 길이 치수 위치 지정' : '치수선의 위치 지정';
-    const kws: Keyword[] = [{ key: 'M', label: '여러 줄 문자' }, { key: 'T', label: '문자' }, { key: 'A', label: '각도' }];
-    if (kind === 'arc') kws.push({ key: 'P', label: '부분' });
     for (;;) {
+      const kws: Keyword[] = [{ key: 'M', label: '여러 줄 문자' }, { key: 'T', label: '문자' }, { key: 'A', label: '각도' }];
+      if (kind === 'arc') {
+        kws.push({ key: 'P', label: '부분' });
+        if (sweepOf().sw > Math.PI / 2 + 1e-9) kws.push(leader ? { key: 'N', label: '지시선 없음' } : { key: 'L', label: '지시선' });
+      }
       const p = await ctx.getPoint(`${what} 또는 [${kws.map((k) => `${k.label}(${k.key})`).join('/')}]:`, { keywords: kws, ghost: preview(app, make) });
+      if ('keyword' in p && (p.keyword === 'L' || p.keyword === 'N') && kind === 'arc') {
+        leader = p.keyword === 'L';
+        continue;
+      }
       if ('keyword' in p && p.keyword === 'P' && kind === 'arc') {
         // 호 위의 두 점(호의 시작에서 반시계로 잰 각을 호 범위로)
         const onArc = (q: Pt): number => {
@@ -459,12 +527,14 @@ export function registerDimCommands(app: App): void {
   app.register({ name: 'DIMARC', aliases: ['DAR'], title: '호 길이 치수', run: radial('arc') });
 
   // ------------------------------------------------------------- DIMCONTINUE·DIMBASELINE
-  /** 직전에 만든(또는 고른) 선형·정렬·세로좌표 치수 */
+  /** 이어 붙일 수 있는 치수: 선형·정렬·세로좌표, 각도(세 점·두 선 — AutoCAD처럼 각도 기준선·연속) */
+  const chainable = (e: Entity | undefined): e is DimensionEntity => e?.type === 'DIMENSION' && [0, 1, 6, 2, 5].includes(e.dimType & 7) && !e.subtype;
+  /** 직전에 만든(또는 고른) 이어 붙일 치수 */
   const lastDim = (): DimensionEntity | null => {
     const st = app.active!;
     for (let i = app.lastCreated.length - 1; i >= 0; i--) {
       const e = st.doc.entityIndex.get(app.lastCreated[i]!);
-      if (e?.type === 'DIMENSION' && [0, 1, 6].includes(e.dimType & 7) && !e.subtype) return e;
+      if (chainable(e)) return e;
     }
     return null;
   };
@@ -476,8 +546,8 @@ export function registerDimCommands(app: App): void {
       const r = await ctx.getEntity(baseline ? '기준 치수 선택:' : '연속된 치수 선택:');
       if (!('handle' in r)) return null;
       const e = doc.entityIndex.get(r.handle);
-      if (e?.type !== 'DIMENSION' || ![0, 1, 6].includes(e.dimType & 7) || e.subtype) {
-        ctx.print('선형·정렬·세로좌표 치수를 선택하십시오.', 'err');
+      if (!chainable(e)) {
+        ctx.print('선형·정렬·세로좌표·각도 치수를 선택하십시오.', 'err');
         return null;
       }
       return e;
@@ -491,9 +561,25 @@ export function registerDimCommands(app: App): void {
     let prev = base;
     let origin = baseline ? base.defPoint2 : base.defPoint3;
     const steps: number[] = [];
+    // 각도 기준선의 첫 치수 호 반지름(그다음은 DIMDLI만큼씩 바깥으로)
+    let angularRadius = angularSpan(base)?.R ?? 0;
     for (;;) {
       const make = (p: Pt): DimensionEntity => {
         const t = prev.dimType & 7;
+        if (t === 2 || t === 5) {
+          // 각도: 같은 꼭짓점에서 앞 치수의 둘째 변(연속) 또는 기준 치수의 첫 변(기준선)부터, 같은 방향으로
+          const sp = angularSpan(baseline ? base! : prev);
+          if (!sp) return createAngularDimension(doc, prev.defPoint4, prev.defPoint3, v3(p), prev.defPoint, { style: prev.dimStyle });
+          const startP = baseline ? (sp.forward ? sp.pStart : sp.pEnd) : sp.forward ? sp.pEnd : sp.pStart;
+          const a = Math.atan2(startP.y - sp.c.y, startP.x - sp.c.x);
+          const b = Math.atan2(p.y - sp.c.y, p.x - sp.c.x);
+          const tau = 2 * Math.PI;
+          const sw = sp.forward ? (((b - a) % tau) + tau) % tau : -((((a - b) % tau) + tau) % tau);
+          const R = baseline ? angularRadius + (steps.length + 1) * step : angularRadius;
+          const mid = a + sw / 2;
+          const arcPt = { x: sp.c.x + R * Math.cos(mid), y: sp.c.y + R * Math.sin(mid), z: 0 };
+          return createAngularDimension(doc, v3(sp.c), v3(startP), v3(p), arcPt, { style: prev.dimStyle });
+        }
         if (t === 6) {
           // 세로좌표: 같은 축, 지시선 끝은 앞 치수와 같은 높이·폭
           const xAxis = (prev.dimType & 64) !== 0;
@@ -520,7 +606,16 @@ export function registerDimCommands(app: App): void {
       if ('point' in r) {
         const d = make(r.point);
         // 연관: 원점은 기준 치수의 같은 점 연관을 이어받는다(세로좌표는 피쳐 위치만)
-        const refs: (PointRef | null)[] = (prev.dimType & 7) === 6 ? [null, pointRef(app, r)] : [baseline ? inheritedRef(app, base, 'defPoint2') : inheritedRef(app, prev, 'defPoint3'), pointRef(app, r)];
+        const pt = prev.dimType & 7;
+        let refs: (PointRef | null)[];
+        if (pt === 2 || pt === 5) {
+          // 각도 [13 시작 변, 14 새 점, 15 꼭짓점]: 세 점 치수면 변의 점·꼭짓점 연관을 이어받는다
+          const src = baseline ? base : prev;
+          const sp = angularSpan(src);
+          const three = (src.dimType & 7) === 5 && !!sp;
+          const first = three ? (baseline ? 'defPoint2' : 'defPoint3') : null;
+          refs = [first ? inheritedRef(app, src, first) : null, pointRef(app, r), three ? inheritedRef(app, src, 'defPoint4') : null];
+        } else refs = pt === 6 ? [null, pointRef(app, r)] : [baseline ? inheritedRef(app, base, 'defPoint2') : inheritedRef(app, prev, 'defPoint3'), pointRef(app, r)];
         const label = baseline ? 'DIMBASELINE' : 'DIMCONTINUE';
         const n = addDimension(app, ctx, d, label, refs);
         steps.push(n);
@@ -540,6 +635,8 @@ export function registerDimCommands(app: App): void {
         base = b;
         prev = b;
         origin = baseline ? b.defPoint2 : b.defPoint3;
+        angularRadius = angularSpan(b)?.R ?? 0;
+        steps.length = 0;
         continue;
       }
       return;

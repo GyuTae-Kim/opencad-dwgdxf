@@ -41,6 +41,11 @@ interface Panel {
   custom?: 'layer' | 'props';
 }
 
+/** 리본 단추 풍선 도움말: 아직 없는 명령이면 "준비 중"을 붙인다(원문 한국어 — 화면 언어로는 번역 모듈이 바꾼다) */
+export function ribbonTip(tip: string, known: boolean): string {
+  return known ? tip : `${tip} — 준비 중`;
+}
+
 const RIBBON: { tab: string; panels: Panel[] }[] = [
   {
     tab: '홈',
@@ -57,8 +62,10 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
             tip: '원 (C)',
             menu: [
               { label: '중심, 반지름', cmd: 'CIRCLE', icon: 'circle' },
-              { label: '3점', cmd: 'CIRCLE 3P', icon: 'circle' },
               { label: '2점', cmd: 'CIRCLE 2P', icon: 'circle' },
+              { label: '3점', cmd: 'CIRCLE 3P', icon: 'circle' },
+              { label: '접선, 접선, 반지름', cmd: 'CIRCLE T', icon: 'circle' },
+              { label: '접선, 접선, 접선', cmd: 'CIRCLE TTT', icon: 'circle' },
             ],
           },
           {
@@ -67,8 +74,18 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
             icon: 'arc',
             tip: '호 (A)',
             menu: [
+              // AutoCAD 리본의 호 방법 11가지: ARC에 미리 고른 응답(역슬래시 = 사용자 입력, ; = Enter)
               { label: '3점', cmd: 'ARC', icon: 'arc' },
-              { label: '중심, 시작점, 끝점', cmd: 'ARC C', icon: 'arc' },
+              { label: '시작점, 중심점, 끝점', cmd: 'ARC \\ C', icon: 'arc' },
+              { label: '시작점, 중심점, 각도', cmd: 'ARC \\ C \\ A', icon: 'arc' },
+              { label: '시작점, 중심점, 길이', cmd: 'ARC \\ C \\ L', icon: 'arc' },
+              { label: '시작점, 끝점, 각도', cmd: 'ARC \\ E \\ A', icon: 'arc' },
+              { label: '시작점, 끝점, 방향', cmd: 'ARC \\ E \\ D', icon: 'arc' },
+              { label: '시작점, 끝점, 반지름', cmd: 'ARC \\ E \\ R', icon: 'arc' },
+              { label: '중심점, 시작점, 끝점', cmd: 'ARC C', icon: 'arc' },
+              { label: '중심점, 시작점, 각도', cmd: 'ARC C \\ \\ A', icon: 'arc' },
+              { label: '중심점, 시작점, 길이', cmd: 'ARC C \\ \\ L', icon: 'arc' },
+              { label: '연속', cmd: 'ARC ;', icon: 'arc' },
             ],
           },
         ],
@@ -739,7 +756,7 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
         title: '플롯',
         large: [
           { cmd: 'PLOT', label: '플롯', icon: 'print', tip: '용지·축척·플롯 스타일을 골라 PDF로 출력 (Ctrl+P)' },
-          { cmd: 'PUBLISH', label: '게시', icon: 'exportPdf', tip: '고른 배치를 PDF 하나로 (PUBLISH)' },
+          { cmd: 'PUBLISH', label: '게시', icon: 'exportPdf', tip: '열린 도면의 배치를 PDF 하나로 (PUBLISH)' },
           { cmd: 'ETRANSMIT', label: '전자 전송', icon: 'folder', tip: '도면과 참조 파일을 zip 하나로' },
         ],
         cols: [
@@ -1352,7 +1369,7 @@ export class Shell implements UiHooks {
   }
 
   private ribbonButton(b: Btn, large: boolean): HTMLButtonElement {
-    const el = h('button', { class: large ? 'rbtn-lg' : 'rbtn-sm', title: b.tip ?? b.label, 'data-cmd': b.cmd ?? '', 'data-nodoc': b.noDoc ? '1' : '' }, iconSpan(b.icon), large ? h('span', {}, b.label) : b.label);
+    const el = h('button', { class: large ? 'rbtn-lg' : 'rbtn-sm', title: b.tip ?? b.label, 'data-tip': b.tip ?? b.label, 'data-cmd': b.cmd ?? '', 'data-nodoc': b.noDoc ? '1' : '' }, iconSpan(b.icon), large ? h('span', {}, b.label) : b.label);
     el.addEventListener('click', () => {
       if (b.menu) {
         const r = el.getBoundingClientRect();
@@ -1385,7 +1402,13 @@ export class Shell implements UiHooks {
       const c = el.dataset.cmd ?? '';
       const known = !c || !!this.app?.findCommand(c.split(' ')[0]!);
       el.disabled = (!has && !el.dataset.nodoc) || !known;
-      if (!known) el.title = `${el.title.replace(/ — 준비 중$/, '')} — 준비 중`;
+      // 명령이 아직 없으면 "준비 중"을 붙이고, 명령이 생기면(편집기 모듈을 늦게 불러온 뒤) 원래 풍선 도움말로 되돌린다
+      // (번역된 화면에서는 title이 번역문이라 견주지 않고, 마지막으로 쓴 상태만 기억한다)
+      const ready = known ? '1' : '0';
+      if (el.dataset.ready !== ready) {
+        el.dataset.ready = ready;
+        el.title = ribbonTip(el.dataset.tip ?? el.title.replace(/ — 준비 중$/, ''), known);
+      }
       if (c === 'LWDISPLAY') el.classList.toggle('on', this.app.view.lwDisplay);
     }
     this.refreshCombos();

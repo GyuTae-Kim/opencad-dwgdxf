@@ -7,7 +7,8 @@
 import { type ArrowKind, arrowKind, drawArrow } from './arrows';
 import { type Out, type Rect, type TextPlace, arcClip, extentAlong, parallel, textOnLine, textRect, verticalOffset } from './builder';
 import { decideFit } from './fit';
-import { type P, add, ang, ccw, dir, dist, dot, intersect, madd, perp, sub, unit } from './vec';
+import type { Vec3 } from '../../core/model';
+import { type P, add, ang, ccw, dir, dist, dot, intersect, madd, normPi, perp, sub, unit } from './vec';
 
 /** 한 변: 각도, 보조선이 시작할 수 있는 거리 구간(꼭짓점 기준) */
 interface Ray {
@@ -130,6 +131,17 @@ export function arcLength(o: Out): void {
   } else {
     drawCurved(o, c, R, { a: as, tmin: r0, tmax: r0 }, { a: ae, tmin: r0, tmax: r0 }, sweep, o.measurement);
   }
+  // 지시선(DIMARC 지시선(L), 71 = 1): 치수 호 쪽(17)에서 재는 호 위(16)로, 화살촉은 호 위에 — 호의 중심을 향한다
+  if (d.arc?.leader1 && d.arc.leader2) {
+    const l1 = o.w(d.arc.leader1);
+    const l2 = o.w(d.arc.leader2);
+    if (dist(l1, l2) > 1e-9) {
+      const k = arrowKind(o, String(v.raw.DIMLDRBLK ?? ''));
+      const u = unit(sub(l1, l2));
+      o.line(l2, k.trim ? madd(l1, u, -k.trim) : l1, o.dimLineProps());
+      drawArrow(o, k, l1, u, perp(u));
+    }
+  }
   o.point(s);
   o.point(e);
   o.point(c);
@@ -206,23 +218,29 @@ function drawCurved(o: Out, c: P, R: number, rs: Ray, re: Ray, sweep: number, me
       }
     }
   };
-  // 바깥 문자까지 호를 늘인다
+  // 바깥 문자까지 호를 늘인다(끝 쪽, 또는 문자가 시작 변 앞에 있으면 시작 쪽 — DIMANGULAR 사분점(Q))
   let reachEnd = 0;
+  let reachStart = 0;
   if (text && place && !textInside && !freeText) {
     const along = extentAlong(text.box, place.angle, tanAt(textAngle));
     const onLine = !parallel(place.angle, tanAt(textAngle)) || v.tad === 0;
-    const dEnd = (textAngle - a1) * R;
-    reachEnd = onLine ? dEnd - along / 2 - v.gap : dEnd + along / 2;
+    const rel = ccw(a0, textAngle);
+    const afterEnd = rel - sweep;
+    const beforeStart = 2 * Math.PI - rel;
+    const reach = (dd: number) => (onLine ? dd - along / 2 - v.gap : dd + along / 2);
+    if (afterEnd <= beforeStart) reachEnd = reach(afterEnd * R);
+    else reachStart = reach(beforeStart * R);
   }
   if (fit.arrowsInside || fit.arrowsSuppressed) {
-    const s = a0 + Math.sign(trim(k1)) * sh(Math.abs(trim(k1)));
+    let s = a0 + Math.sign(trim(k1)) * sh(Math.abs(trim(k1)));
     let e = a1 - Math.sign(trim(k2)) * sh(Math.abs(trim(k2)));
     if (reachEnd > 0) e = Math.max(e, a1 + reachEnd / R);
+    if (reachStart > 0) s = Math.min(s, a0 - reachStart / R);
     pushArc(s, e);
   } else {
     const t1 = sh(k1.trim);
     const t2 = sh(k2.trim);
-    arcs.push([a0 - sh(2 * k1.size), a0 - t1]);
+    arcs.push([Math.min(a0 - sh(2 * k1.size), a0 - reachStart / R), a0 - t1]);
     if (v.tofl) pushArc(a0, a1);
     arcs.push([a1 + t2, Math.max(a1 + sh(2 * k2.size), a1 + reachEnd / R)]);
   }
@@ -251,4 +269,56 @@ function drawCurved(o: Out, c: P, R: number, rs: Ray, re: Ray, sweep: number, me
     o.mtext(text, place);
     o.textMid = o.userText ? o.o(d.textMid) : place.center;
   } else o.textMid = madd(c, dir(bis), R);
+}
+
+/**
+ * 각도 치수(세 점 5·두 선 2)의 재는 범위(평면도): 꼭짓점, 반시계 시작 변·끝 변 각도와 그 변의 보조선 원점, 치수 호 반지름.
+ * forward: 세 점 치수에서 첫 변(13)에서 둘째 변(14)으로 반시계로 재는가. DIMCONTINUE·DIMBASELINE이 이어 붙일 때 쓴다
+ */
+export function angularSpan(d: { dimType: number; defPoint: Vec3; defPoint2: Vec3; defPoint3: Vec3; defPoint4: Vec3; defPoint5?: Vec3 }): { c: P; start: number; sweep: number; pStart: P; pEnd: P; R: number; forward: boolean } | null {
+  const q = (v: Vec3): P => ({ x: v.x, y: v.y });
+  let c: P;
+  let cands: P[];
+  let arcPt: P;
+  if ((d.dimType & 7) === 2) {
+    const a1 = q(d.defPoint2);
+    const b1 = q(d.defPoint3);
+    const a2 = q(d.defPoint4);
+    const b2 = q(d.defPoint);
+    const x = intersect(a1, unit(sub(b1, a1)), a2, unit(sub(b2, a2)));
+    if (!x || !d.defPoint5) return null;
+    c = x;
+    cands = [a1, b1, a2, b2];
+    arcPt = q(d.defPoint5);
+  } else if ((d.dimType & 7) === 5) {
+    c = q(d.defPoint4);
+    cands = [q(d.defPoint2), q(d.defPoint3)];
+    arcPt = q(d.defPoint);
+  } else return null;
+  const g = ang(sub(arcPt, c));
+  const R = dist(arcPt, c);
+  // 둘레의 변(보조선 방향) 후보: 세 점은 두 변, 두 선은 두 직선의 네 반직선
+  const rays: number[] = [];
+  for (const p0 of cands) if (dist(p0, c) > 1e-12) rays.push(ang(sub(p0, c)));
+  if ((d.dimType & 7) === 2) rays.push(...rays.slice(0, 2).map((a) => a + Math.PI));
+  if (rays.length < 2) return null;
+  let best: { s: number; e: number } | null = null;
+  for (const s0 of rays)
+    for (const e0 of rays) {
+      const sw = ccw(s0, e0);
+      if (sw < 1e-9 || ((d.dimType & 7) === 2 && sw > Math.PI + 1e-9)) continue;
+      if (ccw(s0, g) <= sw + 1e-12 && (!best || sw < ccw(best.s, best.e))) best = { s: s0, e: e0 };
+    }
+  if (!best) return null;
+  const sweep = ccw(best.s, best.e);
+  const on = (a: number): P => {
+    let pick: P | null = null;
+    for (const p0 of cands) {
+      const da = Math.abs(normPi(ang(sub(p0, c)) - a));
+      if (da < 1e-6 && (!pick || dist(p0, c) > dist(pick, c))) pick = p0;
+    }
+    return pick ?? madd(c, dir(a), R);
+  };
+  const forward = (d.dimType & 7) !== 5 || Math.abs(normPi(ang(sub(q(d.defPoint2), c)) - best.s)) < 1e-6;
+  return { c, start: best.s, sweep, pStart: on(best.s), pEnd: on(best.e), R, forward };
 }

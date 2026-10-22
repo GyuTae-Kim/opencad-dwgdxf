@@ -4,7 +4,7 @@
  * (번역된 문장을 다시 읽지 않는다). 값 글은 도면 단위 형식(LUNITS·AUNITS·정밀도) 그대로 만든다.
  */
 export interface MeasureResult {
-  kind: 'distance' | 'radius' | 'angle' | 'area';
+  kind: 'distance' | 'radius' | 'angle' | 'area' | 'point';
   /** 값의 이름(작은 글씨, 번역된다): 거리·반지름·각도·면적·둘레 */
   label: string;
   /** 큰 글씨 값(단위 포함, 번역하지 않는다) */
@@ -50,4 +50,9 @@ export function areaResult(f: MeasureFormat, area: number | null, perimeter: num
   const per = perimeter !== null ? f.length(perimeter) + f.unit : null;
   if (area === null) return { kind: 'area', label: '둘레', value: per ?? '-', details: [] };
   return { kind: 'area', label: '면적', value: f.area(area) + (f.unit ? `${f.unit}²` : ''), details: per !== null ? [{ k: '둘레', v: per }] : [] };
+}
+
+/** 점 좌표(ID): 큰 값은 "X, Y", 보조 줄은 Z(0이 아닐 때) */
+export function pointResult(f: MeasureFormat, x: number, y: number, z = 0): MeasureResult {
+  return { kind: 'point', label: '좌표', value: `${f.length(x)}, ${f.length(y)}`, details: z ? [{ k: 'Z', v: f.length(z) }] : [] };
 }
