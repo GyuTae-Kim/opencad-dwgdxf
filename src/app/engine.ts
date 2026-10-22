@@ -15,7 +15,7 @@ export interface OpenResult {
 
 export interface SaveResult {
   data: Uint8Array;
-  warnings: { code: string; message: string; count?: number }[];
+  warnings: { code: string; message: string; count?: number; detail?: Record<string, unknown> }[];
   ms: number;
 }
 

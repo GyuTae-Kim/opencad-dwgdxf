@@ -958,7 +958,8 @@ export function registerModifyCommands(app: App): void {
             ctx.print(res.message ?? '해당 객체를 간격띄우기할 수 없습니다.');
             break;
           }
-          if (erase) res.remove = [...(res.remove ?? []), e.handle];
+          // 잠긴 도면층의 원본은 지우지 않는다(간격띄운 객체만 만든다)
+          if (erase && unlockedOnly(app, [e.handle]).length) res.remove = [...(res.remove ?? []), e.handle];
           const a = commitResults(app, ctx, [res], 'OFFSET');
           steps.push(a.ops);
           if (!multiple) break;
@@ -2078,13 +2079,9 @@ export function registerModifyCommands(app: App): void {
       do name = `A$C${Math.floor(Math.random() * 0x100000000).toString(16).toUpperCase().padStart(8, '0')}`;
       while (st.doc.blocks.has(tableKey(name)));
       const recordHandle = st.session.newHandle();
-      for (const e of list) {
-        e.handle = st.session.newHandle();
-        e.owner = recordHandle;
-        delete e.xdict;
-        delete e.reactors;
-        if (e.type === 'INSERT') for (const at of e.attribs) at.handle = st.session.newHandle();
-      }
+      // 붙여 넣기·복사와 같게 새 핸들을 주고 원본 본문(dwgRaw)도 버린다. R2013+ ACIS 객체의 원본 본문은
+      // 자료 저장소(AcDs)의 원래 핸들 기록을 가리키므로, 새 핸들로 쓰면 형상 없는 객체가 된다.
+      for (const e of list) prepareNew(st, e, recordHandle);
       const record: BlockRecord = { name, handle: recordHandle, flags: 0, insertUnits: Number(st.doc.header.get('$INSUNITS') ?? 0) || 0, explodable: true, scalable: true };
       const def: BlockDef = {
         name,

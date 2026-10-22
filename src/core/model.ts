@@ -772,6 +772,9 @@ export interface Ole2FrameEntity extends EntityBase {
   type: 'OLE2FRAME' | 'OLEFRAME';
   upperLeft: Vec3;
   lowerRight: Vec3;
+  /** DXF에서 읽은 AcDbEntity 다음 원본 태그(OLE 자료 310 포함)와 그 파일 버전. DWG에서 읽은 OLE는 위치를 모른다(원본 본문만) */
+  raw?: RawTag[];
+  rawVersion?: string;
 }
 
 /** ACIS 기반 객체 — 2D 캐드는 형상을 풀지 않고 프록시 그림이 있으면 그것을 그린다. */
@@ -996,6 +999,11 @@ export interface BlockDef {
   /** 70: 1 익명, 2 속성 정의 있음, 4 외부 참조, 8 오버레이, 16 외부 의존, 32 확인됨, 64 참조됨 */
   flags: number;
   xrefPath?: string;
+  /**
+   * 불러오지 않은(언로드한) 외부 참조. DWG 블록 레코드의 "불러오지 않음" 비트에 해당하고,
+   * DXF에서는 70의 32(확인됨)가 없는 외부 참조로 쓴다. flags의 32와 뜻이 반대라 따로 둔다.
+   */
+  xrefUnloaded?: boolean;
   description?: string;
   layer?: string;
   /** 그리기 순서(파일 순서) */
@@ -1339,6 +1347,8 @@ export interface CadDocument {
   tableHeads?: Map<string, TableHead>;
   /** 모델이 해석하지 않는 구역 */
   rawSections?: RawSection[];
+  /** DWG R2013+ 자료 저장소(AcDb:AcDsPrototype_1b — ACIS 형상 등) 원본. 같은 버전으로 저장할 때 그대로 쓴다 */
+  dwgDataStore?: { version: string; data: Uint8Array; compressed: boolean; pageSize: number };
 }
 
 export function createDocument(format: SourceFormat = 'new'): CadDocument {

@@ -1,14 +1,15 @@
 /** 1단계 명령: 보기·조회·도면층·파일 */
-import { tableKey } from '../core/model';
+import { type Entity, tableKey } from '../core/model';
+import { entityPath } from '../edit/geom/path';
+import { pathLength, pathSignedArea } from '../edit/geom/curve';
 import { formatAngle, formatLength, unitAbbr } from '../core/units';
 import { ccwSweep } from '../geom/curves';
 import type { App, CommandContext, PointResult } from './app';
 import { CancelError } from './app';
 import { type LayerPatch, patchLayers } from './layers';
-import { entityLength, entityProperties, hatchArea, polyArea, ringArea, ringPerimeter, typeName } from './inquiry';
+import { entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName } from './inquiry';
 import type { Pt } from './view';
 import { h } from './ui/dom';
-import { lwVertices } from '../core/lwpoly';
 import { type MeasureFormat, angleResult, areaResult, distanceResult, radiusResult } from './measure-result';
 
 function pointOf(r: PointResult): Pt | null {
@@ -510,57 +511,89 @@ async function measureAngle(app: App, ctx: CommandContext): Promise<void> {
   ctx.print(`각도 = ${formatAngle(a, u)}`, 'res', angleResult(measureFormat(app), a));
 }
 
+/** 객체의 면적·둘레(열린 곡선은 현으로 닫은 면적과 곡선 길이, AutoCAD AREA와 같다). 잴 수 없으면 null */
+export function objectArea(e: Entity): { a: number | null; per: number | null } | null {
+  if (e.type === 'HATCH' || e.type === 'MPOLYGON') return { a: hatchArea(e), per: null };
+  if (e.type === 'XLINE' || e.type === 'RAY') return null;
+  const path = entityPath(e);
+  if (!path || !path.pieces.length) return null;
+  // 직선 하나(LINE 등)는 면적이 없다
+  if (path.pieces.length === 1 && path.pieces[0]!.k === 'line' && !path.closed) return null;
+  return { a: Math.abs(pathSignedArea(path)), per: pathLength(path) };
+}
+
 async function measureArea(app: App, ctx: CommandContext): Promise<void> {
-  const r = await ctx.getPoint('첫 번째 구석점 지정 또는 [객체(O)] <객체(O)>:', { keywords: [{ key: 'O', label: '객체' }] });
-  if ('keyword' in r || 'enter' in r) {
-    const er = await ctx.getEntity('객체 선택:');
-    if (!('handle' in er)) return;
-    const e = app.entity(er.handle)!;
-    let a: number | null = null;
-    let per: number | null = null;
-    if (e.type === 'CIRCLE') {
-      a = Math.PI * e.radius * e.radius;
-      per = Math.PI * 2 * e.radius;
-    } else if (e.type === 'LWPOLYLINE') {
-      a = Math.abs(polyArea(lwVertices(e)));
-      per = entityLength(e);
-    } else if (e.type === 'POLYLINE' && e.kind === '2d') {
-      const vs = e.vertices.filter((v) => !(v.flags & 16)).map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge }));
-      a = Math.abs(polyArea(vs));
-      per = entityLength(e);
-    } else if (e.type === 'HATCH' || e.type === 'MPOLYGON') a = hatchArea(e);
-    else if (e.type === 'ELLIPSE') {
-      const ma = Math.hypot(e.majorAxis.x, e.majorAxis.y);
-      a = Math.PI * ma * ma * e.ratio;
-    } else if (e.type === 'SPLINE') per = entityLength(e);
-    if (a === null && per === null) {
-      ctx.print('면적을 잴 수 없는 객체입니다.', 'err');
+  // 더하기(A)·빼기(S) 모드: 잴 때마다 합계를 고친다. 첫 측정 전에는 객체(O) 하나를 재고 끝난다
+  let mode: 'A' | 'S' | null = null;
+  let total = 0;
+  const fmt = measureFormat(app);
+  const tally = (a: number) => {
+    if (!mode) return;
+    total += mode === 'A' ? a : -a;
+    ctx.print(`총 면적 = ${area(app, total)}`, 'res', areaResult(fmt, total, null));
+  };
+  const report = (a: number | null, per: number | null) => {
+    ctx.print(`면적 = ${a !== null ? area(app, a) : '-'},  둘레 = ${per !== null ? L(app, per) : '-'}`, 'res', areaResult(fmt, a, per));
+    if (a !== null) tally(a);
+  };
+  for (;;) {
+    const kws = mode
+      ? [{ key: 'O', label: '객체' }, mode === 'A' ? { key: 'S', label: '면적 빼기' } : { key: 'A', label: '면적 추가' }, { key: 'X', label: '종료' }]
+      : [
+          { key: 'O', label: '객체' },
+          { key: 'A', label: '면적 추가' },
+          { key: 'S', label: '면적 빼기' },
+        ];
+    const prompt = mode
+      ? `(${mode === 'A' ? '추가' : '빼기'} 모드) 첫 번째 구석점 지정 또는 [${kws.map((k) => `${k.label}(${k.key})`).join('/')}]:`
+      : '첫 번째 구석점 지정 또는 [객체(O)/면적 추가(A)/면적 빼기(S)] <객체(O)>:';
+    const r = await ctx.getPoint(prompt, { keywords: kws });
+    if ('keyword' in r && (r.keyword === 'A' || r.keyword === 'S')) {
+      mode = r.keyword;
+      continue;
+    }
+    if (('keyword' in r && r.keyword === 'X') || ('enter' in r && mode)) {
+      if (mode) ctx.print(`총 면적 = ${area(app, total)}`, 'res', areaResult(fmt, total, null));
       return;
     }
-    ctx.print(`면적 = ${a !== null ? area(app, a) : '-'},  둘레 = ${per !== null ? L(app, per) : '-'}`, 'res', areaResult(measureFormat(app), a, per));
-    return;
+    if ('keyword' in r || 'enter' in r) {
+      // 객체: 모드가 없으면 하나만, 더하기·빼기 모드면 Enter까지 이어서
+      for (;;) {
+        const er = await ctx.getEntity(mode ? `(${mode === 'A' ? '추가' : '빼기'} 모드) 객체 선택:` : '객체 선택:');
+        if (!('handle' in er)) break;
+        const e = app.entity(er.handle);
+        const m = e ? objectArea(e) : null;
+        if (!m) ctx.print('면적을 잴 수 없는 객체입니다.', 'err');
+        else report(m.a, m.per);
+        if (!mode) return;
+      }
+      if (!mode) return;
+      continue;
+    }
+    const pts: number[] = [];
+    let p: Pt | null = pointOf(r);
+    while (p) {
+      pts.push(p.x, p.y);
+      const base = p;
+      const r2 = await ctx.getPoint(pts.length >= 6 ? '다음 점 지정 <합계>:' : '다음 점 지정:', {
+        base,
+        rubber: (q) => [{ pts: [...pts, q.x, q.y], closed: true, fill: true }],
+      });
+      p = pointOf(r2);
+    }
+    if (pts.length < 6) {
+      ctx.print('점이 3개 이상 필요합니다.', 'err');
+      if (!mode) return;
+      continue;
+    }
+    const a = Math.abs(ringArea(pts));
+    const per = ringPerimeter(pts);
+    report(a, per);
+    app.view.overlay.rubber = [{ pts, closed: true, fill: true }];
+    app.view.overlay.marks = [{ p: { x: pts[0]!, y: pts[1]! }, text: `면적 ${area(app, a)}` }];
+    persistMarks(app);
+    if (!mode) return;
   }
-  const pts: number[] = [];
-  let p: Pt | null = pointOf(r);
-  while (p) {
-    pts.push(p.x, p.y);
-    const base = p;
-    const r2 = await ctx.getPoint(pts.length >= 6 ? '다음 점 지정 <합계>:' : '다음 점 지정:', {
-      base,
-      rubber: (q) => [{ pts: [...pts, q.x, q.y], closed: true, fill: true }],
-    });
-    p = pointOf(r2);
-  }
-  if (pts.length < 6) {
-    ctx.print('점이 3개 이상 필요합니다.', 'err');
-    return;
-  }
-  const a = Math.abs(ringArea(pts));
-  const per = ringPerimeter(pts);
-  ctx.print(`면적 = ${area(app, a)},  둘레 = ${L(app, per)}`, 'res', areaResult(measureFormat(app), a, per));
-  app.view.overlay.rubber = [{ pts, closed: true, fill: true }];
-  app.view.overlay.marks = [{ p: { x: pts[0]!, y: pts[1]! }, text: `면적 ${area(app, a)}` }];
-  persistMarks(app);
 }
 
 export { h };

@@ -71,8 +71,9 @@ function normalizeSummary(src: CadDocument, e: Sum, a: Sum, ver: number, warning
     for (const x of eb[key]) {
       const de = index.get(x.handle);
       const y = am.get(x.handle);
+      // 빠지거나(원본 자료 없음) 그림 도형으로 바뀐(프록시) 객체는 비교하지 않는다
+      if (de && droppable(de, sameVersion) && (!y || y.type !== x.type)) continue;
       if (!y) {
-        if (de && droppable(de, sameVersion)) continue;
         out.push(x);
         continue;
       }

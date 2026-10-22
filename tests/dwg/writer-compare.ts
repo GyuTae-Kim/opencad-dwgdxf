@@ -3,7 +3,8 @@
  * 버전 차이로 생기는 알려진 손실과 읽기 정규화만 걸러 내고 나머지는 모두 비교한다.
  *
  * 알려진 차이(근거)
- * - 원본 자료만 있는 도형·객체(ACIS, 프록시, 동적 블록 객체 등)는 원본과 같은 버전이 아니면 쓰지 않는다.
+ * - 원본 자료만 있는 도형·객체(ACIS, 프록시, 동적 블록 객체 등)는 원본과 같은 버전이 아니면 쓰지 않는다
+ *   (프록시 그림이 있는 사용자 객체는 그 그림을 보통 도형으로 바꿔 쓴다 — 첫 도형이 핸들을 잇는다).
  * - ACAD_TABLE은 원본과 다른 버전이면 그림 블록(*T)의 블록 참조로 쓴다.
  * - R2000은 트루컬러·색상표 색·투명도·MTEXT 배경이 없다. R2007 이전은 MTEXT 정의 높이, R2018 이전은 단 정보가 없다.
  * - R2007 이전 코드 페이지로 쓸 수 없는 글자는 \U+XXXX가 된다(코드 페이지를 바꿔 쓸 수 있으면 바꾼다).
@@ -240,8 +241,9 @@ export function compareDocs(src: CadDocument, back: CadDocument, o: CompareOptio
     const backHandles = new Map(bb.entities.map((x) => [x.handle, x]));
     for (const e of blk.entities) {
       const a = backHandles.get(e.handle);
+      // 빠지거나 그림 도형으로 바뀐 사용자 객체(proxygeom.ts)
+      if (droppable(e, o.sameVersion) && (!a || a.type !== e.type)) continue;
       if (!a) {
-        if (droppable(e, o.sameVersion)) continue;
         out.push(`${key}: ${e.type}:${e.handle} 없음`);
         continue;
       }

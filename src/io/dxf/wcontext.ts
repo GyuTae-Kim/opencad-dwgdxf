@@ -222,13 +222,16 @@ export class WriteContext {
     if (w) {
       w.count = (w.count ?? 1) + 1;
       if (detail) {
-        const d = (w.detail ??= {}) as { items?: string[] };
+        const d = (w.detail ??= {}) as { items?: string[]; types?: Record<string, number> };
         const items = (d.items ??= []);
         if (items.length < 20 && !items.includes(detail)) items.push(detail);
+        // 종류별 개수(저장 전 확인이 2D에 보이지 않는 종류를 빼고 셀 수 있게, saveloss.ts)
+        const types = (d.types ??= {});
+        types[detail] = (types[detail] ?? 0) + 1;
       }
       return;
     }
-    this.warnMap.set(code, { code, message, count: 1, ...(detail ? { detail: { items: [detail] } } : {}) });
+    this.warnMap.set(code, { code, message, count: 1, ...(detail ? { detail: { items: [detail], types: { [detail]: 1 } } } : {}) });
   }
 
   get warnings(): ReadWarning[] {

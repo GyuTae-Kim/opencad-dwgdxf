@@ -203,7 +203,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
         const doc = docs.get(msg.docId);
         if (!doc) throw new Error('문서가 없습니다');
         const t0 = performance.now();
-        let r: { data: Uint8Array; warnings: { code: string; message: string; count?: number }[] };
+        let r: { data: Uint8Array; warnings: { code: string; message: string; count?: number; detail?: unknown }[] };
         if (msg.format === 'dwg') {
           const { writeDwg } = await import('../io/dwg/index');
           r = writeDwg(doc, { version: msg.version as never });
@@ -212,7 +212,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
           r = writeDxf(doc, { version: msg.version as never, binary: msg.binary });
         }
         const data = r.data.buffer.slice(r.data.byteOffset, r.data.byteOffset + r.data.byteLength) as ArrayBuffer;
-        post({ type: 'saved', id: msg.id, data, warnings: r.warnings.map((w) => ({ code: w.code, message: w.message, count: w.count })), ms: performance.now() - t0 }, [data]);
+        post({ type: 'saved', id: msg.id, data, warnings: r.warnings.map((w) => ({ code: w.code, message: w.message, count: w.count, detail: plainDetail((w as { detail?: unknown }).detail) })), ms: performance.now() - t0 }, [data]);
         break;
       }
       case 'build': {
@@ -229,3 +229,13 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
     else post({ type: 'error', id, code: 'internal', message: e instanceof Error ? e.message : String(e) });
   }
 };
+
+/** 경고 세부(종류 목록·개수)를 구조화 복제할 수 있는 값으로(저장 전 확인창이 빠지는 종류를 보인다) */
+function plainDetail(d: unknown): Record<string, unknown> | undefined {
+  if (!d || typeof d !== 'object') return undefined;
+  try {
+    return JSON.parse(JSON.stringify(d)) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}

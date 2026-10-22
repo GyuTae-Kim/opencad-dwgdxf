@@ -131,7 +131,7 @@ function insertDialog(app: App, st: DocState, v: InsertDialog): Promise<InsertDi
 }
 
 /** 속성 값 받기: ATTREQ 0이면 기본값, ATTDIA 1이면 대화상자, 아니면 명령행(확인 속성은 두 번) */
-async function attributeValues(app: App, ctx: CommandContext, def: BlockDef): Promise<Map<string, string> | null> {
+export async function attributeValues(app: App, ctx: CommandContext, def: BlockDef): Promise<Map<string, string> | null> {
   const values = new Map<string, string>();
   const defs = def.entities.filter((e): e is AttribEntity => e.type === 'ATTDEF' && !((e as AttribEntity).attFlags & 2));
   const askThese = defs.filter((d) => !(d.attFlags & 8));

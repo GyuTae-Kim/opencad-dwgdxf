@@ -200,6 +200,10 @@ export function warningText(code: string): string {
       return '도형 파일(SHX)이 없어 쉐이프 객체를 그리지 못했습니다. SHXFONTS로 도형 파일을 불러올 수 있습니다.';
     case 'dimension.generated':
       return '치수 블록이 없는 치수는 정의점으로 간단히 그렸습니다.';
+    case 'ole.no_position':
+      return 'DWG에서 읽은 OLE 객체(붙여 넣은 표·그림)는 위치를 알 수 없어 그리지 않았습니다. 같은 버전 DWG로 저장하면 그대로 남습니다.';
+    case 'ole.frame_only':
+      return 'OLE 객체(붙여 넣은 표·그림)는 내용 없이 틀만 그립니다.';
     case 'font.unavailable':
       return '글꼴을 받지 못해 일부 문자를 대체 글꼴로 그렸습니다.';
     default:

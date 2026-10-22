@@ -176,7 +176,7 @@ export function readR2004Container(data: Uint8Array, ver: number): DwgSections {
   };
 
   // 선택 섹션: 속성만 암호화된 파일(보안 플래그 2)도 도면은 읽는다
-  const optional = (f: () => Uint8Array | null): Uint8Array | null => {
+  const optional = <T,>(f: () => T | null): T | null => {
     try {
       return f();
     } catch {
@@ -197,6 +197,11 @@ export function readR2004Container(data: Uint8Array, ver: number): DwgSections {
     objects,
     template: optional(() => readSection('AcDb:Template')),
     summaryInfo: optional(() => readSection('AcDb:SummaryInfo')),
+    dataStore: optional(() => {
+      const desc = sections.get('AcDb:AcDsPrototype_1b');
+      const bytes = desc ? readSection('AcDb:AcDsPrototype_1b') : null;
+      return desc && bytes ? { data: bytes, compressed: desc.compressed === 2, pageSize: desc.maxSize || 0x7400 } : null;
+    }),
     securityFlags,
     warnings,
   };

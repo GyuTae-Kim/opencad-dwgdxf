@@ -1677,9 +1677,15 @@ function underlay(c: Common, type: UnderlayEntity['type']): UnderlayEntity {
   return e;
 }
 
-function ole(c: Common, type: 'OLE2FRAME' | 'OLEFRAME'): Ole2FrameEntity {
+function ole(c: Common, type: 'OLE2FRAME' | 'OLEFRAME', version: string): Ole2FrameEntity {
   const t = c.tags;
-  return { ...c.base, type, upperLeft: t.point(10), lowerRight: t.point(11) } as Ole2FrameEntity;
+  const e = { ...c.base, type, upperLeft: t.point(10), lowerRight: t.point(11) } as Ole2FrameEntity;
+  // OLE 자료(310 묶음)를 포함한 원본 태그: 같은 DXF 계열로 다시 쓸 때 그대로 쓴다
+  if (c.raw) {
+    e.raw = c.raw;
+    e.rawVersion = version;
+  }
+  return e;
 }
 
 function proxy(c: Common): UnknownEntity {
@@ -1714,7 +1720,7 @@ const ACIS_TYPES = new Set([
 
 /** 레코드 하나를 객체로. POLYLINE의 정점·INSERT의 속성은 호출한 쪽이 붙인다. */
 /** 원본 태그를 남길 객체 종류(모르는 종류도 남긴다) */
-const RAW_TYPES = new Set(['ACAD_TABLE', 'ACAD_PROXY_ENTITY']);
+const RAW_TYPES = new Set(['ACAD_TABLE', 'ACAD_PROXY_ENTITY', 'OLE2FRAME', 'OLEFRAME']);
 const MODELED_TYPES = new Set([
   'LINE', 'POINT', 'CIRCLE', 'ARC', 'ELLIPSE', 'LWPOLYLINE', 'POLYLINE', 'SPLINE', 'HELIX', 'XLINE', 'RAY', 'TEXT', 'ATTRIB',
   'ATTDEF', 'MTEXT', 'INSERT', 'DIMENSION', 'ARC_DIMENSION', 'LARGE_RADIAL_DIMENSION', 'LEADER', 'MULTILEADER', 'MLEADER',
@@ -1797,7 +1803,7 @@ export function parseEntity(rec: DxfRecord, ctx: EntityContext): Entity | null {
       return underlay(c, rec.type);
     case 'OLE2FRAME':
     case 'OLEFRAME':
-      return ole(c, rec.type);
+      return ole(c, rec.type, ctx.version);
     case 'ACAD_PROXY_ENTITY':
       return proxy(c);
     default:

@@ -476,8 +476,11 @@ export class TableWriter {
     d.B(hasAtt);
     d.B(isXref);
     d.B(isOverlaid);
-    if (ver >= R2000) d.B((flags & 32) !== 0);
-    if (ver >= R2004) d.BL(pb.ents.length);
+    // 불러오지 않음(언로드) 비트. flags의 32는 DXF 뜻(확인됨)이라 쓰지 않는다(읽기 tables.ts).
+    if (ver >= R2000) d.B((isXref || isOverlaid) && def.xrefUnloaded === true);
+    // 외부 참조·덧씌우기 블록에는 소유 객체 수·핸들을 쓰지 않는다(AutoCAD와 같게, 읽기 tables.ts)
+    const owns = !isXref && !isOverlaid;
+    if (ver >= R2004 && owns) d.BL(pb.ents.length);
     d.BD3(def.basePoint ?? { x: 0, y: 0, z: 0 });
     d.TV(def.xrefPath ?? '');
     if (ver >= R2000) {
@@ -498,7 +501,7 @@ export class TableWriter {
         hd.H(SOFT_PTR, pb.ents[0]?.h ?? 0);
         hd.H(SOFT_PTR, pb.ents[pb.ents.length - 1]?.h ?? 0);
       }
-    } else for (const pe of pb.ents) hd.H(HARD_OWNER, pe.h);
+    } else if (owns) for (const pe of pb.ents) hd.H(HARD_OWNER, pe.h);
     hd.H(HARD_OWNER, pb.endH);
     if (ver >= R2000) hd.H(HARD_PTR, ctx.live.has(pb.layoutH) ? pb.layoutH : 0);
     this.finish(pb.recH);

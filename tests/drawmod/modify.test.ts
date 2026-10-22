@@ -182,3 +182,23 @@ describe('PEDIT 정점 편집 끊기·직선화·접선', () => {
     expect(Math.abs(first.bulge)).toBeGreaterThan(0.01);
   });
 });
+
+describe('PASTEBLOCK', () => {
+  it('블록으로 붙여 넣은 객체는 새 핸들·소유자를 받고 원본 본문(dwgRaw)을 버린다(R2013+ ACIS의 자료 저장소 기록을 잘못 가리키지 않게)', async () => {
+    const h = harness();
+    const src = h.add(line(0, 0, 10, 0));
+    const raw = { version: 'AC1032', typeName: 'LINE', typeNum: 19, data: new Uint8Array(1), dataBits: 1, handles: new Uint8Array(0), handleBits: 0, fingerprint: 'x', dataStore: true };
+    (h.doc.entityIndex.get(src.handle) as Entity).dwgRaw = raw;
+    await h.run('COPYBASE', [{ sel: [src.handle] }, '0,0']);
+    await h.run('PASTEBLOCK', ['20,0']);
+    const ins = modelEntities(h.doc, 'INSERT')[0] as Extract<Entity, { type: 'INSERT' }>;
+    const def = h.doc.blocks.get(ins.block.toUpperCase())!;
+    expect(def.entities.length).toBe(1);
+    const pasted = def.entities[0]!;
+    expect(pasted.handle).not.toBe(src.handle);
+    expect(pasted.owner).toBe(def.recordHandle);
+    expect(pasted.dwgRaw).toBeUndefined();
+    // 원본은 그대로
+    expect((h.doc.entityIndex.get(src.handle) as Entity).dwgRaw).toBe(raw);
+  });
+});
