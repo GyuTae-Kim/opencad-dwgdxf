@@ -1309,9 +1309,12 @@ export class App {
     const st = this.active;
     if (!st || !st.isModel || st.msVp || !st.scenes.get(st.space)) return this.dropDetail();
     const cam = this.view.camera();
-    // 기본 장면의 현-곡선 오차가 0.6픽셀을 넘을 때만
-    if (spaceTolerance(st.doc, st.space) * cam.scale < 0.6) return this.dropDetail();
     const vis = this.view.visibleWorld();
+    // 기본 장면의 현-곡선 오차가 0.6픽셀을 넘을 때, 또는 성기게 그린 촘촘한 해치가 있는 공간을 확대했을 때만
+    const b = st.scenes.get(st.space)?.bounds;
+    const zoomedIn = !!b && (vis[2] - vis[0]) * (vis[3] - vis[1]) * 16 < (b.maxX - b.minX) * (b.maxY - b.minY);
+    const dense = st.denseHatch.has(st.space) && zoomedIn;
+    if (!dense && spaceTolerance(st.doc, st.space) * cam.scale < 0.6) return this.dropDetail();
     const d = this.view.detail;
     if (
       d &&
@@ -1337,7 +1340,7 @@ export class App {
     if (!block) return;
     const want = new Set(handles);
     const list = block.entities.filter((e) => want.has(e.handle) && !st.hiddenObjects.has(e.handle));
-    const scene = new OverlayScene(this.view.renderer, st.doc, list, this.text, st.space, 0.3 / cam.scale, this.imageKeys, this.pdfPages);
+    const scene = new OverlayScene(this.view.renderer, st.doc, list, this.text, st.space, 0.3 / cam.scale, this.imageKeys, this.pdfPages, dense ? region : undefined);
     this.dropDetail();
     this.view.detail = { docId: st.docId, space: st.space, gen: st.gen, region, scale: cam.scale, scene };
     this.view.requestRender();

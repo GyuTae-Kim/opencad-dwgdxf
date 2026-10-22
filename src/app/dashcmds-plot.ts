@@ -14,7 +14,7 @@ import { ctbByName, ctbList } from './ctblib';
 import { askLine, askOption, askWord, askYN, parseReal } from './dashcmds-ask';
 import { DRAWING_ACCEPT, loadedDrawings, pickFiles, readDrawingFile } from './drawingfiles';
 import { PT_PER_MM, baseName, download, exportPageSvg, pdfDocument } from './export';
-import { PAPERS, type PlotSettings, lastSettings, plotPages, styleSheetPlotStyle, unitMm } from './plot';
+import { PAPERS, type PlotSettings, lastSettings, plotPages, styleSheetPlotStyle } from './plot';
 import { fileNameMode } from './script';
 import { ask, form } from './ui/dom';
 
@@ -200,7 +200,8 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
         ],
         s.landscape ? 'L' : 'P',
       )) === 'L';
-    if (await askYN(ctx, '위 아래를 뒤집어 플롯?', false)) ctx.print('위 아래를 뒤집은 플롯은 이 웹 버전에서 할 수 없습니다. 바로 놓아 플롯합니다.');
+    s.upsideDown = await askYN(ctx, '위 아래를 뒤집어 플롯?', !!s.upsideDown);
+    s.paperUnits = inches ? 'in' : 'mm';
     // 플롯 영역
     if (model) {
       const area = await askOption(
@@ -270,13 +271,25 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
         ],
         'L',
       );
-      if (area === 'V') await askWord(ctx, '뷰 이름 입력:');
-      if (area === 'W') {
-        await askWord(ctx, '윈도우 왼쪽 아래 좌표를 입력하십시오 <0,0>:');
-        await askWord(ctx, '윈도우 오른쪽 위 좌표를 입력하십시오 <0,0>:');
-      }
-      if (area !== 'L') ctx.print('배치는 용지 전체(배치)로만 플롯할 수 있습니다. 배치 전체를 플롯합니다.');
       s.what = 'layout';
+      s.area = area === 'E' ? 'extents' : area === 'D' ? 'display' : area === 'W' ? 'window' : 'layout';
+      if (area === 'V') {
+        await askWord(ctx, '뷰 이름 입력:');
+        ctx.print('배치의 이름 있는 뷰는 쓰지 않고 배치 전체를 플롯합니다.');
+      }
+      if (area === 'W') {
+        const xy = (t: string | null) => {
+          const m = t ? /^(-?[\d.]+),(-?[\d.]+)/.exec(t) : null;
+          return m ? [Number(m[1]), Number(m[2])] : [0, 0];
+        };
+        const [x0, y0] = xy(await askWord(ctx, '윈도우 왼쪽 아래 좌표를 입력하십시오 <0,0>:')) as [number, number];
+        const [x1, y1] = xy(await askWord(ctx, '윈도우 오른쪽 위 좌표를 입력하십시오 <0,0>:')) as [number, number];
+        if (x0 === x1 || y0 === y1) {
+          ctx.print('윈도우는 폭과 높이가 0이 아니어야 합니다.', 'err');
+          return;
+        }
+        s.window = [Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)];
+      }
     }
     // 축척
     for (;;) {
@@ -287,21 +300,19 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
         ctx.print('축척은 "1=100"처럼 입력하거나 맞춤(F)을 입력하십시오.', 'err');
         continue;
       }
-      if (!model) {
-        if (v !== 'fit' && Math.abs(v.paper / v.units - 1) > 1e-9) ctx.print('배치는 1:1로만 플롯합니다(뷰포트 축척은 배치에서 정합니다).');
-        break;
-      }
-      if (v === 'fit') s.scale = 'fit';
-      else {
-        // 용지 mm / 도면 단위 → PLOT 축척("용지 mm : 실제 mm")
-        const mmPerUnit = ((inches ? 25.4 : 1) * v.paper) / v.units;
-        const u = unitMm(st.units.insunits || (st.units.measurement ? 4 : 1));
-        s.scale = `${+(mmPerUnit / u).toPrecision(12)}:1`;
-      }
+      // 축척 = 출력 단위(인치·mm) a : 도면 단위 b(AutoCAD와 같다). 배치도 이 축척으로 플롯한다
+      s.scale = v === 'fit' ? 'fit' : `${+v.paper.toPrecision(12)}:${+v.units.toPrecision(12)}`;
       break;
     }
     const off = await askWord(ctx, '플롯 간격띄우기 입력(x,y) 또는 [중심(C)] <0.00,0.00>:', [{ key: 'C', label: '중심' }]);
-    if (off !== null && off !== 'C' && !/^0*\.?0*,0*\.?0*$/.test(off)) ctx.print('플롯 간격띄우기는 이 웹 버전에서 쓸 수 없습니다. 용지 가운데에 플롯합니다.');
+    if (off === 'C') s.centered = true;
+    else {
+      const m = off === null ? null : /^\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*$/.exec(off);
+      // 간격띄우기는 용지 단위(인치면 mm로 바꾼다)
+      const k = inches ? 25.4 : 1;
+      s.centered = false;
+      s.offset = m ? { x: parseFloat(m[1]!) * k, y: parseFloat(m[2]!) * k } : { x: 0, y: 0 };
+    }
     const withStyles = await askYN(ctx, '플롯 스타일로 플롯?', true);
     for (;;) {
       const curTable = s.ctb ?? (s.plotStyle === 'mono' ? 'monochrome.ctb' : s.plotStyle === 'gray' ? 'Grayscale.ctb' : '');
@@ -347,9 +358,10 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
       );
       if (shade !== 'A' && shade !== 'W') ctx.print('2D 캐드라 화면표시대로 플롯합니다.');
     } else {
-      await askYN(ctx, '선가중치를 플롯 축척에 적용?', false);
-      await askYN(ctx, '도면 공간을 먼저 플롯?', false);
-      await askYN(ctx, '도면 공간 객체 숨기기?', false);
+      s.scaleLineweights = await askYN(ctx, '선가중치를 플롯 축척에 적용?', !!s.scaleLineweights);
+      // AutoCAD 질문 그대로: 예 = 도면 공간 먼저(기본)
+      s.paperspaceLast = !(await askYN(ctx, '도면 공간을 먼저 플롯?', !s.paperspaceLast));
+      if (await askYN(ctx, '도면 공간 객체 숨기기?', false)) ctx.print('도면 공간 객체 숨기기는 3D 숨은선 제거라 2D 플롯에서는 쓰지 않습니다.');
     }
   }
   const kind = deviceKind(devName)!;

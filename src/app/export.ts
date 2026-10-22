@@ -11,7 +11,7 @@ import type { DisplayList } from '../render/displaylist';
 import { GLYPH_STRIDE, SEG_STRIDE, TRI_STRIDE } from '../render/displaylist';
 import type { App } from './app';
 import type { DocState } from './docstate';
-import type { PlotStyle } from '../render/styles';
+import type { LayerState, PlotStyle } from '../render/styles';
 import type { SpaceScene } from './scene';
 import { layoutViewports, paperInfo, viewportXf } from './scene';
 
@@ -20,6 +20,8 @@ export type Affine = [number, number, number, number, number, number];
 interface Sink {
   seg(x0: number, y0: number, x1: number, y1: number, style: number): void;
   tri(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, style: number): void;
+  /** 글자 하나(글리프가 나타내는 문자, 글리프 단위 → 출력 좌표 아핀, 그리기 깊이, 전진 폭(글리프 단위)). 검색되는 문자를 쓸 때만 */
+  char?(ch: string, m: Affine, style: number, depth: number, advance?: number): void;
 }
 
 /** 표시 목록을 그리기 순서(깊이)대로 내보낸다. m: 도면 → 출력 좌표 */
@@ -75,9 +77,17 @@ export function walk(dl: DisplayList, m: Affine, visible: (s: number) => boolean
       const d = inst[o + 3]!;
       const e = inst[o + 4]! + inst[o + 5]!;
       const ff = inst[o + 6]! + inst[o + 7]!;
-      if (clip && (e < clip[0] || e > clip[2] || ff < clip[1] || ff > clip[3])) continue;
+      // 삽입점이 자르기 밖이어도 글자 일부가 안에 들 수 있다(글자 크기만큼 넉넉히, 실제 자르기는 출력의 자르기 경로)
+      const pad = 2 * (Math.abs(a) + Math.abs(b) + Math.abs(c) + Math.abs(d));
+      if (clip && (e < clip[0] - pad || e > clip[2] + pad || ff < clip[1] - pad || ff > clip[3] + pad)) continue;
       const G = (x: number, y: number) => X(a * x + c * y + e, b * x + d * y + ff);
       const depth = inst[o + 8]!;
+      if (sink.char && g.ch) {
+        const o0 = X(e, ff);
+        const ux = [m[0] * a + m[2] * b, m[1] * a + m[3] * b];
+        const uy = [m[0] * c + m[2] * d, m[1] * c + m[3] * d];
+        sink.char(g.ch, [ux[0]!, ux[1]!, uy[0]!, uy[1]!, o0[0], o0[1]], s, depth, g.adv);
+      }
       if (g.kind === 0) {
         const v = gs.fillVerts;
         const first = g.first;
@@ -118,8 +128,12 @@ export interface Page {
   /** 출력 크기(포인트 또는 픽셀) */
   width: number;
   height: number;
-  /** 그릴 장면들(순서대로), 출력 좌표 변환, 스타일 표, 자르기 */
-  layers: { scene: SpaceScene; m: Affine; styles: Float32Array; clipPx?: [number, number, number, number]; clipWorld?: [number, number, number, number]; clipPoly?: number[] }[];
+  /** 배치를 대화상자 보기(LayoutPlotView)로 그렸다(간격띄우기를 이미 넣었다) */
+  viewed?: boolean;
+  /** 그릴 장면들(순서대로), 출력 좌표 변환, 스타일 표, 자르기, 스타일의 도면층 이름(PDF 도면층) */
+  layers: { scene: SpaceScene; m: Affine; styles: Float32Array; clipPx?: [number, number, number, number]; clipWorld?: [number, number, number, number]; clipPoly?: number[]; layerName?: (style: number) => string | undefined }[];
+  /** 투명도를 출력한다(스타일의 알파) */
+  transparency?: boolean;
   background: number;
   /** 선가중치 mm → 출력 단위 */
   lwScale: number;
@@ -131,6 +145,36 @@ export interface PageOptions {
   ctb?: CtbTable;
   /** 선가중치 출력 */
   lineweights: boolean;
+  /** 투명도 출력(PDF 투명 그래픽 상태, SVG opacity). 없으면 불투명 */
+  transparency?: boolean;
+  /** 배치: 도면 공간을 뷰포트 다음에 그린다(없으면 도면 공간 먼저 — AutoCAD 기본) */
+  paperspaceLast?: boolean;
+}
+
+/** 배치를 대화상자 설정으로 플롯할 때의 보기: 도면 공간 영역 region을 출력 좌표 (offX, offY)부터 k배로 */
+export interface LayoutPlotView {
+  /** 쪽 크기(출력 단위) */
+  width: number;
+  height: number;
+  /** 플롯할 도면 공간 영역 [x0, y0, x1, y1] */
+  region: [number, number, number, number];
+  /** 출력 단위 / 도면 공간 단위 */
+  k: number;
+  /** region 왼쪽 위 구석의 출력 좌표 */
+  offX: number;
+  offY: number;
+  /** 선가중치 배율(선가중치 축척) */
+  lwFactor: number;
+}
+
+/** 스타일 번호 → 도면층 이름(PDF 도면층으로 묶을 때) */
+function layerNamer(scene: SpaceScene, layers: readonly LayerState[]): (style: number) => string | undefined {
+  return (i) => layers[scene.styles.specs[i]?.layer ?? -1]?.name;
+}
+
+/** 두 사각형 [x0, y0, x1, y1]의 겹침 */
+function meet(a: [number, number, number, number], b: [number, number, number, number]): [number, number, number, number] {
+  return [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])];
 }
 
 /** 모형의 사각형(도면 좌표)을 용지에 놓는다. k = 출력 단위 / 도면 단위, 원점 = 용지 위 왼쪽 기준 출력 좌표 */
@@ -141,7 +185,7 @@ function xrefLayers(st: DocState, L: Page['layers'][number], opt: PageOptions, v
   for (const p of xrefPlacements(st, L.scene.source, (sty) => L.styles[sty * 8 + 5]! > 0, vpFrozen)) {
     const mm: Affine = [m[0] * p.m[0] + m[2] * p.m[1], m[1] * p.m[0] + m[3] * p.m[1], m[0] * p.m[2] + m[2] * p.m[3], m[1] * p.m[2] + m[3] * p.m[3], m[0] * p.m[4] + m[2] * p.m[5] + m[4], m[1] * p.m[4] + m[3] * p.m[5] + m[5]];
     const styles = p.file.scene.styleData(p.layers, `${p.key}|${opt.plotStyle || opt.ctb ? 'plot' : 'export'}`, false, 0xffffff, opt.lineweights, undefined, opt.plotStyle, opt.ctb);
-    const layer: Page['layers'][number] = { scene: p.file.scene, m: mm, styles, clipPx: L.clipPx, clipPoly: L.clipPoly };
+    const layer: Page['layers'][number] = { scene: p.file.scene, m: mm, styles, clipPx: L.clipPx, clipPoly: L.clipPoly, layerName: layerNamer(p.file.scene, p.layers) };
     const c = p.clip;
     if (c && !L.clipPoly) layer.clipPoly = c.map((v, i) => (i & 1 ? m[1] * c[i - 1]! + m[3] * v + m[5] : m[0] * v + m[2] * c[i + 1]! + m[4]));
     out.push(layer);
@@ -149,7 +193,10 @@ function xrefLayers(st: DocState, L: Page['layers'][number], opt: PageOptions, v
   return out;
 }
 
-export function modelPage(st: DocState, rect: [number, number, number, number], width: number, height: number, k: number, unitsPerMm: number, opt: PageOptions, clip = true): Page | null {
+/**
+ * 모형의 사각형 rect(도면 좌표)를 쪽 가운데에 놓는다. clipRect를 주면 그 바깥은 그리지 않는다(플롯 영역 — 같은 용지 위라도)
+ */
+export function modelPage(st: DocState, rect: [number, number, number, number], width: number, height: number, k: number, unitsPerMm: number, opt: PageOptions, clip = true, clipRect?: [number, number, number, number]): Page | null {
   const scene = st.scenes.get(MODEL_SPACE);
   if (!scene) return null;
   const [x0, y0, x1, y1] = rect;
@@ -157,24 +204,37 @@ export function modelPage(st: DocState, rect: [number, number, number, number], 
   const cy = (y0 + y1) / 2;
   const styles = scene.styleData(st.sceneLayers(MODEL_SPACE), opt.plotStyle || opt.ctb ? 'plot' : 'export', false, 0xffffff, opt.lineweights, undefined, opt.plotStyle, opt.ctb);
   const m: Affine = [k, 0, 0, -k, width / 2 - cx * k, height / 2 + cy * k];
-  const page: Page = { width, height, background: 0xffffff, lwScale: unitsPerMm, layers: [] };
-  const L: Page['layers'][number] = { scene, m, styles, clipWorld: [x0, y0, x1, y1] };
-  if (clip) L.clipPx = [width / 2 - (cx - x0) * k, height / 2 - (y1 - cy) * k, width / 2 + (x1 - cx) * k, height / 2 + (cy - y0) * k];
+  const page: Page = { width, height, background: 0xffffff, lwScale: unitsPerMm, layers: [], transparency: !!opt.transparency };
+  const c = clipRect ? meet(rect, clipRect) : rect;
+  const L: Page['layers'][number] = { scene, m, styles, clipWorld: [c[0], c[1], c[2], c[3]], layerName: layerNamer(scene, st.sceneLayers(MODEL_SPACE)) };
+  if (clip) L.clipPx = [width / 2 - (cx - c[0]) * k, height / 2 - (c[3] - cy) * k, width / 2 + (c[2] - cx) * k, height / 2 + (cy - c[1]) * k];
   page.layers.push(...xrefLayers(st, L, opt), L);
   return page;
 }
 
-/** 배치를 용지 크기 그대로(1:1) */
-export function layoutPage(st: DocState, space: string, unitsPerMm: number, opt: PageOptions): Page | null {
+/**
+ * 배치를 쪽으로. view가 없으면 배치 용지 그대로(1:1), 있으면 그 영역·축척·자리(대화상자 설정)로 그리고 영역 밖은 자른다.
+ * 그리는 순서는 AutoCAD 기본처럼 도면 공간 먼저, 그 위에 뷰포트(paperspaceLast면 반대)
+ */
+export function layoutPage(st: DocState, space: string, unitsPerMm: number, opt: PageOptions, view?: LayoutPlotView): Page | null {
   const scene = st.scenes.get(space);
   const lay = st.layoutFor(space);
   if (!lay) return null;
   const paper = paperInfo(lay, scene?.bounds ?? null);
-  const pw = paper.maxX - paper.minX;
-  const ph = paper.maxY - paper.minY;
-  // 용지 1단위 = mmPerUnit mm
-  const k = paper.mmPerUnit * unitsPerMm;
-  const page: Page = { width: pw * k, height: ph * k, background: 0xffffff, lwScale: unitsPerMm, layers: [] };
+  // 도면 공간 (x, y) → 출력 ((x − X0)·k + offX, (Y1 − y)·k + offY)
+  const k = view ? view.k : paper.mmPerUnit * unitsPerMm;
+  const X0 = view ? view.region[0] : paper.minX;
+  const Y1 = view ? view.region[3] : paper.maxY;
+  const offX = view?.offX ?? 0;
+  const offY = view?.offY ?? 0;
+  const tx = (x: number) => (x - X0) * k + offX;
+  const ty = (y: number) => (Y1 - y) * k + offY;
+  const width = view ? view.width : (paper.maxX - paper.minX) * k;
+  const height = view ? view.height : (paper.maxY - paper.minY) * k;
+  const page: Page = { width, height, background: 0xffffff, lwScale: unitsPerMm * (view?.lwFactor ?? 1), layers: [], viewed: !!view, transparency: !!opt.transparency };
+  // 플롯 영역(출력 좌표)
+  const area: [number, number, number, number] | null = view ? [offX, offY, offX + (view.region[2] - view.region[0]) * k, offY + (view.region[3] - view.region[1]) * k] : null;
+  const vpLayers: Page['layers'] = [];
   if (st.scenes.has(MODEL_SPACE)) {
     for (const vp of layoutViewports(st.doc, lay)) {
       const vx = viewportXf(st.doc, vp);
@@ -190,31 +250,74 @@ export function layoutPage(st: DocState, space: string, unitsPerMm: number, opt:
       const kk = vx.k * k;
       const c = Math.cos(-vx.twist);
       const s = Math.sin(-vx.twist);
-      const cx = (vp.center.x - paper.minX) * k;
-      const cy = (paper.maxY - vp.center.y) * k;
+      const cx = tx(vp.center.x);
+      const cy = ty(vp.center.y);
       const m: Affine = [kk * c, -kk * s, -kk * s, -kk * c, 0, 0];
       m[4] = cx - (m[0] * vx.refX + m[2] * vx.refY);
       m[5] = cy - (m[1] * vx.refX + m[3] * vx.refY);
       const hw = vp.width / 2;
       const hh = vp.height / 2;
       const rad = Math.hypot(hw, hh) / vx.k;
+      let clipPx: [number, number, number, number] = [cx - hw * k, cy - hh * k, cx + hw * k, cy + hh * k];
+      if (area) clipPx = meet(clipPx, area);
+      if (clipPx[2] <= clipPx[0] || clipPx[3] <= clipPx[1]) continue;
+      // 다각형·원 뷰포트 경계(출력 좌표). 플롯 영역으로 자를 때는 영역과 겹친 부분
+      let clipPoly = vx.clip ? vx.clip.map((v, i) => (i & 1 ? ty(v) : tx(v))) : undefined;
+      if (clipPoly && area) clipPoly = clipPolygonToRect(clipPoly, area);
       const vl: Page['layers'][number] = {
         scene: model,
         m,
         styles: model.styleData(vm.layers, opt.plotStyle || opt.ctb ? 'vp-plot' : 'vp', false, 0xffffff, opt.lineweights, frozen.size ? frozen : undefined, opt.plotStyle, opt.ctb),
-        clipPx: [cx - hw * k, cy - hh * k, cx + hw * k, cy + hh * k],
+        clipPx,
         clipWorld: [vx.refX - rad, vx.refY - rad, vx.refX + rad, vx.refY + rad],
-        // 다각형·원 뷰포트 경계(출력 좌표)
-        clipPoly: vx.clip ? vx.clip.map((v, i) => (i & 1 ? (paper.maxY - v) * k : (v - paper.minX) * k)) : undefined,
+        clipPoly: clipPoly && clipPoly.length >= 6 ? clipPoly : undefined,
+        layerName: layerNamer(model, vm.layers),
       };
-      page.layers.push(...xrefLayers(st, vl, opt, vx.frozen), vl);
+      vpLayers.push(...xrefLayers(st, vl, opt, vx.frozen), vl);
     }
   }
+  const paperLayers: Page['layers'] = [];
   if (scene) {
-    const pl: Page['layers'][number] = { scene, m: [k, 0, 0, -k, -paper.minX * k, paper.maxY * k], styles: scene.styleData(st.sceneLayers(space), opt.plotStyle || opt.ctb ? 'paper-plot' : 'paper', false, 0xffffff, opt.lineweights, undefined, opt.plotStyle, opt.ctb) };
-    page.layers.push(...xrefLayers(st, pl, opt), pl);
+    const pl: Page['layers'][number] = {
+      scene,
+      m: [k, 0, 0, -k, -X0 * k + offX, Y1 * k + offY],
+      styles: scene.styleData(st.sceneLayers(space), opt.plotStyle || opt.ctb ? 'paper-plot' : 'paper', false, 0xffffff, opt.lineweights, undefined, opt.plotStyle, opt.ctb),
+      layerName: layerNamer(scene, st.sceneLayers(space)),
+    };
+    if (area) {
+      pl.clipPx = area;
+      if (view) pl.clipWorld = [view.region[0], view.region[1], view.region[2], view.region[3]];
+    }
+    paperLayers.push(...xrefLayers(st, pl, opt), pl);
   }
+  page.layers.push(...(opt.paperspaceLast ? [...vpLayers, ...paperLayers] : [...paperLayers, ...vpLayers]));
   return page;
+}
+
+/** 다각형(출력 좌표 [x, y, …])을 사각형으로 자른다(서덜랜드-호지먼) */
+function clipPolygonToRect(poly: number[], r: [number, number, number, number]): number[] {
+  let pts: [number, number][] = [];
+  for (let i = 0; i + 1 < poly.length; i += 2) pts.push([poly[i]!, poly[i + 1]!]);
+  const edges: [(p: [number, number]) => boolean, (a: [number, number], b: [number, number]) => [number, number]][] = [
+    [(p) => p[0] >= r[0], (a, b) => [r[0], a[1] + ((b[1] - a[1]) * (r[0] - a[0])) / (b[0] - a[0])]],
+    [(p) => p[0] <= r[2], (a, b) => [r[2], a[1] + ((b[1] - a[1]) * (r[2] - a[0])) / (b[0] - a[0])]],
+    [(p) => p[1] >= r[1], (a, b) => [a[0] + ((b[0] - a[0]) * (r[1] - a[1])) / (b[1] - a[1]), r[1]]],
+    [(p) => p[1] <= r[3], (a, b) => [a[0] + ((b[0] - a[0]) * (r[3] - a[1])) / (b[1] - a[1]), r[3]]],
+  ];
+  for (const [inside, cross] of edges) {
+    const out: [number, number][] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i]!;
+      const b = pts[(i + 1) % pts.length]!;
+      if (inside(b)) {
+        if (!inside(a)) out.push(cross(a, b));
+        out.push(b);
+      } else if (inside(a)) out.push(cross(a, b));
+    }
+    pts = out;
+    if (!pts.length) break;
+  }
+  return pts.flat();
 }
 
 /** 지금 공간을 출력 페이지로(배치는 용지, 모형은 지금 화면) */
@@ -332,10 +435,12 @@ export function exportPageSvg(page: Page, unit: 'px' | 'mm' = 'mm'): Blob {
     let curKind: 'seg' | 'tri' | '' = '';
     const flush = () => {
       if (!path) return;
+      const a = page.transparency ? Math.min(1, Math.max(0, styles[curStyle * 8 + 3]!)) : 1;
+      const op = a < 0.999 ? ` opacity="${a.toFixed(3)}"` : '';
       if (curKind === 'seg') {
-        const w = Math.max(0.1, styles[curStyle * 8 + 4]! * page.lwScale) || 0.25 * page.lwScale;
-        out.push(`<path d="${path}" fill="none" stroke="${css(styles, curStyle)}" stroke-width="${(unit === 'px' ? 1 : w).toFixed(3)}" stroke-linecap="round"/>`);
-      } else out.push(`<path d="${path}" fill="${css(styles, curStyle)}"/>`);
+        const w = (styles[curStyle * 8 + 4]! > 0 ? styles[curStyle * 8 + 4]! : THIN_MM) * page.lwScale;
+        out.push(`<path d="${path}" fill="none" stroke="${css(styles, curStyle)}" stroke-width="${(unit === 'px' ? 1 : w).toFixed(3)}" stroke-linecap="round"${op}/>`);
+      } else out.push(`<path d="${path}" fill="${css(styles, curStyle)}"${op}/>`);
       path = '';
     };
     walk(
@@ -381,12 +486,61 @@ export async function exportPdf(app: App): Promise<Blob | null> {
 
 export const PT_PER_MM = 72 / 25.4;
 
-/** 페이지 하나의 PDF 그리기 명령 */
-/** PDF 내용 스트림. images에 쓴 이미지 열쇠를 차례로 모은다(/Im0, /Im1 …) */
-export function pdfContent(page: Page, images: string[] = []): string {
+/** PDF 문서 전체가 함께 쓰는 자원: 도면층(선택 내용 그룹), 투명도 그래픽 상태, 검색용 문자 글꼴 */
+export class PdfResources {
+  /** 도면층 이름 → 번호(/OCn) */
+  readonly layers = new Map<string, number>();
+  /** 알파(소수 셋째 자리) → 번호(/GSn) */
+  readonly alphas = new Map<string, number>();
+  /**
+   * (문자, 전진 폭) → [글꼴 번호, 글꼴 안 코드(1~255)]. 같은 문자라도 글꼴마다 폭이 달라 폭별로 코드를 둔다
+   * — PDF 글꼴의 /Widths가 실제 글자 폭이어야 PDF 보기 프로그램이 낱말을 이어 읽는다(글자 사이에 빈칸이 끼지 않게).
+   */
+  readonly chars = new Map<string, [number, number]>();
+  /** 코드 차례의 (문자, 전진 폭) */
+  readonly glyphs: { cp: number; adv?: number }[] = [];
+
+  layer(name: string): number {
+    let n = this.layers.get(name);
+    if (n === undefined) this.layers.set(name, (n = this.layers.size));
+    return n;
+  }
+
+  alpha(a: string): number {
+    let n = this.alphas.get(a);
+    if (n === undefined) this.alphas.set(a, (n = this.alphas.size));
+    return n;
+  }
+
+  char(cp: number, adv?: number): [number, number] {
+    const a = adv !== undefined && Number.isFinite(adv) && adv >= 0 ? Math.round(adv * 1000) / 1000 : undefined;
+    const key = `${cp}:${a ?? ''}`;
+    let c = this.chars.get(key);
+    if (!c) {
+      const i = this.chars.size;
+      this.chars.set(key, (c = [Math.floor(i / 255), (i % 255) + 1]));
+      this.glyphs.push(a !== undefined ? { cp, adv: a } : { cp });
+    }
+    return c;
+  }
+
+  get fontCount(): number {
+    return Math.ceil(this.chars.size / 255);
+  }
+}
+
+/** 선가중치 0·기본값을 출력할 굵기(mm): AutoCAD처럼 가장 가는 선. PDF·SVG·인쇄가 같은 값을 쓴다 */
+const THIN_MM = 0.1;
+
+/**
+ * PDF 내용 스트림. images에 쓴 이미지 열쇠를 차례로 모은다(/Im0, /Im1 …).
+ * res가 있으면 도면층(OCG)·투명도·검색용 숨은 문자를 함께 쓴다(그 자원을 pdfDocument가 문서에 넣는다).
+ */
+export function pdfContent(page: Page, images: string[] = [], res?: PdfResources): string {
   const ops: string[] = [];
   const H = page.height;
   ops.push('1 1 1 rg', `0 0 ${page.width.toFixed(2)} ${H.toFixed(2)} re f`, '1 J 1 j');
+  const chars: { ch: string; m: Affine; d: number; adv?: number }[] = [];
   for (const L of page.layers) {
     const styles = L.styles;
     const visible = (s: number) => styles[s * 8 + 5]! > 0;
@@ -418,11 +572,28 @@ export function pdfContent(page: Page, images: string[] = []): string {
     let cur = -1;
     let kind = '';
     let buf: string[] = [];
+    // 지금 열린 도면층(/OC … BDC)과 투명도
+    let openLayer: number | null = null;
+    let curAlpha = '1.000';
     const color = (s: number) => `${styles[s * 8]!.toFixed(3)} ${styles[s * 8 + 1]!.toFixed(3)} ${styles[s * 8 + 2]!.toFixed(3)}`;
     const flush = () => {
       if (!buf.length) return;
+      if (res) {
+        const name = L.layerName?.(cur);
+        const want = name ? res.layer(name) : null;
+        if (want !== openLayer) {
+          if (openLayer !== null) ops.push('EMC');
+          if (want !== null) ops.push(`/OC /OC${want} BDC`);
+          openLayer = want;
+        }
+        const a = page.transparency ? Math.min(1, Math.max(0, styles[cur * 8 + 3]!)).toFixed(3) : '1.000';
+        if (a !== curAlpha) {
+          ops.push(`/GS${res.alpha(a)} gs`);
+          curAlpha = a;
+        }
+      }
       if (kind === 'seg') {
-        const w = styles[cur * 8 + 4]! > 0 ? styles[cur * 8 + 4]! * page.lwScale : 0.25 * page.lwScale * 0.5;
+        const w = (styles[cur * 8 + 4]! > 0 ? styles[cur * 8 + 4]! : THIN_MM) * page.lwScale;
         ops.push(`${color(cur)} RG ${w.toFixed(3)} w`, ...buf, 'S');
       } else ops.push(`${color(cur)} rg`, ...buf, 'f');
       buf = [];
@@ -433,37 +604,76 @@ export function pdfContent(page: Page, images: string[] = []): string {
       visible,
       {
         seg(x0, y0, x1, y1, s) {
-          if (s !== cur || kind !== 'seg' || buf.length > 4000) {
+          if (s !== cur || kind !== 'seg' || buf.length > 20000) {
             flush();
             cur = s;
             kind = 'seg';
           }
           buf.push(`${x0.toFixed(2)} ${(H - y0).toFixed(2)} m ${x1.toFixed(2)} ${(H - y1).toFixed(2)} l`);
         },
+        // 같은 스타일의 이어진 삼각형(해치·채우기·윤곽 글자)은 한 경로로 칠한다 — 나눠 칠하면 이음매에 가는 흰 선이 보인다
         tri(x0, y0, x1, y1, x2, y2, s) {
-          if (s !== cur || kind !== 'tri' || buf.length > 4000) {
+          if (s !== cur || kind !== 'tri' || buf.length > 400000) {
             flush();
             cur = s;
             kind = 'tri';
           }
           buf.push(`${x0.toFixed(2)} ${(H - y0).toFixed(2)} m ${x1.toFixed(2)} ${(H - y1).toFixed(2)} l ${x2.toFixed(2)} ${(H - y2).toFixed(2)} l h`);
         },
+        char: res
+          ? (ch, m, _s, d, adv) => {
+              void _s;
+              chars.push(adv !== undefined ? { ch, m, d, adv } : { ch, m, d });
+            }
+          : undefined,
       },
       L.clipWorld,
     );
     flush();
+    if (openLayer !== null) ops.push('EMC');
     ops.push('Q');
   }
+  if (res && chars.length) ops.push(...hiddenText(chars, H, res));
   return ops.join('\n');
+}
+
+/**
+ * 검색·복사되는 숨은 문자(글자 그리기 방식 3): 글자마다 그 글리프 자리에 둔다.
+ * 같은 객체의 글자(같은 깊이)끼리 줄 → 줄 안 차례로 놓아 읽는 순서를 맞춘다
+ */
+function hiddenText(chars: { ch: string; m: Affine; d: number; adv?: number }[], H: number, res: PdfResources): string[] {
+  const items = chars.map((c) => {
+    const ux = Math.hypot(c.m[0], c.m[1]) || 1;
+    const dx = c.m[0] / ux;
+    const dy = c.m[1] / ux;
+    // 줄 방향으로의 위치와 줄에 수직인 위치(출력 좌표는 y가 아래로)
+    return { ...c, along: c.m[4] * dx + c.m[5] * dy, across: -c.m[4] * dy + c.m[5] * dx, h: Math.hypot(c.m[2], c.m[3]) || 1 };
+  });
+  items.sort((a, b) => a.d - b.d || (Math.abs(a.across - b.across) > a.h * 0.5 ? a.across - b.across : a.along - b.along));
+  const out = ['BT', '3 Tr'];
+  let font = -1;
+  for (const it of items) {
+    const cp = it.ch.codePointAt(0)!;
+    const [f, code] = res.char(cp, it.adv);
+    if (f !== font) {
+      out.push(`/T${f} 1 Tf`);
+      font = f;
+    }
+    const m = it.m;
+    out.push(`${m[0].toFixed(4)} ${(-m[1]).toFixed(4)} ${m[2].toFixed(4)} ${(-m[3]).toFixed(4)} ${m[4].toFixed(2)} ${(H - m[5]).toFixed(2)} Tm <${code.toString(16).padStart(2, '0')}> Tj`);
+  }
+  out.push('ET');
+  return out;
 }
 
 /** 여러 페이지 PDF */
 export async function pdfDocument(pages: Page[], title: string): Promise<Blob> {
   const out: { w: number; h: number; content: Uint8Array; flate: boolean; images: string[] }[] = [];
   const keys: string[] = [];
+  const res = new PdfResources();
   for (const p of pages) {
     const used: string[] = [];
-    const raw = new TextEncoder().encode(pdfContent(p, used));
+    const raw = new TextEncoder().encode(pdfContent(p, used, res));
     const z = await deflate(raw);
     for (const k of used) if (!keys.includes(k)) keys.push(k);
     out.push({ w: p.width, h: p.height, content: z ?? raw, flate: !!z, images: used });
@@ -476,7 +686,7 @@ export async function pdfDocument(pages: Page[], title: string): Promise<Blob> {
     const alpha = px.alpha ? await deflate(px.alpha) : null;
     xobjs.push({ key: k, w: px.w, h: px.h, rgb: rgb ?? px.rgb, alpha: px.alpha ? (alpha ?? px.alpha) : null, flate: !!rgb });
   }
-  return buildPdf(out, title, xobjs);
+  return buildPdf(out, title, xobjs, res);
 }
 
 interface PdfImage {
@@ -495,7 +705,15 @@ async function deflate(data: Uint8Array): Promise<Uint8Array | null> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-function buildPdf(pages: { w: number; h: number; content: Uint8Array; flate: boolean; images: string[] }[], title: string, images: PdfImage[] = []): Blob {
+/** PDF 글자(문자열) — 아스키는 그대로, 아니면 UTF-16BE 16진 */
+function pdfText(t: string): string {
+  if (/^[\x20-\x7e]*$/.test(t)) return `(${t.replace(/[()\\]/g, (c) => '\\' + c)})`;
+  let hex = 'FEFF';
+  for (let i = 0; i < t.length; i++) hex += t.charCodeAt(i).toString(16).padStart(4, '0');
+  return `<${hex}>`;
+}
+
+function buildPdf(pages: { w: number; h: number; content: Uint8Array; flate: boolean; images: string[] }[], title: string, images: PdfImage[] = [], res = new PdfResources()): Blob {
   const enc = new TextEncoder();
   const parts: Uint8Array[] = [];
   const offsets: number[] = [];
@@ -512,24 +730,37 @@ function buildPdf(pages: { w: number; h: number; content: Uint8Array; flate: boo
     else body();
     add('\nendobj\n');
   };
-  const t = title.replace(/[()\\]/g, '');
-  // 1 카탈로그, 2 페이지 목록, 3 정보, 4부터 페이지·내용 쌍
+  // 1 카탈로그, 2 페이지 목록, 3 정보, 4부터 페이지·내용 쌍, 그다음 이미지·도면층·그래픽 상태·글꼴
   const n = pages.length;
   const pageObj = (i: number) => 4 + i * 2;
-  add('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
-  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
-  obj(2, `<< /Type /Pages /Kids [${pages.map((_, i) => `${pageObj(i)} 0 R`).join(' ')}] /Count ${n} >>`);
-  obj(3, `<< /Producer (OpenCAD 2D Viewer) /Title (${/^[\x20-\x7e]*$/.test(t) ? t : 'drawing'}) >>`);
-  // 이미지 객체 번호: 페이지 다음부터(이미지마다 본문, 알파가 있으면 SMask 하나 더)
-  const imgObj = new Map<string, number>();
   let next = 4 + n * 2;
+  const imgObj = new Map<string, number>();
   for (const im of images) {
     imgObj.set(im.key, next);
     next += im.alpha ? 2 : 1;
   }
+  const layerNames = [...res.layers.keys()];
+  const ocgObj = layerNames.map(() => next++);
+  const alphaList = [...res.alphas.keys()];
+  const gsObj = alphaList.map(() => next++);
+  // 글꼴마다 글꼴·ToUnicode·빈 글리프 하나
+  const fontObj: number[] = [];
+  for (let f = 0; f < res.fontCount; f++) {
+    fontObj.push(next);
+    next += 3;
+  }
+  const props = layerNames.map((_, i) => `/OC${i} ${ocgObj[i]} 0 R`).join(' ');
+  const gstates = alphaList.map((_, i) => `/GS${i} ${gsObj[i]} 0 R`).join(' ');
+  const fonts = fontObj.map((o, i) => `/T${i} ${o} 0 R`).join(' ');
+  add('%PDF-1.5\n%\xE2\xE3\xCF\xD3\n');
+  const ocProps = layerNames.length ? ` /OCProperties << /OCGs [${ocgObj.map((o) => `${o} 0 R`).join(' ')}] /D << /Order [${ocgObj.map((o) => `${o} 0 R`).join(' ')}] /ON [${ocgObj.map((o) => `${o} 0 R`).join(' ')}] >> >>` : '';
+  obj(1, `<< /Type /Catalog /Pages 2 0 R${ocProps} >>`);
+  obj(2, `<< /Type /Pages /Kids [${pages.map((_, i) => `${pageObj(i)} 0 R`).join(' ')}] /Count ${n} >>`);
+  obj(3, `<< /Producer (OpenCAD DWG DXF) /Title ${pdfText(title || 'drawing')} >>`);
   pages.forEach((p, i) => {
     const xo = p.images.map((k, j) => `/Im${j} ${imgObj.get(k)} 0 R`).join(' ');
-    obj(pageObj(i), `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${p.w.toFixed(2)} ${p.h.toFixed(2)}] /Contents ${pageObj(i) + 1} 0 R /Resources << ${xo ? `/XObject << ${xo} >>` : ''} >> >>`);
+    const resources = [xo ? `/XObject << ${xo} >>` : '', props ? `/Properties << ${props} >>` : '', gstates ? `/ExtGState << ${gstates} >>` : '', fonts ? `/Font << ${fonts} >>` : ''].filter(Boolean).join(' ');
+    obj(pageObj(i), `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${p.w.toFixed(2)} ${p.h.toFixed(2)}] /Contents ${pageObj(i) + 1} 0 R /Resources << ${resources} >> >>`);
     obj(pageObj(i) + 1, () => {
       add(`<< /Length ${p.content.length}${p.flate ? ' /Filter /FlateDecode' : ''} >>\nstream\n`);
       add(p.content);
@@ -551,6 +782,50 @@ function buildPdf(pages: { w: number; h: number; content: Uint8Array; flate: boo
         add('\nendstream');
       });
   }
+  layerNames.forEach((name, i) => obj(ocgObj[i]!, `<< /Type /OCG /Name ${pdfText(name)} >>`));
+  alphaList.forEach((a, i) => obj(gsObj[i]!, `<< /Type /ExtGState /ca ${a} /CA ${a} >>`));
+  // 검색용 글꼴(Type3, 빈 글리프 — 문자 그리기 방식 3이라 보이지 않는다). 글꼴마다 255자.
+  // 코드 → (문자, 전진 폭)은 들어온 차례로 글꼴마다 255개씩. /Widths는 글리프의 실제 전진 폭(문자 높이 단위 — Tm이 글리프 축이라 그대로)
+  const byFont: { cp: number; adv?: number }[][] = [];
+  res.glyphs.forEach((g, i) => ((byFont[Math.floor(i / 255)] ??= [])[(i % 255) + 1] = g));
+  fontObj.forEach((o, f) => {
+    const codes = byFont[f] ?? [];
+    const last = codes.length - 1;
+    const names = [];
+    for (let c = 1; c <= last; c++) names.push(`/g${c}`);
+    const widths = [];
+    for (let c = 1; c <= last; c++) {
+      const g = codes[c];
+      widths.push(g?.adv !== undefined ? +g.adv.toFixed(3) : g && g.cp >= 0x1100 ? 1 : 0.6);
+    }
+    obj(o, `<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1 1] /FontMatrix [1 0 0 1 0 0] /CharProcs << ${names.map((g) => `${g} ${o + 2} 0 R`).join(' ')} >> /Encoding << /Type /Encoding /Differences [1 ${names.join(' ')}] >> /FirstChar 1 /LastChar ${last} /Widths [${widths.join(' ')}] /ToUnicode ${o + 1} 0 R /Resources << >> >>`);
+    const map: string[] = [];
+    for (let c = 1; c <= last; c++) {
+      const cp = codes[c]?.cp;
+      if (cp === undefined) continue;
+      let u = '';
+      for (const unit of String.fromCodePoint(cp)) for (let k = 0; k < unit.length; k++) u += unit.charCodeAt(k).toString(16).padStart(4, '0');
+      map.push(`<${c.toString(16).padStart(2, '0')}> <${u}>`);
+    }
+    const cmap = ['/CIDInit /ProcSet findresource begin', '12 dict begin', 'begincmap', '/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def', '/CMapName /OpenCAD-UCS def', '/CMapType 2 def', '1 begincodespacerange', '<01> <FF>', 'endcodespacerange'];
+    for (let i = 0; i < map.length; i += 100) {
+      const chunk = map.slice(i, i + 100);
+      cmap.push(`${chunk.length} beginbfchar`, ...chunk, 'endbfchar');
+    }
+    cmap.push('endcmap', 'CMapName currentdict /CMap defineresource pop', 'end', 'end');
+    const cm = enc.encode(cmap.join('\n'));
+    obj(o + 1, () => {
+      add(`<< /Length ${cm.length} >>\nstream\n`);
+      add(cm);
+      add('\nendstream');
+    });
+    const glyph = enc.encode('0 0 d0');
+    obj(o + 2, () => {
+      add(`<< /Length ${glyph.length} >>\nstream\n`);
+      add(glyph);
+      add('\nendstream');
+    });
+  });
   const total = next;
   const xref = pos;
   add(`xref\n0 ${total}\n0000000000 65535 f \n`);

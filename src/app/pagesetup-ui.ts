@@ -41,6 +41,12 @@ export interface PageForm {
   lineweights: boolean;
   /** 선가중치 축척(배치) */
   scaleLineweights: boolean;
+  /** 용지 단위(축척 "a:b" = 용지 a(mm·인치) : 도면 단위 b, AutoCAD와 같다) */
+  paperUnits: 'mm' | 'in';
+  /** 투명도 플롯(기본 끔, AutoCAD와 같다) */
+  plotTransparency: boolean;
+  /** 도면 공간을 나중에 플롯(끄면 도면 공간 먼저, 그 위에 뷰포트) */
+  paperspaceLast: boolean;
 }
 
 /** DXF 75 표준 축척 번호 → "용지:단위"(미터·비율 축척만) */
@@ -82,6 +88,9 @@ export function pageFormOf(p: PageSettings, model: boolean): PageForm {
     centered: (p.flags & 4) !== 0,
     lineweights: (p.flags & 128) !== 0 || (p.flags & 32) !== 0,
     scaleLineweights: (p.flags & 64) !== 0,
+    paperUnits: p.paperUnits === 0 ? 'in' : 'mm',
+    plotTransparency: false,
+    paperspaceLast: (p.flags & 512) !== 0,
   };
 }
 
@@ -95,7 +104,6 @@ export function pageSettingsOf(base: PageSettings, v: PageForm, model: boolean):
     p.paperName = mediaName(v.paper, w, hgt);
     p.paperWidth = w;
     p.paperHeight = hgt;
-    p.paperUnits = /^A\d$/.test(v.paper) ? 1 : (p.paperUnits ?? 1);
     p.rotation = v.upsideDown ? 2 : 0;
   } else {
     const was = isLandscapeOf(base);
@@ -103,14 +111,16 @@ export function pageSettingsOf(base: PageSettings, v: PageForm, model: boolean):
     if (v.landscape !== was) r ^= 1;
     p.rotation = r | (v.upsideDown ? 2 : 0);
   }
+  p.paperUnits = v.paperUnits === 'in' ? 0 : 1;
   p.styleSheet = v.styleSheet;
   p.plotType = AREA_TYPE[v.area];
   if (v.area === 'window' && v.window) {
     p.windowMin = { x: v.window[0], y: v.window[1] };
     p.windowMax = { x: v.window[2], y: v.window[3] };
   }
-  let flags = p.flags & ~(4 | 16 | 32 | 64 | 128 | 1024);
+  let flags = p.flags & ~(4 | 16 | 32 | 64 | 128 | 512 | 1024);
   if (model) flags |= 1024;
+  if (v.paperspaceLast && !model) flags |= 512;
   if (v.centered) flags |= 4;
   if (v.lineweights) flags |= 128;
   if (v.scaleLineweights) flags |= 64;
@@ -247,8 +257,30 @@ export interface PageDialogResult {
 }
 
 /** 페이지 설정 칸들(PLOT 대화상자도 쓴다). read로 지금 칸 값을 읽는다 */
-export function pageFields(v: PageForm, model: boolean): { el: HTMLElement; read(): PageForm; set(f: PageForm): void; onWindow(f: () => void): void } {
-  const paper = selectIn([...(v.paper === 'KEEP' ? [{ value: 'KEEP', label: '지금 용지' }] : []), ...PAPERS.map((x) => ({ value: x.key, label: x.label }))], v.paper, '용지 크기');
+/** 도면 단위 1이 몇 mm인지(INSUNITS, 0이면 null) */
+function drawingUnitMm(insunits: number): number | null {
+  const t: Record<number, number> = { 1: 25.4, 2: 304.8, 4: 1, 5: 10, 6: 1000, 7: 1e6, 9: 0.0254, 10: 914.4, 14: 100 };
+  return t[insunits] ?? null;
+}
+
+const UNIT_NAMES: Record<number, string> = { 1: '인치', 2: '피트', 4: 'mm', 5: 'cm', 6: 'm', 7: 'km', 9: '밀', 10: '야드', 14: 'dm' };
+
+/** 축척이 실제 크기로 몇 대 몇인지(도면 단위를 알 때). 예: m 도면에 1:100(mm) → 실제 1:0.1 */
+export function realScaleNote(scale: string, paperUnits: 'mm' | 'in', insunits: number): string {
+  const du = drawingUnitMm(insunits);
+  if (scale === 'fit' || !du) return '';
+  const [a, b] = scale.split(':').map(Number);
+  if (!(a! > 0 && b! > 0)) return '';
+  // 용지 mm / 실제 mm
+  const r = ((paperUnits === 'in' ? 25.4 : 1) * a!) / (b! * du);
+  const txt = r >= 1 ? `${+r.toPrecision(6)}:1` : `1:${+(1 / r).toPrecision(6)}`;
+  return `도면 단위가 ${UNIT_NAMES[insunits] ?? insunits}이므로 실제 크기 기준 ${txt}`;
+}
+
+/** keepLabel: 목록에 없는 지금 용지를 그대로 쓰는 항목의 이름(없으면 v.paper가 'KEEP'일 때만 "지금 용지") */
+export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?: string): { el: HTMLElement; read(): PageForm; set(f: PageForm): void; onWindow(f: () => void): void } {
+  const keep = keepLabel ?? (v.paper === 'KEEP' ? '지금 용지' : undefined);
+  const paper = selectIn([...(keep ? [{ value: 'KEEP', label: keep }] : []), ...PAPERS.map((x) => ({ value: x.key, label: x.label }))], v.paper, '용지 크기');
   const sheets = [...new Set([...STYLE_SHEETS, ...ctbList().map((t) => t.name), v.styleSheet])];
   const style = selectIn(sheets.map((x) => ({ value: x, label: x || '없음' })), v.styleSheet, '플롯 스타일 테이블');
   const areaOpts = model
@@ -271,9 +303,21 @@ export function pageFields(v: PageForm, model: boolean): { el: HTMLElement; read
   const centered = checkIn(v.centered, '플롯의 중심');
   const ox = numIn(v.offsetX, '간격띄우기 X');
   const oy = numIn(v.offsetY, '간격띄우기 Y');
-  const scale = selectIn([...new Set([...PAGE_SCALES, v.scale])].map((x) => ({ value: x, label: x === 'fit' ? '용지에 맞춤' : `${x} (mm = 단위)` })), v.scale, '축척');
+  const units = selectIn(
+    [
+      { value: 'mm', label: 'mm' },
+      { value: 'in', label: '인치' },
+    ],
+    v.paperUnits,
+    '용지 단위',
+  );
+  const scaleLabel = (x: string, u: string) => (x === 'fit' ? '용지에 맞춤' : `${x} (${u === 'in' ? '인치' : 'mm'} = 도면 단위)`);
+  const scale = selectIn([...new Set([...PAGE_SCALES, v.scale])].map((x) => ({ value: x, label: scaleLabel(x, v.paperUnits) })), v.scale, '축척');
+  const real = h('div', { class: 'mgr-note', 'data-i18n-ui-copy': '' });
   const lw = checkIn(v.lineweights, '객체의 선가중치 플롯');
   const slw = checkIn(v.scaleLineweights, '선가중치 축척');
+  const tr = checkIn(v.plotTransparency, '투명도 플롯');
+  const psl = checkIn(v.paperspaceLast, '도면 공간을 나중에 플롯');
   const land = selectIn(
     [
       { value: 'P', label: '세로(A)' },
@@ -286,17 +330,22 @@ export function pageFields(v: PageForm, model: boolean): { el: HTMLElement; read
   const sync = () => {
     ox.disabled = oy.disabled = centered.checked;
     winBtn.disabled = area.value !== 'window';
+    for (const o of scale.options) o.textContent = scaleLabel(o.value, units.value);
+    real.textContent = realScaleNote(scale.value, units.value as 'mm' | 'in', insunits);
+    real.hidden = !real.textContent;
   };
   centered.addEventListener('change', sync);
   area.addEventListener('change', sync);
+  units.addEventListener('change', sync);
+  scale.addEventListener('change', sync);
   sync();
   const el = h(
     'div',
     { class: 'mgr-dlg' },
     h('div', { class: 'mgr-cols' }, group('용지 크기(Z)', paper), group('플롯 스타일 테이블(펜 지정)(G)', style)),
     h('div', { class: 'mgr-cols' }, group('플롯 영역', row('플롯 대상(W)', area), winBtn), group('도면 방향', land, row('대칭으로 플롯(-)', upside))),
-    h('div', { class: 'mgr-cols' }, group('플롯 간격띄우기(인쇄 가능 영역의 원점 기준)', row('X(mm)', ox), row('Y(mm)', oy), row('플롯의 중심(C)', centered)), group('플롯 축척', row('축척(S)', scale), row('선가중치 축척(L)', slw))),
-    group('플롯 옵션', row('객체의 선가중치 플롯', lw)),
+    h('div', { class: 'mgr-cols' }, group('플롯 간격띄우기(인쇄 가능 영역의 원점 기준)', row('X(mm)', ox), row('Y(mm)', oy), row('플롯의 중심(C)', centered)), group('플롯 축척', row('축척(S)', scale), row('용지 단위(N)', units), real, row('선가중치 축척(L)', slw))),
+    group('플롯 옵션', row('객체의 선가중치 플롯', lw), row('투명도 플롯(T)', tr), ...(model ? [] : [row('도면 공간을 나중에 플롯(J)', psl)])),
   );
   const read = (): PageForm => ({
     paper: paper.value,
@@ -311,14 +360,20 @@ export function pageFields(v: PageForm, model: boolean): { el: HTMLElement; read
     centered: centered.checked,
     lineweights: lw.checked,
     scaleLineweights: slw.checked,
+    paperUnits: units.value === 'in' ? 'in' : 'mm',
+    plotTransparency: tr.checked,
+    paperspaceLast: psl.checked,
   });
   const set = (f: PageForm) => {
-    if (f.paper !== 'KEEP') paper.value = f.paper;
+    if (f.paper !== 'KEEP' || keep) paper.value = f.paper;
     if (![...style.options].some((o) => o.value === f.styleSheet)) style.append(h('option', { value: f.styleSheet }, f.styleSheet || '없음'));
     style.value = f.styleSheet;
     if ([...area.options].some((o) => o.value === f.area)) area.value = f.area;
     win = f.window;
-    if (![...scale.options].some((o) => o.value === f.scale)) scale.append(h('option', { value: f.scale }, `${f.scale} (mm = 단위)`));
+    units.value = f.paperUnits;
+    tr.checked = f.plotTransparency;
+    psl.checked = f.paperspaceLast;
+    if (![...scale.options].some((o) => o.value === f.scale)) scale.append(h('option', { value: f.scale }, scaleLabel(f.scale, f.paperUnits)));
     scale.value = f.scale;
     ox.value = String(f.offsetX);
     oy.value = String(f.offsetY);
@@ -333,8 +388,8 @@ export function pageFields(v: PageForm, model: boolean): { el: HTMLElement; read
 }
 
 /** 페이지 설정 대화상자(취소면 null). 윈도우(O)를 누르면 pickWindow로 닫는다 */
-export async function pageSetupDialog(title: string, v: PageForm, model: boolean, extraNote?: string): Promise<PageDialogResult | null> {
-  const f = pageFields(v, model);
+export async function pageSetupDialog(title: string, v: PageForm, model: boolean, extraNote?: string, insunits = 0): Promise<PageDialogResult | null> {
+  const f = pageFields(v, model, insunits);
   let pick = false;
   let submitNow: (() => void) | null = null;
   f.onWindow(() => {
@@ -368,7 +423,7 @@ export async function askPlotWindow(ctx: CommandContext): Promise<[number, numbe
 async function editPage(ctx: CommandContext, title: string, plot: PageSettings, model: boolean): Promise<PageSettings | null> {
   let form = pageFormOf(plot, model);
   for (;;) {
-    const r = await pageSetupDialog(title, form, model);
+    const r = await pageSetupDialog(title, form, model, undefined, Number(ctx.app.active?.doc.header.get('$INSUNITS') ?? 0));
     if (!r) return null;
     form = r.form;
     if (r.pickWindow) {

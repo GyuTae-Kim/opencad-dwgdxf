@@ -6,7 +6,7 @@
 import type { HatchEntity, HatchPatternLine } from '../core/model';
 import { PATTERNS, createHatch, estimatePatternLines, findPattern, reactorUnlinks } from '../edit/hatch';
 import type { EditOp } from '../edit/session';
-import { HATCH_LINE_LIMIT } from '../render/hatch';
+import { HATCH_CREATE_LIMIT } from '../render/hatch';
 import type { App, CommandContext } from './app';
 import { unlockedOnly } from './layers';
 import { form } from './ui/dom';
@@ -77,7 +77,7 @@ export function rebuildHatch(app: App, h: HatchEntity, e: Edit): HatchEntity | s
       delete q.sources;
       return q;
     });
-  if (estimatePatternLines(n) > HATCH_LINE_LIMIT) return '해치 무늬 축척이 너무 작거나 영역이 너무 큽니다. 축척을 키우십시오.';
+  if (estimatePatternLines(n) > HATCH_CREATE_LIMIT) return '해치 무늬 축척이 너무 작거나 영역이 너무 큽니다. 축척을 키우십시오.';
   return n;
 }
 

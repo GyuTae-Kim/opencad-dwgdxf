@@ -3,11 +3,12 @@
  * PLOT의 "배치에 적용"은 지금 설정을 배치(모형 탭이면 모형)의 페이지 설정으로 도면에 저장한다(명령 취소 한 단계).
  */
 import { ensureLayoutVariants } from './psltscale';
-import { MODEL_SPACE, tableKey } from '../core/model';
+import { type Layout, MODEL_SPACE, tableKey } from '../core/model';
 import type { PlotStyle } from '../render/styles';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
-import { type Page, type PageOptions, PT_PER_MM, baseName, download, exportPageSvg, layoutPage, modelPage, pdfDocument } from './export';
+import { type LayoutPlotView, type Page, type PageOptions, PT_PER_MM, baseName, download, exportPageSvg, layoutPage, modelPage, pdfDocument } from './export';
+import { paperInfo } from './scene';
 import { dialog, h } from './ui/dom';
 import { namedPageSetups } from '../edit/script/pagesetup';
 import { type PageForm, layoutPlotOps, pageFields, pageFormOf, pageSettingsOf } from './pagesetup-ui';
@@ -69,6 +70,18 @@ export interface PlotSettings {
   format: 'pdf' | 'svg';
   margin: number;
   window?: [number, number, number, number];
+  /** 축척 "a:b"의 용지 단위(a mm 또는 a 인치 = 도면 단위 b). 없으면 mm */
+  paperUnits?: 'mm' | 'in';
+  /** 투명도 플롯 */
+  transparency?: boolean;
+  /** 도면 공간을 나중에 플롯(배치) */
+  paperspaceLast?: boolean;
+  /** 선가중치를 플롯 축척에 맞춰 늘이고 줄인다(배치) */
+  scaleLineweights?: boolean;
+  /** 배치 플롯 대상(대화상자의 배치·범위·화면표시·윈도우). 없으면 배치 전체 */
+  area?: 'layout' | 'extents' | 'display' | 'window';
+  /** 배치 플롯에서 배치의 용지를 그대로 쓴다(대화상자 용지가 목록에 없을 때) */
+  keepPaper?: boolean;
 }
 
 /** 문서별 마지막 출력 설정(PLOT·-PLOT이 함께 쓴다) */
@@ -93,10 +106,7 @@ function modelPlotPage(app: App, st: DocState, s: PlotSettings, unitsPerMm: numb
   const rh = Math.max(1e-9, rect[3] - rect[1]);
   let mmPerUnit: number;
   if (s.scale === 'fit') mmPerUnit = Math.min((pw - 2 * s.margin) / rw, (ph - 2 * s.margin) / rh);
-  else {
-    const [a, b] = s.scale.split(':').map(Number);
-    mmPerUnit = (unitMm(st.units.insunits || (st.units.measurement ? 4 : 1)) * a!) / b!;
-  }
+  else mmPerUnit = scaleMmPerUnit(s);
   // 용지 영역 밖은 자른다: 그릴 사각형을 용지에 맞게 넓히거나 줄인다
   const cx = (rect[0] + rect[2]) / 2;
   const cy = (rect[1] + rect[3]) / 2;
@@ -109,19 +119,64 @@ function modelPlotPage(app: App, st: DocState, s: PlotSettings, unitsPerMm: numb
     const ay = rect[1] - s.offset.y / mmPerUnit;
     area = [ax, ay, ax + pw / mmPerUnit, ay + ph / mmPerUnit];
   }
-  return modelPage(st, area, pw * unitsPerMm, ph * unitsPerMm, mmPerUnit * unitsPerMm, unitsPerMm, pageOptions(s));
+  // 플롯 영역 밖(같은 용지 위라도)은 그리지 않는다(AutoCAD와 같다)
+  return modelPage(st, area, pw * unitsPerMm, ph * unitsPerMm, mmPerUnit * unitsPerMm, unitsPerMm, pageOptions(s), true, rect);
+}
+
+/** 고정 축척 "a:b"의 용지 mm / 도면 단위(AutoCAD: a 용지 단위 = b 도면 단위, 도면 단위의 실제 길이(INSUNITS)는 보지 않는다) */
+export function scaleMmPerUnit(s: Pick<PlotSettings, 'scale' | 'paperUnits'>): number {
+  const [a, b] = s.scale.split(':').map(Number);
+  if (!(a! > 0 && b! > 0)) return 1;
+  return ((s.paperUnits === 'in' ? 25.4 : 1) * a!) / b!;
+}
+
+/**
+ * 배치를 대화상자 설정(용지·방향·축척·플롯 대상·간격띄우기)으로 플롯할 때의 보기. 배치의 페이지 설정과 같으면(용지 같음, 1:1, 배치 전체) null
+ * — 배치 그대로 그린다.
+ */
+export function layoutView(app: App, st: DocState, space: string, s: PlotSettings, unitsPerMm: number): LayoutPlotView | null {
+  const lay = st.layoutFor(space);
+  if (!lay) return null;
+  const scene = st.scenes.get(space);
+  const paper = paperInfo(lay, scene?.bounds ?? null);
+  const lw = (paper.maxX - paper.minX) * paper.mmPerUnit;
+  const lh = (paper.maxY - paper.minY) * paper.mmPerUnit;
+  const pp = s.keepPaper ? null : (PAPERS.find((p) => p.key === s.paper) ?? null);
+  // 배치 용지를 그대로 쓸 때도 방향을 바꾸면 돌린다
+  const flip = !pp && s.landscape !== lw >= lh;
+  const pw = pp ? (s.landscape ? pp.h : pp.w) : flip ? lh : lw;
+  const ph = pp ? (s.landscape ? pp.w : pp.h) : flip ? lw : lh;
+  const area = s.area ?? 'layout';
+  const one = s.scale !== 'fit' && Math.abs(scaleMmPerUnit(s) - paper.mmPerUnit) < 1e-9;
+  if (area === 'layout' && one && Math.abs(pw - lw) < 1 && Math.abs(ph - lh) < 1) return null;
+  let region: [number, number, number, number];
+  if (area === 'extents' && scene?.bounds) region = [scene.bounds.minX, scene.bounds.minY, scene.bounds.maxX, scene.bounds.maxY];
+  else if (area === 'window' && s.window) region = s.window;
+  else if (area === 'display' && st.displaySpace === space) region = app.view.visibleWorld();
+  else region = [paper.minX, paper.minY, paper.maxX, paper.maxY];
+  const rw = Math.max(1e-9, region[2] - region[0]);
+  const rh = Math.max(1e-9, region[3] - region[1]);
+  const mmPer = s.scale === 'fit' ? Math.min((pw - 2 * s.margin) / rw, (ph - 2 * s.margin) / rh) : scaleMmPerUnit(s);
+  const k = mmPer * unitsPerMm;
+  const W = pw * unitsPerMm;
+  const H = ph * unitsPerMm;
+  const centered = s.centered !== false;
+  const offX = centered ? (W - rw * k) / 2 : (s.offset?.x ?? 0) * unitsPerMm;
+  const offY = centered ? (H - rh * k) / 2 : H - (s.offset?.y ?? 0) * unitsPerMm - rh * k;
+  return { width: W, height: H, region, k, offX, offY, lwFactor: s.scaleLineweights ? mmPer / paper.mmPerUnit : 1 };
 }
 
 function pageOptions(s: PlotSettings): PageOptions {
   const ctb = ctbByName(s.ctb);
-  return ctb ? { ctb, lineweights: s.lineweights } : { plotStyle: s.plotStyle, lineweights: s.lineweights };
+  const common = { lineweights: s.lineweights, transparency: !!s.transparency, paperspaceLast: !!s.paperspaceLast };
+  return ctb ? { ctb, ...common } : { plotStyle: s.plotStyle, ...common };
 }
 
 /** 설정대로 페이지들을 만든다(배치 장면이 없으면 그려 온다). 플롯 스탬프를 켰으면 각 쪽에 적는다(화면에는 그리지 않는다) */
 export async function plotPages(app: App, st: DocState, s: PlotSettings, unitsPerMm: number): Promise<Page[]> {
   const pages = await drawPages(app, st, s, unitsPerMm);
-  // 배치의 간격띄우기: 용지 위에서 그림 전체를 옮긴다(모형은 modelPlotPage가 영역으로 맞춘다)
-  if ((s.what === 'layout' || s.what === 'layouts') && s.centered === false && s.offset && (s.offset.x || s.offset.y)) for (const p of pages) shiftPage(p, s.offset.x * unitsPerMm, -s.offset.y * unitsPerMm);
+  // 배치의 간격띄우기: 용지 위에서 그림 전체를 옮긴다(모형은 modelPlotPage가, 대화상자 설정으로 그린 배치는 layoutView가 맞춘다)
+  if ((s.what === 'layouts' || (s.what === 'layout' && !pages.some((p) => p.viewed))) && s.centered === false && s.offset && (s.offset.x || s.offset.y)) for (const p of pages) shiftPage(p, s.offset.x * unitsPerMm, -s.offset.y * unitsPerMm);
   if (s.upsideDown) for (const p of pages) turnPage(p);
   if (pages.length && plotStampOn()) await stampPages(app, st, s, pages, unitsPerMm);
   const n = Math.max(1, Math.min(99, Math.round(s.copies ?? 1)));
@@ -171,7 +226,7 @@ async function drawPages(app: App, st: DocState, s: PlotSettings, unitsPerMm: nu
   }
   if (s.what === 'layout' && st.onLayout) {
     await ensureLayoutVariants(app, st, st.displaySpace);
-    const p = layoutPage(st, st.displaySpace, unitsPerMm, opt);
+    const p = layoutPage(st, st.displaySpace, unitsPerMm, opt, layoutView(app, st, st.displaySpace, s, unitsPerMm) ?? undefined);
     if (p) pages.push(p);
     return pages;
   }
@@ -306,6 +361,12 @@ export function plotSettingsOfForm(f: PageForm, model: boolean, allLayouts: bool
     format: device === 'svg' ? 'svg' : 'pdf',
     margin: 5,
     window: f.window,
+    paperUnits: f.paperUnits,
+    transparency: f.plotTransparency,
+    paperspaceLast: f.paperspaceLast,
+    scaleLineweights: f.scaleLineweights,
+    area: model ? undefined : f.area === 'limits' ? 'layout' : f.area,
+    keepPaper: !model && f.paper === 'KEEP' ? true : undefined,
     centered: f.centered,
     offset: { x: f.offsetX, y: f.offsetY },
     upsideDown: f.upsideDown,
@@ -313,17 +374,36 @@ export function plotSettingsOfForm(f: PageForm, model: boolean, allLayouts: bool
   };
 }
 
+/**
+ * PLOT 대화상자의 처음 칸(이전 플롯 → 배치(모형)의 페이지 설정 → 기본값)과 "배치 용지" 항목 이름.
+ * 모형은 목록의 용지로 플롯한다. 배치는 목록에 없는 배치 용지(ARCH D·사용자 크기 등)를 그대로 쓸 수 있다.
+ */
+export function initialPlotForm(layout: Layout | undefined, model: boolean, prev: PlotSettings | undefined, defaults: PageForm): { form: PageForm; keepLabel?: string } {
+  const fromLayout = layout && (!model || layout.plot.pageSetupName || layout.plot.paperWidth > 0) ? pageFormOf(layout.plot, model) : { ...defaults };
+  const keepLabel = !model && layout && fromLayout.paper === 'KEEP' ? `배치 용지(${keepPaperName(layout.plot)})` : undefined;
+  if (fromLayout.paper === 'KEEP' && !keepLabel) fromLayout.paper = defaults.paper;
+  let form: PageForm = prev ? formOfSettings(prev, fromLayout) : fromLayout;
+  if (form.paper === 'KEEP' && !keepLabel) form = { ...form, paper: fromLayout.paper === 'KEEP' ? defaults.paper : fromLayout.paper };
+  if (model && form.area === 'layout') form.area = 'display';
+  if (!model && form.area === 'limits') form.area = 'layout';
+  return { form, keepLabel };
+}
+
 /** 출력 설정 → 플롯 대화상자 칸(이전 플롯) */
 function formOfSettings(s: PlotSettings, base: PageForm): PageForm {
   return {
     ...base,
-    paper: s.paper,
+    paper: s.keepPaper ? 'KEEP' : s.paper,
     landscape: s.landscape,
     scale: s.scale,
     styleSheet: s.ctb ?? (s.plotStyle === 'mono' ? 'monochrome.ctb' : s.plotStyle === 'gray' ? 'Grayscale.ctb' : base.styleSheet),
-    area: s.what === 'extents' ? 'extents' : s.what === 'window' ? 'window' : s.what === 'display' ? 'display' : base.area,
+    area: s.what === 'extents' ? 'extents' : s.what === 'window' ? 'window' : s.what === 'display' ? 'display' : (s.area ?? base.area),
     window: s.window ?? base.window,
     lineweights: s.lineweights,
+    paperUnits: s.paperUnits ?? base.paperUnits,
+    plotTransparency: !!s.transparency,
+    paperspaceLast: s.paperspaceLast ?? base.paperspaceLast,
+    scaleLineweights: s.scaleLineweights ?? base.scaleLineweights,
     centered: s.centered ?? true,
     offsetX: s.offset?.x ?? 0,
     offsetY: s.offset?.y ?? 0,
@@ -377,18 +457,19 @@ async function runPlot(app: App, ctx: CommandContext): Promise<void> {
     centered: true,
     lineweights: true,
     scaleLineweights: false,
+    paperUnits: metric ? 'mm' : 'in',
+    plotTransparency: false,
+    paperspaceLast: false,
   };
-  const fromLayout = layout && (!model || layout.plot.pageSetupName || layout.plot.paperWidth > 0) ? pageFormOf(layout.plot, model) : defaults;
-  if (fromLayout.paper === 'KEEP') fromLayout.paper = defaults.paper;
-  let form: PageForm = prev ? formOfSettings(prev, fromLayout) : fromLayout;
-  if (model && form.area === 'layout') form.area = 'display';
-  if (!model) form.area = 'layout';
+  const init = initialPlotForm(layout ?? undefined, model, prev, defaults);
+  const keepLabel = init.keepLabel;
+  let form = init.form;
   let device: Device = prev?.format === 'svg' ? 'svg' : 'pdf';
   let copies = prev?.copies ?? 1;
   let allLayouts = prev?.what === 'layouts';
   let setupName = '';
   for (;;) {
-    const r = await plotDialog(app, ctx, { form, model, device, copies, allLayouts, setupName, layoutCount, hasPrev: !!prev });
+    const r = await plotDialog(app, ctx, { form, model, device, copies, allLayouts, setupName, layoutCount, hasPrev: !!prev, keepLabel });
     if (!r) return;
     ({ form, device, copies, allLayouts, setupName } = r);
     if (r.action === 'window') {
@@ -464,13 +545,22 @@ interface PlotDialogState {
   setupName: string;
   layoutCount: number;
   hasPrev: boolean;
+  /** 목록에 없는 배치 용지를 그대로 쓰는 항목의 이름(배치에서만) */
+  keepLabel?: string;
+}
+
+/** 목록에 없는 배치 용지의 이름: 매체 이름과 크기(mm) */
+export function keepPaperName(p: { paperName: string; paperWidth: number; paperHeight: number }): string {
+  const size = `${+p.paperWidth.toFixed(1)} × ${+p.paperHeight.toFixed(1)} mm`;
+  const name = p.paperName.replace(/_/g, ' ').trim();
+  return name ? `${name}, ${size}` : size;
 }
 
 function plotDialog(app: App, ctx: CommandContext, v: PlotDialogState): Promise<(PlotDialogState & { action: 'plot' | 'window' | 'apply' }) | null> {
   const st = app.active!;
   const named = namedPageSetups(st.doc).items.filter((x) => x.model === v.model);
   const setup = selectIn([{ value: '', label: '<없음>' }, ...named.map((x) => ({ value: x.name, label: x.name }))], v.setupName, '페이지 설정 이름');
-  const fields = pageFields(v.form, v.model);
+  const fields = pageFields(v.form, v.model, Number(st.doc.header.get('$INSUNITS') ?? 0), v.keepLabel);
   setup.addEventListener('change', () => {
     const it = named.find((x) => x.name === setup.value);
     if (it) fields.set(pageFormOf(it.plot, v.model));
@@ -502,7 +592,7 @@ function plotDialog(app: App, ctx: CommandContext, v: PlotDialogState): Promise<
     fields.el,
     !v.model && v.layoutCount > 1 ? row(`모든 배치 플롯(${v.layoutCount}쪽)`, all) : null,
     row('플롯 스탬프 켜기', stamp),
-    h('div', { class: 'mgr-note' }, '파일은 이 컴퓨터에서 만들어 바로 내려받습니다. 플롯하지 않는 도면층과 Defpoints는 빠집니다. 배치는 용지 전체를 플롯합니다.'),
+    h('div', { class: 'mgr-note' }, '파일은 이 컴퓨터에서 만들어 바로 내려받습니다. 플롯하지 않는 도면층과 Defpoints는 빠집니다. 여러 배치를 한 번에 플롯하면 배치마다 그 페이지 설정을 씁니다.'),
   );
   return resultDialog('플롯', body, {
     ok: '확인',

@@ -56,7 +56,7 @@ import { TAU, arcPoints, bulgePoints, ccwSweep, interpolateFitPoints, nurbsPoint
 import { type DashPattern, dashPolyline } from './linetype';
 import { DisplayListBuilder, type DisplayList, type SnapshotView, clipConvex } from './displaylist';
 import { ColorKind, type LayerState, type StyleSpec, STYLE_FLAG_FIELD, STYLE_FLAG_NO_PLOT, StyleTable, WidthKind, hiddenStyleSpec, layerStates, plotStyleNames } from './styles';
-import { HATCH_LINE_LIMIT, hatchLoops, patternSegments, triangulateLoops, userPattern } from './hatch';
+import { HATCH_LINE_LIMIT, clipLoopsToRect, hatchLoops, patternSegments, spreadPattern, triangulateLoops, userPattern } from './hatch';
 import { builtinArrow } from './arrows';
 import { boundaryEdges, contourSegments, openRing, stripOutline, textLineBoxes } from './fillmode';
 import { type Affine, type TextEngine, type TextLayout, affMul } from '../text/layout';
@@ -83,6 +83,8 @@ export interface BuildOptions {
   tolerance?: number;
   /** 해치 무늬 선 상한 */
   hatchLineLimit?: number;
+  /** 해치 무늬를 이 영역(월드 [x0, y0, x1, y1]) 안만 그린다(확대한 세부 장면 — 촘촘한 해치를 원래 간격으로) */
+  hatchRegion?: [number, number, number, number];
   /** 주석 축척 이름(주석 객체를 그 축척의 표현으로 그린다). 없으면 공간에 맞게(모형 CANNOSCALE, 배치 1:1), null이면 고르지 않는다 */
   annoScale?: string | null;
   /** ANNOALLVISIBLE(0이면 그 축척을 지원하지 않는 주석 객체를 숨긴다). 없으면 그 탭의 값 */
@@ -1938,10 +1940,35 @@ export class SceneBuilder {
     }
     let lines = e.patternLines;
     if (!lines.length) lines = userPattern(e);
-    const segs = patternSegments(lines, loops, this.opt.hatchLineLimit ?? HATCH_LINE_LIMIT);
+    const limit = this.opt.hatchLineLimit ?? HATCH_LINE_LIMIT;
+    // 확대해 보이는 영역만 다시 그릴 때(세부 장면)는 그 영역 안의 무늬만
+    let fillLoops = loops;
+    const region = this.opt.hatchRegion;
+    if (region) {
+      const inv = invert2d(m);
+      if (inv) {
+        const xs: number[] = [];
+        const ys: number[] = [];
+        for (const [x, y] of [
+          [region[0], region[1]],
+          [region[2], region[1]],
+          [region[2], region[3]],
+          [region[0], region[3]],
+        ] as const) {
+          xs.push(inv[0] * x + inv[2] * y + inv[4]);
+          ys.push(inv[1] * x + inv[3] * y + inv[5]);
+        }
+        fillLoops = clipLoopsToRect(loops, [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+        if (!fillLoops.length) return;
+      }
+    }
+    let segs = patternSegments(lines, fillLoops, limit);
     if (!segs) {
+      // 너무 촘촘하면(멀리서 보거나 아주 넓은 해치) 경계와 성긴 무늬로. 확대하면 세부 장면이 원래 간격으로 다시 그린다
       this.warnInc('hatch.pattern_truncated');
-      return;
+      for (const l of loops) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
+      for (let f = 2; f <= 4096 && !segs; f *= 2) segs = patternSegments(spreadPattern(lines, f), fillLoops, limit);
+      if (!segs) return;
     }
     const w = this.xf(m, segs, z);
     for (let i = 0; i + 3 < w.length; i += 4) this.out.segment(w[i]!, w[i + 1]!, w[i + 2]!, w[i + 3]!, r.style);
@@ -2264,3 +2291,20 @@ export function buildSpace(doc: CadDocument, blockName: string, opt: BuildOption
   return new SceneBuilder(doc, opt).build(blockName);
 }
 
+
+/** 2D 아핀 부분([a, b, c, d, e, f] — x' = a x + c y + e)의 역. 4×4 행렬 m에서 */
+function invert2d(m: Mat): [number, number, number, number, number, number] | null {
+  const a = m[0]!;
+  const c = m[1]!;
+  const e = m[3]!;
+  const b = m[4]!;
+  const d = m[5]!;
+  const f = m[7]!;
+  const det = a * d - b * c;
+  if (Math.abs(det) < 1e-300) return null;
+  const ia = d / det;
+  const ib = -b / det;
+  const ic = -c / det;
+  const id = a / det;
+  return [ia, ib, ic, id, -(ia * e + ic * f), -(ib * e + id * f)];
+}

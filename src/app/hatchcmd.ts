@@ -10,7 +10,7 @@ import type { EditOp } from '../edit/session';
 import { drawOrder, sortentsInsertOp } from '../edit/draworder';
 import { PATTERNS, boundaryFromEntities, createHatch, detectBoundary, estimatePatternLines, findPattern, reactorLinks } from '../edit/hatch';
 import type { IslandStyle } from '../edit/hatch';
-import { HATCH_LINE_LIMIT } from '../render/hatch';
+import { HATCH_CREATE_LIMIT } from '../render/hatch';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { currentProps } from './draw';
@@ -320,7 +320,7 @@ async function runHatch(app: App, ctx: CommandContext, gradient: boolean): Promi
   });
   Object.assign(hatch, { color: props.color, linetype: props.linetype, lineweight: props.lineweight, transparency: props.transparency });
   if (gradient) hatch.gradient = { ...g, color1: { ...g.color1 }, color2: { ...g.color2 } };
-  if (!gradient && estimatePatternLines(hatch) > HATCH_LINE_LIMIT) {
+  if (!gradient && estimatePatternLines(hatch) > HATCH_CREATE_LIMIT) {
     ctx.print('해치 무늬 축척이 너무 작거나 영역이 너무 큽니다. 축척을 키우십시오.', 'err');
     return;
   }

@@ -13,7 +13,7 @@ import { PATTERNS, boundaryFromEntities, createHatch, detectBoundary, estimatePa
 import type { IslandStyle } from '../edit/hatch';
 import { boundaryObjects } from '../edit/geom/bpoly';
 import { matchNameList } from '../edit/layercmd';
-import { HATCH_LINE_LIMIT } from '../render/hatch';
+import { HATCH_CREATE_LIMIT } from '../render/hatch';
 import type { App, CommandContext, Keyword } from './app';
 import { askAngleDeg, askOption, askReal, askWord, askYN, fmt4, matchKeyword } from './dashcmds-ask';
 import { askColor, colorName } from './dashcmds-insert';
@@ -482,7 +482,7 @@ export function registerDashHatchCommands(app: App): void {
           lineweight: props.lineweight,
           transparency: transparency ?? props.transparency,
         });
-        if (!gradient && estimatePatternLines(hatch) > HATCH_LINE_LIMIT) {
+        if (!gradient && estimatePatternLines(hatch) > HATCH_CREATE_LIMIT) {
           ctx.print('해치 무늬 축척이 너무 작거나 영역이 너무 큽니다. 축척을 키우십시오.', 'err');
           return;
         }
