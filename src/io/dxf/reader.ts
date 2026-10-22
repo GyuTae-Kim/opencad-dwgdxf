@@ -13,6 +13,7 @@ import type {
   TableHead,
 } from '../../core/model';
 import { MODEL_SPACE, PAPER_SPACE, createDocument, normalizeHandle, tableKey } from '../../core/model';
+import { attachAcisWires } from '../acis';
 import { CadReadError } from '../../core/errors';
 import { codepageToEncoding } from '../../core/codepage';
 import { finalizeDocument } from '../../core/finalize';
@@ -314,6 +315,8 @@ export function readDxf(data: Uint8Array, options: DxfReadOptions = {}): CadDocu
   }
 
   assignMissingHandles(doc);
+  // ACIS 객체(REGION·3DSOLID …)의 모서리 선: SAT(원본 태그) 또는 SAB(ACDSDATA)
+  attachAcisWires(doc);
 
   if (ctx.unsupported.size) {
     const types = Object.fromEntries(ctx.unsupported);

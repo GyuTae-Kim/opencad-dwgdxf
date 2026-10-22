@@ -45,6 +45,13 @@ export interface Paragraph {
   indentLeft: number;
   indentRight: number;
   tabs: number[];
+  /** 탭 정지마다 종류(l 왼쪽, c 가운데, r 오른쪽 — \pt…의 c·r 머리). 없으면 모두 왼쪽 */
+  tabTypes?: ('l' | 'c' | 'r')[];
+  /** 문단 앞·뒤 간격(\p의 sb·sa, 도면 단위) */
+  spaceBefore?: number;
+  spaceAfter?: number;
+  /** 문단 줄 간격(\p의 sm 배수, se 정확히) */
+  lineSpacing?: { kind: 'multiple' | 'exact'; value: number };
   /** 단 나누기(\N) 다음 문단 */
   columnBreak?: boolean;
 }
@@ -163,6 +170,10 @@ export function parseMText(src: string, opt: ParseOptions): Paragraph[] {
     indentLeft: prev?.indentLeft ?? 0,
     indentRight: prev?.indentRight ?? 0,
     tabs: prev?.tabs ?? [],
+    ...(prev?.tabTypes ? { tabTypes: prev.tabTypes } : {}),
+    ...(prev?.spaceBefore ? { spaceBefore: prev.spaceBefore } : {}),
+    ...(prev?.spaceAfter ? { spaceAfter: prev.spaceAfter } : {}),
+    ...(prev?.lineSpacing ? { lineSpacing: prev.lineSpacing } : {}),
   });
   let para = newPara();
   paragraphs.push(para);
@@ -406,14 +417,26 @@ export function parseMText(src: string, opt: ParseOptions): Paragraph[] {
   return paragraphs;
 }
 
-/** \p 문단 서식: xi첫줄,l왼쪽,r오른쪽,q[lcrjd],t탭 */
+/**
+ * \p 문단 서식: [x]i첫줄,l왼쪽,r오른쪽,q[lcrjd],s(b 앞 간격·a 뒤 간격·m 줄 간격 배수·e 정확한 줄 간격),t탭…(c·r 머리면 가운데·오른쪽 탭).
+ * t 다음은 끝까지 탭 정지 목록이다(쉼표로 나눈 값마다 정지 하나)
+ */
 function applyParagraph(p: Paragraph, arg: string): void {
-  for (const part of arg.split(',')) {
-    const t = part.trim();
+  let a = arg.trim();
+  if (a.startsWith('x')) a = a.slice(1);
+  let inTabs = false;
+  for (const part of a.split(',')) {
+    let t = part.trim();
     if (!t) continue;
-    if (t.startsWith('x')) {
-      applyParagraph(p, t.slice(1));
-      continue;
+    if (t.startsWith('x')) t = t.slice(1);
+    if (inTabs) {
+      const m = /^([cr]?)([-+]?(?:\d+\.?\d*|\.\d+))$/.exec(t);
+      if (m) {
+        p.tabs.push(parseFloat(m[2]!));
+        (p.tabTypes ??= []).push((m[1] || 'l') as 'l' | 'c' | 'r');
+        continue;
+      }
+      inTabs = false;
     }
     const k = t[0];
     const v = t.slice(1);
@@ -421,7 +444,29 @@ function applyParagraph(p: Paragraph, arg: string): void {
     else if (k === 'l') p.indentLeft = parseFloat(v) || 0;
     else if (k === 'r') p.indentRight = parseFloat(v) || 0;
     else if (k === 'q') p.align = { l: 1, c: 2, r: 3, j: 4, d: 4 }[v[0] as 'l'] ?? 0;
-    else if (k === 't') p.tabs = v.split(/[,]/).map(Number).filter(Number.isFinite);
+    else if (k === 's') {
+      const n = parseFloat(v.slice(1));
+      if (!Number.isFinite(n)) continue;
+      if (v[0] === 'b') p.spaceBefore = n;
+      else if (v[0] === 'a') p.spaceAfter = n;
+      else if (v[0] === 'm' && n > 0) p.lineSpacing = { kind: 'multiple', value: n };
+      else if (v[0] === 'e' && n > 0) p.lineSpacing = { kind: 'exact', value: n };
+    } else if (k === 't') {
+      p.tabs = [];
+      p.tabTypes = [];
+      inTabs = true;
+      const m = /^([cr]?)([-+]?(?:\d+\.?\d*|\.\d+))$/.exec(v);
+      if (m) {
+        p.tabs.push(parseFloat(m[2]!));
+        p.tabTypes.push((m[1] || 'l') as 'l' | 'c' | 'r');
+      }
+    }
+  }
+  // 정지는 위치 차례로
+  if (p.tabTypes && p.tabTypes.length === p.tabs.length) {
+    const order = p.tabs.map((_, i) => i).sort((i, j) => p.tabs[i]! - p.tabs[j]!);
+    p.tabs = order.map((i) => p.tabs[i]!);
+    p.tabTypes = order.map((i) => p.tabTypes![i]!);
   }
 }
 

@@ -190,7 +190,7 @@ export function warningText(code: string): string {
     case 'entity.unsupported':
       return '표시하지 않는 객체 종류가 있습니다.';
     case 'entity.not_drawn':
-      return '3D 솔리드·영역·사용자 객체는 이 2D 캐드에서 그리지 않습니다.';
+      return '형상 자료를 풀 수 없는 3D 솔리드·영역과 그림이 없는 사용자 객체는 그리지 않았습니다.';
     case 'entity.failed':
       return '일부 객체를 그리지 못했습니다.';
     case 'block.missing':
@@ -204,7 +204,7 @@ export function warningText(code: string): string {
     case 'shape.unsupported':
       return '도형 파일(SHX)이 없어 쉐이프 객체를 그리지 못했습니다. SHXFONTS로 도형 파일을 불러올 수 있습니다.';
     case 'dimension.generated':
-      return '치수 블록이 없는 치수는 정의점으로 간단히 그렸습니다.';
+      return '치수 블록이 없는 치수는 치수 스타일대로 다시 만들어 그렸습니다(저장한 파일에는 블록을 넣지 않습니다).';
     case 'ole.no_position':
       return 'DWG에서 읽은 OLE 객체(붙여 넣은 표·그림)는 위치를 알 수 없어 그리지 않았습니다. 같은 버전 DWG로 저장하면 그대로 남습니다.';
     case 'ole.frame_only':

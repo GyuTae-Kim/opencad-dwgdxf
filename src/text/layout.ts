@@ -409,8 +409,15 @@ export class TextEngine {
           // 탭 정지(\pt)가 있는 문단: 탭은 다음 정지까지(글머리 기호·번호 목록의 내어쓰기). 정지가 없으면 지금처럼 높이의 4배
           if (it.kind === 'tab' && para.tabs.length) {
             const pos = (cur.first ? para.indentFirst : 0) + para.indentLeft + cur.width;
-            const stop = para.tabs.find((t) => t > pos + 1e-9);
-            it.width = stop !== undefined ? stop - pos : Math.max(h * 0.25, Math.ceil((pos + 1e-9) / (h * 4)) * h * 4 - pos);
+            const si = para.tabs.findIndex((t) => t > pos + 1e-9);
+            const stop = si >= 0 ? para.tabs[si]! : undefined;
+            const type = si >= 0 ? (para.tabTypes?.[si] ?? 'l') : 'l';
+            if (stop !== undefined && type !== 'l') {
+              // 가운데·오른쪽 탭: 다음 탭(또는 문단 끝)까지의 글이 정지에 가운데·오른쪽 끝으로 맞는다
+              let after = 0;
+              for (let q = k + 1; q < items.length && items[q]!.kind !== 'tab'; q++) after += items[q]!.width;
+              it.width = Math.max(0, stop - pos - (type === 'r' ? after : after / 2));
+            } else it.width = stop !== undefined ? stop - pos : Math.max(h * 0.25, Math.ceil((pos + 1e-9) / (h * 4)) * h * 4 - pos);
           }
           cur.items.push(it);
           cur.width += it.width;
@@ -436,7 +443,11 @@ export class TextEngine {
       if (k === 0) y = -l.height;
       else {
         const prevH = p.lineSpacingStyle === 2 ? h : Math.max(h, l.height);
-        y -= 1.667 * factor * prevH;
+        // 문단 줄 간격(\psm 배수·\pse 정확히)이 있으면 그것, 아니면 MTEXT 줄 간격
+        const ls = l.para.lineSpacing;
+        y -= ls ? (ls.kind === 'exact' ? ls.value : 1.667 * ls.value * prevH) : 1.667 * factor * prevH;
+        // 문단 사이 간격(앞 문단의 뒤 간격 + 이 문단의 앞 간격)
+        if (l.first) y -= (lines[k - 1]!.para.spaceAfter ?? 0) + (l.para.spaceBefore ?? 0);
       }
       baselines.push(y);
     }
@@ -444,12 +455,14 @@ export class TextEngine {
     const colCount = p.columns && p.columns.count > 1 ? p.columns.count : 1;
     const colHeight = colCount > 1 ? p.columns!.heights[0] || p.rectHeight || 0 : 0;
     const colOffsets: { dx: number; dy: number }[] = lines.map(() => ({ dx: 0, dy: 0 }));
-    if (colCount > 1 && colHeight > 0) {
+    if (colCount > 1) {
       let c = 0;
       let shift = 0;
       for (let k = 0; k < lines.length; k++) {
         const base = baselines[k]! + shift;
-        if (base < -colHeight && c < colCount - 1 && k > 0) {
+        // 단 높이를 넘거나 단 나누기(\N) 문단이 시작하면 다음 단
+        const brk = lines[k]!.first && lines[k]!.para.columnBreak;
+        if (((colHeight > 0 && base < -colHeight) || brk) && c < colCount - 1 && k > 0) {
           c++;
           shift = -baselines[k]! - lines[k]!.height;
         }
@@ -481,6 +494,13 @@ export class TextEngine {
       let x = indent;
       if (align === 2) x = indent + (boxW - indent - l.para.indentRight - l.width) / 2;
       else if (align === 3) x = boxW - l.para.indentRight - l.width;
+      // 양쪽 정렬(4): 문단의 마지막 줄이 아니면 남는 폭을 낱말 사이 공백에 나눠 준다
+      let spaceExtra = 0;
+      if (align === 4 && W > 0 && lines[k + 1]?.para === l.para) {
+        const gaps = l.items.filter((it) => it.kind === 'space').length;
+        const extra = boxW - indent - l.para.indentRight - l.width;
+        if (gaps && extra > 0) spaceExtra = extra / gaps;
+      }
       x += offX + colOffsets[k]!.dx;
       const base = baselines[k]! + offY + colOffsets[k]!.dy;
       let deco: { st: RunStyle; x0: number; x1: number }[] = [];
@@ -519,8 +539,9 @@ export class TextEngine {
         } else {
           emitItem(it, x, yb);
         }
-        if (it.style.underline || it.style.overline || it.style.strike) deco.push({ st: it.style, x0: x, x1: x + it.width });
-        x += it.width;
+        const adv = it.width + (it.kind === 'space' ? spaceExtra : 0);
+        if (it.style.underline || it.style.overline || it.style.strike) deco.push({ st: it.style, x0: x, x1: x + adv });
+        x += adv;
       }
       for (const d of deco) {
         if (d.st.underline) out.lines.push({ x0: d.x0, y0: base - h * 0.2, x1: d.x1, y1: base - h * 0.2, color: d.st.color });

@@ -1,7 +1,9 @@
 /** 1단계 명령: 보기·조회·도면층·파일 */
 import { type Entity, tableKey } from '../core/model';
 import { entityPath } from '../edit/geom/path';
-import { pathLength, pathSignedArea } from '../edit/geom/curve';
+import { flattenPiece, pathLength, pathSignedArea, pieceSize } from '../edit/geom/curve';
+import { type MassProps, type RegionLoop, massPropsOfGroups, regionGroups, ringLoop, wiresToRings } from '../edit/geom/massprop';
+import { baseName, download } from './export';
 import { formatAngle, formatLength, unitAbbr } from '../core/units';
 import { ccwSweep } from '../geom/curves';
 import type { App, CommandContext, PointResult } from './app';
@@ -193,6 +195,35 @@ export function registerCommands(app: App): void {
       }
     },
   });
+  app.register({
+    name: 'MASSPROP',
+    title: '질량 특성',
+    async run(ctx) {
+      const hs = await ctx.getSelection('객체 선택:');
+      const { groups, skipped } = massGroups(hs.map((h) => app.entity(h)));
+      if (skipped) ctx.print(`영역이나 닫힌 객체가 아닌 ${skipped}개는 뺐습니다(3D 솔리드는 2D에서 잴 수 없습니다).`);
+      const mp = massPropsOfGroups(groups);
+      if (!mp) {
+        ctx.print('잴 영역이 없습니다. 영역(REGION)이나 닫힌 객체를 고르십시오.', 'err');
+        return;
+      }
+      const lines = massPropLines(app, mp);
+      for (const l of lines) ctx.print(l, 'res');
+      const w = await ctx.getPoint('분석 결과를 파일에 쓰시겠습니까? [예(Y)/아니요(N)] <아니요>:', { keywords: [{ key: 'Y', label: '예' }, { key: 'N', label: '아니요' }] });
+      if ('keyword' in w && w.keyword === 'Y') download(new Blob([lines.join('\r\n') + '\r\n'], { type: 'text/plain' }), `${baseName(app.active!.saveName)}.mpr`);
+    },
+  });
+  // ACIS 영역을 만드는 명령: 형상(ACIS 자료)을 새로 써야 해서 아직 하지 않는다 — 무엇을 대신 쓸지 알린다
+  for (const name of ['REGION', 'UNION', 'SUBTRACT', 'INTERSECT']) {
+    app.register({
+      name,
+      aliases: name === 'REGION' ? ['REG'] : name === 'UNION' ? ['UNI'] : name === 'SUBTRACT' ? ['SU'] : ['IN'],
+      title: name === 'REGION' ? '영역' : name === 'UNION' ? '합집합' : name === 'SUBTRACT' ? '차집합' : '교집합',
+      async run(ctx) {
+        ctx.print(`${name}은(는) ACIS 형상(영역)을 새로 만들어야 해서 이 웹 버전에서는 아직 할 수 없습니다. 닫힌 경계는 BOUNDARY(폴리선)로 만들고, 면적·도심·관성 모멘트는 MASSPROP으로 구하십시오. 열린 도면의 영역은 모서리를 그리고 잴 수 있습니다.`, 'err');
+      },
+    });
+  }
   app.register({
     name: 'AREA',
     aliases: ['AA'],
@@ -514,12 +545,83 @@ async function measureAngle(app: App, ctx: CommandContext): Promise<void> {
 /** 객체의 면적·둘레(열린 곡선은 현으로 닫은 면적과 곡선 길이, AutoCAD AREA와 같다). 잴 수 없으면 null */
 export function objectArea(e: Entity): { a: number | null; per: number | null } | null {
   if (e.type === 'HATCH' || e.type === 'MPOLYGON') return { a: hatchArea(e), per: null };
+  if (e.type === 'REGION') {
+    const mp = massPropsOfGroups(regionGroups(e));
+    return mp ? { a: Math.abs(mp.area), per: mp.perimeter } : null;
+  }
   if (e.type === 'XLINE' || e.type === 'RAY') return null;
   const path = entityPath(e);
   if (!path || !path.pieces.length) return null;
   // 직선 하나(LINE 등)는 면적이 없다
   if (path.pieces.length === 1 && path.pieces[0]!.k === 'line' && !path.closed) return null;
   return { a: Math.abs(pathSignedArea(path)), per: pathLength(path) };
+}
+
+/**
+ * MASSPROP이 재는 묶음: REGION은 하나씩(ACIS 모서리의 정확한 곡선, 같은 면의 안쪽 고리만 구멍 — 서로 다른 영역은 AutoCAD처럼 더한다),
+ * 닫힌 객체(원·닫힌 폴리선·타원·닫힌 스플라인)는 함께 하나의 영역으로(안에 든 것은 구멍 — 영역을 만들지 못하는 이 앱의 대신 쓰는 방법)
+ */
+export function massGroups(ents: readonly (Entity | null | undefined)[]): { groups: RegionLoop[][]; skipped: number } {
+  const groups: RegionLoop[][] = [];
+  const curves: RegionLoop[] = [];
+  let skipped = 0;
+  for (const e of ents) {
+    if (e?.type === 'REGION') {
+      const g = regionGroups(e);
+      if (g.length) groups.push(...g);
+      else skipped++;
+      continue;
+    }
+    const r = e ? entityRings(e) : null;
+    if (r) curves.push(...r.map(ringLoop));
+    else skipped++;
+  }
+  if (curves.length) groups.push(curves);
+  return { groups, skipped };
+}
+
+/** MASSPROP·면적이 쓰는 닫힌 고리(REGION은 모서리 선을 이어서, 닫힌 곡선은 잘게 나눠서). 닫히지 않았으면 null */
+export function entityRings(e: Entity): number[][] | null {
+  if (e.type === 'REGION') {
+    const r = wiresToRings(e.wires ?? []);
+    return r.length ? r : null;
+  }
+  const path = entityPath(e);
+  if (!path || !path.pieces.length || !path.closed) return null;
+  let size = 0;
+  for (const p of path.pieces) size = Math.max(size, pieceSize(p));
+  // MASSPROP이 소수 넷째 자리까지 맞게(원 지름 10이면 면적 오차 약 2e-5)
+  const tol = Math.max(size, 1e-9) * 1e-7;
+  const ring: number[] = [];
+  for (const p of path.pieces) {
+    const f = flattenPiece(p, tol);
+    for (let i = 0; i < f.length - 1; i++) ring.push(f[i]!.x, f[i]!.y);
+  }
+  return ring.length >= 6 ? [ring] : null;
+}
+
+/** MASSPROP 보고(AutoCAD 영역 형식) */
+function massPropLines(app: App, mp: MassProps): string[] {
+  const f = (v: number) => L(app, v);
+  const ar = (v: number) => area(app, v);
+  const n = (v: number) => (Math.abs(v) >= 1e6 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(4) : v.toFixed(4));
+  return [
+    '----------------   영역   ----------------',
+    `면적:                    ${ar(Math.abs(mp.area))}`,
+    `둘레:                    ${f(mp.perimeter)}`,
+    `경계 상자:            X: ${f(mp.box[0])}  --  ${f(mp.box[2])}`,
+    `                      Y: ${f(mp.box[1])}  --  ${f(mp.box[3])}`,
+    `도심:                 X: ${f(mp.centroid[0])}`,
+    `                      Y: ${f(mp.centroid[1])}`,
+    `관성 모멘트:          X: ${n(Math.abs(mp.ix))}`,
+    `                      Y: ${n(Math.abs(mp.iy))}`,
+    `관성 곱:             XY: ${n(mp.ixy)}`,
+    `회전 반경:            X: ${f(mp.rx)}`,
+    `                      Y: ${f(mp.ry)}`,
+    '도심 기준 주 모멘트와 X-Y 방향:',
+    `                      I: ${n(Math.abs(mp.principal[0]!.i))} 방향 [${mp.principal[0]!.dir.map((v) => v.toFixed(4)).join(' ')}]`,
+    `                      J: ${n(Math.abs(mp.principal[1]!.i))} 방향 [${mp.principal[1]!.dir.map((v) => v.toFixed(4)).join(' ')}]`,
+  ];
 }
 
 async function measureArea(app: App, ctx: CommandContext): Promise<void> {

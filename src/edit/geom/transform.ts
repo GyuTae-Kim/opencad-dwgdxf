@@ -257,9 +257,12 @@ function transformOne(e: Entity, m: Affine, doc: CadDocument, opt: TransformOpti
     case 'SWEPTSURFACE':
     case 'NURBSURFACE': {
       // ACIS 형상(원본 태그·DWG 본문)은 옮길 수 없다 — 저장하면 제자리로 돌아가므로 변환하지 않는다
-      if ((e.raw && e.raw.length) || e.dwgRaw) return { message: MSG.acis };
+      if ((e.raw && e.raw.length) || e.dwgRaw || e.sat) return { message: MSG.acis };
       const r = cloneEntity(e);
       if (e.wires) r.wires = e.wires.map((w) => w.map((p) => P3(m, p, opt)));
+      // 정확한 곡선은 옮기지 않았으니 버린다(면적은 옮긴 모서리 선으로)
+      delete r.acisCurves;
+      delete r.acisLoops;
       return same(e, r);
     }
     case 'ARCALIGNEDTEXT':

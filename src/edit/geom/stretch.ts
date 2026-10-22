@@ -298,8 +298,12 @@ function partial(e: Entity, inside: (p: Vec2) => boolean, d: Vec2, doc: CadDocum
     case 'REGION':
     case '3DSOLID':
     case 'BODY': {
+      // ACIS 형상(원본 태그·DWG 본문·SAT)은 일부만 늘일 수 없다 — 모서리 선만 바꾸면 저장한 형상과 달라진다(옮기기와 같다)
+      if ((e.raw && e.raw.length) || e.dwgRaw || e.sat) return null;
       const r = cloneEntity(e);
       if (e.wires) r.wires = e.wires.map((w) => w.map((p) => (In(p) ? mv(p, d) : { ...p })));
+      delete r.acisCurves;
+      delete r.acisLoops;
       return { replace: [r] };
     }
     default:

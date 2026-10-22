@@ -52,6 +52,7 @@ import { cmcToCad, encToCad } from '../color';
 import { lineweightFromIndex } from '../lineweight';
 import { R14, R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
 import { hex } from './nonentities';
+import { type AcisShape, decodeSatBytes, sabShape, satShape, setAcisShape } from '../../acis';
 import { readTableCellsOld, readTableContentR24 } from './table';
 import { decodeTableBody } from './tableraw';
 import type { EntCommon, ObjectReader, RawEed } from './reader';
@@ -582,6 +583,25 @@ export function readEntity(or: ObjectReader, names: Names): ParsedEntity {
     case 'SWEPTSURFACE':
     case 'NURBSURFACE': {
       const e: AcisEntity = { ...b, type };
+      // R2000~R2010: 객체 본문의 SAT 자료에서 모서리 선(R2013+는 자료 저장소에서 — build.ts)
+      if (type === 'REGION' || type === '3DSOLID' || type === 'BODY') {
+        const start = r.pos;
+        // R13·R14는 앞의 두 비트 배치가 다를 수 있어 차례로 해 본다
+        for (const skip of or.ver <= R14 ? [2, 1, 0] : [2]) {
+          try {
+            r.pos = start;
+            const got = readAcisWires(r, skip);
+            if (got?.shape.wires.length) {
+              setAcisShape(e, got.shape);
+              // DXF(R2000~R2010)에 그대로 옮길 SAT는 판 4.0 이상만(R13·R14의 판 1.x는 AutoCAD DXF가 쓰지 않는 판이라 와이어로 쓴다)
+              if (got.sat && Number(got.sat.trim().split(/\s+/)[0]) >= 400) e.sat = got.sat;
+              break;
+            }
+          } catch {
+            /* 자료를 풀지 못하면 그리지 않는다(원본 본문은 그대로 남는다) */
+          }
+        }
+      }
       out.entity = e;
       break;
     }
@@ -2086,3 +2106,38 @@ function readUnderlay(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: Under
   return e;
 }
 
+/**
+ * ACIS 객체 본문(ODA 명세 20.4.32 3DSOLID): 비었음 B, 모름 B, 판 BS — 판 1이면 (크기 BL, 감춘 SAT 바이트)… 0으로 끝,
+ * 판 2이면 SAB(끝 표지까지). 모서리 선만 돌려준다
+ */
+function readAcisWires(r: BitReader, lead = 2): { shape: AcisShape; sat?: string } | null {
+  if (lead >= 1 && r.B()) return null;
+  if (lead >= 2) r.B();
+  const version = r.BS();
+  if (version === 1) {
+    const parts: number[] = [];
+    for (let guard = 0; guard < 100000; guard++) {
+      const size = r.BL();
+      if (!size) break;
+      r.checkCount(size, 8);
+      for (let i = 0; i < size; i++) parts.push(r.RC());
+    }
+    if (!parts.length) return null;
+    const sat = decodeSatBytes(Uint8Array.from(parts));
+    return { shape: satShape(sat), sat };
+  }
+  if (version === 2) {
+    // SAB: 끝 표지("End-of-ACIS-data"·"End-of-ASM-data")까지
+    const bytes: number[] = [];
+    const tail = /End\x0e\x02of\x0e[\x03\x04](ACIS|ASM)\x0d\x04data$/;
+    for (let guard = 0; guard < 50000000 && r.pos + 8 <= r.end; guard++) {
+      const c = r.RC();
+      bytes.push(c);
+      // 표지는 "data"로 끝난다: 'a'가 나올 때만 끝 32바이트를 맞춰 본다
+      if (c === 0x61 && tail.test(String.fromCharCode(...bytes.slice(-32)))) break;
+    }
+    const w = sabShape(Uint8Array.from(bytes));
+    return w ? { shape: w } : null;
+  }
+  return null;
+}

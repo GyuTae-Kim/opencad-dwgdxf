@@ -7,6 +7,8 @@
  *   무늬 HATCH → LINE, MLINE → LINE, TOLERANCE → 틀 선 + MTEXT.
  */
 import type {
+  AcisCurve,
+  AcisEntity,
   AttribEntity,
   CadDocument,
   Entity,
@@ -31,12 +33,12 @@ import { builtinArrow } from '../../render/arrows';
 import { hatchLoops, patternSegments, userPattern } from '../../render/hatch';
 import { strokeFace } from '../../text/fonts';
 import { type Affine, affMul, affRotate, affScale, affTranslate, normAngle, norm3, cross3 } from './math';
-import { cloneEntity, freshEntity, inherit, lwVerts, makeSpline, polyVerts } from './path';
+import { cloneEntity, freshEntity, inherit, lwVerts, makeEllipse, makeSpline, polyVerts } from './path';
 import { isNaturalExt, isPlanarExt, ocsToWcs, planProj, planZ, wcsToOcs } from './ocs';
 import { type EditResult, MSG, type TransformOptions } from './types';
 import { mapBlockContents } from './xannot';
 import { metrics, mtextDir } from './xtext';
-import { normalizeNurbs } from './nurbs';
+import { type Nurbs, domain, normalizeNurbs, subNurbs } from './nurbs';
 import { explodeArcText } from '../textools/arctext';
 
 export function explodeEntity(e: Entity, doc: CadDocument): EditResult {
@@ -90,6 +92,15 @@ export function explodeEntity(e: Entity, doc: CadDocument): EditResult {
     case 'REGION':
     case '3DSOLID':
     case 'BODY': {
+      // 원본 ACIS 자료가 있으면 보이는 선 조각으로 바꾸고 원본을 지우지 않는다(형상을 잃는다). REGION은 모서리 곡선을 정확히 알면 AutoCAD처럼
+      // 선·원·호·타원·스플라인으로, 3D 솔리드·바디는 거절한다(면을 영역·바디로 나누려면 ACIS 형상을 새로 만들어야 한다)
+      const acis = !!((e.raw && e.raw.length) || e.dwgRaw || e.sat);
+      if (e.type === 'REGION' && e.acisCurves?.length) {
+        const out = regionCurves(e);
+        if (out) return done(out);
+        if (acis) return { message: MSG.regionExplode };
+      }
+      if (acis) return { message: e.type === 'REGION' ? MSG.regionExplode : MSG.solidExplode };
       const out: Entity[] = [];
       for (const w of e.wires ?? []) for (let i = 1; i < w.length; i++) out.push(line3(e, w[i - 1]!, w[i]!));
       return done(out);
@@ -97,6 +108,67 @@ export function explodeEntity(e: Entity, doc: CadDocument): EditResult {
     default:
       return { message: MSG.cannotExplode };
   }
+}
+
+/**
+ * REGION 모서리의 정확한 곡선 → 선·원·호·타원·스플라인(AutoCAD EXPLODE와 같다). 모든 모서리가 XY 평면(같은 Z)의 알려진 곡선일 때만,
+ * 아니면 null
+ */
+function regionCurves(e: AcisEntity): Entity[] | null {
+  const curves = e.acisCurves ?? [];
+  if (!curves.length || curves.some((c) => !c)) return null;
+  const zs: number[] = [];
+  for (const c of curves as AcisCurve[]) {
+    if (c.k === 'line') zs.push(c.a.z, c.b.z);
+    else if (c.k === 'ell') {
+      if (Math.abs(c.u.z) > 1e-9 * Math.hypot(c.u.x, c.u.y) || Math.abs(c.v.z) > 1e-9 * Math.hypot(c.v.x, c.v.y)) return null;
+      zs.push(c.c.z);
+    } else zs.push(...c.ctrl.map((p) => p.z));
+  }
+  const z = zs[0] ?? 0;
+  if (zs.some((v) => Math.abs(v - z) > 1e-9 * Math.max(1, Math.abs(z)))) return null;
+  const out: Entity[] = [];
+  for (const c of curves as AcisCurve[]) {
+    if (c.k === 'line') {
+      out.push(line3(e, c.a, c.b));
+      continue;
+    }
+    if (c.k === 'ell') {
+      const ul = Math.hypot(c.u.x, c.u.y);
+      const vl = Math.hypot(c.v.x, c.v.y);
+      const dt = c.s1 - c.s0;
+      const full = Math.abs(Math.abs(dt) - 2 * Math.PI) < 1e-9;
+      const circle = Math.abs(ul - vl) <= 1e-9 * Math.max(ul, vl) && Math.abs(c.u.x * c.v.x + c.u.y * c.v.y) <= 1e-9 * ul * vl;
+      if (circle) {
+        const center = { x: c.c.x, y: c.c.y, z };
+        if (full) {
+          out.push({ type: 'CIRCLE', ...inherit(e), center, radius: ul } as Entity);
+          continue;
+        }
+        // 호는 반시계: 매개변수 틀(u × v)이 시계 방향이면 큰 쪽 → 작은 쪽(어느 방향으로 따라가든 같은 점들이다)
+        const at = (t: number) => Math.atan2(c.u.y * Math.cos(t) + c.v.y * Math.sin(t), c.u.x * Math.cos(t) + c.v.x * Math.sin(t));
+        const ccw = c.u.x * c.v.y - c.u.y * c.v.x > 0;
+        const [a0, a1] = ccw ? [at(Math.min(c.s0, c.s1)), at(Math.max(c.s0, c.s1))] : [at(Math.max(c.s0, c.s1)), at(Math.min(c.s0, c.s1))];
+        out.push({ type: 'ARC', ...inherit(e), center, radius: ul, startAngle: normAngle(a0), endAngle: normAngle(a1) } as Entity);
+        continue;
+      }
+      out.push(makeEllipse(e, { k: 'ell', c: { x: c.c.x, y: c.c.y }, u: { x: c.u.x, y: c.u.y }, v: { x: c.v.x, y: c.v.y }, t0: c.s0, dt }, z));
+      continue;
+    }
+    let n: Nurbs = { degree: c.degree, knots: c.knots, ctrl: c.ctrl, ...(c.weights ? { weights: c.weights } : {}) };
+    const [d0, d1] = domain(n);
+    const lo = Math.min(c.s0, c.s1);
+    const hi = Math.max(c.s0, c.s1);
+    const whole = Math.abs(lo - d0) <= 1e-9 * Math.max(1, Math.abs(d1 - d0)) && Math.abs(d1 - hi) <= 1e-9 * Math.max(1, Math.abs(d1 - d0));
+    if (!whole) n = subNurbs(n, lo, hi);
+    let size = 1;
+    for (const p of c.ctrl) size = Math.max(size, Math.abs(p.x), Math.abs(p.y));
+    const p0 = c.ctrl[0]!;
+    const p1 = c.ctrl[c.ctrl.length - 1]!;
+    const closed = whole && Math.hypot(p0.x - p1.x, p0.y - p1.y) < 1e-9 * size;
+    out.push(makeSpline(e, n, closed));
+  }
+  return out;
 }
 
 function line3(src: Entity, a: Vec3, b: Vec3): Entity {

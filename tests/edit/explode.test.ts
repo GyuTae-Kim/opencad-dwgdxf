@@ -14,12 +14,15 @@ import type {
   MLineEntity,
   MeshEntity,
   PolylineEntity,
+  SplineEntity,
   TableEntity,
   TextEntity,
   ToleranceEntity,
 } from '../../src/core/model';
 import { entityDefaults } from '../../src/core/model';
 import { explodeEntity } from '../../src/edit/geom/explode';
+import { satShape, setAcisShape } from '../../src/io/acis';
+import { circlesFaceSat, halfDiscSat, nurbsCircleSat } from './acis-sat';
 import { entityPath } from '../../src/edit/geom/path';
 import { flattenPath, pathNearest, pathSize } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, arc, circle, deg, line, lw, mtext, near, newDoc, poly2d, renders, text } from './helpers';
@@ -361,5 +364,46 @@ describe('explodeEntity — 주석·문자·해치', () => {
     expect(explodeEntity(line(0, 0, 1, 1), doc).message).toBe('이 객체는 분해할 수 없습니다.');
     expect(explodeEntity({ type: 'REGION', ...base('RG') } as Entity, doc).message).toBe('이 객체는 분해할 수 없습니다.');
     expect(explodeEntity(arc(0, 0, 1, 0, 90), doc).message).toBeTruthy();
+  });
+});
+
+describe('ACIS 객체 분해', () => {
+  const doc = newDoc();
+  const reg = (sat: string, raw = true): Entity => {
+    const e = { type: 'REGION', ...base('RG1'), ...(raw ? { sat } : {}) } as Entity;
+    setAcisShape(e as never, satShape(sat));
+    return e;
+  };
+  it('REGION은 모서리 곡선대로 원·선·호·스플라인으로(원본은 지운다)', () => {
+    const c = explodeEntity(reg(circlesFaceSat([[3, 4, 10]])), doc);
+    expect(c.remove).toEqual(['RG1']);
+    expect(c.add!.map((e) => e.type)).toEqual(['CIRCLE']);
+    const ci = c.add![0] as CircleEntity;
+    near(ci.center, P(3, 4));
+    expect(ci.radius).toBeCloseTo(10, 12);
+    const h = explodeEntity(reg(halfDiscSat(5)), doc);
+    expect(h.add!.map((e) => e.type).sort()).toEqual(['ARC', 'LINE']);
+    const a = h.add!.find((e) => e.type === 'ARC') as ArcEntity;
+    expect(a.radius).toBeCloseTo(5, 12);
+    expect(a.startAngle).toBeCloseTo(deg(90), 9);
+    expect(a.endAngle).toBeCloseTo(deg(270), 9);
+    const n = explodeEntity(reg(nurbsCircleSat(10)), doc);
+    expect(n.add!.map((e) => e.type)).toEqual(['SPLINE']);
+    const sp = n.add![0] as SplineEntity;
+    expect(sp.degree).toBe(2);
+    expect(sp.controlPoints.length).toBe(9);
+    expect(sp.flags & 1).toBe(1);
+    renders(doc, [...c.add!, ...h.add!, ...n.add!]);
+  });
+  it('원본 ACIS 자료가 있는 3D 솔리드·곡선을 모르는 영역은 분해하지 않고 알린다(형상을 잃지 않게)', () => {
+    const solid = { type: '3DSOLID', ...base('S1'), sat: 'x', wires: [[P(0, 0), P(1, 0)]] } as Entity;
+    const r = explodeEntity(solid, doc);
+    expect(r.add).toBeUndefined();
+    expect(r.remove).toBeUndefined();
+    expect(r.message).toContain('3D 솔리드·바디는 분해할 수 없습니다');
+    const unknown = { type: 'REGION', ...base('R2'), sat: 'x', wires: [[P(0, 0), P(1, 0)], [P(1, 0), P(0, 0)]], acisCurves: [null, null] } as Entity;
+    expect(explodeEntity(unknown, doc).message).toContain('모서리 곡선을 정확히 알 수 없어');
+    // 원본 자료가 없는 모서리 선만 있으면(편집해 만든 것) 예전처럼 선으로
+    expect(explodeEntity({ type: 'REGION', ...base('R3'), wires: [[P(0, 0), P(1, 0), P(1, 1)]] } as Entity, doc).add!.length).toBe(2);
   });
 });
