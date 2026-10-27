@@ -16,6 +16,7 @@ import { lwVertices } from '../core/lwpoly';
 import { entityPath } from '../edit/geom/path';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, pieceNearest } from '../edit/geom/curve';
 import { commonTangentCurves, tangentNearPick, tangentsFromPoint } from '../edit/geom/tangent';
+import { apparentSnaps } from './snap-app';
 
 export interface SnapPoint {
   x: number;
@@ -239,23 +240,6 @@ function segInter(a: number[], i: number, j: number): Pt | null {
   const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / d;
   const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / d;
   if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9) return null;
-  return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) };
-}
-
-/** 두 선분을 무한히 늘린 직선의 교점(가상 교차점). 나란하면 null */
-export function lineInter(a: number[], i: number, j: number): Pt | null {
-  const x1 = a[i]!;
-  const y1 = a[i + 1]!;
-  const x2 = a[i + 2]!;
-  const y2 = a[i + 3]!;
-  const x3 = a[j]!;
-  const y3 = a[j + 1]!;
-  const x4 = a[j + 2]!;
-  const y4 = a[j + 3]!;
-  const d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-  const l = Math.hypot(x2 - x1, y2 - y1) * Math.hypot(x4 - x3, y4 - y3);
-  if (l < 1e-24 || Math.abs(d) < 1e-9 * l) return null;
-  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / d;
   return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) };
 }
 
@@ -762,14 +746,8 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
     }
   }
   if (modes.has('app')) {
-    // 가상 교차점: 근처 선분을 늘려 만나는 점(조준창의 4배 안의 선분끼리, 교점은 조준창 안)
-    const segs = picker.segmentsNear(p.x, p.y, aperture * 4, 200);
-    const n = segs.length / 4;
-    for (let i = 0; i < n; i++)
-      for (let j = i + 1; j < n; j++) {
-        const q = lineInter(segs, i * 4, j * 4);
-        if (q) consider({ ...q, kind: 'app' });
-      }
+    // 가상 교차점: 근처 객체의 곡선을 늘린 것(선 → 무한선, 호 → 원, 타원호 → 타원)끼리의 정확한 교점(snap-app.ts)
+    for (const q of apparentSnaps(doc, picker, p, aperture)) consider({ x: q.x, y: q.y, kind: 'app', handle: q.handle, handle2: q.handle2 });
   }
   // 알맞은 차례(점수가 같으면 먼저 찾은 것), 같은 자리는 하나만. Tab으로 돌 후보는 앞의 MAX_CYCLE개면 된다(촘촘한 해치 위에서도 가볍게)
   found.sort((a, b) => a.score - b.score);
