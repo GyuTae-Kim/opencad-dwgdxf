@@ -64,7 +64,9 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
   (`$DWGCODEPAGE`는 문서 값 그대로). `options.codepage`를 주면 그 코드 페이지 바이트로 쓰고 없는 문자만 `\U+XXXX`로 쓴다
   (`text.escaped`). 리더는 이름(도면층·블록·스타일)의 `\U+`만 풀고 문자 내용은 그대로 두므로(렌더러가 푼다),
   R2007 이전으로 쓴 파일을 다시 읽으면 문자 내용이 `\U+XXXX` 표기로 돌아온다.
-- 제어 문자(0x00~0x1F)는 AutoCAD처럼 캐럿 표기(`^J`, `^I` …)로 쓴다. DWG의 MTEXT 줄바꿈(LF)은 `^J`가 된다.
+- 제어 문자(0x00~0x1F)는 AutoCAD처럼 캐럿 표기(`^J`, `^I` …)로, 글자 ^는 `^ `로 쓴다. DWG의 MTEXT 줄바꿈(LF)은 `^J`가 된다.
+  리더가 문자열 값의 캐럿 표기를 풀어(`records.ts` decodeCaret) 모델에는 DWG와 같은 글자로 둔다(같은 도면의 AutoCAD DWG·DXF 짝으로 확인).
+- 2D 폴리선 정점의 Z(30)는 모델 값 그대로 쓴다(고도로 덮지 않는다).
 - MTEXT 본문은 250자 조각(3 … 3, 마지막 1)으로 나눈다. R2007 이전은 비ASCII 문자를 7바이트(`\U+XXXX`)로 세고,
   서로게이트 쌍은 자르지 않는다.
 
@@ -173,8 +175,8 @@ AutoCAD 기본 서식과 같은 뼈대: 도면층 0, 선종류 ByBlock·ByLayer�
 - `writer.newdoc.test.ts`: 새 도면(미터·인치, 빈 도면·표본 객체를 넣은 도면) × AC1009…AC1032: 왕복·구조·ezdxf(고친 항목 없음).
 
 왕복 비교에서 맞추는 의도된 차이(`writer.helpers.ts`): R2004 이전 트루컬러 없음, 정렬된 TEXT의 11, R2007 이전 `\U+`,
-`$DWGCODEPAGE`·`$INSUNITS`를 늘 씀, 제어 문자 캐럿 표기. ezdxf 비교에서 맞추는 표기 차이: `\U+`(ezdxf는 문자열만,
-우리 리더는 이름만 푼다), ezdxf가 읽을 때 만드는 Defpoints 도면층.
+`$DWGCODEPAGE`·`$INSUNITS`를 늘 씀. ezdxf 비교에서 맞추는 표기 차이: `\U+`(ezdxf는 문자열만,
+우리 리더는 이름만 푼다), 캐럿 표기(ezdxf는 그대로 두고 우리 리더는 푼다), ezdxf가 읽을 때 만드는 Defpoints 도면층.
 
 ezdxf가 고치지만 문제가 아닌 것: 사전(DICTIONARY)에 붙은 확장 사전(AutoCAD에서는 올바른 구조)을 ezdxf는 지우고 그 안의
 XRECORD를 "소유자 없음"으로 지운다. 원본 DXF를 읽을 때도 똑같이 고친다.
