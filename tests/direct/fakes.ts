@@ -1,12 +1,14 @@
 /**
  * 직접 조작 시험용 가짜: tests/polish/fakes.ts의 명령행에 이번에 더한 메서드(clearInput 등)를 붙이고,
- * 진짜 Picker 대신 선·원·호·경량 폴리선의 형상으로 고르는 작은 Picker를 둔다(App.picker를 바꿔 끼운다).
+ * 진짜 Picker 대신 선·원·호·경량 폴리선·타원·스플라인의 형상으로 고르는 작은 Picker를 둔다(App.picker를 바꿔 끼운다).
  * 이 모듈은 app.ts를 가져오지 않는다(vi.mock으로 바꿔 끼우는 동안 순환을 만들지 않는다).
  */
 import type { CadDocument, Entity } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
 import { lwVertices } from '../../src/core/lwpoly';
 import { fenceHits, polygonHits } from '../../src/edit/geom/selpoly';
+import { entityPath } from '../../src/edit/geom/path';
+import { flattenPath, pathSize } from '../../src/edit/geom/curve';
 import { FakeCommandLine } from '../polish/fakes';
 
 type Pt = { x: number; y: number };
@@ -81,6 +83,15 @@ export function geometryOf(e: Entity): Geom {
         const b = vs[(i + 1) % vs.length]!;
         segs.push(a.x, a.y, b.x, b.y);
       }
+      break;
+    }
+    case 'ELLIPSE':
+    case 'SPLINE': {
+      // 경로를 잘게 꺾은선으로(진짜 장면 빌더처럼 곡선을 선분으로 그린다)
+      const p = entityPath(e);
+      if (!p) break;
+      const f = flattenPath(p, pathSize(p) * 1e-3);
+      for (let i = 0; i + 1 < f.length; i++) segs.push(f[i]!.x, f[i]!.y, f[i + 1]!.x, f[i + 1]!.y);
       break;
     }
     default:

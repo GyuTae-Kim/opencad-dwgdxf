@@ -2,7 +2,8 @@
  * 객체 스냅: 끝점·중간점·중심·기하학적 중심·노드·사분점·교차점·연장선·삽입·수직·접점·근처점·가상 교차점·평행.
  * 연장선(EXT)·평행(PAR)은 커서를 끝점·선분 위에 잠시 머물러 얻은 획득점(SnapContext, 앱이 모은다)을 쓴다.
  * 중심·기하학적 중심은 원·호·닫힌 폴리선의 테두리 위에 커서를 두어도 잡힌다(AutoCAD와 같다).
- * 접점은 원·호와 폴리선의 호 구간에 잡힌다(AutoCAD와 같다). 지연된 접점은 명령이 받겠다고 한 점 요청에서만이고,
+ * 접점은 원·호·폴리선의 호 구간·타원·타원호·스플라인에 잡힌다(AutoCAD와 같다 — 타원은 해석적, 스플라인은 매개변수 위 근 찾기).
+ * 지연된 접점은 명령이 받겠다고 한 점 요청에서만이고,
  * 원을 그리는 명령(CIRCLE 3P·Ttr·TTT)은 선·폴리선 직선 구간·구성선·광선에도 받는다(SnapContext.deferTanLines).
  */
 import type { CadDocument, Entity } from '../core/model';
@@ -13,7 +14,8 @@ import type { Picker } from './pick';
 import type { Pt, SnapKind } from './view';
 import { lwVertices } from '../core/lwpoly';
 import { entityPath } from '../edit/geom/path';
-import type { ArcPiece, LinePiece } from '../edit/geom/curve';
+import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, pieceNearest } from '../edit/geom/curve';
+import { commonTangentCurves, tangentNearPick, tangentsFromPoint } from '../edit/geom/tangent';
 
 export interface SnapPoint {
   x: number;
@@ -539,18 +541,44 @@ export function circleOf(e: Entity): WorldCircle | null {
   return null;
 }
 
-/** 접점이 잡히는 객체(원·호·폴리선, 원 그리기에서는 선·구성선·광선도)의 평면도 조각 — 타원·스플라인 등은 빈 목록 */
-function tanPieces(e: Entity, lines: boolean): (ArcPiece | LinePiece)[] {
+/** 접점이 잡히는 곡선 조각: 원·호, 타원·타원호, 스플라인(NURBS) */
+export type TanCurve = ArcPiece | EllPiece | NurbsPiece;
+
+/**
+ * 접점이 잡히는 객체(원·호·폴리선 호 구간·타원·타원호·스플라인, 원 그리기에서는 선·구성선·광선도)의 평면도 조각.
+ * AutoCAD 객체 스냅 설명처럼 접점은 원·호·타원·타원호·폴리선 호·스플라인에 잡힌다
+ */
+function tanPieces(e: Entity, lines: boolean): (TanCurve | LinePiece)[] {
   const ok =
     e.type === 'CIRCLE' ||
     e.type === 'ARC' ||
+    e.type === 'ELLIPSE' ||
+    e.type === 'SPLINE' ||
     e.type === 'LWPOLYLINE' ||
     (e.type === 'POLYLINE' && (e.kind === '2d' || (lines && e.kind === '3d'))) ||
     (lines && (e.type === 'LINE' || e.type === 'XLINE' || e.type === 'RAY'));
   if (!ok) return [];
   const path = entityPath(e);
   if (!path) return [];
-  return path.pieces.filter((pc): pc is ArcPiece | LinePiece => pc.k === 'arc' || (lines && pc.k === 'line' && Math.hypot(pc.b.x - pc.a.x, pc.b.y - pc.a.y) > 0));
+  return path.pieces.filter((pc): pc is TanCurve | LinePiece => pc.k === 'arc' || pc.k === 'ell' || pc.k === 'nurbs' || (lines && pc.k === 'line' && Math.hypot(pc.b.x - pc.a.x, pc.b.y - pc.a.y) > 0));
+}
+
+/**
+ * 지연된 접점 하나 풀기(원·호·타원·스플라인): 점 p에서 곡선에 그은 접선의 접점 중 곡선 범위 안에 있고 찍은 자리(pick)에 가까운 것.
+ * 원·호는 tangentFrom과 같다. 없으면 null
+ */
+export function tangentFromCurve(c: TanCurve, pick: Pt, p: Pt): Pt | null {
+  if (c.k === 'arc') return tangentFrom(arcPieceCircle(c), pick, p);
+  return tangentNearPick(c, pick, p);
+}
+
+/**
+ * 지연된 접점 둘 풀기: 두 곡선의 공통 접선 중 두 접점이 곡선 범위 안에 있고 찍은 자리에 가장 가까운 것.
+ * 둘 다 원·호면 해석적(commonTangent), 타원·스플라인이 끼면 수치(src/edit/geom/tangent.ts). 없으면 null
+ */
+export function commonTangentOf(c1: TanCurve, pick1: Pt, c2: TanCurve, pick2: Pt): [Pt, Pt] | null {
+  if (c1.k === 'arc' && c2.k === 'arc') return commonTangent(arcPieceCircle(c1), pick1, arcPieceCircle(c2), pick2);
+  return commonTangentCurves(c1, pick1, c2, pick2);
 }
 
 /** 호 조각(부호 있는 중심각)을 도면 좌표의 반시계 원·호로 */
@@ -571,11 +599,11 @@ function nearestOnLine(pc: LinePiece, p: Pt): Pt {
 }
 
 /**
- * 접점 대상 조각: 객체에서 pick에 가장 가까운 원·호·폴리선 호 구간(lines면 선·폴리선 직선 구간·구성선·광선도).
+ * 접점 대상 조각: 객체에서 pick에 가장 가까운 원·호·폴리선 호 구간·타원·타원호·스플라인(lines면 선·폴리선 직선 구간·구성선·광선도).
  * 지연된 접점을 받은 명령이 스냅 점(객체 위)으로 대상을 다시 찾는다. 대상이 아니면 null
  */
-export function tanPieceAt(e: Entity, pick: Pt, lines = false): ArcPiece | LinePiece | null {
-  let best: ArcPiece | LinePiece | null = null;
+export function tanPieceAt(e: Entity, pick: Pt, lines = false): TanCurve | LinePiece | null {
+  let best: TanCurve | LinePiece | null = null;
   let bd = Infinity;
   for (const pc of tanPieces(e, lines)) {
     let d: number;
@@ -586,10 +614,10 @@ export function tanPieceAt(e: Entity, pick: Pt, lines = false): ArcPiece | LineP
       d = onArc(a, c.a0, c.sweep)
         ? Math.abs(Math.hypot(pick.x - c.cx, pick.y - c.cy) - c.r)
         : Math.min(...[c.a0, c.a0 + c.sweep].map((t) => Math.hypot(pick.x - c.cx - c.r * Math.cos(t), pick.y - c.cy - c.r * Math.sin(t))));
-    } else {
+    } else if (pc.k === 'line') {
       const q = nearestOnLine(pc, pick);
       d = Math.hypot(q.x - pick.x, q.y - pick.y);
-    }
+    } else d = pieceNearest(pc, pick).d;
     if (d < bd - 1e-12) {
       bd = d;
       best = pc;
@@ -610,9 +638,14 @@ function deferredTanNear(e: Entity, p: Pt, lines: boolean): { q: Pt; d: number }
       if (!onArc(a, c.a0, c.sweep)) continue;
       q = { x: c.cx + c.r * Math.cos(a), y: c.cy + c.r * Math.sin(a) };
       d = Math.abs(Math.hypot(p.x - c.cx, p.y - c.cy) - c.r);
-    } else {
+    } else if (pc.k === 'line') {
       q = nearestOnLine(pc, p);
       d = Math.hypot(q.x - p.x, q.y - p.y);
+    } else {
+      // 타원·스플라인: 곡선 위 가장 가까운 점(범위 안)
+      const n = pieceNearest(pc, p);
+      q = n.p;
+      d = n.d;
     }
     if (!best || d < best.d) best = { q, d };
   }
@@ -663,12 +696,17 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
         // 지연된 접점: 커서에서 가장 가까운 원·호(폴리선 호 구간 포함, 원 그리기는 선도) 위 점 — 접점은 명령이 다음 점을 받은 뒤 구한다
         const t = deferredTanNear(e, p, !!ctx.deferTanLines);
         if (t) considerAt({ ...t.q, kind: 'tan', handle: c.handle, deferred: true }, t.d);
-      } else if (base)
+      } else if (base && (e.type !== 'SPLINE' || picker.distance(c.handle, p.x, p.y) <= aperture))
+        // 스플라인은 접점을 근 찾기로 구하므로, 커서가 그 곡선 가까이(조준창 안)일 때만 — 접점은 곡선 위라 그보다 멀면 잡히지 않는다
         for (const pc of tanPieces(e, false)) {
-          if (pc.k !== 'arc') continue;
-          const circ = arcPieceCircle(pc);
-          for (const q of tangentPoints(base, { x: circ.cx, y: circ.cy }, circ.r))
-            if (onArc(Math.atan2(q.y - circ.cy, q.x - circ.cx), circ.a0, circ.sweep)) consider({ ...q, kind: 'tan', handle: c.handle });
+          if (pc.k === 'arc') {
+            const circ = arcPieceCircle(pc);
+            for (const q of tangentPoints(base, { x: circ.cx, y: circ.cy }, circ.r))
+              if (onArc(Math.atan2(q.y - circ.cy, q.x - circ.cx), circ.a0, circ.sweep)) consider({ ...q, kind: 'tan', handle: c.handle });
+          } else if (pc.k !== 'line') {
+            // 타원·타원호(해석적)·스플라인(근 찾기): 기준점에서 그은 접선의 접점
+            for (const s of tangentsFromPoint(pc, base)) consider({ ...s.p, kind: 'tan', handle: c.handle });
+          }
         }
     }
   }
