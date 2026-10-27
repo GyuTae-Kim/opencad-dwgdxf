@@ -199,7 +199,7 @@ DWG에 자리가 없는 값(스플라인의 평면·직선 비트, R2000 DWG의 
 
 다섯 언어 페이지·검색 정보·사이트맵·내용 수정일·언어별 앱 정보·서비스 워커 빌드, 공용 번역기, 언어 메뉴, 서비스 워커 등록·새 판 알림,
 방문 통계, 휴대폰 성능 비교는 다른 OpenCAD 앱과 함께 쓰는 [opencad-site-kit](https://github.com/GyuTae-Kim/opencad-site-kit)
-(`github:GyuTae-Kim/opencad-site-kit#v0.1.3`, 잠금 커밋 `cb6d7e7`, 빌드 때만 써서 `devDependencies`)에 있습니다.
+(`github:GyuTae-Kim/opencad-site-kit#v0.1.4`, 잠금 커밋 `a1de400`, 빌드 때만 써서 `devDependencies`)에 있습니다.
 이 앱에만 있는 것은 `tools/site.mjs`(앱 정보 원본 `public/manifest.webmanifest`, 처음 설치 때 담을 파일, 쓸 때만 받는 덩어리, 따로 판을 매기는 `fonts/`·`pdfjs/`·`samples/`),
 `tools/sw-template.js`(서비스 워커 본문), `src/app/pwa.ts`의 공유 받기 실패 안내입니다. `check:seo`·`check:i18n`·`test:seo`·`update:content-dates`는 도구의 `opencad-site` 명령입니다.
 도구 판을 올릴 때는 빌드 결과를 견줍니다.
