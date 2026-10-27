@@ -4,7 +4,7 @@
  * 아니면 내려받기로 저장한다.
  */
 import { syncActiveVports } from './vports';
-import { trackExport } from './analytics';
+import { trackExport } from 'opencad-site-kit/analytics';
 import { forgetRecovery } from './autosave';
 import { createNewDocument } from '../core/newdoc';
 import type { CadDocument } from '../core/model';

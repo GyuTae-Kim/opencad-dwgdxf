@@ -1,15 +1,9 @@
 // 이 앱의 사이트 설정(opencad-site-kit): 검색 정보·언어 페이지·앱 정보와 오프라인 서비스 워커. vite.config.ts와 시험이 같이 쓴다.
 import metadata from '../site/metadata.json' with { type: 'json' };
 import history from '../site/content-history.json' with { type: 'json' };
-import { registerCatalog } from 'opencad-site-kit/i18n/core';
-import en from '../site/locales/en.json' with { type: 'json' };
-import ja from '../site/locales/ja.json' with { type: 'json' };
-import zh from '../site/locales/zh-CN.json' with { type: 'json' };
-import de from '../site/locales/de.json' with { type: 'json' };
+import '../site/i18n.mjs';
 import { defineSite } from 'opencad-site-kit/seo/site-metadata';
 import { templateSource } from 'opencad-site-kit/pwa/sw-plugin';
-
-for (const [language, content] of Object.entries({ en, ja, 'zh-CN': zh, de })) registerCatalog(language, content);
 
 export const site = defineSite({ metadata, history, manifest: { source: new URL('../public/manifest.webmanifest', import.meta.url) } });
 

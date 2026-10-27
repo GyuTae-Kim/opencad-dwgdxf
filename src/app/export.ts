@@ -4,7 +4,7 @@
  */
 import { ensureLayoutVariants, viewportModel } from './psltscale';
 import { MODEL_SPACE } from '../core/model';
-import { trackExport, type ExportFormat } from './analytics';
+import { trackExport, type ExportFormat } from 'opencad-site-kit/analytics';
 import { imageDataUrl, imagePixels, xrefPlacements } from './refs';
 import type { CtbTable } from '../render/ctb';
 import type { DisplayList } from '../render/displaylist';

@@ -1,5 +1,5 @@
 /*
- * OpenCAD DWG·DXF 서비스 워커. 빌드가 tools/sw-plugin.mjs로 dist/sw.js를 만든다(__…__ 자리는 빌드 때 채운다).
+ * OpenCAD DWG·DXF 서비스 워커. 빌드가 공용 사이트 도구(opencad-site-kit의 serviceWorker, 설정은 tools/site.mjs)로 dist/sw.js를 만든다(__…__ 자리는 빌드 때 채운다).
  *
  * - 처음 설치: 앱 껍데기(다섯 언어 쪽·앱 정보·아이콘)와 편집기에 꼭 필요한 빌드 결과(시작 스크립트·스타일·편집기·해석 워커·저장 모듈·글꼴 해석기)를
  *   이 판의 캐시에 담는다. 내용 지문 이름(assets/)은 앞 판 캐시나 브라우저 캐시에서 먼저 찾아 같은 파일을 두 번 받지 않는다.
