@@ -20,6 +20,8 @@ export interface SnapPoint {
   handle2?: string;
   /** 연장선·평행 스냅의 정렬선(점선으로 보인다): 시작점과 단위 방향 */
   lines?: { from: Pt; dir: Pt }[];
+  /** 지연된 접점: 기준점이 아직 없어 원·호 위 찍은 자리만 정했다(명령이 다음 점을 받은 뒤 접점을 구한다) */
+  deferred?: boolean;
 }
 
 /** 제도 설정 대화상자의 순서(AutoCAD 2026) */
@@ -59,6 +61,8 @@ export interface SnapContext {
   ext?: readonly ExtAnchor[];
   /** 평행: 획득한 선분 방향(단위 벡터) */
   par?: readonly Pt[];
+  /** 접점을 지연된 접점으로 잡는다(기준점과 상관없이 원·호 위 찍은 자리, 명령이 받겠다고 한 점 요청만) */
+  deferTan?: boolean;
 }
 
 function arcSnaps(m: Mat, cx: number, cy: number, z: number, r: number, a0: number, sweep: number, full: boolean, out: SnapPoint[]): void {
@@ -205,6 +209,9 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
   }
 }
 
+
+/** Tab으로 도는 스냅 후보의 최대 개수 */
+const MAX_CYCLE = 24;
 
 const PRIORITY: Record<string, number> = { end: 0, int: 0, cen: 1, mid: 1, qua: 1, ins: 1, nod: 1, gcen: 1, per: 2, tan: 2, app: 2, ext: 3, par: 3, nea: 5 };
 
@@ -460,8 +467,62 @@ export function geometricCenter(e: Entity): Pt | null {
   return null;
 }
 
+/** 도면 좌표의 원·호(반시계 호: 시작 각·사잇각, 원이면 사잇각 2π) */
+export interface WorldCircle {
+  cx: number;
+  cy: number;
+  r: number;
+  a0: number;
+  sweep: number;
+}
+
+const onCircle = (c: WorldCircle, q: Pt) => onArc(Math.atan2(q.y - c.cy, q.x - c.cx), c.a0, c.sweep);
+
+/**
+ * 지연된 접점 하나 풀기: 점 p에서 원·호 c에 그은 접선의 접점 중 원·호 위에 있고 찍은 자리(pick)에 가까운 것.
+ * p가 원 안이거나 접점이 호 밖이면 null
+ */
+export function tangentFrom(c: WorldCircle, pick: Pt, p: Pt): Pt | null {
+  let best: Pt | null = null;
+  for (const q of tangentPoints(p, { x: c.cx, y: c.cy }, c.r)) if (onCircle(c, q) && (!best || Math.hypot(q.x - pick.x, q.y - pick.y) < Math.hypot(best.x - pick.x, best.y - pick.y))) best = q;
+  return best;
+}
+
+/**
+ * 지연된 접점 둘 풀기: 두 원·호의 공통 접선(바깥 둘·안쪽 둘) 중 두 접점이 원·호 위에 있고 찍은 자리에 가장 가까운 것.
+ * 그런 접선이 없으면(한 원이 다른 원 안, 같은 중심) null
+ */
+export function commonTangent(c1: WorldCircle, pick1: Pt, c2: WorldCircle, pick2: Pt): [Pt, Pt] | null {
+  const dx = c2.cx - c1.cx;
+  const dy = c2.cy - c1.cy;
+  const D2 = dx * dx + dy * dy;
+  if (D2 < 1e-24) return null;
+  let best: [Pt, Pt] | null = null;
+  let bd = Infinity;
+  for (const s of [1, -1]) {
+    // 접선 n·x + k = 0(|n| = 1): c1까지 r1, c2까지 s·r2 → n·(c2 − c1) = s·r2 − r1
+    const dr = s * c2.r - c1.r;
+    const h2 = D2 - dr * dr;
+    if (h2 < -1e-12 * D2) continue;
+    const h = Math.sqrt(Math.max(0, h2));
+    for (const t of h > 1e-12 ? [1, -1] : [1]) {
+      const nx = (dx * dr - t * dy * h) / D2;
+      const ny = (dy * dr + t * dx * h) / D2;
+      const T1 = { x: c1.cx - nx * c1.r, y: c1.cy - ny * c1.r };
+      const T2 = { x: c2.cx - nx * s * c2.r, y: c2.cy - ny * s * c2.r };
+      if (Math.hypot(T2.x - T1.x, T2.y - T1.y) < 1e-12 || !onCircle(c1, T1) || !onCircle(c2, T2)) continue;
+      const d = Math.hypot(T1.x - pick1.x, T1.y - pick1.y) + Math.hypot(T2.x - pick2.x, T2.y - pick2.y);
+      if (d < bd) {
+        bd = d;
+        best = [T1, T2];
+      }
+    }
+  }
+  return best;
+}
+
 /** 원·호(도면 좌표)와 호 범위 — 접점·중심 테두리 스냅용 */
-function circleOf(e: Entity): { cx: number; cy: number; r: number; a0: number; sweep: number } | null {
+export function circleOf(e: Entity): WorldCircle | null {
   if (e.type === 'CIRCLE') {
     const c = applyXY(withOcs(identity(), e.extrusion), e.center.x, e.center.y, e.center.z);
     return { cx: c.x, cy: c.y, r: e.radius, a0: 0, sweep: Math.PI * 2 };
@@ -470,21 +531,24 @@ function circleOf(e: Entity): { cx: number; cy: number; r: number; a0: number; s
   return null;
 }
 
-/** 커서 근처의 스냅점. ctx는 연장선·평행 획득점(앱이 모은다) */
+/** 커서 근처의 스냅점(가장 알맞은 것). ctx는 연장선·평행 획득점(앱이 모은다) */
 export function findSnap(doc: CadDocument, picker: Picker, p: Pt, aperture: number, modes: ReadonlySet<SnapKind>, base?: Pt | null, ctx?: SnapContext): SnapPoint | null {
-  if (!modes.size) return null;
+  return findSnaps(doc, picker, p, aperture, modes, base, ctx)[0] ?? null;
+}
+
+/**
+ * 커서 근처의 스냅점 후보 전부(알맞은 차례 — 거리와 종류 우선순위). 같은 자리의 후보는 하나만 둔다.
+ * 겹친 후보는 스냅 표식 위에서 Tab으로 돈다(AutoCAD와 같다). 첫 후보가 findSnap의 결과다.
+ */
+export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: number, modes: ReadonlySet<SnapKind>, base?: Pt | null, ctx?: SnapContext): SnapPoint[] {
+  if (!modes.size) return [];
   const cands = picker.candidates(p.x, p.y, aperture);
-  let best: SnapPoint | null = null;
-  let bestScore = Infinity;
+  const found: { s: SnapPoint; score: number }[] = [];
   /** d: 커서까지의 거리(테두리로 잡는 중심은 조준창의 절반으로 친다) */
   const considerAt = (s: SnapPoint, d: number) => {
     if (!modes.has(s.kind)) return;
     if (d > aperture) return;
-    const score = d / aperture + (PRIORITY[s.kind] ?? 1) * 0.15;
-    if (score < bestScore) {
-      bestScore = score;
-      best = s;
-    }
+    found.push({ s, score: d / aperture + (PRIORITY[s.kind] ?? 1) * 0.15 });
   };
   const consider = (s: SnapPoint) => considerAt(s, Math.hypot(s.x - p.x, s.y - p.y));
   const m = identity();
@@ -506,9 +570,14 @@ export function findSnap(doc: CadDocument, picker: Picker, p: Pt, aperture: numb
         considerAt({ ...cp, kind: 'cen', handle: c.handle }, aperture * 0.5);
       }
     }
-    if (modes.has('tan') && base) {
+    if (modes.has('tan') && (base || ctx?.deferTan)) {
       const circ = circleOf(e);
-      if (circ)
+      if (circ && ctx?.deferTan) {
+        // 지연된 접점: 커서에서 가장 가까운 원·호 위 점(접점은 명령이 다음 점을 받은 뒤 구한다)
+        const ang = Math.atan2(p.y - circ.cy, p.x - circ.cx);
+        const d = Math.abs(Math.hypot(p.x - circ.cx, p.y - circ.cy) - circ.r);
+        if (onArc(ang, circ.a0, circ.sweep)) considerAt({ x: circ.cx + circ.r * Math.cos(ang), y: circ.cy + circ.r * Math.sin(ang), kind: 'tan', handle: c.handle, deferred: true }, d);
+      } else if (circ && base)
         for (const q of tangentPoints(base, { x: circ.cx, y: circ.cy }, circ.r))
           if (onArc(Math.atan2(q.y - circ.cy, q.x - circ.cx), circ.a0, circ.sweep)) consider({ ...q, kind: 'tan', handle: c.handle });
     }
@@ -550,7 +619,7 @@ export function findSnap(doc: CadDocument, picker: Picker, p: Pt, aperture: numb
         consider({ x: x0 + dx * t, y: y0 + dy * t, kind: 'per' });
       }
     }
-    if (modes.has('nea') && !best) {
+    if (modes.has('nea') && !found.length) {
       for (let i = 0; i < n; i++) {
         const x0 = segs[i * 4]!;
         const y0 = segs[i * 4 + 1]!;
@@ -574,5 +643,13 @@ export function findSnap(doc: CadDocument, picker: Picker, p: Pt, aperture: numb
         if (q) consider({ ...q, kind: 'app' });
       }
   }
-  return best;
+  // 알맞은 차례(점수가 같으면 먼저 찾은 것), 같은 자리는 하나만. Tab으로 돌 후보는 앞의 MAX_CYCLE개면 된다(촘촘한 해치 위에서도 가볍게)
+  found.sort((a, b) => a.score - b.score);
+  const out: SnapPoint[] = [];
+  const eps = aperture * 1e-6;
+  for (const { s } of found) {
+    if (out.length >= MAX_CYCLE) break;
+    if (!out.some((o) => Math.abs(o.x - s.x) <= eps && Math.abs(o.y - s.y) <= eps)) out.push(s);
+  }
+  return out;
 }
