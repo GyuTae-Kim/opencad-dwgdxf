@@ -1,6 +1,7 @@
 /** 표 제어 객체와 표 레코드(사양 20.4.51~20.4.70) */
 import type { CadColor, LinetypeElement, Vec2, Vec3 } from '../../../core/model';
 import type { BitReader, DwgColor } from '../bitstream';
+import { decodeCadEscapes } from '../../../core/codepage';
 import { cmcToCad } from '../color';
 import { lineweightFromIndex } from '../lineweight';
 import { R14, R2000, R2004, R2007, R2010 } from '../version';
@@ -137,7 +138,8 @@ function recordCommon(or: ObjectReader): RecordCommon {
   or.commonObject();
   const h = or.h;
   const r = or.dat;
-  const name = r.TV();
+  // R2007 이전 DWG는 코드 페이지에 없는 글자를 \U+XXXX로 적는다: DXF 리더처럼 이름은 풀어 둔다(쓰기가 다시 감춘다)
+  const name = decodeCadEscapes(r.TV());
   let flags = 0;
   // 64(참조됨) 비트는 DXF가 쓰지 않으므로 담지 않는다
   r.B();

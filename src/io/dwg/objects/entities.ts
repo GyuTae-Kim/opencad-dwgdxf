@@ -47,6 +47,7 @@ import type {
 } from '../../../core/model';
 import { BYLAYER, SHARED_BYLAYER_COLOR } from '../../../core/model';
 import { tidyWidths, zeros } from '../../../core/lwpoly';
+import { decodeCadEscapes } from '../../../core/codepage';
 import { type BitReader, DwgFormatError } from '../bitstream';
 import { cmcToCad, encToCad } from '../color';
 import { lineweightFromIndex } from '../lineweight';
@@ -231,7 +232,8 @@ function readTextData(r: BitReader, ver: number): TextData {
   const df = r.RC();
   const elev = df & 1 ? 0 : r.RD();
   const ins = r.RD2();
-  let al: Vec2 | undefined;
+  // 0x02가 서면 맞춤점이 기본값 (0, 0)이다(없다는 뜻이 아니다 — AutoCAD가 같은 도면을 쓴 DXF의 11이 (0, 0)이다)
+  let al: Vec2 = { x: 0, y: 0 };
   if (!(df & 2)) al = { x: r.DD(ins.x), y: r.DD(ins.y) };
   const extrusion = r.BE();
   const thickness = r.BT();
@@ -245,7 +247,7 @@ function readTextData(r: BitReader, ver: number): TextData {
   const valign = df & 0x80 ? 0 : r.BS();
   return {
     insert: { x: ins.x, y: ins.y, z: elev },
-    alignPoint: al ? { x: al.x, y: al.y, z: elev } : undefined,
+    alignPoint: { x: al.x, y: al.y, z: elev },
     extrusion,
     thickness,
     oblique,
@@ -296,7 +298,7 @@ function readAttribTail(or: ObjectReader, isDef: boolean, names: Names): AttribT
   if (ver >= R2018) attType = r.RC();
   const out: AttribTail = { tag: '', flags: 0, lock: false };
   if (attType === 1) {
-    out.tag = r.TV();
+    out.tag = decodeCadEscapes(r.TV());
     r.BS(); // 필드 길이
     out.flags = r.RC();
     if (ver >= R2007) out.lock = r.B() === 1;
@@ -317,7 +319,7 @@ function readAttribTail(or: ObjectReader, isDef: boolean, names: Names): AttribT
       or.hdl.H(or.h.handle);
       r.BS();
     }
-    out.tag = r.TV();
+    out.tag = decodeCadEscapes(r.TV());
     r.BS();
     out.flags = r.RC();
     out.lock = r.B() === 1;

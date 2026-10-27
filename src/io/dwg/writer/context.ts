@@ -6,6 +6,7 @@
  * - 쓸 객체의 핸들을 live에 모은다. 다른 객체를 가리키는 핸들은 live에 있을 때만 쓴다.
  */
 import type {
+  AcisEntity,
   BlockDef,
   BlockRecord,
   CadColor,
@@ -21,6 +22,7 @@ import type {
   LayoutObject,
   Linetype,
   MLineStyleObject,
+  PolylineEntity,
   ReadWarning,
   TableRecordBase,
   TextStyle,
@@ -36,7 +38,8 @@ import { DIM_VAR_DEFAULTS } from '../../../core/dimvars';
 import { codepageToEncoding, decoderFor, dwgCodepageName } from '../../../core/codepage';
 import { proxyEntities } from '../../../edit/geom/proxygeom';
 import { fingerprint } from '../rawbody';
-import { R2004, R2007, R2018 } from '../version';
+import { R2000, R2004, R2007, R2018 } from '../version';
+import { dxfSatText, encodeSatBytes, satVersion } from '../../acis';
 import { ClassTable } from './classes';
 import { type TextEncoderCp, encoderFor } from './codepage';
 import { parseHandle, warnOnce } from './util';
@@ -67,6 +70,56 @@ export interface PEnt {
   /** POLYLINE 정점 핸들, INSERT 속성 핸들 */
   subs?: number[];
   seqend?: number;
+  /** R2000에 ACIS 객체로 쓸 SAT(판 1 자료 바이트, 감춘 것) */
+  acisSat?: Uint8Array;
+}
+
+const ACIS_ENTITIES = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
+
+/**
+ * R2000 DWG에 ACIS 객체로 쓸 SAT(감춘 바이트). AutoCAD R2000 파일처럼 판 1(SAT 글) 자료를 담는다 — 판 7.0 이하 SAT만
+ * (DWG R2000에서 읽은 SAT, DXF R2000~R2010의 SAT 원본 태그 중 R2000이 담는 판). R2004+ DWG는 SAB(판 2·자료 저장소)라 쓰지 않는다
+ */
+function satForR2000(e: Entity): Uint8Array | null {
+  if (e.type !== 'REGION' && e.type !== '3DSOLID' && e.type !== 'BODY') return null;
+  const a = e as AcisEntity;
+  let text = a.sat ?? null;
+  if (!text && Array.isArray(a.raw) && a.rawVersion && Number(a.rawVersion.slice(2)) <= 1024) text = dxfSatText(a.raw);
+  if (!text) return null;
+  const v = satVersion(text);
+  if (!(v >= 400 && v <= 700)) return null;
+  return encodeSatBytes(text);
+}
+
+/** ACIS 객체의 모서리 선(와이어) → 3D 폴리선(DXF 쓰기와 같다 — 보이는 모양은 남긴다) */
+function acisWirePolylines(e: Entity): PolylineEntity[] {
+  const wires = ((e as AcisEntity).wires ?? []).filter((w) => w.length >= 2);
+  return wires.map((w, i) => {
+    const p: PolylineEntity = {
+      type: 'POLYLINE',
+      handle: i === 0 ? e.handle : '',
+      owner: e.owner,
+      layer: e.layer,
+      linetype: e.linetype,
+      color: e.color,
+      lineweight: e.lineweight,
+      ltscale: e.ltscale,
+      transparency: e.transparency,
+      kind: '3d',
+      flags: 8,
+      vertices: w.map((q) => ({ location: { x: q.x, y: q.y, z: q.z }, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })),
+      elevation: 0,
+      defaultStartWidth: 0,
+      defaultEndWidth: 0,
+      mCount: 0,
+      nCount: 0,
+      mDensity: 0,
+      nDensity: 0,
+      smoothType: 0,
+    };
+    if (e.invisible) p.invisible = true;
+    return p;
+  });
 }
 
 export interface PBlock {
@@ -331,6 +384,12 @@ export class WCtx {
   }
 
   /** 원본 본문을 그대로 쓸 수 있는지(같은 버전, 같은 지문, 같은 핸들) */
+  /** 원본 본문을 이 버전으로 되쓸 수 있는지(핸들 확인은 rawFor) */
+  rawUsable(x: { dwgRaw?: DwgRawBody }): boolean {
+    const r = x.dwgRaw;
+    return !!r && this.useRaw && r.version === this.verStr && r.fingerprint === fingerprint(x);
+  }
+
   rawFor(x: { dwgRaw?: DwgRawBody; handle: string }, h: number): DwgRawBody | undefined {
     const r = x.dwgRaw;
     if (!r || !this.useRaw || r.version !== this.verStr || parseHandle(x.handle) !== h) return undefined;
@@ -576,6 +635,19 @@ export class WCtx {
       seen.add(k);
       list.push({ key: k, def });
     }
+    // 없는 블록을 가리키는 블록 참조·치수·표: 빈 블록 정의를 만든다(DXF 쓰기와 같다 — 비어 있는 블록 핸들은 AutoCAD가 읽지 못한다)
+    const missing: string[] = [];
+    for (const def of doc.blocks.values()) {
+      for (const e of def.entities) {
+        const ref = e.type === 'INSERT' || e.type === 'DIMENSION' || e.type === 'ACAD_TABLE' ? e.block : '';
+        const k = ref ? tableKey(ref) : '';
+        if (!k || seen.has(k)) continue;
+        seen.add(k);
+        missing.push(ref);
+        list.push({ key: k, def: { name: ref, handle: '', recordHandle: '', basePoint: { x: 0, y: 0, z: 0 }, flags: ref.startsWith('*') ? 1 : 0, entities: [] } });
+      }
+    }
+    if (missing.length) this.warn('block.missing', '없는 블록을 가리키는 객체가 있어 빈 블록 정의를 만들었습니다.', { items: missing.slice(0, 20), count: missing.length });
     if (!seen.has(MODEL_SPACE)) list.push({ key: MODEL_SPACE, def: { name: '*Model_Space', handle: '', recordHandle: '', basePoint: { x: 0, y: 0, z: 0 }, flags: 0, entities: [] } });
     if (!seen.has(PAPER_SPACE)) list.push({ key: PAPER_SPACE, def: { name: '*Paper_Space', handle: '', recordHandle: '', basePoint: { x: 0, y: 0, z: 0 }, flags: 0, entities: [] } });
     for (const { key, def } of list) {
@@ -603,6 +675,7 @@ export class WCtx {
     }
     // 도형
     let dropped: Record<string, number> = {};
+    const acisWires: Record<string, number> = {};
     for (const pb of this.blocks) {
       // 외부 참조·덧씌우기 블록 레코드는 도형을 소유하지 않는다(내용은 참조 파일에 있다)
       if (pb.def.flags & 12 && pb !== this.modelBlock && pb !== this.paperBlock) continue;
@@ -620,10 +693,23 @@ export class WCtx {
             continue;
           }
         }
+        // ACIS 객체를 이 버전으로 쓸 수 없으면(원본 본문은 다른 버전, R2000 SAT도 없음) 모서리 선을 3D 폴리선으로 남긴다
+        if (ACIS_ENTITIES.has(e.type) && !this.rawUsable(e) && !(this.ver === R2000 && satForR2000(e))) {
+          const polys = acisWirePolylines(e);
+          if (polys.length) {
+            acisWires[e.type] = (acisWires[e.type] ?? 0) + 1;
+            for (const x of polys) {
+              const pe = this.planEntity(x, dropped);
+              if (pe) pb.ents.push(pe);
+            }
+            continue;
+          }
+        }
         const pe = this.planEntity(e, dropped);
         if (pe) pb.ents.push(pe);
       }
     }
+    if (Object.keys(acisWires).length) this.warn('entity.acis_as_wires', 'ACIS 자료를 이 버전으로 쓸 수 없어 ACIS 객체를 와이어(3D 폴리선)로 썼습니다.', { types: acisWires });
     // ACAD_TABLE을 바꿔 쓸 때 가리키는 블록이 있어야 한다
     for (const pb of this.blocks) {
       pb.ents = pb.ents.filter((pe) => {
@@ -653,7 +739,9 @@ export class WCtx {
       if (xdata) pe.e = { ...e, xdata };
     }
     const raw = this.rawFor(e, h);
+    const sat = !raw && this.ver === R2000 ? satForR2000(e) : null;
     if (raw) pe.raw = raw;
+    else if (sat) pe.acisSat = sat;
     else if (RAW_ONLY_ENTITIES.has(e.type)) {
       const t = e.type === 'UNKNOWN' ? e.originalType : e.type;
       dropped[t] = (dropped[t] ?? 0) + 1;

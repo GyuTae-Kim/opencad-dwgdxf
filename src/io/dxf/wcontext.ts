@@ -131,6 +131,7 @@ const OBJECT_MIN_VERSION: Record<string, number> = {
 
 /** 원본 태그가 없어도 내용을 만들 수 있는 객체 */
 const SYNTH_GENERIC = new Set(['ACDBPLACEHOLDER', 'TABLESTYLE']);
+const ACIS_TYPES = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
 
 const HEX_RE = /^[0-9A-F]+$/;
 
@@ -151,6 +152,8 @@ export class WriteContext {
   private readonly given = new WeakMap<object, string>();
   /** 쓸 객체의 핸들 */
   readonly live = new Set<string>();
+  /** ACIS 객체로 쓰는 도형의 핸들(ACDSDATA 레코드는 이것만 남긴다) */
+  readonly acisLive = new Set<string>();
 
   readonly tableHeads = new Map<TableName, string>();
   vports: PlannedRecord<VPortRecord>[] = [];
@@ -556,6 +559,7 @@ export class WriteContext {
       for (const e of pb.entities) {
         const h = this.claim(e, e.handle);
         this.live.add(h);
+        if (ACIS_TYPES.has(e.type)) this.acisLive.add(h);
         if (e.type === 'INSERT') for (const a of e.attribs) this.live.add(this.claim(a, a.handle));
       }
     }

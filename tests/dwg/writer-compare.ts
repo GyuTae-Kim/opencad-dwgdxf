@@ -107,6 +107,9 @@ function colorPaths(o: unknown, ver: number, back = false): unknown {
     else if (k === 'heights' && Array.isArray(v)) r[k] = v.map((x) => Math.max(0, Number(x)));
     else r[k] = colorPaths(v, ver, back);
   }
+  // 왼쪽 맞춤이 아닌 문자에 맞춤점이 없으면 삽입점으로 그린다 — 쓰기는 그 삽입점을 맞춤점으로 적는다(DWG 0x02는 (0, 0)이라는 뜻)
+  const t = r.type;
+  if ((t === 'TEXT' || t === 'ATTRIB' || t === 'ATTDEF') && r.alignPoint === undefined && (r.halign || r.valign)) r.alignPoint = r.insert;
   return r;
 }
 
@@ -139,7 +142,8 @@ export function compareEntity(e: Entity, a: Entity, o: CompareOptions): string[]
   }
   if (t === 'MTEXT') skipType.add('rotation');
   // 원본에 없던 기본값이 생기는 것(DXF에 없는 LEADER 방향·간격, R14·DXF 뷰포트 UCS)
-  for (const k of ['horizontalDirection', 'blockOffset', 'annotationOffset', 'ucsOrigin', 'ucsXAxis', 'ucsYAxis', 'styleSheet', 'styleHandle']) skipType.add('+' + k);
+  // DXF R2000의 SAT 원본 태그로 쓴 R2000 ACIS 객체는 다시 읽으면 SAT 글(sat)을 가진다
+  for (const k of ['horizontalDirection', 'blockOffset', 'annotationOffset', 'ucsOrigin', 'ucsXAxis', 'ucsYAxis', 'styleSheet', 'styleHandle', 'sat']) skipType.add('+' + k);
   if (t === 'SHAPE' && o.fromDxf) {
     // DWG는 쉐이프 번호만 가진다(이름은 SHX 파일이 있어야 안다)
     skipType.add('name');

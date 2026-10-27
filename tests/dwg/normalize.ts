@@ -11,6 +11,8 @@
  * 6. 트루컬러 도면층의 ACI: 기준은 근사 팔레트로 고른다(AutoCAD DXF와 다름). RGB가 있는 도면층은 ACI를 비교하지 않는다.
  * 7. 색상표 색(DBCOLOR) 도형: 기준은 RGB를 쓰지 않는다(AutoCAD DXF는 씀). 기준에 RGB가 없으면 지운다.
  * 8. 문자: 기준(ezdxf)은 \U+XXXX를 풀고 줄바꿈을 ^J로 쓴다. 양쪽을 같은 표기로 바꾼다.
+ * 9. TEXT·ATTRIB·ATTDEF 맞춤점: DWG 문자 자료 플래그 0x02는 "맞춤점 = (0, 0)"인데(AutoCAD가 같은 도면을 쓴 DXF의 11이 (0, 0)),
+ *    기준은 맞춤점을 빼고 쓴다. 기준에 맞춤점이 없고 DWG 쪽이 (0, 0)이면 맞춤점을 지운다.
  */
 import type { CadDocument } from '../../src/core/model';
 import { decodeCadEscapes } from '../../src/core/codepage';
@@ -57,6 +59,9 @@ export function normalizePair(expected: Obj, actual: Obj, doc: CadDocument): voi
         const de = doc.entityIndex.get(a.handle);
         if (de?.color.name) delete a.color.rgb;
       }
+      // 9
+      const ap = a.alignPoint as number[] | undefined;
+      if (!('alignPoint' in e) && ap && ap[0] === 0 && ap[1] === 0) delete a.alignPoint;
       // 8
       if ('text' in e) {
         e.text = normText(e.text);
