@@ -19,7 +19,9 @@ import { pickColor } from './colorpick';
 import { type MenuItem, dialog, formatBytes, h, iconSpan, showMenu, toast } from './dom';
 import { icon } from './icons';
 import { MobileView, isCoarse, readMobileMode, startInViewMode } from './mobileview';
-import { RecentStore } from '../recent';
+import { RecentStore, recentTimeLabel } from '../recent';
+import { openErrorInfo, OPEN_MAX_BYTES, type OpenErrorInfo } from '../openerror';
+import { colorTheme, setColorTheme, THEME_EVENT } from '../theme';
 import { type AnnoStatus, annoStatus } from '../annoscale-status';
 import { foldCount, layoutClasses, revealX, ribbonOverlay, statusHidden, watchViewport, wheelToHorizontal } from './layout';
 
@@ -890,6 +892,9 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
   },
 ];
 
+/** 이보다 큰 파일은 열기 전에 시간·메모리를 알린다 */
+const BIG_FILE_BYTES = 100 * 1024 * 1024;
+
 export class Shell implements UiHooks {
   private readonly title: HTMLDivElement;
   private readonly ribbonTabs: HTMLDivElement;
@@ -926,8 +931,8 @@ export class Shell implements UiHooks {
     this.fileInput = h('input', { type: 'file', accept: isCoarse() ? undefined : '.dxf,.dwg,.scr,.lsp,.mnl,.DXF,.DWG,.SCR,.LSP,.MNL', multiple: true, hidden: true });
     this.title = h('div', { class: 'titlebar' });
     this.ribbonTabs = h('div', { class: 'ribbon-tabs', role: 'tablist' });
-    this.ribbon = h('div', { class: 'ribbon' });
-    this.fileTabs = h('div', { class: 'filetabs' });
+    this.ribbon = h('div', { class: 'ribbon', id: 'ribbon-panel', role: 'tabpanel' });
+    this.fileTabs = h('div', { class: 'filetabs', role: 'group', 'aria-label': '열린 도면 목록' });
     this.workspace = h('main', { class: 'workspace' });
     this.drawingHost = h('div', { style: 'position:relative;display:flex;flex:1;min-width:0' });
     this.start = h('div', { class: 'start' });
@@ -1015,14 +1020,22 @@ export class Shell implements UiHooks {
         await loadLispFile(this.app, f);
         continue;
       }
-      if (f.size > 512 * 1024 * 1024) {
+      if (f.size > OPEN_MAX_BYTES) {
         beginOpen('local', f.name.split('.').pop() ?? 'other').error('size_limit');
-        toast(`${f.name}: 512MB보다 큰 파일은 열 수 없습니다.`, 'error');
+        this.app.reportOpenError(f.name, openErrorInfo('size_limit'));
         continue;
       }
+      // 아주 큰 파일은 미리 알린다(휴대폰은 메모리가 모자라면 탭째 닫힐 수 있다)
+      if (f.size > BIG_FILE_BYTES) toast(`큰 파일(${formatBytes(f.size)})이라 여는 데 시간이 걸리고 메모리를 많이 씁니다. 다른 탭을 닫아 두면 좋습니다.`, 'warn', 8000);
       const attempt = beginOpen('local', f.name.split('.').pop() ?? 'other');
       let buf: ArrayBuffer;
-      try { buf = await f.arrayBuffer(); } catch (error) { attempt.error('read_error'); throw error; }
+      try {
+        buf = await f.arrayBuffer();
+      } catch {
+        attempt.error('read_error');
+        this.app.reportOpenError(f.name, openErrorInfo('read'));
+        continue;
+      }
       const copy = buf.slice(0);
       const st = await this.app.openFile(f.name, buf, 'local', attempt);
       if (st) void this.recent.add(f.name, copy).then(() => this.refreshRecent());
@@ -1058,6 +1071,10 @@ export class Shell implements UiHooks {
         { label: '모두 저장', icon: 'save', disabled: !app.active, run: () => void app.run('SAVEALL') },
         { separator: true },
         { label: '옵션…', icon: 'settings', run: () => void app.run('OPTIONS') },
+        // 좁은 휴대폰에서는 제목 막대의 테마 단추를 감추므로 여기서도 바꾼다
+        colorTheme() === 1
+          ? { label: '어두운 테마로 바꾸기', icon: 'moon', run: () => this.toggleTheme() }
+          : { label: '밝은 테마로 바꾸기', icon: 'sun', run: () => this.toggleTheme() },
         { label: '단축키·도움말', icon: 'help', kbd: 'F1', run: () => void app.run('HELP') },
         { label: '방문 통계 설정', icon: 'settings', run: showAnalyticsSettings },
         { label: 'OpenCAD 정보', icon: 'info', run: () => void app.run('ABOUT') },
@@ -1081,6 +1098,7 @@ export class Shell implements UiHooks {
       // 손가락 기기: 휴대폰 보기 모드 ↔ 편집 화면
       h('button', { class: 'icon-btn mode-btn view-only', title: '편집 화면으로(리본·명령행)', 'aria-label': '편집 화면으로', html: icon('pencil'), onclick: () => this.mobile.setMode('edit') }),
       h('button', { class: 'icon-btn mode-btn edit-only', title: '휴대폰 보기 모드로(보기·치수 확인)', 'aria-label': '휴대폰 보기 모드로', html: icon('eye'), onclick: () => this.mobile.setMode('view') }),
+      this.themeButton(),
       this.iconBtn('help', '도움말 (F1)', () => void app.run('HELP')),
       this.iconBtn('fullscreen', '전체 화면', () => void app.run('FULLSCREEN')),
     );
@@ -1088,6 +1106,27 @@ export class Shell implements UiHooks {
     const fs = right.lastElementChild as HTMLElement;
     if (document.fullscreenEnabled === false || typeof document.documentElement.requestFullscreen !== 'function') fs.hidden = true;
     this.title.append(appBtn, qat, titleText, right);
+  }
+
+  /** 화면 테마 단추(COLORTHEME): 누르면 밝게 ↔ 어둡게, 이 브라우저에 기억한다. 도면 영역 색은 그대로 */
+  private themeButton(): HTMLButtonElement {
+    const b = h('button', { type: 'button', class: 'icon-btn theme-btn' });
+    const paint = () => {
+      const light = colorTheme() === 1;
+      const label = light ? '어두운 테마로 바꾸기' : '밝은 테마로 바꾸기';
+      b.innerHTML = icon(light ? 'moon' : 'sun');
+      b.title = label;
+      b.setAttribute('aria-label', label);
+    };
+    b.addEventListener('click', () => this.toggleTheme());
+    window.addEventListener(THEME_EVENT, paint);
+    paint();
+    return b;
+  }
+
+  private toggleTheme(): void {
+    setColorTheme(colorTheme() === 1 ? 0 : 1);
+    this.app.view.requestOverlay();
   }
 
   private iconBtn(name: string, label: string, run: () => void): HTMLButtonElement {
@@ -1146,13 +1185,26 @@ export class Shell implements UiHooks {
   }
 
   private buildRibbon(): void {
+    // 탭을 다시 만들어도 키보드 초점은 같은 자리의 탭에 남긴다
+    const focusedTab = [...this.ribbonTabs.children].indexOf(document.activeElement as Element);
     this.ribbonTabs.innerHTML = '';
     RIBBON.forEach((t, i) => {
-      const b = h('button', { class: `ribbon-tab ${i === this.activeTab ? 'active' : ''}`, role: 'tab', 'aria-selected': i === this.activeTab ? 'true' : 'false' }, t.tab);
+      const on = i === this.activeTab;
+      const b = h('button', { type: 'button', class: `ribbon-tab ${on ? 'active' : ''}`, role: 'tab', id: `ribbon-tab-${i}`, 'aria-selected': on ? 'true' : 'false', 'aria-controls': 'ribbon-panel', tabindex: on ? 0 : -1 }, t.tab);
       b.addEventListener('click', () => {
         this.setRibbonOpen(this.activeTab === i ? !this.ribbonOpen() : true);
         this.activeTab = i;
         this.buildRibbon();
+      });
+      // 왼쪽·오른쪽 화살표·Home·End로 탭을 옮겨 다니고 Enter·Space로 연다(탭 목록은 Tab 한 번이면 지나간다)
+      b.addEventListener('keydown', (ev) => {
+        const k = (ev as KeyboardEvent).key;
+        const n = RIBBON.length;
+        const to = k === 'ArrowRight' ? (i + 1) % n : k === 'ArrowLeft' ? (i - 1 + n) % n : k === 'Home' ? 0 : k === 'End' ? n - 1 : -1;
+        if (to < 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        (this.ribbonTabs.children[to] as HTMLElement | undefined)?.focus();
       });
       b.addEventListener('dblclick', () => {
         if (this.overlayMode) return;
@@ -1161,7 +1213,9 @@ export class Shell implements UiHooks {
       });
       this.ribbonTabs.append(b);
     });
+    if (focusedTab >= 0) (this.ribbonTabs.children[focusedTab] as HTMLElement | undefined)?.focus({ preventScroll: true });
     revealX(this.ribbonTabs, this.ribbonTabs.children[this.activeTab] as HTMLElement | undefined ?? null);
+    this.ribbon.setAttribute('aria-labelledby', `ribbon-tab-${this.activeTab}`);
     this.ribbon.innerHTML = '';
     const tab = RIBBON[this.activeTab]!;
     this.combos = null;
@@ -1420,29 +1474,60 @@ export class Shell implements UiHooks {
 
   refreshTabs(): void {
     const app = this.app;
+    // 다시 만들어도 키보드 초점은 같은 자리의 탭(이름 단추·닫기 단추)에 남긴다
+    const focusables = () => [...this.fileTabs.querySelectorAll<HTMLElement>('.filetab-open, .filetab .x')];
+    const focusedAt = focusables().indexOf(document.activeElement as HTMLElement);
     this.fileTabs.innerHTML = '';
-    const startTab = h('div', { class: `filetab ${!app.active ? 'active' : ''}`, role: 'tab' }, h('span', {}, '시작'));
-    startTab.addEventListener('click', () => app.activate(null));
-    this.fileTabs.append(startTab);
+    // 탭 하나 = 여는 단추 + 닫기 단추(나란한 두 단추라 키보드·화면 읽기 프로그램에서 겹친 컨트롤이 되지 않는다). 지금 탭은 aria-current
+    const tab = (label: Node, on: boolean, activate: () => void, title?: string, close?: HTMLButtonElement): HTMLDivElement => {
+      const open = h('button', { type: 'button', class: 'filetab-open', title, 'aria-current': on ? 'true' : undefined }, label);
+      open.addEventListener('click', activate);
+      this.tabKeys(open, close ? () => close.click() : undefined);
+      const t = h('div', { class: `filetab ${on ? 'active' : ''}` }, open, close ?? null);
+      // 탭의 빈 곳을 눌러도 연다
+      t.addEventListener('click', (ev) => {
+        if (ev.target === t) activate();
+      });
+      return t;
+    };
+    this.fileTabs.append(tab(h('span', {}, '시작'), !app.active, () => app.activate(null)));
     for (const d of app.docs) {
-      const x = h('button', { class: 'icon-btn x', title: '닫기', 'aria-label': `${d.name} 닫기`, html: icon('close2') });
+      const x = h('button', { type: 'button', class: 'icon-btn x', title: '닫기', 'aria-label': `${d.name} 닫기`, html: icon('close2') });
       x.addEventListener('click', (ev) => {
         ev.stopPropagation();
         app.close(d);
       });
       const dirty = d.session?.dirty;
-      const t = h('div', { class: `filetab ${app.active === d ? 'active' : ''}`, role: 'tab', title: `${d.saveName}${d.size ? ` (${formatBytes(d.size)})` : ''}${dirty ? ' · 저장하지 않은 변경 있음' : ''}` }, h('span', { translate: 'no' }, `${d.saveName}${dirty ? ' *' : ''}`), x);
-      t.addEventListener('click', () => app.activate(d));
+      const t = tab(h('span', { translate: 'no' }, `${d.saveName}${dirty ? ' *' : ''}`), app.active === d, () => app.activate(d), `${d.saveName}${d.size ? ` (${formatBytes(d.size)})` : ''}${dirty ? ' · 저장하지 않은 변경 있음' : ''}`, x);
       t.addEventListener('auxclick', (ev) => {
         if ((ev as MouseEvent).button === 1) app.close(d);
       });
       this.fileTabs.append(t);
     }
-    const plus = h('button', { class: 'icon-btn', title: '열기', 'aria-label': '파일 열기', html: icon('plus') });
+    const plus = h('button', { type: 'button', class: 'icon-btn', title: '열기', 'aria-label': '파일 열기', html: icon('plus') });
     plus.addEventListener('click', () => this.pickFiles());
     this.fileTabs.append(plus);
+    if (focusedAt >= 0) {
+      const list = focusables();
+      list[Math.min(focusedAt, list.length - 1)]?.focus({ preventScroll: true });
+    }
     revealX(this.fileTabs, this.fileTabs.querySelector<HTMLElement>('.filetab.active'));
     this.refreshRibbonState();
+  }
+
+  /** 도면 탭 이름 단추 키보드: 왼쪽·오른쪽 화살표·Home·End로 탭을 옮기고, Delete로 닫는다(Enter·Space는 단추가 받는다) */
+  private tabKeys(open: HTMLElement, close?: () => void): void {
+    open.addEventListener('keydown', (ev) => {
+      const k = ev as KeyboardEvent;
+      const tabs = [...this.fileTabs.querySelectorAll<HTMLElement>('.filetab-open')];
+      const i = tabs.indexOf(open);
+      const to = k.key === 'ArrowRight' ? (i + 1) % tabs.length : k.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length : k.key === 'Home' ? 0 : k.key === 'End' ? tabs.length - 1 : -1;
+      if (to >= 0) tabs[to]!.focus();
+      else if (k.key === 'Delete' && close) close();
+      else return;
+      k.preventDefault();
+      k.stopPropagation();
+    });
   }
 
   refreshLayouts(): void {
@@ -1760,11 +1845,28 @@ export class Shell implements UiHooks {
   // 시작 화면
   // -------------------------------------------------------------------------
 
-  private recentList = h('div', { class: 'recent' });
+  private recentList = h('ul', { class: 'recent', 'aria-labelledby': 'start-recent-title' });
+  private recentClear = h('button', { type: 'button', class: 'recent-clear', hidden: true, title: '최근 문서 목록을 모두 지웁니다(원래 파일은 그대로)' }, '모두 지우기');
+  private recentSeq = 0;
+  /** 시작 화면 위의 열기 실패 안내(닫거나 다른 파일을 열면 사라진다) */
+  private startError = h('div', { class: 'start-error', role: 'alert', hidden: true });
 
   showStart(show: boolean): void {
     this.start.hidden = !show;
-    if (show) this.refreshRecent();
+    if (show) void this.refreshRecent();
+    else this.startError.hidden = true;
+  }
+
+  /** 시작 화면에 열기 실패 안내를 남긴다: 파일 이름, 무엇이 문제인지, 무엇을 하면 되는지 */
+  showOpenError(name: string, info: OpenErrorInfo): void {
+    const close = h('button', { type: 'button', class: 'icon-btn start-error-close', title: '안내 닫기', 'aria-label': '안내 닫기', html: icon('close2') });
+    close.addEventListener('click', () => (this.startError.hidden = true));
+    this.startError.replaceChildren(
+      h('div', { class: 'start-error-body' }, h('strong', { class: 'start-error-name', translate: 'no' }, name), h('p', { class: 'start-error-msg' }, info.message), h('p', { class: 'start-error-hint' }, info.hint)),
+      close,
+    );
+    this.startError.hidden = false;
+    this.startError.scrollIntoView?.({ block: 'nearest' });
   }
 
   private buildStart(): void {
@@ -1793,6 +1895,7 @@ export class Shell implements UiHooks {
         'div',
         { class: 'start-inner' },
         h('h1', {}, 'OpenCAD 무료 DWG·DXF 캐드'),
+        this.startError,
         // 소개와 지원 범위는 화면마다 둘: 편집 화면·데스크톱(그리기·편집·저장)과 휴대폰 보기 모드(보기·치수 확인). CSS가 #app.view-mode로 고른다
         h('p', { class: 'lead edit-copy' }, 'DWG·DXF 도면을 열거나 새로 만들어 그리고, 고치고, 저장하는 무료 2D 웹 캐드입니다. 설치나 회원가입 없이 브라우저에서 바로 사용하며, 도면 파일은 서버로 보내지 않고 이 컴퓨터에서 처리합니다.'),
         h('p', { class: 'lead view-copy' }, '휴대폰에서 DWG·DXF 도면을 열어 보고 치수를 확인하는 무료 2D 웹 캐드입니다. 설치나 회원가입 없이 브라우저에서 바로 쓰며, 도면 파일은 서버로 보내지 않고 이 기기에서 처리합니다.'),
@@ -1805,7 +1908,13 @@ export class Shell implements UiHooks {
             { class: 'start-side' },
             // 휴대폰 보기 모드에서는 새 도면(그리기)을 숨겨 예제 도면이 먼저 보이게 한다
             h('div', { class: 'card start-new-card' }, h('h3', {}, '새로 그리기'), h('div', { style: 'margin-bottom:8px;color:var(--text-dim)' }, '빈 도면을 만들어 바로 그리기를 시작합니다(Ctrl+N).'), newDrawing),
-            h('div', { class: 'card' }, h('h3', {}, '최근 문서'), this.recentList),
+            h(
+              'div',
+              { class: 'card recent-card' },
+              h('div', { class: 'recent-head' }, h('h3', { id: 'start-recent-title' }, '최근 문서'), this.recentClear),
+              this.recentList,
+              h('p', { class: 'recent-note' }, '최근 문서는 이 기기의 이 브라우저에만 저장하며 서버로 보내지 않습니다.'),
+            ),
             h('div', { class: 'card' }, h('h3', {}, '처음이라면'), h('div', { style: 'margin-bottom:8px;color:var(--text-dim)' }, '예제 도면으로 기능을 둘러볼 수 있습니다.'), sample),
             h(
               'div',
@@ -1836,24 +1945,63 @@ export class Shell implements UiHooks {
       ),
     );
     if (this.guide) this.start.querySelector('.start-inner')!.append(this.guide);
+    this.recentClear.addEventListener('click', () => void this.recent.clear().then(() => this.refreshRecent()));
+    // 날짜 표기(10월 27일 ↔ Oct 27)를 새 언어로
+    this.root.addEventListener('languagechange', () => void this.refreshRecent());
   }
 
   private async refreshRecent(): Promise<void> {
+    const seq = ++this.recentSeq;
     const list = await this.recent.list().catch(() => []);
-    this.recentList.innerHTML = '';
+    if (seq !== this.recentSeq) return;
+    this.recentClear.hidden = !list.length;
     if (!list.length) {
-      this.recentList.append(h('div', { style: 'color:var(--text-faint)' }, '아직 연 문서가 없습니다.'));
+      this.recentList.replaceChildren(h('li', { class: 'recent-empty' }, '아직 연 문서가 없습니다.'));
       return;
     }
-    for (const r of list) {
-      const b = h('button', {}, h('span', {}, r.name), h('small', {}, `${formatBytes(r.size)} · ${new Date(r.time).toLocaleDateString('ko-KR')}`));
-      b.addEventListener('click', async () => {
-        const data = await this.recent.get(r.id);
-        if (data) void this.app.openFile(r.name, data);
-        else toast('저장된 파일을 찾지 못했습니다.', 'warn');
-      });
-      this.recentList.append(b);
+    const now = Date.now();
+    const locale = document.documentElement.lang || 'ko';
+    this.recentList.replaceChildren(
+      ...list.map((r) => {
+        // 파일 이름과 날짜(지금 언어로 적는다)는 번역하지 않는다
+        const open = h('button', { type: 'button', class: 'recent-open' }, h('span', { class: 'recent-name', translate: 'no' }, r.name), h('small', { translate: 'no' }, `${formatBytes(r.size)} · ${recentTimeLabel(r.time, now, locale)}`));
+        open.addEventListener('click', () => void this.openRecent(r.id));
+        const del = h('button', { type: 'button', class: 'icon-btn recent-del', title: '목록에서 지우기', 'aria-label': `최근 문서에서 지우기: ${r.name}`, html: icon('close2') });
+        del.addEventListener('click', () => {
+          // 지운 줄의 다음 줄(없으면 앞 줄)로 키보드 초점을 옮긴다
+          const row = del.closest('li');
+          const next = (row?.nextElementSibling ?? row?.previousElementSibling)?.querySelector<HTMLElement>('.recent-open');
+          void this.recent.remove(r.id).then(async () => {
+            await this.refreshRecent();
+            const again = next && [...this.recentList.querySelectorAll<HTMLElement>('.recent-open')].find((b) => b.textContent === next.textContent);
+            (again ?? this.recentList.querySelector<HTMLElement>('.recent-open, .recent-empty'))?.focus?.();
+          });
+        });
+        return h('li', { class: 'recent-row' }, open, del);
+      }),
+    );
+  }
+
+  /**
+   * 최근 문서 다시 열기(공유 받기·?recent=도 이것으로). 파일이 없으면 목록에서 지우고, 잠깐 못 읽었으면 남겨 다시 누를 수 있게 한다.
+   * dropOnFail이면(공유로 받은 파일) 열지 못한 파일을 목록에 남기지 않는다
+   */
+  async openRecent(id: string, dropOnFail = false): Promise<boolean> {
+    const got = await this.recent.read(id);
+    if (got.kind === 'missing') {
+      toast('저장해 둔 파일을 찾지 못해 목록에서 지웠습니다.', 'warn');
+      await this.recent.remove(id);
+      void this.refreshRecent();
+      return false;
     }
+    if (got.kind === 'error') {
+      toast('저장해 둔 파일을 지금 읽지 못했습니다. 잠시 뒤 다시 눌러 보십시오.', 'warn');
+      return false;
+    }
+    const st = await this.app.openFile(got.name, got.data, 'local', beginOpen('local', got.name.split('.').pop() ?? 'other'));
+    if (!st && dropOnFail) await this.recent.remove(id);
+    void this.refreshRecent();
+    return !!st;
   }
 
   async openSample(): Promise<void> {

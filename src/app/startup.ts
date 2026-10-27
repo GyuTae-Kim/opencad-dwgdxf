@@ -1,4 +1,4 @@
-import { colorTheme } from './theme';
+import { applyColorTheme, colorTheme } from './theme';
 
 export interface EditorActions {
   openFiles(files: File[]): Promise<void>;
@@ -9,8 +9,7 @@ export interface EditorActions {
 
 /** Enter the CAD workspace on every visit; keep the static guide as a loading fallback. */
 export function mountEditor(root: HTMLElement, load: () => Promise<EditorActions>): () => void {
-  if (colorTheme() === 1) document.documentElement.dataset.theme = 'light';
-  else delete document.documentElement.dataset.theme;
+  applyColorTheme(colorTheme());
   const intro = root.querySelector<HTMLElement>('.site-intro');
   if (!intro) throw new Error('Missing startup fallback');
   const status = intro.querySelector<HTMLElement>('.boot-status')!;

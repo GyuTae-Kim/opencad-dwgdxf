@@ -12,7 +12,7 @@
   --border-soft: #46505d;
   --text: #e8ebf0;
   --text-dim: #a9b2bf;
-  --text-faint: #7d8796;
+  --text-faint: #9aa4b2;
   --accent: #3d95f0;
   --accent-soft: rgba(61, 149, 240, 0.18);
   --danger: #ff6b6b;
@@ -263,7 +263,7 @@ button {
   margin-top: auto;
   padding: 2px 0 3px;
   text-align: center;
-  color: var(--text-faint);
+  color: var(--text-dim);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -367,6 +367,18 @@ button {
   color: var(--text-dim);
   cursor: pointer;
   white-space: nowrap;
+}
+.filetab-open {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
 .filetab span {
   overflow: hidden;
@@ -917,28 +929,118 @@ table.grid tr.clickable {
   color: var(--text-dim);
   line-height: 1.7;
 }
-.recent {
+.card ul.recent {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text);
 }
-.recent button {
+.recent-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.recent-head h3 {
+  margin: 0;
+}
+.recent-clear {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.recent-clear:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.recent-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.recent .recent-open {
+  flex: 1;
+  min-width: 0;
   display: flex;
   justify-content: space-between;
   gap: 8px;
+  min-height: 36px;
   padding: 6px 8px;
   border: 0;
   border-radius: 4px;
   background: transparent;
   color: var(--text);
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.recent button:hover {
+.recent-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.recent .recent-open:hover,
+.recent .recent-del:hover {
   background: var(--bg-hover);
 }
 .recent small {
+  flex: none;
   color: var(--text-faint);
+}
+.recent .recent-del {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  color: var(--text-dim);
+}
+.recent-empty {
+  color: var(--text-faint);
+}
+.recent-note {
+  margin: 8px 0 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* 시작 화면의 열기 실패 안내 */
+.start-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--danger);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+.start-error-body {
+  flex: 1;
+  min-width: 0;
+}
+.start-error-name {
+  overflow-wrap: anywhere;
+}
+.start-error p {
+  margin: 4px 0 0;
+  line-height: 1.6;
+}
+.start-error-hint {
+  color: var(--text-dim);
+}
+.start-error-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
 }
 .start-foot {
   margin-top: 18px;
@@ -997,6 +1099,9 @@ table.grid tr.clickable {
   pointer-events: none;
 }
 .toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   max-width: min(360px, calc(100vw - 32px));
   padding: 10px 14px;
   border: 1px solid var(--border-soft);
@@ -1011,6 +1116,40 @@ table.grid tr.clickable {
 }
 .toast.warn {
   border-left-color: #ffcf6b;
+}
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  /* 열기 실패 안내는 "무엇이 문제인지" 다음 줄에 "할 일"을 적는다 */
+  white-space: pre-line;
+}
+.toast-action {
+  flex: none;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--bg-active);
+  border-radius: 5px;
+  background: var(--bg-active);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.toast-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.toast-close:hover {
+  background: var(--bg-hover);
 }
 
 /* 메뉴 */
@@ -1102,6 +1241,15 @@ table.grid tr.clickable {
 }
 .dialog header .icon-btn {
   margin-left: auto;
+}
+.dialog-title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.dialog:focus {
+  outline: none;
 }
 .dialog .body {
   min-height: 0;
@@ -1763,7 +1911,7 @@ button.aci.on {
   --border-soft: #d3d8e0;
   --text: #1d2530;
   --text-dim: #4f5b69;
-  --text-faint: #7a8593;
+  --text-faint: #5f6a78;
   --accent: #1f6fd1;
   --accent-soft: rgba(31, 111, 209, 0.14);
   --danger: #c62828;
@@ -2299,5 +2447,29 @@ html:lang(zh-CN) { --font: -apple-system, "PingFang SC", "Microsoft YaHei", sans
   }
   .dialog-back {
     padding-top: max(16px, env(safe-area-inset-top, 0px));
+  }
+}
+
+/* 접근성: 키보드로 옮긴 초점은 늘 보이게(마우스로 누를 때는 그리지 않는다). 따로 정한 곳이 있으면 그것을 따른다 */
+:where(button, a[href], summary, select, [tabindex]:not([tabindex='-1']), [role='tab'], [role='menuitem']):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.menu button:focus-visible,
+.filetab-open:focus-visible,
+.filetab .x:focus-visible {
+  outline-offset: -2px;
+}
+.menu button:focus-visible {
+  background: var(--bg-hover);
+}
+/* 명령행: 입력란에 초점이 있으면 테두리로 알린다(입력란 자체는 테두리가 없다) */
+.cmdline:focus-within {
+  border-color: var(--accent);
+}
+/* 좁은 휴대폰: 제목이 잘리지 않게 테마 단추는 응용프로그램 메뉴(A)로 옮긴다 */
+@media (max-width: 480px) {
+  .titlebar .theme-btn {
+    display: none;
   }
 }

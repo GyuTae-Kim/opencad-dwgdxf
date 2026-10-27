@@ -18,6 +18,7 @@ import type {
 } from '../../../core/model';
 import { defaultPlotSettings } from '../../../core/finalize';
 import { type BitReader, DwgFormatError, codesToString } from '../bitstream';
+import { decodeCadEscapes } from '../../../core/codepage';
 import { cmcToCad } from '../color';
 import { R2000, R2004, R2007, R2010, R2018 } from '../version';
 import type { ObjectReader } from './reader';
@@ -122,7 +123,7 @@ export function readLayout(or: ObjectReader): LayoutRaw {
   const r = or.dat;
   const ver = or.ver;
   const plot = readPlotSettings(r, ver);
-  const name = r.TV();
+  const name = decodeCadEscapes(r.TV());
   const tabOrder = r.BL();
   const flags = r.BS();
   const ucsOrigin = r.BD3();
@@ -175,7 +176,7 @@ export function readMLineStyle(or: ObjectReader): MLineStyleRaw {
   or.commonObject();
   const r = or.dat;
   const ver = or.ver;
-  const name = r.TV();
+  const name = decodeCadEscapes(r.TV());
   const description = r.TV();
   const f = r.BS();
   // DWG 비트 → DXF 비트

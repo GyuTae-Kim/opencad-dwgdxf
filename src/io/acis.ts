@@ -542,15 +542,37 @@ export function sabWires(b: Uint8Array): Vec3[][] | null {
   return sabShape(b)?.wires ?? null;
 }
 
-/** DXF ACIS 객체의 원본 태그(1·3 SAT 줄)에서 모서리 선과 곡선 */
-export function dxfSatShape(raw: readonly { code: number; value: string | number }[]): AcisShape | null {
+/** DXF ACIS 객체의 원본 태그(1·3 SAT 줄) → 감춤을 푼 SAT 글(줄마다 \n). SAT 줄이 없으면 null */
+export function dxfSatText(raw: readonly { code: number; value: string | number }[]): string | null {
   const lines: string[] = [];
   for (const t of raw) {
     if (t.code === 1) lines.push(String(t.value));
     else if (t.code === 3 && lines.length) lines[lines.length - 1] += String(t.value);
   }
   if (!lines.length) return null;
-  return satShape(lines.map((l) => decodeSatLine(l, true)).join('\n'));
+  return lines.map((l) => decodeSatLine(l, true)).join('\n') + '\n';
+}
+
+/** DXF ACIS 객체의 원본 태그(1·3 SAT 줄)에서 모서리 선과 곡선 */
+export function dxfSatShape(raw: readonly { code: number; value: string | number }[]): AcisShape | null {
+  const text = dxfSatText(raw);
+  return text === null ? null : satShape(text);
+}
+
+/** SAT 글 머리의 판(400, 700, 21500 …). 모르면 NaN */
+export function satVersion(text: string): number {
+  return Number(text.trim().split(/\s+/)[0]);
+}
+
+/** SAT 글 → DWG 판 1 자료 바이트(감춤: 32보다 큰 글자 c → 159 − c). 감출 수 없는 글자(127 이상)가 있으면 null */
+export function encodeSatBytes(text: string): Uint8Array | null {
+  const out = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c > 126) return null;
+    out[i] = c <= 0x20 ? c : 159 - c;
+  }
+  return out;
 }
 
 /** DXF ACIS 객체의 원본 태그(1·3 SAT 줄)에서 모서리 선 */

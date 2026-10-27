@@ -270,6 +270,10 @@ export class EntityWriter {
       this.done(h);
       return;
     }
+    if (pe.acisSat) {
+      this.acisSat(e, h, pe.acisSat, l);
+      return;
+    }
     if (pe.table) {
       this.table(e as TableEntity, pe, l);
       return;
@@ -571,6 +575,34 @@ export class EntityWriter {
     this.done(h);
   }
 
+  /**
+   * R2000 ACIS 객체(ODA 명세 20.4.41)를 판 1(SAT 글) 자료로. AutoCAD가 쓴 R2000 파일과 같은 배치다:
+   * 비었음 0, 모름 1, 판 1, (크기 BL, 감춘 SAT 바이트) 4096바이트씩, 0 — 와이어프레임 있음(점 없음, 등각선 4개, 등각선 있음, 선 0),
+   * 실루엣 0, 다시 비었음 1. R2000에는 기록 핸들이 없다
+   */
+  private acisSat(e: Entity, h: number, sat: Uint8Array, l: Links): void {
+    this.begin(e.type === 'REGION' ? T.REGION : e.type === 'BODY' ? T.BODY : T['3DSOLID'], h, e);
+    this.common(e, l);
+    const d = this.ow.dat;
+    d.B(0);
+    d.B(1);
+    d.BS(1);
+    for (let i = 0; i < sat.length; i += 4096) {
+      const n = Math.min(4096, sat.length - i);
+      d.BL(n);
+      for (let k = 0; k < n; k++) d.RC(sat[i + k]!);
+    }
+    d.BL(0);
+    d.B(1); // 와이어프레임 자료
+    d.B(0); // 점 없음(0, 0, 0)
+    d.BL(4); // 등각선 수
+    d.B(1); // 등각선 있음
+    d.BL(0); // 선 0
+    d.BL(0); // 실루엣 0
+    d.B(1); // 비었음
+    this.done(h);
+  }
+
   /** 이름만 있는 SHAPE의 스타일(쉐이프 파일 항목 중 첫째) */
   private shapeStyle(_name: string): number {
     for (const s of this.ctx.styles) if (s.rec.flags & 1) return s.h;
@@ -584,9 +616,12 @@ export class EntityWriter {
   private textData(e: TextEntity): void {
     const d = this.ow.dat;
     const elev = e.insert.z;
+    // 맞춤점: 왼쪽 맞춤이 아닌데 맞춤점이 없으면 삽입점(화면에 그리는 것과 같게). (0, 0)이면 0x02로 줄인다 —
+    // 읽는 쪽(AutoCAD)은 0x02를 "맞춤점 = (0, 0)"으로 읽으므로 맞춤점이 없다고 0x02를 쓰면 문자가 원점으로 옮겨진다
+    const al = e.alignPoint ?? (e.halign || e.valign ? e.insert : undefined);
     let df = 0;
     if (elev === 0) df |= 1;
-    if (!e.alignPoint) df |= 2;
+    if (!al || (al.x === 0 && al.y === 0)) df |= 2;
     if (!e.oblique) df |= 4;
     if (!e.rotation) df |= 8;
     if (e.widthFactor === 1) df |= 0x10;
@@ -598,8 +633,8 @@ export class EntityWriter {
     d.RD(e.insert.x);
     d.RD(e.insert.y);
     if (!(df & 2)) {
-      d.DD(e.alignPoint!.x, e.insert.x);
-      d.DD(e.alignPoint!.y, e.insert.y);
+      d.DD(al!.x, e.insert.x);
+      d.DD(al!.y, e.insert.y);
     }
     d.BE(e.extrusion);
     d.BT(e.thickness);

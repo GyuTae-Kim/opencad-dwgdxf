@@ -85,6 +85,8 @@ function normalizeSummary(src: CadDocument, e: Sum, a: Sum, ver: number, warning
         if (typeof z.linetype === 'string') z.linetype = up(z.linetype);
         if (typeof z.style === 'string') z.style = up(z.style);
         if (typeof z.text === 'string') z.text = normText(z.text);
+        // 왼쪽 맞춤이 아닌 문자에 맞춤점이 없으면 삽입점으로 그린다 — 쓰기는 그 삽입점을 맞춤점으로 적는다(0x02는 (0, 0)이라는 뜻)
+        if ((z.type === 'TEXT' || z.type === 'ATTRIB' || z.type === 'ATTDEF') && z.alignPoint === undefined && (z.halign || z.valign)) z.alignPoint = z.insert;
         if (z.type === 'SPLINE') z.flags = null;
         if (de?.color.rgb !== undefined && z.color) z.color = ver >= R2004 ? { aci: null, rgb: de.color.rgb } : { aci: de.color.aci >= 1 && de.color.aci <= 255 ? de.color.aci : nearestAci(de.color.rgb) };
         if (de?.color.name && z.color) z.color = { aci: null };
@@ -274,11 +276,11 @@ describe('DWG 쓰기 기초', () => {
     // 같은 버전: ACIS 도형이 남는다
     let back = readDwg(writeDwg(doc, { version: 'AC1032' }).data);
     for (const s of solids) expect(back.entityIndex.get(s.handle)?.type).toBe('3DSOLID');
-    // 다른 버전: 빠지고 경고가 남는다
+    // 다른 버전: ACIS 자료를 옮기지 못해 모서리 선을 3D 폴리선으로 남기고(첫 선이 핸들을 잇는다) 경고가 남는다
     const r = writeDwg(doc, { version: 'AC1027' });
-    expect(r.warnings.some((w) => w.code === 'dwg.write_entity_dropped')).toBe(true);
+    expect(r.warnings.some((w) => w.code === 'entity.acis_as_wires')).toBe(true);
     back = readDwg(r.data);
-    for (const s of solids) expect(back.entityIndex.get(s.handle)).toBeUndefined();
+    for (const s of solids) expect(back.entityIndex.get(s.handle)?.type).toBe('POLYLINE');
     // 값이 바뀌면(지문이 다르면) 원본 본문을 쓰지 않는다
     const changed = solids[0] as Entity & { wires?: unknown };
     changed.wires = [[{ x: 0, y: 0, z: 0 }]];

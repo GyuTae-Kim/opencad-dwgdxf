@@ -1516,7 +1516,8 @@ export function writeEntity(s: TagSink, e: Entity, ctx: WriteContext, owner: str
       thickness(w, e);
       w.p3(10, e.insert);
       w.t(40, e.size || 1);
-      w.t(2, e.name);
+      if (e.name) w.t(2, e.name);
+      else w.t(70, e.shapeNumber ?? 0);
       if (e.rotation) w.deg(50, e.rotation);
       if (e.widthFactor !== 1 && e.widthFactor > 0) w.t(41, e.widthFactor);
       if (e.oblique) w.deg(51, e.oblique);

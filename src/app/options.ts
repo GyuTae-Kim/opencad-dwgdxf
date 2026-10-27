@@ -8,7 +8,7 @@
 import type { App, CommandContext } from './app';
 import { SAVE_TYPES } from './save';
 import { saveTime } from './autosave';
-import { colorTheme } from './theme';
+import { applyColorTheme, colorTheme } from './theme';
 import { browserSysvar, setBrowserSysvar } from './sysvars';
 import { h } from './ui/dom';
 import { checkIn, fail, group, numIn, numOf, prefGet, prefSet, resultDialog, row, selectIn, tabs } from './mgr-ui';
@@ -209,10 +209,7 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   prefSet(KEY_SAVETIME, String(r.saveMin));
   // 색 테마는 theme.ts와 같은 보관 값·문서 표시
   prefSet(KEY_THEME, theme.value);
-  if (typeof document !== 'undefined') {
-    if (theme.value === '1') document.documentElement.dataset.theme = 'light';
-    else delete document.documentElement.dataset.theme;
-  }
+  applyColorTheme(theme.value === '1' ? 1 : 0);
   const bgv = parseInt(bg.value.replace('#', ''), 16);
   if (Number.isFinite(bgv) && app.view && bgv !== app.view.modelBg) {
     app.view.modelBg = bgv;

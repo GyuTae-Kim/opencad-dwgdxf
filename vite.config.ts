@@ -1,4 +1,5 @@
 import { siteLocalization } from './tools/localization-plugin.mjs';
+import { serviceWorker } from './tools/sw-plugin.mjs';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
@@ -56,7 +57,8 @@ function pdfjsAssets(): Plugin {
 export default defineConfig({
   // GitHub Pages 프로젝트 사이트 경로(https://gyutae-kim.github.io/opencad-dwgdxf/)
   base: './',
-  plugins: [siteLocalization(), siteMetadata(), pdfjsAssets()],
+  // serviceWorker는 빌드 끝(언어 쪽까지 다 쓴 뒤)에 dist/sw.js를 만든다(오프라인·공유 받기)
+  plugins: [siteLocalization(), siteMetadata(), pdfjsAssets(), serviceWorker()],
   build: {
     target: 'es2022',
     sourcemap: true,

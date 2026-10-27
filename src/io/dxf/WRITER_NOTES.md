@@ -85,7 +85,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 | ATTRIB·ATTDEF | R2010+ 버전 280, 잠금 280(R2007+), 74 세로 정렬. 여러 줄 속성(R2018)은 101 Embedded Object MTEXT, 그 전 버전은 한 줄 문자로 |
 | MTEXT | 250자 조각, 46 정의 높이(R2007+, 값이 있을 때), 배경(R2004+), 단(R2018 101 Embedded Object; 그 전은 `mtext.columns_dropped`) |
 | INSERT·MINSERT | 66·ATTRIB들·SEQEND. 행·열이 있으면 AcDbMInsertBlock |
-| DIMENSION | 종류별 하위 클래스(회전·정렬·2선 각도·지름·반지름·3점 각도·세로좌표), ARC_DIMENSION(AcDbArcDimension, 70 종류 값은 R2013까지 5·R2018 8), LARGE_RADIAL_DIMENSION. 재지정(`overrides`)은 ACAD DSTYLE 확장 자료로(원래 확장 자료와 같으면 원래 순서 그대로) |
+| DIMENSION | 종류별 하위 클래스(회전·정렬·2선 각도·지름·반지름·3점 각도·세로좌표), ARC_DIMENSION(AcDbArcDimension, 70 종류 값은 모든 버전에서 5 — AutoCAD 2026이 쓴 R2018 DXF로 확인, 다른 프로그램이 쓴 8은 읽을 때 5로), LARGE_RADIAL_DIMENSION(70 종류 값 9, 모델은 & 7로 가리는 4). 재지정(`overrides`)은 ACAD DSTYLE 확장 자료로(원래 확장 자료와 같으면 원래 순서 그대로) |
 | LEADER | 76 정점 수·10 정점, 340 주석, 210~213 |
 | MULTILEADER | CONTEXT_DATA{ … LEADER{ … LEADER_LINE{ … } } } 전체, 문자·블록 내용, 블록 속성(330·177·44·302). 모델에 없는 값은 `props`(읽을 때 남긴 값)나 AutoCAD 기본값 |
 | HATCH·MPOLYGON | 폴리선·모서리 경계(선·호·타원·스플라인), 연관 객체(330), 무늬 선, 씨앗 점, 그라데이션(R2004+). 모델의 호·타원 모서리 각도는 반시계로 정규화되어 있으므로 시계 방향(73 = 0) 모서리는 파일 규칙(보각, 시작·끝 바꿈)으로 되돌린다 |
@@ -93,7 +93,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 | IMAGE·WIPEOUT | IMAGEDEF·IMAGEDEF_REACTOR 연결, 경계가 없으면 이미지 사각형 |
 | VIEWPORT | R2000+ 전체 자료, 동결 도면층 이름 → 341 핸들. R12는 ACAD MVIEW 확장 자료 |
 | MLINE | 스타일 핸들(없으면 Standard), 정점마다 요소 매개변수 |
-| TOLERANCE·SHAPE | 그대로(SHAPE는 이름이 있을 때만; DWG는 번호만 있어 `entity.shape_dropped`) |
+| TOLERANCE·SHAPE | 그대로. SHAPE 이름을 모르면(DWG는 번호만 있다) AutoCAD처럼 2 대신 쉐이프 번호를 70에 쓴다(R12는 자리가 없어 `entity.shape_dropped`) |
 | ACAD_TABLE | 블록 참조 부분은 모델에서. 표 자료는 같은 형식 계열(R2004까지 / R2007+)의 원본 태그가 있으면 그대로(342 표 스타일·343 블록 레코드는 다시 정함), 없으면 셀 배치(`io/tablecells.ts`)로 만든다: 병합(173 덮인 셀, 175·176 기준 셀의 열·행), 셀 재지정(R2007+ 91 / 그 전 177 플래그, 170 정렬, 63 배경색 + 283 0, 64 문자 색, 7 문자 스타일, 140 높이). 앱 표는 OPENCAD_TABLE + 표 스타일(행 종류)에서, AutoCAD 표는 원본 태그에서 온다. `table.synthesized`는 앱 표가 아닐 때만(다른 형식 계열로 옮겨 테두리 재지정이 빠지거나 셀 서식을 모를 때) |
 | MESH | AcDbSubDMesh(R2010+) |
 | PDF·DWF·DGN UNDERLAY | 정의 객체가 있고 버전이 지원할 때(PDF R2010+, DWF·DGN R2007+) |
@@ -141,6 +141,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 
 THUMBNAILIMAGE·ACDSDATA 등은 리더가 원본 태그(`doc.rawSections`)로 남기고 쓰기가 그대로 쓴다.
 ACDSDATA는 원본과 대상이 모두 R2013+일 때만, THUMBNAILIMAGE는 R2000+일 때만 쓴다. R12에는 쓰지 않는다.
+ACDSDATA의 ACIS 형상 레코드(`320` 핸들 + `2 ASM_Data`)는 ACIS 객체로 쓰는 도형 것만 남긴다(지운 솔리드·와이어로 바꾼 솔리드의 레코드는 뺀다).
 
 ## 리더 보강(왕복용)
 

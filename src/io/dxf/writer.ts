@@ -4,7 +4,7 @@
  * 구역: HEADER, CLASSES(R2000+), TABLES, BLOCKS, ENTITIES, OBJECTS(R2000+), 그리고 모델이 해석하지 않은 구역(THUMBNAILIMAGE,
  * ACDSDATA 등, 그 구역을 담을 수 있는 버전일 때). 무엇을 어떻게 쓰는지는 WRITER_NOTES.md에 정리했다.
  */
-import type { BlockDef, CadDocument, HeaderValue, ReadWarning, Vec3 } from '../../core/model';
+import type { BlockDef, CadDocument, HeaderValue, RawTag, ReadWarning, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { STANDARD_CLASSES } from './classes';
 import { DEFAULT_HEADER, HEADER_VARS, R12_HEADER_VARS } from './headervars';
@@ -273,9 +273,30 @@ function writeRawSections(s: TagSink, ctx: WriteContext): void {
     if (sec.name === 'THUMBNAILIMAGE' && src < 1015) continue;
     w.t(0, 'SECTION');
     w.t(2, sec.name);
-    w.raw(sec.tags, true);
+    w.raw(sec.name === 'ACDSDATA' ? liveAcdsTags(sec.tags, ctx) : sec.tags, true);
     w.t(0, 'ENDSEC');
   }
+}
+
+/**
+ * ACDSDATA의 ACIS 형상 레코드(ACDSRECORD … 320 핸들 … 2 ASM_Data)는 ACIS 객체로 쓰는 도형 것만 남긴다
+ * (지운 솔리드·와이어로 바꾼 솔리드의 레코드가 남지 않게). 스키마·미리 보기 레코드는 그대로
+ */
+function liveAcdsTags(tags: RawTag[], ctx: WriteContext): RawTag[] {
+  const out: RawTag[] = [];
+  let rec: RawTag[] = [];
+  const flush = () => {
+    const isAsm = rec[0]?.code === 0 && rec[0].value === 'ACDSRECORD' && rec.some((t) => t.code === 2 && t.value === 'ASM_Data');
+    const h = rec.find((t) => t.code === 320);
+    if (!isAsm || (h && ctx.acisLive.has(String(h.value).trim().toUpperCase()))) out.push(...rec);
+    rec = [];
+  };
+  for (const t of tags) {
+    if (t.code === 0) flush();
+    rec.push(t);
+  }
+  flush();
+  return out;
 }
 
 function serialize(doc: CadDocument, options: DxfWriteOptions, codepage: string) {

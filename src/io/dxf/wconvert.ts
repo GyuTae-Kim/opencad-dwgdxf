@@ -301,7 +301,8 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
       ctx.warn('entity.ole_dropped', 'OLE 자료가 없어 OLE 객체를 쓰지 않았습니다.');
       return [];
     case 'SHAPE':
-      if (!e.name) {
+      // 이름을 모르면 AutoCAD처럼 쉐이프 번호(70)로 쓴다(DWG에서 읽은 SHAPE는 번호만 있다). R12에는 번호 자리가 없다
+      if (!e.name && (r12 || !(e.shapeNumber! > 0))) {
         ctx.warn('entity.shape_dropped', '쉐이프 이름을 몰라 SHAPE를 쓰지 않았습니다.');
         return [];
       }
@@ -388,9 +389,9 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
         ctx.warn('entity.dimension_as_insert', '이 버전에 없는 치수 종류를 치수 그림 블록의 삽입으로 썼습니다.', e.subtype);
         return [blockInsert(e, e.block, { x: 0, y: 0, z: 0 })];
       }
-      if (e.subtype === 'ARC_DIMENSION') {
-        // 호 치수의 종류 값: R2013까지 5, R2018부터 8(AutoCAD와 같음)
-        const t = (e.dimType & 0xfff0) | (ver >= 1032 ? 8 : 5);
+      if (e.subtype === 'ARC_DIMENSION' || e.subtype === 'LARGE_RADIAL_DIMENSION') {
+        // 종류 값(70)은 AutoCAD가 쓰는 대로: 호 길이 5(R2018 DXF도 5 — AutoCAD 2026이 쓴 파일로 확인), 꺾기 반지름 9
+        const t = (e.dimType & ~0x0f) | (e.subtype === 'ARC_DIMENSION' ? 5 : 9);
         if (t !== e.dimType) return [{ ...e, dimType: t }];
       }
       return null;

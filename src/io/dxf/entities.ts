@@ -663,6 +663,10 @@ function dimension(c: Common, subtype?: DimensionEntity['subtype']): DimensionEn
   } as DimensionEntity;
   if (t.hasPoint(12, s)) e.insertPoint = t.point(12, undefined, s);
   if (subtype) e.subtype = subtype;
+  // 호 길이·꺾기 반지름 치수의 종류 값: 파일에는 5·9(AutoCAD) 또는 8(다른 프로그램의 R2018 호 길이)이 온다.
+  // 모델은 DWG 리더·새로 만든 치수와 같게 하위 비트가 & 7로 가려지는 값(호 길이 5, 꺾기 반지름 4)을 쓴다
+  if (subtype === 'ARC_DIMENSION') e.dimType = (e.dimType & ~0x0f) | 5;
+  else if (subtype === 'LARGE_RADIAL_DIMENSION') e.dimType = (e.dimType & ~0x0f) | 4;
   if (subtype === 'ARC_DIMENSION') {
     const a = 'AcDbArcDimension';
     e.arc = {
@@ -1562,6 +1566,8 @@ function shape(c: Common): ShapeEntity {
     widthFactor: t.num(41, 1) || 1,
     oblique: t.num(51) * DEG,
   } as ShapeEntity;
+  // 쉐이프 파일을 찾지 못한 AutoCAD는 이름(2) 대신 쉐이프 번호를 70에 쓴다
+  if (t.has(70) && t.int(70) > 0) e.shapeNumber = t.int(70);
   ocs(t, e);
   return e;
 }
