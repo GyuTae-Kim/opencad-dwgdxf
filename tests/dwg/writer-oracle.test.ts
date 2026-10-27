@@ -4,18 +4,21 @@
  * - 기준 도구 결과(DXF로 저장 → ezdxf 요약)가 우리 리더로 다시 읽은 요약과 같아야 한다(normalize.ts의 알려진 차이만 맞춘다).
  *   DXF 저장은 기준 도구의 파이썬(CAD_DWG_PYTHON), 요약은 ezdxf가 있는 파이썬(CAD_PYTHON)이 한다 — 둘이 같아도 된다.
  * 결과는 쓴 파일 내용의 SHA-1로 .runtime/dwg-writer에 캐시한다(처음 한 번만 느리다).
+ * 준비(쓰기 300여 번·기준 도구 실행)는 원본마다 이벤트 고리를 돌려준다(오래 막으면 vitest 워커가 시간 초과 오류를 낸다, tests/event-loop.ts).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import type { CadDocument } from '../../src/core/model';
 import { createNewDocument } from '../../src/core/newdoc';
 import { readDwg, writeDwg } from '../../src/io/dwg';
 import { summarizeDocument } from '../oracle/summarize';
 import { compareSummaries } from '../oracle/compare';
 import { DWG_PYTHON, PYTHON, READ_DWG_IMPORT, hasDwgOracle, hasPython } from '../oracle/ezdxf';
+import { yieldToEventLoop } from '../event-loop';
 import { normalizePair } from './normalize';
 import { ROOT, WRITE_VERSIONS, dwgSources, dxfSources, readSource, stable, syntheticDocument } from './writer-fixtures';
 
@@ -23,6 +26,7 @@ const CACHE = join(ROOT, '.runtime/dwg-writer');
 const DUMP = join(ROOT, 'scripts/oracle/ezdxf_dump.py');
 /** 캐시 무효화용(기준 도구 호출 방식이 바뀌면 올린다) */
 const SCRIPT_VERSION = '2';
+const run = promisify(execFile);
 
 /** 1단계(기준 도구의 파이썬): 읽어서 같은 핸들의 DXF(<out>.dxf)로 저장하고 결과(<out>.json)를 쓴다 */
 const ENGINE = `
@@ -99,11 +103,12 @@ cases.push({ key: 'new/imperial', label: '새 도면(인치)', make: () => creat
 cases.push({ key: 'new/synthetic', label: '여러 도형 도면', make: syntheticDocument, versions: WRITE_VERSIONS });
 
 describe.skipIf(!enabled)('DWG 쓰기 ↔ 엔진(블랙박스)', () => {
-  beforeAll(() => {
+  beforeAll(async () => {
     mkdirSync(join(CACHE, 'in'), { recursive: true });
     for (const c of cases) {
       const doc = c.make();
       for (const v of c.versions) addJob(`${c.key}@${v}`, `${c.label} → ${v}`, doc, v);
+      await yieldToEventLoop();
     }
     // 캐시에 없는 것만 엔진에 넘긴다. 입력 파일은 묶음(24개)마다 쓰고 지워 디스크를 적게 쓴다
     const pending = [...jobs.values()].filter((j) => !existsSync(join(CACHE, j.hash) + '.json'));
@@ -117,8 +122,8 @@ describe.skipIf(!enabled)('DWG 쓰기 ↔ 엔진(블랙박스)', () => {
         }
         const list = join(CACHE, 'jobs.json');
         writeFileSync(list, JSON.stringify(todo));
-        execFileSync(DWG_PYTHON, ['-I', '-c', ENGINE, list], { stdio: 'pipe', timeout: 3_600_000, maxBuffer: 1 << 26 });
-        execFileSync(PYTHON, ['-I', '-c', SUMMARIZE, DUMP, list], { stdio: 'pipe', timeout: 3_600_000, maxBuffer: 1 << 26 });
+        await run(DWG_PYTHON, ['-I', '-c', ENGINE, list], { timeout: 3_600_000, maxBuffer: 1 << 26 });
+        await run(PYTHON, ['-I', '-c', SUMMARIZE, DUMP, list], { timeout: 3_600_000, maxBuffer: 1 << 26 });
       } finally {
         for (const t of todo) rmSync(t.in, { force: true });
       }

@@ -10,6 +10,28 @@ import { readDwg } from '../../src/io/dwg';
 import { readDxf } from '../../src/io/dxf/reader';
 import { decodeCadEscapes } from '../../src/core/codepage';
 import { FIXTURES, dwgFixtures, engineDxf, hasDwgOracle } from './oracle';
+import { DXF_RENAMES_DYNAMIC_BLOCKS, dynamicBlockRenames, isDynamicBlock } from './normalize';
+import type { CadDocument } from '../../src/core/model';
+import { tableKey } from '../../src/core/model';
+
+/** 참조 도형 핸들 → 블록 이름 */
+function refs(doc: CadDocument): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [h, e] of doc.entityIndex) if ((e.type === 'INSERT' || e.type === 'DIMENSION') && e.block) out.set(h, e.block);
+  return out;
+}
+
+/** normalize.ts 10번: 기준 DXF(R2000~R2007)의 `*U<n>` 동적 블록 정의를 DWG 쪽 본래 이름으로 되돌린다(E를 고친다) */
+function restoreDynamicBlockNames(E: CadDocument, A: CadDocument): Set<string> {
+  if (!DXF_RENAMES_DYNAMIC_BLOCKS(E.version)) return new Set();
+  const handles = (d: CadDocument) => [...d.blocks].map(([key, b]) => ({ key, handles: b.entities.map((e) => e.handle) }));
+  const renames = dynamicBlockRenames(handles(E), handles(A), refs(E), refs(A), (k) => isDynamicBlock(A, k));
+  for (const e of E.entityIndex.values()) {
+    const to = (e.type === 'INSERT' || e.type === 'DIMENSION') && e.block ? renames.get(tableKey(e.block)) : undefined;
+    if (to && (e.type === 'INSERT' || e.type === 'DIMENSION')) e.block = A.blocks.get(to)!.name;
+  }
+  return new Set(renames.keys());
+}
 
 /**
  * 비교하지 않는 필드
@@ -103,8 +125,9 @@ describe.skipIf(!existsSync(join(FIXTURES, 'samples')) || !hasDwgOracle())('DWG 
       const A = readDwg(new Uint8Array(readFileSync(f.path)));
       const E = readDxf(new Uint8Array(readFileSync(dxf)));
       const out: string[] = [];
+      const renamed = restoreDynamicBlockNames(E, A);
       // 기준 도구가 새로 만든 블록(R14의 화살촉 블록 등)의 도형은 뺀다
-      const extraBlocks = new Set([...E.blocks.keys()].filter((k) => !A.blocks.has(k)));
+      const extraBlocks = new Set([...E.blocks.keys()].filter((k) => !A.blocks.has(k) && !renamed.has(k)));
       const skipHandles = new Set<string>();
       for (const k of extraBlocks) for (const x of E.blocks.get(k)!.entities) skipHandles.add(x.handle);
       for (const [h, e] of E.entityIndex) {

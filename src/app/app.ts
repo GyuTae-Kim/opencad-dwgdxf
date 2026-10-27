@@ -24,7 +24,7 @@ import { CommandLine, parsePointInput } from './commandline';
 import type { MeasureResult } from './measure-result';
 import { Picker } from './pick';
 import { SELECT_HELP, SELECT_METHODS, SELECT_OPTIONS, runSelectMethod, selectMethodOf } from './selmethod';
-import { DEFAULT_SNAPS, SNAP_NAMES, findSnap } from './snap';
+import { DEFAULT_SNAPS, SNAP_NAMES, type SnapPoint, findSnaps } from './snap';
 import { type Acquired, objectTrack, polarAngles, polarTrack } from './tracking';
 import { gripPoints } from '../edit/geom';
 import { dynGrips, isDynamicReference } from '../edit/dynblock';
@@ -67,6 +67,8 @@ export interface PointSnap {
   kind: SnapKind;
   handle?: string;
   handle2?: string;
+  /** 지연된 접점(getPoint의 deferTan): point는 원·호 위 찍은 자리, 접점은 명령이 다음 점으로 구한다 */
+  deferred?: boolean;
 }
 
 /**
@@ -80,8 +82,11 @@ interface PointRequest {
   prompt: string;
   base: Pt | null;
   keywords: Keyword[];
-  rubber?: (p: Pt) => { pts: number[]; closed?: boolean; fill?: boolean; dashed?: boolean }[];
+  /** 끌기 미리보기. snap은 지금 커서가 잡은 객체 스냅(지연된 접점 미리보기 등) */
+  rubber?: (p: Pt, snap?: PointSnap | null) => { pts: number[]; closed?: boolean; fill?: boolean; dashed?: boolean }[];
   ghost?: (p: Pt) => OverlayGeom[];
+  /** 접점(TAN)을 지연된 접점으로 받는다(명령이 다음 점을 받은 뒤 접점을 구한다 — LINE) */
+  deferTan: boolean;
   allowText: boolean;
   /** 명령이 글을 받는다고 한 요청(allowText): 객체 스냅 재지정 이름도 글로 돌려준다 */
   freeText: boolean;
@@ -144,7 +149,7 @@ export interface CommandContext {
   app: App;
   /** measure: 측정 결과 값(명령행 글은 그대로, 휴대폰 보기 모드의 결과 카드가 쓴다) */
   print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void;
-  getPoint(prompt: string, opt?: { base?: Pt | null; keywords?: Keyword[]; rubber?: PointRequest['rubber']; ghost?: PointRequest['ghost']; allowText?: boolean; preferNumber?: boolean }): Promise<PointResult>;
+  getPoint(prompt: string, opt?: { base?: Pt | null; keywords?: Keyword[]; rubber?: PointRequest['rubber']; ghost?: PointRequest['ghost']; allowText?: boolean; preferNumber?: boolean; deferTan?: boolean }): Promise<PointResult>;
   getEntity(prompt: string, keywords?: Keyword[]): Promise<EntityResult>;
   /** emptyPick: 빈 곳 클릭·좌표 입력도 EmptyPick으로 돌려받는다(기존 호출의 동작은 그대로) */
   getEntity(prompt: string, keywords: Keyword[] | undefined, opt: EntityOptions): Promise<EntityResult | EmptyPick>;
@@ -574,6 +579,7 @@ export class App {
         keywords: opt.keywords ?? [],
         rubber: opt.rubber,
         ghost: opt.ghost,
+        deferTan: !!opt.deferTan,
         allowText: !!opt.allowText || !!opt.preferNumber,
         freeText: !!opt.allowText,
         preferNumber: !!opt.preferNumber,
@@ -947,6 +953,7 @@ export class App {
   /** 점 요청을 점으로 끝낸다(그 요청의 스냅 재지정·임시 추적점도 끝) */
   private finishPoint(r: PointRequest, res: PointResult): void {
     if (this.snapOverride?.req === r) this.snapOverride = null;
+    this.snapCycle = null;
     if (this.tempTrack?.req === r) {
       this.tempTrack = null;
       this.refreshAcquired();
@@ -1589,15 +1596,21 @@ export class App {
     const st = this.active!;
     const pk = this.picker();
     const modes = this.snapModesFor(r);
+    this.lastSnaps = [];
     if (pk && modes?.size) {
       // 조준창(APERTURE, 픽셀). 보지 못하고 손가락으로 찍은 점은 두 배
       const aperture = this.settings.aperture * this.view.pixelSize() * (this.blindTouch ? 2 : 1);
-      const s = findSnap(st.doc, pk, w, aperture, modes, r.base, { ext: this.extAnchors, par: this.parDirs.map((d) => d.dir) });
+      // Tab으로 도는 중이면 Tab을 누른 자리의 후보 목록을 그대로 쓴다(커서가 조준창 밖으로 나가면 처음부터)
+      const cyc = this.snapCycle;
+      if (cyc && (cyc.req !== r || Math.hypot(w.x - cyc.at.x, w.y - cyc.at.y) > aperture)) this.snapCycle = null;
+      const list = this.snapCycle?.list ?? findSnaps(st.doc, pk, w, aperture, modes, r.base, { ext: this.extAnchors, par: this.parDirs.map((d) => d.dir), deferTan: r.deferTan });
+      this.lastSnaps = list;
+      const s = this.snapCycle ? list[this.snapCycle.i % list.length] : list[0];
       if (s) {
         const p = { x: s.x, y: s.y };
         // 연장선·평행은 정렬선을 함께 보인다
         const track = s.lines?.length ? { p, lines: s.lines, tip: SNAP_NAMES[s.kind] ?? '' } : undefined;
-        return { p, snap: { p, kind: s.kind, handle: s.handle, handle2: s.handle2 }, track };
+        return { p, snap: { p, kind: s.kind, handle: s.handle, handle2: s.handle2, ...(s.deferred ? { deferred: true } : {}) }, track };
       }
     }
     // 확장 지점: 객체 스냅이 없으면 고리가 추적·격자 스냅·직교를 대신할 수 있다(등각투영 제도)
@@ -1776,12 +1789,12 @@ export class App {
     if (r?.kind === 'point') {
       // 끌기 미리보기(DRAGMODE)가 꺼져 있으면 명령의 미리보기 대신 기준점 고무줄만
       const drag = this.dragPreviewOn(r);
-      o.rubber = r.rubber && drag ? r.rubber(p) : r.base ? [{ pts: [r.base.x, r.base.y, p.x, p.y], dashed: false }] : [];
+      o.rubber = r.rubber && drag ? r.rubber(p, snap) : r.base ? [{ pts: [r.base.x, r.base.y, p.x, p.y], dashed: false }] : [];
       o.ghost = r.ghost && drag ? r.ghost(p) : [];
       this.updateDynFields(p);
       // 툴팁: 객체 스냅 이름(AUTOSNAP 4), 추적 거리·각도(AUTOSNAP 32). 끄면 그 자리에 보통 문구
       const as = this.settings.autosnap;
-      if (snap && showSnapTip(as)) o.tip = SNAP_NAMES[snap.kind] ?? null;
+      if (snap && showSnapTip(as)) o.tip = snap.deferred ? '지연된 접점' : (SNAP_NAMES[snap.kind] ?? null);
       else if (track && !snap && showTrackTip(as)) o.tip = track.tip;
       else if (!this.dynOn) o.tip = null;
       else if (r.base && !o.dynFields) {
@@ -1965,7 +1978,7 @@ export class App {
       }
       if (this.outsideLimits(p)) return;
       this.lastPoint = p;
-      this.finishPoint(r, { point: p, snap: snap ? { kind: snap.kind, handle: snap.handle, handle2: snap.handle2 } : null, ...(ev.shiftKey ? { shift: true } : {}), ...(ev.ctrlKey || ev.metaKey ? { ctrl: true } : {}) });
+      this.finishPoint(r, { point: p, snap: snap ? { kind: snap.kind, handle: snap.handle, handle2: snap.handle2, ...(snap.deferred ? { deferred: true } : {}) } : null, ...(ev.shiftKey ? { shift: true } : {}), ...(ev.ctrlKey || ev.metaKey ? { ctrl: true } : {}) });
       return;
     }
     const pk = this.picker();
@@ -2444,8 +2457,28 @@ export class App {
    */
   private interceptKey(ev: KeyboardEvent): boolean {
     if (ev.key === ' ' && this.press?.lasso) return this.cycleLasso();
-    if (ev.key === 'Tab' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !this.cmd.suggesting) return this.dynTab();
+    if (ev.key === 'Tab' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !this.cmd.suggesting) return this.snapTab() || this.dynTab();
     return false;
+  }
+
+  /** 마지막으로 찾은 객체 스냅 후보(알맞은 차례) */
+  private lastSnaps: SnapPoint[] = [];
+  /** 스냅 표식 위 Tab 순환: Tab을 처음 누른 자리(at)의 후보 목록과 지금 차례 */
+  private snapCycle: { req: PointRequest; at: Pt; list: SnapPoint[]; i: number } | null = null;
+
+  /**
+   * 스냅 표식 위의 Tab: 조준창 안에 겹친 스냅 후보가 둘 넘으면 다음 후보로 돈다(AutoCAD와 같다 — 커서를 조준창 밖으로 옮기면 처음부터).
+   * 동적 입력 칸에 친 값이 있으면 그 칸 잠그기(dynTab)가 먼저다
+   */
+  private snapTab(): boolean {
+    const r = this.request;
+    const m = this.lastMove;
+    if (r?.kind !== 'point' || !m || this.cmd.input.value.trim()) return false;
+    if (this.snapCycle?.req === r) this.snapCycle.i++;
+    else if (this.lastSnaps.length > 1) this.snapCycle = { req: r, at: m.w, list: this.lastSnaps, i: 1 };
+    else return false;
+    this.onMove(m.w, m.s, m.ev, true);
+    return true;
   }
 
   /** 올가미를 끄는 중 스페이스바: 걸침 → 윈도우 → 울타리 */

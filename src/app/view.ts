@@ -38,7 +38,7 @@ export interface OverlayState {
   selection: OverlayGeom[];
   hover: OverlayGeom | null;
   grips: Pt[];
-  snap: { p: Pt; kind: SnapKind } | null;
+  snap: { p: Pt; kind: SnapKind; deferred?: boolean } | null;
   rubber: { pts: number[]; closed?: boolean; fill?: boolean; dashed?: boolean }[];
   /** 끌고 있는 객체 미리보기(이동·복사·회전 등) */
   ghost: OverlayGeom[];
@@ -1121,7 +1121,7 @@ export class CadView {
       g.restore();
     }
     // 스냅 표지(AUTOSNAP 표식기, 크기는 OPTIONS의 AutoSnap 표식기 크기)
-    if (o.snap && showSnapMarker(this.prefs.autosnap)) drawSnap(g, W(o.snap.p.x, o.snap.p.y), o.snap.kind, snapMarkerRadius(this.prefs.markerSize));
+    if (o.snap && showSnapMarker(this.prefs.autosnap)) drawSnap(g, W(o.snap.p.x, o.snap.p.y), o.snap.kind, snapMarkerRadius(this.prefs.markerSize), !!o.snap.deferred);
     // 십자선(길이는 CURSORSIZE)
     if (o.cursor && o.crosshair) {
       const c = o.cursor;
@@ -1588,11 +1588,15 @@ export function emptyOverlay(): OverlayState {
   };
 }
 
-/** AutoCAD 스냅 표지 모양(r: 반지름 픽셀) */
-function drawSnap(g: CanvasRenderingContext2D, p: Pt, kind: SnapKind, r = 6): void {
+/** AutoCAD 스냅 표지 모양(r: 반지름 픽셀). 지연된 접점은 접점 표지 오른쪽에 점 셋(…) */
+function drawSnap(g: CanvasRenderingContext2D, p: Pt, kind: SnapKind, r = 6, deferred = false): void {
   g.save();
   g.strokeStyle = '#2fd16b';
   g.lineWidth = 2;
+  if (deferred) {
+    g.fillStyle = '#2fd16b';
+    for (let i = 0; i < 3; i++) g.fillRect(p.x + r * 1.4 + i * r * 0.6, p.y + r * 0.6, 2, 2);
+  }
   g.beginPath();
   switch (kind) {
     case 'end':

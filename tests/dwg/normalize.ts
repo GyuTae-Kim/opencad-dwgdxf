@@ -13,8 +13,14 @@
  * 8. 문자: 기준(ezdxf)은 \U+XXXX를 풀고 캐럿 표기(^J, "^ ")는 그대로 둔다. 양쪽을 글자로 푼다.
  * 9. TEXT·ATTRIB·ATTDEF 맞춤점: DWG 문자 자료 플래그 0x02는 "맞춤점 = (0, 0)"인데(AutoCAD가 같은 도면을 쓴 DXF의 11이 (0, 0)),
  *    기준은 맞춤점을 빼고 쓴다. 기준에 맞춤점이 없고 DWG 쪽이 (0, 0)이면 맞춤점을 지운다.
+ * 10. 동적 블록 정의의 이름: R2000·R2004·R2007 DXF는 동적 블록 정의를 익명 블록 `*U<n>`으로 쓴다. AutoCAD도 같다
+ *    (같은 도면을 AutoCAD가 R2000~R2007 DXF로 저장하면 `*U1`…, R2010+ DXF와 모든 판의 DWG는 본래 이름).
+ *    DWG에는 본래 이름이 있어(기준 도구가 읽은 문서도 본래 이름) 기준 → DXF 단계에서만 이름이 바뀐다.
+ *    DWG 쪽 블록 레코드에 AcDbDynamicBlockGUID 확장 자료가 있고, 블록 안 도형이나 그 블록을 가리키는 INSERT의
+ *    핸들이 같을 때만 기준의 `*U<n>`을 본래 이름으로 되돌린다(dynamicBlockRenames).
  */
 import type { CadDocument } from '../../src/core/model';
+import { tableKey } from '../../src/core/model';
 import { decodeCadEscapes } from '../../src/core/codepage';
 import { decodeCaret } from '../../src/io/dxf/records';
 
@@ -26,7 +32,56 @@ const ACIS = new Set(['REGION', '3DSOLID', 'BODY']);
 
 const normText = (s: unknown): unknown => (typeof s === 'string' ? decodeCaret(decodeCadEscapes(s)) : s);
 
+/** 이 판의 DXF가 동적 블록 정의를 `*U<n>`으로 쓰는지(R2000·R2004·R2007) */
+export const DXF_RENAMES_DYNAMIC_BLOCKS = (version: unknown): boolean => version === 'AC1015' || version === 'AC1018' || version === 'AC1021';
+
+/** 블록 하나: 열쇠(tableKey)와 그 안 도형 핸들 */
+export interface BlockHandles {
+  key: string;
+  handles: string[];
+}
+
+/**
+ * 10번: 기준 DXF의 `*U<n>` 블록 → DWG 쪽 동적 블록 정의 열쇠. 블록 안 도형 핸들이 같거나, 같은 핸들의 INSERT·DIMENSION이
+ * 두 블록을 가리킬 때만 짝짓는다. 기준 쪽 이름은 DWG 쪽에 없고, DWG 쪽 이름은 기준 쪽에 없어야 한다.
+ * @param expRefs·actRefs 참조 도형 핸들 → 가리키는 블록 이름
+ */
+export function dynamicBlockRenames(exp: BlockHandles[], act: BlockHandles[], expRefs: Map<string, string>, actRefs: Map<string, string>, isDynamic: (key: string) => boolean): Map<string, string> {
+  const expKeys = new Set(exp.map((b) => b.key));
+  const actKeys = new Set(act.map((b) => b.key));
+  const owner = new Map<string, string>();
+  for (const b of act) if (!expKeys.has(b.key) && isDynamic(b.key)) for (const h of b.handles) owner.set(h, b.key);
+  const out = new Map<string, string>();
+  const used = new Set<string>();
+  const take = (from: string, to: string | undefined): void => {
+    if (!to || out.has(from) || used.has(to)) return;
+    out.set(from, to);
+    used.add(to);
+  };
+  const candidate = (k: string) => /^\*U\d+$/.test(k) && !actKeys.has(k);
+  for (const b of exp) if (candidate(b.key)) for (const h of b.handles) take(b.key, owner.get(h));
+  for (const [h, name] of expRefs) {
+    const k = tableKey(name);
+    const to = actRefs.get(h);
+    if (candidate(k) && to !== undefined && !expKeys.has(tableKey(to)) && isDynamic(tableKey(to))) take(k, tableKey(to));
+  }
+  return out;
+}
+
+/** 블록 레코드에 동적 블록 표지(AcDbDynamicBlockGUID 확장 자료)가 있는지 */
+export function isDynamicBlock(doc: CadDocument, key: string): boolean {
+  return (doc.blockRecords.get(key)?.xdata ?? []).some((x) => x.app.toUpperCase() === 'ACDBDYNAMICBLOCKGUID');
+}
+
+/** 요약에서 참조 도형 핸들 → 블록 이름 */
+function refsOf(blocks: Record<string, Ent[]>): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const list of Object.values(blocks)) for (const e of list) if (typeof e.block === 'string') out.set(e.handle, e.block);
+  return out;
+}
+
 export function normalizePair(expected: Obj, actual: Obj, doc: CadDocument): void {
+  const refVersion = expected.version;
   // 1
   expected.version = actual.version;
   // 2
@@ -37,6 +92,20 @@ export function normalizePair(expected: Obj, actual: Obj, doc: CadDocument): voi
   const eb = expected.blocks as Record<string, Ent[]>;
   const ab = actual.blocks as Record<string, Ent[]>;
   for (const k of Object.keys(eb)) if (!(k in ab) && ORACLE_DEFAULT_BLOCKS.test(k)) delete eb[k];
+  // 10
+  if (DXF_RENAMES_DYNAMIC_BLOCKS(refVersion)) {
+    const handles = (b: Record<string, Ent[]>) => Object.entries(b).map(([key, list]) => ({ key, handles: list.map((e) => e.handle) }));
+    const renames = dynamicBlockRenames(handles(eb), handles(ab), refsOf(eb), refsOf(ab), (k) => isDynamicBlock(doc, k));
+    for (const [from, to] of renames) {
+      eb[to] = eb[from]!;
+      delete eb[from];
+    }
+    for (const list of Object.values(eb))
+      for (const e of list) {
+        const to = typeof e.block === 'string' ? renames.get(tableKey(e.block)) : undefined;
+        if (to) e.block = doc.blocks.get(to)?.name ?? to;
+      }
+  }
   // 6
   const rgbLayers = new Set([...doc.layers.values()].filter((l) => l.color.rgb !== undefined).map((l) => l.name));
   for (const l of expected.layers as Obj[]) if (rgbLayers.has(String(l.name))) l.color = null;

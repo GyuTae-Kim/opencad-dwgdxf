@@ -30,7 +30,7 @@ export interface PendingInput {
 /** 스냅·추적·직교를 적용한 점 */
 export interface ResolvedPoint {
   p: Pt;
-  snap: { p: Pt; kind: SnapKind; handle?: string; handle2?: string } | null;
+  snap: { p: Pt; kind: SnapKind; handle?: string; handle2?: string; deferred?: boolean } | null;
   track?: TrackResult;
 }
 
