@@ -105,6 +105,10 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   const pickbox = numIn(app.view?.overlay?.pickbox ?? browserSysvar('PICKBOX'), '확인란 크기');
   const gripsize = numIn(browserSysvar('GRIPSIZE'), '그립 크기');
   const grips = checkIn(browserSysvar('GRIPS') !== 0, '그립 표시');
+  // 다기능 그립(GRIPMULTIFUNCTIONAL): 2 커서를 올리면 뜨는 메뉴, 1 Ctrl 순환
+  const gm = browserSysvar('GRIPMULTIFUNCTIONAL');
+  const gripMenu = checkIn((gm & 2) !== 0, '동적 그립 메뉴 표시');
+  const gripCycle = checkIn((gm & 1) !== 0, 'Ctrl+순환 동작 허용');
   const pickfirst = checkIn(browserSysvar('PICKFIRST') !== 0, '명사/동사 선택');
   const pickadd = checkIn(browserSysvar('PICKADD') === 0, 'Shift 키를 사용하여 선택 세트에 추가');
   const sp = browserSysvar('SELECTIONPREVIEW');
@@ -116,7 +120,7 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
     h('div', { class: 'mgr-cols' }, group('확인란 크기(P)', row('픽셀(0~50)', pickbox)), group('그립 크기(Z)', row('픽셀(1~255)', gripsize))),
     group('선택 미리보기', row('명령이 활성화되어 있을 때(S)', spCmd), row('명령이 활성화되어 있지 않을 때(W)', spIdle)),
     group('선택 모드', row('명사/동사 선택(N)', pickfirst), row('Shift 키를 사용하여 선택 세트에 추가(F)', pickadd)),
-    group('그립', row('그립 표시(R)', grips)),
+    group('그립', row('그립 표시(R)', grips), row('동적 그립 메뉴 표시(U)', gripMenu), row('Ctrl+순환 동작 허용(Y)', gripCycle)),
   );
   // 제도
   const as = browserSysvar('AUTOSNAP');
@@ -223,6 +227,7 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   if (app.view?.overlay) app.view.overlay.pickbox = r.pickbox;
   set('GRIPSIZE', r.gripsize);
   set('GRIPS', grips.checked ? (browserSysvar('GRIPS') || 2) : 0);
+  set('GRIPMULTIFUNCTIONAL', (gripMenu.checked ? 2 : 0) | (gripCycle.checked ? 1 : 0));
   set('PICKFIRST', pickfirst.checked ? 1 : 0);
   set('PICKADD', pickadd.checked ? 0 : 2);
   set('SELECTIONPREVIEW', (spCmd.checked ? 1 : 0) | (spIdle.checked ? 2 : 0));

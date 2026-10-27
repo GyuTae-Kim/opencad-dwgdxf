@@ -44,10 +44,10 @@ import { type Override, parseOverride, runPointOverride } from './osnap-override
 import { type ExtAnchor, findExtAnchor, segmentDirAt } from './snap';
 import { DragGhost, commitDrag, pressKind } from './dragmove';
 import { Lasso } from './lasso';
-import { ctrlAction } from './keys';
+import { CtrlTap, ctrlAction } from './keys';
 import { commandLineMenu, commandMenu, idleMenu, osnapItems, showContextMenu } from './ctxmenu';
 import { listGroups } from '../edit/util/groups';
-import { type PickMode, type Settings, autoWindow, contextAction, gripPickRadius, gripsOn, pickMode, previewOn, readSettings, showSnapTip, showTrackTip, usePickfirst } from './settings';
+import { type PickMode, type Settings, autoWindow, contextAction, gripHoverMenu, gripPickRadius, gripsOn, pickMode, previewOn, readSettings, showSnapTip, showTrackTip, usePickfirst } from './settings';
 import { onSysvarChange } from './sysvars';
 import { optionValue } from './options';
 
@@ -91,6 +91,8 @@ interface PointRequest {
   deferTanLines: boolean;
   /** 이 요청에서만 쓰는 객체 스냅(객체 스냅이 꺼져 있어도 — CIRCLE Ttr·TTT의 접점). 찍은 곳에 없으면 다시 묻는다 */
   snaps: ReadonlySet<SnapKind> | null;
+  /** Ctrl(⌘)을 눌렀다 떼면(그 사이 다른 키·클릭 없이) 이 키워드로 끝낸다(다기능 그립의 Ctrl 순환) */
+  ctrlTap: string | null;
   allowText: boolean;
   /** 명령이 글을 받는다고 한 요청(allowText): 객체 스냅 재지정 이름도 글로 돌려준다 */
   freeText: boolean;
@@ -163,6 +165,8 @@ export interface PointOptions {
   deferTanLines?: boolean;
   /** 이 요청에서만 쓰는 객체 스냅(객체 스냅이 꺼져 있어도) */
   snaps?: SnapKind[];
+  /** Ctrl을 눌렀다 떼면 이 키워드로 끝낸다 */
+  ctrlTap?: string;
 }
 
 export interface CommandContext {
@@ -374,10 +378,17 @@ export class App {
       }
       return { x: st.grid.x, y: st.grid.y, major: st.grid.major, baseX: st.snap.baseX, baseY: st.snap.baseY, limits, ucs: currentUcs(st) };
     };
-    window.addEventListener('keydown', (ev) => this.onKey(ev));
+    window.addEventListener('keydown', (ev) => {
+      this.ctrlTapKey(ev, true);
+      this.onKey(ev);
+    });
     window.addEventListener('keyup', (ev) => {
       if (ev.key === 'Shift') this.setShift(false);
+      this.ctrlTapKey(ev, false);
     });
+    // Ctrl을 누른 채 찍거나 창을 떠나면 Ctrl 한 번 누르기가 아니다
+    window.addEventListener('pointerdown', () => this.ctrlTap.cancel(), true);
+    window.addEventListener('blur', () => this.ctrlTap.cancel());
     // 앱 안에서는 브라우저 기본 메뉴를 막는다(입력란·편집 가능한 곳·고른 글이 있을 때는 그대로)
     if (typeof document.addEventListener === 'function')
       document.addEventListener(
@@ -602,6 +613,7 @@ export class App {
         deferTan: !!opt.deferTan,
         deferTanLines: !!opt.deferTanLines,
         snaps: opt.snaps?.length ? new Set(opt.snaps) : null,
+        ctrlTap: opt.ctrlTap ?? null,
         allowText: !!opt.allowText || !!opt.preferNumber,
         freeText: !!opt.allowText,
         preferNumber: !!opt.preferNumber,
@@ -1864,7 +1876,10 @@ export class App {
     return best;
   }
 
-  /** 그립 위에 커서가 오면 분홍, 약 0.5초 머물면 다기능 그립 메뉴(항목이 있을 때). 메뉴는 그립에서 멀어지면 닫는다 */
+  /**
+   * 그립 위에 커서가 오면 분홍, 약 0.5초 머물면 다기능 그립 메뉴(항목이 있고 GRIPMULTIFUNCTIONAL 비트 2일 때).
+   * 메뉴는 그립에서 멀어지면 닫는다
+   */
   private updateGripHover(w: Pt, ev: PointerEvent): void {
     const g = ev.pointerType !== 'touch' && this.active?.selection.size ? this.gripAt(w) : null;
     const cur = this.hoverGrip;
@@ -1880,7 +1895,9 @@ export class App {
     if (!g && !cur) return;
     const cx = ev.clientX;
     const cy = ev.clientY;
-    this.hoverGrip = g ? { point: g.point, shown: false, timer: window.setTimeout(() => this.showGripMenu(g.point, cx, cy), 500) } : null;
+    // 커서를 올리면 뜨는 메뉴는 GRIPMULTIFUNCTIONAL 비트 2일 때만(오른쪽 클릭 메뉴는 늘)
+    const menu = gripHoverMenu(this.settings.gripMultifunctional);
+    this.hoverGrip = g ? { point: g.point, shown: false, timer: menu ? window.setTimeout(() => this.showGripMenu(g.point, cx, cy), 500) : 0 } : null;
     this.view.overlay.hoverGrip = g ? g.point : null;
     this.view.requestOverlay();
   }
@@ -2482,6 +2499,22 @@ export class App {
     if (ev.key === ' ' && this.press?.lasso) return this.cycleLasso();
     if (ev.key === 'Tab' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !this.cmd.suggesting) return this.snapTab() || this.dynTab();
     return false;
+  }
+
+  /** Ctrl(⌘) 한 번 누르기(다기능 그립의 Ctrl 순환) */
+  private readonly ctrlTap = new CtrlTap();
+
+  /** 키 누름·뗌을 Ctrl 한 번 누르기로 본다: 지금 점 요청이 받겠다고 했으면(ctrlTap) 그 키워드로 끝낸다 */
+  private ctrlTapKey(ev: KeyboardEvent, down: boolean): void {
+    const t = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (down) {
+      this.ctrlTap.keyDown(ev, t);
+      return;
+    }
+    if (!this.ctrlTap.keyUp(ev, t)) return;
+    const r = this.request;
+    if (r?.kind !== 'point' || !r.ctrlTap) return;
+    this.finishPoint(r, { keyword: r.ctrlTap });
   }
 
   /** 마지막으로 찾은 객체 스냅 후보(알맞은 차례) */

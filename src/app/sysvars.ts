@@ -5,7 +5,7 @@
  * 변수는 세 곳에 있다.
  *  - 세션 변수: 앱 상태(OSMODE·ORTHOMODE·SNAPMODE·GRIDMODE·POLARMODE·DYNMODE, FILEDIA·CMDDIA·CMDECHO)와 읽기 전용 값(DWGNAME·CDATE …).
  *    AutoLISP getvar·setvar와 같은 구현(lisp-host.ts)을 쓴다.
- *  - 이 브라우저 변수(AutoCAD의 레지스트리 자리): PICKBOX·GRIPSIZE·CURSORSIZE·APERTURE·PICKFIRST·SELECTIONPREVIEW·SHORTCUTMENU·
+ *  - 이 브라우저 변수(AutoCAD의 레지스트리 자리): PICKBOX·GRIPSIZE·GRIPMULTIFUNCTIONAL·CURSORSIZE·APERTURE·PICKFIRST·SELECTIONPREVIEW·SHORTCUTMENU·
  *    ATTDIA·ATTREQ … localStorage에 두고, 바뀌면 onSysvarChange 구독자에게 알린다(화면이 읽는다).
  *  - 도면 변수: 머리말($PDMODE …). 값을 바꾸면 명령 취소 한 단계(header 편집).
  * 변수 이름이 곧 명령인 것(SAVETIME·COLORTHEME·IMAGEFRAME …)은 그 명령이 먼저 받으므로 여기에 오지 않는다.
@@ -55,6 +55,7 @@ export const BROWSER_VARS: readonly BrowserVar[] = [
   { name: 'PICKBOX', def: 5, min: 0, max: 50, desc: '선택 상자 크기(픽셀)' },
   { name: 'GRIPSIZE', def: 5, min: 1, max: 255, desc: '그립 상자 크기(픽셀)' },
   { name: 'GRIPS', def: 2, min: 0, max: 2, desc: '선택한 객체의 그립 표시' },
+  { name: 'GRIPMULTIFUNCTIONAL', def: 3, min: 0, max: 3, desc: '다기능 그립 옵션(1 Ctrl 순환, 2 커서를 올리면 뜨는 메뉴)' },
   { name: 'CURSORSIZE', def: 5, min: 1, max: 100, desc: '십자선 크기(화면 크기의 %)' },
   { name: 'APERTURE', def: 10, min: 1, max: 50, desc: '객체 스냅 조준창 크기(픽셀)' },
   { name: 'AUTOSNAP', def: 63, min: 0, max: 63, desc: 'AutoSnap 표식기·마그넷·툴팁·추적 표시(비트)' },

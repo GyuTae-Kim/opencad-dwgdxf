@@ -3,6 +3,7 @@
  * 입력은 App.onInput처럼 해석한다 — '' = Enter, 키워드(열쇠·이름), 숫자(preferNumber), "x,y" 점, 그 밖의 글(allowText).
  * { click: [x, y] }는 마우스를 그 점에 올려 미리보기(ghost)를 부른 뒤 누른 것, { pick }은 객체 고르기, { sel }은 선택 결과.
  * 지연된 접점을 받는 점 요청(deferTan)에 { pick, at }을 주면 그 객체 위 at을 지연된 접점 스냅으로 찍은 것이다.
+ * { ctrlTap: true }는 Ctrl을 한 번 눌렀다 뗀 것(점 요청이 ctrlTap을 받을 때만).
  */
 import type { CadDocument, Entity } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
@@ -16,7 +17,7 @@ import { boundsOf } from '../../src/edit/geom/query';
 import { newDoc } from '../edit/make';
 import { type CommandFallback, type CommitHook, type DblClickHandler, type EntityClickHandler, type GripMenuProvider, type InputFilter, type PointFilter, bindCommitHooks } from '../../src/app/hooks';
 
-export type Input = string | { click: [number, number]; snap?: string; ctrl?: boolean } | { pick: string; at: [number, number]; shift?: boolean } | { sel: string[] };
+export type Input = string | { click: [number, number]; snap?: string; ctrl?: boolean } | { pick: string; at: [number, number]; shift?: boolean } | { sel: string[] } | { ctrlTap: true };
 
 export interface Harness {
   app: App;
@@ -173,6 +174,10 @@ export function makeHarness(setup?: (doc: CadDocument) => void): Harness {
               h.ghosts++;
             }
             return { point: p, snap };
+          }
+          if ('ctrlTap' in x) {
+            if (!opt.ctrlTap) throw new Error(`Ctrl 누르기를 받지 않는 프롬프트 (${prompt})`);
+            return { keyword: opt.ctrlTap };
           }
           throw new Error(`점 프롬프트에 맞지 않는 입력 (${prompt})`);
         },
