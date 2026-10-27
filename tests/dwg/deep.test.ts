@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { readDwg } from '../../src/io/dwg';
 import { readDxf } from '../../src/io/dxf/reader';
 import { decodeCadEscapes } from '../../src/core/codepage';
-import { FIXTURES, dwgFixtures, engineDxf, hasPython } from './oracle';
+import { FIXTURES, dwgFixtures, engineDxf, hasDwgOracle } from './oracle';
 
 /**
  * 비교하지 않는 필드
@@ -95,7 +95,7 @@ function diff(e: unknown, a: unknown, path: string, skip: Set<string>, out: stri
   if (typeof e === 'string' && typeof a === 'string' ? norm(e) !== norm(a) : e !== a) out.push(`${path}: ${JSON.stringify(e)} → ${JSON.stringify(a)}`);
 }
 
-describe.skipIf(!existsSync(join(FIXTURES, 'samples')) || !hasPython)('DWG 리더 ↔ DXF 리더(같은 핸들)', () => {
+describe.skipIf(!existsSync(join(FIXTURES, 'samples')) || !hasDwgOracle())('DWG 리더 ↔ DXF 리더(같은 핸들)', () => {
   for (const f of dwgFixtures()) {
     it(`${f.group}/${f.name}`, () => {
       const dxf = engineDxf(f.path);

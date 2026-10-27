@@ -1,6 +1,6 @@
 /** 화면 골격: 제목 막대, 리본, 파일 탭, 배치 탭, 상태 막대, 시작 화면 */
 import type { App, UiHooks } from '../app';
-import { beginOpen, showAnalyticsSettings } from '../analytics';
+import { beginOpen, showAnalyticsSettings } from 'opencad-site-kit/analytics';
 import { MODEL_SPACE, tableKey } from '../../core/model';
 import { unitAbbr } from '../../core/units';
 import { ALL_SNAPS, SNAP_NAMES } from '../snap';

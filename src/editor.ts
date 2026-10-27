@@ -1,5 +1,5 @@
 import type { EditorActions } from './app/startup';
-import { beginOpen } from './app/analytics';
+import { beginOpen } from 'opencad-site-kit/analytics';
 import { App } from './app/app';
 import { registerCommands } from './app/commands';
 import { registerDrawCommands } from './app/draw';

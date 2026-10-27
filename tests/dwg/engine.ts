@@ -1,12 +1,12 @@
 /**
- * 비공개 엔진의 공개 함수 read_dwg를 블랙박스로 불러 쓴 DWG가 열리는지 본다(로컬 개발 전용).
+ * DWG 기준 도구(CAD_DWG_ORACLE 모듈의 read_dwg)를 블랙박스로 불러 쓴 DWG가 열리는지 본다(로컬 개발 전용 — 설정은 tests/oracle/ezdxf.ts).
  * 결과: 열렸는지, 경고 문자열, 엔진이 만든 문서의 객체 종류별 개수(DXF 이름). 파일 내용 SHA-1로 캐시한다.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PYTHON, hasPython } from '../oracle/ezdxf';
+import { DWG_PYTHON, READ_DWG_IMPORT, hasDwgOracle } from '../oracle/ezdxf';
 import { ROOT } from './writer-fixtures';
 
 const CACHE = join(ROOT, '.runtime/io3/engine');
@@ -17,7 +17,7 @@ const RUN = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
 const SCRIPT = `
 import sys, json
 from collections import Counter
-from prisme_engine.io.dwg import read_dwg
+${READ_DWG_IMPORT}
 for job in json.load(open(sys.argv[1])):
     try:
         r = read_dwg(open(job['in'], 'rb').read())
@@ -58,7 +58,7 @@ export interface EngineRead {
   tables?: { handle: string; rows: number; cols: number; cells: { merged: number; span: [number, number]; align?: number; height?: number; text: string }[] }[];
 }
 
-export const engineAvailable = hasPython;
+export const engineAvailable = hasDwgOracle();
 
 /** 여러 파일을 한 번의 Python 실행으로 읽는다 */
 export function engineRead(files: Map<string, Uint8Array>): Map<string, EngineRead> {
@@ -79,7 +79,7 @@ export function engineRead(files: Map<string, Uint8Array>): Map<string, EngineRe
     const list = join(CACHE, `jobs-${RUN}.json`);
     writeFileSync(list, JSON.stringify(todo));
     try {
-      execFileSync(PYTHON, ['-I', '-c', SCRIPT, list], { stdio: 'pipe', timeout: 1_800_000, maxBuffer: 1 << 26 });
+      execFileSync(DWG_PYTHON, ['-I', '-c', SCRIPT, list], { stdio: 'pipe', timeout: 1_800_000, maxBuffer: 1 << 26 });
     } finally {
       for (const t of todo) rmSync(t.in, { force: true });
       rmSync(list, { force: true });

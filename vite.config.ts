@@ -1,24 +1,11 @@
-import { siteLocalization } from './tools/localization-plugin.mjs';
-import { serviceWorker } from './tools/sw-plugin.mjs';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { siteLocalization } from 'opencad-site-kit/i18n/localization-plugin';
+import { siteMetadata } from 'opencad-site-kit/seo/site-plugin';
+import { serviceWorker } from 'opencad-site-kit/pwa/sw-plugin';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { renderMetadata, sitemapXml } from './tools/site-metadata.mjs';
-
-function siteMetadata(): Plugin {
-  return {
-    name: 'opencad-site-metadata',
-    transformIndexHtml: { order: 'pre', handler: (html) => html.replace('<!-- site-metadata -->', '<!-- localized-metadata:start -->' + renderMetadata() + '<!-- localized-metadata:end -->') },
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        if (!/^\/(?:opencad-dwgdxf\/)?sitemap\.xml(?:\?|$)/.test(req.url ?? '')) return next();
-        res.setHeader('Content-Type', 'application/xml'); res.end(sitemapXml());
-      });
-    },
-    generateBundle() { this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemapXml() }); },
-  };
-}
+import { offline, site } from './tools/site.mjs';
 
 /**
  * pdf.js가 필요할 때 받아 가는 자료(표준 글꼴, CMap, 그림 해독 wasm, ICC)를 `pdfjs/` 아래로 낸다.
@@ -57,8 +44,9 @@ function pdfjsAssets(): Plugin {
 export default defineConfig({
   // GitHub Pages 프로젝트 사이트 경로(https://gyutae-kim.github.io/opencad-dwgdxf/)
   base: './',
-  // serviceWorker는 빌드 끝(언어 쪽까지 다 쓴 뒤)에 dist/sw.js를 만든다(오프라인·공유 받기)
-  plugins: [siteLocalization(), siteMetadata(), pdfjsAssets(), serviceWorker()],
+  // 언어 페이지·검색 정보·언어별 앱 정보·사이트맵과 빌드 끝(언어 쪽까지 다 쓴 뒤)의 dist/sw.js(오프라인·공유 받기)는
+  // 공용 사이트 도구(opencad-site-kit)가 tools/site.mjs 설정으로 만든다
+  plugins: [siteLocalization(site), siteMetadata(site), pdfjsAssets(), serviceWorker(offline)],
   build: {
     target: 'es2022',
     sourcemap: true,

@@ -19,6 +19,7 @@ import { compareMain, compareRuns } from '../../scripts/sweep/compare';
 import { compareOracle, EzdxfOracle } from '../../scripts/sweep/oracle';
 import { main, parseArgs } from '../../scripts/sweep/sweep';
 import type { FileRecord } from '../../scripts/sweep/record';
+import { PYTHON, hasPython } from '../oracle/ezdxf';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 let dir: string;
@@ -267,10 +268,9 @@ describe('ezdxf 대조', () => {
     expect(d.layersOnlyExp).toEqual(['Defpoints']);
   });
 
-  const py = process.env.CAD_PYTHON;
-  it.skipIf(!py || !existsSync(py))('CAD_PYTHON이 있으면 우리가 쓴 DXF를 ezdxf로 읽어 audit 오류가 없다', async () => {
+  it.skipIf(!hasPython)('CAD_PYTHON(ezdxf가 있는 파이썬)이 있으면 우리가 쓴 DXF를 ezdxf로 읽어 audit 오류가 없다', async () => {
     const tmp = mkdtempSync(join(tmpdir(), 'sweep-ez-'));
-    const o = new EzdxfOracle(py!, join(ROOT, 'scripts/sweep'), tmp);
+    const o = new EzdxfOracle(PYTHON, join(ROOT, 'scripts/sweep'), tmp);
     try {
       const r = await o.dump(join(dir, 'a/b/pair.dxf'));
       expect(r.ok).toBe(true);

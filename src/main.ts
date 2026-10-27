@@ -1,7 +1,7 @@
 import { installLocalization } from './app/i18n';
 import './styles.css';
-import { initAnalytics } from './app/analytics';
-import { GA4_MEASUREMENT_ID } from './app/analytics-config';
+import { initAnalytics } from 'opencad-site-kit/analytics';
+import { GA4_MEASUREMENT_ID } from 'opencad-site-kit/analytics/config';
 import { mountEditor } from './app/startup';
 
 const root = document.getElementById('app');

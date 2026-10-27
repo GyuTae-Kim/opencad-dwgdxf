@@ -11,9 +11,9 @@ import { writeDwg } from '../../src/io/dwg/writer/index';
 import { DEF_KINDS, DefinitionCopier, hasDefinition, listDefinitions } from '../../src/edit/layertools/clone';
 import { type StdSource, checkStandards, fixPropsOps, replacePlan } from '../../src/edit/layertools/standards';
 import { EditSession } from '../../src/edit/session';
+import { FIXTURES } from '../oracle/ezdxf';
 import { commit, duplicateHandles, newDoc } from './helpers';
 
-const FIXTURES = process.env.CAD_FIXTURES ?? '/Users/sean/code/prisme-service/.runtime/cad2d-handoff/dwgref';
 const pick = (rel: string) => {
   const p = join(FIXTURES, rel);
   return existsSync(p) ? p : null;

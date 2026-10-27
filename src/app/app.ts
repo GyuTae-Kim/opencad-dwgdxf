@@ -7,7 +7,7 @@
  * settings에 읽어 두고 바뀌면 바로 다시 읽는다(settings.ts, sysvars.ts onSysvarChange). 화면은 view.prefs로 같은 값을 본다.
  */
 import { currentUcs, dirToUcs, isWorld, toUcs, toWcs } from './ucs';
-import { beginOpen, type InputKind } from './analytics';
+import { beginOpen, type InputKind } from 'opencad-site-kit/analytics';
 import { viewportModel } from './psltscale';
 import type { Entity, ViewportEntity } from '../core/model';
 import { MODEL_SPACE, normalizeHandle, tableKey } from '../core/model';

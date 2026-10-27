@@ -8,8 +8,10 @@ import type { CadDocument, DimensionEntity, Entity } from '../../src/core/model'
 import { generateDimensionGeometry } from '../../src/edit/dim';
 import { readCadFile } from '../../src/io/index';
 import { plainText } from '../../src/app/inquiry';
+import { FIXTURES } from '../oracle/ezdxf';
 
-export const FIXTURES = process.env.CAD_FIXTURES ?? '/Users/sean/code/prisme-service/.runtime/cad2d-handoff/dwgref';
+/** 표본 도면 폴더(CAD_FIXTURES — tests/oracle/ezdxf.ts) */
+export { FIXTURES };
 
 /**
  * 치수가 든 예제 파일 목록(없으면 빈 배열). AutoCAD 예제 도면(Annotation·Mechanical 등)과 서식에는
