@@ -1,7 +1,7 @@
 /**
  * 진짜 App이 OPTIONS·시스템 변수 값을 실제 동작에 쓰는지(화면·명령행·엔진·글꼴은 가짜, 고르기는 tests/direct의 FakePicker):
  * 설정 읽기·바로 반영(onSysvarChange), GRIPS·GRIPSIZE, APERTURE·AUTOSNAP 툴팁, PICKFIRST, PICKADD, PICKAUTO,
- * SELECTIONPREVIEW, SHORTCUTMENU(모드 비트·시간에 민감한 오른쪽 클릭). 기본값에서는 예전 동작 그대로(tests/direct가 지킨다).
+ * SELECTIONPREVIEW, SHORTCUTMENU(모드 비트·시간에 민감한 오른쪽 클릭), GRIPMULTIFUNCTIONAL(커서를 올리면 뜨는 그립 메뉴). 기본값에서는 예전 동작 그대로(tests/direct가 지킨다).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { LineEntity } from '../../src/core/model';
@@ -11,6 +11,7 @@ import type { OverlayState } from '../../src/app/view';
 import { DEFAULT_SETTINGS } from '../../src/app/settings';
 import { BROWSER_VARS, setSysvarText } from '../../src/app/sysvars';
 import { prefSet } from '../../src/app/mgr-ui';
+import { addHook } from '../../src/app/hooks';
 import * as dom from '../../src/app/ui/dom';
 import { browserGlobals } from '../polish/fakes';
 import { type RealApp, makeApp, settle } from '../polish/real-app';
@@ -125,6 +126,33 @@ describe('그립(GRIPS·GRIPSIZE)', () => {
     expect(h.sel()).toEqual([a]);
     h.set('GRIPS', 2);
     expect(h.ov.grips.length).toBeGreaterThan(0);
+  });
+});
+
+describe('다기능 그립 메뉴(GRIPMULTIFUNCTIONAL)', () => {
+  it('비트 2를 끄면 그립에 커서를 올려 두어도 메뉴가 뜨지 않고(분홍 그립은 그대로), 오른쪽 클릭 메뉴는 뜬다', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = setup();
+      const a = h.line(0, 0, 10, 0);
+      addHook(h.app.gripMenuProviders, { name: 'g', items: () => [{ label: '정점 추가', run: () => {} }] });
+      h.app.setSelection([a]);
+      h.move(P(10.5, 0.5));
+      vi.advanceTimersByTime(520);
+      expect(vi.mocked(dom.showMenu)).toHaveBeenCalledTimes(1);
+      h.move(P(60, 60));
+      vi.mocked(dom.showMenu).mockClear();
+      h.set('GRIPMULTIFUNCTIONAL', 1);
+      expect(h.app.settings.gripMultifunctional).toBe(1);
+      h.move(P(10.5, 0.5));
+      expect(h.ov.hoverGrip).toEqual(P(10, 0));
+      vi.advanceTimersByTime(520);
+      expect(vi.mocked(dom.showMenu)).not.toHaveBeenCalled();
+      h.context(P(10.5, 0.5));
+      expect(vi.mocked(dom.showMenu)).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -31,3 +31,33 @@ export function ctrlAction(ev: { key: string; code?: string; ctrlKey: boolean; m
   const k = /^Key([A-Z])$/.exec(ev.code ?? '')?.[1]?.toLowerCase() ?? (ev.code === 'Digit0' ? '0' : ev.code === 'Digit8' ? '8' : ev.code === 'Backslash' ? '\\' : ev.key.toLowerCase());
   return MAP[k] ?? null;
 }
+
+/**
+ * Ctrl(⌘) 한 번 누르기: Ctrl을 눌렀다가 그 사이 다른 키·클릭 없이 떼면 한 번 누른 것이다(다기능 그립의 Ctrl 순환).
+ * Ctrl을 누른 채 찍기(그립 복사)·Ctrl 단축키는 누르기로 치지 않는다. 오래 누르고 있다가 떼도 치지 않는다.
+ */
+export class CtrlTap {
+  private downAt: number | null = null;
+  /** 이보다 오래 누르고 있으면 누르기가 아니다(밀리초) */
+  constructor(private readonly maxHold = 1000) {}
+
+  /** 키를 눌렀다(t: 밀리초) */
+  keyDown(ev: { key: string; repeat?: boolean }, t: number): void {
+    if (ev.key === 'Control' || ev.key === 'Meta') {
+      if (!ev.repeat) this.downAt = t;
+    } else this.downAt = null;
+  }
+
+  /** 키를 뗐다: Ctrl 한 번 누르기면 true */
+  keyUp(ev: { key: string }, t: number): boolean {
+    if (ev.key !== 'Control' && ev.key !== 'Meta') return false;
+    const d = this.downAt;
+    this.downAt = null;
+    return d !== null && t - d <= this.maxHold;
+  }
+
+  /** 누르거나 끌었다(Ctrl을 누른 채 찍기·창 포커스 잃음) */
+  cancel(): void {
+    this.downAt = null;
+  }
+}

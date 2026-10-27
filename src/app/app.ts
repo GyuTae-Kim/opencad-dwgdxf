@@ -44,10 +44,10 @@ import { type Override, parseOverride, runPointOverride } from './osnap-override
 import { type ExtAnchor, findExtAnchor, segmentDirAt } from './snap';
 import { DragGhost, commitDrag, pressKind } from './dragmove';
 import { Lasso } from './lasso';
-import { ctrlAction } from './keys';
+import { CtrlTap, ctrlAction } from './keys';
 import { commandLineMenu, commandMenu, idleMenu, osnapItems, showContextMenu } from './ctxmenu';
 import { listGroups } from '../edit/util/groups';
-import { type PickMode, type Settings, autoWindow, contextAction, gripPickRadius, gripsOn, pickMode, previewOn, readSettings, showSnapTip, showTrackTip, usePickfirst } from './settings';
+import { type PickMode, type Settings, autoWindow, contextAction, gripHoverMenu, gripPickRadius, gripsOn, pickMode, previewOn, readSettings, showSnapTip, showTrackTip, usePickfirst } from './settings';
 import { onSysvarChange } from './sysvars';
 import { optionValue } from './options';
 
@@ -85,8 +85,14 @@ interface PointRequest {
   /** 끌기 미리보기. snap은 지금 커서가 잡은 객체 스냅(지연된 접점 미리보기 등) */
   rubber?: (p: Pt, snap?: PointSnap | null) => { pts: number[]; closed?: boolean; fill?: boolean; dashed?: boolean }[];
   ghost?: (p: Pt) => OverlayGeom[];
-  /** 접점(TAN)을 지연된 접점으로 받는다(명령이 다음 점을 받은 뒤 접점을 구한다 — LINE) */
+  /** 접점(TAN)을 지연된 접점으로 받는다(명령이 다음 점을 받은 뒤 접점을 구한다 — LINE·PLINE·XLINE·CIRCLE) */
   deferTan: boolean;
+  /** 지연된 접점을 선에도 받는다(원을 그리는 명령) */
+  deferTanLines: boolean;
+  /** 이 요청에서만 쓰는 객체 스냅(객체 스냅이 꺼져 있어도 — CIRCLE Ttr·TTT의 접점). 찍은 곳에 없으면 다시 묻는다 */
+  snaps: ReadonlySet<SnapKind> | null;
+  /** Ctrl(⌘)을 눌렀다 떼면(그 사이 다른 키·클릭 없이) 이 키워드로 끝낸다(다기능 그립의 Ctrl 순환) */
+  ctrlTap: string | null;
   allowText: boolean;
   /** 명령이 글을 받는다고 한 요청(allowText): 객체 스냅 재지정 이름도 글로 돌려준다 */
   freeText: boolean;
@@ -145,11 +151,29 @@ type Request = PointRequest | EntityRequest | SelectRequest;
 
 export type { CommitHook, ContextMenuItem, ContextMenuProvider, EntityClickHandler, InputFilter, PendingInput, PointFilter, ResolvedPoint } from './hooks';
 
+/** 점 요청 옵션(CommandContext.getPoint) */
+export interface PointOptions {
+  base?: Pt | null;
+  keywords?: Keyword[];
+  rubber?: PointRequest['rubber'];
+  ghost?: PointRequest['ghost'];
+  allowText?: boolean;
+  preferNumber?: boolean;
+  /** 접점 스냅을 지연된 접점으로 받는다 */
+  deferTan?: boolean;
+  /** 지연된 접점을 선에도 받는다(원을 그리는 명령) */
+  deferTanLines?: boolean;
+  /** 이 요청에서만 쓰는 객체 스냅(객체 스냅이 꺼져 있어도) */
+  snaps?: SnapKind[];
+  /** Ctrl을 눌렀다 떼면 이 키워드로 끝낸다 */
+  ctrlTap?: string;
+}
+
 export interface CommandContext {
   app: App;
   /** measure: 측정 결과 값(명령행 글은 그대로, 휴대폰 보기 모드의 결과 카드가 쓴다) */
   print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void;
-  getPoint(prompt: string, opt?: { base?: Pt | null; keywords?: Keyword[]; rubber?: PointRequest['rubber']; ghost?: PointRequest['ghost']; allowText?: boolean; preferNumber?: boolean; deferTan?: boolean }): Promise<PointResult>;
+  getPoint(prompt: string, opt?: PointOptions): Promise<PointResult>;
   getEntity(prompt: string, keywords?: Keyword[]): Promise<EntityResult>;
   /** emptyPick: 빈 곳 클릭·좌표 입력도 EmptyPick으로 돌려받는다(기존 호출의 동작은 그대로) */
   getEntity(prompt: string, keywords: Keyword[] | undefined, opt: EntityOptions): Promise<EntityResult | EmptyPick>;
@@ -354,10 +378,17 @@ export class App {
       }
       return { x: st.grid.x, y: st.grid.y, major: st.grid.major, baseX: st.snap.baseX, baseY: st.snap.baseY, limits, ucs: currentUcs(st) };
     };
-    window.addEventListener('keydown', (ev) => this.onKey(ev));
+    window.addEventListener('keydown', (ev) => {
+      this.ctrlTapKey(ev, true);
+      this.onKey(ev);
+    });
     window.addEventListener('keyup', (ev) => {
       if (ev.key === 'Shift') this.setShift(false);
+      this.ctrlTapKey(ev, false);
     });
+    // Ctrl을 누른 채 찍거나 창을 떠나면 Ctrl 한 번 누르기가 아니다
+    window.addEventListener('pointerdown', () => this.ctrlTap.cancel(), true);
+    window.addEventListener('blur', () => this.ctrlTap.cancel());
     // 앱 안에서는 브라우저 기본 메뉴를 막는다(입력란·편집 가능한 곳·고른 글이 있을 때는 그대로)
     if (typeof document.addEventListener === 'function')
       document.addEventListener(
@@ -580,6 +611,9 @@ export class App {
         rubber: opt.rubber,
         ghost: opt.ghost,
         deferTan: !!opt.deferTan,
+        deferTanLines: !!opt.deferTanLines,
+        snaps: opt.snaps?.length ? new Set(opt.snaps) : null,
+        ctrlTap: opt.ctrlTap ?? null,
         allowText: !!opt.allowText || !!opt.preferNumber,
         freeText: !!opt.allowText,
         preferNumber: !!opt.preferNumber,
@@ -1582,6 +1616,7 @@ export class App {
   private snapModesFor(r: Request | null): ReadonlySet<SnapKind> | null {
     if (r?.kind !== 'point') return null;
     if (this.snapOverride?.req === r) return this.snapOverride.modes;
+    if (r.snaps) return r.snaps;
     return this.osnapOn ? this.snapModes : null;
   }
 
@@ -1603,7 +1638,7 @@ export class App {
       // Tab으로 도는 중이면 Tab을 누른 자리의 후보 목록을 그대로 쓴다(커서가 조준창 밖으로 나가면 처음부터)
       const cyc = this.snapCycle;
       if (cyc && (cyc.req !== r || Math.hypot(w.x - cyc.at.x, w.y - cyc.at.y) > aperture)) this.snapCycle = null;
-      const list = this.snapCycle?.list ?? findSnaps(st.doc, pk, w, aperture, modes, r.base, { ext: this.extAnchors, par: this.parDirs.map((d) => d.dir), deferTan: r.deferTan });
+      const list = this.snapCycle?.list ?? findSnaps(st.doc, pk, w, aperture, modes, r.base, { ext: this.extAnchors, par: this.parDirs.map((d) => d.dir), deferTan: r.deferTan, deferTanLines: r.deferTanLines });
       this.lastSnaps = list;
       const s = this.snapCycle ? list[this.snapCycle.i % list.length] : list[0];
       if (s) {
@@ -1841,7 +1876,10 @@ export class App {
     return best;
   }
 
-  /** 그립 위에 커서가 오면 분홍, 약 0.5초 머물면 다기능 그립 메뉴(항목이 있을 때). 메뉴는 그립에서 멀어지면 닫는다 */
+  /**
+   * 그립 위에 커서가 오면 분홍, 약 0.5초 머물면 다기능 그립 메뉴(항목이 있고 GRIPMULTIFUNCTIONAL 비트 2일 때).
+   * 메뉴는 그립에서 멀어지면 닫는다
+   */
   private updateGripHover(w: Pt, ev: PointerEvent): void {
     const g = ev.pointerType !== 'touch' && this.active?.selection.size ? this.gripAt(w) : null;
     const cur = this.hoverGrip;
@@ -1857,7 +1895,9 @@ export class App {
     if (!g && !cur) return;
     const cx = ev.clientX;
     const cy = ev.clientY;
-    this.hoverGrip = g ? { point: g.point, shown: false, timer: window.setTimeout(() => this.showGripMenu(g.point, cx, cy), 500) } : null;
+    // 커서를 올리면 뜨는 메뉴는 GRIPMULTIFUNCTIONAL 비트 2일 때만(오른쪽 클릭 메뉴는 늘)
+    const menu = gripHoverMenu(this.settings.gripMultifunctional);
+    this.hoverGrip = g ? { point: g.point, shown: false, timer: menu ? window.setTimeout(() => this.showGripMenu(g.point, cx, cy), 500) : 0 } : null;
     this.view.overlay.hoverGrip = g ? g.point : null;
     this.view.requestOverlay();
   }
@@ -1970,8 +2010,8 @@ export class App {
         this.blindTouch = false;
       }
       const { p, snap } = resolved;
-      // 스냅 재지정(NON 말고)이 잡히지 않은 곳이면 다시 묻는다
-      const ov = this.snapOverride?.req === r ? this.snapOverride.modes : null;
+      // 스냅 재지정(NON 말고)·요청의 스냅이 잡히지 않은 곳이면 다시 묻는다
+      const ov = this.snapOverride?.req === r ? this.snapOverride.modes : r.snaps;
       if (ov?.size && !snap && !(this.dynOn && this.dyn.locked)) {
         this.cmd.print('객체 스냅 점을 찾지 못했습니다. 다시 지정하십시오.', 'err');
         return;
@@ -2459,6 +2499,22 @@ export class App {
     if (ev.key === ' ' && this.press?.lasso) return this.cycleLasso();
     if (ev.key === 'Tab' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !this.cmd.suggesting) return this.snapTab() || this.dynTab();
     return false;
+  }
+
+  /** Ctrl(⌘) 한 번 누르기(다기능 그립의 Ctrl 순환) */
+  private readonly ctrlTap = new CtrlTap();
+
+  /** 키 누름·뗌을 Ctrl 한 번 누르기로 본다: 지금 점 요청이 받겠다고 했으면(ctrlTap) 그 키워드로 끝낸다 */
+  private ctrlTapKey(ev: KeyboardEvent, down: boolean): void {
+    const t = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (down) {
+      this.ctrlTap.keyDown(ev, t);
+      return;
+    }
+    if (!this.ctrlTap.keyUp(ev, t)) return;
+    const r = this.request;
+    if (r?.kind !== 'point' || !r.ctrlTap) return;
+    this.finishPoint(r, { keyword: r.ctrlTap });
   }
 
   /** 마지막으로 찾은 객체 스냅 후보(알맞은 차례) */

@@ -51,6 +51,8 @@ import { crossingPick, fencePicks, lengthenToPoint } from '../edit/geom/modgeom'
 import { arrayGripEdit } from './assocarray-grips';
 import { gripDims, gripMoveMany, gripStretchValue, gripTakesValue } from '../edit/geom/gripops';
 import { type GripOption, ctrlHeld, gripDimGeom, gripOptions, previewEntities, trackModifiers } from './gripmenu';
+import { gripCtrlCycle } from './settings';
+import { browserSysvar } from './sysvars';
 import { stretchSelection } from './editcmds2-stretch';
 import { pasteDependencies } from './pastedeps';
 
@@ -1764,7 +1766,9 @@ export function registerModifyCommands(app: App): void {
 
   // ------------------------------------------------------------- 그립 편집
   // 모드: 신축·이동·회전·축척·대칭(Enter·스페이스로 순환하거나 ST·MO·RO·SC·MI — 오른쪽 클릭 메뉴는 앱이 키워드로 만든다).
+  // 회전·축척은 참조(R): 참조 각도·길이를 정하면 새 각도·새 길이를 묻는다(AutoCAD와 같다).
   // 복사: C 또는 Ctrl(⌘)을 누른 채 찍기(다중 복사가 이어진다). 다중 복사 중 Ctrl을 누르고 있으면 첫 복사의 간격·각도의 배수로 스냅.
+  // 그립 하나의 신축 중 Ctrl을 한 번 눌렀다 떼면 그 그립의 다기능 옵션으로 돈다(GRIPMULTIFUNCTIONAL 비트 1).
   // 여러 핫 그립(hotGrip.items[].point, 없으면 누른 그립 점)은 같은 변위로 신축한다. 그립 하나를 신축하는 중 입력한 값은
   // 결과 길이(선분 길이, 호 끝은 호 길이, 호 중간은 반지름, 폴리선 정점은 앞 세그먼트 길이)이고 미리보기에 동적 치수를 그린다.
   // 다기능 그립 옵션(src/app/gripmenu.ts): 메뉴에서 고르면 arg = 'opt:열쇠'로 바로 실행, 그립 편집 중에는 키워드로 고른다.
@@ -1865,19 +1869,30 @@ export function registerModifyCommands(app: App): void {
           return { x: base.x + f.x * k, y: base.y + f.y * k };
         }
         if (mode === 'rotate' && first.a) {
-          const t = ang(base, p) / first.a;
+          // 회전 각도(참조가 있으면 참조에서 잰 각도)의 배수
+          const r0 = mode === 'rotate' && ref !== null ? ref : 0;
+          const t = (ang(base, p) - r0) / first.a;
           const k = Math.round(t) || Math.sign(t) || 1;
           const r = dist(base, p);
-          return { x: base.x + r * Math.cos(first.a * k), y: base.y + r * Math.sin(first.a * k) };
+          return { x: base.x + r * Math.cos(r0 + first.a * k), y: base.y + r * Math.sin(r0 + first.a * k) };
         }
         return p;
       };
-      // 다기능 옵션 실행(확정은 명령 취소 한 단계)
-      const runOption = async (o: GripOption, at: Pt): Promise<void> => {
+      /**
+       * 다기능 옵션 실행(확정은 명령 취소 한 단계). cycle: Ctrl 순환 중이면 그 키워드 — 점 요청에서 Ctrl을 한 번 누르면 'cycle',
+       * Enter면 'enter'(다음 모드)를 돌려준다. 순환 중의 바로 실행·명령 옵션은 점을 찍으면 적용한다
+       */
+      const runOption = async (o: GripOption, at: Pt, cycle?: string): Promise<'done' | 'cycle' | 'enter'> => {
         ctx.print(`** ${o.label} **`);
+        if (cycle && (o.kind === 'now' || o.kind === 'command')) {
+          const r = await ctx.getPoint('적용하려면 점 지정:', { base: at, ctrlTap: cycle });
+          if ('keyword' in r && r.keyword === cycle) return 'cycle';
+          if ('enter' in r) return 'enter';
+          if (!('point' in r)) return 'done';
+        }
         if (o.kind === 'command') {
           o.start?.();
-          return;
+          return 'done';
         }
         let res: EditResult | null = null;
         if (o.kind === 'now') res = o.apply?.() ?? null;
@@ -1886,24 +1901,28 @@ export function registerModifyCommands(app: App): void {
           const r = await ctx.getPoint(o.prompt ?? '대상점 지정:', {
             base: at,
             preferNumber: !!o.numeric,
+            ...(cycle ? { ctrlTap: cycle } : {}),
             ghost: (p) => {
               last = p;
               const x = o.apply?.(p);
               return x && (x.replace?.length || x.add?.length) ? geomOf([x]) : [];
             },
           });
+          if (cycle && 'keyword' in r && r.keyword === cycle) return 'cycle';
+          if (cycle && 'enter' in r) return 'enter';
           if ('point' in r) res = o.apply?.(r.point) ?? null;
           else if ('text' in r && o.value) {
             const v = num(r.text);
             if (v !== null) res = o.value(v, last);
           }
         }
-        if (!res) return;
+        if (!res) return 'done';
         if (!res.replace?.length && !res.add?.length && !res.remove?.length) {
           if (res.message) ctx.print(res.message, 'err');
-          return;
+          return 'done';
         }
         commitResults(app, ctx, [res], 'GRIP');
+        return 'done';
       };
       if (arg?.startsWith('opt:')) {
         const o = opts.find((x) => x.key === arg.slice(4));
@@ -1911,25 +1930,95 @@ export function registerModifyCommands(app: App): void {
         app.refreshSelectionOverlay();
         return;
       }
+      // 회전·축척의 참조(R): 참조 각도(회전) 또는 참조 길이(축척). 있으면 점·값은 새 각도·새 길이다(모드를 바꾸면 지운다)
+      let ref: number | null = null;
       const xf = (mode: (typeof modes)[number], p: Pt): Affine | null => {
         if (mode === 'move') return translate(p.x - base.x, p.y - base.y);
-        if (mode === 'rotate') return rotateAbout(base, ang(base, p));
+        if (mode === 'rotate') return rotateAbout(base, ang(base, p) - (ref ?? 0));
         if (mode === 'scale') {
-          const k = dist(base, p);
+          const k = dist(base, p) / (ref ?? 1);
           return k > 1e-12 ? scaleAbout(base, k) : null;
         }
         if (mode === 'mirror') return mirrorAbout(base, p);
         return null;
       };
+      // 참조 각도(숫자 = 도, 점 = 두 점의 방향)·참조 길이(숫자, 점 = 두 점 사이 거리). ROTATE·SCALE과 같은 기본값을 쓴다
+      const askRefAngle = async (): Promise<number | null> => {
+        const m = mem(st);
+        const def = Number(m.rotateRef ?? 0);
+        const rr = await ctx.getPoint(`참조 각도 지정 <${deg(def).toFixed(0)}>:`, { preferNumber: true });
+        let a = def;
+        if ('text' in rr) {
+          const v = num(rr.text);
+          if (v === null) return null;
+          a = (v * Math.PI) / 180;
+        } else if ('point' in rr) {
+          const p2 = await ctx.getPoint('두 번째 점 지정:', { base: rr.point });
+          if (!('point' in p2)) return null;
+          a = ang(rr.point, p2.point);
+        } else if (!('enter' in rr)) return null;
+        m.rotateRef = a;
+        return a;
+      };
+      const askRefLength = async (): Promise<number | null> => {
+        const m = mem(st);
+        const def = Number(m.scaleRef ?? 1);
+        const rr = await ctx.getPoint(`참조 길이 지정 <${formatLength(def, st.units)}>:`, { preferNumber: true });
+        let len = def;
+        if ('text' in rr) {
+          const v = num(rr.text);
+          if (v === null || !(v > 0)) {
+            ctx.print('0보다 큰 값을 입력하십시오.', 'err');
+            return null;
+          }
+          len = v;
+        } else if ('point' in rr) {
+          const p2 = await ctx.getPoint('두 번째 점 지정:', { base: rr.point });
+          if (!('point' in p2)) return null;
+          len = dist(rr.point, p2.point);
+          if (!(len > 0)) return null;
+        } else if (!('enter' in rr)) return null;
+        m.scaleRef = len;
+        return len;
+      };
+      // Ctrl 순환(GRIPMULTIFUNCTIONAL 비트 1): 핫 그립 하나를 신축하는 중 Ctrl을 한 번 누를 때마다 그 그립의 다기능 옵션으로
+      // (신축 → 옵션 1 → 옵션 2 … → 신축). Ctrl을 누른 채 찍는 복사는 그대로다
+      const CYCLE = 'CTRLCYCLE';
+      const cycleOn = !!single && opts.length > 0 && gripCtrlCycle(browserSysvar('GRIPMULTIFUNCTIONAL'));
+      let oi = 0;
       for (;;) {
         const mode = modes[mi]!;
-        const what = mode === 'stretch' ? '신축점' : mode === 'move' ? '이동점' : mode === 'rotate' ? '회전 각도' : mode === 'scale' ? '축척 비율' : '두 번째 점';
+        if (mode === 'stretch' && oi > 0 && single) {
+          const st2 = await runOption(opts[oi - 1]!, single.point, CYCLE);
+          if (st2 === 'cycle') {
+            oi = (oi + 1) % (opts.length + 1);
+            continue;
+          }
+          if (st2 === 'enter') {
+            oi = 0;
+            mi = 1;
+            continue;
+          }
+          break;
+        }
+        const refd = ref !== null && (mode === 'rotate' || mode === 'scale');
+        const what = mode === 'stretch' ? '신축점' : mode === 'move' ? '이동점' : mode === 'rotate' ? (refd ? '새 각도' : '회전 각도') : mode === 'scale' ? (refd ? '새 길이' : '축척 비율') : '두 번째 점';
+        const refKw = mode === 'rotate' || mode === 'scale';
         ctx.print(`** ${names[mode]}${copy ? ' (다중)' : ''} **`);
-        const r = await ctx.getPoint(`${what} 지정 또는 [기준점(B)/복사(C)/명령 취소(U)/종료(X)]:`, {
+        const r = await ctx.getPoint(`${what} 지정 또는 [기준점(B)/복사(C)/명령 취소(U)/${refKw ? '참조(R)/' : ''}종료(X)]:`, {
           base,
-          // 회전·축척은 숫자가 각도·비율, 값을 받는 그립의 신축은 결과 길이(그 밖은 숫자 = 직접 거리)
+          // 회전·축척은 숫자가 각도·비율(참조가 있으면 새 각도·새 길이), 값을 받는 그립의 신축은 결과 길이(그 밖은 숫자 = 직접 거리)
           preferNumber: mode === 'rotate' || mode === 'scale' || (mode === 'stretch' && dynamic),
-          keywords: [...modeKw, { key: 'B', label: '기준점' }, { key: 'C', label: '복사' }, { key: 'U', label: '명령 취소' }, { key: 'X', label: '종료' }, ...opts.map((o) => ({ key: o.key, label: o.label }))],
+          keywords: [
+            ...modeKw,
+            { key: 'B', label: '기준점' },
+            { key: 'C', label: '복사' },
+            { key: 'U', label: '명령 취소' },
+            ...(refKw ? [{ key: 'R', label: '참조' }] : []),
+            { key: 'X', label: '종료' },
+            ...opts.map((o) => ({ key: o.key, label: o.label })),
+          ],
+          ...(cycleOn && mode === 'stretch' ? { ctrlTap: CYCLE } : {}),
           ghost: (p0) => {
             cursor = p0;
             const p = snapPick(mode, p0);
@@ -1948,13 +2037,24 @@ export function registerModifyCommands(app: App): void {
         if ('enter' in r) {
           // Enter·스페이스: 다음 모드
           mi = (mi + 1) % modes.length;
+          ref = null;
           continue;
         }
         if ('keyword' in r) {
           const k = r.keyword;
+          if (k === CYCLE) {
+            oi = 1;
+            continue;
+          }
           const mk = modeKw.findIndex((x) => x.key === k);
           if (mk >= 0) {
+            if (mk !== mi) ref = null;
             mi = mk;
+            continue;
+          }
+          if (k === 'R' && refKw) {
+            const got = mode === 'rotate' ? await askRefAngle() : await askRefLength();
+            if (got !== null) ref = got;
             continue;
           }
           const o = opts.find((x) => x.key === k);
@@ -1986,7 +2086,7 @@ export function registerModifyCommands(app: App): void {
             if (m) {
               results = transformAll(st, sel, m, copy);
               xform = m;
-              step = mode === 'move' ? { d: { x: p.x - base.x, y: p.y - base.y } } : mode === 'rotate' ? { a: ang(base, p) } : null;
+              step = mode === 'move' ? { d: { x: p.x - base.x, y: p.y - base.y } } : mode === 'rotate' ? { a: ang(base, p) - (ref ?? 0) } : null;
             }
           }
         } else if ('text' in r) {
@@ -1996,9 +2096,10 @@ export function registerModifyCommands(app: App): void {
             const one = single && singleEnt ? gripStretchValue(singleEnt, single.id, v, cursor, doc) : null;
             if (one) results = [asCopy(one)];
           } else if (mode === 'rotate') {
-            xform = rotateAbout(base, (v * Math.PI) / 180);
-            step = { a: (v * Math.PI) / 180 };
-          } else if (mode === 'scale' && v > 0) xform = scaleAbout(base, v);
+            const a = (v * Math.PI) / 180 - (ref ?? 0);
+            xform = rotateAbout(base, a);
+            step = { a };
+          } else if (mode === 'scale' && v > 0) xform = scaleAbout(base, v / (ref ?? 1));
           if (xform) results = transformAll(st, sel, xform, copy);
         }
         if (!results.length) continue;

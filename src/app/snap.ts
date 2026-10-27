@@ -2,6 +2,8 @@
  * 객체 스냅: 끝점·중간점·중심·기하학적 중심·노드·사분점·교차점·연장선·삽입·수직·접점·근처점·가상 교차점·평행.
  * 연장선(EXT)·평행(PAR)은 커서를 끝점·선분 위에 잠시 머물러 얻은 획득점(SnapContext, 앱이 모은다)을 쓴다.
  * 중심·기하학적 중심은 원·호·닫힌 폴리선의 테두리 위에 커서를 두어도 잡힌다(AutoCAD와 같다).
+ * 접점은 원·호와 폴리선의 호 구간에 잡힌다(AutoCAD와 같다). 지연된 접점은 명령이 받겠다고 한 점 요청에서만이고,
+ * 원을 그리는 명령(CIRCLE 3P·Ttr·TTT)은 선·폴리선 직선 구간·구성선·광선에도 받는다(SnapContext.deferTanLines).
  */
 import type { CadDocument, Entity } from '../core/model';
 import { tableKey } from '../core/model';
@@ -10,6 +12,8 @@ import { bulgeArc, ccwSweep, interpolateFitPoints, nurbsPoints } from '../geom/c
 import type { Picker } from './pick';
 import type { Pt, SnapKind } from './view';
 import { lwVertices } from '../core/lwpoly';
+import { entityPath } from '../edit/geom/path';
+import type { ArcPiece, LinePiece } from '../edit/geom/curve';
 
 export interface SnapPoint {
   x: number;
@@ -63,6 +67,8 @@ export interface SnapContext {
   par?: readonly Pt[];
   /** 접점을 지연된 접점으로 잡는다(기준점과 상관없이 원·호 위 찍은 자리, 명령이 받겠다고 한 점 요청만) */
   deferTan?: boolean;
+  /** 지연된 접점을 선(선·폴리선 직선 구간·구성선·광선)에도 잡는다(원을 그리는 명령: 원은 선에도 접한다) */
+  deferTanLines?: boolean;
 }
 
 function arcSnaps(m: Mat, cx: number, cy: number, z: number, r: number, a0: number, sweep: number, full: boolean, out: SnapPoint[]): void {
@@ -531,6 +537,86 @@ export function circleOf(e: Entity): WorldCircle | null {
   return null;
 }
 
+/** 접점이 잡히는 객체(원·호·폴리선, 원 그리기에서는 선·구성선·광선도)의 평면도 조각 — 타원·스플라인 등은 빈 목록 */
+function tanPieces(e: Entity, lines: boolean): (ArcPiece | LinePiece)[] {
+  const ok =
+    e.type === 'CIRCLE' ||
+    e.type === 'ARC' ||
+    e.type === 'LWPOLYLINE' ||
+    (e.type === 'POLYLINE' && (e.kind === '2d' || (lines && e.kind === '3d'))) ||
+    (lines && (e.type === 'LINE' || e.type === 'XLINE' || e.type === 'RAY'));
+  if (!ok) return [];
+  const path = entityPath(e);
+  if (!path) return [];
+  return path.pieces.filter((pc): pc is ArcPiece | LinePiece => pc.k === 'arc' || (lines && pc.k === 'line' && Math.hypot(pc.b.x - pc.a.x, pc.b.y - pc.a.y) > 0));
+}
+
+/** 호 조각(부호 있는 중심각)을 도면 좌표의 반시계 원·호로 */
+export function arcPieceCircle(pc: ArcPiece): WorldCircle {
+  const full = Math.abs(pc.sw) >= Math.PI * 2 - 1e-12;
+  if (full) return { cx: pc.c.x, cy: pc.c.y, r: pc.r, a0: 0, sweep: Math.PI * 2 };
+  return { cx: pc.c.x, cy: pc.c.y, r: pc.r, a0: pc.sw < 0 ? pc.a0 + pc.sw : pc.a0, sweep: Math.abs(pc.sw) };
+}
+
+/** 선 조각에서 p에 가장 가까운 점(무한한 쪽은 자르지 않는다) */
+function nearestOnLine(pc: LinePiece, p: Pt): Pt {
+  const dx = pc.b.x - pc.a.x;
+  const dy = pc.b.y - pc.a.y;
+  let t = ((p.x - pc.a.x) * dx + (p.y - pc.a.y) * dy) / (dx * dx + dy * dy);
+  if (!pc.inf0 && t < 0) t = 0;
+  if (!pc.inf1 && t > 1) t = 1;
+  return { x: pc.a.x + dx * t, y: pc.a.y + dy * t };
+}
+
+/**
+ * 접점 대상 조각: 객체에서 pick에 가장 가까운 원·호·폴리선 호 구간(lines면 선·폴리선 직선 구간·구성선·광선도).
+ * 지연된 접점을 받은 명령이 스냅 점(객체 위)으로 대상을 다시 찾는다. 대상이 아니면 null
+ */
+export function tanPieceAt(e: Entity, pick: Pt, lines = false): ArcPiece | LinePiece | null {
+  let best: ArcPiece | LinePiece | null = null;
+  let bd = Infinity;
+  for (const pc of tanPieces(e, lines)) {
+    let d: number;
+    if (pc.k === 'arc') {
+      const c = arcPieceCircle(pc);
+      const a = Math.atan2(pick.y - c.cy, pick.x - c.cx);
+      // 호 밖이면 가까운 끝까지
+      d = onArc(a, c.a0, c.sweep)
+        ? Math.abs(Math.hypot(pick.x - c.cx, pick.y - c.cy) - c.r)
+        : Math.min(...[c.a0, c.a0 + c.sweep].map((t) => Math.hypot(pick.x - c.cx - c.r * Math.cos(t), pick.y - c.cy - c.r * Math.sin(t))));
+    } else {
+      const q = nearestOnLine(pc, pick);
+      d = Math.hypot(q.x - pick.x, q.y - pick.y);
+    }
+    if (d < bd - 1e-12) {
+      bd = d;
+      best = pc;
+    }
+  }
+  return best;
+}
+
+/** 지연된 접점 스냅: 커서에서 가장 가까운 접점 대상 위 점(호는 호 범위 안일 때만)과 커서까지 거리 */
+function deferredTanNear(e: Entity, p: Pt, lines: boolean): { q: Pt; d: number } | null {
+  let best: { q: Pt; d: number } | null = null;
+  for (const pc of tanPieces(e, lines)) {
+    let q: Pt;
+    let d: number;
+    if (pc.k === 'arc') {
+      const c = arcPieceCircle(pc);
+      const a = Math.atan2(p.y - c.cy, p.x - c.cx);
+      if (!onArc(a, c.a0, c.sweep)) continue;
+      q = { x: c.cx + c.r * Math.cos(a), y: c.cy + c.r * Math.sin(a) };
+      d = Math.abs(Math.hypot(p.x - c.cx, p.y - c.cy) - c.r);
+    } else {
+      q = nearestOnLine(pc, p);
+      d = Math.hypot(q.x - p.x, q.y - p.y);
+    }
+    if (!best || d < best.d) best = { q, d };
+  }
+  return best;
+}
+
 /** 커서 근처의 스냅점(가장 알맞은 것). ctx는 연장선·평행 획득점(앱이 모은다) */
 export function findSnap(doc: CadDocument, picker: Picker, p: Pt, aperture: number, modes: ReadonlySet<SnapKind>, base?: Pt | null, ctx?: SnapContext): SnapPoint | null {
   return findSnaps(doc, picker, p, aperture, modes, base, ctx)[0] ?? null;
@@ -571,15 +657,17 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
       }
     }
     if (modes.has('tan') && (base || ctx?.deferTan)) {
-      const circ = circleOf(e);
-      if (circ && ctx?.deferTan) {
-        // 지연된 접점: 커서에서 가장 가까운 원·호 위 점(접점은 명령이 다음 점을 받은 뒤 구한다)
-        const ang = Math.atan2(p.y - circ.cy, p.x - circ.cx);
-        const d = Math.abs(Math.hypot(p.x - circ.cx, p.y - circ.cy) - circ.r);
-        if (onArc(ang, circ.a0, circ.sweep)) considerAt({ x: circ.cx + circ.r * Math.cos(ang), y: circ.cy + circ.r * Math.sin(ang), kind: 'tan', handle: c.handle, deferred: true }, d);
-      } else if (circ && base)
-        for (const q of tangentPoints(base, { x: circ.cx, y: circ.cy }, circ.r))
-          if (onArc(Math.atan2(q.y - circ.cy, q.x - circ.cx), circ.a0, circ.sweep)) consider({ ...q, kind: 'tan', handle: c.handle });
+      if (ctx?.deferTan) {
+        // 지연된 접점: 커서에서 가장 가까운 원·호(폴리선 호 구간 포함, 원 그리기는 선도) 위 점 — 접점은 명령이 다음 점을 받은 뒤 구한다
+        const t = deferredTanNear(e, p, !!ctx.deferTanLines);
+        if (t) considerAt({ ...t.q, kind: 'tan', handle: c.handle, deferred: true }, t.d);
+      } else if (base)
+        for (const pc of tanPieces(e, false)) {
+          if (pc.k !== 'arc') continue;
+          const circ = arcPieceCircle(pc);
+          for (const q of tangentPoints(base, { x: circ.cx, y: circ.cy }, circ.r))
+            if (onArc(Math.atan2(q.y - circ.cy, q.x - circ.cx), circ.a0, circ.sweep)) consider({ ...q, kind: 'tan', handle: c.handle });
+        }
     }
   }
   if (modes.has('ext') && ctx?.ext?.length) for (const s of extSnaps(ctx.ext, p, aperture)) consider(s);

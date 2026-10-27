@@ -13,6 +13,8 @@ export interface Settings {
   gripSize: number;
   /** 0이면 선택한 객체의 그립을 보이지 않는다(GRIPS) */
   grips: number;
+  /** 다기능 그립 옵션을 쓰는 방법: 1 Ctrl 순환, 2 커서를 올리면 뜨는 그립 메뉴(GRIPMULTIFUNCTIONAL) — 오른쪽 클릭 메뉴는 늘 */
+  gripMultifunctional: number;
   /** 십자선 길이, 화면 크기의 %. 100이면 화면 끝까지(CURSORSIZE) */
   cursorSize: number;
   /** 객체 스냅 조준창, 픽셀(APERTURE) */
@@ -42,6 +44,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   pickbox: 5,
   gripSize: 5,
   grips: 2,
+  gripMultifunctional: 3,
   cursorSize: 5,
   aperture: 10,
   autosnap: 63,
@@ -60,6 +63,7 @@ export const SETTING_VARS: Readonly<Record<keyof Settings, string>> = {
   pickbox: 'PICKBOX',
   gripSize: 'GRIPSIZE',
   grips: 'GRIPS',
+  gripMultifunctional: 'GRIPMULTIFUNCTIONAL',
   cursorSize: 'CURSORSIZE',
   aperture: 'APERTURE',
   autosnap: 'AUTOSNAP',
@@ -208,6 +212,16 @@ export class RightClickTimer {
 /** 그립을 보이는지(GRIPS 0이면 그립도, 그립 편집도 없다) */
 export function gripsOn(grips: number): boolean {
   return grips !== 0;
+}
+
+/** 핫 그립에서 Ctrl을 한 번 누를 때마다 그 그립의 다기능 옵션으로 도는지(GRIPMULTIFUNCTIONAL 비트 1) */
+export function gripCtrlCycle(gripMultifunctional: number): boolean {
+  return (gripMultifunctional & 1) !== 0;
+}
+
+/** 그립에 커서를 올려 두면 다기능 그립 메뉴를 띄우는지(GRIPMULTIFUNCTIONAL 비트 2). 그립의 오른쪽 클릭 메뉴는 늘 뜬다 */
+export function gripHoverMenu(gripMultifunctional: number): boolean {
+  return (gripMultifunctional & 2) !== 0;
 }
 
 /** 명령이 먼저 고른 객체(명사/동사)를 쓰는지(PICKFIRST) */
