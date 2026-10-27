@@ -620,14 +620,15 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
         cols: [
           [
             { cmd: 'VIEW', label: '뷰 관리자', icon: 'views', tip: '지금 화면을 이름 붙여 저장하고 다시 불러오기' },
+            { cmd: 'VIEWLINK', label: '보기 링크', icon: 'link', tip: '지금 화면(가운데·배율·배치 탭)을 담은 주소 복사 — 파일은 담지 않습니다' },
             { cmd: 'UCS', label: 'UCS', icon: 'ucs', tip: '사용자 좌표계의 원점·방향 바꾸기' },
-            { cmd: 'UCSMAN', label: 'UCS 관리자', icon: 'coord' },
           ],
           [
+            { cmd: 'UCSMAN', label: 'UCS 관리자', icon: 'coord' },
             { cmd: 'DSETTINGS', label: '제도 설정', icon: 'settings', tip: '스냅·격자, 극좌표 추적, 객체 스냅 설정' },
             { cmd: 'ISOLATEOBJECTS', label: '객체 격리', icon: 'isolate', tip: '고른 객체만 보이기(UNISOLATEOBJECTS로 끝)' },
-            { cmd: 'UNISOLATEOBJECTS', label: '격리 끝', icon: 'eye' },
           ],
+          [{ cmd: 'UNISOLATEOBJECTS', label: '격리 끝', icon: 'eye' }],
         ],
       },
       {

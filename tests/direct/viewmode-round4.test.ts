@@ -128,18 +128,18 @@ describe('측정 띠의 객체 스냅 칩', () => {
   });
 });
 
-describe('더 보기: 점 좌표·문자 찾기', () => {
+describe('더 보기: 점 좌표·문자 찾기·보기 링크', () => {
   it('점 좌표(ID)는 큰 좌표 값 카드와 다시 재기', async () => {
     const h = setup();
     h.mv.apply(true);
-    const more = h.mv.bar.querySelector<HTMLButtonElement>('button[aria-label="더 보기: 좌표·찾기·참조 파일"]')!;
+    const more = h.mv.bar.querySelector<HTMLButtonElement>('button[aria-label="더 보기: 좌표·찾기·참조 파일·보기 링크"]')!;
     // 좁은 화면에서 다른 단추 이름이 줄지 않게 아이콘만, 마지막 자리
     expect(more.classList.contains('vb-more')).toBe(true);
     expect(more.querySelector('.vb-lbl')).toBeNull();
     expect(h.mv.bar.lastElementChild).toBe(more);
     more.click();
     const items = vi.mocked(showMenu).mock.calls.at(-1)![2] as { label: string; run: () => void }[];
-    expect(items.map((i) => i.label)).toEqual(['점 좌표 (ID)', '문자 찾기', '참조 파일 고르기(외부 참조·SHX 글꼴)']);
+    expect(items.map((i) => i.label)).toEqual(['점 좌표 (ID)', '문자 찾기', '참조 파일 고르기(외부 참조·SHX 글꼴)', '보기 링크 복사']);
     items[0]!.run();
     await settle();
     expect(h.mv.card.querySelector('.mv-prompt')?.textContent).toBe('점 지정:');

@@ -72,6 +72,7 @@ import { registerManageCommands } from './app/manage';
 import { handleLaunchQuery, installPwa } from './app/pwa-app';
 import { Shell } from './app/ui/shell';
 import { dialog, h, toast } from './app/ui/dom';
+import { installViewLinks } from './app/viewlink-app';
 import { baseName, download, exportRaster, exportSvg } from './app/export';
 
 export function startEditor(root: HTMLElement): EditorActions {
@@ -173,7 +174,10 @@ export function startEditor(root: HTMLElement): EditorActions {
     displayFlags.fieldBackground = v === 1;
     app.view.requestRender();
   });
+  // 보기 링크(#view=): 지금 화면을 담은 주소 복사, 주소의 보기를 처음 연 도면에 적용
+  const viewLinks = installViewLinks(app, (st) => shell.mobile?.keepView(st));
   app.onOpened = (st) => {
+    viewLinks.opened(st);
     noteMissingShx(app, st);
     noteForeignConstraints(app, st);
     void noteMissingRefs(app, st);
