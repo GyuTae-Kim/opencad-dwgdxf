@@ -25,6 +25,7 @@ import { type KnotParam, fitSplineNurbs, makeCvSpline, makeFitSpline, splineFrom
 import { type CircleItem, type RectOptions, arcByCenter, arcByCenterAngle, arcFromBulge, bulgeOfSweep, arcByCenterChord, arcByDirection, arcByRadiusAngle, arcByRadiusEnd, bisectAngle, circleThrough, circleTTR, circleTTT, ellipseAngleToParam, ellipseParamToAngle, offsetLine, rectCorners, rectCornersFit, rectOtherCorner, rectOtherSide, rectVertices } from '../edit/geom/drawgeom';
 import { entityPath } from '../edit/geom/path';
 import { type Piece, pathNearest } from '../edit/geom/curve';
+import { ctrlHeld } from './gripmenu';
 
 // ---------------------------------------------------------------------------
 // 공통
@@ -394,6 +395,8 @@ export function registerDrawCommands(app: App): void {
         const half = Math.atan2(Math.sin(d), Math.cos(d));
         return Math.tan(half / 2);
       };
+      /** 접선 이어 그리기 호의 방향 바꾸기(Ctrl): 같은 원을 반대로 도는 나머지 호(볼록 −1/b). 직선(b = 0)이면 그대로 */
+      const flipTangent = (b: number): number => (Math.abs(b) > 1e-9 ? -1 / b : b);
       /** 호 구간 하나를 더한다(지금 정점의 볼록·폭, 끝점) */
       const pushArc = (last: LwVertex, bulge: number, ep: Pt) => {
         last.bulge = bulge;
@@ -417,15 +420,16 @@ export function registerDrawCommands(app: App): void {
         if (k === 'A') {
           const sw = await getAngle(ctx, '사이각 지정', null, Math.PI / 2);
           if (Math.abs(sw) < 1e-12) return true;
+          // Ctrl: 같은 사이각을 반대로 돈다
           const r = await ctx.getPoint('호의 끝점 지정(방향 전환은 Ctrl 키) 또는 [중심(CE)/반지름(R)]:', {
             base: lp,
             keywords: [
               { key: 'CE', label: '중심' },
               { key: 'R', label: '반지름' },
             ],
-            rubber: (q) => arcRubber(Math.tan(sw / 4), q),
+            rubber: (q) => arcRubber(Math.tan((ctrlHeld() ? -sw : sw) / 4), q),
           });
-          if ('point' in r) pushArc(last, Math.tan(sw / 4), r.point);
+          if ('point' in r) pushArc(last, Math.tan((r.ctrl ? -sw : sw) / 4), r.point);
           else if ('keyword' in r && r.keyword === 'CE') {
             const c = pt(await ctx.getPoint('호의 중심점 지정:', { base: lp, rubber: (q) => { const a = arcByCenterAngle(lp, q, sw); return a ? arcRubber(a.bulge, a.end) : []; } }));
             const a = c ? arcByCenterAngle(lp, c, sw) : null;
@@ -442,6 +446,7 @@ export function registerDrawCommands(app: App): void {
         if (k === 'CE') {
           const c = pt(await ctx.getPoint('호의 중심점 지정:', { base: lp }));
           if (!c) return true;
+          // Ctrl: 시계 방향
           const r = await ctx.getPoint('호의 끝점 지정(방향 전환은 Ctrl 키) 또는 [각도(A)/길이(L)]:', {
             base: c,
             keywords: [
@@ -449,12 +454,12 @@ export function registerDrawCommands(app: App): void {
               { key: 'L', label: '길이' },
             ],
             rubber: (q) => {
-              const a = arcByCenter(lp, c, q);
+              const a = arcByCenter(lp, c, q, !ctrlHeld());
               return a ? arcRubber(a.bulge, a.end) : [];
             },
           });
           let a: { end: Pt; bulge: number } | null = null;
-          if ('point' in r) a = arcByCenter(lp, c, r.point);
+          if ('point' in r) a = arcByCenter(lp, c, r.point, !r.ctrl);
           else if ('keyword' in r && r.keyword === 'A') a = arcByCenterAngle(lp, c, await getAngle(ctx, '사이각 지정', null, Math.PI / 2));
           else if ('keyword' in r && r.keyword === 'L') a = arcByCenterChord(lp, c, await getDistance(ctx, '현의 길이 지정', lp));
           if (a) pushArc(last, a.bulge, a.end);
@@ -463,21 +468,25 @@ export function registerDrawCommands(app: App): void {
         }
         if (k === 'D') {
           const dir = await getAngle(ctx, '호의 시작 방향 지정', lp, tan ?? 0);
-          const ep = pt(await ctx.getPoint('호의 끝점 지정(방향 전환은 Ctrl 키):', { base: lp, rubber: (q) => arcRubber(arcByDirection(lp, dir, q), q) }));
-          const b = ep ? arcByDirection(lp, dir, ep) : null;
+          // Ctrl: 시작 방향을 거꾸로
+          const er = await ctx.getPoint('호의 끝점 지정(방향 전환은 Ctrl 키):', { base: lp, rubber: (q) => arcRubber(arcByDirection(lp, ctrlHeld() ? dir + Math.PI : dir, q), q) });
+          const ep = pt(er);
+          const b = ep ? arcByDirection(lp, 'point' in er && er.ctrl ? dir + Math.PI : dir, ep) : null;
           if (ep && b !== null) pushArc(last, b, ep);
           return true;
         }
         if (k === 'R') {
           const R = await getDistance(ctx, '호의 반지름 지정', lp);
           if (!(R > 0)) return true;
+          // Ctrl: 같은 반지름의 호를 반대쪽으로
+          const flip = (b: number | null, on: boolean) => (b !== null && on ? -b : b);
           const r = await ctx.getPoint('호의 끝점 지정(방향 전환은 Ctrl 키) 또는 [각도(A)]:', {
             base: lp,
             keywords: [{ key: 'A', label: '각도' }],
-            rubber: (q) => arcRubber(arcByRadiusEnd(lp, R, q), q),
+            rubber: (q) => arcRubber(flip(arcByRadiusEnd(lp, R, q), ctrlHeld()), q),
           });
           if ('point' in r) {
-            const b = arcByRadiusEnd(lp, R, r.point);
+            const b = flip(arcByRadiusEnd(lp, R, r.point), !!r.ctrl);
             if (b === null) ctx.print('호를 만들 수 없습니다. 반지름이 너무 작습니다.', 'err');
             else pushArc(last, b, r.point);
           } else if ('keyword' in r) {
@@ -547,7 +556,8 @@ export function registerDrawCommands(app: App): void {
             base: lp,
             keywords: kws,
             rubber: (q) => {
-              const b = bulgeFor(last, q);
+              const b0 = bulgeFor(last, q);
+              const b = ctrlHeld() ? flipTangent(b0) : b0;
               const tmp = verts.map((v) => ({ ...v }));
               tmp[tmp.length - 1]!.bulge = b;
               return [{ pts: polyPreview([...tmp, { x: q.x, y: q.y, bulge: 0, startWidth: 0, endWidth: 0 }], false) }];
@@ -617,7 +627,8 @@ export function registerDrawCommands(app: App): void {
           p = seg[1];
           deferred = null;
         }
-        if (arcMode) last.bulge = bulgeFor(last, p);
+        // 접선 이어 그리기 호: Ctrl을 누른 채 찍으면 방향을 바꾼다
+        if (arcMode) last.bulge = 'point' in r && r.ctrl ? flipTangent(bulgeFor(last, p)) : bulgeFor(last, p);
         last.startWidth = width0;
         last.endWidth = width1;
         verts.push({ x: p.x, y: p.y, bulge: 0, startWidth: width1, endWidth: width1 });
