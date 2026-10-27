@@ -192,6 +192,23 @@ DWG에 자리가 없는 값(스플라인의 평면·직선 비트, R2000 DWG의 
 알리지 않고 빠진 객체만 왕복 차이(`object:종류:-`)와 품질 지표 `silent-object-loss`로 남깁니다.
 `--oracle`은 `CAD_PYTHON`(ezdxf가 있는 파이썬)이 있을 때만 ezdxf와도 견줍니다(DXF 원본, 우리가 쓴 DXF와 audit, DWG 옆의 같은 이름 DXF).
 
+### 공용 사이트 도구
+
+다섯 언어 페이지·검색 정보·사이트맵·내용 수정일·언어별 앱 정보·서비스 워커 빌드, 공용 번역기, 언어 메뉴, 서비스 워커 등록·새 판 알림,
+방문 통계, 휴대폰 성능 비교는 다른 OpenCAD 앱과 함께 쓰는 [opencad-site-kit](https://github.com/GyuTae-Kim/opencad-site-kit)
+(`github:GyuTae-Kim/opencad-site-kit#v0.1.3`, 잠금 커밋 `cb6d7e7`, 빌드 때만 써서 `devDependencies`)에 있습니다.
+이 앱에만 있는 것은 `tools/site.mjs`(앱 정보 원본 `public/manifest.webmanifest`, 처음 설치 때 담을 파일, 쓸 때만 받는 덩어리, 따로 판을 매기는 `fonts/`·`pdfjs/`·`samples/`),
+`tools/sw-template.js`(서비스 워커 본문), `src/app/pwa.ts`의 공유 받기 실패 안내입니다. `check:seo`·`check:i18n`·`test:seo`·`update:content-dates`는 도구의 `opencad-site` 명령입니다.
+도구 판을 올릴 때는 빌드 결과를 견줍니다.
+
+```bash
+npx vite build && cp -R dist .runtime/dist-before                                        # 올리기 전
+npm install -D "opencad-site-kit@github:GyuTae-Kim/opencad-site-kit#<태그>"               # package.json·잠금 파일을 함께
+npx vite build && npx opencad-site compare-dist .runtime/dist-before dist                 # 바뀐 파일과 처음 다른 곳
+```
+
+도구의 판 설명에 적힌 것 밖의 차이가 없으면, 스크립트가 바뀐 경우 내용 수정일을 갱신하고(아래 "검색 및 링크 공유") 빌드·시험을 돌립니다.
+
 `main` 브랜치에 올리면 GitHub Actions가 빌드해 `gh-pages` 브랜치로 배포합니다.
 
 ## 로드맵
@@ -205,7 +222,7 @@ AutoCAD는 Autodesk의 상표이며, 이 프로젝트는 Autodesk와 관계가 �
 
 ## 검색 및 링크 공유
 
-대표 주소는 `https://gyutae-kim.github.io/opencad-dwgdxf/`입니다. `site/metadata.json`에서 제목·검색 설명·대표 주소·공유 이미지·작성자를 관리하고 `tools/site-metadata.mjs`가 canonical, Open Graph·Twitter, WebApplication·탐색경로 구조화 데이터를 함께 생성합니다. `index.html`의 `<!-- site-metadata -->`가 개발·배포 빌드에서 같은 메타데이터로 치환되므로 개별 태그에 제목이나 설명을 중복 작성하지 않습니다. 앱 실행 전에도 기능 안내와 포트폴리오 링크를 읽을 수 있고, 실행 후에는 같은 안내를 시작 화면에서 제공합니다. 공유 이미지는 `public/og-opencad.jpg`(1200×630)입니다.
+대표 주소는 `https://gyutae-kim.github.io/opencad-dwgdxf/`입니다. `site/metadata.json`에서 제목·검색 설명·대표 주소·공유 이미지·작성자를 관리하고, 공용 사이트 도구가 `tools/site.mjs` 설정으로 canonical, Open Graph·Twitter, WebApplication·탐색경로 구조화 데이터를 함께 생성합니다. `index.html`의 `<!-- site-metadata -->`가 개발·배포 빌드에서 같은 메타데이터로 치환되므로 개별 태그에 제목이나 설명을 중복 작성하지 않습니다. 앱 실행 전에도 기능 안내와 포트폴리오 링크를 읽을 수 있고, 실행 후에는 같은 안내를 시작 화면에서 제공합니다. 공유 이미지는 `public/og-opencad.jpg`(1200×630)입니다.
 
 `sitemap.xml`은 같은 생성 코드에서 만들며 이 앱 주소와 `lastmod`를 포함합니다. 개발 서버에서도 같은 주소로 제공합니다. 호스트 전체의 `robots.txt`와 통합 사이트맵은 포트폴리오 저장소에서 관리합니다. 하위 프로젝트의 `robots.txt`로 호스트 수집 규칙을 바꿀 수는 없습니다. 새 공개 도구를 추가하면 포트폴리오의 `OPENCAD_TOOLS`에도 실제 주소를 등록합니다.
 
@@ -235,14 +252,14 @@ npm run build
 
 ## 홈 화면 앱과 오프라인
 
-빌드가 서비스 워커(`dist/sw.js`, `tools/sw-plugin.mjs`·`tools/sw-template.js`)를 만듭니다. 페이지가 다 뜨고 한가할 때 등록하므로 첫 화면은 늦어지지 않습니다.
+빌드가 서비스 워커(`dist/sw.js`)를 만듭니다. 본문은 `tools/sw-template.js`이고, 미리 담을 목록과 판 이름은 공용 사이트 도구가 `tools/site.mjs` 설정으로 정합니다. 페이지가 다 뜨고 한가할 때 등록하므로 첫 화면은 늦어지지 않습니다.
 
 - 처음 방문 뒤 미리 담는 것: 다섯 언어 쪽과 앱 정보·아이콘, 시작 스크립트·스타일, 편집기, 해석 워커, DWG 저장 모듈, 글꼴 해석기(합쳐 약 4.6MB, 압축 전송 약 1.6MB).
   편집기처럼 페이지가 이미 받은 것은 브라우저 캐시에서 가져오므로, 처음 방문에 더 받는 양은 약 0.5MB입니다(해석 워커·저장 모듈·글꼴 해석기·다른 언어 쪽·아이콘).
 - 쓸 때만 받는 것: 글꼴(`fonts/`, 약 6MB)·PDF 자료(`pdfjs/`)·예제 도면, 다른 언어 사전, PDF 해석기는 미리 담지 않고 쓴 것만 담습니다. 서비스 워커가 맡기 전에 받은 것(첫 방문의 사전·글꼴)도 앱이 알려 담게 합니다.
   첫 방문에 바로 연 도면이 해석 워커에서 받은 글꼴은 다음에 그 글꼴을 쓸 때 담깁니다.
 - 쪽(HTML)은 늘 네트워크를 먼저 보고, 안 되면 담아 둔 쪽을 엽니다(`?sample`도 오프라인에서 열립니다). 같은 출처의 `?open=` 도면과 앱 범위 밖 주소는 손대지 않습니다.
-- 새 판: 새 서비스 워커는 설치만 하고 기다리다가 "새 버전이 있습니다 · 새로 고침" 알림을 띄웁니다. 저장하지 않은 도면이 있으면 묻고, 새로 고치기 전에 이 브라우저에 자동 저장해 두므로 다시 열린 뒤 도면 복구 관리자(DRAWINGRECOVERY)로 되살릴 수 있습니다.
+- 새 판: 새 서비스 워커는 설치만 하고 기다리다가 "새 버전이 있습니다 · 새로 고침" 알림을 한 번 띄웁니다. 홈 화면 앱으로 다시 돌아올 때도 새 판이 있는지 봅니다. 저장하지 않은 도면이 있으면 묻고, 새로 고치기 전에 이 브라우저에 자동 저장해 두므로 다시 열린 뒤 도면 복구 관리자(DRAWINGRECOVERY)로 되살릴 수 있습니다.
 - 공유 받기(안드로이드 `share_target`): 서비스 워커가 받은 파일을 최근 문서 저장소(IndexedDB `opencad-2d`)에 넣고 `?recent=<id>`로 엽니다. 60MB보다 크면 받지 않고 "파일 열기로 여십시오"라고 알립니다. 열지 못한 파일은 최근 문서에 남기지 않습니다.
 - 파일 연결(데스크톱 Chrome·Edge에 설치한 앱, `file_handlers` + `launchQueue`): .dwg·.dxf와 스크립트(.scr)·AutoLISP(.lsp·.mnl)를 "연결 프로그램"으로 열면 이미 열린 창의 새 탭으로 엽니다(`launch_handler`).
 - 휴대폰 브라우저 검사(`tools/mobile-browser-check.js`)는 편집기 받기 실패를 흉내 내야 해서 서비스 워커를 막은 창에서 돕니다(`tools/mobile-browser.json`). 오프라인 동작은 `tests/app/sw.test.ts`가 가짜 캐시·네트워크로 확인합니다.
@@ -260,5 +277,7 @@ npm run build
 한국어 기본 주소와 영어(`/en/`), 일본어(`/ja/`), 중국어 간체(`/zh-CN/`), 독일어(`/de/`) 페이지를 제공합니다. 각 언어의 소개 본문과 검색·공유 메타데이터를 빌드할 때 생성하며, `hreflang`과 사이트맵이 같은 페이지의 언어들을 연결합니다. `site/locales/*.json`에 한국어 원문과 번역을 저장하고, 브라우저는 선택한 언어의 사전만 내려받습니다. 방문 중 외부 번역 서비스는 호출하지 않습니다.
 
 우측 상단 지구본 아이콘에서 언어를 선택합니다. 방향키로 이동하고 Escape나 바깥 클릭으로 닫을 수 있습니다. 언어 선택은 URL에 반영하며, 열린 문서나 편집 상태를 다시 만들지 않고 화면 문구·접근성 설명·오류·도움말을 갱신합니다. 명령 식별자·입력값·파일명·모델 이름·원본 도면의 문자는 번역하지 않습니다. 새 데이터 이름을 표시하는 요소에는 `translate="no"`를 지정하고, UI 문구의 `{0}` 같은 변수 자리를 변경하지 마세요. 여러 줄 메시지와 새 한국어 문구도 번역 사전에 추가해야 합니다.
+
+번역기는 공용 사이트 도구의 것을 씁니다. 줄바꿈으로 이은 글은 줄마다, ` · `·` | `·` — `로 이은 문장은 조각마다 사전에서 찾아 옮기므로, 이은 글 전체를 사전에 따로 넣지 않아도 됩니다.
 
 `npm run test:i18n`은 언어 전환과 문서 데이터 보존을, `npm run check:i18n`은 다섯 언어의 정적 소개·canonical·언어 링크·사전 변수·에셋 경로를 검사합니다. 번역이나 앱을 수정하면 기존 콘텐츠 수정일 갱신 절차를 따른 뒤 다시 빌드합니다. 자동 번역 초안의 주요 메뉴와 제품명은 교정했으며, 긴 기술 설명에는 추가 원어민 감수가 필요합니다.
