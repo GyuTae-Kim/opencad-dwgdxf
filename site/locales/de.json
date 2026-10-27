@@ -5171,6 +5171,7 @@
   "연결할 수 있는 파일이 없습니다(DWG·DXF·이미지·PDF·SHX).": "Es konnten keine Dateien verknüpft werden (DWG, DXF, Bilder, PDF, SHX).",
   "연관": "Assoziation",
   "연관 객체 유지": "Assoziationsobjekt verwalten",
+  "연관 동작 일부를 이 형식으로 쓸 수 없어 그 동작을 통째로 뺐습니다(객체는 남고 연관만 풀립니다).": "Ein Teil einer assoziativen Aktion kann in diesem Format nicht geschrieben werden, daher wurde die ganze Aktion entfernt (die Objekte bleiben erhalten, nur die Assoziativität wird aufgehoben).",
   "연관 망을 읽지 못했습니다.": "Fehler beim Lesen des Assoziationsnetzwerks.",
   "연관 배열 기본값": "Standardmäßiges assoziatives Array",
   "연관 배열 작성": "Assoziatives Array erstellen",

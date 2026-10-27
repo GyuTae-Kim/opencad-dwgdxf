@@ -131,6 +131,8 @@ export const OBJECT_MIN_VERSION: Readonly<Record<string, number>> = {
 
 /** 원본 태그가 없어도 내용을 만들 수 있는 객체 */
 const SYNTH_GENERIC = new Set(['ACDBPLACEHOLDER', 'TABLESTYLE']);
+/** 연관 동작을 통째로 뺄 때의 경고(저장 전 확인에 나온다, src/app/saveloss.ts) */
+export const ASSOC_DROPPED = '연관 동작 일부를 이 형식으로 쓸 수 없어 그 동작을 통째로 뺐습니다(객체는 남고 연관만 풀립니다).';
 const ACIS_TYPES = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
 
 const HEX_RE = /^[0-9A-F]+$/;
@@ -875,6 +877,7 @@ export class WriteContext {
     }
 
     // IMAGE ↔ IMAGEDEF_REACTOR
+    const linkedImages = new Set<string>();
     for (const pb of this.blocks) {
       for (const e of pb.entities) {
         if (e.type !== 'IMAGE') continue;
@@ -882,6 +885,8 @@ export class WriteContext {
         const eh = this.hOf(img);
         const def = img.imageDef ? this.objByH.get(img.imageDef.toUpperCase()) : undefined;
         if (!def || def.obj.type !== 'IMAGEDEF') continue;
+        if (img.handle) linkedImages.add(img.handle.toUpperCase());
+        if (img.imageDefReactor) linkedImages.add(img.imageDefReactor.toUpperCase());
         const r = { type: 'IMAGEDEF_REACTOR', handle: img.imageDefReactor ?? '' } as GenericObject;
         const p = add(r, true);
         p.owner = eh;
@@ -891,6 +896,10 @@ export class WriteContext {
         this.imageDefReactors.set(def.h, list);
       }
     }
+    // 원본의 반응자 중 쓸 IMAGE(와 그 IMAGEDEF)에 이어지지 않은 것(IMAGE를 지운 뒤 남은 것 등)은 빠진다고 알린다
+    for (const o of objs.values())
+      if (o.type === 'IMAGEDEF_REACTOR' && !linkedImages.has(o.handle.toUpperCase()) && !linkedImages.has((o.owner ?? '').toUpperCase()))
+        this.warn('object.orphan_dropped', '소유 객체를 쓰지 않는 객체를 뺐습니다.', o.type);
     // 그룹: 쓸 객체만 남긴다(비면 뺀다).
     for (const p of [...this.objects]) {
       if (p.obj.type !== 'GROUP') continue;
@@ -973,7 +982,10 @@ export class WriteContext {
           return false;
         }
         // 연관 망 객체: 같은 동작의 다른 객체가 DWG 원본 비트뿐이면 동작을 통째로 빼고 망 목록에서도 뺀다(src/edit/assocnet/version.ts)
-        if (!assocDxfWritable(o as GenericObject, (h) => this.doc.objects.get(h) as GenericObject | undefined)) return false;
+        if (!assocDxfWritable(o as GenericObject, (h) => this.doc.objects.get(h) as GenericObject | undefined)) {
+          this.warn('object.assoc_dropped', ASSOC_DROPPED, o.type);
+          return false;
+        }
         if (!rawTagsValid(raw)) {
           this.warn('object.corrupt_dropped', '값이 잘못된 원본 자료를 담은 객체를 쓰지 않았습니다.', o.type);
           return false;

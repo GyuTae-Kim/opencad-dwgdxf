@@ -5171,6 +5171,7 @@
   "연결할 수 있는 파일이 없습니다(DWG·DXF·이미지·PDF·SHX).": "No files could be linked (DWG, DXF, images, PDF, SHX).",
   "연관": "Associativity",
   "연관 객체 유지": "Maintain associative objects",
+  "연관 동작 일부를 이 형식으로 쓸 수 없어 그 동작을 통째로 뺐습니다(객체는 남고 연관만 풀립니다).": "Part of an associative action can't be written in this format, so the whole action was removed (the objects stay; only the association is released).",
   "연관 망을 읽지 못했습니다.": "Failed to read the associativity network.",
   "연관 배열 기본값": "Default associative array settings",
   "연관 배열 작성": "Create associative array",

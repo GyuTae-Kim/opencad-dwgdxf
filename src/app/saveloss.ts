@@ -4,6 +4,7 @@
  *
  * - 도형이 빠지거나(…_dropped) 다른 모양으로 바뀌는(…_as_…, 분해·근사) 것은 모두 보인다.
  * - 객체가 빠지는 것은 2D 도면에 보이지 않는 3D·문서화 스타일(재질·비주얼 스타일·단면/상세 뷰 스타일)을 빼고 보인다.
+ *   DXF로 쓸 수 없는 객체가 섞인 연관 동작을 통째로 뺀 것(object.assoc_dropped — 객체는 남고 연관만 풀린다)도 여기에 든다.
  * - 고아 객체·빠진 객체를 가리키던 사전 항목은 위 항목의 결과라 따로 보이지 않는다.
  */
 import type { ReadWarning } from '../core/model';
@@ -52,7 +53,7 @@ const CONVERSIONS = new Set([
 ]);
 
 /** 객체가 빠지는 경고(종류에 따라) */
-const OBJECT_DROPS = new Set(['dwg.write_object_dropped', 'object.no_data', 'object.corrupt_dropped']);
+const OBJECT_DROPS = new Set(['dwg.write_object_dropped', 'object.no_data', 'object.corrupt_dropped', 'object.assoc_dropped']);
 
 function typesOf(w: ReadWarning): string[] {
   const d = w.detail as { types?: Record<string, number>; items?: unknown[] } | undefined;

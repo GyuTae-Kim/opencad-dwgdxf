@@ -23,7 +23,7 @@ const writes = (r: FileRecord): [string, WriteRecord][] => Object.entries(r.writ
 const sceneFailed = (r: FileRecord) => !!r.scene?.error || (r.scene?.spaces ?? []).some((s) => !s.ok && s.error?.err !== 'no block');
 
 /** 비그래픽 객체를 뺐다고 알리는 쓰기 경고(세부에 종류가 있다) */
-const OBJECT_DROP_WARNINGS = ['dwg.write_object_dropped', 'object.no_data', 'object.orphan_dropped', 'object.corrupt_dropped'];
+const OBJECT_DROP_WARNINGS = ['dwg.write_object_dropped', 'object.no_data', 'object.orphan_dropped', 'object.corrupt_dropped', 'object.assoc_dropped'];
 
 /** 쓰기 경고가 알린 뺀 객체 종류 */
 function warnedObjectTypes(w: WriteRecord): Set<string> {
