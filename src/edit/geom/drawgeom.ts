@@ -1,5 +1,5 @@
 /**
- * 그리기 명령의 형상 계산(DOM 없음): RECTANG(회전·모따기·모깎기·영역), CIRCLE Ttr(접선 접선 반지름),
+ * 그리기 명령의 형상 계산(DOM 없음): RECTANG(회전·모따기·모깎기·영역), CIRCLE Ttr(접선 접선 반지름)·TTT·3P의 접점(점과 접선 섞기),
  * XLINE 이등분·간격띄우기, PLINE 호 옵션(중심·반지름·방향)의 볼록 값, ELLIPSE 호의 각도 ↔ 매개변수.
  * 좌표는 WCS 평면도다.
  */
@@ -207,16 +207,28 @@ export function circleTTR(p1: Piece, pick1: Vec2, p2: Piece, pick2: Vec2, r: num
   return best ? { c: best.c, r } : null;
 }
 
+/** 원이 지나거나 접할 것: 점, 또는 접할 선·호 조각과 그 위의 고른 점 */
+export type CircleItem = { point: Vec2 } | { piece: Piece; pick: Vec2 };
+
 /**
  * 세 곡선(선·호 조각, 연장해서 본다)에 모두 접하는 원(아폴로니우스 문제 — AutoCAD 리본의 접선, 접선, 접선).
  * 해가 여럿이면 접점이 고른 점에 가장 가까운 것. 해가 없으면 null.
+ */
+export function circleTTT(picks: readonly { piece: Piece; pick: Vec2 }[]): { c: Vec2; r: number } | null {
+  return circleThrough(picks);
+}
+
+/**
+ * 세 가지(점은 지나고, 선·호 조각은 연장해서 접한다)를 모두 만족하는 원 — CIRCLE 3P의 점·지연된 접점, TTT.
+ * 점은 반지름 0인 원으로 본다. 해가 여럿이면 접점이 고른 점에 가장 가까운 것. 해가 없으면 null.
  *
  * 미지수 u = (x, y, r). 선(단위 법선 n): n·(x, y) − n·a = s·r. 원(중심 c, 반지름 R): |(x, y) − c|² = (R + s·r)², s = ±1.
  * 원 식끼리 빼면 일차식이 되므로 일차식 둘 + 이차식 하나(원이 없으면 일차식 셋)로 푼다.
  */
-export function circleTTT(picks: readonly { piece: Piece; pick: Vec2 }[]): { c: Vec2; r: number } | null {
-  if (picks.length !== 3) return null;
-  const cs = picks.map((p) => carrier(p.piece));
+export function circleThrough(items: readonly CircleItem[]): { c: Vec2; r: number } | null {
+  if (items.length !== 3) return null;
+  const picks = items.map((it) => ('point' in it ? { pick: it.point } : { pick: it.pick }));
+  const cs = items.map((it) => ('point' in it ? ({ k: 'circle', c: it.point, r: 0 } as const) : carrier(it.piece)));
   if (cs.some((c) => !c)) return null;
   const car = cs as NonNullable<ReturnType<typeof carrier>>[];
   const size = Math.max(1, ...picks.map((p) => Math.hypot(p.pick.x, p.pick.y)));

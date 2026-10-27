@@ -10,7 +10,7 @@ import type { EditOp } from '../edit/session';
 import { registerUndoCommand } from './undocmd';
 import { registerDraw3dCommands } from './draw3d';
 import type { App, CommandContext, PointResult, PointSnap } from './app';
-import { type WorldCircle, circleOf, commonTangent, tangentFrom } from './snap';
+import { type WorldCircle, arcPieceCircle, commonTangent, tangentFrom, tanPieceAt } from './snap';
 import { CancelError } from './app';
 import type { Pt } from './view';
 import { registerTextCommands } from './textedit/commands';
@@ -22,9 +22,9 @@ import { isoCircleEllipse, isoEllipseKeyword } from './viewtools-iso';
 import { packLw, packLwPoints } from '../core/lwpoly';
 import type { DocState } from './docstate';
 import { type KnotParam, fitSplineNurbs, makeCvSpline, makeFitSpline, splineFromFitPolyline } from '../edit/geom/drawgeom';
-import { type RectOptions, arcByCenter, arcByCenterAngle, arcFromBulge, bulgeOfSweep, arcByCenterChord, arcByDirection, arcByRadiusAngle, arcByRadiusEnd, bisectAngle, circleTTR, circleTTT, ellipseAngleToParam, ellipseParamToAngle, offsetLine, rectCorners, rectCornersFit, rectOtherCorner, rectOtherSide, rectVertices } from '../edit/geom/drawgeom';
+import { type CircleItem, type RectOptions, arcByCenter, arcByCenterAngle, arcFromBulge, bulgeOfSweep, arcByCenterChord, arcByDirection, arcByRadiusAngle, arcByRadiusEnd, bisectAngle, circleThrough, circleTTR, circleTTT, ellipseAngleToParam, ellipseParamToAngle, offsetLine, rectCorners, rectCornersFit, rectOtherCorner, rectOtherSide, rectVertices } from '../edit/geom/drawgeom';
 import { entityPath } from '../edit/geom/path';
-import { pathNearest } from '../edit/geom/curve';
+import { type Piece, pathNearest } from '../edit/geom/curve';
 
 // ---------------------------------------------------------------------------
 // 공통
@@ -75,11 +75,33 @@ export function addEntities(app: App, ctx: CommandContext, list: Entity[], label
   return out;
 }
 
-/** 지연된 접점 스냅이 잡은 원·호(도면 좌표). 지연된 접점이 아니면 null */
-function deferredCircle(app: App, snap: PointSnap | null | undefined): WorldCircle | null {
+/** 지연된 접점 스냅이 잡은 원·호(폴리선 호 구간 포함, 도면 좌표). at = 스냅 점(객체 위). 지연된 접점이 아니면 null */
+function deferredCircle(app: App, snap: PointSnap | null | undefined, at: Pt): WorldCircle | null {
   if (!snap?.deferred || !snap.handle) return null;
   const e = app.active?.doc.entityIndex.get(snap.handle);
-  return e ? circleOf(e) : null;
+  const pc = e ? tanPieceAt(e, at) : null;
+  return pc?.k === 'arc' ? arcPieceCircle(pc) : null;
+}
+
+/** 지연된 접점 스냅이 잡은 접점 대상 조각(원을 그리는 명령 — 선 조각도). 지연된 접점이 아니면 null */
+function deferredPiece(app: App, snap: PointSnap | null | undefined, at: Pt): Piece | null {
+  if (!snap?.deferred || !snap.handle) return null;
+  const e = app.active?.doc.entityIndex.get(snap.handle);
+  return e ? tanPieceAt(e, at, true) : null;
+}
+
+/** 지연된 접점 하나 풀기용: 점 요청 결과에서 찍은 자리와 원·호 */
+interface Deferred {
+  c: WorldCircle;
+  pick: Pt;
+}
+
+/** 지연된 접점과 다음 점(또는 다음 지연된 접점)으로 접선의 두 끝. 접선이 없으면 null */
+function solveDeferred(app: App, d: Deferred, p: Pt, snap: PointSnap | null | undefined): [Pt, Pt] | null {
+  const c2 = deferredCircle(app, snap, p);
+  if (c2) return commonTangent(d.c, d.pick, c2, p);
+  const t = tangentFrom(d.c, d.pick, p);
+  return t ? [t, p] : null;
 }
 
 function pt(r: PointResult): Pt | null {
@@ -238,7 +260,7 @@ export function registerDrawCommands(app: App): void {
       const elev = currentElevation(app);
       let first: Pt | null = null;
       // 지연된 접점(첫 점을 접점 스냅으로 원·호 위에 찍음): 둘째 점을 받은 뒤 접점을 구한다(AutoCAD와 같다)
-      let deferred: { c: WorldCircle; pick: Pt } | null = null;
+      let deferred: Deferred | null = null;
       for (;;) {
         const r = await ctx.getPoint('첫 번째 점 지정:', { deferTan: true });
         if ('enter' in r) {
@@ -246,17 +268,11 @@ export function registerDrawCommands(app: App): void {
           if (app.lastPoint) first = app.lastPoint;
           else continue;
         } else first = pt(r);
-        const c = 'point' in r ? deferredCircle(app, r.snap) : null;
+        const c = 'point' in r ? deferredCircle(app, r.snap, r.point) : null;
         if (c && first) deferred = { c, pick: first };
         if (first) break;
       }
-      /** 지연된 접점과 둘째 점(또는 둘째 지연된 접점)으로 첫 선분의 두 끝 */
-      const solve = (d: { c: WorldCircle; pick: Pt }, p: Pt, snap: PointSnap | null | undefined): [Pt, Pt] | null => {
-        const c2 = deferredCircle(app, snap);
-        if (c2) return commonTangent(d.c, d.pick, c2, p);
-        const t = tangentFrom(d.c, d.pick, p);
-        return t ? [t, p] : null;
-      };
+      const solve = (d: Deferred, p: Pt, snap: PointSnap | null | undefined) => solveDeferred(app, d, p, snap);
       let start = first;
       let prev = first;
       let count = 0;
@@ -323,9 +339,13 @@ export function registerDrawCommands(app: App): void {
     title: '폴리선',
     async run(ctx) {
       const st = app.active!;
-      const startR = await ctx.getPoint('시작점 지정:');
+      // 시작점을 접점 스냅으로 원·호 위에 찍으면 지연된 접점(AutoCAD 도움말은 LINE·XLINE만 말한다 — 이 앱의 확장):
+      // 다음 점을 선으로 받으면 그 점에서 그은 접선의 접점이 시작점이 된다
+      const startR = await ctx.getPoint('시작점 지정:', { deferTan: true });
       const s0 = pt(startR);
       if (!s0) return;
+      const sc = 'point' in startR ? deferredCircle(app, startR.snap, startR.point) : null;
+      let deferred: Deferred | null = sc ? { c: sc, pick: s0 } : null;
       let width0 = Number(st.doc.header.get('$PLINEWID') ?? 0) || 0;
       let width1 = width0;
       ctx.print(`현재의 선 폭은 ${fmt(ctx, width0)}입니다`);
@@ -486,6 +506,8 @@ export function registerDrawCommands(app: App): void {
         const last = verts[verts.length - 1]!;
         const lp = { x: last.x, y: last.y };
         let r: PointResult;
+        // 지연된 접점이 남아 있으면 다음 선분은 원·호에 그은 접선(미리보기도)
+        const d = verts.length === 1 && !arcMode ? deferred : null;
         if (!arcMode) {
           const kws = [
             { key: 'A', label: '호' },
@@ -498,7 +520,15 @@ export function registerDrawCommands(app: App): void {
           r = await ctx.getPoint(verts.length > 2 ? '다음 점 지정 또는 [호(A)/닫기(C)/반폭(H)/길이(L)/명령 취소(U)/폭(W)]:' : '다음 점 지정 또는 [호(A)/반폭(H)/길이(L)/명령 취소(U)/폭(W)]:', {
             base: lp,
             keywords: kws,
-            rubber: (q) => [{ pts: polyPreview([...verts, { x: q.x, y: q.y, bulge: 0, startWidth: 0, endWidth: 0 }], false) }],
+            ...(d
+              ? {
+                  deferTan: true,
+                  rubber: (q: Pt, snap?: PointSnap | null) => {
+                    const seg = solveDeferred(app, d, q, snap);
+                    return seg ? [{ pts: [seg[0].x, seg[0].y, seg[1].x, seg[1].y] }] : [];
+                  },
+                }
+              : { rubber: (q: Pt) => [{ pts: polyPreview([...verts, { x: q.x, y: q.y, bulge: 0, startWidth: 0, endWidth: 0 }], false) }] }),
           });
         } else {
           const kws = [
@@ -527,6 +557,8 @@ export function registerDrawCommands(app: App): void {
         if ('enter' in r) break;
         if ('keyword' in r) {
           const k = r.keyword;
+          // 폭 말고 다른 옵션을 고르면 지연된 접점은 찍은 자리 그대로(접선을 그을 다음 점이 없다)
+          if (k !== 'W' && k !== 'H') deferred = null;
           if (k === 'A' && !arcMode) {
             arcMode = true;
             continue;
@@ -573,7 +605,18 @@ export function registerDrawCommands(app: App): void {
           if (arcMode && (await arcOption(k, last, lp))) continue;
           continue;
         }
-        const p = pt(r)!;
+        let p = pt(r)!;
+        if (d) {
+          const seg = solveDeferred(app, d, p, 'point' in r ? r.snap : null);
+          if (!seg) {
+            ctx.print('그 점에서는 접선을 그을 수 없습니다. 다시 지정하십시오.', 'err');
+            continue;
+          }
+          last.x = seg[0].x;
+          last.y = seg[0].y;
+          p = seg[1];
+          deferred = null;
+        }
         if (arcMode) last.bulge = bulgeFor(last, p);
         last.startWidth = width0;
         last.endWidth = width1;
@@ -604,17 +647,19 @@ export function registerDrawCommands(app: App): void {
           });
       let c: Pt;
       let rad: number;
-      // 접선 객체: 선·호·원(폴리선의 직선·호 구간 포함)을 연장해서 본다
+      // 접선 객체: 선·호·원(폴리선의 직선·호 구간 포함)을 연장해서 본다. AutoCAD처럼 접점 스냅(지연된 접점)만 켠 점 요청으로
+      // 객체 위의 점을 받는다(객체 스냅이 꺼져 있어도). 좌표 입력·스크립트로 준 점은 그 점에 걸친 객체
       const pieceAt = async (prompt: string) => {
         for (;;) {
-          const r = await ctx.getEntity(prompt);
-          if (!('handle' in r)) return null;
-          const e = app.active!.doc.entityIndex.get(r.handle);
-          const path = e ? entityPath(e) : null;
-          if (path && path.pieces.length) {
-            const piece = path.pieces[pathNearest(path, r.point).i]!;
-            if (piece.k === 'line' || piece.k === 'arc') return { piece, pick: r.point };
+          const r = await ctx.getPoint(prompt, { deferTan: true, deferTanLines: true, snaps: ['tan'] });
+          if (!('point' in r)) return null;
+          let piece = deferredPiece(app, r.snap, r.point);
+          if (!piece && !r.snap) {
+            const h = app.picker()?.pick(r.point.x, r.point.y, app.view.overlay.pickbox * app.view.pixelSize());
+            const e = h ? app.active!.doc.entityIndex.get(h) : undefined;
+            piece = e ? tanPieceAt(e, r.point, true) : null;
           }
+          if (piece) return { piece, pick: r.point };
           ctx.print('선, 호, 원을 선택하십시오.', 'err');
         }
       };
@@ -647,22 +692,35 @@ export function registerDrawCommands(app: App): void {
         c = k.c;
         rad = k.r;
       } else if ('keyword' in r0 && r0.keyword === '3P') {
-        const a = pt(await ctx.getPoint('원 위의 첫 번째 점 지정:'));
-        if (!a) return;
-        const b = pt(await ctx.getPoint('원 위의 두 번째 점 지정:', { base: a }));
-        if (!b) return;
-        const p3 = pt(
-          await ctx.getPoint('원 위의 세 번째 점 지정:', {
-            rubber: (q) => {
-              const k = circle3p(a, b, q);
-              return k ? [{ pts: circlePts(k.c, k.r), closed: true }] : [];
-            },
-          }),
-        );
-        if (!p3) return;
-        const k = circle3p(a, b, p3);
+        // 세 점 각각 점 또는 지연된 접점(원·호·폴리선 호 구간·선에 접한다 — AutoCAD처럼 접점 스냅으로 찍으면)
+        const item = (p: Pt, snap: PointSnap | null | undefined): CircleItem => {
+          const piece = deferredPiece(app, snap, p);
+          return piece ? { piece, pick: p } : { point: p };
+        };
+        const at = (it: CircleItem) => ('point' in it ? it.point : it.pick);
+        const solve3 = (its: CircleItem[]) => {
+          if (its.every((x) => 'point' in x)) return circle3p(at(its[0]!), at(its[1]!), at(its[2]!));
+          return circleThrough(its);
+        };
+        const ra = await ctx.getPoint('원 위의 첫 번째 점 지정:', { deferTan: true, deferTanLines: true });
+        if (!('point' in ra)) return;
+        const a = item(ra.point, ra.snap);
+        const rb = await ctx.getPoint('원 위의 두 번째 점 지정:', { base: at(a), deferTan: true, deferTanLines: true });
+        if (!('point' in rb)) return;
+        const b = item(rb.point, rb.snap);
+        const rc = await ctx.getPoint('원 위의 세 번째 점 지정:', {
+          deferTan: true,
+          deferTanLines: true,
+          rubber: (q, snap) => {
+            const k = solve3([a, b, item(q, snap)]);
+            return k ? [{ pts: circlePts(k.c, k.r), closed: true }] : [];
+          },
+        });
+        if (!('point' in rc)) return;
+        const its = [a, b, item(rc.point, rc.snap)];
+        const k = solve3(its);
         if (!k) {
-          ctx.print('세 점이 한 직선 위에 있습니다.', 'err');
+          ctx.print(its.every((x) => 'point' in x) ? '세 점이 한 직선 위에 있습니다.' : '원이 존재하지 않습니다.', 'err');
           return;
         }
         c = k.c;
@@ -1401,6 +1459,7 @@ export function registerDrawCommands(app: App): void {
           ctx.print('선택한 객체는 선이 아닙니다.', 'err');
         }
       };
+      // 첫 점을 접점 스냅으로 원·호 위에 찍으면 지연된 접점: 통과점마다 그 점에서 원·호에 그은 접선(통과점도 접점이면 공통 접선)
       const r0 = await ctx.getPoint('점 지정 또는 [수평(H)/수직(V)/각도(A)/이등분(B)/간격띄우기(O)]:', {
         keywords: [
           { key: 'H', label: '수평' },
@@ -1409,7 +1468,10 @@ export function registerDrawCommands(app: App): void {
           { key: 'B', label: '이등분' },
           { key: 'O', label: '간격띄우기' },
         ],
+        deferTan: true,
       });
+      const c0 = 'point' in r0 ? deferredCircle(app, r0.snap, r0.point) : null;
+      const deferred: Deferred | null = c0 && 'point' in r0 ? { c: c0, pick: r0.point } : null;
       if ('keyword' in r0 && r0.keyword === 'B') {
         // 이등분: 정점·시작점, 끝점마다 하나씩
         const v = pt(await ctx.getPoint('각도 정점 지정:'));
@@ -1501,9 +1563,26 @@ export function registerDrawCommands(app: App): void {
       for (;;) {
         const fx = fixed;
         const bp = basePt;
-        const r = await ctx.getPoint('통과점을 지정:', { base: basePt, rubber: (q) => (fx !== null ? xlinePreview(q, fx) : bp && dist(bp, q) > 0 ? xlinePreview(bp, ang(bp, q)) : []) });
+        const r = await ctx.getPoint('통과점을 지정:', {
+          base: basePt,
+          ...(deferred
+            ? {
+                deferTan: true,
+                rubber: (q: Pt, snap?: PointSnap | null) => {
+                  const seg = solveDeferred(app, deferred, q, snap);
+                  return seg ? xlinePreview(seg[0], ang(seg[0], seg[1])) : [];
+                },
+              }
+            : { rubber: (q: Pt) => (fx !== null ? xlinePreview(q, fx) : bp && dist(bp, q) > 0 ? xlinePreview(bp, ang(bp, q)) : []) }),
+        });
         const p = pt(r);
         if (!p) return;
+        if (deferred) {
+          const seg = solveDeferred(app, deferred, p, 'point' in r ? r.snap : null);
+          if (!seg) ctx.print('그 점에서는 접선을 그을 수 없습니다. 다시 지정하십시오.', 'err');
+          else if (dist(seg[0], seg[1]) > 1e-12) make(seg[0], ang(seg[0], seg[1]));
+          continue;
+        }
         let b = basePt ?? p;
         let dir: number;
         if (fixed !== null) {
