@@ -11,13 +11,13 @@ import { readDwg, dwgVersion } from '../../src/io/dwg';
 import { summarizeDocument } from '../oracle/summarize';
 import { compareSummaries } from '../oracle/compare';
 import { ezdxfSummary } from '../oracle/ezdxf';
-import { FIXTURES, dwgFixtures, engineDxf, hasPython } from './oracle';
+import { FIXTURES, dwgFixtures, engineDxf, hasDwgOracle, hasPython } from './oracle';
 import { normalizePair } from './normalize';
 
 const fixtures = dwgFixtures();
 const timings: string[] = [];
 
-describe.skipIf(!existsSync(join(FIXTURES, 'samples')) || !hasPython)('DWG 리더 ↔ 기준 요약', () => {
+describe.skipIf(!existsSync(join(FIXTURES, 'samples')) || !hasPython || !hasDwgOracle())('DWG 리더 ↔ 기준 요약', () => {
   for (const f of fixtures) {
     it(`${f.group}/${f.name}`, () => {
       const data = new Uint8Array(readFileSync(f.path));

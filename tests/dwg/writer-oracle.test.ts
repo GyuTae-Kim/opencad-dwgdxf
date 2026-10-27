@@ -1,8 +1,9 @@
 /**
- * DWG 쓰기 ↔ 비공개 엔진(블랙박스): 쓴 파일을 엔진의 공개 함수 read_dwg로 읽는다.
- * - 엔진이 오류 없이 읽고, 객체를 하나도 버리지 않아야 한다(dwg.object_invalid 없음).
- * - 엔진 결과(DXF로 저장 → ezdxf 요약)가 우리 리더로 다시 읽은 요약과 같아야 한다(normalize.ts의 알려진 차이만 맞춘다).
- * 엔진 결과는 쓴 파일 내용의 SHA-1로 .runtime/dwg-writer에 캐시한다(처음 한 번만 느리다).
+ * DWG 쓰기 ↔ DWG 기준 도구(블랙박스): 쓴 파일을 CAD_DWG_ORACLE 모듈의 read_dwg로 읽는다(설정은 tests/oracle/ezdxf.ts).
+ * - 기준 도구가 오류 없이 읽고, 객체를 하나도 버리지 않아야 한다(dwg.object_invalid 없음).
+ * - 기준 도구 결과(DXF로 저장 → ezdxf 요약)가 우리 리더로 다시 읽은 요약과 같아야 한다(normalize.ts의 알려진 차이만 맞춘다).
+ *   DXF 저장은 기준 도구의 파이썬(CAD_DWG_PYTHON), 요약은 ezdxf가 있는 파이썬(CAD_PYTHON)이 한다 — 둘이 같아도 된다.
+ * 결과는 쓴 파일 내용의 SHA-1로 .runtime/dwg-writer에 캐시한다(처음 한 번만 느리다).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
@@ -14,34 +15,48 @@ import { createNewDocument } from '../../src/core/newdoc';
 import { readDwg, writeDwg } from '../../src/io/dwg';
 import { summarizeDocument } from '../oracle/summarize';
 import { compareSummaries } from '../oracle/compare';
-import { PYTHON, hasPython } from '../oracle/ezdxf';
+import { DWG_PYTHON, PYTHON, READ_DWG_IMPORT, hasDwgOracle, hasPython } from '../oracle/ezdxf';
 import { normalizePair } from './normalize';
 import { ROOT, WRITE_VERSIONS, dwgSources, dxfSources, readSource, stable, syntheticDocument } from './writer-fixtures';
 
 const CACHE = join(ROOT, '.runtime/dwg-writer');
 const DUMP = join(ROOT, 'scripts/oracle/ezdxf_dump.py');
-/** 캐시 무효화용(엔진 호출 방식이 바뀌면 올린다) */
-const SCRIPT_VERSION = '1';
+/** 캐시 무효화용(기준 도구 호출 방식이 바뀌면 올린다) */
+const SCRIPT_VERSION = '2';
 
+/** 1단계(기준 도구의 파이썬): 읽어서 같은 핸들의 DXF(<out>.dxf)로 저장하고 결과(<out>.json)를 쓴다 */
 const ENGINE = `
-import sys, json, os, importlib.util
-from prisme_engine.io.dwg import read_dwg
-spec = importlib.util.spec_from_file_location('ezdxf_dump', sys.argv[1])
-dump = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(dump)
-for job in json.load(open(sys.argv[2])):
+import sys, json
+${READ_DWG_IMPORT}
+for job in json.load(open(sys.argv[1])):
     out = job['out']
     try:
         r = read_dwg(open(job['in'], 'rb').read())
-        tmp = out + '.dxf'
-        r.doc.saveas(tmp)
-        dump.main(tmp, out + '.sum.json')
-        os.remove(tmp)
+        r.doc.saveas(out + '.dxf')
         res = {'ok': True, 'version': str(r.version), 'warnings': [str(w) for w in (r.warnings or [])]}
     except Exception as e:
         res = {'ok': False, 'error': repr(e)[:1000]}
     with open(out + '.json', 'w') as f:
         json.dump(res, f)
+`;
+
+/** 2단계(ezdxf가 있는 파이썬): 1단계가 저장한 DXF를 요약(<out>.sum.json)하고 지운다. 요약하지 못하면 결과를 실패로 고친다 */
+const SUMMARIZE = `
+import sys, json, os, importlib.util
+spec = importlib.util.spec_from_file_location('ezdxf_dump', sys.argv[1])
+dump = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(dump)
+for job in json.load(open(sys.argv[2])):
+    out = job['out']
+    if not os.path.exists(out + '.dxf'):
+        continue
+    try:
+        dump.main(out + '.dxf', out + '.sum.json')
+    except Exception as e:
+        with open(out + '.json', 'w') as f:
+            json.dump({'ok': False, 'error': 'ezdxf: ' + repr(e)[:1000]}, f)
+    finally:
+        os.remove(out + '.dxf')
 `;
 
 interface Job {
@@ -58,7 +73,7 @@ interface EngineResult {
   summary?: Record<string, unknown>;
 }
 
-const enabled = hasPython && existsSync(DUMP);
+const enabled = hasPython && hasDwgOracle() && existsSync(DUMP);
 const results = new Map<string, EngineResult>();
 const jobs = new Map<string, Job>();
 
@@ -102,7 +117,8 @@ describe.skipIf(!enabled)('DWG 쓰기 ↔ 엔진(블랙박스)', () => {
         }
         const list = join(CACHE, 'jobs.json');
         writeFileSync(list, JSON.stringify(todo));
-        execFileSync(PYTHON, ['-I', '-c', ENGINE, DUMP, list], { stdio: 'pipe', timeout: 3_600_000, maxBuffer: 1 << 26 });
+        execFileSync(DWG_PYTHON, ['-I', '-c', ENGINE, list], { stdio: 'pipe', timeout: 3_600_000, maxBuffer: 1 << 26 });
+        execFileSync(PYTHON, ['-I', '-c', SUMMARIZE, DUMP, list], { stdio: 'pipe', timeout: 3_600_000, maxBuffer: 1 << 26 });
       } finally {
         for (const t of todo) rmSync(t.in, { force: true });
       }

@@ -156,8 +156,22 @@ npm test          # 비교용 도면이 없으면 해당 테스트는 건너뜁�
 npm run build     # dist/
 ```
 
-DXF·DWG 리더와 DXF 쓰기, 치수 생성기 테스트는 로컬 도면을 ezdxf 결과와 비교합니다
-(`scripts/oracle/`, `CAD_FIXTURES`·`CAD_PYTHON` 환경 변수). 비교용 도면은 저장소에 넣지 않습니다.
+**로컬 대조 시험**: DXF·DWG 리더와 쓰기, 치수 생성기 같은 시험의 일부는 각자 가진 표본 도면을 ezdxf 결과와 DWG 기준 도구의 결과에 견줍니다
+(`scripts/oracle/`, 설정은 `tests/oracle/ezdxf.ts`). 표본과 도구는 저장소에 넣지 않고 환경 변수로만 줍니다.
+주지 않거나 쓸 수 없으면(ezdxf를 불러오지 못하는 파이썬, 불러오지 못하는 모듈) 그 시험은 건너뜁니다. CI도 이렇게 돕니다.
+
+| 변수 | 내용 |
+|---|---|
+| `CAD_PYTHON` | ezdxf가 있는 파이썬 실행 파일 |
+| `CAD_FIXTURES` | 표본 도면 폴더(`samples/`·`samples-dxf/`·`all-samples/`·`templates/` 등, 읽기만 합니다) |
+| `CAD_DWG_ORACLE` | `read_dwg(bytes)`를 내보내는 파이썬 모듈 이름. 결과의 `doc`(ezdxf와 같은 꼴의 문서)·`warnings`·`version`을 블랙박스로 씁니다 |
+| `CAD_DWG_PYTHON` | (선택) 그 모듈을 불러올 수 있는 파이썬. 기준 도구와 ezdxf가 다른 환경에 있을 때만 줍니다(없으면 `CAD_PYTHON`) |
+
+```bash
+CAD_PYTHON=~/envs/cad/bin/python CAD_FIXTURES=~/cad-fixtures CAD_DWG_ORACLE=<모듈 이름> npm test
+```
+
+ezdxf 요약과 기준 도구가 바꾼 DXF는 `.runtime/`에 캐시해 두 번째부터 빠릅니다.
 
 ### 실제 도면 훑기
 

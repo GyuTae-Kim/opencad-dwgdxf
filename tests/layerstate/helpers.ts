@@ -5,11 +5,13 @@ import type { CadDocument } from '../../src/core/model';
 import { readCadFile } from '../../src/io/index';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { writeDwg } from '../../src/io/dwg/writer/index';
+import { FIXTURES } from '../oracle/ezdxf';
 
 export { add, addBlock, addLayer, addLinetype, commit, duplicateHandles, insert, line, newDoc, viewport } from '../layertools/helpers';
 export type { TestDoc } from '../layertools/helpers';
 
-export const FIXTURES = process.env.CAD_FIXTURES ?? '/Users/sean/code/prisme-service/.runtime/cad2d-handoff/dwgref';
+/** 표본 도면 폴더(CAD_FIXTURES — tests/oracle/ezdxf.ts) */
+export { FIXTURES };
 
 /** 표본 파일 경로(없으면 null — 시험을 건너뛴다) */
 export function fixture(rel: string): string | null {
