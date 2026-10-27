@@ -53,6 +53,7 @@ import { cmcToCad, encToCad } from '../color';
 import { lineweightFromIndex } from '../lineweight';
 import { R14, R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
 import { hex } from './nonentities';
+import { splineFitBits } from '../splineflags';
 import { type AcisShape, decodeSatBytes, sabShape, satShape, setAcisShape } from '../../acis';
 import { readTableCellsOld, readTableContentR24 } from './table';
 import { decodeTableBody } from './tableraw';
@@ -896,13 +897,14 @@ function readLwPolyline(or: ObjectReader, b: Omit<EntityBase, 'type'>): LwPolyli
 function readSpline(or: ObjectReader, b: Omit<EntityBase, 'type'>, helix: boolean): SplineEntity {
   const r = or.dat;
   const ver = or.ver;
-  let scenario = r.BL();
+  const first = r.BL();
+  let scenario = first;
   let flags = 0;
-  let f1 = 0;
+  let knotParam = -1;
   if (ver >= R2013) {
-    // R2013+: 맞춤점 방식(비트 1)이면 맞춤 자료, 매듭 매개변수가 사용자 지정(15)이면 조정점 자료
-    f1 = r.BL();
-    const knotParam = r.BL();
+    // R2013+: 맞춤점 방식(비트 1)이면 맞춤 자료, 매듭 매개변수가 사용자 지정(15)이면 조정점 자료. 비트 4는 닫힘
+    const f1 = r.BL();
+    knotParam = r.BL();
     if (f1 & 1) scenario = 2;
     if (knotParam === 15) scenario = 1;
     if (f1 & 4) flags |= 1;
@@ -960,8 +962,8 @@ function readSpline(or: ObjectReader, b: Omit<EntityBase, 'type'>, helix: boolea
     flags |= 8;
     e.normal = n;
   }
-  // AutoCAD는 R2013+ DXF 70에 스플라인 플래그 1을 7비트 올려 함께 쓴다(예: 1160)
-  if (f1) flags |= f1 << 7;
+  // AutoCAD가 같은 도면을 DXF로 쓸 때의 70: 첫 값이 1인 맞춤점 스플라인만 1024 + 매듭 매개변수 비트(예: 1064·1160)
+  if (ver >= R2013 && scenario === 2 && first === 1) flags |= splineFitBits(knotParam);
   e.flags = flags;
   if (helix) {
     r.BS(); // 주 버전

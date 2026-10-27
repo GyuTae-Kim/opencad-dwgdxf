@@ -3,6 +3,7 @@
  */
 import type { Entity } from '../core/model';
 import { createGroupOps, deleteGroupOps, expandByGroups, groupNameProblem, groupsContaining, listGroups, type GroupInfo } from '../edit/util/groups';
+import { cachedMTextColumnSets, expandByMTextColumns } from '../edit/util/mtextcols';
 import {
   OP_LABELS,
   PROPS,
@@ -41,14 +42,15 @@ export function setPickstyle(v: number): void {
 }
 
 /**
- * 고르기 넓히기(PICKSTYLE 1 = 그룹 선택). app.ts가 클릭·창 선택 결과를 이 함수로 넘겨 주면 그룹 단위로 고른다.
- * (App에 `selectionExpander` 고리가 있을 때 util2가 연결한다.)
+ * 고르기 넓히기: PICKSTYLE 1이면 그룹 단위로, 그리고 늘 R2000~R2013 형식의 여러 단 MTEXT(단마다 따로 저장된 MTEXT)를 한 묶음으로.
+ * app.ts가 클릭·창·올가미 선택 결과를 이 함수로 넘긴다(App에 `selectionExpander` 고리가 있을 때 util2가 연결한다).
  */
 export function groupExpander(app: App): (handles: string[]) => string[] {
   return (handles) => {
     const st = app.active;
-    if (!st || !(pickstyle() & 1)) return handles;
-    return expandByGroups(st.doc, handles);
+    if (!st) return handles;
+    const g = pickstyle() & 1 ? expandByGroups(st.doc, handles) : handles;
+    return expandByMTextColumns(st.doc, g, cachedMTextColumnSets(st.doc, st.gen));
   };
 }
 

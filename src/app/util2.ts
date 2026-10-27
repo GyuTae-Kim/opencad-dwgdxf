@@ -23,7 +23,7 @@ export function registerUtil2Commands(app: App): void {
   registerUtil2BlockCommands(app);
   registerUtil2SelectCommands(app);
   registerUtil2MiscCommands(app);
-  // PICKSTYLE 1(그룹 선택): App에 고르기 넓히기 고리가 있으면 연결한다(없으면 GROUP·UNGROUP만 쓰인다)
+  // PICKSTYLE 1(그룹 선택)과 여러 단 MTEXT 묶음: App에 고르기 넓히기 고리가 있으면 연결한다(없으면 GROUP·UNGROUP만 쓰인다)
   const hook = app as unknown as { selectionExpander?: ((handles: string[]) => string[]) | null };
   if ('selectionExpander' in hook) hook.selectionExpander = groupExpander(app);
   // Ctrl+Shift+A: 그룹 선택 켜기·끄기(AutoCAD와 같은 바로 가기)

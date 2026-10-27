@@ -104,7 +104,7 @@ const STD_TABLE_HANDLES: Record<TableName, string> = {
 };
 
 /** 이 버전부터 있는 객체 종류(그 전 버전으로 쓸 때는 뺀다) */
-const OBJECT_MIN_VERSION: Record<string, number> = {
+export const OBJECT_MIN_VERSION: Readonly<Record<string, number>> = {
   MLEADERSTYLE: 1021,
   // 축척 리스트와 주석 축척 레코드: AutoCAD도 R2000·R2004 DXF에 SCALE을 쓰고(표본), SAVEFIDELITY 0이면 레코드(클래스 판 3)를 쓴다
   SCALE: 1015,

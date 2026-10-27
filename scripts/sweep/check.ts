@@ -125,8 +125,19 @@ export function normalizeForRoundtrip(d: Record<string, unknown>): Record<string
   return o;
 }
 
+/**
+ * 쓰는 형식에 자리가 없는 값을 맞춘다: DWG에는 SPLINE의 평면·직선 비트(DXF 70의 8·16)가 없고(리더가 점들로 다시 정한다 — AutoCAD도
+ * DXF를 읽을 때 이 비트를 쓰지 않는다), R2013 전 DWG에는 맞춤점 방식·매듭 매개변수(32 이상)가 없다.
+ */
+export function normalizeForTarget(d: Record<string, unknown>, target: Pick<WriteTarget, 'fmt' | 'version'>): Record<string, unknown> {
+  if (target.fmt !== 'dwg' || (d.type !== 'SPLINE' && d.type !== 'HELIX') || typeof d.flags !== 'number') return d;
+  let f = d.flags & ~24;
+  if (Number(target.version.slice(2)) < 1027) f &= 7;
+  return { ...d, flags: f };
+}
+
 /** 원본 → 다시 읽은 것: 종류별 수 차이, 핸들로 맞춘 값 차이(종류.속성별 수), 사라진 도면층·블록 이름 */
-function compareDigest(src: Digest, out: Digest): Partial<RereadRecord> {
+function compareDigest(src: Digest, out: Digest, target: Pick<WriteTarget, 'fmt' | 'version'>): Partial<RereadRecord> {
   const fieldDiffs: Tally = {};
   const samples: Record<string, unknown> = {};
   let missing = 0;
@@ -143,7 +154,9 @@ function compareDigest(src: Digest, out: Digest): Partial<RereadRecord> {
         missing++;
         continue;
       }
-      for (const d of compareSummaries({ ...normalizeForRoundtrip(se), handle: null }, normalizeForRoundtrip(oe), 1e-6, '', [], 20)) {
+      const a = normalizeForTarget(normalizeForRoundtrip(se), target);
+      const b = normalizeForTarget(normalizeForRoundtrip(oe), target);
+      for (const d of compareSummaries({ ...a, handle: null }, b, 1e-6, '', [], 20)) {
         const f = `${se.type}${d.path.replace(/\[\d+\]/g, '[]').replace(/\.length$/, '#')}`;
         inc(fieldDiffs, f);
         if (!samples[f]) samples[f] = clip({ block: k, handle: h, exp: d.expected, act: d.actual });
@@ -324,7 +337,7 @@ export async function checkFile(f: SweepFile, ctx: CheckContext): Promise<FileRe
     const tr = performance.now();
     try {
       const back = readCadFile(out, `x.${t.fmt}`);
-      w.reread = prune({ ok: true, ms: Math.round(performance.now() - tr), version: back.version, warn: warnTally(back.warnings), ...compareDigest(src, digest(back)) });
+      w.reread = prune({ ok: true, ms: Math.round(performance.now() - tr), version: back.version, warn: warnTally(back.warnings), ...compareDigest(src, digest(back), t) });
     } catch (e) {
       w.reread = { ok: false, ms: Math.round(performance.now() - tr), error: stepError(e) };
     }

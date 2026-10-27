@@ -204,27 +204,7 @@ export function parseMText(src: string, opt: ParseOptions): Paragraph[] {
       run = null;
       continue;
     }
-    if (ch === '^' && i + 1 < s.length) {
-      const c = s[i + 1]!;
-      if (c === 'I') {
-        para.runs.push({ style: st, text: [], tab: true });
-        run = null;
-        i++;
-        continue;
-      }
-      if (c === 'J' || c === 'M') {
-        para = newPara(para);
-        paragraphs.push(para);
-        run = null;
-        i++;
-        continue;
-      }
-      if (c === ' ') {
-        pushChar(94);
-        i++;
-        continue;
-      }
-    }
+    // 탭·줄바꿈은 글자 그대로 온다(DXF의 캐럿 표기 ^I·^J는 리더가 푼다 — ^는 보통 글자)
     if (ch === '\t') {
       para.runs.push({ style: st, text: [], tab: true });
       run = null;

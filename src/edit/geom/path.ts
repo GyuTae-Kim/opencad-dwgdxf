@@ -25,6 +25,7 @@ import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, type Pat
 import { type Affine, TAU, affApply, affLin, affSimilarity, dist, normAngle, sweepToBulge } from './math';
 import { type Nurbs, arcBeziers, beziersToNurbs, domain, ellBeziers, lineBezier, normalizeNurbs, reverseNurbs, subNurbs, toBezier } from './nurbs';
 import { planProj, planZ } from './ocs';
+import { stripMTextColumnLinks } from '../util/mtextcols';
 
 // ---------------------------------------------------------------------------
 // 특성 잇기
@@ -58,6 +59,8 @@ export function freshEntity<T extends Entity>(x: T, keepOwner = true): T {
   delete x.dwgRaw;
   if (!keepOwner) delete x.owner;
   if (x.type === 'INSERT') for (const a of x.attribs) freshEntity(a as Entity, keepOwner);
+  // R2000~R2013 여러 단 MTEXT의 단 연결(원본의 다른 단 핸들)은 복사본에 남기지 않는다
+  if (x.type === 'MTEXT') stripMTextColumnLinks(x);
   return x;
 }
 

@@ -24,6 +24,27 @@ interface TagReader {
 
 export const BINARY_SENTINEL = 'AutoCAD Binary DXF\r\n\x1a\x00';
 
+/**
+ * DXF 문자열의 캐럿 표기를 푼다(tagwriter.ts의 쓰기와 짝): ^ 다음 글자가 @~_(0x40~0x5F)이면 제어 문자(^J = 줄바꿈, ^I = 탭, ^M),
+ * "^ "는 ^ 자체. AutoCAD는 제어 문자와 ^를 이렇게 적는다(같은 도면의 DWG에는 줄바꿈 글자 그대로, DXF에는 ^J — 실물 짝으로 확인).
+ * 그 밖의 ^(뒤가 소문자·숫자 등)는 그대로 둔다.
+ */
+export function decodeCaret(s: string): string {
+  let i = s.indexOf('^');
+  if (i < 0) return s;
+  let out = '';
+  let from = 0;
+  while (i >= 0 && i + 1 < s.length) {
+    const c = s.charCodeAt(i + 1);
+    if (c === 0x20 || (c >= 0x40 && c <= 0x5f)) {
+      out += s.slice(from, i) + (c === 0x20 ? '^' : String.fromCharCode(c - 64));
+      from = i + 2;
+      i = s.indexOf('^', from);
+    } else i = s.indexOf('^', i + 1);
+  }
+  return from === 0 ? s : out + s.slice(from);
+}
+
 export function isBinaryDxf(data: Uint8Array): boolean {
   if (data.length < 22) return false;
   for (let i = 0; i < 22; i++) if (data[i] !== BINARY_SENTINEL.charCodeAt(i)) return false;
@@ -77,7 +98,7 @@ class StringTagReader implements TagReader {
     const v = this.readLine();
     if (v === null) return false;
     this.code = code;
-    this.value = v;
+    this.value = vtOf(code) === VT.Str && v.indexOf('^') >= 0 ? decodeCaret(v) : v;
     return true;
   }
 }
@@ -338,7 +359,10 @@ class AsciiByteTagReader implements TagReader {
     if (code >= 10 && code < 1072 && DOUBLE_CODE[code]) {
       const v = parseDecimalBytes(this.data, this.ls, this.le);
       this.value = v === v ? v : this.strings.get(this.ls, this.le);
-    } else this.value = this.strings.get(this.ls, this.le);
+    } else {
+      const v = this.strings.get(this.ls, this.le);
+      this.value = v.indexOf('^') >= 0 && vtOf(code) === VT.Str ? decodeCaret(v) : v;
+    }
     return true;
   }
 }
@@ -416,9 +440,11 @@ class BinaryTagReader implements TagReader {
     }
     this.code = code;
     switch (vtOf(code)) {
-      case VT.Str:
-        this.value = this.readString();
+      case VT.Str: {
+        const sv = this.readString();
+        this.value = sv.indexOf('^') >= 0 ? decodeCaret(sv) : sv;
         break;
+      }
       case VT.Double:
         this.value = v.getFloat64(this.pos, true);
         this.pos += 8;

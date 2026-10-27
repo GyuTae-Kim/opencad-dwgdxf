@@ -9,7 +9,7 @@ const base = { height: 2, width: 0, attachment: 1, lineSpacingStyle: 1, lineSpac
 
 describe('탭 정지', () => {
   it('내어쓰기 목록: 첫 줄 글자와 둘째 문단 글자가 같은 자리에서 시작', () => {
-    const l = eng.layoutMText({ ...base, text: '\\pxi-3,l3,t3;•^Iabc\\P•^Idef' });
+    const l = eng.layoutMText({ ...base, text: '\\pxi-3,l3,t3;•\tabc\\P•\tdef' });
     // 글리프: • a b c • d e f
     const xs = l.glyphs.map((g) => g.m[4]);
     expect(xs[1]).toBeCloseTo(3, 6);
@@ -18,7 +18,7 @@ describe('탭 정지', () => {
   });
 
   it('탭 정지가 없으면 지금처럼 높이의 4배', () => {
-    const l = eng.layoutMText({ ...base, text: 'a^Ib' });
+    const l = eng.layoutMText({ ...base, text: 'a\tb' });
     const a = l.glyphs[0]!;
     const b = l.glyphs[1]!;
     expect(b.m[4] - a.m[4] - a.geom.advance * a.m[0]).toBeCloseTo(8, 6);

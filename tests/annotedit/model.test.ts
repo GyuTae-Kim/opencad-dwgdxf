@@ -40,10 +40,10 @@ const SAMPLES = [
   '분수 \\S1/2; 대각 \\S3#4; 공차 \\S+0.1^-0.2;',
   '{\\W0.8;좁게}{\\T1.5;자간}{\\Q15;기울기}{\\A1;가운데}',
   '\\pxqc;가운데\\P이어받음\\P\\pql;왼쪽',
-  '\\pxi-3,l3,t3;•^I첫째\\P•^I둘째',
+  '\\pxi-3,l3,t3;•\t첫째\\P•\t둘째',
   '열1\\N열2',
-  '탭^I다음^J줄',
-  '^ 꺾쇠',
+  '탭\t다음\n줄',
+  '^ 꺾쇠 ^J는 글자',
   '{\\fromans.shx|c0;SHX}',
   '{\\H1.5x;{\\C3;초록 큰}큰만}',
   '\\pxi1.5,l2,r0.5,qj;양쪽',
@@ -68,7 +68,7 @@ describe('MTEXT 왕복', () => {
 
   it('원래 표기를 지닌다(기호·유니코드·이스케이프)', () => {
     expect(serializeRich(parseRich('%%c10 \\U+AC00 \\~ a\\{b'))).toBe('%%c10 \\U+AC00 \\~ a\\{b');
-    expect(serializeRich(parseRich('\\pxi-3,l3,t3;•^I첫째'))).toBe('\\pxi-3,l3,t3;•^I첫째');
+    expect(serializeRich(parseRich('\\pxi-3,l3,t3;•\t첫째'))).toBe('\\pxi-3,l3,t3;•\t첫째');
   });
 
   it('문단 서식은 다음 문단이 이어받고, 바꾼 문단만 코드를 더한다', () => {
@@ -89,11 +89,11 @@ describe('MTEXT 왕복', () => {
     expect(serializeRich(d)).toBe('{\\C1;a}{\\C1;\\Lb}{\\C1;c}');
   });
 
-  it('새로 넣은 기호는 %%d·%%p·%%c, 특수 문자는 이스케이프', () => {
+  it('새로 넣은 기호는 %%d·%%p·%%c, 특수 문자는 이스케이프(^는 보통 글자 — DXF 파일의 캐럿 표기는 리더·쓰기가 맡는다)', () => {
     const d = parseRich('');
     insertText(d, 0, '°±\u2205 {x}\\ ^I %', {});
-    expect(serializeRich(d)).toBe('%%d%%p%%c \\{x\\}\\\\ ^ I %');
-    expect(mtextMeaning(serializeRich(d))).toEqual(mtextMeaning('%%d%%p%%c \\{x\\}\\\\ ^ I %'));
+    expect(serializeRich(d)).toBe('%%d%%p%%c \\{x\\}\\\\ ^I %');
+    expect(mtextMeaning(serializeRich(d))).toEqual(mtextMeaning('%%d%%p%%c \\{x\\}\\\\ ^I %'));
   });
 
   it('% 뒤에 %로 시작하는 것이 오면 %%%', () => {
@@ -158,7 +158,7 @@ describe('편집 연산', () => {
     expect(fmtAt(d, 2)).toEqual({ color: { aci: 1 } });
     expect(fmtAt(d, 4)).toEqual({});
     insertItems(d, 0, [{ k: 'tab', f: {} }]);
-    expect(serializeRich(d)).toBe('^I{\\C1;red}x');
+    expect(serializeRich(d)).toBe('\t{\\C1;red}x');
   });
 
   it('글머리 기호·번호 목록', () => {
@@ -168,7 +168,7 @@ describe('편집 연산', () => {
     expect(d.paras.map(listKindOf)).toEqual(['number', 'number', 'number']);
     expect(d.paras[0]!.pf).toMatchObject({ indentFirst: -3, indentLeft: 3, tabs: [3] });
     const s = serializeRich(d);
-    expect(s.startsWith('\\pxi-3,l3,t3;1.^I하나')).toBe(true);
+    expect(s.startsWith('\\pxi-3,l3,t3;1.\t하나')).toBe(true);
     setList(d, 0, docLength(d), 'bullet', 3);
     expect(plainText(d).split('\n')[1]).toBe('•\t둘');
     setList(d, 0, docLength(d), 'off', 3);

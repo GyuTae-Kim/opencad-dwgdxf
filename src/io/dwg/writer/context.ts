@@ -185,7 +185,7 @@ const NATIVE_OBJECTS = new Set([
 
 /** 원본 본문이 없으면 조용히 빼는 객체: 표 내용·형상·셀 스타일 지도는 DXF·옛 버전의 왕복 보조 자료이고
  *  표(ACAD_TABLE)와 테이블 스타일을 모델 값으로 쓰면 필요 없다(AutoCAD R2018 DWG도 표마다 두지 않는다) */
-const SILENT_OBJECTS = new Set(['TABLECONTENT', 'TABLEGEOMETRY', 'CELLSTYLEMAP']);
+export const SILENT_OBJECTS: ReadonlySet<string> = new Set(['TABLECONTENT', 'TABLEGEOMETRY', 'CELLSTYLEMAP']);
 
 /** 코드 페이지 이름 → DWG 번호 */
 export function codepageNumber(name: string): number {

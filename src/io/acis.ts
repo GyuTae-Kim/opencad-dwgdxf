@@ -2,7 +2,8 @@
  * ACIS(REGION·3DSOLID·BODY·SURFACE 형상) 자료에서 모서리 선(와이어)만 뽑는다 — 2D 캐드에서 보이는 모양(AutoCAD의 와이어프레임 표시).
  *
  * - SAT(문자, DXF R2000~R2010의 1·3 코드, DWG R2000~R2010 객체 본문의 판 1 자료): 레코드는 `이름 … #`, 포인터 `$n`,
- *   문자열 `@길이 글`. AutoCAD는 글자를 감춰 적는다(32보다 큰 글자 c → 159 − c, DXF에서는 "^ "가 "A").
+ *   문자열 `@길이 글`. AutoCAD는 글자를 감춰 적는다(32보다 큰 글자 c → 159 − c, 'A'는 ^가 되어 DXF 파일에는 캐럿 표기 "^ "로 적힌다 —
+ *   DXF 리더·쓰기가 캐럿 표기를 풀고 만드므로 여기서는 ^ 한 글자로 다룬다).
  * - SAB(이진, DXF R2013+ ACDSDATA·DWG R2013+ 자료 저장소): 꼬리표 바이트 + 값(ezdxf 문서·코드(MIT)로 확인한 꼬리표 표).
  *
  * 형상은 모서리(edge)마다 시작·끝 꼭짓점(vertex → point)과 곡선(직선·타원·넙스)으로 그린다. 몸체(body)의 변환(transform)을 적용한다.
@@ -23,17 +24,12 @@ interface Rec {
 // SAT
 // ---------------------------------------------------------------------------
 
-/** AutoCAD가 감춘 SAT 한 줄을 푼다(dxf: DXF 1·3 코드 — "^ "는 "A") */
-export function decodeSatLine(s: string, dxf = false): string {
+/** AutoCAD가 감춘 SAT 한 줄을 푼다(DXF 1·3 코드는 리더가 캐럿 표기를 푼 글) */
+export function decodeSatLine(s: string): string {
   let out = '';
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
-    if (c <= 0x20) out += s[i];
-    else {
-      out += String.fromCharCode(159 - c);
-      // DXF는 ^(0x5E, 풀면 'A')를 제어 문자로 쓰지 않으려 뒤에 공백을 둔다
-      if (dxf && c === 0x5e && s[i + 1] === ' ') i++;
-    }
+    out += c <= 0x20 ? s[i] : String.fromCharCode(159 - c);
   }
   return out;
 }
@@ -550,7 +546,7 @@ export function dxfSatText(raw: readonly { code: number; value: string | number 
     else if (t.code === 3 && lines.length) lines[lines.length - 1] += String(t.value);
   }
   if (!lines.length) return null;
-  return lines.map((l) => decodeSatLine(l, true)).join('\n') + '\n';
+  return lines.map((l) => decodeSatLine(l)).join('\n') + '\n';
 }
 
 /** DXF ACIS 객체의 원본 태그(1·3 SAT 줄)에서 모서리 선과 곡선 */
@@ -641,17 +637,31 @@ export function attachAcisWires(doc: { blocks: Map<string, { entities: { type: s
     }
 }
 
-/** SAT 글 한 줄을 DXF 1·3 코드 글로 감춘다(풀기의 반대: 32보다 큰 글자 c → 159 − c, 'A'는 "^ ") */
+/** SAT 글 한 줄을 DXF 1·3 코드 글로 감춘다(풀기의 반대: 32보다 큰 글자 c → 159 − c. 'A'가 된 ^는 DXF 쓰기가 "^ "로 적는다) */
 export function encodeSatLine(s: string): string {
   let out = '';
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
-    if (c <= 0x20) out += s[i];
-    else {
-      const e = String.fromCharCode(159 - c);
-      out += e === '^' ? '^ ' : e;
-    }
+    out += c <= 0x20 ? s[i] : String.fromCharCode(159 - c);
   }
+  return out;
+}
+
+/** 파일에서 255자를 넘지 않게 자른다(^는 캐럿 표기 "^ " 두 글자) */
+function satChunks(enc: string): string[] {
+  const out: string[] = [];
+  let start = 0;
+  let size = 0;
+  for (let i = 0; i < enc.length; i++) {
+    const n = enc.charCodeAt(i) === 0x5e ? 2 : 1;
+    if (size + n > 255) {
+      out.push(enc.slice(start, i));
+      start = i;
+      size = 0;
+    }
+    size += n;
+  }
+  out.push(enc.slice(start));
   return out;
 }
 
@@ -663,9 +673,9 @@ export function satDxfTags(sat: string, type: string, ver = 1024): { code: numbe
   const tags: { code: number; value: string | number }[] = [{ code: 100, value: 'AcDbModelerGeometry' }, { code: 70, value: 1 }];
   for (const line of sat.split(/\r?\n/)) {
     if (!line.trim()) continue;
-    const enc = encodeSatLine(line);
-    tags.push({ code: 1, value: enc.slice(0, 255) });
-    for (let i = 255; i < enc.length; i += 255) tags.push({ code: 3, value: enc.slice(i, i + 255) });
+    const [first, ...rest] = satChunks(encodeSatLine(line));
+    tags.push({ code: 1, value: first! });
+    for (const c of rest) tags.push({ code: 3, value: c });
   }
   if (type === '3DSOLID' && ver >= 1021) tags.push({ code: 100, value: 'AcDb3dSolid' }, { code: 350, value: '0' });
   return tags;

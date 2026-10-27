@@ -23,6 +23,7 @@ import type {
   ViewportEntity,
 } from '../../../core/model';
 import { R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
+import { SPLINE_FIT_METHOD, splineKnotParam } from '../splineflags';
 import { annoDimWriteXData, ctxRecordsOf } from '../../annoscale';
 import type { PBlock, PEnt, WCtx } from './context';
 import { HARD_OWNER, HARD_PTR, SOFT_PTR, type EntCommonOut, type ObjWriter } from './objwriter';
@@ -999,16 +1000,21 @@ export class EntityWriter {
     this.begin(helix ? this.cls('HELIX') : T.SPLINE, h, e);
     this.common(e, l);
     const d = this.ow.dat;
+    // DWG는 맞춤점 자료와 조정점 자료 중 하나만 담는다: 조정점이 있으면 조정점(모양이 정확히 같다), 없으면 맞춤점
     const scenario = e.controlPoints.length ? 1 : 2;
     if (ver >= R2013) {
-      // R2013+: 첫 값은 늘 1이고 맞춤점 방식은 플래그 비트 1이 정한다(AutoCAD 표본)
-      d.BL(1);
-      let f1 = e.flags >= 128 ? e.flags >> 7 : e.flags & 1 ? 4 : 0;
-      // 맞춤점 방식은 비트 1, AutoCAD는 매듭 매개변수 사용(8)도 함께 둔다
-      if (scenario === 2) f1 |= e.flags >= 128 ? 1 : 9;
-      else f1 &= ~1;
-      d.BL(f1);
-      d.BL(scenario === 1 ? 15 : 2);
+      // R2013+(AutoCAD 실물 짝): 조정점 = 첫 값 1, 플래그 0(닫힘 4), 매듭 매개변수 15(사용자 지정).
+      // 맞춤점 = 플래그 9(맞춤점 방식 1 + 8), 매듭 매개변수는 DXF 70의 비트(없으면 현 길이 0), 첫 값은 DXF 70에 1024가 있으면 1 아니면 2
+      const closed = e.flags & 1 ? 4 : 0;
+      if (scenario === 2) {
+        d.BL(e.flags & SPLINE_FIT_METHOD ? 1 : 2);
+        d.BL(9 | closed);
+        d.BL(splineKnotParam(e.flags));
+      } else {
+        d.BL(1);
+        d.BL(closed);
+        d.BL(15);
+      }
     } else d.BL(scenario);
     d.BL(e.degree);
     if (scenario === 2) {

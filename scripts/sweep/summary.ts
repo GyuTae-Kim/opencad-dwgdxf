@@ -2,6 +2,8 @@
  * 훑기 기록 → 분류·품질 지표·요약(순수 함수, 비교 도구와 같이 쓴다).
  */
 import type { FileRecord, StepError, Tally, WriteRecord } from './record';
+import { OBJECT_MIN_VERSION } from '../../src/io/dxf/wcontext';
+import { SILENT_OBJECTS } from '../../src/io/dwg/writer/context';
 
 const inc = (t: Tally, k: string, n = 1) => {
   t[k] = (t[k] ?? 0) + n;
@@ -9,7 +11,8 @@ const inc = (t: Tally, k: string, n = 1) => {
 
 /**
  * 파일 분류(나쁜 것부터 하나): 시간 넘김·워커 죽음·읽기·장면·쓰기·다시 읽기 실패, 왕복 차이, 정상.
- * 왕복 차이는 객체(그림 요소)의 수·값이나 도면층·블록 이름이 달라진 것만 — 비그래픽 객체(MATERIAL 등)가 빠지는 것은 종류별로만 센다.
+ * 왕복 차이는 객체(그림 요소)의 수·값이나 도면층·블록 이름이 달라진 것만 — 비그래픽 객체(MATERIAL 등)가 빠지는 것은 종류별로만 센다
+ * (설계대로 빠진 것은 objectsDropped, 알리지 않고 빠진 것은 roundtrip의 object:종류:-와 품질 지표 silent-object-loss).
  */
 export type FileClass = 'timeout' | 'crash' | 'read-fail' | 'scene-fail' | 'write-fail' | 'reread-fail' | 'roundtrip-diff' | 'ok';
 export const CLASS_ORDER: FileClass[] = ['timeout', 'crash', 'read-fail', 'scene-fail', 'write-fail', 'reread-fail', 'roundtrip-diff', 'ok'];
@@ -19,8 +22,45 @@ const writes = (r: FileRecord): [string, WriteRecord][] => Object.entries(r.writ
 /** 장면 실패(배치 블록이 없는 것은 실패로 보지 않는다) */
 const sceneFailed = (r: FileRecord) => !!r.scene?.error || (r.scene?.spaces ?? []).some((s) => !s.ok && s.error?.err !== 'no block');
 
-/** 왕복 차이 종류(대상 하나): count:종류:+/-, field:종류.속성, name:layer|block, object:종류:- */
-export function rereadKinds(w: WriteRecord): string[] {
+/** 비그래픽 객체를 뺐다고 알리는 쓰기 경고(세부에 종류가 있다) */
+const OBJECT_DROP_WARNINGS = ['dwg.write_object_dropped', 'object.no_data', 'object.orphan_dropped', 'object.corrupt_dropped'];
+
+/** 쓰기 경고가 알린 뺀 객체 종류 */
+function warnedObjectTypes(w: WriteRecord): Set<string> {
+  const out = new Set<string>();
+  for (const code of OBJECT_DROP_WARNINGS) {
+    const d = w.detail?.[code];
+    if (typeof d === 'string') out.add(d);
+    else if (d && typeof d === 'object') {
+      const x = d as { types?: Record<string, number>; items?: unknown[] };
+      for (const t of Object.keys(x.types ?? {})) out.add(t);
+      for (const t of x.items ?? []) if (typeof t === 'string') out.add(t);
+    }
+  }
+  if (w.warn?.['group.empty_dropped']) out.add('GROUP');
+  return out;
+}
+
+/**
+ * 비그래픽 객체가 빠진 것이 설계대로인지(왕복 차이로 세지 않는다):
+ * - 쓰기가 경고로 알린 종류(다른 형식·버전으로 옮길 원본 자료가 없음, 쓰지 않는 객체가 소유한 객체 — 저장 전 확인에 나온다)
+ * - DXF: 그 버전에 없는 종류(OBJECT_MIN_VERSION — 예: R2000·R2004 DXF의 재질·비주얼 스타일·다중 지시선 스타일)
+ * - DWG: 원본 본문이 없으면 조용히 빼는 표 보조 자료(SILENT_OBJECTS — 표와 스타일은 모델 값으로 쓴다)
+ * AutoCAD는 빠진 재질·비주얼 스타일 등 기본 객체를 열 때 다시 만든다. 알리지 않고 빠지면 결함으로 본다(object:종류:-).
+ */
+export function expectedObjectDrop(target: string, type: string, warned: Set<string>): boolean {
+  if (warned.has(type)) return true;
+  const [fmt, ver] = target.split('-') as [string, string | undefined];
+  if (fmt === 'dwg') return SILENT_OBJECTS.has(type);
+  const min = OBJECT_MIN_VERSION[type];
+  return !!min && !!ver && Number(ver.slice(2)) < min;
+}
+
+/**
+ * 왕복 차이 종류(대상 하나): count:종류:+/-, field:종류.속성, name:layer|block, object:종류:-(알리지 않고 빠진 비그래픽 객체),
+ * dropped:종류(설계대로 빠진 비그래픽 객체 — 왕복 차이로 세지 않는다, expectedObjectDrop). target은 쓰기 대상 열쇠(dxf-AC1015 등).
+ */
+export function rereadKinds(w: WriteRecord, target = ''): string[] {
   const rr = w.reread;
   if (!rr?.ok) return [];
   const out: string[] = [];
@@ -28,9 +68,17 @@ export function rereadKinds(w: WriteRecord): string[] {
   for (const f of Object.keys(rr.fieldDiffs ?? {})) out.push(`field:${f}`);
   if (rr.layersLost?.length) out.push('name:layer');
   if (rr.blocksLost?.length) out.push('name:block');
-  for (const [t, d] of Object.entries(rr.objDelta ?? {})) if (d < 0) out.push(`object:${t}:-`);
+  let warned: Set<string> | null = null;
+  for (const [t, d] of Object.entries(rr.objDelta ?? {})) {
+    if (d >= 0) continue;
+    warned ??= warnedObjectTypes(w);
+    out.push(expectedObjectDrop(target, t, warned) ? `dropped:${t}` : `object:${t}:-`);
+  }
   return out;
 }
+
+/** 설계대로 빠진 비그래픽 객체 종류(dropped:)인지 */
+export const isDesignDrop = (kind: string) => kind.startsWith('dropped:');
 
 export function classify(r: FileRecord): FileClass {
   if (r.fatal) return r.fatal.startsWith('TIMEOUT') ? 'timeout' : 'crash';
@@ -38,7 +86,7 @@ export function classify(r: FileRecord): FileClass {
   if (sceneFailed(r)) return 'scene-fail';
   if (writes(r).some(([, w]) => !w.ok)) return 'write-fail';
   if (writes(r).some(([, w]) => w.reread && !w.reread.ok)) return 'reread-fail';
-  if (writes(r).some(([, w]) => rereadKinds(w).some((k) => !k.startsWith('object:')))) return 'roundtrip-diff';
+  if (writes(r).some(([k, w]) => rereadKinds(w, k).some((x) => !x.startsWith('object:') && !isDesignDrop(x)))) return 'roundtrip-diff';
   return 'ok';
 }
 
@@ -67,6 +115,8 @@ export const QUALITY: Record<string, (r: FileRecord) => boolean> = {
       const lost = Object.values(w.reread?.countDelta ?? {}).some((n) => n < 0);
       return lost && !Object.keys(w.warn ?? {}).length;
     }),
+  /** 알리지 않고(설계 목록에도 없이) 빠진 비그래픽 객체 */
+  'silent-object-loss': (r) => writes(r).some(([k, w]) => rereadKinds(w, k).some((x) => x.startsWith('object:'))),
 };
 
 /** ezdxf 대조 지표(--oracle일 때만) */
@@ -153,6 +203,8 @@ export function buildSummary({ records, input, options, wallMs, startedAt, finis
   const rereadWarn: Tally = {};
   const roundtrip: Tally = {};
   const roundtripByTarget: Record<string, Tally> = {};
+  const objectsDropped: Tally = {};
+  const dropsByTarget: Record<string, Tally> = {};
   const quality: Tally = {};
   for (const k of Object.keys(QUALITY)) quality[k] = 0;
   const oracleUsed = records.some((r) => r.oracle);
@@ -177,6 +229,7 @@ export function buildSummary({ records, input, options, wallMs, startedAt, finis
     for (const s of r.scene?.spaces ?? []) for (const code of Object.keys(s.warn ?? {})) sw.add(code);
     for (const code of sw) inc(sceneWarn, code);
     const kinds = new Set<string>();
+    const drops = new Set<string>();
     const rw = new Set<string>();
     let wms = 0;
     let rms = 0;
@@ -185,14 +238,20 @@ export function buildSummary({ records, input, options, wallMs, startedAt, finis
       rms += w.reread?.ms ?? 0;
       for (const code of Object.keys(w.warn ?? {})) inc((writeWarn[k] ??= {}), code);
       for (const code of Object.keys(w.reread?.warn ?? {})) rw.add(code);
-      const ks = rereadKinds(w);
+      const ks = rereadKinds(w, k);
       for (const kind of ks) {
+        if (isDesignDrop(kind)) {
+          drops.add(kind.slice(8));
+          inc((dropsByTarget[k] ??= {}), kind.slice(8));
+          continue;
+        }
         kinds.add(kind);
         inc((roundtripByTarget[k] ??= {}), kind);
       }
     }
     for (const code of rw) inc(rereadWarn, code);
     for (const kind of kinds) inc(roundtrip, kind);
+    for (const t of drops) inc(objectsDropped, t);
     for (const [k, f] of Object.entries(QUALITY)) if (f(r)) inc(quality, k);
     if (oracleUsed) {
       for (const [k, f] of Object.entries(ORACLE_QUALITY)) if (f(r)) inc(oracle, k);
@@ -233,6 +292,9 @@ export function buildSummary({ records, input, options, wallMs, startedAt, finis
     quality,
     roundtrip: sorted(roundtrip, 200),
     roundtripByTarget: Object.fromEntries(Object.entries(roundtripByTarget).map(([k, v]) => [k, sorted(v, 60)])),
+    // 설계대로 빠진 비그래픽 객체(종류별 파일 수) — 왕복 차이(roundtrip)와 분류에는 넣지 않는다(expectedObjectDrop)
+    objectsDropped: sorted(objectsDropped, 80),
+    objectsDroppedByTarget: Object.fromEntries(Object.entries(dropsByTarget).map(([k, v]) => [k, sorted(v, 40)])),
     warnings: { read: sorted(readWarn), scene: sorted(sceneWarn), write: Object.fromEntries(Object.entries(writeWarn).map(([k, v]) => [k, sorted(v)])), reread: sorted(rereadWarn) },
     timeMs: { wall: wallMs, read: percentiles(t.read), scene: percentiles(t.scene), write: percentiles(t.write), reread: percentiles(t.reread), total: percentiles(t.total) },
   };
