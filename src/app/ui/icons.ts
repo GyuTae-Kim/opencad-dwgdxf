@@ -43,6 +43,7 @@ export const ICONS: Record<string, string> = {
   gridSnap: S('<path d="M5 5h.01M12 5h.01M19 5h.01M5 12h.01M19 12h.01M5 19h.01M12 19h.01M19 19h.01" stroke-width="2.4" stroke-linecap="round"/><path d="M9 15l3-3 3 3M12 12v7"/>'),
   viewport: S('<rect x="3" y="4" width="18" height="16"/><rect x="6" y="7" width="7" height="6"/><rect x="14.5" y="7" width="3.5" height="10"/>'),
   ucs: S('<path d="M6 18V6M6 18h12"/><path d="M6 6L4 8.5M6 6l2 2.5M18 18l-2.5-2M18 18l-2.5 2"/>'),
+  link: S('<path d="M10 14a4.2 4.2 0 0 0 6 0l3-3a4.2 4.2 0 0 0-6-6l-1.2 1.2"/><path d="M14 10a4.2 4.2 0 0 0-6 0l-3 3a4.2 4.2 0 0 0 6 6l1.2-1.2"/>'),
   views: S('<rect x="3" y="6.5" width="12.5" height="11" rx="1"/><path d="M15.5 10.5L21 7.5v9l-5.5-3"/>'),
   isolate: S('<circle cx="12" cy="12" r="3.2"/><path d="M3 12h4M17 12h4M12 3v4M12 17v4" stroke-dasharray="2 2"/>'),
   polar: S('<path d="M4 20h16M4 20L18 6"/><path d="M4 20l8-14" stroke-dasharray="2 2"/>'),

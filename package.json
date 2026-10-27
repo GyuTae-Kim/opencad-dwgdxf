@@ -16,7 +16,9 @@
     "update:content-dates": "vite build && node tools/update-content-dates.mjs",
     "test:seo": "node --test tools/seo.test.mjs",
     "check:i18n": "node tools/check-i18n.mjs",
-    "test:i18n": "vitest run tests/i18n.test.ts"
+    "test:i18n": "vitest run tests/i18n.test.ts",
+    "sweep": "vite-node scripts/sweep/cli.ts sweep",
+    "sweep:compare": "vite-node scripts/sweep/cli.ts compare"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

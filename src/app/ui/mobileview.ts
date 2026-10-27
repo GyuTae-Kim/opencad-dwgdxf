@@ -16,6 +16,7 @@ import type { MeasureResult } from '../measure-result';
 import { h, showMenu, toast } from './dom';
 import { icon } from './icons';
 import { ribbonOverlay } from './layout';
+import { copyViewLink } from '../viewlink-app';
 
 export type MobileMode = 'view' | 'edit';
 
@@ -268,12 +269,13 @@ export class MobileView {
     const dims = btn('dimlist', '치수', '치수 목록(표시 값과 실제 길이 비교)', () => host.openPalette('dims'));
     // 더 보기: 점 좌표(ID), 문자 찾기, 빠진 참조 파일 고르기(외부 참조·이미지·PDF·SHX 글꼴)
     // 이름 없이 아이콘만(좁은 화면에서 다른 단추 이름이 줄지 않게 — 접근 이름은 제목)
-    const more = btn('more', '', '더 보기: 좌표·찾기·참조 파일', () => {
+    const more = btn('more', '', '더 보기: 좌표·찾기·참조 파일·보기 링크', () => {
       const r = more.getBoundingClientRect();
       showMenu(r.left, r.bottom + 2, [
         { label: '점 좌표 (ID)', icon: 'id', run: () => this.startMeasure('ID') },
         { label: '문자 찾기', icon: 'find', run: () => host.openPalette('find') },
         { label: '참조 파일 고르기(외부 참조·SHX 글꼴)', icon: 'folder', run: () => void this.pickRefFiles() },
+        { label: '보기 링크 복사', icon: 'link', run: () => void copyViewLink(app) },
       ]);
     });
     more.classList.add('vb-more');
@@ -335,6 +337,11 @@ export class MobileView {
       this.fitQueued = false;
       fitLabels(this.bar);
     });
+  }
+
+  /** 이 도면은 처음 볼 때 전체 보기로 맞추지 않는다(보기 링크로 연 화면을 지킨다) */
+  keepView(st: DocState): void {
+    this.fitted.add(st);
   }
 
   get viewMode(): boolean {
