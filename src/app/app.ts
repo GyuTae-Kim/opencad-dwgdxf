@@ -11,13 +11,12 @@ import { beginOpen, type InputKind } from './analytics';
 import { viewportModel } from './psltscale';
 import type { Entity, ViewportEntity } from '../core/model';
 import { MODEL_SPACE, normalizeHandle, tableKey } from '../core/model';
-import { errorMessage } from '../core/errors';
-import type { CadErrorCode } from '../core/errors';
 import { formatLength } from '../core/units';
 import { OutlineLibrary } from '../text/fonts';
 import { TextEngine } from '../text/layout';
 import { collectTextUsage } from '../text/collect';
 import { EngineClient, EngineError, type OpenResult } from './engine';
+import { openErrorInfo, openErrorText, type OpenErrorInfo } from './openerror';
 import { LoadPreview } from './loadpreview';
 import { DocState } from './docstate';
 import { CadView, type OverlayGeom, type Pt, type SnapKind } from './view';
@@ -30,7 +29,7 @@ import { type Acquired, objectTrack, polarAngles, polarTrack } from './tracking'
 import { gripPoints } from '../edit/geom';
 import { dynGrips, isDynamicReference } from '../edit/dynblock';
 import { spaceTolerance } from '../render/build';
-import { ask, closeMenu, showMenu, toast } from './ui/dom';
+import { ask, closeMenu, keyboardControl, showMenu, toast } from './ui/dom';
 import { kindName as entityKindName } from '../edit/extract';
 import { EditManager } from './edits';
 import { OverlayScene, layoutViewports, paperInfo } from './scene';
@@ -177,6 +176,8 @@ export interface UiHooks {
   setBusySeeThrough?(on: boolean): void;
   setCoords(text: string): void;
   openPalette(tab: string): void;
+  /** 시작 화면에 열기 실패 안내를 남긴다(없으면 알림으로) */
+  showOpenError?(name: string, info: OpenErrorInfo): void;
 }
 
 export class App {
@@ -1046,11 +1047,9 @@ export class App {
       attempt.success();
       return st;
     } catch (e) {
-      const code = e instanceof EngineError ? e.code : 'internal';
-      const msg = e instanceof EngineError && code !== 'internal' ? errorMessage(code as CadErrorCode) : `파일을 열지 못했습니다: ${e instanceof Error ? e.message : String(e)}`;
-      toast(`${name}: ${msg}`, 'error', 7000);
-      this.cmd.print(`${name}: ${msg}`, 'err');
-      attempt.error('parse_error');
+      const info = openErrorInfo(e instanceof EngineError ? e.code : 'internal', e instanceof Error ? e.message : String(e));
+      this.reportOpenError(name, info);
+      attempt.error(info.code === 'file.empty' ? 'empty' : info.code === 'file.unrecognized' || info.code === 'dwg.unsupported_version' || info.code === 'dwg.encrypted' ? 'unsupported' : 'parse_error');
       return null;
     } finally {
       this.view.setLoadPreview(null);
@@ -1058,6 +1057,18 @@ export class App {
       this.ui.showStart(!this.active);
       this.ui.setBusy(null);
     }
+  }
+
+  /**
+   * 열지 못한 까닭과 할 일을 알린다: 명령행에 남기고, 시작 화면이면 그 위의 안내 상자에, 도면을 보는 중이면 알림으로.
+   * 알림은 화면 읽기 프로그램이 바로 읽는다(role="alert")
+   */
+  reportOpenError(name: string, info: OpenErrorInfo): void {
+    const text = openErrorText(name, info);
+    this.cmd.print(`${name} — ${info.message}`, 'err');
+    this.cmd.print(info.hint);
+    if (!this.active && this.ui.showOpenError) this.ui.showOpenError(name, info);
+    else toast(text, 'error', 9000);
   }
 
   /** 워커가 읽었거나 받아 둔 문서를 탭으로 연다 */
@@ -2511,6 +2522,8 @@ export class App {
     const inCmd = t === this.cmd.input;
     const mod = ev.ctrlKey || ev.metaKey;
     if (ev.key === 'Shift') this.setShift(true);
+    // 대화상자·메뉴 안의 키는 그 상자가 받는다(글자가 뒤의 명령행으로 가거나, Enter가 단추 대신 명령을 끝내지 않게)
+    if (t?.closest?.('.dialog-back, .menu, .language-list')) return;
     // 명령행 입력란의 키는 명령행이 먼저 처리했다(intercept). 여기서는 막힌 키를 다시 보지 않는다
     if (inCmd && ev.defaultPrevented && (ev.key === ' ' || ev.key === 'Tab')) return;
     // Ctrl 제도 보조·입력 키(글을 고치는 다른 입력란에서는 그 입력란의 키)
@@ -2672,6 +2685,8 @@ export class App {
     }
     if (typing && !inCmd) return;
     if (inCmd) return; // 명령행이 직접 처리
+    // 키보드로 초점을 옮긴 단추·링크·탭은 Enter·Space·Tab을 그 컨트롤이 받는다(마우스로 누른 뒤에는 AutoCAD처럼 입력 마침·명령 반복)
+    if ((ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Tab') && !mod && keyboardControl(t)) return;
     if (ev.key === 'Escape') {
       ev.preventDefault();
       this.cancel();

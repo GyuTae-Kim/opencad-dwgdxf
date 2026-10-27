@@ -32,14 +32,61 @@ export function iconSpan(name: string, cls = 'ic'): HTMLSpanElement {
 
 let toastWrap: HTMLDivElement | null = null;
 
-export function toast(text: string, kind: 'info' | 'warn' | 'error' = 'info', ms = 4200): void {
-  if (!toastWrap) {
+/** 알림에 붙는 단추(예: 새 버전 → 새로 고침) */
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
+/**
+ * 잠깐 보이는 알림. 오류는 화면 읽기 프로그램이 바로 읽게 role="alert"로 둔다.
+ * action이 있으면 단추와 닫기 단추를 붙인다. ms가 0이면 닫을 때까지 남는다
+ */
+export function toast(text: string, kind: 'info' | 'warn' | 'error' = 'info', ms = 4200, action?: ToastAction): HTMLDivElement {
+  if (!toastWrap || !toastWrap.isConnected) {
     toastWrap = h('div', { class: 'toast-wrap', role: 'status', 'aria-live': 'polite' });
     document.body.append(toastWrap);
   }
-  const t = h('div', { class: `toast ${kind === 'info' ? '' : kind}` }, text);
+  const t = h('div', { class: `toast ${kind === 'info' ? '' : kind}`, role: kind === 'error' ? 'alert' : undefined }, h('span', { class: 'toast-text' }, text));
+  if (action) {
+    t.classList.add('has-action');
+    const run = h('button', { type: 'button', class: 'toast-action' }, action.label);
+    run.addEventListener('click', () => {
+      t.remove();
+      action.run();
+    });
+    const close = h('button', { type: 'button', class: 'toast-close', 'aria-label': '알림 닫기', title: '알림 닫기', html: icon('close2') });
+    close.addEventListener('click', () => t.remove());
+    t.append(run, close);
+  }
   toastWrap.append(t);
-  setTimeout(() => t.remove(), ms);
+  if (ms > 0) setTimeout(() => t.remove(), ms);
+  return t;
+}
+
+/** 키보드로 초점을 옮겨 온 요소인지(:focus-visible — 마우스로 누른 단추는 아니다). 이 판별을 못 하는 환경은 false */
+export function focusVisible(el: Element): boolean {
+  try {
+    return el.matches(':focus-visible');
+  } catch {
+    return false;
+  }
+}
+
+/** 키보드로 초점을 옮겨 온 단추·링크·탭 같은 컨트롤인지(그림 영역·문서 본문은 아니다). 앱의 Enter·Space·Tab 처리가 이것을 비켜 간다 */
+export function keyboardControl(t: Element | null): boolean {
+  if (!t || typeof t.matches !== 'function' || t === document.body || t.tagName === 'CANVAS') return false;
+  return t.matches('button, a[href], summary, select, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [tabindex]') && focusVisible(t);
+}
+
+/** 키보드로 옮겨 다닐 수 있는(보이는) 요소들 */
+export function focusables(root: ParentNode): HTMLElement[] {
+  const sel = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+  return [...root.querySelectorAll<HTMLElement>(sel)].filter((el) => {
+    if (el.closest('[hidden], [inert]')) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== 'none' && cs.visibility !== 'hidden';
+  });
 }
 
 export interface MenuItem {
@@ -55,31 +102,43 @@ export interface MenuItem {
 }
 
 let openMenu: HTMLDivElement | null = null;
+/** 메뉴를 열기 전에 초점이 있던 곳(Esc로 닫으면 돌려준다) */
+let menuOpener: HTMLElement | null = null;
 
-export function closeMenu(): void {
+export function closeMenu(restoreFocus = false): void {
+  const had = !!openMenu;
   openMenu?.remove();
   openMenu = null;
+  if (had && restoreFocus && menuOpener?.isConnected) menuOpener.focus({ preventScroll: true });
+  menuOpener = null;
 }
 
+/**
+ * 바로가기 메뉴. 키보드: 위·아래 화살표·Home·End로 옮기고 Enter·Space로 고르며, Esc는 닫고 연 곳으로 초점을 돌린다(Tab도 닫는다).
+ * 키보드로 연 메뉴(초점이 단추 등에 있을 때)는 첫 항목에 초점을 둔다
+ */
 export function showMenu(x: number, y: number, items: MenuItem[]): void {
   closeMenu();
+  const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
   const m = h('div', { class: 'menu', role: 'menu' });
   for (const it of items) {
     if (it.separator) {
-      m.append(h('hr'));
+      m.append(h('hr', { role: 'separator' }));
       continue;
     }
     if (it.heading) {
-      m.append(h('div', { class: 'label' }, it.heading));
+      m.append(h('div', { class: 'label', role: 'presentation' }, it.heading));
       continue;
     }
     const b = h(
       'button',
       {
+        type: 'button',
         role: 'menuitem',
+        tabindex: -1,
         disabled: !!it.disabled,
         onclick: () => {
-          closeMenu();
+          closeMenu(true);
           it.run?.();
         },
         onmouseenter: () => it.hover?.(),
@@ -90,6 +149,31 @@ export function showMenu(x: number, y: number, items: MenuItem[]): void {
     );
     m.append(b);
   }
+  const enabled = () => [...m.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not([disabled])')];
+  m.addEventListener('keydown', (ev) => {
+    const k = ev as KeyboardEvent;
+    const list = enabled();
+    const i = list.indexOf(document.activeElement as HTMLButtonElement);
+    let next = -1;
+    if (k.key === 'ArrowDown') next = (i + 1) % list.length;
+    else if (k.key === 'ArrowUp') next = (i - 1 + list.length) % list.length;
+    else if (k.key === 'Home') next = 0;
+    else if (k.key === 'End') next = list.length - 1;
+    else if (k.key === 'Escape') {
+      k.preventDefault();
+      k.stopPropagation();
+      closeMenu(true);
+      return;
+    } else if (k.key === 'Tab') {
+      closeMenu(true);
+      return;
+    }
+    if (next >= 0 && list.length) {
+      k.preventDefault();
+      k.stopPropagation();
+      list[next]!.focus();
+    }
+  });
   document.body.append(m);
   const r = m.getBoundingClientRect();
   // 보이는 영역(소프트 키보드가 올라오면 그만큼 줄어든다) 안에 둔다. 데스크톱에서는 창 크기와 같다
@@ -100,6 +184,9 @@ export function showMenu(x: number, y: number, items: MenuItem[]): void {
   m.style.left = `${pos.left + ox}px`;
   m.style.top = `${pos.top + oy}px`;
   openMenu = m;
+  menuOpener = opener;
+  // 키보드로 연 메뉴는 첫 항목으로(마우스로 연 메뉴는 초점을 옮기지 않아 그리던 자리의 키 입력이 그대로 간다)
+  if (opener && focusVisible(opener)) enabled()[0]?.focus();
   setTimeout(() => {
     const off = (ev: Event) => {
       if (openMenu && !openMenu.contains(ev.target as Node)) {
@@ -111,13 +198,22 @@ export function showMenu(x: number, y: number, items: MenuItem[]): void {
   });
 }
 
+let dialogSeq = 0;
+
+/**
+ * 대화상자(모달). 키보드: 열면 주 단추(없으면 상자)에 초점, Tab·Shift+Tab은 상자 안에서만 돈다, Esc는 닫는다.
+ * 어떻게 닫히든(단추·Esc·바깥 누르기·back.remove()) 열기 전에 초점이 있던 곳으로 초점을 돌린다
+ */
 export function dialog(title: string, body: Node | string, buttons: { label: string; primary?: boolean; run?: () => void | boolean }[] = [{ label: '닫기', primary: true }]): HTMLDivElement {
+  const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
   const back = h('div', { class: 'dialog-back' });
   const close = () => back.remove();
+  const titleId = `dialog-title-${++dialogSeq}`;
   const box = h(
     'div',
-    { class: 'dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
-    h('header', {}, title, h('button', { class: 'icon-btn', 'aria-label': '닫기', onclick: close, html: icon('close2') })),
+    // 이름은 aria-label(제목과 같은 글 — 다른 코드·시험이 이것으로 상자를 찾는다), 제목은 h2로 둬 화면 읽기 프로그램의 제목 이동에도 잡힌다
+    { class: 'dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': title, tabindex: -1 },
+    h('header', {}, h('h2', { class: 'dialog-title', id: titleId }, title), h('button', { type: 'button', class: 'icon-btn', 'aria-label': '닫기', title: '닫기', onclick: close, html: icon('close2') })),
     h('div', { class: 'body' }, typeof body === 'string' ? h('div', { html: body }) : body),
     h(
       'footer',
@@ -126,6 +222,7 @@ export function dialog(title: string, body: Node | string, buttons: { label: str
         h(
           'button',
           {
+            type: 'button',
             class: `btn ${b.primary ? 'primary' : ''}`,
             onclick: () => {
               const keep = b.run?.();
@@ -142,10 +239,41 @@ export function dialog(title: string, body: Node | string, buttons: { label: str
     if (ev.target === back) close();
   });
   back.addEventListener('keydown', (ev) => {
-    if ((ev as KeyboardEvent).key === 'Escape') close();
+    const k = ev as KeyboardEvent;
+    if (k.key === 'Escape') {
+      // 명령 중에 연 도움말 같은 상자를 Esc로 닫아도 진행 중인 명령은 그대로 둔다
+      k.preventDefault();
+      k.stopPropagation();
+      close();
+      return;
+    }
+    if (k.key !== 'Tab') return;
+    const list = focusables(box);
+    if (!list.length) {
+      k.preventDefault();
+      box.focus();
+      return;
+    }
+    const first = list[0]!;
+    const last = list[list.length - 1]!;
+    const cur = document.activeElement;
+    if (k.shiftKey && (cur === first || cur === box || !box.contains(cur))) {
+      k.preventDefault();
+      last.focus();
+    } else if (!k.shiftKey && (cur === last || !box.contains(cur))) {
+      k.preventDefault();
+      first.focus();
+    }
   });
   document.body.append(back);
-  (box.querySelector('footer .btn.primary') as HTMLButtonElement | null)?.focus();
+  const obs = new MutationObserver(() => {
+    if (back.isConnected) return;
+    obs.disconnect();
+    const now = document.activeElement;
+    if (opener?.isConnected && (!now || now === document.body || !now.isConnected)) opener.focus({ preventScroll: true });
+  });
+  obs.observe(document.body, { childList: true });
+  ((box.querySelector('footer .btn.primary') as HTMLButtonElement | null) ?? box).focus();
   return back;
 }
 

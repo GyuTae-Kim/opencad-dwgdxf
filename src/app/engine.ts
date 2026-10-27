@@ -55,10 +55,28 @@ export class EngineClient {
     if (!this.worker) {
       const worker = new Worker(new URL('../worker/engine.worker.ts', import.meta.url), { type: 'module' });
       worker.onmessage = (ev: MessageEvent<FromWorker>) => this.onMessage(ev.data);
+      worker.onerror = (ev) => this.onWorkerError(worker, ev);
       worker.postMessage({ type: 'init', fontBase: this.fontBase } satisfies ToWorker);
       this.worker = worker;
     }
     this.worker.postMessage(m, transfer);
+  }
+
+  /**
+   * 워커 오류: 기다리던 요청이 영영 끝나지 않아 "여는 중" 상자가 남지 않게 모두 실패로 끝낸다.
+   * 워커 스크립트를 받지 못했으면(오프라인 등 — ErrorEvent가 아니거나 내용이 없다) 그 워커는 버리고 다음 요청에서 새로 띄운다
+   */
+  private onWorkerError(worker: Worker, ev: Event): void {
+    const loadFailed = !(typeof ErrorEvent !== 'undefined' && ev instanceof ErrorEvent) || !ev.message;
+    const err = loadFailed ? new EngineError('worker_load', '도면 처리 모듈을 불러오지 못했습니다.') : new EngineError('worker', (ev as ErrorEvent).message);
+    for (const [id, p] of [...this.pending]) {
+      this.pending.delete(id);
+      p.reject(err);
+    }
+    if (loadFailed && this.worker === worker) {
+      worker.terminate();
+      this.worker = undefined;
+    }
   }
 
   private onMessage(m: FromWorker): void {
