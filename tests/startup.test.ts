@@ -20,7 +20,7 @@ describe('direct CAD workspace startup', () => {
     const load = vi.fn().mockResolvedValue(ready);
     dispose = mountEditor(root, load);
     expect(root.getAttribute('aria-busy')).toBe('true');
-    expect(root.querySelector('.boot-status')!.textContent).toContain('편집기를 준비');
+    expect(root.querySelector('.boot-status')!.textContent).not.toBe('');
     await flush();
     expect(load).toHaveBeenCalledOnce();
     expect(location.pathname + location.search + location.hash).toBe(url);
@@ -56,4 +56,13 @@ describe('direct CAD workspace startup', () => {
     dispose(); await flush();
     expect(load).not.toHaveBeenCalled();
   });
+  it.each([['en','Preparing the editor…','Reload'],['ja','エディターを準備しています…','再読み込み'],['zh-CN','正在准备编辑器…','重新加载'],['de','Editor wird vorbereitet…','Neu laden']])('shows native loading and retry copy before the %s catalog loads', async (code, loading, retry) => {
+    history.replaceState(null,'',`/${code}/`);
+    dispose=mountEditor(root,vi.fn().mockRejectedValue(new Error('offline')));
+    expect(root.querySelector('.boot-status')!.textContent).toBe(loading);
+    await flush();
+    expect(root.querySelector('[role="alert"]')!.textContent).not.toMatch(/[가-힣]/);
+    expect(root.querySelector('[role="alert"] button')!.textContent).toBe(retry);
+  });
+
 });

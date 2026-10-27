@@ -4384,7 +4384,7 @@
   "새로 만들기(N)...": "Neu (N)...",
   "새로 만들기...": "Neu...",
   "새로 만들기로 지금 도면층 설정을 상태로 저장합니다.": "Neu speichert nun die Ebeneneinstellungen als Status.",
-  "새로고침": "Aktualisieren",
+  "새로고침": "Neu laden",
   "색": "Farbe",
   "색 (객체를 고르면 그 객체의 색)": "Farbe (Wenn Sie ein Objekt auswählen, die Farbe dieses Objekts)",
   "색 1(번호 또는 r,g,b)": "Farbe 1 (Zahl oder r,g,b)",
@@ -7423,7 +7423,7 @@
   "편집(E)...": "Bearbeiten (E)...",
   "편집(I)...": "Bearbeiten (I)...",
   "편집기를 준비하고 있습니다…": "Editor wird vorbereitet…",
-  "편집기를 준비하지 못했습니다. 인터넷 연결을 확인한 뒤 새로고침해 주세요.": "Fehler beim Vorbereiten des Editors. Bitte überprüfen Sie Ihre Internetverbindung und aktualisieren Sie die Seite.",
+  "편집기를 준비하지 못했습니다. 인터넷 연결을 확인한 뒤 새로고침해 주세요.": "Der Editor konnte nicht geladen werden. Prüfen Sie die Internetverbindung und laden Sie die Seite erneut.",
   "편집을 위한 속성 정의 표시": "Eigenschaftsdefinitionen zur Bearbeitung anzeigen",
   "편집을 위한 속성 정의 표시(D)": "Eigenschaftsdefinitionen zur Bearbeitung anzeigen (D)",
   "편집하던 배열을 찾을 수 없습니다. 변경 내용을 버립니다.": "Das bearbeitete Array wurde nicht gefunden. Änderungen werden verworfen.",
@@ -8212,5 +8212,9 @@
   "흐리기(0-100)": "Weichzeichnen (0–100)",
   "흐리기(F)": "Unschärfe (F)",
   "흙": "Erde",
-  "흰색": "Weiß"
+  "흰색": "Weiß",
+  "언어 선택": "Sprache wählen",
+  "https://gyutae-kim.github.io/opencad-dwgdxf/og-opencad.jpg": "https://gyutae-kim.github.io/assets/i18n/de/og/opencad.jpg",
+  "사이트 이동": "Seitennavigation",
+  "OpenCAD 사용 안내": "OpenCAD-Anleitungen"
 }
