@@ -48,6 +48,21 @@ describe('웹 앱 매니페스트', () => {
       expect(html).toContain(tag);
   });
 
+  it('공유 받기(share_target)·파일 연결(file_handlers)·이미 열린 창 쓰기(launch_handler): DWG·DXF와 앱이 여는 스크립트·LISP', () => {
+    expect(manifest.share_target).toMatchObject({ action: './share-target', method: 'POST', enctype: 'multipart/form-data' });
+    const accept: string[] = manifest.share_target.params.files[0].accept;
+    expect(manifest.share_target.params.files[0].name).toBe('file');
+    for (const a of ['.dwg', '.dxf', 'image/vnd.dwg', 'image/vnd.dxf']) expect(accept).toContain(a);
+    const exts = Object.values(manifest.file_handlers[0].accept as Record<string, string[]>).flat().sort();
+    expect(exts).toEqual(['.dwg', '.dxf', '.lsp', '.mnl', '.scr']);
+    expect(manifest.file_handlers[0].action).toBe('./');
+    for (const mime of Object.keys(manifest.file_handlers[0].accept)) expect(mime).toMatch(/^[a-z]+\/[\w.+-]+$/);
+    expect(manifest.launch_handler.client_mode[0]).toBe('focus-existing');
+    // 앱의 파일 고르기와 같은 확장자
+    const shell = read('src/app/ui/shell.ts').toString('utf8');
+    for (const ext of exts) expect(shell).toContain(ext);
+  });
+
   it('언어 페이지(<언어>/)는 그 언어 이름의 앱 정보: 그 언어 페이지에서 열고, 범위·아이콘은 앱 뿌리', () => {
     expect(localizeManifest(manifest, 'ko')).toBe(manifest);
     for (const lang of ['en', 'ja', 'zh-CN', 'de']) {
@@ -62,6 +77,9 @@ describe('웹 앱 매니페스트', () => {
       expect(new URL(m.start_url, at).pathname).toBe(`/opencad-dwgdxf/${lang}/`);
       expect(new URL(m.scope, at).pathname).toBe('/opencad-dwgdxf/');
       expect(new URL(m.icons[0].src, at).pathname).toBe(`/opencad-dwgdxf/${m.icons[0].src.slice(3)}`);
+      // 공유 받기·파일 연결도 그 언어 페이지로(서비스 워커는 앱 뿌리 범위라 언어 쪽 share-target도 받는다)
+      expect(new URL(m.share_target.action, at).pathname).toBe(`/opencad-dwgdxf/${lang}/share-target`);
+      expect(new URL(m.file_handlers[0].action, at).pathname).toBe(`/opencad-dwgdxf/${lang}/`);
     }
     const html = read('index.html').toString('utf8').replace('<!-- site-metadata -->', '');
     const en = localizeHtml(html, 'en');

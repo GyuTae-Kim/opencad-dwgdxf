@@ -69,6 +69,7 @@ import { registerFileCommands } from './app/filecmds';
 import { registerBlkCommands } from './app/blkcmds';
 import { registerLispCommands } from './app/lisp';
 import { registerManageCommands } from './app/manage';
+import { handleLaunchQuery, installPwa } from './app/pwa-app';
 import { Shell } from './app/ui/shell';
 import { dialog, h, toast } from './app/ui/dom';
 import { baseName, download, exportRaster, exportSvg } from './app/export';
@@ -292,6 +293,10 @@ export function startEditor(root: HTMLElement): EditorActions {
   });
 
   app.activate(null);
+
+  // 홈 화면 앱: 오프라인(서비스 워커)과 새 판 알림, 데스크톱에서 연결 프로그램으로 연 파일, 공유 받은 도면(?recent=)
+  installPwa(app, shell);
+  void handleLaunchQuery(shell);
 
   // 주소에 ?sample 이 있으면 예제를, ?open=주소 가 있으면 그 파일을 연다
   const params = new URLSearchParams(location.search);

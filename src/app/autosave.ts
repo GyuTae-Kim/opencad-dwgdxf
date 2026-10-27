@@ -143,6 +143,11 @@ async function autosaveTick(app: App, force = false): Promise<number> {
   return n;
 }
 
+/** 바뀐 도면을 지금 모두 자동 저장한다(새 판으로 바꾸려고 다시 읽기 전 등). 저장한 수 */
+export function autosaveNow(app: App): Promise<number> {
+  return autosaveTick(app, true);
+}
+
 /** 저장하거나 닫은 도면의 자동 저장본을 지운다 */
 export function forgetRecovery(st: DocState): void {
   last.delete(st);
