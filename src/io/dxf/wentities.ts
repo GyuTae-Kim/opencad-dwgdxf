@@ -596,7 +596,8 @@ function writeVertices(w: TagOut, e: PolylineEntity, h: string, paper: boolean):
         w.t(100, e.kind === '3d' ? 'AcDb3dPolylineVertex' : e.kind === 'mesh' ? 'AcDbPolygonMeshVertex' : e.kind === 'polyface' ? 'AcDbPolyFaceMeshVertex' : 'AcDb2dVertex');
       }
     }
-    w.p3(10, face ? { x: 0, y: 0, z: 0 } : e.kind === '2d' ? { x: v.location.x, y: v.location.y, z: fin(e.elevation) } : v.location);
+    // 2D 정점의 Z(30)도 모델 값 그대로 — AutoCAD는 고도(POLYLINE 30)와 다른 정점 Z를 그대로 적고, 그릴 때는 고도만 쓴다
+    w.p3(10, face ? { x: 0, y: 0, z: 0 } : e.kind === '2d' ? { x: v.location.x, y: v.location.y, z: fin(v.location.z) } : v.location);
     if (e.kind === '2d') {
       if (v.startWidth) w.t(40, v.startWidth);
       if (v.endWidth) w.t(41, v.endWidth);

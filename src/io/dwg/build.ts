@@ -17,7 +17,6 @@ import {
   type Layer,
   type Layout,
   type Linetype,
-  type PolylineEntity,
   type TableRecordBase,
   type TextStyle,
   type UcsRecord,
@@ -655,7 +654,8 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
       for (const ch of childList(p)) {
         const c = parsed.get(ch);
         used.add(ch);
-        if (c && c.vertex) e.vertices.push(fixVertex(e, c.vertex));
+        // 2D 정점의 Z는 파일 값 그대로 둔다(그릴 때는 폴리선 고도를 쓴다 — AutoCAD가 같은 도면을 DXF로 쓸 때도 정점 Z를 그대로 적는다)
+        if (c && c.vertex) e.vertices.push(c.vertex);
       }
     }
     if (p.seqend) used.add(p.seqend);
@@ -875,12 +875,6 @@ function layerTransparency(xdata: NonNullable<Layer['xdata']>): number | undefin
   const kind = (v >>> 24) & 0xff;
   if (kind >= 2) return v & 0xff;
   return undefined;
-}
-
-/** 2D 폴리선 정점의 Z는 폴리선 고도 */
-function fixVertex(e: PolylineEntity, v: PolylineEntity['vertices'][number]): PolylineEntity['vertices'][number] {
-  if (e.kind === '2d' && v.location.z === 0 && e.elevation) return { ...v, location: { ...v.location, z: e.elevation } };
-  return v;
 }
 
 interface HeaderNames {
