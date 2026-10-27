@@ -132,9 +132,12 @@
 - [x] BLOCK 재정의·-BLOCK, ATTDEF·INSERT·EATTEDIT 보강, 다른 도면 붙여넣기의 익명 블록 충돌 수정, ADDSELECTED
 - [x] 시스템 변수 바로 입력·SYSVDLG·ALIASEDIT·OPTIONS(화면에 바로 반영)·DWGPROPS(DWG 요약 정보 왕복), PAGESETUP 관리자, PLOT 배치에 적용·브라우저 인쇄
 - [x] 스냅 표식 위 Tab 순환(겹친 스냅 점), LINE의 지연된 접점(점에서 원에 그은 접선, 두 원의 공통 접선)
-- [ ] 지연된 접점을 LINE 밖(PLINE·XLINE·CIRCLE 3P)으로, 오른쪽 버튼 끌어 놓기 메뉴, 가상 교차점 정밀화, AUTOSNAP 마그넷·추적 비트
-- [ ] Ctrl 순환 다기능 그립(GRIPMULTIFUNCTIONAL 1), 회전·축척 그립의 참조(R), 화살표 반전 값
-- [ ] SPLINE 공차 근사, 매듭 방식 보존, 3DPOLY의 Z 입력, PLINE 호 Ctrl 방향 전환, ARRAYPOLAR 회전축
+- [x] 지연된 접점을 PLINE 시작점·XLINE 첫 점·CIRCLE 3P로, Ttr·TTT는 접점 스냅 점 요청, 폴리선 호 구간의 접점 스냅
+- [ ] 오른쪽 버튼 끌어 놓기 메뉴, 가상 교차점 정밀화, AUTOSNAP 마그넷·추적 비트, 타원·스플라인의 접점 스냅
+- [x] Ctrl 순환 다기능 그립(GRIPMULTIFUNCTIONAL — 초기값 3, 1 Ctrl 순환, 2 커서를 올리면 뜨는 메뉴), 회전·축척 그립의 참조(R)
+- [ ] 화살표 반전 값
+- [x] PLINE 호 Ctrl 방향 전환
+- [ ] SPLINE 공차 근사, 매듭 방식 보존, 3DPOLY의 Z 입력, ARRAYPOLAR 회전축
 - [ ] 표 셀 제자리 편집, 자동 쌓기·철자 검사·배경 마스크, QDIM·DIMJOGGED 머리말 재지정
 - [ ] VIEW에 UCS 저장, 사용자 특성 10개 넘게, 배치 플롯 범위·윈도우, 브라우저마다 다른 contenteditable·시간에 민감한 오른쪽 클릭 실기기 확인
 
