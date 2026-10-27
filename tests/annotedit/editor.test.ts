@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe('모델 ↔ DOM', () => {
-  const SAMPLES = ['abc', '{\\fArial|b1|i0|c0|p34;굵게}보통\\P둘째', '\\pxqc;가운데\\P이어받음', '분수 \\S1/2; 끝', 'a^Ib', '{\\C1;빨강}{\\H2x;큰}', '열1\\N열2', ''];
+  const SAMPLES = ['abc', '{\\fArial|b1|i0|c0|p34;굵게}보통\\P둘째', '\\pxqc;가운데\\P이어받음', '분수 \\S1/2; 끝', 'a\tb', '{\\C1;빨강}{\\H2x;큰}', '열1\\N열2', ''];
   for (const s of SAMPLES) {
     it(`그렸다 읽어도 같은 뜻: ${s || '(빈 문자)'}`, () => {
       const root = document.createElement('div');
@@ -133,7 +133,7 @@ describe('편집기', () => {
     expect(serializeRich(ed.doc)).toBe('\\S1/2;%%d');
     sel.lastSel = { a: 0, b: 2 };
     ed.setList('bullet');
-    expect(serializeRich(ed.doc)).toBe('\\pxi-3,l3,t3;•^I\\S1/2;%%d');
+    expect(serializeRich(ed.doc)).toBe('\\pxi-3,l3,t3;•\t\\S1/2;%%d');
     ed.cancel();
     expect(await p).toBeNull();
   });

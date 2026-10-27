@@ -173,7 +173,7 @@ export async function editTolerance(app: App, e: ToleranceEntity, ctx?: CommandC
   const v = await toleranceDialog(spec);
   if (!v) return false;
   const body = buildToleranceText(v);
-  const text = [body, ...spec.extra].filter((x, i) => i === 0 || x).join('^J');
+  const text = [body, ...spec.extra].filter((x, i) => i === 0 || x).join('\n');
   if (!body) {
     app.cmd.print('공차 내용이 비어 있어 바꾸지 않았습니다.', 'err');
     return false;

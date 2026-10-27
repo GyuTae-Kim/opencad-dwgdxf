@@ -3,7 +3,7 @@
  * - 값의 표기(정수·실수·문자열·이진)는 그룹 코드로 정한다(이진 DXF 형식 표와 같다).
  * - R2007(AC1021)부터 문자열은 UTF-8, 그 전은 $DWGCODEPAGE 코드 페이지로 쓰고
  *   코드 페이지에 없는 문자는 AutoCAD처럼 \U+XXXX로 쓴다(escapeNonAscii면 모든 비ASCII 문자를 \U+XXXX로).
- * - 제어 문자(0x00~0x1F)는 AutoCAD처럼 ^ 표기(^J, ^I …)로 바꾼다.
+ * - 제어 문자(0x00~0x1F)는 AutoCAD처럼 ^ 표기(^J, ^I …)로, 글자 ^는 "^ "로 바꾼다(리더의 decodeCaret과 짝).
  */
 import type { RawTag } from '../../core/model';
 import { codepageToEncoding, decoderFor } from '../../core/codepage';
@@ -145,12 +145,13 @@ function uEscape(cu: number): string {
   return '\\U+' + HEXU[(cu >> 12) & 15]! + HEXU[(cu >> 8) & 15]! + HEXU[(cu >> 4) & 15]! + HEXU[cu & 15]!;
 }
 
-/** 제어 문자 → ^ 표기 */
-function caret(s: string): string {
-  // 빠른 길: 제어 문자가 없으면 그대로
+/** 제어 문자 → ^ 표기, 글자 ^ → "^ "(AutoCAD DXF와 같다 — ACIS 자료의 ^도 "^ "로 적는다) */
+export function caret(s: string): string {
+  // 빠른 길: 제어 문자와 ^가 없으면 그대로
   let need = false;
   for (let i = 0; i < s.length; i++) {
-    if (s.charCodeAt(i) < 0x20) {
+    const c = s.charCodeAt(i);
+    if (c < 0x20 || c === 0x5e) {
       need = true;
       break;
     }
@@ -159,7 +160,7 @@ function caret(s: string): string {
   let out = '';
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
-    out += c < 0x20 ? '^' + String.fromCharCode(c + 64) : s[i];
+    out += c < 0x20 ? '^' + String.fromCharCode(c + 64) : c === 0x5e ? '^ ' : s[i];
   }
   return out;
 }

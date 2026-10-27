@@ -45,7 +45,7 @@ export type Item =
   | { k: 'stack'; top: string; bot: string; sep: StackSep; f: Fmt }
   /** 필드 코드 %<\…>% */
   | { k: 'field'; code: string; f: Fmt }
-  /** 탭(^I) */
+  /** 탭(글자 \t — DXF 파일에는 ^I) */
   | { k: 'tab'; f: Fmt }
   /** 치수 문자의 측정값 자리(<>) */
   | { k: 'measure'; f: Fmt };
@@ -185,24 +185,7 @@ function parseMTextRich(s: string, opt: ParseOpt): RichDoc {
       f = stack.pop() ?? f;
       continue;
     }
-    if (c0 === '^' && i + 1 < s.length) {
-      const c = s[i + 1]!;
-      if (c === 'I') {
-        para.items.push({ k: 'tab', f });
-        i++;
-        continue;
-      }
-      if (c === 'J' || c === 'M') {
-        newPara('P');
-        i++;
-        continue;
-      }
-      if (c === ' ') {
-        ch('^', '^ ');
-        i++;
-        continue;
-      }
-    }
+    // 탭·줄바꿈은 글자 그대로(DXF의 캐럿 표기는 리더가 푼다)
     if (c0 === '\t') {
       para.items.push({ k: 'tab', f });
       continue;
@@ -489,9 +472,7 @@ function encodeChar(it: Extract<Item, { k: 'ch' }>, next: Item | undefined, mode
   if (mode === 'text') return c;
   if (c === '\\' || c === '{' || c === '}') return '\\' + c;
   if (c === ' ') return '\\~';
-  if (c === '^' && next?.k === 'ch' && next.raw === undefined && /^[IJM ]$/.test(next.c)) return '^ ';
   if (c === '\n' || c === '\r') return '\\P';
-  if (c === '\t') return '^I';
   return c;
 }
 
@@ -555,7 +536,7 @@ function encodeItem(it: Item, next: Item | undefined, mode: 'mtext' | 'text'): s
     case 'field':
       return it.code;
     case 'tab':
-      return mode === 'text' ? ' ' : '^I';
+      return mode === 'text' ? ' ' : '\t';
     case 'measure':
       return '<>';
   }

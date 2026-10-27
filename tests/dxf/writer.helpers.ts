@@ -7,8 +7,8 @@
  *  2. 정렬된 TEXT·ATTRIB·ATTDEF는 늘 두 번째 정렬점(11)을 쓴다 → 기준에 alignPoint가 없으면 insert로 둔다.
  *  3. R2007 이전은 비ASCII 문자를 \U+XXXX로 쓴다 → 양쪽 문자열의 \U+ 이스케이프를 푼다.
  *  4. 쓰기는 $DWGCODEPAGE·$INSUNITS를 늘 쓴다 → 기준 값은 쓰기가 쓴 값(문서 코드 페이지, 단위 없으면 0)이다.
- *  5. 문자열의 제어 문자(DWG MTEXT의 줄바꿈 등)는 AutoCAD처럼 ^J 같은 캐럿 표기로 쓰고, 리더는 그 표기를 그대로 둔다
- *     → 기준 문자열의 제어 문자를 캐럿 표기로 바꾼다.
+ *  5. 문자열의 제어 문자와 ^는 AutoCAD처럼 캐럿 표기(^J, "^ ")로 쓰고 리더가 다시 푼다 → 맞출 것 없음.
+ *     ezdxf는 캐럿 표기를 그대로 두므로 ezdxf 요약의 문자열은 풀어서 견준다.
  * 버전 변환이 없는 경우(대상 버전 ≥ 원본 버전)에는 변환 경고가 "자료가 없어 뺀 객체" 종류뿐인지도 따로 본다.
  */
 import { execFile } from 'node:child_process';
@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import type { BlockDef, CadDocument, Entity } from '../../src/core/model';
 import { decodeCadEscapes } from '../../src/core/codepage';
 import { WriteContext } from '../../src/io/dxf/wcontext';
+import { decodeCaret } from '../../src/io/dxf/records';
 import type { DxfVersion } from '../../src/io/dxf/tagwriter';
 import { type Summary, summarizeDocument } from '../oracle/summarize';
 import { FIXTURES, PYTHON, hasPython } from '../oracle/ezdxf';
@@ -128,11 +129,10 @@ function mapEntities(s: Summary, fn: (e: Obj) => void): void {
 
 const TEXT_KEYS = ['text', 'tag'];
 
-const caret = (s: string): string => s.replace(/[\x00-\x1f]/g, (c) => '^' + String.fromCharCode(c.charCodeAt(0) + 64));
-
 /**
  * ezdxf와 우리 리더의 표기 차이를 맞춘다.
  * - \U+XXXX: ezdxf는 문자열(TEXT 등)은 풀고 이름(도면층·블록·배치)은 풀지 않으며, 우리 리더는 반대다 → 양쪽을 모두 푼다.
+ * - 캐럿 표기(^J, "^ "): ezdxf는 그대로 두고 우리 리더는 푼다 → 양쪽을 모두 푼다.
  * - ezdxf는 읽을 때 Defpoints 도면층이 없으면 만든다 → 우리 쪽에 없으면 ezdxf 쪽에서 뺀다.
  */
 export function normalizeEzdxf(theirs: Summary, ours: Summary): { theirs: Summary; ours: Summary } {
@@ -144,7 +144,7 @@ export function normalizeEzdxf(theirs: Summary, ours: Summary): { theirs: Summar
 }
 
 function decodeAll(v: unknown): unknown {
-  if (typeof v === 'string') return decodeCadEscapes(v);
+  if (typeof v === 'string') return decodeCaret(decodeCadEscapes(v));
   if (Array.isArray(v)) return v.map(decodeAll);
   if (v && typeof v === 'object') {
     const o: Record<string, unknown> = {};
@@ -158,7 +158,6 @@ function decodeAll(v: unknown): unknown {
 export function normalizeRoundTrip(expected: Summary, actual: Summary, version: DxfVersion): void {
   const ver = Number(version.slice(2));
   mapEntities(expected, (e) => {
-    for (const k of TEXT_KEYS) if (typeof e[k] === 'string') e[k] = caret(e[k] as string);
     const c = e.color as { aci: number; rgb?: number } | undefined;
     if (ver < 1018 && c && c.rgb !== undefined) delete c.rgb;
     if ((e.type === 'TEXT' || e.type === 'ATTRIB' || e.type === 'ATTDEF') && (e.halign || e.valign) && !e.alignPoint) e.alignPoint = e.insert;

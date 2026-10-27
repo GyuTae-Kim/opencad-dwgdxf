@@ -1,7 +1,8 @@
 /**
  * 기하 공차(TOLERANCE): 대화상자 값 ↔ AutoCAD 공차 문자열, 그리고 프레임 배치(선·기호 외곽선·문자 자리).
  *
- * 문자열: 줄마다 `기호%%v공차1%%v공차2%%v데이텀1%%v데이텀2%%v데이텀3`(끝의 빈 칸은 뺀다), 줄 사이 `^J`.
+ * 문자열: 줄마다 `기호%%v공차1%%v공차2%%v데이텀1%%v데이텀2%%v데이텀3`(끝의 빈 칸은 뺀다), 줄 사이 줄바꿈 글자(DXF 파일에는 `^J`,
+ * DWG에는 글자 그대로 — AutoCAD 실물 짝). 읽을 때는 캐럿 표기를 글자로 남긴 옛 도면도 받아 `^J`·`\P`로도 나눈다.
  * 기호·지름·재료 조건은 GDT 글꼴 문자 `{\Fgdt;x}`로 적는다(a 경사도, b 직각도, c 평면도, d 면의 윤곽도, e 진원도,
  * f 평행도, g 원통도, h 원주 흔들림, i 대칭도, j 위치도, k 선의 윤곽도, l Ⓛ, m Ⓜ, n ⌀, p Ⓟ, r 동심도, s Ⓢ,
  * t 온 흔들림, u 진직도). 높이(투영 공차 영역)와 데이텀 식별자는 %%v가 없는 줄로 뒤에 붙인다.
@@ -104,7 +105,7 @@ export function buildToleranceText(s: TolSpec): string {
     if (!(h || s.projected)) lines.push('');
     lines.push(s.datumId.trim());
   }
-  return lines.join('^J');
+  return lines.join('\n');
 }
 
 /** 칸 문자 하나를 조각으로: 일반 문자와 GDT 문자 */

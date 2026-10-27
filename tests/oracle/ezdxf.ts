@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { decodeCaret } from '../../src/io/dxf/records';
 
 export const PYTHON = process.env.CAD_PYTHON ?? '/opt/homebrew/Caskroom/miniconda/base/envs/prisme-engine314/bin/python';
 export const FIXTURES = process.env.CAD_FIXTURES ?? '/Users/sean/code/prisme-service/.runtime/cad2d-handoff/dwgref';
@@ -20,5 +21,13 @@ export function ezdxfSummary(dxfPath: string): unknown {
   if (!existsSync(out)) {
     execFileSync(PYTHON, ['-I', join(ROOT, 'scripts/oracle/ezdxf_dump.py'), dxfPath, out], { stdio: 'pipe' });
   }
-  return JSON.parse(readFileSync(out, 'utf8'));
+  return decodeStrings(JSON.parse(readFileSync(out, 'utf8')));
+}
+
+/** ezdxf는 DXF 문자열의 캐럿 표기(^J, "^ ")를 그대로 두고 우리 리더는 푼다 → 기준 쪽 문자열도 푼다 */
+function decodeStrings(v: unknown): unknown {
+  if (typeof v === 'string') return decodeCaret(v);
+  if (Array.isArray(v)) return v.map(decodeStrings);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [decodeCaret(k), decodeStrings(x)]));
+  return v;
 }

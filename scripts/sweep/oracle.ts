@@ -9,6 +9,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { compareSummaries } from '../../tests/oracle/compare';
 import { decodeCadEscapes } from '../../src/core/codepage';
+import { decodeCaret } from '../../src/io/dxf/records';
 
 type Tally = Record<string, number>;
 const inc = (t: Tally, k: string, n = 1) => {
@@ -92,7 +93,8 @@ export class EzdxfOracle {
   }
 }
 
-const normText = (s: unknown): unknown => (typeof s === 'string' ? decodeCadEscapes(s).replace(/[\x00-\x1f]/g, (c) => '^' + String.fromCharCode(c.charCodeAt(0) + 64)) : s);
+/** 문자 비교 표기 맞추기: \U+ 이스케이프와 캐럿 표기(ezdxf는 DXF의 ^J·"^ "를 그대로 두고, 우리 리더는 푼다)를 글자로 */
+const normText = (s: unknown): unknown => (typeof s === 'string' ? decodeCaret(decodeCadEscapes(s)) : s);
 
 export interface OracleDiff {
   /** 기준(ezdxf)에 대한 우리 종류별 개수 차이 */

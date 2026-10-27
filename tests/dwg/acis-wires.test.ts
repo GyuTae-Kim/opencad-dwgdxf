@@ -10,6 +10,8 @@ import type { AcisEntity, CadDocument, Entity } from '../../src/core/model';
 import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
 import { createNewDocument } from '../../src/core/newdoc';
 import { decodeSatLine, encodeSatLine, satWires } from '../../src/io/acis';
+import { decodeCaret } from '../../src/io/dxf/records';
+import { caret } from '../../src/io/dxf/tagwriter';
 import { readDwg } from '../../src/io/dwg';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
@@ -66,11 +68,15 @@ describe('SAT 해석', () => {
     for (const p of c) expect(Math.hypot(p.x - 12, p.y - 22)).toBeCloseTo(1, 6);
     expect(Math.hypot(c[0]!.x - c.at(-1)!.x, c[0]!.y - c.at(-1)!.y)).toBeLessThan(1e-9);
   });
-  it('AutoCAD의 글자 감춤(DXF "^ " = A)을 풀고 다시 감춘다', () => {
+  it('AutoCAD의 글자 감춤(A → ^, DXF 파일에는 캐럿 표기 "^ ")을 풀고 다시 감춘다', () => {
     const line = 'body $-1 -1 $-1 $1 @3 ABC #';
     const enc = encodeSatLine(line);
-    expect(enc).toContain('^ ');
-    expect(decodeSatLine(enc, true)).toBe(line);
+    expect(enc).toContain('^');
+    expect(enc).not.toContain('^ ');
+    expect(decodeSatLine(enc)).toBe(line);
+    // DXF로 쓰고 읽으면 "^ " → ^로 풀려 같은 줄(A 다음 공백도 잃지 않는다)
+    const spaced = 'A A';
+    expect(decodeSatLine(decodeCaret(caret(encodeSatLine(spaced))))).toBe(spaced);
   });
 });
 

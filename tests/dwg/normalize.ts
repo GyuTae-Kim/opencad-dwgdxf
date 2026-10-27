@@ -10,12 +10,13 @@
  * 5. R2013+ SPLINE 플래그: AutoCAD DXF는 1160처럼 높은 비트를 쓰고 기준은 24를 낸다. 128 이상 비트가 있으면 비교하지 않는다.
  * 6. 트루컬러 도면층의 ACI: 기준은 근사 팔레트로 고른다(AutoCAD DXF와 다름). RGB가 있는 도면층은 ACI를 비교하지 않는다.
  * 7. 색상표 색(DBCOLOR) 도형: 기준은 RGB를 쓰지 않는다(AutoCAD DXF는 씀). 기준에 RGB가 없으면 지운다.
- * 8. 문자: 기준(ezdxf)은 \U+XXXX를 풀고 줄바꿈을 ^J로 쓴다. 양쪽을 같은 표기로 바꾼다.
+ * 8. 문자: 기준(ezdxf)은 \U+XXXX를 풀고 캐럿 표기(^J, "^ ")는 그대로 둔다. 양쪽을 글자로 푼다.
  * 9. TEXT·ATTRIB·ATTDEF 맞춤점: DWG 문자 자료 플래그 0x02는 "맞춤점 = (0, 0)"인데(AutoCAD가 같은 도면을 쓴 DXF의 11이 (0, 0)),
  *    기준은 맞춤점을 빼고 쓴다. 기준에 맞춤점이 없고 DWG 쪽이 (0, 0)이면 맞춤점을 지운다.
  */
 import type { CadDocument } from '../../src/core/model';
 import { decodeCadEscapes } from '../../src/core/codepage';
+import { decodeCaret } from '../../src/io/dxf/records';
 
 type Obj = Record<string, unknown>;
 type Ent = Obj & { type: string; handle: string; color?: { aci: number; rgb?: number } };
@@ -23,8 +24,7 @@ type Ent = Obj & { type: string; handle: string; color?: { aci: number; rgb?: nu
 const ORACLE_DEFAULT_BLOCKS = /^_(CLOSEDFILLED|SMALL|DATUMFILLED|DOT|ORIGIN|OPEN30|OPEN|OBLIQUE|OPEN90|DOTBLANK|ORIGIN2|BOXFILLED|CLOSED|DATUMBLANK|NONE|DOTSMALL|INTEGRAL|ARCHTICK|BOXBLANK|CLOSEDBLANK)$/;
 const ACIS = new Set(['REGION', '3DSOLID', 'BODY']);
 
-const normText = (s: unknown): unknown =>
-  typeof s === 'string' ? decodeCadEscapes(s).replace(/[\x00-\x1f]/g, (c) => '^' + String.fromCharCode(c.charCodeAt(0) + 64)) : s;
+const normText = (s: unknown): unknown => (typeof s === 'string' ? decodeCaret(decodeCadEscapes(s)) : s);
 
 export function normalizePair(expected: Obj, actual: Obj, doc: CadDocument): void {
   // 1

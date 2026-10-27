@@ -74,7 +74,8 @@ describe('TOLERANCE', () => {
     s.projected = true;
     s.datumId = 'C';
     const t = buildToleranceText(s);
-    expect(t).toBe('{\\Fgdt;j}%%v{\\Fgdt;n}0.05{\\Fgdt;m}%%v%%vA%%vB{\\Fgdt;m}^J{\\Fgdt;f}%%v0.02^J10{\\Fgdt;p}^JC');
+    // 줄 사이는 줄바꿈 글자(DXF 파일에는 ^J, DWG에는 글자 그대로 — AutoCAD 실물 짝)
+    expect(t).toBe('{\\Fgdt;j}%%v{\\Fgdt;n}0.05{\\Fgdt;m}%%v%%vA%%vB{\\Fgdt;m}\n{\\Fgdt;f}%%v0.02\n10{\\Fgdt;p}\nC');
     const p = parseToleranceText(t);
     expect(p.rows[0]).toEqual(s.rows[0]);
     expect(p.rows[1]).toEqual(s.rows[1]);
