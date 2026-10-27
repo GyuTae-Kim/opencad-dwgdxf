@@ -87,7 +87,7 @@ function readHead(path: string, n = 64 * 1024): Uint8Array {
   }
 }
 
-/** 폴더를 재귀로 훑는다(숨은 폴더·node_modules는 건너뛴다). 경로는 정렬해 돌려준다 */
+/** 폴더를 재귀로 훑는다(.git·node_modules만 건너뛴다). 경로는 정렬해 돌려준다 */
 export function walk(dir: string, out: string[] = []): string[] {
   let names: string[];
   try {
