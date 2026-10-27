@@ -1,7 +1,15 @@
-/** 오프라인 서비스 워커(tools/sw-plugin.mjs가 tools/sw-template.js로 만드는 dist/sw.js)를 가짜 self·caches·fetch·indexedDB로 돌린다 */
+/** 오프라인 서비스 워커(공용 사이트 도구가 tools/site.mjs 설정과 tools/sw-template.js로 만드는 dist/sw.js)를 가짜 self·caches·fetch·indexedDB로 돌린다 */
+import { readFileSync } from 'node:fs';
+import { fillTemplate, lazyFiles as kitLazyFiles, serviceWorkerValues, type BundleItem } from 'opencad-site-kit/pwa/sw-plugin';
 import { describe, expect, it } from 'vitest';
-import { lazyFiles, precacheable, precacheUrls, serviceWorkerSource } from '../../tools/sw-plugin.mjs';
+import { lazy as lazyRules, offline, precache } from '../../tools/site.mjs';
 import { createFakeIndexedDB } from './fake-idb';
+
+const precacheable = (f: string, lazy = new Set<string>()) => precache(f, { lazy });
+const precacheUrls = (files: string[], lazy = new Set<string>()) => serviceWorkerValues(files, () => '', { ...offline, lazy }).precache;
+const lazyFiles = (bundle: Record<string, BundleItem>) => kitLazyFiles(bundle, lazyRules);
+const template = readFileSync(new URL('../../tools/sw-template.js', import.meta.url), 'utf8');
+const serviceWorkerSource = (values: Parameters<typeof fillTemplate>[1]) => fillTemplate(template, values);
 
 const SCOPE = 'https://x.test/app/';
 

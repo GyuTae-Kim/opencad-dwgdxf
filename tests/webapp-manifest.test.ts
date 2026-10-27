@@ -1,7 +1,8 @@
 /** 홈 화면에 추가: 웹 앱 매니페스트와 아이콘(크기·마스크 가능), 공통 head의 연결 */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { localizeHtml, localizeManifest } from '../tools/localization-plugin.mjs';
+import { localizeHtml, localizeManifest } from 'opencad-site-kit/i18n/localization-plugin';
+import { site } from '../tools/site.mjs';
 
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url));
 /** PNG 머리(IHDR)의 가로·세로와 알파 채널 여부 */
@@ -82,11 +83,11 @@ describe('웹 앱 매니페스트', () => {
       expect(new URL(m.file_handlers[0].action, at).pathname).toBe(`/opencad-dwgdxf/${lang}/`);
     }
     const html = read('index.html').toString('utf8').replace('<!-- site-metadata -->', '');
-    const en = localizeHtml(html, 'en');
+    const en = localizeHtml(html, 'en', site);
     expect(en).toContain('<base href="../">');
     expect(en).toContain('<link rel="manifest" href="./en/manifest.webmanifest" />');
     expect(en).toContain(`<meta name="apple-mobile-web-app-title" content="${localizeManifest(manifest, 'en').short_name}" />`);
     expect(en).toContain('<link rel="apple-touch-icon" href="./apple-touch-icon.png" />');
-    expect(localizeHtml(html, 'ko')).toContain('<link rel="manifest" href="./manifest.webmanifest" />');
+    expect(localizeHtml(html, 'ko', site)).toContain('<link rel="manifest" href="./manifest.webmanifest" />');
   });
 });
