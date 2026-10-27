@@ -7,7 +7,7 @@
  */
 import type { CadDocument, Entity } from '../core/model';
 import { tableKey } from '../core/model';
-import { type Mat, applyXY, identity, multiply, rotationZ, scaling, translation, withOcs } from '../geom/matrix';
+import { type Mat, apply, applyXY, identity, multiply, rotationZ, scaling, translation, withOcs } from '../geom/matrix';
 import { bulgeArc, ccwSweep, interpolateFitPoints, nurbsPoints } from '../geom/curves';
 import type { Picker } from './pick';
 import type { Pt, SnapKind } from './view';
@@ -18,6 +18,8 @@ import type { ArcPiece, LinePiece } from '../edit/geom/curve';
 export interface SnapPoint {
   x: number;
   y: number;
+  /** 객체 정의점(끝점·중간점·중심·사분점·노드·삽입점)의 WCS Z. 교차점·접점·근처점 등 평면도에서 구한 점은 없음 */
+  z?: number;
   kind: SnapKind;
   /** 스냅 점을 준 객체(교차점·근처점처럼 선분에서 구한 것은 없음) */
   handle?: string;
@@ -72,8 +74,8 @@ export interface SnapContext {
 }
 
 function arcSnaps(m: Mat, cx: number, cy: number, z: number, r: number, a0: number, sweep: number, full: boolean, out: SnapPoint[]): void {
-  const P = (a: number) => applyXY(m, cx + r * Math.cos(a), cy + r * Math.sin(a), z);
-  const c = applyXY(m, cx, cy, z);
+  const P = (a: number) => apply(m, cx + r * Math.cos(a), cy + r * Math.sin(a), z);
+  const c = apply(m, cx, cy, z);
   out.push({ ...c, kind: 'cen' });
   for (let k = 0; k < 4; k++) {
     const a = (k * Math.PI) / 2;
@@ -86,7 +88,7 @@ function arcSnaps(m: Mat, cx: number, cy: number, z: number, r: number, a0: numb
 
 function polySnaps(m: Mat, vs: { x: number; y: number; bulge: number }[], closed: boolean, z: number, out: SnapPoint[]): void {
   const n = vs.length;
-  for (const v of vs) out.push({ ...applyXY(m, v.x, v.y, z), kind: 'end' });
+  for (const v of vs) out.push({ ...apply(m, v.x, v.y, z), kind: 'end' });
   const segs = closed ? n : n - 1;
   for (let i = 0; i < segs; i++) {
     const a = vs[i]!;
@@ -94,9 +96,9 @@ function polySnaps(m: Mat, vs: { x: number; y: number; bulge: number }[], closed
     const arc = bulgeArc(a.x, a.y, b.x, b.y, a.bulge);
     if (arc) {
       const am = arc.a0 + arc.sweep / 2;
-      out.push({ ...applyXY(m, arc.cx + arc.r * Math.cos(am), arc.cy + arc.r * Math.sin(am), z), kind: 'mid' });
-      out.push({ ...applyXY(m, arc.cx, arc.cy, z), kind: 'cen' });
-    } else out.push({ ...applyXY(m, (a.x + b.x) / 2, (a.y + b.y) / 2, z), kind: 'mid' });
+      out.push({ ...apply(m, arc.cx + arc.r * Math.cos(am), arc.cy + arc.r * Math.sin(am), z), kind: 'mid' });
+      out.push({ ...apply(m, arc.cx, arc.cy, z), kind: 'cen' });
+    } else out.push({ ...apply(m, (a.x + b.x) / 2, (a.y + b.y) / 2, z), kind: 'mid' });
   }
 }
 
@@ -104,9 +106,9 @@ function polySnaps(m: Mat, vs: { x: number; y: number; bulge: number }[], closed
 export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[], depth = 0): void {
   switch (e.type) {
     case 'LINE': {
-      const a = applyXY(m, e.start.x, e.start.y, e.start.z);
-      const b = applyXY(m, e.end.x, e.end.y, e.end.z);
-      out.push({ ...a, kind: 'end' }, { ...b, kind: 'end' }, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, kind: 'mid' });
+      const a = apply(m, e.start.x, e.start.y, e.start.z);
+      const b = apply(m, e.end.x, e.end.y, e.end.z);
+      out.push({ ...a, kind: 'end' }, { ...b, kind: 'end' }, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2, kind: 'mid' });
       return;
     }
     case 'CIRCLE':
@@ -119,8 +121,8 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
       const n = e.extrusion ?? { x: 0, y: 0, z: 1 };
       const M = e.majorAxis;
       const mn = { x: (n.y * M.z - n.z * M.y) * e.ratio, y: (n.z * M.x - n.x * M.z) * e.ratio, z: (n.x * M.y - n.y * M.x) * e.ratio };
-      const P = (t: number) => applyXY(m, e.center.x + M.x * Math.cos(t) + mn.x * Math.sin(t), e.center.y + M.y * Math.cos(t) + mn.y * Math.sin(t), e.center.z + M.z * Math.cos(t) + mn.z * Math.sin(t));
-      out.push({ ...applyXY(m, e.center.x, e.center.y, e.center.z), kind: 'cen' });
+      const P = (t: number) => apply(m, e.center.x + M.x * Math.cos(t) + mn.x * Math.sin(t), e.center.y + M.y * Math.cos(t) + mn.y * Math.sin(t), e.center.z + M.z * Math.cos(t) + mn.z * Math.sin(t));
+      out.push({ ...apply(m, e.center.x, e.center.y, e.center.z), kind: 'cen' });
       const full = Math.abs(e.endParam - e.startParam - Math.PI * 2) < 1e-9 || Math.abs(e.endParam - e.startParam) < 1e-12;
       const sweep = full ? Math.PI * 2 : ccwSweep(e.startParam, e.endParam);
       for (let k = 0; k < 4; k++) {
@@ -136,7 +138,7 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
     case 'POLYLINE': {
       const vs = e.vertices.filter((v) => !(v.flags & 16) && !(v.faceIndices && !(v.flags & 64)));
       if (e.kind === '2d') polySnaps(withOcs(m, e.extrusion), vs.map((v) => ({ x: v.location.x, y: v.location.y, bulge: e.flags & 2 ? 0 : v.bulge })), (e.flags & 1) !== 0, e.elevation, out);
-      else for (const v of vs) out.push({ ...applyXY(m, v.location.x, v.location.y, v.location.z), kind: 'end' });
+      else for (const v of vs) out.push({ ...apply(m, v.location.x, v.location.y, v.location.z), kind: 'end' });
       return;
     }
     case 'SPLINE': {
@@ -147,28 +149,28 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
         pts = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e9);
       } else return;
       if (!(e.flags & 1)) {
-        out.push({ ...applyXY(m, pts[0]!, pts[1]!, pts[2]!), kind: 'end' });
-        out.push({ ...applyXY(m, pts[pts.length - 3]!, pts[pts.length - 2]!, pts[pts.length - 1]!), kind: 'end' });
+        out.push({ ...apply(m, pts[0]!, pts[1]!, pts[2]!), kind: 'end' });
+        out.push({ ...apply(m, pts[pts.length - 3]!, pts[pts.length - 2]!, pts[pts.length - 1]!), kind: 'end' });
       }
-      for (const f of e.fitPoints) out.push({ ...applyXY(m, f.x, f.y, f.z), kind: 'nod' });
+      for (const f of e.fitPoints) out.push({ ...apply(m, f.x, f.y, f.z), kind: 'nod' });
       return;
     }
     case 'POINT':
-      out.push({ ...applyXY(m, e.position.x, e.position.y, e.position.z), kind: 'nod' });
+      out.push({ ...apply(m, e.position.x, e.position.y, e.position.z), kind: 'nod' });
       return;
     case 'TEXT':
     case 'ATTRIB':
     case 'ATTDEF': {
       const p = e.alignPoint && (e.halign !== 0 || e.valign !== 0) && e.halign !== 3 && e.halign !== 5 ? e.alignPoint : e.insert;
-      out.push({ ...applyXY(withOcs(m, e.extrusion), p.x, p.y, p.z), kind: 'ins' });
+      out.push({ ...apply(withOcs(m, e.extrusion), p.x, p.y, p.z), kind: 'ins' });
       return;
     }
     case 'MTEXT':
-      out.push({ ...applyXY(m, e.insert.x, e.insert.y, e.insert.z), kind: 'ins' });
+      out.push({ ...apply(m, e.insert.x, e.insert.y, e.insert.z), kind: 'ins' });
       return;
     case 'INSERT': {
       const om = withOcs(m, e.extrusion);
-      out.push({ ...applyXY(om, e.insert.x, e.insert.y, e.insert.z), kind: 'ins' });
+      out.push({ ...apply(om, e.insert.x, e.insert.y, e.insert.z), kind: 'ins' });
       for (const a of e.attribs) entitySnaps(doc, a, m, out, depth + 1);
       if (depth >= 3) return;
       const b = doc.blocks.get(tableKey(e.block));
@@ -179,24 +181,24 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
       return;
     }
     case 'DIMENSION':
-      for (const p of [e.defPoint, e.defPoint2, e.defPoint3, e.defPoint4]) if (p.x || p.y || p.z) out.push({ ...applyXY(m, p.x, p.y, p.z), kind: 'nod' });
+      for (const p of [e.defPoint, e.defPoint2, e.defPoint3, e.defPoint4]) if (p.x || p.y || p.z) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'nod' });
       return;
     case 'SOLID':
     case 'TRACE': {
       const om = withOcs(m, e.extrusion);
-      for (const p of e.points) out.push({ ...applyXY(om, p.x, p.y, p.z), kind: 'end' });
+      for (const p of e.points) out.push({ ...apply(om, p.x, p.y, p.z), kind: 'end' });
       return;
     }
     case '3DFACE':
-      for (const p of e.points) out.push({ ...applyXY(m, p.x, p.y, p.z), kind: 'end' });
+      for (const p of e.points) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'end' });
       return;
     case 'LEADER':
-      for (const p of e.vertices) out.push({ ...applyXY(m, p.x, p.y, p.z), kind: 'end' });
+      for (const p of e.vertices) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'end' });
       return;
     case 'MULTILEADER':
       for (const l of e.context.leaders) {
-        for (const ln of l.lines) for (const p of ln.vertices) out.push({ ...applyXY(m, p.x, p.y, p.z), kind: 'end' });
-        if (l.lastLeaderPoint) out.push({ ...applyXY(m, l.lastLeaderPoint.x, l.lastLeaderPoint.y, l.lastLeaderPoint.z), kind: 'end' });
+        for (const ln of l.lines) for (const p of ln.vertices) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'end' });
+        if (l.lastLeaderPoint) out.push({ ...apply(m, l.lastLeaderPoint.x, l.lastLeaderPoint.y, l.lastLeaderPoint.z), kind: 'end' });
       }
       return;
     case 'VIEWPORT': {
@@ -207,7 +209,7 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
         [1, 1],
         [-1, 1],
       ] as const)
-        out.push({ ...applyXY(m, c.x + (sx * e.width) / 2, c.y + (sy * e.height) / 2, c.z), kind: 'end' });
+        out.push({ ...apply(m, c.x + (sx * e.width) / 2, c.y + (sy * e.height) / 2, c.z), kind: 'end' });
       return;
     }
     default:

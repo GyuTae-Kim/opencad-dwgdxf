@@ -73,14 +73,17 @@ export interface PointSnap {
 
 /**
  * 점 요청의 결과. 클릭으로 찍었으면 그때 누른 보조키(shift·ctrl, ⌘는 ctrl로)를 눌렀을 때만 true로 싣는다
- * (그립 복사의 Ctrl 간격 맞춤 등). 좌표 입력·스냅 재지정으로 만든 점에는 없다
+ * (그립 복사의 Ctrl 간격 맞춤 등). 좌표 입력·스냅 재지정으로 만든 점에는 없다.
+ * z: 좌표 입력(x,y,z·@ 상대 좌표·원통·구 좌표)·점 필터(.XY 등)가 정한 WCS Z. 없으면 Z를 주지 않은 점이다(3D 명령은 고도를 쓴다).
+ * point는 늘 평면 좌표이고, 2D 명령은 z를 쓰지 않는다(평면 객체는 고도에 그린다)
  */
-export type PointResult = { point: Pt; snap?: PointSnap | null; shift?: boolean; ctrl?: boolean } | { keyword: string } | { text: string } | { enter: true };
+export type PointResult = { point: Pt; z?: number; snap?: PointSnap | null; shift?: boolean; ctrl?: boolean } | { keyword: string } | { text: string } | { enter: true };
 
 interface PointRequest {
   kind: 'point';
   prompt: string;
-  base: Pt | null;
+  /** 기준점(z가 있으면 3D 명령의 기준점 — @ 상대 좌표가 그 Z를 잇는다) */
+  base: (Pt & { z?: number }) | null;
   keywords: Keyword[];
   /** 끌기 미리보기. snap은 지금 커서가 잡은 객체 스냅(지연된 접점 미리보기 등) */
   rubber?: (p: Pt, snap?: PointSnap | null) => { pts: number[]; closed?: boolean; fill?: boolean; dashed?: boolean }[];
@@ -93,6 +96,8 @@ interface PointRequest {
   snaps: ReadonlySet<SnapKind> | null;
   /** Ctrl(⌘)을 눌렀다 떼면(그 사이 다른 키·클릭 없이) 이 키워드로 끝낸다(다기능 그립의 Ctrl 순환) */
   ctrlTap: string | null;
+  /** 3D 명령: 객체 정의점에 잡힌 스냅의 Z를 결과 z로(AutoCAD OSNAPZ 0) */
+  snapZ: boolean;
   allowText: boolean;
   /** 명령이 글을 받는다고 한 요청(allowText): 객체 스냅 재지정 이름도 글로 돌려준다 */
   freeText: boolean;
@@ -153,7 +158,8 @@ export type { CommitHook, ContextMenuItem, ContextMenuProvider, EntityClickHandl
 
 /** 점 요청 옵션(CommandContext.getPoint) */
 export interface PointOptions {
-  base?: Pt | null;
+  /** 기준점(고무줄·@ 상대 좌표). z가 있으면(3D 명령) @ 상대 좌표가 그 Z를 잇는다 */
+  base?: (Pt & { z?: number }) | null;
   keywords?: Keyword[];
   rubber?: PointRequest['rubber'];
   ghost?: PointRequest['ghost'];
@@ -167,6 +173,8 @@ export interface PointOptions {
   snaps?: SnapKind[];
   /** Ctrl을 눌렀다 떼면 이 키워드로 끝낸다 */
   ctrlTap?: string;
+  /** 3D 명령(3DPOLY·3DFACE): 끝점·중간점·중심 등 객체 정의점에 잡힌 스냅의 Z를 결과 z로 받는다(AutoCAD OSNAPZ 0) */
+  snapZ?: boolean;
 }
 
 export interface CommandContext {
@@ -302,7 +310,8 @@ export class App {
   private dragFor: PointRequest | null = null;
   /** 직전 선택(P 옵션) */
   lastSelection: string[] = [];
-  lastPoint: Pt | null = null;
+  /** 마지막 점(LASTPOINT). z: 그 점을 Z와 함께 정했을 때(좌표 입력의 Z·3D 명령의 정점) — @ 상대 좌표가 잇는다 */
+  lastPoint: (Pt & { z?: number }) | null = null;
   private cursorWorld: Pt | null = null;
   private windowStart: { screen: Pt; world: Pt; viaClick: boolean } | null = null;
   private pickers = new Map<string, Picker>();
@@ -614,6 +623,7 @@ export class App {
         deferTanLines: !!opt.deferTanLines,
         snaps: opt.snaps?.length ? new Set(opt.snaps) : null,
         ctrlTap: opt.ctrlTap ?? null,
+        snapZ: !!opt.snapZ,
         allowText: !!opt.allowText || !!opt.preferNumber,
         freeText: !!opt.allowText,
         preferNumber: !!opt.preferNumber,
@@ -903,8 +913,11 @@ export class App {
       if (p) {
         if (this.outsideLimits(p)) return;
         this.cmd.print(`${this.promptOf(r)} ${[...this.dyn.locks.filter((x) => x !== null), t].filter(Boolean).join(' ')}`);
-        this.lastPoint = p;
-        this.finishPoint(r, { point: p, snap: null });
+        // 거리·각도 칸은 기준점에서 평면으로 잰다: Z는 기준점 그대로(3D 명령의 기준점에 Z가 있을 때)
+        const bz = r.base?.z;
+        const p3 = r.base && bz !== undefined ? { ...p, z: bz } : p;
+        this.lastPoint = p3;
+        this.finishPoint(r, { ...App.pointResult(p3), snap: null });
         return;
       }
     }
@@ -943,7 +956,7 @@ export class App {
         this.cmd.print(`${this.promptOf(r)} ${t}`);
         remember(this.recentInputs, t);
         this.lastPoint = p;
-        this.finishPoint(r, { point: p, snap: null });
+        this.finishPoint(r, { ...App.pointResult(p), snap: null });
         return;
       }
       if (r.allowText) {
@@ -965,23 +978,43 @@ export class App {
       if (p) {
         this.cmd.print(`${this.promptOf(r)} ${t}`);
         this.lastPoint = p;
-        r.resolve({ point: p, empty: true });
+        r.resolve({ point: { x: p.x, y: p.y }, empty: true });
         return;
       }
     }
     this.cmd.print('객체를 선택하거나 옵션을 입력하십시오.', 'err');
   }
 
-  /** 좌표 글 읽기: 현재 UCS(* 로 시작하면 WCS), @는 기준점(없으면 마지막 점)에서, 숫자 하나는 커서 방향 직접 거리 */
-  private parsePoint(r: PointRequest | null, t: string): Pt | null {
+  /**
+   * 좌표 글 읽기: 현재 UCS(* 로 시작하면 WCS), @는 기준점(없으면 마지막 점)에서, 숫자 하나는 커서 방향 직접 거리.
+   * Z: 이 앱의 UCS는 평면 안의 원점·회전뿐이라(Z축 = WCS Z) Z는 그대로 지나간다. 기준점·마지막 점에 Z가 없으면(평면 점)
+   * dz를 준 상대 좌표는 고도에서 잰다
+   */
+  private parsePoint(r: PointRequest | null, t: string): (Pt & { z?: number }) | null {
     const base = r?.base ?? null;
     const dir = this.cursorWorld && base ? { x: this.cursorWorld.x - base.x, y: this.cursorWorld.y - base.y } : null;
     const u = currentUcs(this.active);
     const wcs = t.startsWith('*');
     const conv = !wcs && !isWorld(u);
     const lastW = base ?? this.lastPoint;
-    const pu = parsePointInput(wcs ? t.slice(1) : t, lastW && conv ? toUcs(u, lastW) : lastW, dir && conv ? dirToUcs(u, dir) : dir);
-    return pu && conv ? toWcs(u, pu) : pu;
+    const lastZ = lastW?.z;
+    const last = lastW ? { ...(conv ? toUcs(u, lastW) : { x: lastW.x, y: lastW.y }), ...(lastZ !== undefined ? { z: lastZ } : {}) } : null;
+    const pu = parsePointInput(wcs ? t.slice(1) : t, last, dir && conv ? dirToUcs(u, dir) : dir, this.elevation());
+    if (!pu) return null;
+    const w = conv ? toWcs(u, pu) : { x: pu.x, y: pu.y };
+    return pu.z === undefined ? w : { ...w, z: pu.z };
+  }
+
+  /** 새 객체의 고도(ELEVATION, 배치에서는 PELEVATION — draw.ts currentElevation과 같다) */
+  private elevation(): number {
+    const st = this.active;
+    const v = st?.doc.header.get(st.isModel === false ? '$PELEVATION' : '$ELEVATION');
+    return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+  }
+
+  /** 점 결과: point는 평면 좌표만, Z를 정한 입력이면 z(2D 명령은 쓰지 않는다) */
+  private static pointResult(p: Pt & { z?: number }): { point: Pt; z?: number } {
+    return p.z === undefined ? { point: { x: p.x, y: p.y } } : { point: { x: p.x, y: p.y }, z: p.z };
   }
 
   /** 점 요청을 점으로 끝낸다(그 요청의 스냅 재지정·임시 추적점도 끝) */
@@ -1028,15 +1061,17 @@ export class App {
       }
       const st = this.active;
       const p = await runPointOverride(ov, {
-        getPoint: (prompt, o) => this.requestPoint(prompt, o ?? {}, r.signal),
+        // 더 묻는 점도 원래 요청처럼 스냅의 Z를 받는다(3D 명령)
+        getPoint: (prompt, o) => this.requestPoint(prompt, { ...(o ?? {}), snapZ: r.snapZ }, r.signal),
         print: (t, c) => this.cmd.print(t, c),
         ucs: currentUcs(st),
+        elevation: this.elevation(),
       });
       if (!back()) return;
       if (p) {
         if (this.outsideLimits(p)) return;
         this.lastPoint = p;
-        this.finishPoint(r, { point: p, snap: null });
+        this.finishPoint(r, { ...App.pointResult(p), snap: null });
       }
     } catch (e) {
       // 더 묻는 중에 취소하면 명령도 취소
@@ -1645,7 +1680,7 @@ export class App {
         const p = { x: s.x, y: s.y };
         // 연장선·평행은 정렬선을 함께 보인다
         const track = s.lines?.length ? { p, lines: s.lines, tip: SNAP_NAMES[s.kind] ?? '' } : undefined;
-        return { p, snap: { p, kind: s.kind, handle: s.handle, handle2: s.handle2, ...(s.deferred ? { deferred: true } : {}) }, track };
+        return { p, snap: { p, kind: s.kind, handle: s.handle, handle2: s.handle2, ...(s.deferred ? { deferred: true } : {}), ...(s.z !== undefined ? { z: s.z } : {}) }, track };
       }
     }
     // 확장 지점: 객체 스냅이 없으면 고리가 추적·격자 스냅·직교를 대신할 수 있다(등각투영 제도)
@@ -2017,8 +2052,10 @@ export class App {
         return;
       }
       if (this.outsideLimits(p)) return;
-      this.lastPoint = p;
-      this.finishPoint(r, { point: p, snap: snap ? { kind: snap.kind, handle: snap.handle, handle2: snap.handle2, ...(snap.deferred ? { deferred: true } : {}) } : null, ...(ev.shiftKey ? { shift: true } : {}), ...(ev.ctrlKey || ev.metaKey ? { ctrl: true } : {}) });
+      // 3D 명령(snapZ)은 객체 정의점에 잡힌 스냅의 Z를 받는다(AutoCAD OSNAPZ 0). 그 밖의 점은 Z 없이(고도)
+      const z = r.snapZ && snap?.z !== undefined ? snap.z : undefined;
+      this.lastPoint = z === undefined ? p : { ...p, z };
+      this.finishPoint(r, { point: p, ...(z !== undefined ? { z } : {}), snap: snap ? { kind: snap.kind, handle: snap.handle, handle2: snap.handle2, ...(snap.deferred ? { deferred: true } : {}) } : null, ...(ev.shiftKey ? { shift: true } : {}), ...(ev.ctrlKey || ev.metaKey ? { ctrl: true } : {}) });
       return;
     }
     const pk = this.picker();

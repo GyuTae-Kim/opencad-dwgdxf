@@ -301,33 +301,62 @@ export class CommandLine {
   }
 }
 
-/** 점 입력 해석: "x,y", "@dx,dy", "@d<a", "d<a", 숫자(직접 거리) */
-export function parsePointInput(s: string, last: { x: number; y: number } | null, cursorDir: { x: number; y: number } | null): { x: number; y: number } | null {
+/** 좌표 입력으로 읽은 점. z는 입력이 Z를 정했을 때만(없으면 명령이 고도를 쓴다) */
+export interface PointInput {
+  x: number;
+  y: number;
+  z?: number;
+}
+
+const NUM = '(-?[\\d.]+(?:e-?\\d+)?)';
+const RE_XY = new RegExp(`^${NUM},${NUM}(?:,${NUM})?$`, 'i');
+/** 극좌표 d<a, 원통 좌표 d<a,z */
+const RE_POLAR = new RegExp(`^${NUM}<${NUM}(?:,${NUM})?$`, 'i');
+/** 구 좌표 d<a<b(b = XY 평면에서 올려 본 각) */
+const RE_SPHERE = new RegExp(`^${NUM}<${NUM}<${NUM}$`, 'i');
+
+/**
+ * 점 입력 해석(AutoCAD 좌표 입력): "x,y", "x,y,z", "@dx,dy[,dz]", "d<a", "@d<a", 원통 "d<a,z"·"@d<a,dz",
+ * 구 "d<a<b"·"@d<a<b", 숫자(직접 거리). 각도는 도.
+ * Z: 절대 좌표는 Z를 준 때만 z가 있다. @ 상대 좌표·직접 거리는 마지막 점(last)의 Z를 잇는다. last에 z가 없으면(평면 점)
+ * 평면 상대 좌표에는 z가 없고, dz를 준 상대 좌표는 relZ0(고도)에서 잰다.
+ */
+export function parsePointInput(s: string, last: { x: number; y: number; z?: number } | null, cursorDir: { x: number; y: number } | null, relZ0 = 0): PointInput | null {
   const t = s.trim().replace(/\s+/g, '');
   if (!t) return null;
   const rel = t.startsWith('@');
   const body = rel ? t.slice(1) : t.startsWith('#') ? t.slice(1) : t;
   const base = rel ? (last ?? { x: 0, y: 0 }) : { x: 0, y: 0 };
-  const polar = /^(-?[\d.]+(?:e-?\d+)?)<(-?[\d.]+(?:e-?\d+)?)$/i.exec(body);
+  const baseZ = rel ? last?.z : undefined;
+  /** dz를 주었으면 기준 Z(절대면 0, 상대면 마지막 점 — 없으면 relZ0)에 더하고, 주지 않았으면 상대 좌표만 마지막 점의 Z */
+  const zOf = (dz: number | null): number | undefined => (dz === null ? baseZ : (rel ? (baseZ ?? relZ0) : 0) + dz);
+  const out = (x: number, y: number, z: number | undefined): PointInput | null => {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || (z !== undefined && !Number.isFinite(z))) return null;
+    return z === undefined ? { x, y } : { x, y, z };
+  };
+  const sph = RE_SPHERE.exec(body);
+  if (sph) {
+    const d = parseFloat(sph[1]!);
+    const a = (parseFloat(sph[2]!) * Math.PI) / 180;
+    const b = (parseFloat(sph[3]!) * Math.PI) / 180;
+    const h = d * Math.cos(b);
+    return out(base.x + h * Math.cos(a), base.y + h * Math.sin(a), zOf(d * Math.sin(b)));
+  }
+  const polar = RE_POLAR.exec(body);
   if (polar) {
     const d = parseFloat(polar[1]!);
     const a = (parseFloat(polar[2]!) * Math.PI) / 180;
-    if (!Number.isFinite(d) || !Number.isFinite(a)) return null;
-    return { x: base.x + d * Math.cos(a), y: base.y + d * Math.sin(a) };
+    return out(base.x + d * Math.cos(a), base.y + d * Math.sin(a), zOf(polar[3] !== undefined ? parseFloat(polar[3]) : null));
   }
-  const xy = /^(-?[\d.]+(?:e-?\d+)?),(-?[\d.]+(?:e-?\d+)?)(?:,(-?[\d.]+(?:e-?\d+)?))?$/i.exec(body);
-  if (xy) {
-    const x = parseFloat(xy[1]!);
-    const y = parseFloat(xy[2]!);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    return { x: base.x + x, y: base.y + y };
-  }
+  const xy = RE_XY.exec(body);
+  if (xy) return out(base.x + parseFloat(xy[1]!), base.y + parseFloat(xy[2]!), zOf(xy[3] !== undefined ? parseFloat(xy[3]) : null));
   const dist = /^-?[\d.]+(?:e-?\d+)?$/i.exec(body);
   if (dist && last && cursorDir && !rel) {
     const d = parseFloat(t);
     const l = Math.hypot(cursorDir.x, cursorDir.y);
     if (!Number.isFinite(d) || l < 1e-12) return null;
-    return { x: last.x + (cursorDir.x / l) * d, y: last.y + (cursorDir.y / l) * d };
+    // 직접 거리는 평면도의 커서 방향(수평)으로: Z는 마지막 점 그대로
+    return out(last.x + (cursorDir.x / l) * d, last.y + (cursorDir.y / l) * d, last.z);
   }
   return null;
 }

@@ -86,11 +86,16 @@ export function parseOverride(text: string): Override | null {
 
 /** runPointOverride가 점을 묻는 데 쓰는 것 */
 export interface OverrideIO {
-  getPoint(prompt: string, opt?: { base?: Pt | null; allowText?: boolean; rubber?: (p: Pt) => { pts: number[]; dashed?: boolean }[] }): Promise<PointResult>;
+  getPoint(prompt: string, opt?: { base?: (Pt & { z?: number }) | null; allowText?: boolean; rubber?: (p: Pt) => { pts: number[]; dashed?: boolean }[] }): Promise<PointResult>;
   print(text: string, cls?: 'err' | 'res'): void;
   /** 점 필터의 좌표계 */
   ucs: Ucs;
+  /** 고도(Z를 주지 않은 점의 Z — 점 필터·M2P가 Z를 섞을 때). 없으면 0 */
+  elevation?: number;
 }
+
+/** Z를 정했을 수도 있는 점(z가 없으면 Z를 주지 않은 점) */
+type P3 = Pt & { z?: number };
 
 /** 필터에서 남은 좌표의 프롬프트 */
 function needPrompt(take: Axis[]): { prompt: string; rest: Axis[] } {
@@ -98,11 +103,11 @@ function needPrompt(take: Axis[]): { prompt: string; rest: Axis[] } {
   return { prompt: `(${rest.join('').toUpperCase()} 필요):`, rest };
 }
 
-/** 점 하나 받기: Enter면 null, 점이 아닌 글이면 다시 묻는다(숫자 하나를 받을 때는 allowNumber) */
-async function pointOf(io: OverrideIO, prompt: string, opt: { base?: Pt | null; rubber?: (p: Pt) => { pts: number[]; dashed?: boolean }[] } = {}, allowNumber = false): Promise<Pt | number | null> {
+/** 점 하나 받기: Enter면 null, 점이 아닌 글이면 다시 묻는다(숫자 하나를 받을 때는 allowNumber). 입력이 Z를 정했으면 z도 */
+async function pointOf(io: OverrideIO, prompt: string, opt: { base?: P3 | null; rubber?: (p: Pt) => { pts: number[]; dashed?: boolean }[] } = {}, allowNumber = false): Promise<P3 | number | null> {
   for (;;) {
     const r = await io.getPoint(prompt, { ...opt, allowText: allowNumber });
-    if ('point' in r) return r.point;
+    if ('point' in r) return r.z === undefined ? r.point : { ...r.point, z: r.z };
     if ('enter' in r) return null;
     if ('text' in r && allowNumber) {
       const v = Number(r.text.trim());
@@ -112,8 +117,13 @@ async function pointOf(io: OverrideIO, prompt: string, opt: { base?: Pt | null; 
   }
 }
 
-/** FROM·M2P·점 필터: 점을 더 물어 한 점을 만든다(Enter로 그만두면 null) */
-export async function runPointOverride(ov: Extract<Override, { kind: 'from' | 'm2p' | 'filter' }>, io: OverrideIO): Promise<Pt | null> {
+/**
+ * FROM·M2P·점 필터: 점을 더 물어 한 점을 만든다(Enter로 그만두면 null).
+ * Z: 입력이 정한 Z를 잇는다(점 필터 .XY → "(Z 필요):"의 숫자, .Z는 첫 점의 Z, M2P는 두 점 Z의 가운데 — Z가 없는 점은 고도).
+ * 어느 점도 Z를 정하지 않았으면 결과에도 z가 없다(2D 명령에는 같은 평면 점)
+ */
+export async function runPointOverride(ov: Extract<Override, { kind: 'from' | 'm2p' | 'filter' }>, io: OverrideIO): Promise<P3 | null> {
+  const elev = io.elevation ?? 0;
   if (ov.kind === 'from') {
     const b = await pointOf(io, '기준점:');
     if (b === null || typeof b === 'number') return null;
@@ -125,22 +135,21 @@ export async function runPointOverride(ov: Extract<Override, { kind: 'from' | 'm
     if (a === null || typeof a === 'number') return null;
     const b = await pointOf(io, '중간점의 두 번째 점:', { base: a, rubber: (p) => [{ pts: [a.x, a.y, p.x, p.y], dashed: true }] });
     if (b === null || typeof b === 'number') return null;
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    return a.z === undefined && b.z === undefined ? m : { ...m, z: ((a.z ?? elev) + (b.z ?? elev)) / 2 };
   }
-  // 점 필터: 고른 좌표는 첫 점에서, 남은 좌표는 둘째 점(남은 좌표가 하나면 숫자도)
+  // 점 필터: 고른 좌표는 첫 점에서, 남은 좌표는 둘째 점(남은 좌표가 하나면 숫자도). UCS는 평면 안이라 Z는 그대로
   const a = await pointOf(io, '대상:');
   if (a === null || typeof a === 'number') return null;
   const { prompt, rest } = needPrompt(ov.take);
-  // 평면 도면이라 Z만 남으면 첫 점 그대로(숫자·점 무엇이든 받고 버린다)
   const b = await pointOf(io, prompt, {}, rest.length === 1);
   if (b === null) return null;
-  const ua = toUcs(io.ucs, a);
-  if (typeof b === 'number') {
-    const out = { ...ua };
-    if (rest[0] === 'x') out.x = b;
-    else if (rest[0] === 'y') out.y = b;
-    return toWcs(io.ucs, out);
-  }
-  const ub = toUcs(io.ucs, b);
-  return toWcs(io.ucs, { x: ov.take.includes('x') ? ua.x : ub.x, y: ov.take.includes('y') ? ua.y : ub.y });
+  const ua: P3 = { ...toUcs(io.ucs, a), ...(a.z !== undefined ? { z: a.z } : {}) };
+  const ub: P3 = typeof b === 'number' ? { x: b, y: b, z: b } : { ...toUcs(io.ucs, b), ...(b.z !== undefined ? { z: b.z } : {}) };
+  const from = (axis: Axis) => (ov.take.includes(axis) ? ua : ub);
+  const out = toWcs(io.ucs, { x: from('x').x, y: from('y').y });
+  // Z: 그 좌표를 준 점이 Z를 정했으면 그것. 정하지 않은 점이면 고도 — 두 점 모두 Z가 없으면 Z 없는 점
+  const zSrc = from('z');
+  if (zSrc.z !== undefined) return { ...out, z: zSrc.z };
+  return a.z === undefined && (typeof b === 'number' || b.z === undefined) ? out : { ...out, z: elev };
 }
