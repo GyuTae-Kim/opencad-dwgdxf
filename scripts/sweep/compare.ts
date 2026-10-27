@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FileRecord } from './record';
-import { ORACLE_QUALITY, QUALITY, classify, fileErrors, qualityFlags, rereadKinds } from './summary';
+import { ORACLE_QUALITY, QUALITY, classify, fileErrors, isDesignDrop, qualityFlags, rereadKinds } from './summary';
 
 export function readRecords(dir: string): FileRecord[] {
   const p = join(dir, 'records.jsonl');
@@ -19,9 +19,14 @@ export function readRecords(dir: string): FileRecord[] {
 /** 파일 하나의 비교 지표(값이 같으면 바뀌지 않은 것) */
 export function fileMetrics(r: FileRecord, oracle = true) {
   const kinds = new Set<string>();
+  /** 설계대로 빠진 비그래픽 객체(대상:종류) — 지표 바뀜으로 세지 않고 따로 센다 */
+  const drops = new Set<string>();
   const writeWarn = new Set<string>();
   for (const [k, w] of Object.entries(r.writes ?? {})) {
-    for (const kind of rereadKinds(w)) kinds.add(kind);
+    for (const kind of rereadKinds(w, k)) {
+      if (isDesignDrop(kind)) drops.add(`${k}:${kind.slice(8)}`);
+      else kinds.add(kind);
+    }
     for (const code of Object.keys(w.warn ?? {})) writeWarn.add(`${k}:${code}`);
   }
   return {
@@ -31,6 +36,7 @@ export function fileMetrics(r: FileRecord, oracle = true) {
     counts: r.counts ?? {},
     readWarn: new Set(Object.keys(r.read?.warn ?? {})),
     kinds,
+    drops,
     writeWarn,
     flags: new Set(qualityFlags(r, oracle)),
     errors: new Set(fileErrors(r)),
@@ -62,6 +68,10 @@ export interface CompareResult {
   classChanged: number;
   transitions: Record<string, number>;
   metricChanged: number;
+  /** 설계대로 빠지는 비그래픽 객체 목록이 바뀐 파일 수(지표 바뀜에 넣지 않는다) */
+  dropsChanged: number;
+  /** 설계대로 빠지는 비그래픽 객체가 있는 파일 수(전, 후) */
+  dropFiles: [number, number];
   changed: FileChange[];
   newExceptions: Record<string, number>;
   goneExceptions: Record<string, number>;
@@ -71,7 +81,7 @@ export interface CompareResult {
 export function compareRuns(before: FileRecord[], after: FileRecord[]): CompareResult {
   const bm = new Map(before.map((r) => [r.key, r]));
   const am = new Map(after.map((r) => [r.key, r]));
-  const res: CompareResult = { before: before.length, after: after.length, matched: 0, onlyBefore: 0, onlyAfter: 0, classChanged: 0, transitions: {}, metricChanged: 0, changed: [], newExceptions: {}, goneExceptions: {}, quality: {} };
+  const res: CompareResult = { before: before.length, after: after.length, matched: 0, onlyBefore: 0, onlyAfter: 0, classChanged: 0, transitions: {}, metricChanged: 0, dropsChanged: 0, dropFiles: [0, 0], changed: [], newExceptions: {}, goneExceptions: {}, quality: {} };
   for (const k of bm.keys()) if (!am.has(k)) res.onlyBefore++;
   for (const k of am.keys()) if (!bm.has(k)) res.onlyAfter++;
   const errB: Record<string, number> = {};
@@ -85,6 +95,9 @@ export function compareRuns(before: FileRecord[], after: FileRecord[]): CompareR
     res.matched++;
     const mb = fileMetrics(b, oracle);
     const ma = fileMetrics(a, oracle);
+    if (mb.drops.size) res.dropFiles[0]++;
+    if (ma.drops.size) res.dropFiles[1]++;
+    if (mb.drops.size !== ma.drops.size || [...mb.drops].some((x) => !ma.drops.has(x))) res.dropsChanged++;
     for (const e of mb.errors) errB[e] = (errB[e] ?? 0) + 1;
     for (const e of ma.errors) errA[e] = (errA[e] ?? 0) + 1;
     for (const q of qkeys) {
@@ -124,6 +137,7 @@ export function compareText(r: CompareResult, top = 20): string {
   const L: string[] = [];
   L.push(`전 ${r.before}개, 후 ${r.after}개 — 같은 파일 ${r.matched}개(전에만 ${r.onlyBefore}, 후에만 ${r.onlyAfter})`);
   L.push(`분류가 바뀐 파일 ${r.classChanged}개, 지표가 바뀐 파일 ${r.metricChanged}개, 새 예외 ${Object.keys(r.newExceptions).length}가지, 사라진 예외 ${Object.keys(r.goneExceptions).length}가지`);
+  L.push(`설계대로 빠지는 비그래픽 객체(쓰기 경고·버전에 없는 종류·DWG 표 보조 자료)가 있는 파일 전 ${r.dropFiles[0]}개 → 후 ${r.dropFiles[1]}개, 그 목록이 바뀐 파일 ${r.dropsChanged}개(지표 바뀜에 넣지 않음)`);
   L.push('');
   L.push('품질 지표(같은 파일 중)            전      후');
   for (const [k, [b, a]] of Object.entries(r.quality)) L.push(`  ${k.padEnd(28)} ${String(b).padStart(6)} ${String(a).padStart(6)}${a !== b ? (a > b ? '  ▲' : '  ▼') : ''}`);

@@ -13,8 +13,8 @@ import { writeDxf } from '../../src/io/dxf/writer';
 import { writeDwg } from '../../src/io/dwg/index';
 import { readCadFile } from '../../src/io/index';
 import { collect, parseFilter, sniffVersion, walk } from '../../scripts/sweep/files';
-import { checkFile, createContext, normalizeForRoundtrip, writeTargets } from '../../scripts/sweep/check';
-import { buildSummary, classify, errorSignature, qualityFlags } from '../../scripts/sweep/summary';
+import { checkFile, createContext, normalizeForRoundtrip, normalizeForTarget, writeTargets } from '../../scripts/sweep/check';
+import { buildSummary, classify, errorSignature, expectedObjectDrop, qualityFlags, rereadKinds } from '../../scripts/sweep/summary';
 import { compareMain, compareRuns } from '../../scripts/sweep/compare';
 import { compareOracle, EzdxfOracle } from '../../scripts/sweep/oracle';
 import { main, parseArgs } from '../../scripts/sweep/sweep';
@@ -131,6 +131,17 @@ describe('파일 하나 확인', () => {
     expect(keys('dxf', 'AC1009')).toContain('dxf-AC1009');
   });
 
+  it('DWG 대상은 SPLINE 평면·직선 비트(8·16)를, R2000 DWG는 맞춤점 방식·매듭 매개변수 비트도 견주지 않는다(형식에 자리가 없다)', () => {
+    const sp = (flags: number) => ({ type: 'SPLINE', flags });
+    const dwg18 = { fmt: 'dwg' as const, version: 'AC1032' };
+    const dwg00 = { fmt: 'dwg' as const, version: 'AC1015' };
+    expect(normalizeForTarget(sp(8), dwg18)).toEqual(normalizeForTarget(sp(0), dwg18));
+    expect(normalizeForTarget(sp(1064), dwg18)).not.toEqual(normalizeForTarget(sp(8), dwg18));
+    expect(normalizeForTarget(sp(1160 | 1), dwg00)).toEqual(normalizeForTarget(sp(9), dwg00));
+    expect(normalizeForTarget(sp(8), { fmt: 'dxf', version: 'AC1032' })).toEqual(sp(8));
+    expect(normalizeForTarget({ type: 'LINE', flags: 8 }, dwg18)).toEqual({ type: 'LINE', flags: 8 });
+  });
+
   it('왕복 비교는 \\U+ 이스케이프와 ByBlock 대소문자를 같은 것으로 본다', () => {
     expect(normalizeForRoundtrip({ text: '\\U+C9C0\\U+B984 \\U+220520', linetype: 'BYBLOCK' })).toEqual(normalizeForRoundtrip({ text: '지름 ∅20', linetype: 'ByBlock' }));
     expect(normalizeForRoundtrip({ linetype: 'Dashed' }).linetype).toBe('Dashed');
@@ -176,6 +187,42 @@ describe('요약', () => {
     expect(s.quality).toMatchObject({ 'shape-dropped': 1, 'name-changed': 1, 'silent-count-loss': 0 });
     expect(s.roundtrip).toMatchObject({ 'count:SHAPE:-': 1, 'name:layer': 1 });
     expect((s.timeMs as { total: { n: number; max: number } }).total).toMatchObject({ n: 4, max: 5 });
+  });
+});
+
+describe('설계대로 빠지는 비그래픽 객체', () => {
+  it('쓰기 경고가 알린 종류·그 버전에 없는 종류(DXF)·DWG 표 보조 자료는 dropped:, 알리지 않고 빠진 것은 object:', () => {
+    const none = new Set<string>();
+    expect(expectedObjectDrop('dxf-AC1015', 'MATERIAL', none)).toBe(true);
+    expect(expectedObjectDrop('dxf-AC1032', 'MATERIAL', none)).toBe(false);
+    expect(expectedObjectDrop('dxf-AC1024', 'ACDBSECTIONVIEWSTYLE', none)).toBe(true);
+    expect(expectedObjectDrop('dwg-AC1032', 'CELLSTYLEMAP', none)).toBe(true);
+    expect(expectedObjectDrop('dwg-AC1032', 'MATERIAL', none)).toBe(false);
+    expect(expectedObjectDrop('dwg-AC1032', 'MATERIAL', new Set(['MATERIAL']))).toBe(true);
+    const w = {
+      ok: true,
+      ms: 1,
+      warn: { 'dwg.write_object_dropped': 1 },
+      detail: { 'dwg.write_object_dropped': { types: { MATERIAL: 3, VISUALSTYLE: 2 } } },
+      reread: { ok: true, ms: 1, objDelta: { MATERIAL: -3, VISUALSTYLE: -2, CELLSTYLEMAP: -1, XRECORD: -1, LAYOUT: 1 } },
+    };
+    expect(rereadKinds(w, 'dwg-AC1032').sort()).toEqual(['dropped:CELLSTYLEMAP', 'dropped:MATERIAL', 'dropped:VISUALSTYLE', 'object:XRECORD:-']);
+    // DXF 경고는 세부에 종류 목록(items)과 개수(types)를 둔다
+    const dx = { ok: true, ms: 1, warn: { 'object.orphan_dropped': 2 }, detail: { 'object.orphan_dropped': { items: ['XRECORD'], types: { XRECORD: 2 } } }, reread: { ok: true, ms: 1, objDelta: { XRECORD: -2 } } };
+    expect(rereadKinds(dx, 'dxf-AC1032')).toEqual(['dropped:XRECORD']);
+  });
+
+  it('요약은 설계대로 빠진 것을 objectsDropped로 따로 세고 왕복 차이·분류에 넣지 않는다, 알리지 않고 빠지면 silent-object-loss', () => {
+    const drop = rec('a', { writes: { 'dxf-AC1015': { ok: true, ms: 1, reread: { ok: true, ms: 1, objDelta: { MATERIAL: -2 } } } } });
+    const silent = rec('b', { writes: { 'dxf-AC1032': { ok: true, ms: 1, reread: { ok: true, ms: 1, objDelta: { MATERIAL: -2 } } } } });
+    const s = buildSummary({ records: [drop, silent] });
+    expect(s.objectsDropped).toEqual({ MATERIAL: 1 });
+    expect(s.roundtrip).toEqual({ 'object:MATERIAL:-': 1 });
+    expect(s.classes).toMatchObject({ ok: 2 });
+    expect(s.quality).toMatchObject({ 'silent-object-loss': 1 });
+    // 비교: 설계대로 빠지는 것만 바뀌면 지표 바뀜으로 세지 않는다
+    const r = compareRuns([rec('a')], [drop]);
+    expect(r).toMatchObject({ metricChanged: 0, dropsChanged: 1, dropFiles: [0, 1] });
   });
 });
 
