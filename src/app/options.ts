@@ -52,6 +52,15 @@ export function optionValue(name: string): number {
 
 const hex6 = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
+/** AutoSnap 칸(OPTIONS 제도 탭) ↔ AUTOSNAP 비트: 1 표식기, 2 AutoSnap 툴팁, 4 마그넷(AutoCAD 도움말). 8·16·32(추적)는 건드리지 않는다 */
+export function autosnapFields(bits: number): { marker: boolean; tooltip: boolean; magnet: boolean } {
+  return { marker: (bits & 1) !== 0, tooltip: (bits & 2) !== 0, magnet: (bits & 4) !== 0 };
+}
+
+export function autosnapBits(old: number, v: { marker: boolean; tooltip: boolean; magnet: boolean }): number {
+  return (old & ~7) | (v.marker ? 1 : 0) | (v.tooltip ? 2 : 0) | (v.magnet ? 4 : 0);
+}
+
 /** SHORTCUTMENU 비트 ↔ 대화상자 칸(1 기본 모드 메뉴, 2 편집 모드 메뉴, 4 명령 모드 늘 메뉴, 8 옵션이 있을 때만, 16 시간에 민감한 오른쪽 클릭) */
 export function shortcutMenuBits(v: { menus: boolean; def: 'repeat' | 'menu'; edit: 'repeat' | 'menu'; cmd: 'enter' | 'options' | 'always'; timed: boolean }): number {
   if (!v.menus) return v.timed ? 16 : 0;
@@ -124,9 +133,10 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   );
   // 제도
   const as = browserSysvar('AUTOSNAP');
-  const marker = checkIn((as & 1) !== 0, '표식기');
-  const magnet = checkIn((as & 2) !== 0, '마그넷');
-  const tooltip = checkIn((as & 4) !== 0, 'AutoSnap 툴팁 표시');
+  const asf = autosnapFields(as);
+  const marker = checkIn(asf.marker, '표식기');
+  const magnet = checkIn(asf.magnet, '마그넷');
+  const tooltip = checkIn(asf.tooltip, 'AutoSnap 툴팁 표시');
   const markerSize = numIn(autosnapMarkerSize(), 'AutoSnap 표식기 크기');
   const aperture = numIn(browserSysvar('APERTURE'), '조준창 크기');
   const drafting = h(
@@ -231,7 +241,7 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   set('PICKFIRST', pickfirst.checked ? 1 : 0);
   set('PICKADD', pickadd.checked ? 0 : 2);
   set('SELECTIONPREVIEW', (spCmd.checked ? 1 : 0) | (spIdle.checked ? 2 : 0));
-  set('AUTOSNAP', (as & ~7) | (marker.checked ? 1 : 0) | (magnet.checked ? 2 : 0) | (tooltip.checked ? 4 : 0));
+  set('AUTOSNAP', autosnapBits(as, { marker: marker.checked, tooltip: tooltip.checked, magnet: magnet.checked }));
   set('APERTURE', r.aperture);
   set('SHORTCUTMENU', shortcutMenuBits({ menus: menus.checked, def: defMode.value as 'repeat', edit: editMode.value as 'repeat', cmd: cmdMode.value as 'enter', timed: timed.checked }));
   set('SHORTCUTMENUDURATION', r.duration);

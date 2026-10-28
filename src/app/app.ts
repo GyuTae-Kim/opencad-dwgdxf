@@ -1862,7 +1862,7 @@ export class App {
       o.rubber = r.rubber && drag ? r.rubber(p, snap) : r.base ? [{ pts: [r.base.x, r.base.y, p.x, p.y], dashed: false }] : [];
       o.ghost = r.ghost && drag ? r.ghost(p) : [];
       this.updateDynFields(p);
-      // 툴팁: 객체 스냅 이름(AUTOSNAP 4), 추적 거리·각도(AUTOSNAP 32). 끄면 그 자리에 보통 문구
+      // 툴팁: 객체 스냅 이름(AUTOSNAP 2), 추적 거리·각도(AUTOSNAP 32). 끄면 그 자리에 보통 문구
       const as = this.settings.autosnap;
       if (snap && showSnapTip(as)) o.tip = snap.deferred ? '지연된 접점' : (SNAP_NAMES[snap.kind] ?? null);
       else if (track && !snap && showTrackTip(as)) o.tip = track.tip;

@@ -26,7 +26,7 @@ import {
   wheelZoom,
 } from '../../src/app/settings';
 import { BROWSER_VARS, setBrowserSysvar } from '../../src/app/sysvars';
-import { optionValue } from '../../src/app/options';
+import { autosnapBits, autosnapFields, optionValue } from '../../src/app/options';
 import { prefSet } from '../../src/app/mgr-ui';
 
 afterEach(() => {
@@ -98,11 +98,24 @@ describe('화면 크기 계산', () => {
     expect(wheelZoom(-100, 500, false)).toBe(wheelZoom(-100, 100, false));
   });
 
-  it('AUTOSNAP 비트: 1 표식기, 4 스냅 툴팁, 32 추적 툴팁', () => {
+  it('AUTOSNAP 비트(AutoCAD 도움말): 1 표식기, 2 AutoSnap 툴팁, 4 마그넷, 32 추적 툴팁', () => {
     expect([showSnapMarker(63), showSnapTip(63), showTrackTip(63)]).toEqual([true, true, true]);
     expect([showSnapMarker(0), showSnapTip(0), showTrackTip(0)]).toEqual([false, false, false]);
-    expect([showSnapMarker(63 & ~1), showSnapTip(63 & ~4), showTrackTip(63 & ~32)]).toEqual([false, false, false]);
+    expect([showSnapMarker(63 & ~1), showSnapTip(63 & ~2), showTrackTip(63 & ~32)]).toEqual([false, false, false]);
     expect(showSnapMarker(1)).toBe(true);
+    // 4는 마그넷: 꺼도 툴팁은 그대로(전에는 4를 툴팁으로 읽었다)
+    expect(showSnapTip(63 & ~4)).toBe(true);
+    expect(showSnapTip(2)).toBe(true);
+  });
+
+  it('OPTIONS 제도 탭의 AutoSnap 칸 ↔ AUTOSNAP 비트: 표식기 1·툴팁 2·마그넷 4, 추적 비트(8·16·32)는 그대로', () => {
+    expect(autosnapFields(63)).toEqual({ marker: true, tooltip: true, magnet: true });
+    expect(autosnapFields(61)).toEqual({ marker: true, tooltip: false, magnet: true });
+    expect(autosnapFields(59)).toEqual({ marker: true, tooltip: true, magnet: false });
+    expect(autosnapBits(63, { marker: true, tooltip: false, magnet: true })).toBe(61);
+    expect(autosnapBits(63, { marker: true, tooltip: true, magnet: false })).toBe(59);
+    expect(autosnapBits(24, { marker: false, tooltip: true, magnet: false })).toBe(26);
+    for (const v of [0, 7, 21, 42, 63]) expect(autosnapBits(v, autosnapFields(v))).toBe(v);
   });
 });
 
