@@ -20,6 +20,7 @@ import { keepIdentity } from './trim';
 import { type EditResult, allocBlockName, mergeResults } from './types';
 import { dimMeasure, updateDimNumber } from './xannot';
 import { layoutArcText } from '../../text/arctext';
+import { hatchEdges, packEdges } from '../../core/hatchedges';
 
 /** 걸침 영역: 두 점이면 사각형 */
 function polygonOf(crossing: readonly Vec2[]): Vec2[] {
@@ -494,7 +495,7 @@ function hatchPoints(e: HatchEntity): Vec2[] {
   const out: Vec2[] = [];
   for (const p of e.paths) {
     if (p.polyline) for (const v of bulgeVertices(p.polyline.verts)) out.push(affApply(pr, v));
-    for (const ed of p.edges ?? []) {
+    for (const ed of hatchEdges(p)) {
       if (ed.type === 'line') out.push(affApply(pr, ed.start), affApply(pr, ed.end));
       else if (ed.type === 'arc' || ed.type === 'ellipse') out.push(affApply(pr, ed.center));
       else for (const q of ed.fitPoints?.length ? ed.fitPoints : ed.controlPoints) out.push(affApply(pr, q));
@@ -513,12 +514,14 @@ function stretchHatch(e: HatchEntity, inside: (p: Vec2) => boolean, d: Vec2): Ha
   };
   for (const p of r.paths) {
     if (p.polyline) p.polyline.verts = packBulge(bulgeVertices(p.polyline.verts).map((v) => ({ ...v, ...mvp(v) })));
-    if (p.edges)
-      p.edges = p.edges.map((ed) => {
-        if (ed.type === 'line') return { ...ed, start: mvp(ed.start), end: mvp(ed.end) };
-        if (ed.type === 'arc' || ed.type === 'ellipse') return { ...ed, center: mvp(ed.center) };
-        return { ...ed, controlPoints: ed.controlPoints.map(mvp), fitPoints: ed.fitPoints?.map(mvp) };
-      });
+    if (p.edgeData)
+      p.edgeData = packEdges(
+        hatchEdges(p).map((ed) => {
+          if (ed.type === 'line') return { ...ed, start: mvp(ed.start), end: mvp(ed.end) };
+          if (ed.type === 'arc' || ed.type === 'ellipse') return { ...ed, center: mvp(ed.center) };
+          return { ...ed, controlPoints: ed.controlPoints.map(mvp), fitPoints: ed.fitPoints?.map(mvp) };
+        }),
+      );
     p.sources = undefined;
   }
   r.associative = false;

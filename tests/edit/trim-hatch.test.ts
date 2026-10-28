@@ -14,6 +14,8 @@ import { hatchArea } from '../../src/app/inquiry';
 import { circle, line, lw, newDoc, xline } from './make';
 import { registerModifyCommands } from '../../src/app/modify';
 import { makeHarness } from '../cmds2/harness';
+import { packEdges } from '../../src/core/hatchedges';
+import { hatchEdges } from '../../src/core/hatchedges';
 
 const rect = (x0: number, y0: number, x1: number, y1: number, flags = 3): HatchPath => ({
   flags,
@@ -87,7 +89,7 @@ describe('TRIM: 해치 자르기', () => {
 
   it('원 해치를 지름으로 자르면 반원(호 모서리 유지)', () => {
     const doc = newDoc();
-    const disk: HatchPath = { flags: 1, edges: [{ type: 'arc', center: { x: 0, y: 0 }, radius: 5, startAngle: 0, endAngle: Math.PI * 2, ccw: true }] };
+    const disk: HatchPath = { flags: 1, edgeData: packEdges([{ type: 'arc', center: { x: 0, y: 0 }, radius: 5, startAngle: 0, endAngle: Math.PI * 2, ccw: true }]) };
     const h = hatchOf(doc, [disk], 'SOLID');
     const r = trimmed(trimEntity(h, [line(-6, 0, 6, 0)], { x: 1, y: -2 }, { doc }));
     // 넓이는 꺾은선 근사(hatchArea)로 잰다
@@ -96,7 +98,7 @@ describe('TRIM: 해치 자르기', () => {
     expect(filled(r, 0, -2)).toBe(false);
     // 폴리선 경로(볼록도) 또는 호 모서리 — 꺾은선으로 깎지 않는다
     const p = r.paths[0]!;
-    const curved = p.polyline ? p.polyline.verts.some((v, i) => i % 3 === 2 && Math.abs(v) > 0.1) : (p.edges ?? []).some((e) => e.type === 'arc');
+    const curved = p.polyline ? p.polyline.verts.some((v, i) => i % 3 === 2 && Math.abs(v) > 0.1) : hatchEdges(p).some((e) => e.type === 'arc');
     expect(curved).toBe(true);
   });
 
@@ -158,7 +160,7 @@ describe('TRIM: 해치 자르기', () => {
 
 describe('해치 경계 객체와 그 밖의 객체', () => {
   it('한 바퀴 원 모서리 경로는 반원 둘의 닫힌 폴리선(볼록도 1)이 된다(전에는 볼록도가 무한대)', () => {
-    const disk: HatchPath = { flags: 1, edges: [{ type: 'arc', center: { x: 0, y: 0 }, radius: 5, startAngle: 0, endAngle: Math.PI * 2, ccw: true }] };
+    const disk: HatchPath = { flags: 1, edgeData: packEdges([{ type: 'arc', center: { x: 0, y: 0 }, radius: 5, startAngle: 0, endAngle: Math.PI * 2, ccw: true }]) };
     const [o] = boundaryObjects([disk], entityDefaults());
     const v = lwVertices(o as LwPolylineEntity);
     expect(v).toHaveLength(2);

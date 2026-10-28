@@ -8,6 +8,7 @@
 import type { CadDocument, Entity, EntityBase, HatchEdge, HatchEntity, HatchPath, HatchPatternLine, Vec2 } from '../../core/model';
 import { boundaryFromEntities, createHatch, estimatePatternLines, findPattern, pathsFillPoint } from '../hatch';
 import { boundaryObjects } from '../geom/bpoly';
+import { hatchEdges, packEdges } from '../../core/hatchedges';
 
 const DEG = Math.PI / 180;
 
@@ -76,9 +77,10 @@ const isFull = (a0: number, a1: number) => Math.abs(Math.abs(a1 - a0) - TAU) < 1
  */
 export function splitFullEdges(paths: readonly HatchPath[]): HatchPath[] {
   return paths.map((p) => {
-    if (!p.edges?.some((e) => (e.type === 'arc' || e.type === 'ellipse') && isFull(e.startAngle, e.endAngle))) return p;
+    const pe = hatchEdges(p);
+    if (!pe.some((e) => (e.type === 'arc' || e.type === 'ellipse') && isFull(e.startAngle, e.endAngle))) return p;
     const edges: HatchEdge[] = [];
-    for (const e of p.edges) {
+    for (const e of pe) {
       if ((e.type === 'arc' || e.type === 'ellipse') && isFull(e.startAngle, e.endAngle)) {
         const s = Math.min(e.startAngle, e.endAngle);
         const halves: [number, number][] = [
@@ -89,7 +91,7 @@ export function splitFullEdges(paths: readonly HatchPath[]): HatchPath[] {
         for (const [a, b] of e.ccw ? halves : halves.reverse()) edges.push({ ...e, startAngle: a, endAngle: b } as HatchEdge);
       } else edges.push(e);
     }
-    return { ...p, edges };
+    return { ...p, edgeData: packEdges(edges) };
   });
 }
 

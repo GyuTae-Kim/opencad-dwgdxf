@@ -40,6 +40,7 @@ import { mtextPlainLines } from './wconvert';
 import { annoDimWriteOverrides } from '../annoscale';
 import { parseDimOverrides } from './tagutil';
 import { acdbTableTags, tableCellsOut } from '../tablecells';
+import { hatchEdges } from '../../core/hatchedges';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -1028,7 +1029,7 @@ function writePath(w: TagOut, p: HatchPath, mpolygon: boolean): void {
     }
   } else {
     w.t(92, p.flags & ~2);
-    const edges = (p.edges ?? []).filter((e) => e.type !== 'spline' || e.controlPoints.length > e.degree || (e.fitPoints?.length ?? 0) >= 2);
+    const edges = hatchEdges(p).filter((e) => e.type !== 'spline' || e.controlPoints.length > e.degree || (e.fitPoints?.length ?? 0) >= 2);
     w.t(93, edges.length);
     for (const e of edges) writeEdge(w, e);
   }

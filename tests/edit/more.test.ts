@@ -18,6 +18,8 @@ import { entityPath } from '../../src/edit/geom/path';
 import { pathNearest } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, circle, deg, line, lw, near, newDoc, renders, text, xline } from './helpers';
 import { packPoly, polyVertices } from '../../src/core/polyverts';
+import { packEdges } from '../../src/core/hatchedges';
+import { hatchEdges } from '../../src/core/hatchedges';
 
 const base = (h: string) => ({ ...entityDefaults(), handle: h });
 const all = (r: G.EditResult) => [...(r.replace ?? []), ...(r.add ?? [])];
@@ -195,13 +197,13 @@ describe('주석 객체: 신축·그립·분해', () => {
       patternScale: 1,
       patternDouble: false,
       elevation: 0,
-      paths: [{ flags: 1, edges: [{ type: 'line', start: V(0, 0), end: V(5, 0) }, { type: 'line', start: V(5, 0), end: V(5, 5) }, { type: 'line', start: V(5, 5), end: V(0, 0) }] }],
+      paths: [{ flags: 1, edgeData: packEdges([{ type: 'line', start: V(0, 0), end: V(5, 0) }, { type: 'line', start: V(5, 0), end: V(5, 5) }, { type: 'line', start: V(5, 5), end: V(0, 0) }]) }],
       patternLines: [],
       pixelSize: 0,
       seedPoints: [],
     };
     const hg = G.gripMove(h, 'p0.1', V(7, 0), doc).replace![0] as HatchEntity;
-    const ed = hg.paths[0]!.edges!;
+    const ed = hatchEdges(hg.paths[0]!);
     expect(ed[1]!.type === 'line' && ed[1]!.start.x).toBe(7);
     expect(ed[0]!.type === 'line' && ed[0]!.end.x).toBe(7);
     renders(doc, [r, hg]);

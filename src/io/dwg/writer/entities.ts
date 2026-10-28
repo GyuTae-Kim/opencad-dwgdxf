@@ -34,6 +34,7 @@ import { polyBulge, polyCount, polyEndWidth, polyFace, polyFlags, polyLoc, polyS
 import { tableCellsOut } from '../../tablecells';
 import { tableOld, tableR24, writeIO } from '../tablecodec';
 import { tableToOld, tableToR24 } from '../tablemodel';
+import { hatchEdges } from '../../../core/hatchedges';
 
 const Z: Vec3 = { x: 0, y: 0, z: 1 };
 const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
@@ -1282,7 +1283,7 @@ export class EntityWriter {
       if (flags & 4) anyDerived = true;
       d.BL(flags);
       if (!(flags & 2)) {
-        const edges = p.edges ?? [];
+        const edges = hatchEdges(p);
         d.BL(edges.length);
         for (const ed of edges) {
           if (ed.type === 'line') {

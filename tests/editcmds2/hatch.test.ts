@@ -5,6 +5,7 @@ import { PATTERNS, boundaryFromEntities, createHatch, reactorLinks } from '../..
 import { hasPatternOrigin, hatchBoundaryEntities, hatchOrigin, hatchWithBoundary, relinkReactors, withHatchOrigin } from '../../src/edit/editcmds2/hatch';
 import { circle, line, put, setup } from '../util2/helpers';
 import { lwVertices, packBulge } from '../../src/core/lwpoly';
+import { packEdges } from '../../src/core/hatchedges';
 
 const square = (x0: number, y0: number, s: number): HatchPath => ({
   flags: 3,
@@ -24,7 +25,7 @@ const near = (a: { x: number; y: number }, b: { x: number; y: number }, eps = 1e
 describe('HATCHGENERATEBOUNDARY: 해치 둘레의 경계', () => {
   it('폴리선 경로 → 닫힌 LWPOLYLINE(현재 특성), 원 경로 → 볼록도 있는 닫힌 폴리선', () => {
     const { doc } = setup();
-    const ring: HatchPath = { flags: 1, edges: [{ type: 'arc', center: { x: 20, y: 0 }, radius: 3, startAngle: 0, endAngle: Math.PI * 2, ccw: true }] };
+    const ring: HatchPath = { flags: 1, edgeData: packEdges([{ type: 'arc', center: { x: 20, y: 0 }, radius: 3, startAngle: 0, endAngle: Math.PI * 2, ccw: true }]) };
     const h = createHatch(doc, [square(0, 0, 10), ring], { pattern: 'ANSI31', layer: '해치' });
     const props = { ...entityDefaults(), layer: '경계', color: { aci: 1 } };
     const out = hatchBoundaryEntities(h, props);
@@ -50,7 +51,7 @@ describe('HATCHGENERATEBOUNDARY: 해치 둘레의 경계', () => {
     // 해치 자체는 연관되지 않은 그대로(원본 핸들 없음)
     expect(out.every((e) => !e.handle)).toBe(true);
     // 시계 방향 한 바퀴 타원 → 닫힌 스플라인
-    const el: HatchPath = { flags: 1, edges: [{ type: 'ellipse', center: { x: 0, y: 0 }, majorAxis: { x: 4, y: 0 }, ratio: 0.5, startAngle: 0, endAngle: Math.PI * 2, ccw: false }] };
+    const el: HatchPath = { flags: 1, edgeData: packEdges([{ type: 'ellipse', center: { x: 0, y: 0 }, majorAxis: { x: 4, y: 0 }, ratio: 0.5, startAngle: 0, endAngle: Math.PI * 2, ccw: false }]) };
     const e2 = hatchBoundaryEntities(createHatch(doc, [el], { pattern: 'SOLID' }), props);
     expect(e2.map((e) => e.type)).toEqual(['SPLINE']);
   });

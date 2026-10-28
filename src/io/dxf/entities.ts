@@ -47,6 +47,7 @@ import type {
 } from '../../core/model';
 import { BYLAYER, SHARED_BYLAYER_COLOR, entityDefaults } from '../../core/model';
 import type { PolyAccum } from '../../core/polyverts';
+import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../core/hatchedges';
 import { rawColorToCad } from '../../core/color';
 import type { DxfRecord, TagValue } from './records';
 import { DEG, Tags, handle, hexToBytes, int, name, num, parseColor, parseDimOverrides, parseXData, str } from './tagutil';
@@ -1199,7 +1200,8 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
           ne = int(at(i));
           i++;
         }
-        const edges: HatchEdge[] = [];
+        // 모서리는 객체 없이 수 배열 기록으로(src/core/hatchedges.ts)
+        const edges: number[] = [];
         for (let k = 0; k < ne && i < n; k++) {
           if (codes[i] !== 72) break;
           const et = int(at(i));
@@ -1209,7 +1211,7 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
             i += 2;
             const en = codes[i] === 11 ? p2At(i) : { x: 0, y: 0 };
             i += 2;
-            edges.push({ type: 'line', start: s, end: en });
+            edges.push(EDGE_LINE, s.x, s.y, en.x, en.y);
           } else if (et === 2) {
             let center = { x: 0, y: 0 };
             let radius = 0;
@@ -1231,7 +1233,7 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
               } else break;
             }
             const [s0, e0] = ccw ? [sa, ea] : [360 - ea, 360 - sa];
-            edges.push({ type: 'arc', center, radius, startAngle: s0 * DEG, endAngle: e0 * DEG, ccw });
+            edges.push(EDGE_ARC, center.x, center.y, radius, s0 * DEG, e0 * DEG, ccw ? 1 : 0);
           } else if (et === 3) {
             let center = { x: 0, y: 0 };
             let major = { x: 1, y: 0 };
@@ -1257,7 +1259,7 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
               } else break;
             }
             const [s0, e0] = ccw ? [sa, ea] : [360 - ea, 360 - sa];
-            edges.push({ type: 'ellipse', center, majorAxis: major, ratio, startAngle: s0 * DEG, endAngle: e0 * DEG, ccw });
+            edges.push(EDGE_ELLIPSE, center.x, center.y, major.x, major.y, ratio, s0 * DEG, e0 * DEG, ccw ? 1 : 0);
           } else if (et === 4) {
             const sp = {
               type: 'spline' as const,
@@ -1302,12 +1304,12 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
             }
             if (!sp.weights!.length) delete sp.weights;
             if (!sp.fitPoints!.length) delete sp.fitPoints;
-            edges.push(sp);
+            packEdge(sp, edges);
           } else {
             break;
           }
         }
-        path.edges = edges;
+        path.edgeData = edges.slice();
       }
       // 연관 경계 객체
       if (codes[i] === 97) {

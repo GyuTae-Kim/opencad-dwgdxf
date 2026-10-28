@@ -45,6 +45,7 @@ import { keepIdentity } from './trim';
 import { type EditResult, type GripPoint, MSG, allocBlockName } from './types';
 import { updateDimNumber } from './xannot';
 import { mtextDir } from './xtext';
+import { hatchEdges, packEdges } from '../../core/hatchedges';
 
 export interface GripOptions {
   /** 호 중간 그립: 'stretch'(기본, 세 점 호) 또는 'radius'(반지름만) */
@@ -248,7 +249,7 @@ function hatchGrips(e: HatchEntity, doc: CadDocument): GripPoint[] {
   e.paths.forEach((p, k) => {
     const pts: Vec2[] = [];
     if (p.polyline) for (const v of bulgeVertices(p.polyline.verts)) pts.push(v);
-    else for (const ed of p.edges ?? []) if (ed.type === 'line') pts.push(ed.start);
+    else for (const ed of hatchEdges(p)) if (ed.type === 'line') pts.push(ed.start);
     pts.forEach((q, i) => {
       const w = affApply(P, q);
       minX = Math.min(minX, w.x);
@@ -645,14 +646,16 @@ function hatchGrip(e: HatchEntity, id: string, d: Vec2): HatchEntity {
       vs[i * 3 + 1] = vs[i * 3 + 1]! + dl.y;
     }
     p.polyline.verts = vs;
-  } else if (p.edges) {
-    const lines = p.edges.map((ed, j) => (ed.type === 'line' ? j : -1)).filter((j) => j >= 0);
+  } else if (p.edgeData) {
+    const edges = hatchEdges(p);
+    const lines = edges.map((ed, j) => (ed.type === 'line' ? j : -1)).filter((j) => j >= 0);
     const j = lines[i];
     if (j !== undefined) {
-      const ed = p.edges[j]!;
+      const ed = edges[j]!;
       if (ed.type === 'line') ed.start = { x: ed.start.x + dl.x, y: ed.start.y + dl.y };
-      const prev = p.edges[(j - 1 + p.edges.length) % p.edges.length]!;
+      const prev = edges[(j - 1 + edges.length) % edges.length]!;
       if (prev.type === 'line') prev.end = { x: prev.end.x + dl.x, y: prev.end.y + dl.y };
+      p.edgeData = packEdges(edges);
     }
   }
   for (const pp of r.paths) pp.sources = undefined;

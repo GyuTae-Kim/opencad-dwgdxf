@@ -27,6 +27,8 @@ import { type Affine, affApply, affInv, affMirror, affMul, affRotate, affScale, 
 import { NEG_Z, P, V, circle, deg, line, mtext, near, newDoc, renders, text } from './helpers';
 import { bulgeVertices, packBulge } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
+import { packEdges } from '../../src/core/hatchedges';
+import { hatchEdges } from '../../src/core/hatchedges';
 
 const base = (h: string) => ({ ...entityDefaults(), handle: h });
 const one = (r: { replace?: Entity[]; add?: Entity[] }) => [...(r.replace ?? []), ...(r.add ?? [])][0]!;
@@ -126,12 +128,12 @@ function hatch(): HatchEntity {
       { flags: 3, polyline: { closed: true, verts: packBulge([{ x: 0, y: 0, bulge: 0 }, { x: 10, y: 0, bulge: 0.4 }, { x: 10, y: 10, bulge: 0 }, { x: 0, y: 10, bulge: 0 }]) } },
       {
         flags: 0,
-        edges: [
+        edgeData: packEdges([
           { type: 'line', start: V(2, 2), end: V(4, 2) },
           { type: 'arc', center: V(4, 3), radius: 1, startAngle: -Math.PI / 2, endAngle: Math.PI / 2, ccw: true },
           { type: 'line', start: V(4, 4), end: V(2, 4) },
           { type: 'ellipse', center: V(2, 3), majorAxis: V(0, 1), ratio: 0.5, startAngle: 0, endAngle: Math.PI, ccw: true },
-        ],
+        ]),
       },
     ],
     patternLines: [{ angle: deg(45), base: V(0, 0), offset: V(-2.245, 2.245), dashes: [] }],
@@ -213,7 +215,7 @@ describe('transformEntity — 주석·기타 객체', () => {
     expect(Math.hypot(sc.patternLines[0]!.offset.x, sc.patternLines[0]!.offset.y)).toBeCloseTo(2 * Math.hypot(2.245, 2.245));
     // 비균등: 볼록도 경로 → 모서리 경로(타원)
     const nu = one(transformEntity(hatch(), affScale(2, 1), doc)) as HatchEntity;
-    expect(nu.paths[0]!.edges!.some((e) => e.type === 'ellipse')).toBe(true);
+    expect(hatchEdges(nu.paths[0]!).some((e) => e.type === 'ellipse')).toBe(true);
   });
   it('다중 지시선: 점·문자 방향, 대칭은 읽을 수 있게', () => {
     const doc = makeDoc();

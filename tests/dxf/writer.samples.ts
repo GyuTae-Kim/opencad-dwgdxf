@@ -7,6 +7,7 @@ import { entityDefaults, tableKey } from '../../src/core/model';
 import { finalizeDocument } from '../../src/core/finalize';
 import { packBulge, packLw } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
+import { packEdges } from '../../src/core/hatchedges';
 
 /** 문서의 $HANDSEED에서 핸들을 하나씩(편집 세션과 같은 방식) */
 function handles(doc: CadDocument): () => string {
@@ -259,25 +260,25 @@ export function addSampleEntities(doc: CadDocument): void {
     paths: [
       {
         flags: 1,
-        edges: [
+        edgeData: packEdges([
           { type: 'line', start: { x: 0, y: 0 }, end: { x: 20, y: 0 } },
           { type: 'arc', center: { x: 20, y: 10 }, radius: 10, startAngle: -Math.PI / 2, endAngle: Math.PI / 2, ccw: true },
           { type: 'line', start: { x: 20, y: 20 }, end: { x: 0, y: 20 } },
           { type: 'arc', center: { x: 0, y: 10 }, radius: 10, startAngle: -Math.PI / 2, endAngle: Math.PI / 2, ccw: false },
-        ],
+        ]),
       },
       {
         flags: 0,
-        edges: [
+        edgeData: packEdges([
           { type: 'ellipse', center: { x: 10, y: 10 }, majorAxis: { x: 4, y: 0 }, ratio: 0.5, startAngle: 0, endAngle: Math.PI * 2, ccw: true },
-        ],
+        ]),
       },
       {
         flags: 0,
-        edges: [
+        edgeData: packEdges([
           { type: 'spline', degree: 3, rational: false, periodic: false, knots: [0, 0, 0, 0, 1, 1, 1, 1], controlPoints: [ { x: 30, y: 0 }, { x: 35, y: 5 }, { x: 40, y: -5 }, { x: 45, y: 0 } ] },
           { type: 'line', start: { x: 45, y: 0 }, end: { x: 30, y: 0 } },
-        ],
+        ]),
       },
     ],
   } as HatchEntity);

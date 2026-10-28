@@ -15,6 +15,7 @@ import { FIXTURES } from '../oracle/ezdxf';
 import { dwgFixtures } from './oracle';
 import { packBulge, packLw } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
+import { packEdges } from '../../src/core/hatchedges';
 
 export const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 export const WRITE_VERSIONS = ['AC1015', 'AC1018', 'AC1024', 'AC1027', 'AC1032'] as const;
@@ -153,12 +154,12 @@ export function syntheticDocument(): CadDocument {
       { flags: 3, polyline: { closed: true, verts: packBulge([{ x: 0, y: 0, bulge: 0 }, { x: 5, y: 0, bulge: 0.4 }, { x: 5, y: 5, bulge: 0 }]) } },
       {
         flags: 0,
-        edges: [
+        edgeData: packEdges([
           { type: 'line', start: { x: 10, y: 0 }, end: { x: 15, y: 0 } },
           { type: 'arc', center: { x: 15, y: 2.5 }, radius: 2.5, startAngle: -Math.PI / 2, endAngle: Math.PI / 2, ccw: true },
           { type: 'line', start: { x: 15, y: 5 }, end: { x: 10, y: 5 } },
           { type: 'ellipse', center: { x: 10, y: 2.5 }, majorAxis: { x: 0, y: 2.5 }, ratio: 0.5, startAngle: 0, endAngle: Math.PI, ccw: true },
-        ],
+        ]),
       },
     ],
     patternLines: [],
@@ -177,7 +178,7 @@ export function syntheticDocument(): CadDocument {
     patternScale: 2,
     patternDouble: false,
     elevation: 0,
-    paths: [{ flags: 1, edges: [{ type: 'line', start: { x: 0, y: 0 }, end: { x: 9, y: 0 } }, { type: 'line', start: { x: 9, y: 0 }, end: { x: 0, y: 9 } }, { type: 'line', start: { x: 0, y: 9 }, end: { x: 0, y: 0 } }] }],
+    paths: [{ flags: 1, edgeData: packEdges([{ type: 'line', start: { x: 0, y: 0 }, end: { x: 9, y: 0 } }, { type: 'line', start: { x: 9, y: 0 }, end: { x: 0, y: 9 } }, { type: 'line', start: { x: 0, y: 9 }, end: { x: 0, y: 0 } }]) }],
     patternLines: [{ angle: Math.PI / 4, base: { x: 0, y: 0 }, offset: { x: -2.2, y: 2.2 }, dashes: [] }],
     pixelSize: 0,
     seedPoints: [],

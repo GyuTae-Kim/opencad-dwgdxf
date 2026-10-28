@@ -577,7 +577,11 @@ export interface HatchPath {
   flags: number;
   /** 폴리선 경계(flags & 2) */
   polyline?: HatchPolyline;
-  edges?: HatchEdge[];
+  /**
+   * 모서리 경계(선·호·타원호·스플라인)를 모서리 객체 대신 수 배열 하나로 둔다(큰 도면의 문서 메모리·GC).
+   * 기록 형식과 풀어 쓰기(hatchEdges)·되담기(packEdges)는 src/core/hatchedges.ts
+   */
+  edgeData?: number[];
   /** 연관 경계 객체 핸들 */
   sources?: string[];
 }

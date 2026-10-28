@@ -10,6 +10,7 @@ import { type Affine, TAU, affAngle, affApply, affDet, affInv, affLin, affMul, a
 import { planProj, planeMap } from './ocs';
 import type { TransformOptions } from './types';
 import { bulgeVertices, packBulge } from '../../core/lwpoly';
+import { firstEdge, hatchEdges, packEdges } from '../../core/hatchedges';
 
 export function xformHatch(e: HatchEntity, m: Affine, opt: TransformOptions): HatchEntity {
   const pm = planeMap(e.extrusion, e.elevation, m, opt.dz ?? 0);
@@ -44,7 +45,7 @@ export function xformHatch(e: HatchEntity, m: Affine, opt: TransformOptions): Ha
 function firstVertex(e: HatchEntity): Vec2 {
   for (const p of e.paths) {
     if (p.polyline && p.polyline.verts.length >= 3) return { x: p.polyline.verts[0]!, y: p.polyline.verts[1]! };
-    const ed = p.edges?.[0];
+    const ed = firstEdge(p);
     if (ed) {
       if (ed.type === 'line') return { ...ed.start };
       if (ed.type === 'arc') return { x: ed.center.x + ed.radius * Math.cos(ed.startAngle), y: ed.center.y + ed.radius * Math.sin(ed.startAngle) };
@@ -101,10 +102,10 @@ export function xformPath(p: HatchPath, A: Affine): HatchPath {
       const lo = ccw ? arc.a0 : arc.a0 + arc.sweep;
       edges.push(arcEdgeUnder(A, { x: arc.cx, y: arc.cy }, arc.r, lo, Math.abs(arc.sweep), ccw));
     }
-    out.edges = edges;
+    out.edgeData = packEdges(edges);
     return out;
   }
-  out.edges = (p.edges ?? []).map((ed) => xformEdge(ed, A));
+  out.edgeData = packEdges(hatchEdges(p).map((ed) => xformEdge(ed, A)));
   return out;
 }
 

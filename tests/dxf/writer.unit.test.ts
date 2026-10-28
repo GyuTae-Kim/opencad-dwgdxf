@@ -12,6 +12,7 @@ import { DXF_VERSIONS } from '../../src/io/dxf/tagwriter';
 import { addSampleEntities } from './writer.samples';
 import { checkStructure } from './writer.helpers';
 import { polyVertices } from '../../src/core/polyverts';
+import { hatchEdges } from '../../src/core/hatchedges';
 
 /** ASCII DXF → (코드, 값) 목록(R2007+는 UTF-8) */
 function tagsOf(data: Uint8Array, utf8 = true): [number, string][] {
@@ -170,7 +171,8 @@ describe('DXF 쓰기: 객체 규칙', () => {
     ]);
     const src = doc.blocks.get('*MODEL_SPACE')!.entities.find((e) => e.type === 'HATCH' && e.patternName === 'ANSI31') as HatchEntity;
     const back = readDxf(res.data).blocks.get('*MODEL_SPACE')!.entities.find((e) => e.type === 'HATCH' && e.patternName === 'ANSI31') as HatchEntity;
-    expect(back.paths[0]!.edges).toEqual(src.paths[0]!.edges!.map((e) => ({ ...e })));
+    expect(hatchEdges(back.paths[0]!)).toEqual(hatchEdges(src.paths[0]!));
+    expect(back.paths[0]!.edgeData).toEqual(src.paths[0]!.edgeData);
   });
 
   it('치수 스타일 340~347은 이름에서 핸들로, 뷰포트 동결 도면층은 341 핸들로', () => {

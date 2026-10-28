@@ -10,6 +10,7 @@
 import type { CadDocument, Entity, HatchEdge, HatchPath, Vec2, Vec3 } from '../../core/model';
 import { bulgeVertices, lwVertices } from '../../core/lwpoly';
 import { polyVertices } from '../../core/polyverts';
+import { firstEdge, hatchEdges } from '../../core/hatchedges';
 
 /** COMPAREPROPS 비트 */
 export const PROP_COLOR = 1;
@@ -162,7 +163,7 @@ function hatchPath(s: Builder, p: HatchPath): void {
     s.k(p.polyline.closed, vs.length);
     for (const v of vs) s.n(v.x, v.y, v.bulge ?? 0);
   }
-  for (const e of p.edges ?? []) hatchEdge(s, e);
+  for (const e of hatchEdges(p)) hatchEdge(s, e);
 }
 
 function hatchEdge(s: Builder, e: HatchEdge): void {
@@ -463,7 +464,7 @@ export function entitySignature(e: Entity, opt: CompareOptions, doc?: CadDocumen
     case 'MPOLYGON': {
       const p0 = e.paths[0];
       const pv = p0?.polyline?.verts;
-      const q = (pv && pv.length >= 3 ? { x: pv[0]!, y: pv[1]! } : undefined) ?? (p0?.edges?.[0] ? edgeStart(p0.edges[0]) : undefined);
+      const q = (pv && pv.length >= 3 ? { x: pv[0]!, y: pv[1]! } : undefined) ?? (p0 && firstEdge(p0) ? edgeStart(firstEdge(p0)!) : undefined);
       if (q) s.anchor(q.x, q.y);
       s.k(up(e.patternName), e.solid, e.hatchStyle, e.patternType, e.patternDouble, e.paths.length);
       if (e.gradient?.enabled) {
