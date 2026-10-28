@@ -2,12 +2,13 @@
  * SPLINEDIT 계산: 닫기·열기, 맞춤 데이터(추가·삭제·이동·공차·소거), 정점(추가·이동·가중치), 폴리선으로 변환, 반전.
  *
  * - 맞춤점 스플라인(fitPoints 2개 이상)은 맞춤점을 고칠 때마다 곡선(조정점·매듭)을 다시 만든다:
- *   열린 곡선은 현 길이 매개변수의 3차 보간(끝 접선 반영), 닫힌 곡선은 맞춤점을 지나는 주기 3차 곡선.
+ *   열린 곡선은 AutoCAD와 같은 3차 보간(70의 매듭 매개변수, 끝 접선이 있으면 그 끝의 도함수, 없으면 자연 끝 — fitSplineAcad),
+ *   닫힌 곡선은 맞춤점을 지나는 주기 3차 곡선.
  * - 닫힌(주기) 조정점 스플라인: 조정점 n개 + 처음 차수 개 반복, 매듭 0 … n + 2·차수(고정되지 않음).
  * - 맞춤점 스플라인의 정점을 고치면 맞춤 데이터를 버리고 조정점 정의가 된다(AutoCAD와 같다).
  */
 import type { SplineEntity, Vec2, Vec3 } from '../../core/model';
-import { clampedKnots, interpolateFitPoints } from '../../geom/curves';
+import { clampedKnots, fitSplineAcad, interpolateFitPoints, knotParamOfFlags } from '../../geom/curves';
 import { pieceNearest } from './curve';
 import { dist } from './math';
 import { domain, elevateBezier, insertKnot, joinBeziers, joinNurbs, normalizeNurbs, periodicInterpolate, toBezier } from './nurbs';
@@ -49,7 +50,7 @@ export function refit(e: SplineEntity): SplineEntity {
       return out;
     }
   }
-  const s = interpolateFitPoints(fit, e.startTangent, e.endTangent);
+  const s = fitSplineAcad(fit, knotParamOfFlags(e.flags), e.startTangent, e.endTangent) ?? interpolateFitPoints(fit, e.startTangent, e.endTangent);
   out.degree = s.degree;
   out.knots = s.knots;
   out.controlPoints = s.ctrl;
@@ -335,8 +336,9 @@ export function fitKink(e: SplineEntity, q: Vec2): SplineEntity | null {
   const left = [...fit.slice(0, i), mid];
   const right = [mid, ...fit.slice(i)];
   if (left.length < 2 || right.length < 2) return null;
-  const L = interpolateFitPoints(left, e.startTangent, undefined);
-  const R = interpolateFitPoints(right, undefined, e.endTangent);
+  const kp = knotParamOfFlags(e.flags);
+  const L = fitSplineAcad(left, kp, e.startTangent) ?? interpolateFitPoints(left, e.startTangent, undefined);
+  const R = fitSplineAcad(right, kp, undefined, e.endTangent) ?? interpolateFitPoints(right, undefined, e.endTangent);
   const j = joinNurbs([
     { degree: L.degree, knots: L.knots, ctrl: L.ctrl },
     { degree: R.degree, knots: R.knots, ctrl: R.ctrl },

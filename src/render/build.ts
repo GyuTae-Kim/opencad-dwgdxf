@@ -52,7 +52,7 @@ import {
   translation,
   withOcs,
 } from '../geom/matrix';
-import { TAU, arcPoints, bulgePoints, ccwSweep, interpolateFitPoints, nurbsPoints } from '../geom/curves';
+import { TAU, arcPoints, bulgePoints, ccwSweep, fitPointsCurve, interpolateFitPoints, nurbsPoints } from '../geom/curves';
 import { type DashPattern, dashPolyline } from './linetype';
 import { DisplayListBuilder, type DisplayList, type SnapshotView, clipConvex } from './displaylist';
 import { ColorKind, type LayerState, type StyleSpec, STYLE_FLAG_FIELD, STYLE_FLAG_NO_PLOT, StyleTable, WidthKind, hiddenStyleSpec, layerStates, plotStyleNames } from './styles';
@@ -1435,7 +1435,7 @@ export class SceneBuilder {
     let degree = e.degree;
     let weights = e.weights;
     if (ctrl.length < 2 && e.fitPoints.length >= 2) {
-      const s = interpolateFitPoints(e.fitPoints, e.startTangent, e.endTangent);
+      const s = fitPointsCurve(e);
       ctrl = s.ctrl;
       knots = s.knots;
       degree = s.degree;

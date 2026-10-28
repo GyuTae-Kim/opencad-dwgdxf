@@ -228,6 +228,14 @@ function deBoor(p: number, U: readonly number[], P: readonly Vec3[], W: readonly
   return { x: dx[p]! / w, y: dy[p]! / w, z: dz[p]! / w };
 }
 
+/** NURBS 위의 한 점(매개변수 u는 매듭 범위로 자른다) */
+export function nurbsPoint(degree: number, knots: readonly number[], ctrl: readonly Vec3[], weights: readonly number[] | undefined, u: number): Vec3 {
+  const n = ctrl.length;
+  const p = Math.max(1, Math.min(degree, n - 1));
+  const U = knots.length === n + p + 1 ? knots : clampedKnots(n, p);
+  return deBoor(p, U, ctrl, weights, Math.min(Math.max(u, U[p]!), U[n]!));
+}
+
 /** 균일 열린 매듭(맞춤 매듭이 없을 때) */
 export function clampedKnots(nCtrl: number, degree: number): number[] {
   const m = nCtrl + degree + 1;
@@ -352,6 +360,149 @@ export function interpolateFitPoints(fit: readonly Vec3[], startTangent?: Vec3, 
   const ctrl = solve(A, rhs);
   if (!ctrl) return { ctrl: [...fit], knots: clampedKnots(n, 1), degree: 1 };
   return { ctrl, knots: U, degree: p };
+}
+
+/**
+ * AutoCAD의 맞춤점 스플라인(열린 곡선, 맞춤 공차 0)이 맞춤점 자료에서 만드는 조정점·매듭.
+ * AutoCAD가 같은 도면을 DWG(맞춤점 자료만)와 DXF(조정점·매듭·맞춤점)로 쓴 짝으로 정했다:
+ * - 3차, 조정점 = 맞춤점 + 2, 매듭 = [t0 ×4, t1 … t(n−2), t(n−1) ×4]. t는 맞춤점 매개변수를 정규화하지 않은 값
+ *   (knotParam 0 현 길이 누적, 1 현 길이 제곱근 누적, 2 균일 0·1·2…).
+ * - 끝 접선이 있으면 그 벡터(크기까지)가 그 끝의 1차 도함수, 없으면 그 끝의 2차 도함수가 0(자연 끝).
+ * 맞춤점이 둘보다 적거나 이웃 맞춤점이 겹쳐(매개변수가 같아) 풀 수 없으면 null.
+ */
+export function fitSplineAcad(fit: readonly Vec3[], knotParam: number, startTangent?: Vec3, endTangent?: Vec3): { ctrl: Vec3[]; knots: number[]; degree: 3 } | null {
+  const n = fit.length;
+  if (n < 2) return null;
+  const t: number[] = [0];
+  for (let i = 1; i < n; i++) {
+    const a = fit[i - 1]!;
+    const b = fit[i]!;
+    const d = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    const step = knotParam === 2 ? 1 : knotParam === 1 ? Math.sqrt(d) : d;
+    if (!(step > 0) || !Number.isFinite(step)) return null;
+    t.push(t[i - 1]! + step);
+  }
+  const T = t[n - 1]!;
+  const U = [0, 0, 0, 0, ...t.slice(1, n - 1), T, T, T, T];
+  const m = n + 1; // 마지막 조정점 번호
+  const N = m + 1;
+  // 세 줄 띠 행렬: dl[i] = A[i+1][i], d[i] = A[i][i], du[i] = A[i][i+1]
+  const dl = new Float64Array(N - 1);
+  const d = new Float64Array(N);
+  const du = new Float64Array(N - 1);
+  const bx = new Float64Array(N);
+  const by = new Float64Array(N);
+  const bz = new Float64Array(N);
+  const rhs = (i: number, v: Vec3, s = 1) => {
+    bx[i] = v.x * s;
+    by[i] = v.y * s;
+    bz[i] = v.z * s;
+  };
+  const has = (v?: Vec3): v is Vec3 => !!v && (v.x !== 0 || v.y !== 0 || v.z !== 0);
+  // 첫 조정점 = 첫 맞춤점
+  d[0] = 1;
+  rhs(0, fit[0]!);
+  // 시작 조건: P1 − P0 = 접선·(U4 − U1)/3, 또는 (P1 − P0)/(U4 − U1) = (P2 − P1)/(U5 − U2)
+  const d1 = U[4]! - U[1]!;
+  const d2 = U[5]! - U[2]!;
+  if (has(startTangent)) {
+    dl[0] = -1;
+    d[1] = 1;
+    rhs(1, startTangent, d1 / 3);
+  } else {
+    dl[0] = -1 / d1;
+    d[1] = 1 / d1 + 1 / d2;
+    du[1] = -1 / d2;
+  }
+  // 안쪽 맞춤점: 매듭 t_i에서 0이 아닌 기저 셋(조정점 i, i+1, i+2)
+  for (let i = 1; i < n - 1; i++) {
+    const r = i + 1;
+    const B = basisFuns(i + 3, t[i]!, 3, U);
+    dl[r - 1] = B[0]!;
+    d[r] = B[1]!;
+    du[r] = B[2]!;
+    rhs(r, fit[i]!);
+  }
+  // 끝 조건: P_m − P_{m−1} = 접선·(U_{m+3} − U_m)/3, 또는 2차 도함수 0
+  const e1 = U[m + 3]! - U[m]!;
+  const e2 = U[m + 2]! - U[m - 1]!;
+  if (has(endTangent)) {
+    if (m - 2 >= 0) dl[m - 2] = 0;
+    d[m - 1] = -1;
+    du[m - 1] = 1;
+    rhs(m - 1, endTangent, e1 / 3);
+  } else {
+    dl[m - 2] = 1 / e2;
+    d[m - 1] = -(1 / e1 + 1 / e2);
+    du[m - 1] = 1 / e1;
+  }
+  // 마지막 조정점 = 마지막 맞춤점
+  d[m] = 1;
+  rhs(m, fit[n - 1]!);
+  if (!solveTridiagonal(dl, d, du, [bx, by, bz])) return null;
+  const ctrl: Vec3[] = [];
+  for (let i = 0; i < N; i++) ctrl.push({ x: bx[i]! || 0, y: by[i]! || 0, z: bz[i]! || 0 });
+  // 양끝은 맞춤점 그대로(소거의 반올림 없이)
+  ctrl[0] = { ...fit[0]! };
+  ctrl[m] = { ...fit[n - 1]! };
+  return { ctrl, knots: U, degree: 3 };
+}
+
+/** DXF 70의 매듭 매개변수 비트(32 현 길이·64 제곱근·128 균일) → 0·1·2(비트가 없으면 AutoCAD 기본 현 길이) */
+export function knotParamOfFlags(flags: number): number {
+  return flags & 128 ? 2 : flags & 64 ? 1 : 0;
+}
+
+/**
+ * 조정점이 없는 맞춤점 스플라인의 곡선. 열린 곡선(맞춤 공차 0)은 AutoCAD가 맞춤점 자료에서 만드는 곡선(fitSplineAcad, 70의 매듭 매개변수 비트),
+ * 닫힌 곡선·근사 공차는 전역 보간(AutoCAD의 계산을 모른다).
+ */
+export function fitPointsCurve(e: { fitPoints: readonly Vec3[]; flags: number; startTangent?: Vec3; endTangent?: Vec3; fitTolerance?: number }): { ctrl: Vec3[]; knots: number[]; degree: number } {
+  if (!(e.flags & 1) && !((e.fitTolerance ?? 0) > 1e-9)) {
+    const s = fitSplineAcad(e.fitPoints, knotParamOfFlags(e.flags), e.startTangent, e.endTangent);
+    if (s) return s;
+  }
+  return interpolateFitPoints(e.fitPoints, e.startTangent, e.endTangent);
+}
+
+/**
+ * 세 줄 띠 행렬 풀기(부분 피벗 — LAPACK dgtsv와 같은 차례). dl·d·du와 오른쪽 b를 덮어쓴다(dl은 피벗으로 생긴 둘째 위 띠로 쓴다).
+ * 특이하면 false.
+ */
+function solveTridiagonal(dl: Float64Array, d: Float64Array, du: Float64Array, bs: Float64Array[]): boolean {
+  const n = d.length;
+  for (let i = 0; i < n - 1; i++) {
+    if (Math.abs(d[i]!) >= Math.abs(dl[i]!)) {
+      if (d[i] === 0) return false;
+      const f = dl[i]! / d[i]!;
+      d[i + 1] = d[i + 1]! - f * du[i]!;
+      for (const b of bs) b[i + 1] = b[i + 1]! - f * b[i]!;
+      dl[i] = 0;
+    } else {
+      const f = d[i]! / dl[i]!;
+      d[i] = dl[i]!;
+      const tmp = d[i + 1]!;
+      d[i + 1] = du[i]! - f * tmp;
+      if (i < n - 2) {
+        dl[i] = du[i + 1]!;
+        du[i + 1] = -f * dl[i]!;
+      } else dl[i] = 0;
+      du[i] = tmp;
+      for (const b of bs) {
+        const tb = b[i]!;
+        b[i] = b[i + 1]!;
+        b[i + 1] = tb - f * b[i + 1]!;
+      }
+    }
+  }
+  if (!(Math.abs(d[n - 1]!) > 0)) return false;
+  for (const b of bs) {
+    b[n - 1] = b[n - 1]! / d[n - 1]!;
+    if (n > 1) b[n - 2] = (b[n - 2]! - du[n - 2]! * b[n - 1]!) / d[n - 2]!;
+    for (let i = n - 3; i >= 0; i--) b[i] = (b[i]! - du[i]! * b[i + 1]! - dl[i]! * b[i + 2]!) / d[i]!;
+  }
+  for (const b of bs) for (let i = 0; i < n; i++) if (!Number.isFinite(b[i]!)) return false;
+  return true;
 }
 
 function scaleV(v: Vec3, s: number): Vec3 {

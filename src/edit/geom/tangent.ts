@@ -4,8 +4,9 @@
  * - 타원·타원호: 아핀 변환으로 해석적 — 타원은 단위원의 아핀 상이고, 접함(한 점에서 만나고 방향이 같음)은 아핀 변환에서
  *   보존되므로 점을 단위원 좌표로 옮겨 단위원의 접점을 구하고 되돌린다.
  * - NURBS(스플라인): 매개변수 위의 근 찾기. f(t) = D1(t) × (P(t) − p)의 부호가 바뀌는 구간을 표본으로 가두고,
- *   그 안에서 뉴턴(f′ = D2 × (P − p))을 쓰되 구간을 벗어나면 이분법으로 바꾼다. 마지막에 잔차를 보고 접점이 아니면 버린다
- *   (곡선 위의 점 자신, 꺾인 매듭 등). 수렴하지 않으면 후보가 없다.
+ *   그 안에서 뉴턴(f′ = D2 × (P − p))을 쓰되 구간을 벗어나면 이분법으로 바꾼다. 표본 한 칸 안에 두 근이 함께 들어 부호가 바뀌지 않는
+ *   경우(점이 곡선에 아주 가까울 때)는 f′의 부호가 바뀌는 칸에서 f의 극값을 찾아, 극값에서 부호가 바뀌면 두 근, 0에 닿으면 이중근으로 본다.
+ *   마지막에 잔차를 보고 접점이 아니면 버린다(곡선 위의 점 자신, 꺾인 매듭 등). 수렴하지 않으면 후보가 없다.
  * - 공통 접선(타원·스플라인이 낄 때): 미지수 (t1, t2)의 2차원 뉴턴. F1 = D1a × (Pb − Pa), F2 = D1a × D1b.
  *   두 곡선의 표본 격자에서 F가 작은 곳(이웃보다 작은 곳)들을 시작점으로 쓰고, 수렴한 해 중 접점이 찍은 자리에 가장 가까운 것.
  * 매개변수 t는 조각의 [0, 1](src/edit/geom/curve.ts). 완전한 원·타원은 주기로 감는다.
@@ -157,17 +158,36 @@ export function tangentsFromPoint(pc: Piece, q: Vec2): CurvePoint[] {
         const P = pieceAt(pc, t);
         return cross(pieceD2(pc, t), { x: P.x - q.x, y: P.y - q.y });
       };
+      // f′의 도함수(극값을 뉴턴으로 다듬을 때만 — 이분법으로 가둔다)
+      const ddf = (t: number) => {
+        const h = 1e-6;
+        const a = Math.max(0, t - h);
+        const b = Math.min(1, t + h);
+        return (df(b) - df(a)) / (b - a);
+      };
       const N = nurbsSamples(pc, 1024);
       let t0 = 0;
       let f0 = f(0);
+      let g0 = df(0);
       const roots: number[] = [];
       for (let i = 1; i <= N; i++) {
         const t1 = i / N;
         const f1 = f(t1);
+        const g1 = df(t1);
         if (f0 === 0) roots.push(t0);
         else if (f1 !== 0 && Math.sign(f0) !== Math.sign(f1)) roots.push(bracketRoot(f, df, t0, t1, f0));
+        else if (f1 !== 0 && g0 !== 0 && g1 !== 0 && Math.sign(g0) !== Math.sign(g1)) {
+          // 부호는 그대로인데 f가 이 칸 안에서 극값을 가진다: 극값에서 부호가 바뀌면 두 근, 아니면 극값 자신(이중근이면 잔차로 남는다)
+          const tm = bracketRoot(df, ddf, t0, t1, g0);
+          const fm = f(tm);
+          if (fm !== 0 && Math.sign(fm) !== Math.sign(f0)) {
+            roots.push(bracketRoot(f, df, t0, tm, f0));
+            roots.push(bracketRoot(f, df, tm, t1, fm));
+          } else roots.push(tm);
+        }
         t0 = t1;
         f0 = f1;
+        g0 = g1;
       }
       if (f0 === 0) roots.push(1);
       for (const t of roots) {

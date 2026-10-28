@@ -4,12 +4,11 @@
  * 좌표는 WCS 평면도다.
  */
 import type { Entity, EntityBase, LwVertex, SplineEntity, Vec2, Vec3 } from '../../core/model';
-import { bulgeArc, clampedKnots, interpolateFitPoints } from '../../geom/curves';
+import { bulgeArc, clampedKnots, fitSplineAcad, interpolateFitPoints } from '../../geom/curves';
 import type { Piece } from './curve';
 import { pieceAt, pieceD1, pieceNearest } from './curve';
 import { footNear, osculatingPiece } from './tangent';
 import { ccwSweep, dist, wrapPi } from './math';
-import { interpolate } from './nurbs';
 import { inherit } from './path';
 import { fitKind, frameVerts, isClosed, isPolyline } from './pedit';
 import { closeSpline } from './splinedit';
@@ -152,27 +151,39 @@ function loci(c: NonNullable<ReturnType<typeof carrier>>, r: number): Locus[] {
   return out;
 }
 
-function meet(A: Locus, B: Locus): Vec2[] {
+/**
+ * 두 자취의 교점. relaxed면 만나지 않을 때 가장 가까이 가는 점 하나(선은 원 중심에서 내린 수선의 발, 두 원은 중심선 위에서
+ * 서로 가장 가까운 두 점의 가운데) — 곡선을 곡률원으로 바꿔 풀 때 접하는 경계(이중근)의 근처에서는 곡률원이 자취에 닿지 않을 수 있다.
+ */
+function meet(A: Locus, B: Locus, relaxed = false): Vec2[] {
   if (A.k === 'line' && B.k === 'line') {
     const den = A.d.x * B.d.y - A.d.y * B.d.x;
     if (Math.abs(den) < 1e-12) return [];
     const t = ((B.a.x - A.a.x) * B.d.y - (B.a.y - A.a.y) * B.d.x) / den;
     return [{ x: A.a.x + A.d.x * t, y: A.a.y + A.d.y * t }];
   }
-  if (A.k === 'circle' && B.k === 'line') return meet(B, A);
+  if (A.k === 'circle' && B.k === 'line') return meet(B, A, relaxed);
   if (A.k === 'line' && B.k === 'circle') {
     const fx = A.a.x - B.c.x;
     const fy = A.a.y - B.c.y;
     const b = fx * A.d.x + fy * A.d.y;
     const c = fx * fx + fy * fy - B.r * B.r;
     const disc = b * b - c;
-    if (disc < -1e-12 * Math.max(1, B.r * B.r)) return [];
+    if (disc < -1e-12 * Math.max(1, B.r * B.r)) return relaxed ? [{ x: A.a.x - A.d.x * b, y: A.a.y - A.d.y * b }] : [];
     const s = Math.sqrt(Math.max(0, disc));
     return [-b - s, -b + s].map((t) => ({ x: A.a.x + A.d.x * t, y: A.a.y + A.d.y * t }));
   }
   if (A.k === 'circle' && B.k === 'circle') {
     const d = dist(A.c, B.c);
-    if (d < 1e-12 || d > A.r + B.r + 1e-9 || d < Math.abs(A.r - B.r) - 1e-9) return [];
+    if (d < 1e-12) return [];
+    if (d > A.r + B.r + 1e-9 || d < Math.abs(A.r - B.r) - 1e-9) {
+      if (!relaxed) return [];
+      const u = { x: (B.c.x - A.c.x) / d, y: (B.c.y - A.c.y) / d };
+      // 떨어져 있으면 마주 보는 두 점, 한 원이 다른 원 안이면 같은 쪽 두 점
+      const sa = d > A.r + B.r || A.r > B.r ? 1 : -1;
+      const sb = d > A.r + B.r ? -1 : A.r > B.r ? 1 : -1;
+      return [{ x: (A.c.x + u.x * A.r * sa + B.c.x + u.x * B.r * sb) / 2, y: (A.c.y + u.y * A.r * sa + B.c.y + u.y * B.r * sb) / 2 }];
+    }
     const a = (A.r * A.r - B.r * B.r + d * d) / (2 * d);
     const h = Math.sqrt(Math.max(0, A.r * A.r - a * a));
     const ux = (B.c.x - A.c.x) / d;
@@ -198,25 +209,28 @@ export function circleTTR(p1: Piece, pick1: Vec2, p2: Piece, pick2: Vec2, r: num
       { piece: p1, pick: pick1 },
       { piece: p2, pick: pick2 },
     ],
-    (its) => {
+    (its, relaxed) => {
       const [a, b] = its as { piece: Piece; pick: Vec2 }[];
-      return ttrAnalytic(a!.piece, a!.pick, b!.piece, b!.pick, r);
+      return ttrAnalytic(a!.piece, a!.pick, b!.piece, b!.pick, r, relaxed);
     },
   );
 }
 
-function ttrAnalytic(p1: Piece, pick1: Vec2, p2: Piece, pick2: Vec2, r: number): { c: Vec2; r: number } | null {
+/** relaxed: 만나지 않는 자취의 가장 가까운 점도 후보로(벗어난 정도가 작은 것부터) — solveWithCurves의 되풀이에서만 쓴다 */
+function ttrAnalytic(p1: Piece, pick1: Vec2, p2: Piece, pick2: Vec2, r: number, relaxed = false): { c: Vec2; r: number } | null {
   const c1 = carrier(p1);
   const c2 = carrier(p2);
   if (!c1 || !c2) return null;
-  let best: { c: Vec2; score: number } | null = null;
+  let best: { c: Vec2; score: number; gap: number } | null = null;
+  const gapTol = 1e-9 * Math.max(1, r);
   for (const A of loci(c1, r))
     for (const B of loci(c2, r))
-      for (const c of meet(A, B)) {
+      for (const c of meet(A, B, relaxed)) {
         const t1 = pieceNearest(p1, c, false).p;
         const t2 = pieceNearest(p2, c, false).p;
         const score = dist(t1, pick1) + dist(t2, pick2);
-        if (!best || score < best.score - 1e-12) best = { c, score };
+        const gap = relaxed ? Math.abs(dist(t1, c) - r) + Math.abs(dist(t2, c) - r) : 0;
+        if (!best || gap < best.gap - gapTol || (gap <= best.gap + gapTol && score < best.score - 1e-12)) best = { c, score, gap };
       }
   return best ? { c: best.c, r } : null;
 }
@@ -241,7 +255,7 @@ export function circleTTT(picks: readonly { piece: Piece; pick: Vec2 }[]): { c: 
  */
 export function circleThrough(items: readonly CircleItem[]): { c: Vec2; r: number } | null {
   if (items.length !== 3) return null;
-  return solveWithCurves(items, throughAnalytic);
+  return solveWithCurves(items, (its, relaxed) => throughAnalytic(its, relaxed));
 }
 
 /**
@@ -251,9 +265,9 @@ export function circleThrough(items: readonly CircleItem[]): { c: Vec2; r: numbe
  * 첫 바퀴는 고른 점에서, 다음부터는 앞 바퀴의 발에서 해를 고른다. 수렴하지 않거나 접점이 범위 밖(스플라인)이면 null.
  * 타원호는 원호처럼 연장해서(타원 전체) 본다. 곡선이 없으면 해석적 풀이 그대로.
  */
-function solveWithCurves(items: readonly CircleItem[], solve: (items: readonly CircleItem[]) => { c: Vec2; r: number } | null): { c: Vec2; r: number } | null {
+function solveWithCurves(items: readonly CircleItem[], solve: (items: readonly CircleItem[], relaxed: boolean) => { c: Vec2; r: number } | null): { c: Vec2; r: number } | null {
   const curved = items.map((it) => 'piece' in it && (it.piece.k === 'ell' || it.piece.k === 'nurbs'));
-  if (!curved.some(Boolean)) return solve(items);
+  if (!curved.some(Boolean)) return solve(items, false);
   const ts = items.map((it, i) => (curved[i] && 'piece' in it ? pieceNearest(it.piece, it.pick, it.piece.k !== 'ell').t : 0));
   let size = 1;
   for (const it of items) size = Math.max(size, Math.hypot('point' in it ? it.point.x : it.pick.x, 'point' in it ? it.point.y : it.pick.y));
@@ -264,7 +278,9 @@ function solveWithCurves(items: readonly CircleItem[], solve: (items: readonly C
       const foot = pieceAt(it.piece, ts[i]!);
       return { piece: osculatingPiece(it.piece, ts[i]!), pick: k === 0 ? it.pick : foot };
     });
-    const s = solve(approx);
+    // 곡선에 한 점으로 닿는 경계(이중근)에서는 그 근처 곡률원이 자취에 닿지 않을 수 있다(예: 타원 꼭짓점의 곡률원이 가장 커서
+    // 이웃 곡률원은 모두 그 안에 든다) — 그때는 가장 가까이 가는 점으로 되풀이하고, 끝에서 모든 조건을 다시 본다
+    const s = solve(approx, false) ?? solve(approx, true);
     if (!s) return null;
     items.forEach((it, i) => {
       if (curved[i] && 'piece' in it) ts[i] = footNear(it.piece, s.c, ts[i]!, it.piece.k === 'ell');
@@ -274,11 +290,26 @@ function solveWithCurves(items: readonly CircleItem[], solve: (items: readonly C
     if (done) break;
   }
   if (!prev) return null;
-  // 곡선마다 발에서 접하는지(거리 = 반지름, 반지름 ⟂ 곡선)
+  // 곡선마다 발에서 접하는지(거리 = 반지름, 반지름 ⟂ 곡선), 점은 지나는지, 선·호는 접하는지
   const tol = 1e-7 * Math.max(size, prev.r);
   for (let i = 0; i < items.length; i++) {
     const it = items[i]!;
-    if (!curved[i] || !('piece' in it)) continue;
+    if (!('piece' in it)) {
+      if (Math.abs(dist(it.point, prev.c) - prev.r) > tol) return null;
+      continue;
+    }
+    if (!curved[i]) {
+      const cr = carrier(it.piece);
+      if (!cr) return null;
+      if (cr.k === 'line') {
+        const off = Math.abs((prev.c.x - cr.a.x) * cr.d.y - (prev.c.y - cr.a.y) * cr.d.x);
+        if (Math.abs(off - prev.r) > tol) return null;
+      } else {
+        const dd = dist(prev.c, cr.c);
+        if (Math.abs(dd - (cr.r + prev.r)) > tol && Math.abs(dd - Math.abs(cr.r - prev.r)) > tol) return null;
+      }
+      continue;
+    }
     const pc = it.piece;
     const tt = ts[i]!;
     if (pc.k === 'nurbs' && (tt < -1e-9 || tt > 1 + 1e-9)) return null;
@@ -292,14 +323,15 @@ function solveWithCurves(items: readonly CircleItem[], solve: (items: readonly C
   return prev;
 }
 
-function throughAnalytic(items: readonly CircleItem[]): { c: Vec2; r: number } | null {
+function throughAnalytic(items: readonly CircleItem[], relaxed = false): { c: Vec2; r: number } | null {
   if (items.length !== 3) return null;
   const picks = items.map((it) => ('point' in it ? { pick: it.point } : { pick: it.pick }));
   const cs = items.map((it) => ('point' in it ? ({ k: 'circle', c: it.point, r: 0 } as const) : carrier(it.piece)));
   if (cs.some((c) => !c)) return null;
   const car = cs as NonNullable<ReturnType<typeof carrier>>[];
   const size = Math.max(1, ...picks.map((p) => Math.hypot(p.pick.x, p.pick.y)));
-  let best: { c: Vec2; r: number; score: number } | null = null;
+  let best: { c: Vec2; r: number; score: number; gap: number } | null = null;
+  const gapTol = 1e-9 * size;
   for (let mask = 0; mask < 8; mask++) {
     const sg = [mask & 1 ? -1 : 1, mask & 2 ? -1 : 1, mask & 4 ? -1 : 1];
     const lin: number[][] = [];
@@ -346,7 +378,7 @@ function throughAnalytic(items: readonly CircleItem[]): { c: Vec2; r: number } |
         if (disc >= -1e-12 * Math.max(1, qb * qb)) {
           const sq = Math.sqrt(Math.max(0, disc));
           ts.push((-qb - sq) / (2 * qa), (-qb + sq) / (2 * qa));
-        }
+        } else if (relaxed) ts.push(-qb / (2 * qa)); // 가장 가까이 가는 곳(이차식의 꼭짓점)
       }
       for (const t of ts) sols.push([u0[0]! + t * w[0]!, u0[1]! + t * w[1]!, u0[2]! + t * w[2]!]);
     }
@@ -354,6 +386,7 @@ function throughAnalytic(items: readonly CircleItem[]): { c: Vec2; r: number } |
       if (!(r > 1e-9 * size) || !Number.isFinite(x + y + r)) continue;
       const c = { x, y };
       let score = 0;
+      let gap = 0;
       let ok = true;
       car.forEach((cr, i) => {
         let tp: Vec2;
@@ -367,10 +400,13 @@ function throughAnalytic(items: readonly CircleItem[]): { c: Vec2; r: number } |
           const b = { x: cr.c.x - u.x * cr.r, y: cr.c.y - u.y * cr.r };
           tp = Math.abs(dist(a, c) - r) <= Math.abs(dist(b, c) - r) ? a : b;
         }
-        if (Math.abs(dist(tp, c) - r) > 1e-6 * Math.max(size, r)) ok = false;
+        const g = Math.abs(dist(tp, c) - r);
+        if (g > 1e-6 * Math.max(size, r)) ok = false;
+        gap += g;
         score += dist(tp, picks[i]!.pick);
       });
-      if (ok && (!best || score < best.score - 1e-12)) best = { c, r, score };
+      if (!relaxed) gap = 0;
+      if ((ok || relaxed) && (!best || gap < best.gap - gapTol || (gap <= best.gap + gapTol && score < best.score - 1e-12))) best = { c, r, score, gap };
     }
   }
   return best ? { c: best.c, r: best.r } : null;
@@ -487,13 +523,16 @@ export function arcByDirection(start: Vec2, dir: number, end: Vec2): number | nu
 
 export type KnotParam = 'chord' | 'sqrt' | 'uniform';
 
-/** 맞춤점 스플라인의 조정점·매듭(열린 곡선). 접선이 있으면 현 길이 매개변수(접선 조건이 있는 보간) */
+const KNOT_PARAM: Record<KnotParam, number> = { chord: 0, sqrt: 1, uniform: 2 };
+/** DXF 70: 맞춤점 방식(1024) + 매듭 매개변수 비트(AutoCAD SPLINE 맞춤 방식으로 그린 곡선과 같은 값) */
+const FIT_FLAGS: Record<KnotParam, number> = { chord: 1024 | 32, sqrt: 1024 | 64, uniform: 1024 | 128 };
+
+/**
+ * 맞춤점 스플라인의 조정점·매듭(열린 곡선): AutoCAD와 같은 보간(fitSplineAcad — 매듭은 맞춤점 매개변수, 끝 접선이 있으면 그 끝의 도함수,
+ * 없으면 자연 끝). 같은 맞춤점이면 AutoCAD가 같은 곡선을 만들어 DWG에 맞춤점 자료로 쓸 수 있다.
+ */
 export function fitSplineNurbs(fit: readonly Vec3[], knots: KnotParam = 'chord', startTangent?: Vec3, endTangent?: Vec3): { degree: number; knots: number[]; ctrl: Vec3[] } {
-  if (knots !== 'chord' && !startTangent && !endTangent && fit.length >= 3) {
-    const n = interpolate(fit, 3, knots);
-    if (n) return { degree: n.degree, knots: n.knots, ctrl: n.ctrl };
-  }
-  return interpolateFitPoints(fit, startTangent, endTangent);
+  return fitSplineAcad(fit, KNOT_PARAM[knots], startTangent, endTangent) ?? interpolateFitPoints(fit, startTangent, endTangent);
 }
 
 /** 맞춤점 스플라인 객체(닫기면 맞춤점을 지나는 주기 곡선 — SPLINEDIT 닫기와 같다) */
@@ -504,7 +543,8 @@ export function makeFitSpline(base: Omit<EntityBase, 'type' | 'handle'>, fit: re
     ...base,
     type: 'SPLINE',
     handle: '',
-    flags: 8,
+    // 열린 곡선은 맞춤점 방식 비트(닫힌 맞춤점 곡선은 AutoCAD의 계산을 몰라 예전처럼)
+    flags: opt.closed ? 8 : 8 | FIT_FLAGS[opt.knots ?? 'chord'],
     degree: s.degree,
     knots: s.knots,
     controlPoints: s.ctrl,

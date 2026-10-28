@@ -3,7 +3,7 @@
  * 점은 증분(SKETCHINC) 이상 떨어질 때만 기록하고, 스플라인은 공차(SKPOLY 2의 맞춤 공차)로 점을 줄여 맞춤점으로 쓴다.
  */
 import type { Entity, EntityBase, Vec3 } from '../core/model';
-import { interpolateFitPoints } from '../geom/curves';
+import { fitSplineAcad, interpolateFitPoints } from '../geom/curves';
 import { packLwPoints } from '../core/lwpoly';
 
 export type SketchType = 'line' | 'polyline' | 'spline';
@@ -76,12 +76,13 @@ export function sketchEntities(strokes: readonly P2[][], type: SketchType, props
     } else {
       const fit = simplify(s, tolerance).map(v3);
       if (fit.length < 2) continue;
-      const sp = interpolateFitPoints(fit);
+      // AutoCAD와 같은 맞춤점 보간(현 길이, 자연 끝) — DWG에 맞춤점 자료로 쓸 수 있다
+      const sp = fitSplineAcad(fit, 0) ?? interpolateFitPoints(fit);
       out.push({
         ...props,
         type: 'SPLINE',
         handle: '',
-        flags: 8,
+        flags: 8 | 1024 | 32,
         degree: sp.degree,
         knots: sp.knots,
         controlPoints: sp.ctrl,

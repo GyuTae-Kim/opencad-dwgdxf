@@ -135,6 +135,13 @@ export function compareEntity(e: Entity, a: Entity, o: CompareOptions): string[]
   if (t === 'SPLINE') {
     skipType.add('flags');
     skipType.add('normal');
+    // DWG에는 맞춤점·조정점 자료 중 하나만 남는다(splineflags.ts): 맞춤점만 있으면 다시 읽을 때 조정점·매듭이 채워지고,
+    // 조정점만 남은 1024는 맞춤점을 되살리고, R2013 전 판의 제곱근·균일 매듭은 맞춤점이 빠진다
+    if (!e.controlPoints.length && e.fitPoints.length >= 2) {
+      skipType.add('knots');
+      skipType.add('controlPoints');
+    }
+    if ((e.flags & 1024 && !e.fitPoints.length) || (ver < 1027 && e.flags & (64 | 128))) skipType.add('fitPoints');
   }
   if (t === 'MTEXT' || (t as string) === 'ATTRIB' || (t as string) === 'ATTDEF') {
     skipType.add('direction');

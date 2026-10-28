@@ -50,6 +50,7 @@ const CONVERSIONS = new Set([
   'r12.approximated',
   'r12.mtext_as_text',
   'r12.leader_as_polyline',
+  'dwg.write_spline_fit_dropped',
 ]);
 
 /** 객체가 빠지는 경고(종류에 따라) */

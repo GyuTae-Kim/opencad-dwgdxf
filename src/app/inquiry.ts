@@ -3,7 +3,7 @@ import type { CadColor, CadDocument, DimensionEntity, Entity, HatchEntity } from
 import { tableKey } from '../core/model';
 import { DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../core/dimvars';
 import { type UnitSettings, formatAngle, formatLength } from '../core/units';
-import { bulgeArc, ccwSweep, interpolateFitPoints, nurbsPoints, TAU } from '../geom/curves';
+import { bulgeArc, ccwSweep, fitPointsCurve, nurbsPoints, TAU } from '../geom/curves';
 import { hatchLoops } from '../render/hatch';
 import { decodePercent } from '../text/mtext';
 import { definitionName } from '../edit/dynblock';
@@ -210,7 +210,7 @@ function splineLength(e: Extract<Entity, { type: 'SPLINE' }>): number {
   let pts: number[];
   if (e.controlPoints.length >= 2) pts = nurbsPoints(e.degree, e.knots, e.controlPoints, e.weights, 1e-6);
   else if (e.fitPoints.length >= 2) {
-    const s = interpolateFitPoints(e.fitPoints, e.startTangent, e.endTangent);
+    const s = fitPointsCurve(e);
     pts = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e-6);
   } else return 0;
   let L = 0;
