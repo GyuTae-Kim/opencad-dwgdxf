@@ -10,6 +10,7 @@ import { definitionName } from '../edit/dynblock';
 import { lwVertices } from '../core/lwpoly';
 import { polyDrawnBulgeVerts, polyVertices } from '../core/polyverts';
 import { childStyleOf } from '../edit/dim/vars';
+import { leaderCount } from '../core/flat3';
 
 export const TYPE_NAMES: Record<string, string> = {
   LINE: '선',
@@ -513,7 +514,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): 
       misc.push({ k: '지시선 수', v: String(e.context.leaders.length) });
       break;
     case 'LEADER':
-      geo.push({ k: '정점 수', v: String(e.vertices.length) });
+      geo.push({ k: '정점 수', v: String(leaderCount(e)) });
       break;
     case 'ACAD_TABLE':
       misc.push({ k: '행 × 열', v: `${e.rows} × ${e.columns}` });

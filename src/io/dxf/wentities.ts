@@ -42,6 +42,7 @@ import { parseDimOverrides } from './tagutil';
 import { acdbTableTags, tableCellsOut } from '../tablecells';
 import { hatchEdges } from '../../core/hatchedges';
 import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../core/meshdata';
+import { leaderCount, leaderVertices } from '../../core/flat3';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -783,8 +784,8 @@ function writeLeader(w: TagOut, e: LeaderEntity): void {
   w.t(75, e.hookline ? 1 : 0);
   w.t(40, fin(e.textHeight));
   w.t(41, fin(e.textWidth));
-  w.t(76, e.vertices.length);
-  for (const v of e.vertices) w.p3(10, v);
+  w.t(76, leaderCount(e));
+  for (const v of leaderVertices(e)) w.p3(10, v);
   w.h(340, e.annotation);
   if (e.normal) w.p3(210, e.normal);
   if (e.horizontalDirection) w.p3(211, e.horizontalDirection);

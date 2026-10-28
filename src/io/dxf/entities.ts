@@ -691,13 +691,18 @@ function dimension(c: Common, subtype?: DimensionEntity['subtype']): DimensionEn
 
 function leader(c: Common): LeaderEntity {
   const t = c.tags;
-  const vertices: Vec3[] = [];
-  for (let i = 0; i < t.length; i++) if (t.codes[i] === 10) vertices.push(t.pointAt(i));
+  // 정점은 평탄 좌표로(src/core/flat3.ts)
+  const verts: number[] = [];
+  for (let i = 0; i < t.length; i++)
+    if (t.codes[i] === 10) {
+      const p = t.pointAt(i);
+      verts.push(p.x, p.y, p.z);
+    }
   const e = {
     ...c.base,
     type: 'LEADER',
     dimStyle: name(t.str(3, 'Standard')),
-    vertices,
+    verts: verts.slice(),
     arrowHead: t.int(71, 1) === 1,
     pathType: t.int(72),
     creation: t.int(73, 3),

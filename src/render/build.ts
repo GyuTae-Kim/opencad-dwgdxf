@@ -70,6 +70,7 @@ import { mlineDrawing } from '../edit/mline/draw';
 import { toleranceLayout } from '../edit/annot/tolerance';
 import { breakRuns } from '../edit/annot/mleader';
 import { type AnnoDisplay, annoDisplayFor } from '../edit/annoscale/view';
+import { leaderVertices } from '../core/flat3';
 
 export interface BuildOptions {
   text: TextEngine;
@@ -1853,12 +1854,13 @@ export class SceneBuilder {
   private leader(e: LeaderEntity, ctx: Ctx): void {
     const r = this.resolve(e, ctx);
     const v = this.dimVars(e.dimStyle, e.overrides, { subtype: 'LEADER' });
-    if (e.vertices.length < 2) return;
+    const nv = (e.verts.length / 3) | 0;
+    if (nv < 2) return;
     let pts3: number[];
-    if (e.pathType === 1 && e.vertices.length > 2) {
-      const s = interpolateFitPoints(e.vertices);
+    if (e.pathType === 1 && nv > 2) {
+      const s = interpolateFitPoints(leaderVertices(e));
       pts3 = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, this.localTol(ctx.m));
-    } else pts3 = e.vertices.flatMap((p) => [p.x, p.y, p.z]);
+    } else pts3 = e.verts.slice(0, nv * 3);
     const pts = this.xf3(ctx.m, pts3);
     let color = e.color;
     if (e.overrides && e.overrides[176] !== undefined) color = { aci: Number(e.overrides[176]) };

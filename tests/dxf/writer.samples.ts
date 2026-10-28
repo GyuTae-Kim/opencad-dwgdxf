@@ -9,6 +9,7 @@ import { packBulge, packLw } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
 import { packEdges } from '../../src/core/hatchedges';
 import { packMesh } from '../../src/core/meshdata';
+import { pack3 } from '../../src/core/flat3';
 
 /** 문서의 $HANDSEED에서 핸들을 하나씩(편집 세션과 같은 방식) */
 function handles(doc: CadDocument): () => string {
@@ -180,7 +181,7 @@ export function addSampleEntities(doc: CadDocument): void {
     defPoint: p(80, 65),
     arc: { center: p(80, 50), start: p(90, 50), end: p(80, 60), startAngle: 0, endAngle: Math.PI / 2, partial: false },
   });
-  push({ ...base('LEADER'), dimStyle: 'Standard', vertices: [p(0, 0), p(10, 10), p(20, 10)], arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 2.5, textWidth: 0 });
+  push({ ...base('LEADER'), dimStyle: 'Standard', verts: pack3([p(0, 0), p(10, 10), p(20, 10)]), arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 2.5, textWidth: 0 });
   const ml: MLeaderEntity = {
     ...(base('MULTILEADER') as unknown as MLeaderEntity),
     leaderLineType: 1,

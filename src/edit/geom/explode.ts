@@ -42,6 +42,7 @@ import { metrics, mtextDir } from './xtext';
 import { type Nurbs, domain, normalizeNurbs, subNurbs } from './nurbs';
 import { explodeArcText } from '../textools/arctext';
 import { meshFaces, meshVertices } from '../../core/meshdata';
+import { leaderVertices } from '../../core/flat3';
 
 export function explodeEntity(e: Entity, doc: CadDocument): EditResult {
   const done = (add: Entity[], extra: Partial<EditResult> = {}): EditResult => (add.length ? { remove: e.handle ? [e.handle] : [], add, ...extra } : { message: MSG.cannotExplode });
@@ -401,12 +402,13 @@ function polyEntities(src: Entity, v: Vec3[], spline: boolean): Entity[] {
 }
 
 function explodeLeader(e: LeaderEntity, doc: CadDocument): Entity[] {
-  const out = polyEntities(e, e.vertices, e.pathType === 1);
-  if (e.arrowHead && e.vertices.length >= 2) {
+  const lv = leaderVertices(e);
+  const out = polyEntities(e, lv, e.pathType === 1);
+  if (e.arrowHead && lv.length >= 2) {
     const v = dimVars(doc, e);
     const asz = (Number(v.DIMASZ) || 2.5) * (Number(v.DIMSCALE) || 1);
-    const a = e.vertices[0]!;
-    const b = e.vertices[1]!;
+    const a = lv[0]!;
+    const b = lv[1]!;
     out.push(...arrowEntities(e, doc, String(v.DIMLDRBLK || v.DIMBLK || ''), a, Math.atan2(a.y - b.y, a.x - b.x), asz, a.z));
   }
   return out;

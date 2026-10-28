@@ -16,6 +16,7 @@ import { dwgFixtures } from './oracle';
 import { packBulge, packLw } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
 import { packEdges } from '../../src/core/hatchedges';
+import { pack3 } from '../../src/core/flat3';
 
 export const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 export const WRITE_VERSIONS = ['AC1015', 'AC1018', 'AC1024', 'AC1027', 'AC1032'] as const;
@@ -207,7 +208,7 @@ export function syntheticDocument(): CadDocument {
     lineSpacingStyle: 1,
     lineSpacingFactor: 1,
   } as Entity);
-  add({ ...base(), type: 'LEADER', dimStyle: 'ISO-25', vertices: [{ x: 0, y: 0, z: 0 }, { x: 5, y: 5, z: 0 }, { x: 10, y: 5, z: 0 }], arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 } as Entity);
+  add({ ...base(), type: 'LEADER', dimStyle: 'ISO-25', verts: pack3([{ x: 0, y: 0, z: 0 }, { x: 5, y: 5, z: 0 }, { x: 10, y: 5, z: 0 }]), arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 } as Entity);
   add({ ...base(), type: 'TOLERANCE', dimStyle: 'ISO-25', insert: { x: 0, y: 30, z: 0 }, text: '{\\Fgdt;j}%%v0.1', direction: { x: 1, y: 0, z: 0 } } as Entity);
   add({ ...base(), type: 'MLINE', styleName: 'Standard', scale: 1, justification: 0, flags: 1, startPoint: { x: 0, y: 40, z: 0 }, normal: { x: 0, y: 0, z: 1 }, elementCount: 2, vertices: [0, 1].map((i) => ({ position: { x: i * 10, y: 40, z: 0 }, direction: { x: 1, y: 0, z: 0 }, miter: { x: 0, y: 1, z: 0 }, elements: [{ params: [0.5, 0], fillParams: [] }, { params: [-0.5, 0], fillParams: [] }] })) } as Entity);
   return doc;

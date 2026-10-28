@@ -16,6 +16,7 @@ import { findTargets, replaceTargets } from '../../src/app/textedit/findreplace'
 import { activeEditor } from '../../src/app/textedit/editor';
 import { findPanel, newFindState } from '../../src/app/textedit/palette';
 import { makeApp, settle } from '../polish/real-app';
+import { pack3 } from '../../src/core/flat3';
 
 vi.mock('../../src/app/view', async (orig) => ({ ...(await orig<object>()), CadView: (await import('../polish/fakes')).FakeView }));
 vi.mock('../../src/app/commandline', async (orig) => ({ ...(await orig<object>()), CommandLine: (await import('../polish/fakes')).FakeCommandLine }));
@@ -138,7 +139,7 @@ describe('TEXTEDIT·두 번 누르기', () => {
     await settle();
     expect((h.doc.entityIndex.get(m.handle) as MLeaderEntity).context.text!.text).toBe('고친 줄');
     const note = add(h, mtext('주석'));
-    const ld = add(h, { ...entityDefaults(), type: 'LEADER', handle: '', dimStyle: 'Standard', vertices: [{ x: 0, y: 0, z: 0 }, { x: 5, y: 5, z: 0 }], arrowHead: true, pathType: 0, creation: 0, hooklineDirection: 0, hookline: false, textHeight: 2.5, textWidth: 0, horizontalDirection: { x: 1, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, annotation: note.handle } as LeaderEntity);
+    const ld = add(h, { ...entityDefaults(), type: 'LEADER', handle: '', dimStyle: 'Standard', verts: pack3([{ x: 0, y: 0, z: 0 }, { x: 5, y: 5, z: 0 }]), arrowHead: true, pathType: 0, creation: 0, hooklineDirection: 0, hookline: false, textHeight: 2.5, textWidth: 0, horizontalDirection: { x: 1, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, annotation: note.handle } as LeaderEntity);
     void h.app.run('TEXTEDIT', ld.handle);
     await settle();
     typeInto('바뀐 주석');

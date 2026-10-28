@@ -22,6 +22,7 @@ import { dimMeasure, updateDimNumber } from './xannot';
 import { layoutArcText } from '../../text/arctext';
 import { hatchEdges, packEdges } from '../../core/hatchedges';
 import { meshVertices, packMesh } from '../../core/meshdata';
+import { leaderVertices, pack3 } from '../../core/flat3';
 
 /** 걸침 영역: 두 점이면 사각형 */
 function polygonOf(crossing: readonly Vec2[]): Vec2[] {
@@ -133,7 +134,7 @@ function keyPoints(e: Entity): Vec2[] {
     case 'DIMENSION':
       return dimPoints(e).map((k) => k.p);
     case 'LEADER':
-      return e.vertices.map((v) => P(v));
+      return leaderVertices(e).map((v) => P(v));
     case 'MULTILEADER': {
       const out: Vec2[] = [P(e.context.contentBase)];
       for (const ld of e.context.leaders) {
@@ -254,7 +255,7 @@ function partial(e: Entity, inside: (p: Vec2) => boolean, d: Vec2, doc: CadDocum
       return stretchDimension(e, inside, d, doc, opts);
     case 'LEADER': {
       const r = cloneEntity(e);
-      r.vertices = e.vertices.map((v) => (In(v) ? mv(v, d) : { ...v }));
+      r.verts = pack3(leaderVertices(e).map((v) => (In(v) ? mv(v, d) : { ...v })));
       return { replace: [r] };
     }
     case 'MULTILEADER': {

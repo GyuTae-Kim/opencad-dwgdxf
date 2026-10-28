@@ -34,6 +34,7 @@ import { isNaturalExt, isPlanarExt, ocsToWcs, planProj, planZ, planeMap } from '
 import { type EditResult, type TransformOptions, allocBlockName } from './types';
 import { metrics } from './xtext';
 import { transformEntity, decomposeBlock, xformNormal } from './transform';
+import { leaderVertices, pack3 } from '../../core/flat3';
 
 function dir3(m: Affine, v: Vec3): Vec3 {
   const d = affLin3(m, v);
@@ -213,7 +214,7 @@ export function xformLeader(e: LeaderEntity, m: Affine, opt: TransformOptions): 
   const r = cloneEntity(e);
   const dz = opt.dz ?? 0;
   const s = affScaleOf(m);
-  r.vertices = e.vertices.map((p) => affApply3(m, p, dz));
+  r.verts = pack3(leaderVertices(e).map((p) => affApply3(m, p, dz)));
   if (e.normal) r.normal = xformNormal(m, e.normal);
   if (e.extrusion) r.extrusion = xformNormal(m, e.extrusion);
   if (e.horizontalDirection) r.horizontalDirection = dir3(m, e.horizontalDirection);

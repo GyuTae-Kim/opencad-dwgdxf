@@ -36,6 +36,7 @@ import { tableOld, tableR24, writeIO } from '../tablecodec';
 import { tableToOld, tableToR24 } from '../tablemodel';
 import { hatchEdges } from '../../../core/hatchedges';
 import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../../core/meshdata';
+import { leaderVertices } from '../../../core/flat3';
 
 const Z: Vec3 = { x: 0, y: 0, z: 1 };
 const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
@@ -1207,7 +1208,7 @@ export class EntityWriter {
     this.common(e, l);
     const d = this.ow.dat;
     // 읽기가 덧붙인 걸이선 점(마지막 점 바로 앞)을 뺀다
-    let verts = e.vertices;
+    let verts = leaderVertices(e);
     if (e.hookline && verts.length >= 3) verts = [...verts.slice(0, verts.length - 2), verts[verts.length - 1]];
     d.B(0);
     d.BS(e.creation);

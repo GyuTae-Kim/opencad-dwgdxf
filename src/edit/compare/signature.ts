@@ -11,6 +11,7 @@ import type { CadDocument, Entity, HatchEdge, HatchPath, Vec2, Vec3 } from '../.
 import { bulgeVertices, lwVertices } from '../../core/lwpoly';
 import { polyVertices } from '../../core/polyverts';
 import { firstEdge, hatchEdges } from '../../core/hatchedges';
+import { leaderVertices } from '../../core/flat3';
 
 /** COMPAREPROPS 비트 */
 export const PROP_COLOR = 1;
@@ -453,10 +454,11 @@ export function entitySignature(e: Entity, opt: CompareOptions, doc?: CadDocumen
       break;
     }
     case 'LEADER': {
-      const v0 = e.vertices[0];
+      const lv = leaderVertices(e);
+      const v0 = lv[0];
       if (v0) s.anchor(v0.x, v0.y);
-      s.k(up(e.dimStyle), e.arrowHead, e.pathType, e.creation, e.hooklineDirection, e.hookline, e.vertices.length);
-      for (const v of e.vertices) s.p(v);
+      s.k(up(e.dimStyle), e.arrowHead, e.pathType, e.creation, e.hooklineDirection, e.hookline, lv.length);
+      for (const v of lv) s.p(v);
       s.n(e.textHeight, e.textWidth);
       break;
     }

@@ -1290,8 +1290,12 @@ function readLeader(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names)
   const creation = r.BS();
   const pathType = r.BS();
   const n = r.checkCount(r.BL(), 64);
-  const vertices: Vec3[] = [];
-  for (let i = 0; i < n; i++) vertices.push(r.BD3());
+  // 정점은 평탄 좌표로(src/core/flat3.ts)
+  const verts: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const p = r.BD3();
+    verts.push(p.x, p.y, p.z);
+  }
   r.BD3(); // 원점
   const normal = r.BD3();
   const horizontalDirection = r.BD3();
@@ -1328,7 +1332,7 @@ function readLeader(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names)
     ...b,
     type: 'LEADER',
     dimStyle,
-    vertices,
+    verts: verts.slice(),
     arrowHead,
     pathType,
     creation,

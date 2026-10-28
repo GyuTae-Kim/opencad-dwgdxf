@@ -7,6 +7,7 @@ import { plainText, TYPE_NAMES } from '../../app/inquiry';
 import { hasWildcard, wcmatch } from './wildcard';
 import { lwCount, lwPoint } from '../../core/lwpoly';
 import { polyCount, polyLoc } from '../../core/polyverts';
+import { at3, leaderCount } from '../../core/flat3';
 
 export type PropKind = 'name' | 'text' | 'number' | 'color' | 'lineweight' | 'transparency';
 
@@ -87,7 +88,7 @@ function anchor(e: Entity): { x: number; y: number } | null {
     case 'DIMENSION':
       return e.textMid;
     case 'LEADER':
-      return e.vertices[0] ?? null;
+      return leaderCount(e) ? at3(e.verts, 0) : null;
     default:
       return null;
   }

@@ -47,6 +47,7 @@ import { updateDimNumber } from './xannot';
 import { mtextDir } from './xtext';
 import { hatchEdges, packEdges } from '../../core/hatchedges';
 import { meshVertexCount, meshVertices } from '../../core/meshdata';
+import { leaderCount, leaderVertices } from '../../core/flat3';
 
 export interface GripOptions {
   /** 호 중간 그립: 'stretch'(기본, 세 점 호) 또는 'radius'(반지름만) */
@@ -146,7 +147,7 @@ export function gripPoints(e: Entity, doc: CadDocument): GripPoint[] {
     case 'DIMENSION':
       return dimPoints(e).map((k) => g(k.key, k.p, k.key === 'textMid' ? 'text' : 'end'));
     case 'LEADER':
-      return e.vertices.map((v, i) => g('v' + i, v, 'vertex'));
+      return leaderVertices(e).map((v, i) => g('v' + i, v, 'vertex'));
     case 'MULTILEADER': {
       const out = [g('content', e.context.contentBase, 'ins')];
       e.context.leaders.forEach((ld, li) => {
@@ -350,7 +351,12 @@ export function gripMove(e: Entity, id: string, to: Vec2, doc: CadDocument, opts
     case 'LEADER': {
       const i = Number(id.slice(1));
       const r = cloneEntity(e);
-      r.vertices[i] = { x: to.x, y: to.y, z: e.vertices[i]!.z };
+      if (Number.isInteger(i) && i >= 0 && i < leaderCount(e)) {
+        const vs = numArray(r.verts);
+        vs[i * 3] = to.x;
+        vs[i * 3 + 1] = to.y;
+        r.verts = vs;
+      }
       return { replace: [r] };
     }
     case 'MULTILEADER': {

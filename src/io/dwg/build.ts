@@ -86,6 +86,7 @@ import { RAW_TAG_TYPES, decodeRawTags } from './objects/rawtags';
 import { decodeTableStyleBody } from './objects/tableraw';
 import { parseDimOverrides } from './xdata';
 import { adoptSummaryInfo, parseSummaryInfo } from '../dwgprops';
+import { leaderCount, leaderVertices, pack3 } from '../../core/flat3';
 
 /** 원본 본문을 남기는 도형 */
 const RAW_TYPES = new Set(['UNKNOWN', 'REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE', 'OLE2FRAME', 'OLEFRAME', 'ACAD_TABLE', 'MULTILEADER', 'MESH']);
@@ -599,11 +600,12 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
         e.textWidth = ann.extents.width;
       }
     }
-    if (e.creation !== 0 || !e.annotation || e.vertices.length < 2) continue;
+    if (e.creation !== 0 || !e.annotation || leaderCount(e) < 2) continue;
     const xd = e.horizontalDirection ?? { x: 1, y: 0, z: 0 };
-    const n = e.vertices.length;
-    const a = e.vertices[n - 2];
-    const bpt = e.vertices[n - 1];
+    const lv = leaderVertices(e);
+    const n = lv.length;
+    const a = lv[n - 2]!;
+    const bpt = lv[n - 1]!;
     const dx = bpt.x - a.x;
     const dy = bpt.y - a.y;
     const dz = bpt.z - a.z;
@@ -620,7 +622,8 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
     const L = asz * sc;
     if (!(L > 0)) continue;
     const sgn = e.hooklineDirection ? 1 : -1;
-    e.vertices.splice(n - 1, 0, { x: bpt.x + (sgn * L * xd.x) / xl, y: bpt.y + (sgn * L * xd.y) / xl, z: bpt.z + (sgn * L * xd.z) / xl });
+    lv.splice(n - 1, 0, { x: bpt.x + (sgn * L * xd.x) / xl, y: bpt.y + (sgn * L * xd.y) / xl, z: bpt.z + (sgn * L * xd.z) / xl });
+    e.verts = pack3(lv);
     e.hookline = true;
   }
 

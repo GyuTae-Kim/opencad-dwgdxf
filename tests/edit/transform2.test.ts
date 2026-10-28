@@ -30,6 +30,7 @@ import { packPoly } from '../../src/core/polyverts';
 import { packEdges } from '../../src/core/hatchedges';
 import { hatchEdges } from '../../src/core/hatchedges';
 import { packMesh } from '../../src/core/meshdata';
+import { leaderVertices, pack3 } from '../../src/core/flat3';
 
 const base = (h: string) => ({ ...entityDefaults(), handle: h });
 const one = (r: { replace?: Entity[]; add?: Entity[] }) => [...(r.replace ?? []), ...(r.add ?? [])][0]!;
@@ -146,7 +147,7 @@ function hatch(): HatchEntity {
 const others = (): [string, Entity][] => [
   ['점', { type: 'POINT', ...base('PT'), position: P(1, 2), angle: 0 } as PointEntity],
   ['치수', dim()],
-  ['지시선', { type: 'LEADER', ...base('LD'), dimStyle: 'Standard', vertices: [P(0, 0), P(5, 5), P(10, 5)], arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 2, textWidth: 5 } as LeaderEntity],
+  ['지시선', { type: 'LEADER', ...base('LD'), dimStyle: 'Standard', verts: pack3([P(0, 0), P(5, 5), P(10, 5)]), arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 2, textWidth: 5 } as LeaderEntity],
   ['다중 지시선', mleader()],
   ['해치', hatch()],
   ['솔리드(−Z)', { type: 'SOLID', ...base('SO'), points: [P(0, 0), P(4, 0), P(0, 3), P(4, 3)], invisibleEdges: 0, extrusion: NEG_Z } as FaceEntity],
@@ -264,7 +265,7 @@ describe('transformEntity — 주석·기타 객체', () => {
       for (const k of ['defPoint', 'defPoint2', 'defPoint3', 'textMid'] as const) near(d1[k], d0[k], 1e-9);
       const l0 = others()[2]![1] as LeaderEntity;
       const l1 = one(transformEntity(one(transformEntity(l0, m, doc)), inv, doc)) as LeaderEntity;
-      l0.vertices.forEach((v, i) => near(l1.vertices[i]!, v, 1e-9));
+      leaderVertices(l0).forEach((v, i) => near(leaderVertices(l1)[i]!, v, 1e-9));
       const h0 = hatch();
       const h1 = one(transformEntity(one(transformEntity(h0, m, doc)), inv, doc)) as HatchEntity;
       bulgeVertices(h0.paths[0]!.polyline!.verts).forEach((v, i) => {

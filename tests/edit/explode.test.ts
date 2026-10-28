@@ -29,6 +29,7 @@ import { NEG_Z, P, V, arc, circle, deg, line, lw, mtext, near, newDoc, poly2d, r
 import { packBulge } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
 import { packMesh } from '../../src/core/meshdata';
+import { pack3 } from '../../src/core/flat3';
 
 const base = (h = '') => ({ ...entityDefaults(), handle: h });
 
@@ -322,7 +323,7 @@ describe('explodeEntity — 주석·문자·해치', () => {
     expect(explodeEntity({ ...h, solid: true }, doc).message).toBeTruthy();
   });
   it('지시선 → 선 + 화살촉', () => {
-    const l: LeaderEntity = { type: 'LEADER', ...base('L'), dimStyle: 'Standard', vertices: [P(0, 0), P(5, 5), P(10, 5)], arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 };
+    const l: LeaderEntity = { type: 'LEADER', ...base('L'), dimStyle: 'Standard', verts: pack3([P(0, 0), P(5, 5), P(10, 5)]), arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 };
     const r = explodeEntity(l, doc);
     expect(r.add!.filter((e) => e.type === 'LINE').length).toBeGreaterThanOrEqual(2);
     expect(r.add!.some((e) => e.type === 'SOLID')).toBe(true);

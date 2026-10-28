@@ -29,6 +29,7 @@ import { satDxfTags } from '../acis';
 import { codepageToEncoding, decoderFor } from '../../core/codepage';
 import type { WriteContext } from './wcontext';
 import { meshFaces, meshVertices } from '../../core/meshdata';
+import { leaderCount, leaderVertices } from '../../core/flat3';
 
 const ACIS = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
 
@@ -250,7 +251,7 @@ function invalid(e: Entity): boolean {
     case 'ELLIPSE':
       return Math.hypot(e.majorAxis.x, e.majorAxis.y, e.majorAxis.z) < 1e-12 || !(e.ratio > 0);
     case 'LEADER':
-      return e.vertices.length < 2;
+      return leaderCount(e) < 2;
     case 'SPLINE':
       return e.degree < 1 || (e.controlPoints.length === 0 && e.fitPoints.length === 0);
     case 'MESH':
@@ -452,9 +453,9 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
       return out;
     }
     case 'LEADER': {
-      if (e.vertices.length < 2) return [];
+      if (leaderCount(e) < 2) return [];
       ctx.warn('r12.leader_as_polyline', 'R12에 없는 LEADER를 폴리선으로 썼습니다.');
-      return [polyline(e, '3d', e.vertices.map((p) => v(p, 32)), 8, e.handle)];
+      return [polyline(e, '3d', leaderVertices(e).map((p) => v(p, 32)), 8, e.handle)];
     }
     case 'XLINE':
     case 'RAY':

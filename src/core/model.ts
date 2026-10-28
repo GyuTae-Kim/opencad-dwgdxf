@@ -407,7 +407,8 @@ export interface DimensionEntity extends EntityBase {
 export interface LeaderEntity extends EntityBase {
   type: 'LEADER';
   dimStyle: string;
-  vertices: Vec3[];
+  /** 정점 평탄 좌표 [x0, y0, z0, …](WCS). 큰 도면의 문서 메모리를 줄이려고 수만 이어 둔다(풀어 쓰기는 src/core/flat3.ts) */
+  verts: number[];
   /** 71: 화살표 사용 */
   arrowHead: boolean;
   /** 72: 0 직선, 1 스플라인 */

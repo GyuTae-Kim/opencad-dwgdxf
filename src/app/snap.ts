@@ -18,6 +18,7 @@ import { entityPath } from '../edit/geom/path';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, pieceNearest } from '../edit/geom/curve';
 import { commonTangentCurves, tangentNearPick, tangentsFromPoint } from '../edit/geom/tangent';
 import { apparentSnaps } from './snap-app';
+import { leaderVertices } from '../core/flat3';
 
 export interface SnapPoint {
   x: number;
@@ -197,7 +198,7 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
       for (const p of e.points) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'end' });
       return;
     case 'LEADER':
-      for (const p of e.vertices) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'end' });
+      for (const p of leaderVertices(e)) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'end' });
       return;
     case 'MULTILEADER':
       for (const l of e.context.leaders) {
