@@ -301,6 +301,8 @@ describe('ezdxf 대조', () => {
     expect(compareOracle(blocks(sp()), blocks(sp({ knots: 10, controlPoints: 6 }))).fieldDiffs).toBeUndefined();
     expect(compareOracle(blocks(sp()), blocks(sp({ knots: 10, controlPoints: 6, fitPoints: 3 }))).fieldDiffs).toEqual({ 'SPLINE.knots': 1, 'SPLINE.controlPoints': 1, 'SPLINE.fitPoints': 1 });
     expect(compareOracle(blocks(sp({ knots: 8, controlPoints: 4 })), blocks(sp({ knots: 10, controlPoints: 6 }))).fieldDiffs).toEqual({ 'SPLINE.knots': 1, 'SPLINE.controlPoints': 1 });
+    // 우리 쪽 수가 AutoCAD가 적을 수(조정점 = 맞춤점 + 2, 매듭 = 맞춤점 + 6)가 아니면 형식 차이가 아니다
+    expect(compareOracle(blocks(sp()), blocks(sp({ knots: 9, controlPoints: 5 }))).fieldDiffs).toEqual({ 'SPLINE.knots': 1, 'SPLINE.controlPoints': 1 });
   });
 
   it.skipIf(!hasPython)('CAD_PYTHON(ezdxf가 있는 파이썬)이 있으면 우리가 쓴 DXF를 ezdxf로 읽어 audit 오류가 없다', async () => {

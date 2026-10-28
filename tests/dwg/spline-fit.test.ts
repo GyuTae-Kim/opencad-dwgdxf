@@ -5,13 +5,18 @@
  * - 조정점만 남은 맞춤점 방식(1024, 맞춤점 없음)은 맞춤점 자료를 되살려 쓴다(같은 곡선일 때만).
  * - R2000~R2010: 현 길이는 맞춤점 자료로, 제곱근·균일은 조정점 자료로 쓰고 저장 전 확인에 알린다.
  * - 조정점이 맞춤점에서 다시 구한 곡선과 다르면 조정점으로 쓰고(모양 그대로) 알린다.
+ * - 로컬 대조(표본이 있을 때만): 맞춤점 자료에서 채운 조정점·매듭이 같은 도면을 AutoCAD가 쓴 DXF와 같다.
  */
 import { describe, expect, it } from 'vitest';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { CadDocument, ReadWarning, SplineEntity, Vec3 } from '../../src/core/model';
 import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
 import { createNewDocument } from '../../src/core/newdoc';
 import { readDwg, writeDwg } from '../../src/io/dwg';
+import { readDxf } from '../../src/io/dxf/reader';
 import { dwgSplinePlan } from '../../src/io/dwg/splineflags';
+import { FIXTURES } from '../oracle/ezdxf';
 import { fitPointsCurve, fitSplineAcad } from '../../src/geom/curves';
 import { saveLosses } from '../../src/app/saveloss';
 import { makeFitSpline } from '../../src/edit/geom/drawgeom';
@@ -178,4 +183,35 @@ describe('앱에서 그린·고친 맞춤점 스플라인(AutoCAD와 같은 보�
     expect(fitPointsCurve({ fitPoints: fit, flags: 1 }).ctrl.length).toBe(fit.length);
     expect(fitPointsCurve({ fitPoints: fit, flags: 0, fitTolerance: 2 }).ctrl.length).toBe(fit.length);
   });
+});
+
+/**
+ * 로컬 대조(CAD_FIXTURES의 samples·samples-dxf — 같은 도면을 AutoCAD가 판마다 DWG와 DXF로 저장한 짝, 표본이 없으면 건너뛴다):
+ * DWG 맞춤점 자료에서 채운 조정점·매듭과 70이 AutoCAD가 같은 도면을 쓴 DXF와 같다. 대조 기준 DXF(AutoCAD가 쓰지 않은 DXF)에는
+ * 맞춤점만 있어 그 차이를 normalize.ts 11번으로 맞추는데, 이 시험이 그 근거(AutoCAD DXF에는 조정점·매듭이 함께 있다)를 지킨다.
+ * AutoCAD는 균일 매듭 맞춤점 스플라인을 DXF로 쓸 때 맞춤점을 빼므로 맞춤점은 견주지 않는다.
+ */
+const PAIR = (v: string) => ({ dwg: join(FIXTURES, 'samples', `sample_${v}.dwg`), dxf: join(FIXTURES, 'samples-dxf', `sample_${v}_ascii.dxf`) });
+const PAIR_VERSIONS = ['AC1027', 'AC1032'];
+
+describe.skipIf(!PAIR_VERSIONS.every((v) => existsSync(PAIR(v).dwg) && existsSync(PAIR(v).dxf)))('로컬 대조: DWG 맞춤점 자료 ↔ AutoCAD가 쓴 같은 도면의 DXF', () => {
+  for (const v of PAIR_VERSIONS) {
+    it(`${v}: 채운 조정점·매듭·70이 AutoCAD DXF와 같다`, () => {
+      const A = readDwg(new Uint8Array(readFileSync(PAIR(v).dwg)));
+      const D = readDxf(new Uint8Array(readFileSync(PAIR(v).dxf)));
+      // DWG에는 맞춤점·조정점 자료 중 하나만 있으므로, 둘 다 가진 스플라인은 리더가 맞춤점 자료에서 조정점을 채운 것이다
+      const filled = [...A.entityIndex.values()].filter((e): e is SplineEntity => e.type === 'SPLINE' && e.fitPoints.length >= 2 && e.controlPoints.length > 0);
+      expect(filled.length).toBeGreaterThan(0);
+      for (const a of filled) {
+        const d = D.entityIndex.get(a.handle);
+        expect(d?.type, a.handle).toBe('SPLINE');
+        const s = d as SplineEntity;
+        expect(a.flags, a.handle).toBe(s.flags);
+        expect(a.degree, a.handle).toBe(s.degree);
+        expect(close(a.controlPoints, s.controlPoints), a.handle).toBe(true);
+        expect(a.knots.length, a.handle).toBe(s.knots.length);
+        a.knots.forEach((k, i) => expect(k).toBeCloseTo(s.knots[i]!, 12));
+      }
+    });
+  }
 });

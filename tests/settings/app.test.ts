@@ -157,7 +157,7 @@ describe('다기능 그립 메뉴(GRIPMULTIFUNCTIONAL)', () => {
 });
 
 describe('객체 스냅(APERTURE·AUTOSNAP)', () => {
-  it('조준창 밖이면 스냅하지 않고, AUTOSNAP 4를 끄면 스냅 이름 툴팁 대신 보통 문구', async () => {
+  it('조준창 밖이면 스냅하지 않고, AUTOSNAP 2(툴팁)를 끄면 스냅 이름 툴팁 대신 보통 문구 — 4(마그넷)를 꺼도 툴팁은 그대로', async () => {
     const h = setup();
     h.line(0, 0, 10, 0);
     const got = pointCmd(h, 'PT');
@@ -171,6 +171,9 @@ describe('객체 스냅(APERTURE·AUTOSNAP)', () => {
     expect(h.ov.snap).toBeNull();
     h.set('APERTURE', 10);
     h.set('AUTOSNAP', 63 & ~4);
+    h.move(P(4, 1));
+    expect(h.ov.tip).toBe('끝점');
+    h.set('AUTOSNAP', 63 & ~2);
     h.move(P(4, 1));
     expect(h.ov.snap).toMatchObject({ kind: 'end' });
     expect(h.ov.tip).not.toBe('끝점');

@@ -8,6 +8,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { compareSummaries } from '../../tests/oracle/compare';
+import { fitOnlySplineGap } from '../../tests/oracle/spline';
 import { decodeCadEscapes } from '../../src/core/codepage';
 import { decodeCaret } from '../../src/io/dxf/records';
 
@@ -152,8 +153,8 @@ export function compareOracle(exp: OracleSummary, act: OracleSummary): OracleDif
         a2.attvals = Array.isArray(a2.attvals) ? (a2.attvals as string[]).map(normText) : a2.attvals;
       }
       // 기준 DXF에 맞춤점만 있는 스플라인: 우리 리더는 DWG 맞춤점 자료에서 AutoCAD처럼 조정점·매듭을 채운다
-      // (AutoCAD가 그 DWG를 DXF로 쓰면 함께 적는 값 — 기준 DXF를 AutoCAD가 쓰지 않았을 때만 생기는 차이)
-      if (e.type === 'SPLINE' && e2.controlPoints === 0 && typeof e2.fitPoints === 'number' && e2.fitPoints >= 2 && e2.fitPoints === a2.fitPoints) {
+      // (AutoCAD가 그 DWG를 DXF로 쓰면 함께 적는 값 — 기준 DXF를 AutoCAD가 쓰지 않았을 때만 생기는 차이, tests/oracle/spline.ts)
+      if (fitOnlySplineGap(e2, a2)) {
         delete e2.controlPoints;
         delete e2.knots;
         delete a2.controlPoints;

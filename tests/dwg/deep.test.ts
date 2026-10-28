@@ -10,7 +10,7 @@ import { readDwg } from '../../src/io/dwg';
 import { readDxf } from '../../src/io/dxf/reader';
 import { decodeCadEscapes } from '../../src/core/codepage';
 import { FIXTURES, dwgFixtures, engineDxf, hasDwgOracle } from './oracle';
-import { DXF_RENAMES_DYNAMIC_BLOCKS, dynamicBlockRenames, isDynamicBlock } from './normalize';
+import { DXF_RENAMES_DYNAMIC_BLOCKS, acadFitControl, dynamicBlockRenames, isDynamicBlock } from './normalize';
 import type { CadDocument } from '../../src/core/model';
 import { tableKey } from '../../src/core/model';
 
@@ -142,6 +142,8 @@ describe.skipIf(!existsSync(join(FIXTURES, 'samples')) || !hasDwgOracle())('DWG 
           if (e.type !== 'UNKNOWN') out.push(`${e.type}:${h}: 종류 → ${a.type}`);
           continue;
         }
+        // normalize.ts 11번: 맞춤점만 적힌 기준 스플라인을 AutoCAD DXF 꼴(조정점·매듭 함께)로
+        if (e.type === 'SPLINE' && a.type === 'SPLINE') acadFitControl(e, a);
         const skip = new Set([...SKIP, ...(SKIP_BY_TYPE[e.type] ?? [])]);
         diff(e, a, `${e.type}:${h}`, skip, out);
       }

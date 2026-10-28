@@ -19,7 +19,7 @@ export interface Settings {
   cursorSize: number;
   /** 객체 스냅 조준창, 픽셀(APERTURE) */
   aperture: number;
-  /** 1 표식기, 2 마그넷, 4 스냅 툴팁, 8 극좌표 추적, 16 객체 스냅 추적, 32 추적 툴팁(AUTOSNAP) */
+  /** 1 표식기, 2 AutoSnap 툴팁, 4 마그넷, 8 극좌표 추적, 16 객체 스냅 추적, 32 추적·직교 툴팁(AUTOSNAP — AutoCAD 도움말의 비트) */
   autosnap: number;
   /** AutoSnap 표식기 크기 1~20(OPTIONS 제도 탭, options.ts AUTOSNAPMARKER) */
   markerSize: number;
@@ -132,9 +132,9 @@ export function showSnapMarker(autosnap: number): boolean {
   return (autosnap & 1) !== 0;
 }
 
-/** 객체 스냅 툴팁(스냅 이름)을 보이는지(AUTOSNAP 4) */
+/** 객체 스냅 툴팁(스냅 이름)을 보이는지(AUTOSNAP 2 — 4는 마그넷) */
 export function showSnapTip(autosnap: number): boolean {
-  return (autosnap & 4) !== 0;
+  return (autosnap & 2) !== 0;
 }
 
 /** 극좌표·객체 스냅 추적 툴팁(거리 < 각도)을 보이는지(AUTOSNAP 32) */
