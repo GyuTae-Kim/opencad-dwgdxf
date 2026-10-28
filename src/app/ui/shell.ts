@@ -23,7 +23,7 @@ import { RecentStore, recentTimeLabel } from '../recent';
 import { openErrorInfo, OPEN_MAX_BYTES, type OpenErrorInfo } from '../openerror';
 import { colorTheme, setColorTheme, THEME_EVENT } from '../theme';
 import { type AnnoStatus, annoStatus } from '../annoscale-status';
-import { POLAR_COMMON_ANGLES, formatDeg } from '../polar';
+import { DEGREE_UNITS, POLAR_COMMON_ANGLES, formatPolarAngle } from '../polar';
 import { foldCount, layoutClasses, revealX, ribbonOverlay, statusHidden, watchViewport, wheelToHorizontal } from './layout';
 
 interface Btn {
@@ -1607,13 +1607,14 @@ export class Shell implements UiHooks {
     const polar = mk('polar', 'polarTrack', '극좌표 추적 (F10) · 오른쪽 클릭으로 증분 각도 선택', () => app.togglePolar());
     polar.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
-      // 흔한 증분 각도(POLARANG — 이 브라우저). 목록에 없는 각도를 정해 두었으면 그것도 맨 앞에
+      // 흔한 증분 각도(POLARANG — 이 브라우저). 목록에 없는 각도를 정해 두었으면 그것도 맨 앞에. 도면의 각도 단위(AUNITS·AUPREC)로 보인다
       const cur = app.settings.polarAng;
+      const au = app.active?.units ?? DEGREE_UNITS;
       const angles = POLAR_COMMON_ANGLES.some((d) => Math.abs(d - cur) < 1e-9) ? POLAR_COMMON_ANGLES : [cur, ...POLAR_COMMON_ANGLES];
       showMenu(ev.clientX, ev.clientY - 250, [
         { heading: '극좌표 증분 각도' },
         ...angles.map((d) => ({
-          label: `${Math.abs(cur - d) < 1e-9 ? '✓ ' : ' '}${formatDeg(d)}°`,
+          label: `${Math.abs(cur - d) < 1e-9 ? '✓ ' : ' '}${formatPolarAngle(d, au)}${au.aunits === 0 ? '°' : ''}`,
           run: () => {
             app.polarInc = (d * Math.PI) / 180;
             if (!app.polarOn) app.togglePolar();

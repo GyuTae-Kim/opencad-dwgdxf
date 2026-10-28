@@ -10,7 +10,8 @@ import type { SnapKind } from './view';
 import { form } from './ui/dom';
 import { isoState, setIso } from './viewtools-iso';
 import { browserSysvar, browserSysvarText, setBrowserSysvar, setBrowserSysvarText } from './sysvars';
-import { POLAR_COMMON_ANGLES, formatDeg, parsePolarAddAng, parsePolarAng, polarModeBits, polarModeFields } from './polar';
+import { DEGREE_UNITS, POLAR_COMMON_ANGLES, formatPolarAddAng, formatPolarAngle, parsePolarAng, polarAddList, polarModeBits, polarModeFields } from './polar';
+import { polarAddEditor } from './polar-addlist';
 
 /** -OSNAP·명령행에서 쓰는 영문 약어(이름 앞 세 글자) */
 const SNAP_ABBR: Record<string, SnapKind> = {
@@ -181,6 +182,11 @@ export function registerDraftingCommands(app: App): void {
   const settings = async (tab: 'snap' | 'polar' | 'osnap') => {
     const st = app.active;
     const pm = polarModeFields(browserSysvar('POLARMODE'));
+    // 극좌표 추적 탭의 각도 단위(도면이 없으면 십진 도)
+    const au = st?.units ?? DEGREE_UNITS;
+    const incShown = formatPolarAngle(browserSysvar('POLARANG'), au);
+    const addList = tab === 'polar' ? polarAddEditor(polarAddList(browserSysvarText('POLARADDANG')), au) : null;
+    const readInc = (text: string) => (text.trim() === incShown ? browserSysvar('POLARANG') : parsePolarAng(text, au));
     const fields: Parameters<typeof form>[1] = [];
     if (st && tab === 'snap') {
       fields.push(
@@ -205,12 +211,13 @@ export function registerDraftingCommands(app: App): void {
     }
     if (tab === 'polar') {
       // AutoCAD 제도 설정의 극좌표 추적 탭: 켜기(AUTOSNAP 8), 증분 각도(POLARANG — 목록에서 고르거나 친다),
-      // 추가 각도(POLARMODE 4·POLARADDANG), 객체 스냅 추적 설정(POLARMODE 2), 극좌표 각도 측정(POLARMODE 1)
+      // 추가 각도(POLARMODE 4·POLARADDANG — 목록과 새로 만들기·삭제), 객체 스냅 추적 설정(POLARMODE 2), 극좌표 각도 측정(POLARMODE 1).
+      // 각도는 도면의 각도 단위(AUNITS·AUPREC)로 보이고 받는다. 증분 각도 칸을 고치지 않았으면 저장값을 그대로 둔다(보이는 자릿수로 바뀌지 않게)
       fields.push(
         { key: 'polarOn', label: '극좌표 추적 켜기 (F10)', type: 'check', value: app.polarOn },
-        { key: 'inc', label: '증분 각도', type: 'text', value: formatDeg(browserSysvar('POLARANG')), list: POLAR_COMMON_ANGLES.map(formatDeg) },
+        { key: 'inc', label: '증분 각도', type: 'text', value: incShown, list: POLAR_COMMON_ANGLES.map((d) => formatPolarAngle(d, au)) },
         { key: 'addOn', label: '추가 각도', type: 'check', value: pm.addAngles },
-        { key: 'add', label: '추가 각도 목록(도, ;로 구분, 10개까지)', type: 'text', value: browserSysvarText('POLARADDANG') ?? '', placeholder: '예: 10;75' },
+        { key: 'add', label: '추가 각도 목록', type: 'custom', el: addList!.el, read: () => formatPolarAddAng(addList!.values()), check: () => addList!.commitPending() },
         { key: 'otrack', label: '객체 스냅 추적 켜기 (F11)', type: 'check', value: app.otrackOn },
         {
           key: 'otrackPolar',
@@ -242,10 +249,8 @@ export function registerDraftingCommands(app: App): void {
       validate: (x) => {
         if (tab === 'snap' && !(Number(x.snapX) > 0 && Number(x.snapY) > 0 && Number(x.gridX) > 0 && Number(x.gridY) > 0 && Number(x.major) >= 1)) return '간격은 0보다 커야 합니다.';
         if (tab === 'polar') {
-          const inc = parsePolarAng(String(x.inc));
+          const inc = readInc(String(x.inc));
           if (typeof inc === 'string') return inc;
-          const add = parsePolarAddAng(String(x.add));
-          if (typeof add === 'string') return add;
         }
         return null;
       },
@@ -264,7 +269,7 @@ export function registerDraftingCommands(app: App): void {
     }
     if (tab === 'polar') {
       // 값은 이 브라우저 변수(AutoCAD는 레지스트리). Shift로 획득(POLARMODE 8)은 OPTIONS 제도 탭의 칸이라 그대로 둔다
-      setBrowserSysvar('POLARANG', parsePolarAng(String(v.inc)) as number);
+      setBrowserSysvar('POLARANG', readInc(String(v.inc)) as number);
       setBrowserSysvarText('POLARADDANG', String(v.add));
       setBrowserSysvar('POLARMODE', polarModeBits(browserSysvar('POLARMODE'), { addAngles: !!v.addOn, otrackPolar: v.otrackPolar === '1', relative: v.relative === '1' }));
       if (!!v.polarOn !== app.polarOn) app.togglePolar();

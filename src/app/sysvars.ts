@@ -20,7 +20,7 @@ import { addHook } from './hooks';
 import { getSysVar, setSysVar } from './lisp-host';
 import { h } from './ui/dom';
 import { btn, checkIn, ensureMgrStyle, pickList, prefGet, prefSet, resultDialog, textIn } from './mgr-ui';
-import { POLARANG_MAX, POLARANG_MIN, formatPolarAddAng, parsePolarAddAng } from './polar';
+import { POLARANG_MAX, POLARANG_MIN, formatPolarAddAng, parseAngleText, parsePolarAddAng } from './polar';
 
 export type SysvarSource = 'session' | 'browser' | 'header';
 /** angle: 도 단위 실수(POLARANG — 명령행·목록에 90, 22.5처럼) */
@@ -434,8 +434,10 @@ export function setSysvarText(app: App, raw: string, text: string): string | nul
     if (browserTextVar(n)) return setBrowserSysvarText(n, t === '.' ? '' : t);
     const v = Number(t);
     if (info.kind === 'angle') {
-      if (!/^[-+]?(\d+(\.\d*)?|\.\d+)$/.test(t)) return `${browserVar(n)!.min}과(와) ${browserVar(n)!.max} 사이의 값이 필요합니다.`;
-      return setBrowserSysvar(n, v);
+      // 값은 저장값 그대로 도(단위 표시 없는 수). 단위 표시(22d30'·25g·0.3927r)를 붙이면 도로 바꿔 받는다
+      const d = parseAngleText(t, 0);
+      if (d === null) return `${browserVar(n)!.min}과(와) ${browserVar(n)!.max} 사이의 값이 필요합니다.`;
+      return setBrowserSysvar(n, d);
     }
     if (!/^[-+]?\d+$/.test(t)) return `${browserVar(n)!.min}과(와) ${browserVar(n)!.max} 사이의 정수가 필요합니다.`;
     const err = setBrowserSysvar(n, v);

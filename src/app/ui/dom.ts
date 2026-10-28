@@ -318,7 +318,12 @@ export type FormField =
   | { key: string; label: string; type: 'text' | 'number'; value: string | number; placeholder?: string; wide?: boolean; list?: readonly string[] }
   | { key: string; label: string; type: 'select'; value: string; options: { value: string; label: string }[] }
   | { key: string; label: string; type: 'check'; value: boolean }
-  | { key: string; label: string; type: 'textarea'; value: string };
+  | { key: string; label: string; type: 'textarea'; value: string }
+  /**
+   * 부른 쪽이 만든 칸(단추가 있는 목록 등 — 키는 그 칸이 받는다, Enter로 상자를 확인하지 않는다). read: 돌려줄 값(글).
+   * check: 확인 직전에 부른다(넣다 만 값을 넣어 보고, 안 되면 문구 — 상자를 닫지 않는다)
+   */
+  | { key: string; label: string; type: 'custom'; el: HTMLElement; read: () => string; check?: () => string | null };
 
 let formListSerial = 0;
 
@@ -329,6 +334,10 @@ export function form(title: string, fields: FormField[], opt: { ok?: string; not
     const inputs = new Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>();
     const err = h('div', { class: 'form-error', role: 'alert' });
     const rows = fields.map((f) => {
+      if (f.type === 'custom') {
+        // 단추를 담은 칸은 <label>로 감싸지 않는다(이름표를 누르면 첫 단추가 눌린다). 이름은 칸 안의 요소가 스스로 단다
+        return h('div', { class: 'form-row custom' }, h('span', {}, f.label), f.el);
+      }
       let el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
       if (f.type === 'select') {
         el = h('select', { 'aria-label': f.label }, ...f.options.map((o) => h('option', { value: o.value }, o.label)));
@@ -357,6 +366,10 @@ export function form(title: string, fields: FormField[], opt: { ok?: string; not
     const read = () => {
       const out: Record<string, string | number | boolean> = {};
       for (const f of fields) {
+        if (f.type === 'custom') {
+          out[f.key] = f.read();
+          continue;
+        }
         const el = inputs.get(f.key)!;
         if (f.type === 'check') out[f.key] = (el as HTMLInputElement).checked;
         else if (f.type === 'number') out[f.key] = Number(el.value.trim());
@@ -365,6 +378,13 @@ export function form(title: string, fields: FormField[], opt: { ok?: string; not
       return out;
     };
     const submit = () => {
+      for (const f of fields) {
+        const e = f.type === 'custom' ? (f.check?.() ?? null) : null;
+        if (e) {
+          err.textContent = e;
+          return;
+        }
+      }
       const v = read();
       for (const f of fields) {
         if (f.type === 'number' && !Number.isFinite(v[f.key] as number)) {

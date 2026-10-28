@@ -16,6 +16,7 @@ import { registerDrawCommands } from '../../src/app/draw';
 import { prefSet } from '../../src/app/mgr-ui';
 import { Real } from '../../src/edit/lisp/types';
 import { lwVertices } from '../../src/core/lwpoly';
+import { unitSettings } from '../../src/core/units';
 import { browserGlobals } from '../polish/fakes';
 import { type RealApp, makeApp, settle } from '../polish/real-app';
 import { FakePicker } from '../direct/fakes';
@@ -125,7 +126,7 @@ describe('POLARMODE·POLARANG·POLARADDANG 한 값', () => {
     // POLARADDANG: 글. "."은 없음, 고른 꼴로 저장
     h.set('POLARADDANG', ' 75; 10 ');
     expect([getSysVar(h.app, 'POLARADDANG'), browserSysvarText('POLARADDANG')]).toEqual(['75;10', '75;10']);
-    expect(setSysvarText(h.app, 'POLARADDANG', '1,2')).toContain('수가 아닙니다');
+    expect(setSysvarText(h.app, 'POLARADDANG', '1,2')).toContain('각도로 읽을 수 없습니다');
     expect(setSysVar(h.app, 'POLARADDANG', '30')).toBeNull();
     expect(getSysVar(h.app, 'POLARADDANG')).toBe('30');
     h.set('POLARADDANG', '.');
@@ -270,6 +271,38 @@ describe('POLARMODE 2·4: 객체 스냅 추적에 극좌표 각도, 추가 각�
     h.move(at(20, 100));
     expect(h.ov.tracks).toEqual([]);
     h.move(at10);
+    h.click(at10);
+    await settle();
+    const p = (got.at(-1) as { point: Pt }).point;
+    expect((Math.atan2(p.y, p.x) * 180) / Math.PI).toBeCloseTo(10, 9);
+  });
+});
+
+describe('POLARANG·POLARADDANG 단위 표시 입력(15차)', () => {
+  it('변수 입력·SETVAR은 저장값 그대로 도 — 단위 표시(25g·7d30\')·방위(N 80d E)를 붙이면 도로 바꿔 받고 추적에 쓴다', async () => {
+    const h = setup();
+    h.set('POLARANG', '25g');
+    expect([browserSysvar('POLARANG'), h.app.settings.polarAng, sysvarInfo(h.app, 'POLARANG')?.value]).toEqual([22.5, 22.5, 22.5]);
+    h.set('POLARANG', "7d30'");
+    expect(browserSysvar('POLARANG')).toBe(7.5);
+    // 증분 각도는 크기라 방위를 받지 않는다. 단위 표시 없는 수는 도(도면의 AUNITS와 상관없이)
+    expect(setSysvarText(h.app, 'POLARANG', 'N 80d E')).toBe('0.1과(와) 360 사이의 값이 필요합니다.');
+    // 그라드 도면(AUNITS 2)이어도
+    h.doc.header.set('$AUNITS', 2);
+    h.st.units = unitSettings(h.doc);
+    h.set('POLARANG', '90');
+    expect(browserSysvar('POLARANG')).toBe(90);
+    h.set('POLARADDANG', 'N 80d E;50g;-10');
+    expect([browserSysvarText('POLARADDANG'), getSysVar(h.app, 'POLARADDANG'), h.app.polar.add]).toEqual(['10;45;350', '10;45;350', [10, 45, 350]]);
+    expect(setSysVar(h.app, 'POLARADDANG', "N 10d W;1,2")).toBe('추가 각도 "1,2"을(를) 각도로 읽을 수 없습니다. 각도를 ;로 나눠 입력하십시오');
+    // 방위로 넣은 10도 방향으로 추적한다(POLARMODE 4)
+    h.set('POLARMODE', 4);
+    const got = pointCmd(h, 'PU', P(0, 0));
+    const at10 = P(Math.cos((10 * Math.PI) / 180) * 50, Math.sin((10 * Math.PI) / 180) * 50 + 1);
+    void h.app.run('PU');
+    await settle();
+    h.move(at10);
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 10°$/);
     h.click(at10);
     await settle();
     const p = (got.at(-1) as { point: Pt }).point;

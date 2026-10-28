@@ -3,7 +3,7 @@
  * 대화상자 흐름 연기 시험(jsdom): 열리고, 칸을 고치고, 확인하면 도면이 바뀌는지.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DictionaryObject } from '../../src/core/model';
+import type { CadDocument, DictionaryObject } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
 import { registerBlockCommands } from '../../src/app/blocks';
 import { registerSysvarCommands } from '../../src/app/sysvars';
@@ -11,7 +11,7 @@ import { registerDwgProps } from '../../src/app/dwgprops';
 import { registerOptions } from '../../src/app/options';
 import { registerAliasEdit } from '../../src/app/aliasedit';
 import { drawingProps } from '../../src/io/dwgprops';
-import { browserSysvar, browserSysvarText, setBrowserSysvar } from '../../src/app/sysvars';
+import { browserSysvar, browserSysvarText, setBrowserSysvar, setBrowserSysvarText } from '../../src/app/sysvars';
 import { registerDraftingCommands } from '../../src/app/drafting';
 import { prefSet } from '../../src/app/mgr-ui';
 import { makeHarness } from '../cmds2/harness';
@@ -117,8 +117,8 @@ describe('극좌표 추적 설정 연기 시험(POLARMODE·POLARANG·POLARADDANG
   });
 
   /** 극좌표·객체 스냅 추적 켜기·끄기만 흉내 낸 앱 */
-  function draftingHarness() {
-    const h = makeHarness();
+  function draftingHarness(setup?: (d: CadDocument) => void) {
+    const h = makeHarness(setup);
     const on = { polar: true, otrack: true };
     Object.assign(h.app, {
       get polarOn() {
@@ -134,8 +134,13 @@ describe('극좌표 추적 설정 연기 시험(POLARMODE·POLARANG·POLARADDANG
     registerDraftingCommands(h.app);
     return { h, on };
   }
+  const listbox = () => input('추가 각도 목록') as unknown as HTMLElement;
+  /** 추가 각도 목록에 보이는 칸과 고른 칸 */
+  const items = () => [...listbox().querySelectorAll('[role=option]')].map((o) => (o.getAttribute('aria-selected') === 'true' ? `[${o.textContent}]` : o.textContent));
+  const key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  const status = () => dlg().querySelector('.polar-add-msg')?.textContent ?? '';
 
-  it('DSETTINGS 극좌표 추적 탭: 증분 각도는 목록에서 고르거나 치고, 추가 각도·추적 방식·각도 측정을 고르면 이 브라우저에(8은 그대로)', async () => {
+  it('DSETTINGS 극좌표 추적 탭: 증분 각도는 목록에서 고르거나 치고, 추가 각도는 목록과 새로 만들기·삭제, 추적 방식·각도 측정을 고르면 이 브라우저에(8은 그대로)', async () => {
     setBrowserSysvar('POLARMODE', 8);
     const { h, on } = draftingHarness();
     const run = h.run('DSETTINGS', [], 'P');
@@ -144,33 +149,141 @@ describe('극좌표 추적 설정 연기 시험(POLARMODE·POLARANG·POLARADDANG
     expect(inc.value).toBe('90');
     const list = document.getElementById(inc.getAttribute('list') ?? '');
     expect([...(list?.querySelectorAll('option') ?? [])].map((o) => (o as HTMLOptionElement).value)).toEqual(['90', '45', '30', '22.5', '18', '15', '10', '5']);
-    expect([input('추가 각도').checked, input('추가 각도 목록(도, ;로 구분, 10개까지)').value]).toEqual([false, '']);
+    expect([input('추가 각도').checked, items(), listbox().getAttribute('role')]).toEqual([false, [], 'listbox']);
+    expect([button('새로 만들기').getAttribute('aria-label'), button('삭제').getAttribute('aria-label'), button('삭제').disabled]).toEqual(['추가 각도 새로 만들기', '추가 각도 삭제', true]);
     expect([(input('객체 스냅 추적 설정') as unknown as HTMLSelectElement).value, (input('극좌표 각도 측정') as unknown as HTMLSelectElement).value]).toEqual(['0', '0']);
     // 잘못된 값은 알리고 상자를 닫지 않는다
     inc.value = '0';
     ok();
-    expect(dlg().querySelector('.form-error')?.textContent).toBe('증분 각도는 0.1과(와) 360 사이의 수(도)여야 합니다.');
+    expect(dlg().querySelector('.form-error')?.textContent).toBe('증분 각도는 0.1과(와) 360 사이의 각도여야 합니다.');
     inc.value = '7.5';
-    input('추가 각도 목록(도, ;로 구분, 10개까지)').value = '75;1,5';
+    // 새로 만들기 → 새 각도 칸에 치고 Enter로 넣는다(넣은 칸을 고르고 목록에 초점)
+    const edit = input('새 추가 각도');
+    expect(edit.hidden).toBe(true);
+    button('새로 만들기').click();
+    expect([edit.hidden, document.activeElement === edit]).toEqual([false, true]);
+    edit.value = '75';
+    key(edit, 'Enter');
+    expect([items(), edit.hidden, document.activeElement === listbox(), listbox().getAttribute('aria-activedescendant')]).toEqual([['[75]'], true, true, listbox().querySelector('[role=option]')!.id]);
+    // 못 읽는 글·같은 방향(435 = 75)은 알리고 칸에 남긴다
+    button('새로 만들기').click();
+    edit.value = '1,5';
+    key(edit, 'Enter');
+    expect([status(), edit.hidden, items()]).toEqual(['"1,5"을(를) 각도로 읽을 수 없습니다.', false, ['[75]']]);
+    edit.value = '435';
+    key(edit, 'Enter');
+    expect([status(), items()]).toEqual(['추가 각도 75은(는) 이미 목록에 있습니다.', ['[75]']]);
+    edit.value = ' 10 ';
+    key(edit, 'Enter');
+    expect([items(), status()]).toEqual([['75', '[10]'], '']);
+    // Esc는 새 각도만 그만둔다(상자는 그대로)
+    button('새로 만들기').click();
+    edit.value = '20';
+    key(edit, 'Escape');
+    expect([edit.hidden, items(), !!dlg()]).toEqual([true, ['75', '[10]'], true]);
+    // 글을 남긴 채 확인: 못 읽으면 상자를 닫지 않는다
+    button('새로 만들기').click();
+    edit.value = 'x';
     ok();
-    expect(dlg().querySelector('.form-error')?.textContent).toContain('"1,5"');
+    expect([dlg().querySelector('.form-error')?.textContent, !!dlg()]).toEqual(['"x"을(를) 각도로 읽을 수 없습니다.', true]);
+    edit.value = '';
     input('추가 각도').checked = true;
-    input('추가 각도 목록(도, ;로 구분, 10개까지)').value = ' 75 ; 10 ';
     (input('객체 스냅 추적 설정') as unknown as HTMLSelectElement).value = '1';
     (input('극좌표 각도 측정') as unknown as HTMLSelectElement).value = '1';
     input('극좌표 추적 켜기 (F10)').checked = false;
     ok();
     await run;
     expect([browserSysvar('POLARANG'), browserSysvarText('POLARADDANG'), browserSysvar('POLARMODE'), on.polar, on.otrack]).toEqual([7.5, '75;10', 15, false, true]);
-    // 다시 열면 저장한 값
+    // 다시 열면 저장한 값. 목록에서 Delete로 지운다(다음 칸을 고른다), 마지막을 지우면 새로 만들기에 초점
     const again = h.run('DSETTINGS', [], 'P');
     await dialogReady('제도 설정 - 극좌표 추적');
-    expect([input('증분 각도').value, input('추가 각도').checked, input('추가 각도 목록(도, ;로 구분, 10개까지)').value, (input('극좌표 각도 측정') as unknown as HTMLSelectElement).value]).toEqual(['7.5', true, '75;10', '1']);
+    expect([input('증분 각도').value, input('추가 각도').checked, items(), (input('극좌표 각도 측정') as unknown as HTMLSelectElement).value]).toEqual(['7.5', true, ['[75]', '10'], '1']);
+    listbox().focus();
+    key(listbox(), 'ArrowDown');
+    expect(items()).toEqual(['75', '[10]']);
+    key(listbox(), 'Home');
+    key(listbox(), 'Delete');
+    expect(items()).toEqual(['[10]']);
+    button('삭제').click();
+    expect([items(), button('삭제').disabled, document.activeElement === button('새로 만들기')]).toEqual([[], true, true]);
     (input('극좌표 각도 측정') as unknown as HTMLSelectElement).value = '0';
     input('추가 각도').checked = false;
     ok();
     await again;
-    expect(browserSysvar('POLARMODE')).toBe(10);
+    expect([browserSysvar('POLARMODE'), browserSysvarText('POLARADDANG')]).toEqual([10, '']);
+  });
+
+  it('추가 각도는 10개까지: 열째를 넣으면 새로 만들기를 막고 알린다, 지우면 다시 된다(Insert로도 새로 만들기, 치던 각도는 새로 만들기에 먼저 넣는다)', async () => {
+    setBrowserSysvarText('POLARADDANG', '1;2;3;4;5;6;7;8;9');
+    const { h } = draftingHarness();
+    const run = h.run('DSETTINGS', [], 'P');
+    await dialogReady('제도 설정 - 극좌표 추적');
+    expect(items()).toHaveLength(9);
+    listbox().focus();
+    key(listbox(), 'Insert');
+    const edit = input('새 추가 각도');
+    expect(document.activeElement).toBe(edit);
+    edit.value = '10';
+    // 치던 각도가 있는 채 새로 만들기를 누르면 먼저 넣는다(10개가 차서 새 칸은 열지 않는다)
+    button('새로 만들기').click();
+    expect([items().length, button('새로 만들기').disabled, edit.hidden, status(), document.activeElement === listbox()]).toEqual([10, true, true, '추가 각도는 10개까지입니다.', true]);
+    key(listbox(), 'Insert');
+    expect([edit.hidden, status()]).toEqual([true, '추가 각도는 10개까지입니다.']);
+    key(listbox(), 'Backspace');
+    expect([items().length, button('새로 만들기').disabled]).toEqual([9, false]);
+    ok();
+    await run;
+    expect(browserSysvarText('POLARADDANG')).toBe('1;2;3;4;5;6;7;8;9');
+  });
+
+  it('도면의 각도 단위(AUNITS·AUPREC)로 보이고 그 단위로 받는다 — 저장은 도, 고치지 않은 증분 각도는 저장값 그대로', async () => {
+    // 도/분/초(AUNITS 1, AUPREC 0)
+    setBrowserSysvar('POLARANG', 22.5);
+    setBrowserSysvarText('POLARADDANG', '10;100.25');
+    const dms = draftingHarness((d) => {
+      d.header.set('$AUNITS', 1);
+      d.header.set('$AUPREC', 0);
+    });
+    let run = dms.h.run('DSETTINGS', [], 'P');
+    await dialogReady('제도 설정 - 극좌표 추적');
+    const inc = input('증분 각도');
+    expect(inc.value).toBe("22d30'");
+    expect([...document.getElementById(inc.getAttribute('list')!)!.querySelectorAll('option')].map((o) => (o as HTMLOptionElement).value)).toEqual(['90d', '45d', '30d', "22d30'", '18d', '15d', '10d', '5d']);
+    expect(items()).toEqual(['[10d]', "100d15'"]);
+    button('새로 만들기').click();
+    const edit = input('새 추가 각도');
+    edit.value = '-30';
+    key(edit, 'Enter');
+    expect([items(), status()]).toEqual([['10d', "100d15'", '[330d]'], '-30을(를) 같은 방향인 330d(으)로 넣었습니다(추가 각도는 0 이상 360 미만).']);
+    button('새로 만들기').click();
+    edit.value = 'N 45d W';
+    key(edit, 'Enter');
+    expect(items().at(-1)).toBe('[135d]');
+    inc.value = '400';
+    ok();
+    expect(dlg().querySelector('.form-error')?.textContent).toBe("증분 각도는 0d6'과(와) 360d 사이의 각도여야 합니다.");
+    inc.value = "7d30'";
+    ok();
+    await run;
+    expect([browserSysvar('POLARANG'), browserSysvarText('POLARADDANG')]).toEqual([7.5, '10;100.25;330;135']);
+    // 라디안(AUNITS 3, AUPREC 2): 단위 표시 없는 수는 라디안. 고치지 않은 증분 각도는 보이는 자릿수로 바뀌지 않는다
+    setBrowserSysvar('POLARANG', 33.3333333);
+    const rad = draftingHarness((d) => {
+      d.header.set('$AUNITS', 3);
+      d.header.set('$AUPREC', 2);
+    });
+    run = rad.h.run('DSETTINGS', [], 'P');
+    await dialogReady('제도 설정 - 극좌표 추적');
+    expect([input('증분 각도').value, items()[0]]).toEqual(['0.5817764r', '[0.17453293r]']);
+    ok();
+    await run;
+    expect(browserSysvar('POLARANG')).toBe(33.3333333);
+    run = rad.h.run('DSETTINGS', [], 'P');
+    await dialogReady('제도 설정 - 극좌표 추적');
+    input('증분 각도').value = '0.5';
+    ok();
+    await run;
+    expect(browserSysvar('POLARANG')).toBeCloseTo(28.64788976, 7);
   });
 
   it('OPTIONS 제도 탭의 정렬점 획득: Shift 키를 눌러 획득은 POLARMODE 8만 바꾼다', async () => {
