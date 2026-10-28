@@ -18,11 +18,18 @@
  *    DWG에는 본래 이름이 있어(기준 도구가 읽은 문서도 본래 이름) 기준 → DXF 단계에서만 이름이 바뀐다.
  *    DWG 쪽 블록 레코드에 AcDbDynamicBlockGUID 확장 자료가 있고, 블록 안 도형이나 그 블록을 가리키는 INSERT의
  *    핸들이 같을 때만 기준의 `*U<n>`을 본래 이름으로 되돌린다(dynamicBlockRenames).
+ * 11. 맞춤점 자료만 담은 스플라인: AutoCAD는 그 DWG를 DXF로 쓸 때 맞춤점 자료로 구한 조정점·매듭을 함께 적고(표본 sample_AC1027·AC1032의
+ *    SPLINE 434 — 같은 도면을 AutoCAD가 쓴 DXF에 조정점 4개·매듭 8개가 있고 DWG 리더가 채운 값과 같다), DWG 리더도 같은 값을 채운다.
+ *    기준 DXF에는 맞춤점만 있다. 기준을 AutoCAD DXF 꼴로 바꿔 견준다: 요약은 조정점 = 맞춤점 + 2, 매듭 = 맞춤점 + 6
+ *    (훑기 ezdxf 대조와 같은 규칙, tests/oracle/spline.ts), 객체 비교는 그 맞춤점 자료로 AutoCAD 방식 조정점·매듭을 구해 좌표까지
+ *    (acadFitControl). 맞춤점 수·좌표·끝 접선·차수는 그대로 견준다.
  */
-import type { CadDocument } from '../../src/core/model';
+import type { CadDocument, SplineEntity } from '../../src/core/model';
 import { tableKey } from '../../src/core/model';
 import { decodeCadEscapes } from '../../src/core/codepage';
 import { decodeCaret } from '../../src/io/dxf/records';
+import { fitSplineAcad, knotParamOfFlags } from '../../src/geom/curves';
+import { fitOnlySplineGap } from '../oracle/spline';
 
 type Obj = Record<string, unknown>;
 type Ent = Obj & { type: string; handle: string; color?: { aci: number; rgb?: number } };
@@ -71,6 +78,19 @@ export function dynamicBlockRenames(exp: BlockHandles[], act: BlockHandles[], ex
 /** 블록 레코드에 동적 블록 표지(AcDbDynamicBlockGUID 확장 자료)가 있는지 */
 export function isDynamicBlock(doc: CadDocument, key: string): boolean {
   return (doc.blockRecords.get(key)?.xdata ?? []).some((x) => x.app.toUpperCase() === 'ACDBDYNAMICBLOCKGUID');
+}
+
+/**
+ * 11번(객체 비교): 기준 DXF를 읽은 스플라인 E에 맞춤점만 있고 DWG 리더가 읽은 A에 조정점이 있으면, E에 AutoCAD가 같은 맞춤점 자료로
+ * 적을 조정점·매듭을 넣는다(E를 고친다). 맞춤점·끝 접선은 E 것을 쓰고 매듭 매개변수만 A의 70에서 읽는다 — 기준 DXF는 70의 매듭 매개변수
+ * 비트를 잃는다(5번). 그 뒤 조정점 좌표·매듭 값까지 견주므로 DWG 리더가 다른 곡선을 채우면 차이로 남는다.
+ */
+export function acadFitControl(E: SplineEntity, A: SplineEntity): void {
+  if (E.controlPoints.length || E.fitPoints.length < 2 || !A.controlPoints.length || A.fitPoints.length !== E.fitPoints.length) return;
+  const s = fitSplineAcad(E.fitPoints, knotParamOfFlags(A.flags), E.startTangent, E.endTangent);
+  if (!s) return;
+  E.controlPoints = s.ctrl;
+  E.knots = s.knots;
 }
 
 /** 요약에서 참조 도형 핸들 → 블록 이름 */
@@ -123,6 +143,11 @@ export function normalizePair(expected: Obj, actual: Obj, doc: CadDocument): voi
       if (e.type === 'ACAD_PROXY_ENTITY' && a.type === 'MESH') a.type = e.type;
       // 5
       if (e.type === 'SPLINE' && typeof a.flags === 'number' && a.flags >= 128) e.flags = null;
+      // 11
+      if (fitOnlySplineGap(e, a)) {
+        e.controlPoints = (e.fitPoints as number) + 2;
+        e.knots = (e.fitPoints as number) + 6;
+      }
       // 7
       if (a.color && a.color.rgb !== undefined && e.color && e.color.rgb === undefined) {
         const de = doc.entityIndex.get(a.handle);
