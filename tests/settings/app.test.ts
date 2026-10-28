@@ -1,15 +1,16 @@
 /**
  * 진짜 App이 OPTIONS·시스템 변수 값을 실제 동작에 쓰는지(화면·명령행·엔진·글꼴은 가짜, 고르기는 tests/direct의 FakePicker):
- * 설정 읽기·바로 반영(onSysvarChange), GRIPS·GRIPSIZE, APERTURE·AUTOSNAP 툴팁, PICKFIRST, PICKADD, PICKAUTO,
+ * 설정 읽기·바로 반영(onSysvarChange), GRIPS·GRIPSIZE, APERTURE·AUTOSNAP 툴팁·마그넷·추적 비트(F10·F11), PICKFIRST, PICKADD, PICKAUTO,
  * SELECTIONPREVIEW, SHORTCUTMENU(모드 비트·시간에 민감한 오른쪽 클릭), GRIPMULTIFUNCTIONAL(커서를 올리면 뜨는 그립 메뉴). 기본값에서는 예전 동작 그대로(tests/direct가 지킨다).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { LineEntity } from '../../src/core/model';
 import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
-import type { PointResult } from '../../src/app/app';
+import { App, type PointResult } from '../../src/app/app';
 import type { OverlayState } from '../../src/app/view';
 import { DEFAULT_SETTINGS } from '../../src/app/settings';
-import { BROWSER_VARS, setSysvarText } from '../../src/app/sysvars';
+import { BROWSER_VARS, browserSysvar, setSysvarText, sysvarInfo } from '../../src/app/sysvars';
+import { getSysVar, setSysVar } from '../../src/app/lisp-host';
 import { prefSet } from '../../src/app/mgr-ui';
 import { addHook } from '../../src/app/hooks';
 import * as dom from '../../src/app/ui/dom';
@@ -181,6 +182,124 @@ describe('객체 스냅(APERTURE·AUTOSNAP)', () => {
     h.click(P(4, 1));
     await settle();
     expect(got.at(-1)).toMatchObject({ point: P(0, 0), snap: { kind: 'end' } });
+  });
+
+  it('마그넷(AUTOSNAP 4): 켜면 십자선이 잡은 스냅점에 붙고, 끄면 커서 자리 그대로 — 어느 쪽이든 누르면 스냅점', async () => {
+    const h = setup();
+    h.line(0, 0, 10, 0);
+    const got = pointCmd(h, 'PT');
+    void h.app.run('PT');
+    await settle();
+    h.move(P(1, 1));
+    expect(h.ov.snap).toMatchObject({ kind: 'end', p: P(0, 0) });
+    expect(h.ov.cursor).toEqual(P(0, 0));
+    h.set('AUTOSNAP', 63 & ~4);
+    h.move(P(1, 1));
+    expect(h.ov.snap).toMatchObject({ kind: 'end', p: P(0, 0) });
+    expect(h.ov.cursor).toEqual(P(1, 1));
+    // 표식기·툴팁은 마그넷과 따로(4만 끄면 그대로)
+    expect(h.ov.tip).toBe('끝점');
+    h.click(P(1, 1));
+    await settle();
+    expect(got.at(-1)).toMatchObject({ point: P(0, 0), snap: { kind: 'end' } });
+    // 스냅점이 없으면 마그넷이 켜져 있어도 커서 자리
+    h.set('AUTOSNAP', 63);
+    void h.app.run('PT');
+    await settle();
+    h.move(P(5, 40));
+    expect(h.ov.snap).toBeNull();
+    expect(h.ov.cursor).toEqual(P(5, 40));
+  });
+});
+
+describe('극좌표·객체 스냅 추적(F10·F11 = AUTOSNAP 8·16)', () => {
+  type KeyApp = { onKey(ev: KeyboardEvent): void };
+  const key = (h: H, k: string) => (h.app as unknown as KeyApp).onKey({ key: k, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, target: null, preventDefault() {} } as unknown as KeyboardEvent);
+  const lisp = (h: H) => Number(getSysVar(h.app, 'AUTOSNAP'));
+
+  it('한 상태: F10·F11, 변수 입력(SETVAR·SYSVDLG), AutoLISP setvar·getvar가 같은 값을 보고 이 브라우저에 남는다', () => {
+    const h = setup();
+    // AutoCAD 초기값 63: 둘 다 켜짐
+    expect([h.app.polarOn, h.app.otrackOn]).toEqual([true, true]);
+    const status = h.ui.refreshStatus ?? 0;
+    key(h, 'F10');
+    expect([h.app.polarOn, h.app.otrackOn]).toEqual([false, true]);
+    expect([browserSysvar('AUTOSNAP'), lisp(h), sysvarInfo(h.app, 'AUTOSNAP')?.value]).toEqual([55, 55, 55]);
+    key(h, 'F11');
+    expect([h.app.polarOn, h.app.otrackOn]).toEqual([false, false]);
+    expect(lisp(h)).toBe(39);
+    expect(h.out().slice(-2)).toEqual(['<극좌표 끄기>', '<객체 스냅 추적 끄기>']);
+    // 상태 막대가 다시 읽는다
+    expect(h.ui.refreshStatus).toBeGreaterThan(status);
+    // 변수 입력: 다른 비트(표식기·툴팁·마그넷)는 그 값대로, 추적 비트는 F10·F11 상태로
+    h.set('AUTOSNAP', 63);
+    expect([h.app.polarOn, h.app.otrackOn]).toEqual([true, true]);
+    expect(setSysVar(h.app, 'AUTOSNAP', 7 | 16)).toBeNull();
+    expect([h.app.polarOn, h.app.otrackOn]).toEqual([false, true]);
+    // AutoLISP 직접 대입도 같은 상태
+    h.app.polarOn = true;
+    expect(lisp(h)).toBe(31);
+    // 이 브라우저에 남아, 다음에 연 앱(새 App)도 같은 상태로 시작한다(AutoCAD는 레지스트리)
+    const next = new App({} as HTMLElement);
+    expect([next.polarOn, next.otrackOn, next.settings.autosnap]).toEqual([true, true, 31]);
+    // 도면 머리말에는 AUTOSNAP이 없다(DXF·DWG 모두) — 도면을 바꿔도 그대로
+    expect(h.doc.header.has('$AUTOSNAP')).toBe(false);
+  });
+
+  it('직교(F8)를 켜면 극좌표 추적(8)이 꺼지고, 8을 켜면(F10·변수·POLARMODE) 직교가 꺼진다', () => {
+    const h = setup();
+    expect([h.app.orthoOn, h.app.polarOn]).toEqual([false, true]);
+    key(h, 'F8');
+    expect([h.app.orthoOn, h.app.polarOn, lisp(h)]).toEqual([true, false, 55]);
+    // 직교를 다시 꺼도 극좌표 추적은 꺼진 채
+    key(h, 'F8');
+    expect([h.app.orthoOn, h.app.polarOn]).toEqual([false, false]);
+    key(h, 'F8');
+    h.set('AUTOSNAP', 63);
+    expect([h.app.orthoOn, h.app.polarOn]).toEqual([false, true]);
+    expect(setSysVar(h.app, 'ORTHOMODE', 1)).toBeNull();
+    expect([h.app.orthoOn, h.app.polarOn, lisp(h)]).toEqual([true, false, 55]);
+    key(h, 'F10');
+    expect([h.app.orthoOn, h.app.polarOn, lisp(h)]).toEqual([false, true, 63]);
+    h.app.orthoOn = true;
+    expect(setSysVar(h.app, 'POLARMODE', 1)).toBeNull();
+    expect([h.app.orthoOn, h.app.polarOn, getSysVar(h.app, 'POLARMODE')]).toEqual([false, true, 1]);
+  });
+
+  it('객체 스냅 추적을 끄면(F11·AUTOSNAP 16) 획득점(+)을 지우고 더 얻지 않으며, 켜져 있으면 획득점에서 정렬', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = setup();
+      // 끝점만(연장선 획득점이 섞이지 않게)
+      h.set('OSMODE', 1);
+      h.line(0, 0, 10, 0);
+      const got = pointCmd(h, 'PT');
+      void h.app.run('PT');
+      await vi.advanceTimersByTimeAsync(0);
+      h.move(P(10.5, 0.5));
+      vi.advanceTimersByTime(450);
+      expect(h.ov.acquired).toEqual([P(10, 0)]);
+      h.move(P(10.3, 30));
+      expect(h.ov.tracks.length).toBeGreaterThan(0);
+      h.click(P(10.3, 30));
+      await vi.advanceTimersByTimeAsync(0);
+      expect((got.at(-1) as { point: Pt }).point.x).toBeCloseTo(10, 9);
+      void h.app.run('PT');
+      await vi.advanceTimersByTimeAsync(0);
+      h.move(P(10.5, 0.5));
+      vi.advanceTimersByTime(450);
+      expect(h.ov.acquired).toEqual([P(10, 0)]);
+      h.set('AUTOSNAP', 63 & ~16);
+      expect(h.ov.acquired).toEqual([]);
+      h.move(P(10.5, 0.5));
+      vi.advanceTimersByTime(450);
+      expect(h.ov.acquired).toEqual([]);
+      h.click(P(10.3, 30));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(got.at(-1)).toMatchObject({ point: P(10.3, 30) });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

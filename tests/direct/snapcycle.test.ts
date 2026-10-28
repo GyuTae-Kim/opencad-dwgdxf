@@ -215,6 +215,8 @@ describe('스냅 표식 위 Tab 순환', () => {
 describe('LINE의 지연된 접점', () => {
   it('첫 점을 접점으로 원 위에 찍고 둘째 점을 찍으면 그 점에서 원에 그은 접선', async () => {
     const h = setup();
+    // 극좌표 추적(F10, 기본 켜짐)은 끈다: 켜져 있으면 (20, 0)이 찍은 자리 (0.2, 5)의 0° 정렬 경로로 간다
+    h.app.polarOn = false;
     h.add(circ(0, 0, 5));
     snaps(h, ['tan']);
     void h.app.run('LINE');

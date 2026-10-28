@@ -252,6 +252,7 @@ function sessionVar(app: App, n: string): Value | undefined {
     case 'GRIDMODE':
       return app.gridOn ? 1 : 0;
     case 'POLARMODE':
+      // 이 앱에서는 극좌표 추적 켜기·끄기(F10 = AUTOSNAP 8과 같은 상태). AutoCAD의 POLARMODE는 각도 측정·추적 방식 비트라 다르다(ROADMAP)
       return app.polarOn ? 1 : 0;
     case 'DYNMODE':
       return app.dynOn ? 3 : 0;

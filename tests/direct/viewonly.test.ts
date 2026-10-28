@@ -9,6 +9,7 @@ import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
 import type { PointResult } from '../../src/app/app';
 import type { OverlayState } from '../../src/app/view';
 import * as dom from '../../src/app/ui/dom';
+import { setSysvarText } from '../../src/app/sysvars';
 import { browserGlobals } from '../polish/fakes';
 import { type RealApp, makeApp, settle } from '../polish/real-app';
 import { FakePicker } from './fakes';
@@ -140,6 +141,14 @@ describe('터치 점 찍기', () => {
     await settle();
     h.move(P(99, 2), { pointerType: 'touch' });
     expect(ov(h).cursor).toBeNull();
+    h.view2.aiming = true;
+    h.move(P(99, 2), { pointerType: 'touch' });
+    h.view2.aiming = false;
+    // 마그넷(AUTOSNAP 4, 기본 켜짐): 조준 십자선도 마우스 십자선처럼 잡은 스냅점에 붙는다
+    expect(ov(h).cursor).toEqual(P(100, 0));
+    expect(ov(h).snap?.p).toEqual(P(100, 0));
+    // 마그넷을 끄면 손가락 위 십자선 자리 그대로(표식기만 스냅점에)
+    expect(setSysvarText(h.app, 'AUTOSNAP', String(63 & ~4))).toBeNull();
     h.view2.aiming = true;
     h.move(P(99, 2), { pointerType: 'touch' });
     h.view2.aiming = false;

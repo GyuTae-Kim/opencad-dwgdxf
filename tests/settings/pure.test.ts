@@ -1,7 +1,7 @@
 /**
  * 설정 연결의 순수 계산(src/app/settings.ts): 기본값에서는 예전 고정 크기·동작과 같고, 값에 따라 바뀐다.
  * 그립 크기·고르기 거리(GRIPSIZE), 십자선(CURSORSIZE), 표식기(AutoSnap 표식기 크기), 휠(ZOOMFACTOR),
- * AUTOSNAP 비트, SELECTIONPREVIEW·PICKAUTO·PICKADD·SHORTCUTMENU, 시간에 민감한 오른쪽 클릭의 누른 시간 재기.
+ * AUTOSNAP 비트(마그넷·추적 켜기·끄기 포함), SELECTIONPREVIEW·PICKAUTO·PICKADD·SHORTCUTMENU, 시간에 민감한 오른쪽 클릭의 누른 시간 재기.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -14,7 +14,11 @@ import {
   gripHalf,
   gripPickRadius,
   gripsOn,
+  magnetCursor,
+  magnetOn,
+  objectTrackOn,
   pickMode,
+  polarTrackOn,
   previewOn,
   readSettings,
   showSnapMarker,
@@ -24,6 +28,7 @@ import {
   timedRightClick,
   usePickfirst,
   wheelZoom,
+  withTracking,
 } from '../../src/app/settings';
 import { BROWSER_VARS, setBrowserSysvar } from '../../src/app/sysvars';
 import { autosnapBits, autosnapFields, optionValue } from '../../src/app/options';
@@ -108,14 +113,45 @@ describe('화면 크기 계산', () => {
     expect(showSnapTip(2)).toBe(true);
   });
 
-  it('OPTIONS 제도 탭의 AutoSnap 칸 ↔ AUTOSNAP 비트: 표식기 1·툴팁 2·마그넷 4, 추적 비트(8·16·32)는 그대로', () => {
-    expect(autosnapFields(63)).toEqual({ marker: true, tooltip: true, magnet: true });
-    expect(autosnapFields(61)).toEqual({ marker: true, tooltip: false, magnet: true });
-    expect(autosnapFields(59)).toEqual({ marker: true, tooltip: true, magnet: false });
+  it('OPTIONS 제도 탭의 칸 ↔ AUTOSNAP 비트: 표식기 1·툴팁 2·마그넷 4·AutoTrack 툴팁 32, 추적 켜기·끄기(8·16)는 그대로', () => {
+    expect(autosnapFields(63)).toEqual({ marker: true, tooltip: true, magnet: true, trackTip: true });
+    expect(autosnapFields(61)).toEqual({ marker: true, tooltip: false, magnet: true, trackTip: true });
+    expect(autosnapFields(59)).toEqual({ marker: true, tooltip: true, magnet: false, trackTip: true });
+    expect(autosnapFields(31)).toEqual({ marker: true, tooltip: true, magnet: true, trackTip: false });
     expect(autosnapBits(63, { marker: true, tooltip: false, magnet: true })).toBe(61);
     expect(autosnapBits(63, { marker: true, tooltip: true, magnet: false })).toBe(59);
     expect(autosnapBits(24, { marker: false, tooltip: true, magnet: false })).toBe(26);
+    // AutoTrack 툴팁 칸을 주면 32를 바꾸고, 주지 않으면 그대로
+    expect(autosnapBits(63, { marker: true, tooltip: true, magnet: true, trackTip: false })).toBe(31);
+    expect(autosnapBits(7, { marker: true, tooltip: true, magnet: true, trackTip: true })).toBe(39);
+    // 8·16(F10·F11)은 어느 칸으로도 바뀌지 않는다
+    expect(autosnapBits(24, { marker: false, tooltip: false, magnet: false, trackTip: false })).toBe(24);
+    expect(autosnapBits(39, { marker: true, tooltip: true, magnet: true, trackTip: true })).toBe(39);
     for (const v of [0, 7, 21, 42, 63]) expect(autosnapBits(v, autosnapFields(v))).toBe(v);
+  });
+
+  it('AUTOSNAP 마그넷(4)과 추적 비트(8 극좌표, 16 객체 스냅 — F10·F11과 같은 상태)', () => {
+    expect([magnetOn(63), polarTrackOn(63), objectTrackOn(63)]).toEqual([true, true, true]);
+    expect([magnetOn(0), polarTrackOn(0), objectTrackOn(0)]).toEqual([false, false, false]);
+    expect([magnetOn(63 & ~4), polarTrackOn(63 & ~8), objectTrackOn(63 & ~16)]).toEqual([false, false, false]);
+    // 한 비트를 꺼도 다른 비트는 그대로
+    expect([magnetOn(63 & ~8), polarTrackOn(63 & ~16), objectTrackOn(63 & ~4)]).toEqual([true, true, true]);
+    expect(withTracking(63, { polar: false })).toBe(55);
+    expect(withTracking(63, { otrack: false })).toBe(47);
+    expect(withTracking(7, { polar: true, otrack: true })).toBe(31);
+    expect(withTracking(39, { polar: true })).toBe(47);
+    expect(withTracking(47, {})).toBe(47);
+    for (const v of [0, 5, 24, 63]) expect(withTracking(v, { polar: polarTrackOn(v), otrack: objectTrackOn(v) })).toBe(v);
+  });
+
+  it('마그넷이 켜져 있으면 십자선을 잡은 스냅점에, 끄면 커서 자리에(터치처럼 커서가 없으면 없다)', () => {
+    const cur = { x: 103, y: 47 };
+    const snap = { x: 100, y: 50 };
+    expect(magnetCursor(cur, snap, 63)).toEqual(snap);
+    expect(magnetCursor(cur, snap, 4)).toEqual(snap);
+    expect(magnetCursor(cur, snap, 63 & ~4)).toEqual(cur);
+    expect(magnetCursor(cur, null, 63)).toEqual(cur);
+    expect(magnetCursor(null, snap, 63)).toBeNull();
   });
 });
 

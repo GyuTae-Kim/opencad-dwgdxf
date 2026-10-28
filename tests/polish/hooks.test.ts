@@ -246,6 +246,8 @@ describe('점 해석 고리(pointFilters)', () => {
 describe('입력 고리(inputFilters)와 끌기 미리보기(DRAGMODE)', () => {
   it('DRAGMODE 1: 미리보기 없이 기준점 고무줄만, 그 점 프롬프트에서 DRAG를 입력하면 그 요청만 미리보기', async () => {
     const h = makeApp();
+    // 극좌표 추적(F10, 기본 켜짐)은 끈다: 켜져 있으면 (4, 5)가 90° 정렬 경로 (0, 5)로 간다
+    h.app.polarOn = false;
     registerViewToolCommands(h.app);
     expect(h.app.inputFilters.map((f) => f.name)).toEqual(['drag']);
     h.doc.header.set('$DRAGMODE', 1);
@@ -275,6 +277,7 @@ describe('입력 고리(inputFilters)와 끌기 미리보기(DRAGMODE)', () => {
 
   it('DRAGMODE 0이면 DRAG는 알리기만, 2(자동)면 늘 미리보기. 점 요청이 아니면 DRAG를 가로채지 않는다', async () => {
     const h = makeApp();
+    h.app.polarOn = false;
     registerViewToolCommands(h.app);
     pointCommand(h, 'PT', { base: { x: 0, y: 0 }, ghost: true });
     h.doc.header.set('$DRAGMODE', 0);

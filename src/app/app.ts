@@ -47,8 +47,26 @@ import { Lasso } from './lasso';
 import { CtrlTap, ctrlAction } from './keys';
 import { commandLineMenu, commandMenu, idleMenu, osnapItems, showContextMenu } from './ctxmenu';
 import { listGroups } from '../edit/util/groups';
-import { type PickMode, type Settings, autoWindow, contextAction, gripHoverMenu, gripPickRadius, gripsOn, pickMode, previewOn, readSettings, showSnapTip, showTrackTip, usePickfirst } from './settings';
-import { onSysvarChange } from './sysvars';
+import {
+  type PickMode,
+  type Settings,
+  autoWindow,
+  contextAction,
+  gripHoverMenu,
+  gripPickRadius,
+  gripsOn,
+  magnetCursor,
+  objectTrackOn,
+  pickMode,
+  polarTrackOn,
+  previewOn,
+  readSettings,
+  showSnapTip,
+  showTrackTip,
+  usePickfirst,
+  withTracking,
+} from './settings';
+import { browserSysvar, onSysvarChange, setBrowserSysvar } from './sysvars';
 import { optionValue } from './options';
 
 export class CancelError extends Error {
@@ -231,15 +249,12 @@ export class App {
   private readonly aliases = new Map<string, string>();
   osnapOn = true;
   readonly snapModes = new Set<SnapKind>(DEFAULT_SNAPS);
-  orthoOn = false;
+  private ortho = false;
   /** 격자 표시(F7)·격자 스냅(F9) */
   gridOn = false;
   snapOn = false;
-  /** 극좌표 추적(F10)과 증분 각도 */
-  polarOn = false;
+  /** 극좌표 추적(F10)의 증분 각도 */
   polarInc = Math.PI / 2;
-  /** 객체 스냅 추적(F11)과 획득점 */
-  otrackOn = false;
   /** 동적 입력(F12): 커서 옆에 프롬프트·거리·입력 중인 값 */
   dynOn = true;
   /**
@@ -1575,11 +1590,20 @@ export class App {
    * (없으면 처음 읽기)
    */
   applySettings(name?: string): void {
+    const before = this.settings.autosnap;
     this.settings = readSettings(optionValue);
     const v = this.view;
     v.prefs = this.settings;
     if (!name || name === 'PICKBOX') v.overlay.pickbox = this.settings.pickbox;
     if (!name) return;
+    if (name === 'AUTOSNAP') {
+      // 추적 비트(8·16)는 F10·F11과 같은 상태: 어디서 바꿨든(F10·F11·상태 막대·DSETTINGS·OPTIONS·변수 입력·setvar) 같은 값을 본다
+      const as = this.settings.autosnap;
+      // 직교와 극좌표 추적은 함께 켤 수 없다(극좌표를 켜면 직교를 끈다)
+      if (polarTrackOn(as) && !polarTrackOn(before)) this.ortho = false;
+      if (!objectTrackOn(as) && objectTrackOn(before)) this.clearTracking();
+      this.ui?.refreshStatus();
+    }
     if (name === 'GRIPS' || name === 'GRIPSIZE') {
       this.clearGripHover();
       if (!gripsOn(this.settings.grips)) {
@@ -1592,6 +1616,44 @@ export class App {
       v.overlay.preview = [];
     }
     v.requestOverlay();
+  }
+
+  /** 직교(F8). 켜면 극좌표 추적을 끈다(AutoCAD: 둘은 함께 켤 수 없다) */
+  get orthoOn(): boolean {
+    return this.ortho;
+  }
+
+  set orthoOn(on: boolean) {
+    this.ortho = on;
+    if (on && this.polarOn) this.polarOn = false;
+  }
+
+  /** 극좌표 추적(F10): AUTOSNAP 8과 같은 상태라 이 브라우저에 저장된다(AutoCAD는 레지스트리). 켜면 직교를 끈다 */
+  get polarOn(): boolean {
+    return polarTrackOn(this.settings.autosnap);
+  }
+
+  set polarOn(on: boolean) {
+    if (on) this.ortho = false;
+    this.setTracking({ polar: on });
+  }
+
+  /** 객체 스냅 추적(F11): AUTOSNAP 16과 같은 상태(이 브라우저에 저장) */
+  get otrackOn(): boolean {
+    return objectTrackOn(this.settings.autosnap);
+  }
+
+  set otrackOn(on: boolean) {
+    this.setTracking({ otrack: on });
+  }
+
+  /** AUTOSNAP의 추적 비트를 바꾼다(바뀌면 onSysvarChange → applySettings가 화면·상태 막대를 맞춘다) */
+  private setTracking(v: { polar?: boolean; otrack?: boolean }): void {
+    const cur = browserSysvar('AUTOSNAP');
+    const next = withTracking(cur, v);
+    if (next !== cur) setBrowserSysvar('AUTOSNAP', next);
+    // 구독이 없는 환경에서도 값이 맞게
+    if (this.settings.autosnap !== next) this.applySettings('AUTOSNAP');
   }
 
   refreshSelectionOverlay(): void {
@@ -1798,10 +1860,11 @@ export class App {
     this.extCandidate = null;
   }
 
-  /** 획득점 표시(+): 객체 스냅 추적·임시 추적점·연장선·평행 */
+  /** 획득점 표시(+): 객체 스냅 추적·임시 추적점·연장선·평행. 같은 점(끝점을 추적과 연장선이 함께 얻음)은 + 하나 */
   private refreshAcquired(): void {
     const temp = this.tempTrack && this.tempTrack.req === this.request ? this.tempTrack.points : [];
-    this.view.overlay.acquired = [...this.acquired.map((a) => a.p), ...temp.map((a) => a.p), ...this.extAnchors.map((a) => a.p), ...this.parDirs.map((d) => d.at)];
+    const all = [...this.acquired.map((a) => a.p), ...temp.map((a) => a.p), ...this.extAnchors.map((a) => a.p), ...this.parDirs.map((d) => d.at)];
+    this.view.overlay.acquired = all.filter((p, i) => !all.slice(0, i).some((q) => samePt(p, q)));
   }
 
   private clearTracking(): void {
@@ -1854,6 +1917,8 @@ export class App {
     const { p, snap, track } = this.resolvePoint(w);
     this.lastResolved = p;
     o.snap = snap;
+    // AutoSnap 마그넷(AUTOSNAP 4): 잡은 스냅점에 십자선을 붙인다. 끄면 표식기만 스냅점에 보이고 십자선은 커서 자리
+    if (snap && o.cursor) o.cursor = magnetCursor(o.cursor, this.view.worldToScreen(snap.p.x, snap.p.y), this.settings.autosnap);
     o.tracks = track ? track.lines.map((l) => ({ from: l.from, dir: l.dir })) : [];
     this.updateAcquire(snap);
     if (r?.kind === 'point') {
@@ -2869,16 +2934,15 @@ export class App {
   }
 
   toggleOrtho(): void {
+    // 직교와 극좌표 추적은 함께 켤 수 없다(켜면 극좌표 추적 — AUTOSNAP 8 — 을 끈다)
     this.orthoOn = !this.orthoOn;
-    // 직교와 극좌표 추적은 함께 켤 수 없다
-    if (this.orthoOn) this.polarOn = false;
     this.cmd.print(`<직교 ${this.orthoOn ? '켜기' : '끄기'}>`);
     this.ui.refreshStatus();
   }
 
+  /** F10·Ctrl+U·상태 막대 단추: AUTOSNAP 8을 뒤집는다(켜면 직교를 끈다) */
   togglePolar(): void {
     this.polarOn = !this.polarOn;
-    if (this.polarOn) this.orthoOn = false;
     this.cmd.print(`<극좌표 ${this.polarOn ? '켜기' : '끄기'}>`);
     this.ui.refreshStatus();
   }
@@ -2894,9 +2958,9 @@ export class App {
     this.ui.refreshStatus();
   }
 
+  /** F11·상태 막대 단추: AUTOSNAP 16을 뒤집는다(끄면 획득점을 지운다 — applySettings) */
   toggleOtrack(): void {
     this.otrackOn = !this.otrackOn;
-    if (!this.otrackOn) this.clearTracking();
     this.cmd.print(`<객체 스냅 추적 ${this.otrackOn ? '켜기' : '끄기'}>`);
     this.ui.refreshStatus();
   }
