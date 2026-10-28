@@ -49,8 +49,10 @@ function setup(prep?: (doc: CadDocument) => void) {
   root.append(mv.bar, mv.card);
   return { ...h, mv, opened, click: (p: { x: number; y: number }) => h.view.events.click!(p, p, ev) };
 }
-const until = async (f: () => boolean) => {
-  for (let i = 0; i < 50 && !f(); i++) await settle();
+// 동적 import(참조·SHX 모듈)를 기다리므로 횟수가 아니라 시간으로 기다린다(바쁜 CI에서는 첫 모듈 변환이 수십 ms를 넘는다)
+const until = async (f: () => boolean, ms = 10_000) => {
+  const end = Date.now() + ms;
+  while (!f() && Date.now() < end) await settle();
   return f();
 };
 

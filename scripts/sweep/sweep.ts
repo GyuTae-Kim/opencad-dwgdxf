@@ -11,6 +11,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { cpus } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -104,10 +105,27 @@ interface Lane {
   stderr: string;
 }
 
+/**
+ * vite-node 실행 파일 — 판마다 자리가 달라(3.x `vite-node.mjs`, 5.x `dist/cli.mjs`) 경로를 박아 두지 않고
+ * 설치된 vite-node의 package.json `bin`으로 찾는다
+ */
+function viteNodeCli(): string {
+  let pkgPath: string;
+  try {
+    pkgPath = createRequire(join(root, 'package.json')).resolve('vite-node/package.json');
+  } catch {
+    throw new Error('vite-node를 찾지 못했습니다. 먼저 npm ci를 하십시오.');
+  }
+  const { bin } = JSON.parse(readFileSync(pkgPath, 'utf8')) as { bin?: string | Record<string, string> };
+  const rel = typeof bin === 'string' ? bin : bin?.['vite-node'];
+  const cli = rel ? resolve(dirname(pkgPath), rel) : '';
+  if (!cli || !existsSync(cli)) throw new Error('vite-node 실행 파일을 찾지 못했습니다. 먼저 npm ci를 하십시오.');
+  return cli;
+}
+
 /** 워커 하나 띄우기(vite-node로 TS를 바로 돌린다) — 준비되면 resolve */
 function spawnWorker(lane: Lane, env: NodeJS.ProcessEnv): Promise<ChildProcess> {
-  const vn = join(root, 'node_modules/vite-node/vite-node.mjs');
-  if (!existsSync(vn)) throw new Error('vite-node를 찾지 못했습니다. 먼저 npm ci를 하십시오.');
+  const vn = viteNodeCli();
   const p = spawn(process.execPath, [vn, join(here, 'worker.ts')], { cwd: root, env, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
   lane.proc = p;
   lane.stderr = '';
