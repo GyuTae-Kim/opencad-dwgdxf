@@ -29,10 +29,13 @@ const deg = (r: number) => {
   return Math.abs(d - Math.round(d)) < 1e-6 ? String(Math.round(d)) : d.toFixed(1);
 };
 
-/** 증분 각도의 배수 방향들(0 ≤ θ < 2π) */
-export function polarAngles(inc: number, extra: number[] = []): number[] {
+/**
+ * 증분 각도의 배수 방향들(0 ≤ θ < 2π)과 추가 방향(배수를 만들지 않는다). 360을 나누지 않는 증분(50도)은
+ * 360 아래의 배수를 모두(0·50 … 350)
+ */
+export function polarAngles(inc: number, extra: readonly number[] = []): number[] {
   const out: number[] = [];
-  const n = Math.max(1, Math.round((2 * Math.PI) / inc));
+  const n = Math.max(1, Math.ceil((2 * Math.PI) / inc - 1e-9));
   for (let i = 0; i < n; i++) out.push(i * inc);
   for (const a of extra) {
     const t = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
@@ -57,12 +60,19 @@ function nearestRay(from: Pt, w: Pt, angles: number[], tol: number): { q: Pt; di
   return best;
 }
 
-/** 극좌표 추적: 기준점에서 증분 각도 방향 */
-export function polarTrack(base: Pt, w: Pt, angles: number[], tol: number, fmt: (v: number) => string): TrackResult | null {
+/** 극좌표 정렬선의 툴팁: 각도를 잴 0도 방향(라디안 — UCS X축 또는 상대 극좌표의 마지막 선분)과 이름 */
+export interface PolarTip {
+  ref?: number;
+  /** 기본 "극좌표"(상대면 "상대 극좌표") */
+  label?: string;
+}
+
+/** 극좌표 추적: 기준점에서 증분 각도 방향. 툴팁 각도는 tip.ref에서 잰다 */
+export function polarTrack(base: Pt, w: Pt, angles: number[], tol: number, fmt: (v: number) => string, tip: PolarTip = {}): TrackResult | null {
   const r = nearestRay(base, w, angles, tol);
   if (!r) return null;
   const len = Math.hypot(r.q.x - base.x, r.q.y - base.y);
-  return { p: r.q, lines: [{ from: base, dir: r.dir }], tip: `극좌표: ${fmt(len)} < ${deg(r.angle)}°` };
+  return { p: r.q, lines: [{ from: base, dir: r.dir }], tip: `${tip.label ?? '극좌표'}: ${fmt(len)} < ${deg(r.angle - (tip.ref ?? 0))}°` };
 }
 
 function intersect(a: TrackLine, b: TrackLine): Pt | null {
@@ -74,17 +84,17 @@ function intersect(a: TrackLine, b: TrackLine): Pt | null {
 
 /**
  * 객체 스냅 추적: 획득점(그리고 극좌표가 켜져 있으면 기준점)에서 나가는 정렬선.
- * 두 정렬선이 커서 근처에서 만나면 그 교점.
+ * 두 정렬선이 커서 근처에서 만나면 그 교점. 툴팁 각도는 획득점은 ref(UCS X축)에서, 기준점은 baseTip.ref에서 잰다
  */
-export function objectTrack(acquired: readonly Acquired[], w: Pt, angles: number[], tol: number, base: Pt | null, baseAngles: number[] | null, fmt: (v: number) => string): TrackResult | null {
+export function objectTrack(acquired: readonly Acquired[], w: Pt, angles: number[], tol: number, base: Pt | null, baseAngles: number[] | null, fmt: (v: number) => string, ref = 0, baseTip: PolarTip = {}): TrackResult | null {
   const cands: { line: TrackLine; q: Pt; d: number; label: string; angle: number; from: Pt }[] = [];
   for (const a of acquired) {
     const r = nearestRay(a.p, w, angles, tol);
-    if (r) cands.push({ line: { from: a.p, dir: r.dir }, q: r.q, d: r.d, label: a.label, angle: r.angle, from: a.p });
+    if (r) cands.push({ line: { from: a.p, dir: r.dir }, q: r.q, d: r.d, label: a.label, angle: r.angle - ref, from: a.p });
   }
   if (base && baseAngles) {
     const r = nearestRay(base, w, baseAngles, tol);
-    if (r) cands.push({ line: { from: base, dir: r.dir }, q: r.q, d: r.d, label: '극좌표', angle: r.angle, from: base });
+    if (r) cands.push({ line: { from: base, dir: r.dir }, q: r.q, d: r.d, label: baseTip.label ?? '극좌표', angle: r.angle - (baseTip.ref ?? ref), from: base });
   }
   if (!cands.length) return null;
   cands.sort((x, y) => x.d - y.d);

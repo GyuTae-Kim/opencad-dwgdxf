@@ -23,6 +23,7 @@ import { RecentStore, recentTimeLabel } from '../recent';
 import { openErrorInfo, OPEN_MAX_BYTES, type OpenErrorInfo } from '../openerror';
 import { colorTheme, setColorTheme, THEME_EVENT } from '../theme';
 import { type AnnoStatus, annoStatus } from '../annoscale-status';
+import { POLAR_COMMON_ANGLES, formatDeg } from '../polar';
 import { foldCount, layoutClasses, revealX, ribbonOverlay, statusHidden, watchViewport, wheelToHorizontal } from './layout';
 
 interface Btn {
@@ -1606,16 +1607,21 @@ export class Shell implements UiHooks {
     const polar = mk('polar', 'polarTrack', '극좌표 추적 (F10) · 오른쪽 클릭으로 증분 각도 선택', () => app.togglePolar());
     polar.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
-      showMenu(ev.clientX, ev.clientY - 220, [
+      // 흔한 증분 각도(POLARANG — 이 브라우저). 목록에 없는 각도를 정해 두었으면 그것도 맨 앞에
+      const cur = app.settings.polarAng;
+      const angles = POLAR_COMMON_ANGLES.some((d) => Math.abs(d - cur) < 1e-9) ? POLAR_COMMON_ANGLES : [cur, ...POLAR_COMMON_ANGLES];
+      showMenu(ev.clientX, ev.clientY - 250, [
         { heading: '극좌표 증분 각도' },
-        ...[90, 45, 30, 22.5, 18, 15, 10, 5].map((d) => ({
-          label: `${Math.abs((app.polarInc * 180) / Math.PI - d) < 1e-9 ? '✓ ' : ' '}${d}°`,
+        ...angles.map((d) => ({
+          label: `${Math.abs(cur - d) < 1e-9 ? '✓ ' : ' '}${formatDeg(d)}°`,
           run: () => {
             app.polarInc = (d * Math.PI) / 180;
             if (!app.polarOn) app.togglePolar();
             this.refreshStatus();
           },
         })),
+        { separator: true },
+        { label: '추적 설정…', run: () => void app.run('DSETTINGS', 'P') },
       ]);
     });
     // 등각투영 제도: 누르면 켜기·끄기, 오른쪽 클릭으로 평면 고르기(F5·Ctrl+E로 평면 전환)

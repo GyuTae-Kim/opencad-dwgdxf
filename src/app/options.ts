@@ -1,6 +1,6 @@
 /**
  * OPTIONS(옵션 대화상자): 열기 및 저장·화면표시·선택·제도·사용자 기본 설정 탭. AutoCAD 2026의 같은 칸만 둔다.
- * 값은 시스템 변수(sysvars.ts의 이 브라우저 변수 — PICKBOX·GRIPSIZE·CURSORSIZE·APERTURE·AUTOSNAP·PICKFIRST·PICKADD·
+ * 값은 시스템 변수(sysvars.ts의 이 브라우저 변수 — PICKBOX·GRIPSIZE·CURSORSIZE·APERTURE·AUTOSNAP·POLARMODE(8)·PICKFIRST·PICKADD·
  * SELECTIONPREVIEW·SHORTCUTMENU·SHORTCUTMENUDURATION)와 이 브라우저 보관 값(SAVETIME·COLORTHEME·기본 저장 형식·도면 영역 배경색·
  * AutoSnap 표식기 크기)으로 저장한다. 화면·입력은 App.settings(settings.ts)가 optionValue로 읽고, 값이 바뀌면
  * onSysvarChange로 바로 다시 읽는다(표식기 크기는 저장 뒤 이어지는 변수 저장의 알림 때 함께 읽힌다).
@@ -10,6 +10,7 @@ import { SAVE_TYPES } from './save';
 import { saveTime } from './autosave';
 import { applyColorTheme, colorTheme } from './theme';
 import { browserSysvar, setBrowserSysvar } from './sysvars';
+import { polarModeBits, shiftAcquire } from './polar';
 import { h } from './ui/dom';
 import { checkIn, fail, group, numIn, numOf, prefGet, prefSet, resultDialog, row, selectIn, tabs } from './mgr-ui';
 
@@ -152,6 +153,15 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   const trackTip = checkIn(asf.trackTip, 'AutoTrack 툴팁 표시');
   const markerSize = numIn(autosnapMarkerSize(), 'AutoSnap 표식기 크기');
   const aperture = numIn(browserSysvar('APERTURE'), '조준창 크기');
+  // 정렬점 획득(POLARMODE 8): 자동(잠시 머물면) 또는 Shift 키를 눌러 획득. 1·2·4는 제도 설정의 극좌표 추적 탭
+  const acquire = selectIn(
+    [
+      { value: 'auto', label: '자동(U)' },
+      { value: 'shift', label: 'Shift 키를 눌러 획득(Q)' },
+    ],
+    shiftAcquire(browserSysvar('POLARMODE')) ? 'shift' : 'auto',
+    '정렬점 획득',
+  );
   const drafting = h(
     'div',
     { class: 'mgr-dlg' },
@@ -161,6 +171,7 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
       group('AutoSnap 설정', row('표식기(M)', marker), row('마그넷(G)', magnet), row('AutoSnap 툴팁 표시(T)', tooltip)),
       group('AutoTrack 설정', row('AutoTrack 툴팁 표시(K)', trackTip)),
     ),
+    h('div', { class: 'mgr-cols' }, group('정렬점 획득', row('객체 스냅 추적점', acquire))),
     h('div', { class: 'mgr-cols' }, group('AutoSnap 표식기 크기(S)', row('1~20', markerSize)), group('조준창 크기(Z)', row('픽셀(1~50)', aperture))),
   );
   // 사용자 기본 설정
@@ -261,6 +272,8 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   set('SELECTIONPREVIEW', (spCmd.checked ? 1 : 0) | (spIdle.checked ? 2 : 0));
   // 추적 비트(8·16)는 지금 값에 담는다(대화상자를 연 동안 F10·F11·상태 막대로 바꾼 것을 되돌리지 않게)
   set('AUTOSNAP', autosnapBits(browserSysvar('AUTOSNAP'), { marker: marker.checked, tooltip: tooltip.checked, magnet: magnet.checked, trackTip: trackTip.checked }));
+  // POLARMODE는 8만 바꾼다(1·2·4는 제도 설정에서 — 대화상자를 연 동안 바꾼 것을 되돌리지 않게 지금 값에 담는다)
+  set('POLARMODE', polarModeBits(browserSysvar('POLARMODE'), { shiftAcquire: acquire.value === 'shift' }));
   set('APERTURE', r.aperture);
   set('SHORTCUTMENU', shortcutMenuBits({ menus: menus.checked, def: defMode.value as 'repeat', edit: editMode.value as 'repeat', cmd: cmdMode.value as 'enter', timed: timed.checked }));
   set('SHORTCUTMENUDURATION', r.duration);

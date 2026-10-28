@@ -314,10 +314,13 @@ export function ask<T extends string>(title: string, text: string, buttons: { la
 }
 
 export type FormField =
-  | { key: string; label: string; type: 'text' | 'number'; value: string | number; placeholder?: string; wide?: boolean }
+  /** list: 고를 수 있는 값(입력 칸에 목록으로 뜬다 — 다른 값도 칠 수 있다) */
+  | { key: string; label: string; type: 'text' | 'number'; value: string | number; placeholder?: string; wide?: boolean; list?: readonly string[] }
   | { key: string; label: string; type: 'select'; value: string; options: { value: string; label: string }[] }
   | { key: string; label: string; type: 'check'; value: boolean }
   | { key: string; label: string; type: 'textarea'; value: string };
+
+let formListSerial = 0;
 
 /** 입력 칸 여러 개를 받는 대화상자(취소하면 null). check는 boolean, number는 숫자로 돌려준다 */
 export function form(title: string, fields: FormField[], opt: { ok?: string; note?: string; validate?: (v: Record<string, string | number | boolean>) => string | null } = {}): Promise<Record<string, string | number | boolean> | null> {
@@ -340,13 +343,16 @@ export function form(title: string, fields: FormField[], opt: { ok?: string; not
         el = h('input', { type: f.type === 'number' ? 'text' : 'text', inputmode: f.type === 'number' ? 'decimal' : undefined, 'aria-label': f.label, placeholder: f.placeholder ?? '' });
         el.value = String(f.value);
       }
+      // 고를 수 있는 값 목록(입력 칸 + datalist — 다른 값도 칠 수 있다)
+      const list = 'list' in f && f.list?.length ? h('datalist', { id: `form-list-${++formListSerial}` }, ...f.list.map((v) => h('option', { value: v }))) : null;
+      if (list) el.setAttribute('list', list.id);
       inputs.set(f.key, el);
       el.addEventListener('keydown', (ev) => {
         const k = ev as KeyboardEvent;
         k.stopPropagation();
         if (k.key === 'Enter' && f.type !== 'textarea') submit();
       });
-      return h('label', { class: `form-row ${f.type === 'check' ? 'check' : ''}` }, h('span', {}, f.label), el);
+      return h('label', { class: `form-row ${f.type === 'check' ? 'check' : ''}` }, h('span', {}, f.label), el, list);
     });
     const read = () => {
       const out: Record<string, string | number | boolean> = {};

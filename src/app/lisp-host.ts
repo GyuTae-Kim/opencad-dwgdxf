@@ -25,7 +25,7 @@ import { sessionFile } from './sessionfiles';
 import { findSnap } from './snap';
 import { grClear, grDraw } from './lisp-gr';
 import { affApply } from '../text/layout';
-import { browserSysvar, setSysvarText, sysvarInfo } from './sysvars';
+import { isBrowserSysvar, setSysvarText, sysvarInfo } from './sysvars';
 
 type Pt = { x: number; y: number };
 
@@ -251,9 +251,7 @@ function sessionVar(app: App, n: string): Value | undefined {
       return app.snapOn ? 1 : 0;
     case 'GRIDMODE':
       return app.gridOn ? 1 : 0;
-    case 'POLARMODE':
-      // 이 앱에서는 극좌표 추적 켜기·끄기(F10 = AUTOSNAP 8과 같은 상태). AutoCAD의 POLARMODE는 각도 측정·추적 방식 비트라 다르다(ROADMAP)
-      return app.polarOn ? 1 : 0;
+    // POLARMODE는 이 브라우저 변수(각도 측정·추적 방식 비트 — polar.ts). 극좌표 추적 켜기·끄기는 AUTOSNAP 8
     case 'DYNMODE':
       return app.dynOn ? 3 : 0;
     case 'FILEDIA':
@@ -316,8 +314,8 @@ function headerToValue(name: string, v: HeaderValue): Value {
   return null;
 }
 
-/** 이 브라우저 변수(PICKBOX·GRIPSIZE·ATTREQ …, sysvars.ts)인지 — 모르는 이름이면 browserSysvar가 NaN */
-const isBrowserVar = (n: string): boolean => !Number.isNaN(browserSysvar(n));
+/** 이 브라우저 변수(PICKBOX·GRIPSIZE·ATTREQ·POLARMODE·POLARADDANG …, sysvars.ts)인지 */
+const isBrowserVar = (n: string): boolean => isBrowserSysvar(n);
 
 export function getSysVar(app: App, name: string): Value | undefined {
   const n = name.trim().toUpperCase().replace(/^\$/, '');
@@ -325,8 +323,12 @@ export function getSysVar(app: App, name: string): Value | undefined {
   if (sv !== undefined) return sv;
   // 이 브라우저 변수는 SYSVDLG·OPTIONS와 같은 값(ATTREQ는 정하지 않았으면 도면 머리말)
   if (isBrowserVar(n)) {
-    const bv = sysvarInfo(app, n)?.value;
-    return typeof bv === 'number' ? bv : undefined;
+    const info = sysvarInfo(app, n);
+    const bv = info?.value;
+    if (typeof bv === 'string') return bv;
+    if (typeof bv !== 'number') return undefined;
+    // 각도 변수(POLARANG)는 AutoLISP에서 라디안 실수(AutoCAD의 각도 시스템 변수와 같다). 명령행·SYSVDLG는 도
+    return info?.kind === 'angle' ? new Real((bv * Math.PI) / 180) : bv;
   }
   const v = app.active?.doc.header.get(`$${n}`);
   return v === undefined ? undefined : headerToValue(`$${n}`, v);
@@ -348,14 +350,12 @@ export function setSysVar(app: App, name: string, v: Value): string | null {
     }
     case 'ORTHOMODE':
     case 'SNAPMODE':
-    case 'GRIDMODE':
-    case 'POLARMODE': {
+    case 'GRIDMODE': {
       const b = int01();
       if (b === null) return '';
       if (n === 'ORTHOMODE') app.orthoOn = !!b;
       else if (n === 'SNAPMODE') app.snapOn = !!b;
-      else if (n === 'GRIDMODE') app.gridOn = !!b;
-      else app.polarOn = !!b;
+      else app.gridOn = !!b;
       app.ui?.refreshStatus?.();
       if (n === 'GRIDMODE') app.view?.requestRender?.();
       return null;
@@ -378,9 +378,23 @@ export function setSysVar(app: App, name: string, v: Value): string | null {
   }
   // 이 브라우저 변수: SYSVDLG·변수 이름 입력과 같은 검사·적용(바뀌면 화면이 onSysvarChange로 다시 읽는다)
   if (isBrowserVar(n)) {
-    const num = typeof v === 'number' ? v : v instanceof Real ? v.v : NaN;
-    if (!Number.isInteger(num)) return '정수가 필요합니다';
-    const err = setSysvarText(app, n, String(num));
+    const kind = sysvarInfo(app, n)?.kind;
+    let text: string;
+    if (kind === 'string') {
+      if (typeof v !== 'string') return '';
+      text = v === '' ? '.' : v;
+    } else {
+      const num = typeof v === 'number' ? v : v instanceof Real ? v.v : NaN;
+      if (kind === 'angle') {
+        // 라디안 → 도(소수 아홉째 자리에서 반올림해 (/ pi 4)가 45가 되게)
+        if (!Number.isFinite(num)) return '실수가 필요합니다';
+        text = String(Math.round(((num * 180) / Math.PI) * 1e9) / 1e9);
+      } else {
+        if (!Number.isInteger(num)) return '정수가 필요합니다';
+        text = String(num);
+      }
+    }
+    const err = setSysvarText(app, n, text);
     return err === null ? null : err.replace(/\.$/, '');
   }
   const st = app.active;

@@ -246,7 +246,7 @@ describe('극좌표·객체 스냅 추적(F10·F11 = AUTOSNAP 8·16)', () => {
     expect(h.doc.header.has('$AUTOSNAP')).toBe(false);
   });
 
-  it('직교(F8)를 켜면 극좌표 추적(8)이 꺼지고, 8을 켜면(F10·변수·POLARMODE) 직교가 꺼진다', () => {
+  it('직교(F8)를 켜면 극좌표 추적(8)이 꺼지고, 8을 켜면(F10·변수·setvar AUTOSNAP) 직교가 꺼진다 — POLARMODE는 켜고 끄지 않는다', () => {
     const h = setup();
     expect([h.app.orthoOn, h.app.polarOn]).toEqual([false, true]);
     key(h, 'F8');
@@ -262,7 +262,10 @@ describe('극좌표·객체 스냅 추적(F10·F11 = AUTOSNAP 8·16)', () => {
     key(h, 'F10');
     expect([h.app.orthoOn, h.app.polarOn, lisp(h)]).toEqual([false, true, 63]);
     h.app.orthoOn = true;
+    // POLARMODE는 AutoCAD처럼 각도 측정·추적 방식 비트(14차) — 극좌표 추적·직교를 바꾸지 않는다
     expect(setSysVar(h.app, 'POLARMODE', 1)).toBeNull();
+    expect([h.app.orthoOn, h.app.polarOn, getSysVar(h.app, 'POLARMODE')]).toEqual([true, false, 1]);
+    expect(setSysVar(h.app, 'AUTOSNAP', 63)).toBeNull();
     expect([h.app.orthoOn, h.app.polarOn, getSysVar(h.app, 'POLARMODE')]).toEqual([false, true, 1]);
   });
 

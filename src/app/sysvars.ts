@@ -3,10 +3,11 @@
  * SYSVDLG(시스템 변수 목록·검색·편집 대화상자).
  *
  * 변수는 세 곳에 있다.
- *  - 세션 변수: 앱 상태(OSMODE·ORTHOMODE·SNAPMODE·GRIDMODE·POLARMODE·DYNMODE, FILEDIA·CMDDIA·CMDECHO)와 읽기 전용 값(DWGNAME·CDATE …).
+ *  - 세션 변수: 앱 상태(OSMODE·ORTHOMODE·SNAPMODE·GRIDMODE·DYNMODE, FILEDIA·CMDDIA·CMDECHO)와 읽기 전용 값(DWGNAME·CDATE …).
  *    AutoLISP getvar·setvar와 같은 구현(lisp-host.ts)을 쓴다.
- *  - 이 브라우저 변수(AutoCAD의 레지스트리 자리): PICKBOX·GRIPSIZE·GRIPMULTIFUNCTIONAL·CURSORSIZE·APERTURE·PICKFIRST·SELECTIONPREVIEW·SHORTCUTMENU·
- *    ATTDIA·ATTREQ … localStorage에 두고, 바뀌면 onSysvarChange 구독자에게 알린다(화면이 읽는다).
+ *  - 이 브라우저 변수(AutoCAD의 레지스트리 자리): PICKBOX·GRIPSIZE·GRIPMULTIFUNCTIONAL·CURSORSIZE·APERTURE·AUTOSNAP·POLARMODE·POLARANG·
+ *    PICKFIRST·SELECTIONPREVIEW·SHORTCUTMENU·ATTDIA·ATTREQ …(수)와 POLARADDANG(글). localStorage에 두고, 바뀌면 onSysvarChange 구독자에게
+ *    알린다(화면이 읽는다).
  *  - 도면 변수: 머리말($PDMODE …). 값을 바꾸면 명령 취소 한 단계(header 편집).
  * 변수 이름이 곧 명령인 것(SAVETIME·COLORTHEME·IMAGEFRAME …)은 그 명령이 먼저 받으므로 여기에 오지 않는다.
  */
@@ -19,9 +20,11 @@ import { addHook } from './hooks';
 import { getSysVar, setSysVar } from './lisp-host';
 import { h } from './ui/dom';
 import { btn, checkIn, ensureMgrStyle, pickList, prefGet, prefSet, resultDialog, textIn } from './mgr-ui';
+import { POLARANG_MAX, POLARANG_MIN, formatPolarAddAng, parsePolarAddAng } from './polar';
 
 export type SysvarSource = 'session' | 'browser' | 'header';
-export type SysvarKind = 'int' | 'real' | 'string' | 'point' | 'bool';
+/** angle: 도 단위 실수(POLARANG — 명령행·목록에 90, 22.5처럼) */
+export type SysvarKind = 'int' | 'real' | 'angle' | 'string' | 'point' | 'bool';
 
 export interface SysvarInfo {
   name: string;
@@ -46,6 +49,16 @@ interface BrowserVar {
   desc: string;
   /** 허용 값이 띄엄띄엄이면 */
   values?: readonly number[];
+  /** 정수가 아니어도 되는 각도(도) — POLARANG. 명령행·SYSVDLG는 도, AutoLISP getvar·setvar는 라디안(lisp-host.ts) */
+  angle?: boolean;
+}
+
+/** 글 값인 이 브라우저 변수(POLARADDANG). parse는 바르면 저장할 글, 아니면 { error } */
+interface BrowserTextVar {
+  name: string;
+  def: string;
+  desc: string;
+  parse: (text: string) => { value: string } | { error: string };
 }
 
 const PREFIX = 'opencad.sysvar.';
@@ -60,6 +73,9 @@ export const BROWSER_VARS: readonly BrowserVar[] = [
   { name: 'APERTURE', def: 10, min: 1, max: 50, desc: '객체 스냅 조준창 크기(픽셀)' },
   // 8·16은 F10·F11의 켜기·끄기와 같은 상태(App.polarOn·otrackOn이 이 값을 읽고 쓴다)
   { name: 'AUTOSNAP', def: 63, min: 0, max: 63, desc: 'AutoSnap 표식기·툴팁·마그넷, 극좌표·객체 스냅 추적(F10·F11)과 그 툴팁(비트)' },
+  // 극좌표 추적의 각도 측정·추적 방식(polar.ts). 켜기·끄기는 AUTOSNAP 8
+  { name: 'POLARMODE', def: 0, min: 0, max: 15, desc: '극좌표 각도 측정과 객체 스냅 추적 방식(1 마지막 선분 기준, 2 추적에 극좌표 각도, 4 추가 각도, 8 Shift로 획득)' },
+  { name: 'POLARANG', def: 90, min: POLARANG_MIN, max: POLARANG_MAX, desc: '극좌표 추적 증분 각도(도)', angle: true },
   { name: 'PICKFIRST', def: 1, min: 0, max: 1, desc: '명령 전에 객체 선택(명사/동사 선택)' },
   { name: 'PICKADD', def: 2, min: 0, max: 2, desc: '선택 세트에 추가(Shift로 추가)' },
   { name: 'PICKAUTO', def: 5, min: 0, max: 7, desc: '객체 선택 프롬프트의 자동 윈도우·걸침 선택' },
@@ -71,10 +87,24 @@ export const BROWSER_VARS: readonly BrowserVar[] = [
   { name: 'ZOOMFACTOR', def: 60, min: 3, max: 100, desc: '휠 한 칸의 확대·축소 정도' },
 ];
 
-const browserVar = (n: string) => BROWSER_VARS.find((v) => v.name === n);
-const listeners = new Set<(name: string, value: number) => void>();
+/** 글 값인 이 브라우저 변수(AutoCAD 2026 초기값) */
+export const BROWSER_TEXT_VARS: readonly BrowserTextVar[] = [
+  {
+    name: 'POLARADDANG',
+    def: '',
+    desc: '극좌표 추적 추가 각도(도, ;로 구분, 10개까지 — POLARMODE 4일 때)',
+    parse: (t) => {
+      const r = parsePolarAddAng(t);
+      return typeof r === 'string' ? { error: r } : { value: formatPolarAddAng(r) };
+    },
+  },
+];
 
-/** 이 브라우저 변수 값(없는 이름이면 NaN) */
+const browserVar = (n: string) => BROWSER_VARS.find((v) => v.name === n);
+const browserTextVar = (n: string) => BROWSER_TEXT_VARS.find((v) => v.name === n);
+const listeners = new Set<(name: string, value: number | string) => void>();
+
+/** 이 브라우저 변수 값(없는 이름이나 글 변수면 NaN) */
 export function browserSysvar(name: string): number {
   const v = browserVar(name.toUpperCase());
   if (!v) return NaN;
@@ -83,18 +113,48 @@ export function browserSysvar(name: string): number {
   return Number.isFinite(n) && n >= v.min && n <= v.max ? n : v.def;
 }
 
+/** 글 값인 이 브라우저 변수(POLARADDANG). 없는 이름이면 null, 저장한 글이 맞지 않으면 초기값 */
+export function browserSysvarText(name: string): string | null {
+  const v = browserTextVar(name.toUpperCase());
+  if (!v) return null;
+  const raw = prefGet(PREFIX + v.name);
+  if (raw === null) return v.def;
+  const r = v.parse(raw);
+  return 'value' in r ? r.value : v.def;
+}
+
+/** 이 브라우저 변수(수 또는 글)인지 */
+export function isBrowserSysvar(name: string): boolean {
+  const n = name.trim().toUpperCase().replace(/^\$/, '');
+  return !!browserVar(n) || !!browserTextVar(n);
+}
+
 /** 이 브라우저 변수 바꾸기(범위 밖이면 문구). 바꾸면 구독자에게 알린다 */
 export function setBrowserSysvar(name: string, value: number): string | null {
   const v = browserVar(name.toUpperCase());
   if (!v) return '알 수 없는 변수 이름입니다.';
-  if (!Number.isInteger(value) || value < v.min || value > v.max || (v.values && !v.values.includes(value))) return `${v.min}과(와) ${v.max} 사이의 정수가 필요합니다.`;
+  if (v.angle) {
+    if (!Number.isFinite(value) || value < v.min || value > v.max) return `${v.min}과(와) ${v.max} 사이의 값이 필요합니다.`;
+    value = Math.round(value * 1e9) / 1e9;
+  } else if (!Number.isInteger(value) || value < v.min || value > v.max || (v.values && !v.values.includes(value))) return `${v.min}과(와) ${v.max} 사이의 정수가 필요합니다.`;
   prefSet(PREFIX + v.name, String(value));
   for (const f of listeners) f(v.name, value);
   return null;
 }
 
+/** 글 값인 이 브라우저 변수 바꾸기(맞지 않으면 문구). 저장하는 글은 고른 꼴(POLARADDANG "10;75"). 바꾸면 구독자에게 알린다 */
+export function setBrowserSysvarText(name: string, text: string): string | null {
+  const v = browserTextVar(name.toUpperCase());
+  if (!v) return '알 수 없는 변수 이름입니다.';
+  const r = v.parse(text);
+  if ('error' in r) return r.error;
+  prefSet(PREFIX + v.name, r.value);
+  for (const f of listeners) f(v.name, r.value);
+  return null;
+}
+
 /** 이 브라우저 변수가 바뀔 때(화면이 PICKBOX·GRIPSIZE·CURSORSIZE … 를 다시 읽는다). 끊는 함수를 돌려준다 */
-export function onSysvarChange(f: (name: string, value: number) => void): () => void {
+export function onSysvarChange(f: (name: string, value: number | string) => void): () => void {
   listeners.add(f);
   return () => listeners.delete(f);
 }
@@ -231,7 +291,6 @@ const DESC: Record<string, string> = {
   QTEXTMODE: '빠른 문자(상자로 표시)',
   SNAPMODE: '스냅 모드',
   GRIDMODE: '격자 표시',
-  POLARMODE: '극좌표 추적',
   DYNMODE: '동적 입력',
   TEXTSIZE: '새 문자의 높이',
   TEXTSTYLE: '현재 문자 스타일',
@@ -278,7 +337,8 @@ function headerKind(name: string, v: HeaderValue | undefined): SysvarKind {
 // 세션 변수(lisp-host.ts의 getvar·setvar)
 // ---------------------------------------------------------------------------
 
-const SESSION_RW = ['OSMODE', 'ORTHOMODE', 'SNAPMODE', 'GRIDMODE', 'POLARMODE', 'DYNMODE', 'FILEDIA', 'CMDDIA', 'CMDECHO'];
+// POLARMODE는 13차까지 여기서 극좌표 추적 켜기·끄기였다. 14차부터 AutoCAD처럼 이 브라우저 변수(비트)이고 켜기·끄기는 AUTOSNAP 8
+const SESSION_RW = ['OSMODE', 'ORTHOMODE', 'SNAPMODE', 'GRIDMODE', 'DYNMODE', 'FILEDIA', 'CMDDIA', 'CMDECHO'];
 const SESSION_RO = ['DWGNAME', 'DWGPREFIX', 'DWGTITLED', 'CDATE', 'DATE', 'MILLISECS', 'ACADVER', 'PRODUCT', 'PLATFORM', 'LOCALE', 'CTAB', 'LASTPOINT', 'SDI', 'LISPINIT', 'UNDOCTL', 'ERRNO'];
 
 function lispToHeader(v: Value | undefined): HeaderValue | undefined {
@@ -315,8 +375,10 @@ export function sysvarInfo(app: App, raw: string): SysvarInfo | null {
   const bv = browserVar(name);
   if (bv) {
     const value = name === 'PICKBOX' && app.view?.overlay ? app.view.overlay.pickbox : name === 'ATTREQ' ? (attReq(app) ? 1 : 0) : browserSysvar(name);
-    return { name, source: 'browser', kind: 'int', value, readOnly: false, desc: bv.desc };
+    return { name, source: 'browser', kind: bv.angle ? 'angle' : 'int', value, readOnly: false, desc: bv.desc };
   }
+  const tv = browserTextVar(name);
+  if (tv) return { name, source: 'browser', kind: 'string', value: browserSysvarText(name) ?? tv.def, readOnly: false, desc: tv.desc };
   const key = `$${name}`;
   if (NOT_SYSVARS.has(key)) return null;
   const doc = app.active?.doc;
@@ -340,7 +402,7 @@ export function sysvarText(v: HeaderValue | undefined, kind?: SysvarKind): strin
 
 /** 모든 변수(이름 순): 세션·이 브라우저·지금 도면의 머리말과 알려진 머리말 변수 */
 export function listSysvars(app: App): SysvarInfo[] {
-  const names = new Set<string>([...SESSION_RW, ...SESSION_RO, ...BROWSER_VARS.map((v) => v.name)]);
+  const names = new Set<string>([...SESSION_RW, ...SESSION_RO, ...BROWSER_VARS.map((v) => v.name), ...BROWSER_TEXT_VARS.map((v) => v.name)]);
   for (const k of app.active?.doc.header.keys() ?? []) if (k.startsWith('$')) names.add(k.slice(1));
   for (const [k] of HEADER_VARS) names.add(k.slice(1));
   const out: SysvarInfo[] = [];
@@ -368,7 +430,13 @@ export function setSysvarText(app: App, raw: string, text: string): string | nul
   const t = text.trim().replace(/^"(.*)"$/, '$1');
   const n = info.name;
   if (info.source === 'browser') {
+    // 글 변수(POLARADDANG): "."은 없음(AutoCAD 문자열 변수와 같다)
+    if (browserTextVar(n)) return setBrowserSysvarText(n, t === '.' ? '' : t);
     const v = Number(t);
+    if (info.kind === 'angle') {
+      if (!/^[-+]?(\d+(\.\d*)?|\.\d+)$/.test(t)) return `${browserVar(n)!.min}과(와) ${browserVar(n)!.max} 사이의 값이 필요합니다.`;
+      return setBrowserSysvar(n, v);
+    }
     if (!/^[-+]?\d+$/.test(t)) return `${browserVar(n)!.min}과(와) ${browserVar(n)!.max} 사이의 정수가 필요합니다.`;
     const err = setBrowserSysvar(n, v);
     if (err) return err;
@@ -462,16 +530,32 @@ export async function promptSysvar(app: App, ctx: CommandContext, raw: string, a
       text = pending;
       pending = undefined;
     } else {
-      const r = await ctx.getPoint(`${info.name}에 대한 새 값 입력 <${sysvarText(cur.value, cur.kind)}>:`, { allowText: true, preferNumber: true });
+      // 글 변수는 "."으로 비운다(AutoCAD 문자열 변수의 "없음")
+      const none = browserTextVar(info.name) ? ' 또는 없음은 . 입력' : '';
+      const r = await ctx.getPoint(`${info.name}에 대한 새 값 입력${none} <${sysvarText(cur.value, cur.kind)}>:`, { allowText: true, preferNumber: true });
       if ('enter' in r) return;
       if ('point' in r) text = `${r.point.x},${r.point.y}`;
       else if ('text' in r) text = r.text;
       else return;
     }
     const err = setSysvarText(app, info.name, text);
-    if (!err) return;
+    if (!err) {
+      if (info.name === 'POLARMODE') polarModeNote(ctx);
+      return;
+    }
     ctx.print(err, 'err');
   }
+}
+
+let polarNoted = false;
+/**
+ * 13차까지 이 앱은 POLARMODE 0·1을 극좌표 추적 끄기·켜기로 받았다. 이제 AutoCAD처럼 각도 측정·추적 방식 비트이므로
+ * 명령행·SETVAR·스크립트로 처음 바꿀 때 한 번 알린다(예전 스크립트를 쓰던 사람이 놀라지 않게)
+ */
+function polarModeNote(ctx: CommandContext): void {
+  if (polarNoted) return;
+  polarNoted = true;
+  ctx.print('POLARMODE는 극좌표 각도 측정과 객체 스냅 추적 방식(비트)입니다. 극좌표 추적 켜기·끄기는 F10(AUTOSNAP 8)입니다.');
 }
 
 // ---------------------------------------------------------------------------
@@ -505,7 +589,7 @@ async function sysvdlg(app: App, ctx: CommandContext): Promise<void> {
     },
     onActivate: () => edit.focus(),
   });
-  const defOf = (r: SysvarInfo): HeaderValue | undefined => (r.source === 'browser' ? browserVar(r.name)?.def : r.source === 'header' ? DEFAULT_HEADER[`$${r.name}`] : undefined);
+  const defOf = (r: SysvarInfo): HeaderValue | undefined => (r.source === 'browser' ? (browserVar(r.name)?.def ?? browserTextVar(r.name)?.def) : r.source === 'header' ? DEFAULT_HEADER[`$${r.name}`] : undefined);
   const refresh = () => {
     const q = search.value.trim().toUpperCase();
     rows = listSysvars(app).filter((r) => (!q || r.name.includes(q) || r.desc.includes(search.value.trim())) && (!onlyChanged.checked || (defOf(r) !== undefined && JSON.stringify(defOf(r)) !== JSON.stringify(r.value))));
