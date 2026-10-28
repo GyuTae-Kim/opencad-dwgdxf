@@ -8,7 +8,7 @@
  * 요약 결과는 .runtime/oracle에 캐시한다.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -57,7 +57,14 @@ export function ezdxfSummary(dxfPath: string): unknown {
   mkdirSync(CACHE, { recursive: true });
   const out = join(CACHE, `${basename(dxfPath)}.${key}.json`);
   if (!existsSync(out)) {
-    execFileSync(PYTHON, ['-I', join(ROOT, 'scripts/oracle/ezdxf_dump.py'), dxfPath, out], { stdio: 'pipe' });
+    // 다른 워커가 같은 요약을 쓰는 중에 읽지 않게 임시 이름에 다 쓴 뒤 옮긴다
+    const tmp = `${out}.${process.pid}.tmp`;
+    try {
+      execFileSync(PYTHON, ['-I', join(ROOT, 'scripts/oracle/ezdxf_dump.py'), dxfPath, tmp], { stdio: 'pipe' });
+      renameSync(tmp, out);
+    } finally {
+      rmSync(tmp, { force: true });
+    }
   }
   return decodeStrings(JSON.parse(readFileSync(out, 'utf8')));
 }
