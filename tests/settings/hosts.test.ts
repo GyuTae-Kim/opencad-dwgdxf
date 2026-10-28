@@ -7,7 +7,7 @@ import type { CadDocument, Entity, InsertEntity } from '../../src/core/model';
 import { entityDefaults } from '../../src/core/model';
 import { Real } from '../../src/edit/lisp/types';
 import { getSysVar, setSysVar } from '../../src/app/lisp-host';
-import { BROWSER_VARS, browserSysvar, setBrowserSysvar } from '../../src/app/sysvars';
+import { BROWSER_VARS, browserSysvar, browserSysvarText, setBrowserSysvar } from '../../src/app/sysvars';
 import { prefSet } from '../../src/app/mgr-ui';
 import { registerDrawCommands } from '../../src/app/draw';
 import { registerBlockCommands } from '../../src/app/blocks';
@@ -31,6 +31,29 @@ describe('AutoLISP getvar·setvar와 이 브라우저 변수', () => {
     await h.lisp('(setvar "GRIPSIZE" 300)');
     expect(h.errors().at(-1)).toContain('AutoCAD 변수 설정 거부: "GRIPSIZE" 300 (1과(와) 255 사이의 정수가 필요합니다)');
     expect(browserSysvar('GRIPSIZE')).toBe(5);
+  });
+
+  it('POLARANG은 라디안 실수, POLARADDANG은 글, POLARMODE는 비트(극좌표 추적 켜기·끄기가 아니다)', async () => {
+    const h = makeLispApp();
+    try {
+      await h.lisp('(getvar "POLARANG")');
+      expect(h.printed.at(-1)?.text).toBe('1.5708');
+      await h.lisp('(setvar "POLARANG" (/ pi 4))');
+      expect(browserSysvar('POLARANG')).toBe(45);
+      await h.lisp('(setvar "POLARADDANG" "10;75")');
+      expect(browserSysvarText('POLARADDANG')).toBe('10;75');
+      await h.lisp('(getvar "polaraddang")');
+      expect(h.printed.at(-1)?.text).toBe('"10;75"');
+      await h.lisp('(setvar "POLARMODE" 3)');
+      expect(browserSysvar('POLARMODE')).toBe(3);
+      await h.lisp('(setvar "POLARMODE" 1.5)');
+      expect(h.errors().at(-1)).toContain('정수가 필요합니다');
+      await h.lisp('(setvar "POLARANG" 0.0)');
+      expect(h.errors().at(-1)).toContain('0.1과(와) 360 사이의 값이 필요합니다');
+      expect(browserSysvar('POLARANG')).toBe(45);
+    } finally {
+      prefSet('opencad.sysvar.POLARADDANG', null);
+    }
   });
 
   it('정수만 받고(정수 실수는 받는다), ATTREQ는 정하지 않았으면 도면 머리말', () => {

@@ -23,6 +23,10 @@ export interface Settings {
   autosnap: number;
   /** AutoSnap 표식기 크기 1~20(OPTIONS 제도 탭, options.ts AUTOSNAPMARKER) */
   markerSize: number;
+  /** 1 마지막 선분 기준 각도, 2 객체 스냅 추적에 극좌표 각도, 4 추가 각도, 8 Shift로 추적점 획득(POLARMODE — polar.ts) */
+  polarMode: number;
+  /** 극좌표 추적 증분 각도, 도(POLARANG). 추가 각도 목록(POLARADDANG)은 글이라 App이 따로 읽는다 */
+  polarAng: number;
   /** 0이면 명령 전에 고른 객체를 명령이 쓰지 않는다 — 명사/동사 선택 끄기(PICKFIRST) */
   pickfirst: number;
   /** 0이면 새로 고른 것이 선택을 바꾸고 Shift로 더한다(PICKADD) */
@@ -49,6 +53,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   aperture: 10,
   autosnap: 63,
   markerSize: 5,
+  polarMode: 0,
+  polarAng: 90,
   pickfirst: 1,
   pickadd: 2,
   pickauto: 5,
@@ -68,6 +74,8 @@ export const SETTING_VARS: Readonly<Record<keyof Settings, string>> = {
   aperture: 'APERTURE',
   autosnap: 'AUTOSNAP',
   markerSize: 'AUTOSNAPMARKER',
+  polarMode: 'POLARMODE',
+  polarAng: 'POLARANG',
   pickfirst: 'PICKFIRST',
   pickadd: 'PICKADD',
   pickauto: 'PICKAUTO',

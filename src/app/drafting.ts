@@ -9,6 +9,8 @@ import { ALL_SNAPS, SNAP_NAMES } from './snap';
 import type { SnapKind } from './view';
 import { form } from './ui/dom';
 import { isoState, setIso } from './viewtools-iso';
+import { browserSysvar, browserSysvarText, setBrowserSysvar, setBrowserSysvarText } from './sysvars';
+import { POLAR_COMMON_ANGLES, formatDeg, parsePolarAddAng, parsePolarAng, polarModeBits, polarModeFields } from './polar';
 
 /** -OSNAP·명령행에서 쓰는 영문 약어(이름 앞 세 글자) */
 const SNAP_ABBR: Record<string, SnapKind> = {
@@ -178,7 +180,7 @@ export function registerDraftingCommands(app: App): void {
 
   const settings = async (tab: 'snap' | 'polar' | 'osnap') => {
     const st = app.active;
-    const deg = Math.round((app.polarInc * 180) / Math.PI * 1e6) / 1e6;
+    const pm = polarModeFields(browserSysvar('POLARMODE'));
     const fields: Parameters<typeof form>[1] = [];
     if (st && tab === 'snap') {
       fields.push(
@@ -202,16 +204,34 @@ export function registerDraftingCommands(app: App): void {
       );
     }
     if (tab === 'polar') {
+      // AutoCAD 제도 설정의 극좌표 추적 탭: 켜기(AUTOSNAP 8), 증분 각도(POLARANG — 목록에서 고르거나 친다),
+      // 추가 각도(POLARMODE 4·POLARADDANG), 객체 스냅 추적 설정(POLARMODE 2), 극좌표 각도 측정(POLARMODE 1)
       fields.push(
         { key: 'polarOn', label: '극좌표 추적 켜기 (F10)', type: 'check', value: app.polarOn },
-        {
-          key: 'inc',
-          label: '증분 각도',
-          type: 'select',
-          value: String(deg),
-          options: ['90', '45', '30', '22.5', '18', '15', '10', '5'].map((v) => ({ value: v, label: v })),
-        },
+        { key: 'inc', label: '증분 각도', type: 'text', value: formatDeg(browserSysvar('POLARANG')), list: POLAR_COMMON_ANGLES.map(formatDeg) },
+        { key: 'addOn', label: '추가 각도', type: 'check', value: pm.addAngles },
+        { key: 'add', label: '추가 각도 목록(도, ;로 구분, 10개까지)', type: 'text', value: browserSysvarText('POLARADDANG') ?? '', placeholder: '예: 10;75' },
         { key: 'otrack', label: '객체 스냅 추적 켜기 (F11)', type: 'check', value: app.otrackOn },
+        {
+          key: 'otrackPolar',
+          label: '객체 스냅 추적 설정',
+          type: 'select',
+          value: pm.otrackPolar ? '1' : '0',
+          options: [
+            { value: '0', label: '직교로만 추적' },
+            { value: '1', label: '전체 극좌표 각도 설정을 사용하여 추적' },
+          ],
+        },
+        {
+          key: 'relative',
+          label: '극좌표 각도 측정',
+          type: 'select',
+          value: pm.relative ? '1' : '0',
+          options: [
+            { value: '0', label: '절대' },
+            { value: '1', label: '마지막 세그먼트에 상대적' },
+          ],
+        },
       );
     }
     if (tab === 'osnap') {
@@ -219,7 +239,16 @@ export function registerDraftingCommands(app: App): void {
       for (const k of ALL_SNAPS) fields.push({ key: `s_${k}`, label: SNAP_NAMES[k] ?? k, type: 'check', value: app.snapModes.has(k) });
     }
     const v = await form(tab === 'snap' ? '제도 설정 - 스냅 및 그리드' : tab === 'polar' ? '제도 설정 - 극좌표 추적' : '제도 설정 - 객체 스냅', fields, {
-      validate: (x) => (tab === 'snap' && !(Number(x.snapX) > 0 && Number(x.snapY) > 0 && Number(x.gridX) > 0 && Number(x.gridY) > 0 && Number(x.major) >= 1) ? '간격은 0보다 커야 합니다.' : null),
+      validate: (x) => {
+        if (tab === 'snap' && !(Number(x.snapX) > 0 && Number(x.snapY) > 0 && Number(x.gridX) > 0 && Number(x.gridY) > 0 && Number(x.major) >= 1)) return '간격은 0보다 커야 합니다.';
+        if (tab === 'polar') {
+          const inc = parsePolarAng(String(x.inc));
+          if (typeof inc === 'string') return inc;
+          const add = parsePolarAddAng(String(x.add));
+          if (typeof add === 'string') return add;
+        }
+        return null;
+      },
     });
     if (!v) return;
     if (st && tab === 'snap') {
@@ -234,7 +263,10 @@ export function registerDraftingCommands(app: App): void {
       app.view.requestOverlay();
     }
     if (tab === 'polar') {
-      app.polarInc = (Number(v.inc) * Math.PI) / 180;
+      // 값은 이 브라우저 변수(AutoCAD는 레지스트리). Shift로 획득(POLARMODE 8)은 OPTIONS 제도 탭의 칸이라 그대로 둔다
+      setBrowserSysvar('POLARANG', parsePolarAng(String(v.inc)) as number);
+      setBrowserSysvarText('POLARADDANG', String(v.add));
+      setBrowserSysvar('POLARMODE', polarModeBits(browserSysvar('POLARMODE'), { addAngles: !!v.addOn, otrackPolar: v.otrackPolar === '1', relative: v.relative === '1' }));
       if (!!v.polarOn !== app.polarOn) app.togglePolar();
       if (!!v.otrack !== app.otrackOn) app.toggleOtrack();
     }
@@ -252,14 +284,18 @@ export function registerDraftingCommands(app: App): void {
     title: '제도 설정',
     transparent: true,
     noDoc: true,
-    async run(ctx) {
-      const r = await ctx.getPoint('설정할 항목 [스냅 및 그리드(S)/극좌표 추적(P)/객체 스냅(O)] <스냅 및 그리드>:', {
-        keywords: [
-          { key: 'S', label: '스냅 및 그리드' },
-          { key: 'P', label: '극좌표 추적' },
-          { key: 'O', label: '객체 스냅' },
-        ],
-      });
+    async run(ctx, arg) {
+      // 상태 막대의 "추적 설정…"은 탭을 인자(P)로 준다
+      const given = (arg ?? '').trim().toUpperCase();
+      const r = ['S', 'P', 'O'].includes(given)
+        ? { keyword: given }
+        : await ctx.getPoint('설정할 항목 [스냅 및 그리드(S)/극좌표 추적(P)/객체 스냅(O)] <스냅 및 그리드>:', {
+            keywords: [
+              { key: 'S', label: '스냅 및 그리드' },
+              { key: 'P', label: '극좌표 추적' },
+              { key: 'O', label: '객체 스냅' },
+            ],
+          });
       const k = 'keyword' in r ? r.keyword : 'S';
       await settings(k === 'P' ? 'polar' : k === 'O' ? 'osnap' : 'snap');
     },

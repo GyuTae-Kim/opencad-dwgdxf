@@ -6,7 +6,7 @@ import { registerBlockCommands } from '../../src/app/blocks';
 import { registerTableCommands } from '../../src/app/tables';
 import { registerDashCommands } from '../../src/app/dashcmds';
 import { scriptRunner } from '../../src/app/script';
-import { browserSysvar } from '../../src/app/sysvars';
+import { browserSysvar, browserSysvarText } from '../../src/app/sysvars';
 import { prefSet } from '../../src/app/mgr-ui';
 import { makeScriptApp, type ScriptApp } from './app';
 
@@ -135,6 +135,25 @@ describe('SCRIPT 통합: 선·원·블록 삽입·해치', () => {
       expect(h.errors().join('\n')).toContain('변수 "NOSUCHVAR"이(가) 이 도면에 없습니다.');
     } finally {
       prefSet('opencad.sysvar.AUTOSNAP', null);
+    }
+  });
+
+  it('SETVAR로 POLARANG(도)·POLARADDANG(글, "."은 없음)·POLARMODE(비트)를 바꾼다 — POLARMODE 0은 극좌표 추적(AUTOSNAP 8)을 끄지 않는다', async () => {
+    const h = setup();
+    try {
+      expect(await h.script('SETVAR POLARANG 22.5\nSETVAR POLARADDANG 75;10\nSETVAR POLARMODE 0\n')).toBe('idle');
+      expect([browserSysvar('POLARANG'), browserSysvarText('POLARADDANG'), browserSysvar('POLARMODE'), browserSysvar('AUTOSNAP')]).toEqual([22.5, '75;10', 0, 63]);
+      // 예전 판처럼 POLARMODE로 켜고 끄던 스크립트를 위해 한 번 알린다
+      expect(h.out()).toContain('POLARMODE는 극좌표 각도 측정과 객체 스냅 추적 방식(비트)입니다. 극좌표 추적 켜기·끄기는 F10(AUTOSNAP 8)입니다.');
+      expect(['$POLARMODE', '$POLARANG', '$POLARADDANG'].some((k) => h.doc.header.has(k))).toBe(false);
+      expect(await h.script('SETVAR POLARADDANG .\nSETVAR POLARMODE 5\n')).toBe('idle');
+      expect([browserSysvarText('POLARADDANG'), browserSysvar('POLARMODE')]).toEqual(['', 5]);
+      // 잘못된 값은 알리고 스크립트를 멈춘다(값은 그대로)
+      expect(await h.script('SETVAR POLARANG 0\n')).toBe('paused');
+      expect(h.errors().join('\n')).toContain('0.1과(와) 360 사이의 값이 필요합니다.');
+      expect(browserSysvar('POLARANG')).toBe(22.5);
+    } finally {
+      for (const n of ['POLARMODE', 'POLARANG', 'POLARADDANG']) prefSet(`opencad.sysvar.${n}`, null);
     }
   });
 

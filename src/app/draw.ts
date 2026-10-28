@@ -234,6 +234,11 @@ function setTangent(app: App, p: Pt, dir: number): void {
   if (app.active) tangentAfter.set(app.active, { p: { x: p.x, y: p.y }, dir });
 }
 
+/** 상대 극좌표(POLARMODE 1)의 0도 방향으로 마지막으로 그린 선분의 진행 방향을 알린다(명령만 돌리는 가벼운 앱에는 없다) */
+function noteSegment(app: App, dir: number): void {
+  app.noteSegment?.(dir);
+}
+
 /** 세 점(시작·중간·끝)으로 호: 반시계 시작각·끝각 */
 function arc3p(a: Pt, m: Pt, b: Pt): { c: Pt; r: number; a0: number; a1: number } | null {
   const k = circle3p(a, m, b);
@@ -277,8 +282,8 @@ export function registerDrawCommands(app: App): void {
       let start = first;
       let prev = first;
       let count = 0;
-      /** 그린 선분의 시작점. 명령 취소(U)로 하나씩 되돌린다 — 다음 선분의 시작점 */
-      const froms: Pt[] = [];
+      /** 그린 선분(시작점·방향). 명령 취소(U)로 하나씩 되돌린다 — 다음 선분의 시작점과 상대 극좌표의 기준 */
+      const segs: { from: Pt; dir: number }[] = [];
       for (;;) {
         const kws = count >= 2 ? [{ key: 'C', label: '닫기' }, { key: 'U', label: '명령 취소' }] : [{ key: 'U', label: '명령 취소' }];
         const d = deferred;
@@ -299,16 +304,19 @@ export function registerDrawCommands(app: App): void {
         if ('keyword' in r) {
           if (r.keyword === 'U') {
             if (count > 0 && st.session.undoLastStep(ctx.group, 1)) {
-              // 되돌린 선분의 시작점에서 잇는다(전에는 되돌린 선분의 핸들로 찾다가 지워져 늘 첫 점으로 돌아갔다)
+              // 되돌린 선분의 시작점에서 잇는다(전에는 되돌린 선분의 핸들로 찾다가 지워져 늘 첫 점으로 돌아갔다).
+              // 상대 극좌표의 기준도 남은 마지막 선분으로
               count--;
-              prev = froms.pop() ?? start;
+              prev = segs.pop()?.from ?? start;
               if (count === 0) prev = start;
+              if (segs.length) noteSegment(app, segs[segs.length - 1]!.dir);
             }
             continue;
           }
           if (r.keyword === 'C') {
             addEntities(app, ctx, [{ ...base(), type: 'LINE', handle: '', start: v3(prev, elev), end: v3(start, elev) } as Entity], 'LINE');
             setTangent(app, start, ang(prev, start));
+            noteSegment(app, ang(prev, start));
             app.lastPoint = start;
             return;
           }
@@ -328,7 +336,9 @@ export function registerDrawCommands(app: App): void {
         if (dist(prev, p) < 1e-12) continue;
         addEntities(app, ctx, [{ ...base(), type: 'LINE', handle: '', start: v3(prev, elev), end: v3(p, elev) } as Entity], 'LINE');
         setTangent(app, p, ang(prev, p));
-        froms.push(prev);
+        // 상대 극좌표(POLARMODE 1)의 0도 방향: 마지막으로 그린 선분
+        segs.push({ from: prev, dir: ang(prev, p) });
+        noteSegment(app, segs[segs.length - 1]!.dir);
         prev = p;
         app.lastPoint = p;
         count++;
@@ -369,16 +379,15 @@ export function registerDrawCommands(app: App): void {
           constantWidth: 0,
           elevation: elev,
         }) as Entity;
-      /** 접선 방향(마지막 선분 끝의 진행 방향) */
-      const tangentAt = (): number | null => {
-        if (verts.length < 2) return null;
-        const a = verts[verts.length - 2]!;
-        const b = verts[verts.length - 1]!;
+      /** 구간(a → b, a의 볼록) 끝의 진행 방향 */
+      const endDir = (a: LwVertex, b: { x: number; y: number }): number => {
         const arc = bulgeArc(a.x, a.y, b.x, b.y, a.bulge);
         if (!arc) return Math.atan2(b.y - a.y, b.x - a.x);
         const endAng = arc.a0 + arc.sweep;
         return endAng + (arc.sweep > 0 ? Math.PI / 2 : -Math.PI / 2);
       };
+      /** 접선 방향(마지막 선분 끝의 진행 방향) */
+      const tangentAt = (): number | null => (verts.length < 2 ? null : endDir(verts[verts.length - 2]!, verts[verts.length - 1]!));
       const commit = () => {
         const st2 = app.active!;
         const e = entity();
@@ -389,6 +398,9 @@ export function registerDrawCommands(app: App): void {
           const before = st2.doc.entityIndex.get(handle);
           if (before) st2.session.commit({ label: 'PLINE', ops: [{ kind: 'modify', block: st2.space, before, after: { ...e, owner: before.owner } as Entity }], group: ctx.group });
         }
+        // 상대 극좌표(POLARMODE 1)의 0도 방향: 마지막으로 그린 구간 끝의 진행 방향(닫았으면 닫는 구간)
+        const dir = closed && verts.length > 1 ? endDir(verts[verts.length - 1]!, verts[0]!) : tangentAt();
+        if (dir !== null) noteSegment(app, dir);
       };
       const bulgeFor = (from: LwVertex, to: Pt): number => {
         const t = tangentAt();

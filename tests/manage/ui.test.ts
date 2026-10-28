@@ -11,7 +11,9 @@ import { registerDwgProps } from '../../src/app/dwgprops';
 import { registerOptions } from '../../src/app/options';
 import { registerAliasEdit } from '../../src/app/aliasedit';
 import { drawingProps } from '../../src/io/dwgprops';
-import { browserSysvar } from '../../src/app/sysvars';
+import { browserSysvar, browserSysvarText, setBrowserSysvar } from '../../src/app/sysvars';
+import { registerDraftingCommands } from '../../src/app/drafting';
+import { prefSet } from '../../src/app/mgr-ui';
 import { makeHarness } from '../cmds2/harness';
 import { line } from '../edit/make';
 
@@ -106,6 +108,90 @@ describe('대화상자 연기 시험', () => {
     ok();
     await run;
     expect(aliases.get('LL')).toBe('LINE');
+  });
+});
+
+describe('극좌표 추적 설정 연기 시험(POLARMODE·POLARANG·POLARADDANG — 이 브라우저)', () => {
+  afterEach(() => {
+    for (const n of ['POLARMODE', 'POLARANG', 'POLARADDANG']) prefSet(`opencad.sysvar.${n}`, null);
+  });
+
+  /** 극좌표·객체 스냅 추적 켜기·끄기만 흉내 낸 앱 */
+  function draftingHarness() {
+    const h = makeHarness();
+    const on = { polar: true, otrack: true };
+    Object.assign(h.app, {
+      get polarOn() {
+        return on.polar;
+      },
+      get otrackOn() {
+        return on.otrack;
+      },
+      togglePolar: () => void (on.polar = !on.polar),
+      toggleOtrack: () => void (on.otrack = !on.otrack),
+      ui: { setBusy() {}, refreshStatus() {} },
+    });
+    registerDraftingCommands(h.app);
+    return { h, on };
+  }
+
+  it('DSETTINGS 극좌표 추적 탭: 증분 각도는 목록에서 고르거나 치고, 추가 각도·추적 방식·각도 측정을 고르면 이 브라우저에(8은 그대로)', async () => {
+    setBrowserSysvar('POLARMODE', 8);
+    const { h, on } = draftingHarness();
+    const run = h.run('DSETTINGS', [], 'P');
+    await dialogReady('제도 설정 - 극좌표 추적');
+    const inc = input('증분 각도');
+    expect(inc.value).toBe('90');
+    const list = document.getElementById(inc.getAttribute('list') ?? '');
+    expect([...(list?.querySelectorAll('option') ?? [])].map((o) => (o as HTMLOptionElement).value)).toEqual(['90', '45', '30', '22.5', '18', '15', '10', '5']);
+    expect([input('추가 각도').checked, input('추가 각도 목록(도, ;로 구분, 10개까지)').value]).toEqual([false, '']);
+    expect([(input('객체 스냅 추적 설정') as unknown as HTMLSelectElement).value, (input('극좌표 각도 측정') as unknown as HTMLSelectElement).value]).toEqual(['0', '0']);
+    // 잘못된 값은 알리고 상자를 닫지 않는다
+    inc.value = '0';
+    ok();
+    expect(dlg().querySelector('.form-error')?.textContent).toBe('증분 각도는 0.1과(와) 360 사이의 수(도)여야 합니다.');
+    inc.value = '7.5';
+    input('추가 각도 목록(도, ;로 구분, 10개까지)').value = '75;1,5';
+    ok();
+    expect(dlg().querySelector('.form-error')?.textContent).toContain('"1,5"');
+    input('추가 각도').checked = true;
+    input('추가 각도 목록(도, ;로 구분, 10개까지)').value = ' 75 ; 10 ';
+    (input('객체 스냅 추적 설정') as unknown as HTMLSelectElement).value = '1';
+    (input('극좌표 각도 측정') as unknown as HTMLSelectElement).value = '1';
+    input('극좌표 추적 켜기 (F10)').checked = false;
+    ok();
+    await run;
+    expect([browserSysvar('POLARANG'), browserSysvarText('POLARADDANG'), browserSysvar('POLARMODE'), on.polar, on.otrack]).toEqual([7.5, '75;10', 15, false, true]);
+    // 다시 열면 저장한 값
+    const again = h.run('DSETTINGS', [], 'P');
+    await dialogReady('제도 설정 - 극좌표 추적');
+    expect([input('증분 각도').value, input('추가 각도').checked, input('추가 각도 목록(도, ;로 구분, 10개까지)').value, (input('극좌표 각도 측정') as unknown as HTMLSelectElement).value]).toEqual(['7.5', true, '75;10', '1']);
+    (input('극좌표 각도 측정') as unknown as HTMLSelectElement).value = '0';
+    input('추가 각도').checked = false;
+    ok();
+    await again;
+    expect(browserSysvar('POLARMODE')).toBe(10);
+  });
+
+  it('OPTIONS 제도 탭의 정렬점 획득: Shift 키를 눌러 획득은 POLARMODE 8만 바꾼다', async () => {
+    setBrowserSysvar('POLARMODE', 5);
+    const h = makeHarness();
+    registerOptions(h.app);
+    const run = h.run('OPTIONS', []);
+    await tick();
+    const acq = input('정렬점 획득') as unknown as HTMLSelectElement;
+    expect(acq.value).toBe('auto');
+    acq.value = 'shift';
+    ok();
+    await run;
+    expect(browserSysvar('POLARMODE')).toBe(13);
+    const again = h.run('OPTIONS', []);
+    await tick();
+    expect((input('정렬점 획득') as unknown as HTMLSelectElement).value).toBe('shift');
+    (input('정렬점 획득') as unknown as HTMLSelectElement).value = 'auto';
+    ok();
+    await again;
+    expect(browserSysvar('POLARMODE')).toBe(5);
   });
 });
 

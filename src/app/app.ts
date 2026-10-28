@@ -25,7 +25,8 @@ import type { MeasureResult } from './measure-result';
 import { Picker } from './pick';
 import { SELECT_HELP, SELECT_METHODS, SELECT_OPTIONS, runSelectMethod, selectMethodOf } from './selmethod';
 import { DEFAULT_SNAPS, SNAP_NAMES, type SnapPoint, findSnaps } from './snap';
-import { type Acquired, objectTrack, polarAngles, polarTrack } from './tracking';
+import { type Acquired, objectTrack, polarTrack } from './tracking';
+import { type PolarSettings, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire } from './polar';
 import { gripPoints } from '../edit/geom';
 import { dynGrips, isDynamicReference } from '../edit/dynblock';
 import { spaceTolerance } from '../render/build';
@@ -66,7 +67,7 @@ import {
   usePickfirst,
   withTracking,
 } from './settings';
-import { browserSysvar, onSysvarChange, setBrowserSysvar } from './sysvars';
+import { browserSysvar, browserSysvarText, onSysvarChange, setBrowserSysvar } from './sysvars';
 import { optionValue } from './options';
 
 export class CancelError extends Error {
@@ -253,8 +254,22 @@ export class App {
   /** 격자 표시(F7)·격자 스냅(F9) */
   gridOn = false;
   snapOn = false;
-  /** 극좌표 추적(F10)의 증분 각도 */
-  polarInc = Math.PI / 2;
+  /** 극좌표 추적(F10)의 증분 각도, 라디안. 이 브라우저 변수 POLARANG(도)를 읽고 쓴다(AutoCAD는 레지스트리) */
+  get polarInc(): number {
+    return (this.settings.polarAng * Math.PI) / 180;
+  }
+
+  set polarInc(rad: number) {
+    setBrowserSysvar('POLARANG', Math.round(((rad * 180) / Math.PI) * 1e9) / 1e9);
+    if (this.settings.polarAng !== browserSysvar('POLARANG')) this.applySettings('POLARANG');
+  }
+
+  /** 극좌표 추가 각도(도, POLARADDANG — POLARMODE 4일 때 쓴다) */
+  private polarAdd: number[] = [];
+  /** 문서마다 마지막으로 그린 선분의 진행 방향(라디안) — 상대 극좌표(POLARMODE 1)의 0도 방향 */
+  private readonly lastSegment = new WeakMap<DocState, number>();
+  /** Shift로 획득(POLARMODE 8): 이번에 Shift를 누른 채 이미 뒤집은 스냅점(같은 점에 머무는 동안 다시 뒤집지 않는다) */
+  private shiftAcq: Pt | null = null;
   /** 동적 입력(F12): 커서 옆에 프롬프트·거리·입력 중인 값 */
   dynOn = true;
   /**
@@ -1595,7 +1610,13 @@ export class App {
     const v = this.view;
     v.prefs = this.settings;
     if (!name || name === 'PICKBOX') v.overlay.pickbox = this.settings.pickbox;
+    if (!name || name === 'POLARADDANG') this.polarAdd = polarAddList(browserSysvarText('POLARADDANG'));
     if (!name) return;
+    if (name === 'POLARMODE' || name === 'POLARANG' || name === 'POLARADDANG') {
+      // 추적 방식이 바뀌면 기다리던 획득을 버린다(자동 ↔ Shift)
+      this.updateAcquire(null);
+      this.ui?.refreshStatus();
+    }
     if (name === 'AUTOSNAP') {
       // 추적 비트(8·16)는 F10·F11과 같은 상태: 어디서 바꿨든(F10·F11·상태 막대·DSETTINGS·OPTIONS·변수 입력·setvar) 같은 값을 본다
       const as = this.settings.autosnap;
@@ -1645,6 +1666,24 @@ export class App {
 
   set otrackOn(on: boolean) {
     this.setTracking({ otrack: on });
+  }
+
+  /** 극좌표 추적 설정(POLARMODE·POLARANG·POLARADDANG — 이 브라우저) */
+  get polar(): PolarSettings {
+    return { mode: this.settings.polarMode, inc: this.settings.polarAng, add: this.polarAdd };
+  }
+
+  /**
+   * 그리는 명령(LINE·PLINE)이 선분을 하나 그렸다: 그 끝의 진행 방향(라디안)을 상대 극좌표(POLARMODE 1)의 0도 방향으로 둔다.
+   * AutoCAD 제도 설정 도움말의 "마지막으로 그린 세그먼트". 문서마다 따로
+   */
+  noteSegment(dir: number): void {
+    if (this.active && Number.isFinite(dir)) this.lastSegment.set(this.active, dir);
+  }
+
+  /** 지금 문서에서 마지막으로 그린 선분의 방향(없으면 null) */
+  lastSegmentDir(): number | null {
+    return this.active ? (this.lastSegment.get(this.active) ?? null) : null;
   }
 
   /** AUTOSNAP의 추적 비트를 바꾼다(바뀌면 onSysvarChange → applySettings가 화면·상태 막대를 맞춘다) */
@@ -1754,20 +1793,23 @@ export class App {
     const fmt = (v: number) => formatLength(v, st.units);
     // Shift를 누르는 동안 직교를 뒤집는다(켜져 있으면 끄고, 꺼져 있으면 켠다)
     const ortho = this.orthoOn !== this.shiftHeld;
-    // 극좌표 각도는 UCS X축 기준
+    // 극좌표 각도는 UCS X축 기준(절대), POLARMODE 1이면 마지막으로 그린 선분 기준(상대). 증분 각도의 배수와 POLARMODE 4면 추가 각도
     const ua = currentUcs(st).angle;
-    const norm = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-    const pa = this.polarOn && !ortho ? polarAngles(this.polarInc).map((a) => norm(a + ua)) : null;
+    const ps = this.polar;
+    const polarActive = this.polarOn && !ortho;
+    const pref = polarReference(ps.mode, ua, this.lastSegmentDir());
+    const pa = polarActive ? polarDirections(ps, pref.ref) : null;
+    const ptip = { ref: pref.ref, label: pref.relative ? '상대 극좌표' : '극좌표' };
     // 획득점: 객체 스냅 추적이 켜져 있으면 획득한 점, 임시 추적점(TT)은 꺼져 있어도
     const temp = this.tempTrack?.req === r ? this.tempTrack.points : [];
     const acq = [...(this.otrackOn ? this.acquired : []), ...temp];
     if (acq.length) {
-      // 획득점에서는 수평·수직(극좌표가 켜져 있으면 그 각도들도)
-      const t = objectTrack(acq, w, pa ?? polarAngles(Math.PI / 2).map((a) => norm(a + ua)), tol, r.base, pa, fmt);
+      // 획득점에서는 수평·수직(POLARMODE 2이고 극좌표 추적 중이면 극좌표 추적 설정의 각도 — UCS 기준)
+      const t = objectTrack(acq, w, otrackDirections(ps, polarActive, ua), tol, r.base, pa, fmt, ua, ptip);
       if (t) return { p: t.p, snap: null, track: t };
     }
     if (r.base && pa) {
-      const t = polarTrack(r.base, w, pa, tol, fmt);
+      const t = polarTrack(r.base, w, pa, tol, fmt, ptip);
       if (t) return { p: t.p, snap: null, track: t };
     }
     // 격자 스냅(객체 스냅·추적이 먼저)
@@ -1791,31 +1833,47 @@ export class App {
     return { p: this.dyn.constrain(r.base, res.p, currentUcs(st), st.units.aunits), snap: null };
   }
 
-  /** 스냅점 위에 잠시 머물면 추적용으로 획득(다시 머물면 해제) */
+  /**
+   * 객체 스냅 추적점 획득: 스냅점 위에 잠시 머물면 획득(다시 머물면 해제). POLARMODE 8이면 머무는 것으로는 얻지 않고
+   * Shift를 누른 채 스냅점을 지나거나 스냅점 위에서 Shift를 누르면 바로 얻는다(AutoCAD "Shift 키를 눌러 획득")
+   */
   private updateAcquire(snap: { p: Pt; kind: SnapKind } | null): void {
     const c = this.acqCandidate;
     if (!snap || !this.otrackOn || this.request?.kind !== 'point') {
       if (c) clearTimeout(c.timer);
       this.acqCandidate = null;
+      this.shiftAcq = null;
+      return;
+    }
+    const p = snap.p;
+    const label = SNAP_NAMES[snap.kind] ?? '점';
+    if (shiftAcquire(this.settings.polarMode)) {
+      if (c) clearTimeout(c.timer);
+      this.acqCandidate = null;
+      if (!this.shiftHeld) {
+        this.shiftAcq = null;
+        return;
+      }
+      if (this.shiftAcq && samePt(this.shiftAcq, p)) return;
+      this.shiftAcq = p;
+      this.toggleAcquired(p, label);
       return;
     }
     if (c && Math.abs(c.p.x - snap.p.x) < 1e-9 && Math.abs(c.p.y - snap.p.y) < 1e-9) return;
     if (c) clearTimeout(c.timer);
-    const p = snap.p;
-    const label = SNAP_NAMES[snap.kind] ?? '점';
-    this.acqCandidate = {
-      p,
-      timer: window.setTimeout(() => {
-        const i = this.acquired.findIndex((a) => Math.abs(a.p.x - p.x) < 1e-9 && Math.abs(a.p.y - p.y) < 1e-9);
-        if (i >= 0) this.acquired.splice(i, 1);
-        else {
-          this.acquired.push({ p, label });
-          if (this.acquired.length > 7) this.acquired.shift();
-        }
-        this.refreshAcquired();
-        this.view.requestOverlay();
-      }, 450),
-    };
+    this.acqCandidate = { p, timer: window.setTimeout(() => this.toggleAcquired(p, label), 450) };
+  }
+
+  /** 획득점을 더하거나(이미 있으면) 뺀다. 일곱 개까지(오래된 것부터 버린다) */
+  private toggleAcquired(p: Pt, label: string): void {
+    const i = this.acquired.findIndex((a) => Math.abs(a.p.x - p.x) < 1e-9 && Math.abs(a.p.y - p.y) < 1e-9);
+    if (i >= 0) this.acquired.splice(i, 1);
+    else {
+      this.acquired.push({ p, label });
+      if (this.acquired.length > 7) this.acquired.shift();
+    }
+    this.refreshAcquired();
+    this.view.requestOverlay();
   }
 
   /**
