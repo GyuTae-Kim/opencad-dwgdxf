@@ -77,14 +77,18 @@ describe('LINE의 지연된 접점: 타원·스플라인', () => {
   it('스플라인 → 점, 타원호 범위 밖의 접점은 없다', async () => {
     const h = draw();
     const s = h.add(wave());
-    await h.run('LINE', [{ pick: s.handle, at: [4, 5] }, '10,20', '']);
+    // (10, 10)에서는 두 봉우리의 바깥 비탈에 접한다. 찍은 왼쪽 봉우리 쪽 접점(약 (2.98, 4.27))
+    await h.run('LINE', [{ pick: s.handle, at: [4, 5] }, '10,10', '']);
     const l = modelEntities(h.doc, 'LINE')[0] as LineEntity;
     touches(s, l.start, l.end);
-    expect(l.end).toMatchObject({ x: 10, y: 20 });
-    // 위쪽 반 타원호(0 → π): 아래에서는 접점이 호 밖
+    expect(l.end).toMatchObject({ x: 10, y: 10 });
+    expect(l.start.x).toBeGreaterThan(2);
+    expect(l.start.x).toBeLessThan(4);
+    // 위쪽 반 타원호(0 → π): 바로 아래 (0, −8)에서 그은 두 접선은 모두 아래 반(y = −0.5)에 닿아 호 밖
+    // ((8, −1)처럼 오른쪽 옆이면 한 접선이 위쪽 반 (2.73, 1.46)을 스친다)
     const h2 = draw();
     const a = h2.add(ellipse(0, 0, 4, 0, 0.5, 0, Math.PI));
-    await h2.run('LINE', [{ pick: a.handle, at: [3, 1.3] }, '8,-1', '8,1', '']);
+    await h2.run('LINE', [{ pick: a.handle, at: [3, 1.3] }, '0,-8', '8,1', '']);
     expect(h2.printed).toContain('그 점에서는 접선을 그을 수 없습니다. 다시 지정하십시오.');
     const l2 = modelEntities(h2.doc, 'LINE')[0] as LineEntity;
     expect(l2.start.y).toBeGreaterThan(0);
@@ -121,11 +125,17 @@ describe('CIRCLE의 지연된 접점: 타원·스플라인', () => {
     const h = draw();
     const e = h.add(ell());
     const l = h.add(line(-20, -5, 20, -5));
-    await h.run('CIRCLE', ['T', { pick: e.handle, at: [2, -1.7] }, { pick: l.handle, at: [2, -5] }, '1']);
+    // 타원 맨 아래(y = −2)와 선 y = −5 사이가 3이므로 둘에 함께 접하려면 반지름이 1.5보다 커야 한다
+    await h.run('CIRCLE', ['T', { pick: e.handle, at: [2, -1.7] }, { pick: l.handle, at: [2, -5] }, '2']);
     const c = modelEntities(h.doc, 'CIRCLE')[0] as CircleEntity;
-    expect(c.center.y).toBeCloseTo(-4, 9);
+    expect(c.center.y).toBeCloseTo(-3, 9);
     expect(c.center.x).toBeGreaterThan(0);
-    expect(c.radius).toBe(1);
+    expect(c.radius).toBe(2);
+    // 중심에서 타원까지 거리 = 반지름(타원 위 촘촘한 표본)
+    const pc: Piece = entityPath(e)!.pieces[0]!;
+    let md = Infinity;
+    for (let i = 0; i <= 40000; i++) md = Math.min(md, d2(pieceAt(pc, i / 40000), c.center));
+    expect(md).toBeCloseTo(2, 6);
   });
 
   it('TTT: 스플라인 맨 아래와 두 선, 3P: 두 점과 타원', async () => {

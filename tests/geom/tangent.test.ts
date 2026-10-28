@@ -90,7 +90,9 @@ describe('점에서 그은 접선의 접점', () => {
 
   it('스플라인: 근 찾기의 접점이 촘촘한 표본으로 찾은 접점과 같다', () => {
     const pc = piece(spline([[0, 0], [5, 10], [10, -6], [15, 8], [20, 0]]));
-    const q = P(10, 20);
+    // 두 봉우리(높이 약 5)의 바깥 비탈에 하나씩 접한다. (10, 20)처럼 높으면 시작 접선((0,0) → (5,10))이 그 점을 지날 뿐
+    // 봉우리에 닿는 접선이 없다(f가 끝점 말고는 늘 음수)
+    const q = P(10, 10);
     const ts = tangentsFromPoint(pc, q);
     // 따로: 20만 표본의 부호 바뀜
     const f = (t: number) => {
@@ -174,16 +176,18 @@ describe('타원·스플라인에 접하는 원', () => {
   const ell = piece(ellE);
   const low = piece(line(-20, -5, 20, -5));
 
-  it('Ttr: 타원과 선 y = −5에 접하는 반지름 1인 원', () => {
-    const k = circleTTR(ell, P(2, -1.7), low, P(2, -5), 1)!;
+  it('Ttr: 타원과 선 y = −5에 접하는 반지름 2인 원, 반지름 1이면 없다', () => {
+    const k = circleTTR(ell, P(2, -1.7), low, P(2, -5), 2)!;
     expect(k).not.toBeNull();
-    expect(k.r).toBe(1);
-    expect(k.c.y).toBeCloseTo(-4, 9);
+    expect(k.r).toBe(2);
+    expect(k.c.y).toBeCloseTo(-3, 9);
     expect(k.c.x).toBeGreaterThan(0);
-    expect(minDist(ell, k.c)).toBeCloseTo(1, 7);
+    expect(minDist(ell, k.c)).toBeCloseTo(2, 7);
     // 다른 쪽을 고르면 왼쪽 해
-    const k2 = circleTTR(ell, P(-2, -1.7), low, P(-2, -5), 1)!;
+    const k2 = circleTTR(ell, P(-2, -1.7), low, P(-2, -5), 2)!;
     expect(k2.c.x).toBeCloseTo(-k.c.x, 9);
+    // 타원 맨 아래(y = −2)와 선 사이가 3이라 지름 2인 원은 둘에 함께 닿지 못한다(AutoCAD도 원이 없다고 한다)
+    expect(circleTTR(ell, P(2, -1.7), low, P(2, -5), 1)).toBeNull();
   });
 
   it('TTT: 타원과 두 선에 접하는 원, 3P: 두 점을 지나고 타원에 접하는 원', () => {
@@ -206,9 +210,10 @@ describe('타원·스플라인에 접하는 원', () => {
   it('타원호는 연장해서(원호처럼), 스플라인은 범위 안에서만 접한다', () => {
     // 오른쪽 반만 있는 타원호(−90° → 90°)라도 왼쪽 아래 해가 있다
     const halfArc = piece(ellipse(0, 0, 4, 0, 0.5, -Math.PI / 2, Math.PI / 2));
-    const k = circleTTR(halfArc, P(-2, -1.7), low, P(-2, -5), 1)!;
+    const k = circleTTR(halfArc, P(-2, -1.7), low, P(-2, -5), 2)!;
     expect(k.c.x).toBeLessThan(0);
-    expect(minDist(halfArc, k.c, true)).toBeCloseTo(1, 7);
+    expect(k.c.y).toBeCloseTo(-3, 9);
+    expect(minDist(halfArc, k.c, true)).toBeCloseTo(2, 7);
     // U자 베지어 스플라인(맨 아래 (0, −5))과 선 y = −8: 반지름 1.5인 원은 맨 아래에서 접한다
     const sp = piece(spline([[-10, 10], [-5, -10], [5, -10], [10, 10]]));
     const floor = piece(line(-20, -8, 20, -8));

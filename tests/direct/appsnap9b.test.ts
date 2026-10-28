@@ -68,7 +68,9 @@ describe('가상 교차점(APP)', () => {
     const ins = { ...entityDefaults(), handle: '', type: 'INSERT', block: 'B', insert: { x: 0, y: 5, z: 0 }, scale: { x: 2, y: 2, z: 1 }, rotation: Math.PI / 2, columnCount: 1, rowCount: 1, columnSpacing: 0, rowSpacing: 0, attribs: [] } as Entity;
     const { doc, pk, hs } = setup(ins, line(2, 0, 4, 0));
     doc.blocks.set('B', doc0.blocks.get('B')!);
-    const s = findSnaps(doc, pk, P(0.2, 0.2), 1.3, APP)[0]!;
+    // 커서에 더 가까운(늘린 곡선까지 거리) 객체가 handle. 블록의 선(x = 0)까지 0.1, 선 y = 0까지 0.2
+    // (두 거리가 같으면 회전 행렬의 반올림(cos 90° ≈ 6e-17)이 순서를 정한다)
+    const s = findSnaps(doc, pk, P(0.1, 0.2), 1.3, APP)[0]!;
     expect(s).toMatchObject({ kind: 'app', handle: hs[0], handle2: hs[1] });
     expect(s.x).toBeCloseTo(0, 12);
     expect(s.y).toBeCloseTo(0, 12);
