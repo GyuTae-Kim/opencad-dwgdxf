@@ -5,7 +5,7 @@
 import type { CadDocument, Entity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { type Mat, identity, multiply, ocsMatrix, rotationZ, scaling, translation } from '../../geom/matrix';
-import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
+import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { lwCount, lwVertices } from '../../core/lwpoly';
 
 export const TAU = Math.PI * 2;
@@ -435,7 +435,7 @@ function addEntity(ctx: Ctx, e: Entity, src: string, m: Mat, depth: number, chai
       let deg = e.degree;
       let w = e.weights && e.weights.length === ctrl.length && e.weights.some((x) => Math.abs(x - 1) > 1e-12) ? e.weights : undefined;
       if (ctrl.length < 2 && e.fitPoints.length >= 2) {
-        const s = interpolateFitPoints(e.fitPoints, e.startTangent, e.endTangent);
+        const s = fitPointsCurve(e);
         ctrl = s.ctrl;
         knots = s.knots;
         deg = s.degree;

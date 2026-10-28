@@ -19,7 +19,7 @@ import type {
   ViewportEntity,
 } from '../../core/model';
 import { lwCount, tidyWidths } from '../../core/lwpoly';
-import { interpolateFitPoints } from '../../geom/curves';
+import { fitPointsCurve } from '../../geom/curves';
 import { ellipseFromConjugate, ellipseFromConjugate3 } from './conic';
 import { type ArcPiece, type EllPiece } from './curve';
 import { arcUnder, bulgePieces, cloneEntity, inherit, lwVerts, piecesNurbs, polyVerts } from './path';
@@ -386,7 +386,7 @@ export function xformSpline(e: SplineEntity, m: Affine, opt: TransformOptions): 
   if (!sim && e.fitPoints.length >= 2) {
     // 맞춤 곡선은 닮음이 아닌 변환에서 유지되지 않는다 → 조정점 정의로
     if (e.controlPoints.length < 2) {
-      const s = interpolateFitPoints(e.fitPoints, e.startTangent, e.endTangent);
+      const s = fitPointsCurve(e);
       r.degree = s.degree;
       r.knots = s.knots;
       r.controlPoints = s.ctrl;

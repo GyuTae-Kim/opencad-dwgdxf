@@ -10,7 +10,7 @@
 import type { BlockDef, CadDocument, DimensionEntity, Entity, HatchEntity, MLineEntity, SplineEntity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { bulgeVertices, lwPoints, lwVertices, packBulge, setLwVertices } from '../../core/lwpoly';
-import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
+import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { type Affine, add, affApply, affInv, affTranslate, ccwSweep, dist, norm, normAngle, pointInPolygon, rot90, sub } from './math';
 import { cloneEntity, freshEntity, makeArc } from './path';
 import { frameOf, isNaturalExt, ocsToWcs, planProj, wcsToOcs } from './ocs';
@@ -323,7 +323,7 @@ function stretchSpline(e: SplineEntity, In: (p: Vec3) => boolean, d: Vec2): Spli
   if (fitMoved && e.fitPoints.length >= 2) {
     // 맞춤점을 옮겼으면 조정점을 맞춤점에서 다시 구한다(그리는 쪽과 같은 보간)
     if (e.controlPoints.length >= 2) {
-      const s = interpolateFitPoints(r.fitPoints, r.startTangent, r.endTangent);
+      const s = fitPointsCurve(r);
       r.degree = s.degree;
       r.knots = s.knots;
       r.controlPoints = s.ctrl;

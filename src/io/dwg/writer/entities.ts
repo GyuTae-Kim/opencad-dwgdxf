@@ -23,7 +23,7 @@ import type {
   ViewportEntity,
 } from '../../../core/model';
 import { R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
-import { SPLINE_FIT_METHOD, splineKnotParam } from '../splineflags';
+import { SPLINE_FIT_METHOD, dwgSplinePlan } from '../splineflags';
 import { annoDimWriteXData, ctxRecordsOf } from '../../annoscale';
 import type { PBlock, PEnt, WCtx } from './context';
 import { HARD_OWNER, HARD_PTR, SOFT_PTR, type EntCommonOut, type ObjWriter } from './objwriter';
@@ -1000,43 +1000,53 @@ export class EntityWriter {
     this.begin(helix ? this.cls('HELIX') : T.SPLINE, h, e);
     this.common(e, l);
     const d = this.ow.dat;
-    // DWG는 맞춤점 자료와 조정점 자료 중 하나만 담는다: 조정점이 있으면 조정점(모양이 정확히 같다), 없으면 맞춤점
-    const scenario = e.controlPoints.length ? 1 : 2;
+    // DWG는 맞춤점 자료와 조정점 자료 중 하나만 담는다. 맞춤점 방식이면 AutoCAD처럼 맞춤점 자료(다시 열 때 같은 조정점이 나오는지 확인한 것만),
+    // 아니면 조정점 자료(splineflags.ts dwgSplinePlan)
+    const plan = dwgSplinePlan(e, ver >= R2013);
+    if (plan.kind === 'ctrl' && plan.fitDropped) {
+      this.ctx.warn(
+        'dwg.write_spline_fit_dropped',
+        plan.fitDropped === 'version'
+          ? '이 버전 DWG에 없는 매듭 매개변수(제곱근·균일)의 맞춤점 스플라인을 조정점 스플라인으로 썼습니다(모양은 같고 맞춤점은 빠집니다).'
+          : '조정점이 맞춤점에서 다시 구한 곡선과 다른 스플라인을 조정점 스플라인으로 썼습니다(모양은 같고 맞춤점은 빠집니다).',
+      );
+    }
     if (ver >= R2013) {
       // R2013+(AutoCAD 실물 짝): 조정점 = 첫 값 1, 플래그 0(닫힘 4), 매듭 매개변수 15(사용자 지정).
       // 맞춤점 = 플래그 9(맞춤점 방식 1 + 8), 매듭 매개변수는 DXF 70의 비트(없으면 현 길이 0), 첫 값은 DXF 70에 1024가 있으면 1 아니면 2
       const closed = e.flags & 1 ? 4 : 0;
-      if (scenario === 2) {
+      if (plan.kind === 'fit') {
         d.BL(e.flags & SPLINE_FIT_METHOD ? 1 : 2);
         d.BL(9 | closed);
-        d.BL(splineKnotParam(e.flags));
+        d.BL(plan.knotParam);
       } else {
         d.BL(1);
         d.BL(closed);
         d.BL(15);
       }
-    } else d.BL(scenario);
-    d.BL(e.degree);
-    if (scenario === 2) {
-      d.BD(e.fitTolerance);
-      d.BD3(e.startTangent ?? ORIGIN);
-      d.BD3(e.endTangent ?? ORIGIN);
-      d.BL(e.fitPoints.length);
-      for (const p of e.fitPoints) d.BD3(p);
+    } else d.BL(plan.kind === 'fit' ? 2 : 1);
+    d.BL(plan.kind === 'fit' ? e.degree : plan.degree);
+    if (plan.kind === 'fit') {
+      d.BD(plan.tolerance);
+      d.BD3(plan.startTangent ?? ORIGIN);
+      d.BD3(plan.endTangent ?? ORIGIN);
+      d.BL(plan.fit.length);
+      for (const p of plan.fit) d.BD3(p);
     } else {
-      const weighted = !!e.weights && e.weights.length === e.controlPoints.length && e.weights.some((w) => w !== 1);
+      const { ctrl, knots, weights } = plan;
+      const weighted = !!weights && weights.length === ctrl.length && weights.some((w) => w !== 1);
       d.B((e.flags & 4) !== 0 || weighted);
       d.B((e.flags & 1) !== 0);
       d.B((e.flags & 2) !== 0);
       d.BD(e.knotTolerance);
       d.BD(e.controlTolerance);
-      d.BL(e.knots.length);
-      d.BL(e.controlPoints.length);
+      d.BL(knots.length);
+      d.BL(ctrl.length);
       d.B(weighted);
-      for (const k of e.knots) d.BD(k);
-      e.controlPoints.forEach((p, i) => {
+      for (const k of knots) d.BD(k);
+      ctrl.forEach((p, i) => {
         d.BD3(p);
-        if (weighted) d.BD(e.weights![i]);
+        if (weighted) d.BD(weights![i]);
       });
     }
     if (helix) {

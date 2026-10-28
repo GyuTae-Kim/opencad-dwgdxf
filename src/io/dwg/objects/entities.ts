@@ -53,7 +53,7 @@ import { cmcToCad, encToCad } from '../color';
 import { lineweightFromIndex } from '../lineweight';
 import { R14, R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
 import { hex } from './nonentities';
-import { splineFitBits } from '../splineflags';
+import { fillFitControl, splineFitBits } from '../splineflags';
 import { type AcisShape, decodeSatBytes, sabShape, satShape, setAcisShape } from '../../acis';
 import { readTableCellsOld, readTableContentR24 } from './table';
 import { decodeTableBody } from './tableraw';
@@ -962,9 +962,13 @@ function readSpline(or: ObjectReader, b: Omit<EntityBase, 'type'>, helix: boolea
     flags |= 8;
     e.normal = n;
   }
-  // AutoCAD가 같은 도면을 DXF로 쓸 때의 70: 첫 값이 1인 맞춤점 스플라인만 1024 + 매듭 매개변수 비트(예: 1064·1160)
+  // AutoCAD가 같은 도면을 DXF로 쓸 때의 70: 첫 값이 1인 맞춤점 스플라인만 1024 + 매듭 매개변수 비트(예: 1064·1160).
+  // R2000~R2010의 맞춤점 자료는 현 길이 맞춤점 방식(AutoCAD가 그 DWG를 DXF로 쓰면 1064)
   if (ver >= R2013 && scenario === 2 && first === 1) flags |= splineFitBits(knotParam);
+  if (ver < R2013 && scenario === 2) flags |= splineFitBits(0);
   e.flags = flags;
+  // 맞춤점 자료만 담긴 DWG: AutoCAD가 다시 구하는 조정점·매듭을 채운다(그 DXF에 적히는 값과 같다)
+  if (scenario === 2 && !helix) fillFitControl(e, ver >= R2013 ? knotParam : 0);
   if (helix) {
     r.BS(); // 주 버전
     r.BS(); // 부 버전

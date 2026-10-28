@@ -81,6 +81,16 @@ function normalizeSummary(src: CadDocument, e: Sum, a: Sum, ver: number, warning
         out.push(y);
         continue;
       }
+      // DWG에는 맞춤점·조정점 자료 중 하나만 남는다(splineflags.ts — 훑기의 normalizeSplinePair와 같은 규칙):
+      // 맞춤점만 있으면 다시 읽을 때 조정점·매듭이 채워지고, 조정점만 남은 1024는 맞춤점을 되살리고, R2013 전 판의 제곱근·균일은 맞춤점이 빠진다
+      if (x.type === 'SPLINE' && y.type === 'SPLINE' && de?.type === 'SPLINE') {
+        if (x.controlPoints === 0 && (x.fitPoints as number) >= 2) {
+          x.controlPoints = y.controlPoints;
+          x.knots = y.knots;
+        }
+        if (de.flags & 1024 && x.fitPoints === 0) x.fitPoints = y.fitPoints;
+        if (ver < R2013 && de.flags & (64 | 128)) x.fitPoints = y.fitPoints;
+      }
       for (const z of [x, y]) {
         if (typeof z.linetype === 'string') z.linetype = up(z.linetype);
         if (typeof z.style === 'string') z.style = up(z.style);

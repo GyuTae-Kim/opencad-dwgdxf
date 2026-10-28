@@ -4,12 +4,11 @@
  * 좌표는 WCS 평면도다.
  */
 import type { Entity, EntityBase, LwVertex, SplineEntity, Vec2, Vec3 } from '../../core/model';
-import { bulgeArc, clampedKnots, interpolateFitPoints } from '../../geom/curves';
+import { bulgeArc, clampedKnots, fitSplineAcad, interpolateFitPoints } from '../../geom/curves';
 import type { Piece } from './curve';
 import { pieceAt, pieceD1, pieceNearest } from './curve';
 import { footNear, osculatingPiece } from './tangent';
 import { ccwSweep, dist, wrapPi } from './math';
-import { interpolate } from './nurbs';
 import { inherit } from './path';
 import { fitKind, frameVerts, isClosed, isPolyline } from './pedit';
 import { closeSpline } from './splinedit';
@@ -487,13 +486,16 @@ export function arcByDirection(start: Vec2, dir: number, end: Vec2): number | nu
 
 export type KnotParam = 'chord' | 'sqrt' | 'uniform';
 
-/** 맞춤점 스플라인의 조정점·매듭(열린 곡선). 접선이 있으면 현 길이 매개변수(접선 조건이 있는 보간) */
+const KNOT_PARAM: Record<KnotParam, number> = { chord: 0, sqrt: 1, uniform: 2 };
+/** DXF 70: 맞춤점 방식(1024) + 매듭 매개변수 비트(AutoCAD SPLINE 맞춤 방식으로 그린 곡선과 같은 값) */
+const FIT_FLAGS: Record<KnotParam, number> = { chord: 1024 | 32, sqrt: 1024 | 64, uniform: 1024 | 128 };
+
+/**
+ * 맞춤점 스플라인의 조정점·매듭(열린 곡선): AutoCAD와 같은 보간(fitSplineAcad — 매듭은 맞춤점 매개변수, 끝 접선이 있으면 그 끝의 도함수,
+ * 없으면 자연 끝). 같은 맞춤점이면 AutoCAD가 같은 곡선을 만들어 DWG에 맞춤점 자료로 쓸 수 있다.
+ */
 export function fitSplineNurbs(fit: readonly Vec3[], knots: KnotParam = 'chord', startTangent?: Vec3, endTangent?: Vec3): { degree: number; knots: number[]; ctrl: Vec3[] } {
-  if (knots !== 'chord' && !startTangent && !endTangent && fit.length >= 3) {
-    const n = interpolate(fit, 3, knots);
-    if (n) return { degree: n.degree, knots: n.knots, ctrl: n.ctrl };
-  }
-  return interpolateFitPoints(fit, startTangent, endTangent);
+  return fitSplineAcad(fit, KNOT_PARAM[knots], startTangent, endTangent) ?? interpolateFitPoints(fit, startTangent, endTangent);
 }
 
 /** 맞춤점 스플라인 객체(닫기면 맞춤점을 지나는 주기 곡선 — SPLINEDIT 닫기와 같다) */
@@ -504,7 +506,8 @@ export function makeFitSpline(base: Omit<EntityBase, 'type' | 'handle'>, fit: re
     ...base,
     type: 'SPLINE',
     handle: '',
-    flags: 8,
+    // 열린 곡선은 맞춤점 방식 비트(닫힌 맞춤점 곡선은 AutoCAD의 계산을 몰라 예전처럼)
+    flags: opt.closed ? 8 : 8 | FIT_FLAGS[opt.knots ?? 'chord'],
     degree: s.degree,
     knots: s.knots,
     controlPoints: s.ctrl,

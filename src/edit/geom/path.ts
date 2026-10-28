@@ -19,7 +19,7 @@ import type {
   XLineEntity,
 } from '../../core/model';
 import { lwCount, packLw, unboxLw } from '../../core/lwpoly';
-import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
+import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { ellipseFromConjugate } from './conic';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, type Path, type Piece, pieceAt, pieceLength, pieceSize, reversePiece } from './curve';
 import { type Affine, TAU, affApply, affLin, affSimilarity, dist, normAngle, sweepToBulge } from './math';
@@ -154,7 +154,7 @@ export function splineNurbs(e: SplineEntity): Nurbs | null {
     return normalizeNurbs({ degree: e.degree, knots: e.knots, ctrl: e.controlPoints, weights: e.weights });
   }
   if (e.fitPoints.length >= 2) {
-    const s = interpolateFitPoints(e.fitPoints, e.startTangent, e.endTangent);
+    const s = fitPointsCurve(e);
     return normalizeNurbs({ degree: s.degree, knots: s.knots, ctrl: s.ctrl });
   }
   return null;

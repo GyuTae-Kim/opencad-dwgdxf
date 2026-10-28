@@ -20,7 +20,7 @@ import type {
   TextEntity,
   Vec3,
 } from '../../core/model';
-import { ellipsePoints, nurbsPoints, interpolateFitPoints, TAU } from '../../geom/curves';
+import { ellipsePoints, nurbsPoints, fitPointsCurve, TAU } from '../../geom/curves';
 import { lwVertices } from '../../core/lwpoly';
 import { rawTagsValid } from './tagwriter';
 import { proxyEntities } from '../../edit/geom/proxygeom';
@@ -211,7 +211,7 @@ function splineToPolyline(e: SplineEntity): PolylineEntity {
   let degree = e.degree;
   let weights = e.weights;
   if (ctrl.length < 2 && e.fitPoints.length >= 2) {
-    const r = interpolateFitPoints(e.fitPoints, e.startTangent, e.endTangent);
+    const r = fitPointsCurve(e);
     ctrl = r.ctrl;
     knots = r.knots;
     degree = r.degree;

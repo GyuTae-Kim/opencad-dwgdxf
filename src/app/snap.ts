@@ -9,7 +9,7 @@
 import type { CadDocument, Entity } from '../core/model';
 import { tableKey } from '../core/model';
 import { type Mat, apply, applyXY, identity, multiply, rotationZ, scaling, translation, withOcs } from '../geom/matrix';
-import { bulgeArc, ccwSweep, interpolateFitPoints, nurbsPoints } from '../geom/curves';
+import { bulgeArc, ccwSweep, fitPointsCurve, nurbsPoints } from '../geom/curves';
 import type { Picker } from './pick';
 import type { Pt, SnapKind } from './view';
 import { lwVertices } from '../core/lwpoly';
@@ -148,7 +148,7 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
       let pts: number[];
       if (e.controlPoints.length >= 2) pts = nurbsPoints(e.degree, e.knots, e.controlPoints, e.weights, 1e9);
       else if (e.fitPoints.length >= 2) {
-        const s = interpolateFitPoints(e.fitPoints);
+        const s = fitPointsCurve(e);
         pts = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e9);
       } else return;
       if (!(e.flags & 1)) {
