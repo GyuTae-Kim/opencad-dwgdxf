@@ -13,7 +13,7 @@ import { writeDxf } from '../../src/io/dxf/writer';
 import { writeDwg } from '../../src/io/dwg/index';
 import { readCadFile } from '../../src/io/index';
 import { collect, parseFilter, sniffVersion, walk } from '../../scripts/sweep/files';
-import { checkFile, createContext, normalizeForRoundtrip, normalizeForTarget, writeTargets } from '../../scripts/sweep/check';
+import { checkFile, createContext, normalizeForRoundtrip, normalizeForTarget, normalizeSplinePair, writeTargets } from '../../scripts/sweep/check';
 import { buildSummary, classify, errorSignature, expectedObjectDrop, qualityFlags, rereadKinds } from '../../scripts/sweep/summary';
 import { compareMain, compareRuns } from '../../scripts/sweep/compare';
 import { compareOracle, EzdxfOracle } from '../../scripts/sweep/oracle';
@@ -143,6 +143,33 @@ describe('파일 하나 확인', () => {
     expect(normalizeForTarget({ type: 'LINE', flags: 8 }, dwg18)).toEqual({ type: 'LINE', flags: 8 });
   });
 
+  it('맞춤점 스플라인의 DWG 형식 차이(맞춤점·조정점 중 하나만 남는 것)만 견주지 않는다', () => {
+    const dwg18 = { fmt: 'dwg' as const, version: 'AC1032' };
+    const dwg00 = { fmt: 'dwg' as const, version: 'AC1015' };
+    const same = (src: Record<string, unknown>, back: Record<string, unknown>, t: { fmt: 'dwg' | 'dxf'; version: string }) => {
+      const a = { ...src };
+      const b = { ...back };
+      normalizeSplinePair(src, a, b, t);
+      return JSON.stringify(a) === JSON.stringify(b);
+    };
+    const ctrlOnly = { type: 'SPLINE', flags: 1160, knots: 8, controlPoints: 4, fitPoints: 0 };
+    const fitOnly = { type: 'SPLINE', flags: 0, knots: 0, controlPoints: 0, fitPoints: 4 };
+    const uniform = { type: 'SPLINE', flags: 1160, knots: 10, controlPoints: 6, fitPoints: 4 };
+    // 조정점만 남은 1024 → DWG 맞춤점 자료로 되살림
+    expect(same(ctrlOnly, { ...ctrlOnly, fitPoints: 2 }, dwg18)).toBe(true);
+    // 맞춤점만 → 다시 읽으면 조정점·매듭이 채워짐
+    expect(same(fitOnly, { ...fitOnly, knots: 10, controlPoints: 6 }, dwg18)).toBe(true);
+    // R2000의 균일 매듭 → 조정점으로(맞춤점 빠짐). R2018에서는 견준다
+    expect(same(uniform, { ...uniform, fitPoints: 0 }, dwg00)).toBe(true);
+    expect(same(uniform, { ...uniform, fitPoints: 0 }, dwg18)).toBe(false);
+    // 그 밖은 그대로 견준다: 1024가 없는 조정점 스플라인, DXF 대상, 플래그·다른 수
+    expect(same({ ...ctrlOnly, flags: 8 }, { ...ctrlOnly, flags: 8, fitPoints: 2 }, dwg18)).toBe(false);
+    expect(same(ctrlOnly, { ...ctrlOnly, fitPoints: 2 }, { fmt: 'dxf', version: 'AC1032' })).toBe(false);
+    expect(same(ctrlOnly, { ...ctrlOnly, fitPoints: 2, flags: 8 }, dwg18)).toBe(false);
+    expect(same(fitOnly, { ...fitOnly, fitPoints: 0, controlPoints: 6 }, dwg18)).toBe(false);
+    expect(same({ ...uniform, flags: 1064 }, { ...uniform, flags: 1064, fitPoints: 0 }, dwg00)).toBe(false);
+  });
+
   it('왕복 비교는 \\U+ 이스케이프와 ByBlock 대소문자를 같은 것으로 본다', () => {
     expect(normalizeForRoundtrip({ text: '\\U+C9C0\\U+B984 \\U+220520', linetype: 'BYBLOCK' })).toEqual(normalizeForRoundtrip({ text: '지름 ∅20', linetype: 'ByBlock' }));
     expect(normalizeForRoundtrip({ linetype: 'Dashed' }).linetype).toBe('Dashed');
@@ -266,6 +293,14 @@ describe('ezdxf 대조', () => {
     expect(d.countDelta).toEqual({ LINE: 1 });
     expect(d.onlyAct).toEqual({ LINE: 1 });
     expect(d.layersOnlyExp).toEqual(['Defpoints']);
+  });
+
+  it('기준 DXF에 맞춤점만 있는 스플라인은 우리가 채운 조정점·매듭 수를 견주지 않는다(맞춤점 수·플래그는 견준다)', () => {
+    const sp = (extra = {}) => ({ type: 'SPLINE', handle: '9', flags: 8, knots: 0, controlPoints: 0, fitPoints: 4, ...extra });
+    const blocks = (x: Record<string, unknown>) => ({ layers: [{ name: '0' }], blocks: { '*MODEL_SPACE': [x as never] } });
+    expect(compareOracle(blocks(sp()), blocks(sp({ knots: 10, controlPoints: 6 }))).fieldDiffs).toBeUndefined();
+    expect(compareOracle(blocks(sp()), blocks(sp({ knots: 10, controlPoints: 6, fitPoints: 3 }))).fieldDiffs).toEqual({ 'SPLINE.knots': 1, 'SPLINE.controlPoints': 1, 'SPLINE.fitPoints': 1 });
+    expect(compareOracle(blocks(sp({ knots: 8, controlPoints: 4 })), blocks(sp({ knots: 10, controlPoints: 6 }))).fieldDiffs).toEqual({ 'SPLINE.knots': 1, 'SPLINE.controlPoints': 1 });
   });
 
   it.skipIf(!hasPython)('CAD_PYTHON(ezdxf가 있는 파이썬)이 있으면 우리가 쓴 DXF를 ezdxf로 읽어 audit 오류가 없다', async () => {

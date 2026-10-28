@@ -136,6 +136,29 @@ export function normalizeForTarget(d: Record<string, unknown>, target: Pick<Writ
   return { ...d, flags: f };
 }
 
+/**
+ * 맞춤점 스플라인을 DWG로 쓰면 DWG에는 맞춤점 자료와 조정점 자료 중 하나만 남는다(AutoCAD가 같은 도면을 쓴 DWG·DXF 짝과 같다).
+ * 형식 차이로 생기는 수만 견주지 않는다(플래그와 나머지 수는 그대로 견준다):
+ * - 맞춤점만 있던 스플라인: DWG 맞춤점 자료를 읽으면 AutoCAD가 만드는 조정점·매듭을 채운다 → 조정점·매듭 수.
+ * - 조정점만 남은 맞춤점 방식(70에 1024, 맞춤점 0개 — AutoCAD가 균일 매듭 맞춤점 스플라인을 DXF로 쓸 때 맞춤점을 뺀다):
+ *   DWG에는 맞춤점 자료를 되살려 쓴다 → 맞춤점 수.
+ * - R2000~R2010 DWG의 제곱근·균일 매듭 맞춤점 스플라인: 그 판에 매듭 매개변수 자리가 없어 조정점으로 쓴다
+ *   (AutoCAD도 같고, 쓰기 경고로 알린다) → 맞춤점 수.
+ */
+export function normalizeSplinePair(src: Record<string, unknown>, a: Record<string, unknown>, b: Record<string, unknown>, target: Pick<WriteTarget, 'fmt' | 'version'>): void {
+  if (target.fmt !== 'dwg' || src.type !== 'SPLINE' || typeof src.flags !== 'number') return;
+  const num = (v: unknown) => (typeof v === 'number' ? v : -1);
+  const drop = (...keys: string[]) => {
+    for (const k of keys) {
+      delete a[k];
+      delete b[k];
+    }
+  };
+  if (num(src.controlPoints) === 0 && num(src.fitPoints) >= 2 && num(b.controlPoints) > 0) drop('controlPoints', 'knots');
+  if (src.flags & 1024 && num(src.fitPoints) === 0 && num(b.fitPoints) > 0) drop('fitPoints');
+  if (Number(target.version.slice(2)) < 1027 && src.flags & (64 | 128) && num(src.fitPoints) > 0 && num(b.fitPoints) === 0) drop('fitPoints');
+}
+
 /** 원본 → 다시 읽은 것: 종류별 수 차이, 핸들로 맞춘 값 차이(종류.속성별 수), 사라진 도면층·블록 이름 */
 function compareDigest(src: Digest, out: Digest, target: Pick<WriteTarget, 'fmt' | 'version'>): Partial<RereadRecord> {
   const fieldDiffs: Tally = {};
@@ -156,6 +179,7 @@ function compareDigest(src: Digest, out: Digest, target: Pick<WriteTarget, 'fmt'
       }
       const a = normalizeForTarget(normalizeForRoundtrip(se), target);
       const b = normalizeForTarget(normalizeForRoundtrip(oe), target);
+      normalizeSplinePair(se, a, b, target);
       for (const d of compareSummaries({ ...a, handle: null }, b, 1e-6, '', [], 20)) {
         const f = `${se.type}${d.path.replace(/\[\d+\]/g, '[]').replace(/\.length$/, '#')}`;
         inc(fieldDiffs, f);
