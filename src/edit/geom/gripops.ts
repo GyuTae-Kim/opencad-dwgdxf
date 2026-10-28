@@ -10,6 +10,7 @@
  */
 import type { ArcEntity, CadDocument, DimensionEntity, Entity, LwPolylineEntity, LwVertex, PolylineEntity, PolyVertex, SplineEntity, Vec2 } from '../../core/model';
 import { lwVertices, setLwVertices } from '../../core/lwpoly';
+import { polyCount, polyFlags, polyVertices, setPolyVertices } from '../../core/polyverts';
 import { clampedKnots } from '../../geom/curves';
 import { moveDimensionText } from '../dim/create';
 import { type ArcPiece, pieceAt } from './curve';
@@ -68,15 +69,19 @@ function polyData(e: Entity): PolyData | null {
     const P = planProj(e.extrusion, e.elevation);
     const inv = affInv(P);
     if (!inv) return null;
-    const z0 = e.vertices[0]?.location.z ?? 0;
+    const ev = polyVertices(e);
+    const z0 = ev[0]?.location.z ?? 0;
     return {
-      vs: e.vertices.map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge, startWidth: v.startWidth, endWidth: v.endWidth, src: v })),
+      vs: ev.map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge, startWidth: v.startWidth, endWidth: v.endWidth, src: v })),
       closed: (e.flags & 1) !== 0,
       P,
       inv,
       write: (vs) => {
         const r = cloneEntity(e) as PolylineEntity;
-        r.vertices = vs.map((v): PolyVertex => ({ ...(v.src ? structuredClone(v.src) : { flags: 0 }), location: { x: v.x, y: v.y, z: v.src?.location.z ?? z0 }, bulge: v.bulge, startWidth: v.startWidth, endWidth: v.endWidth }));
+        setPolyVertices(
+          r,
+          vs.map((v): PolyVertex => ({ ...(v.src ? structuredClone(v.src) : { flags: 0 }), location: { x: v.x, y: v.y, z: v.src?.location.z ?? z0 }, bulge: v.bulge, startWidth: v.startWidth, endWidth: v.endWidth })),
+        );
         return r;
       },
     };
@@ -86,7 +91,9 @@ function polyData(e: Entity): PolyData | null {
 
 /** 맞춤·스플라인 곡선이 아닌 2D 폴리선(정점 그립이 정점 그대로) */
 export function isPlainPoly2d(e: PolylineEntity): boolean {
-  return e.kind === '2d' && !(e.flags & 6) && !e.vertices.some((v) => v.flags & (1 | 8 | 16));
+  if (e.kind !== '2d' || e.flags & 6) return false;
+  for (let i = 0, n = polyCount(e); i < n; i++) if (polyFlags(e, i) & (1 | 8 | 16)) return false;
+  return true;
 }
 
 /** 정점·세그먼트 그립을 다루는 폴리선인지 */

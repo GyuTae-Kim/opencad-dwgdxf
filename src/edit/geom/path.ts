@@ -19,6 +19,7 @@ import type {
   XLineEntity,
 } from '../../core/model';
 import { lwCount, packLw, unboxLw } from '../../core/lwpoly';
+import { packPoly, polyVertices, unboxPoly } from '../../core/polyverts';
 import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { ellipseFromConjugate } from './conic';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, type Path, type Piece, pieceAt, pieceLength, pieceSize, reversePiece } from './curve';
@@ -69,6 +70,7 @@ export function cloneEntity<T extends Entity>(e: T): T {
   const c = structuredClone(e);
   // 구조화 복제는 수 배열의 수를 하나씩 상자에 담는다 — 평탄 좌표는 빈칸 없는 실수 배열로 다시 담는다
   if (c.type === 'LWPOLYLINE') unboxLw(c, e as LwPolylineEntity);
+  else if (c.type === 'POLYLINE') unboxPoly(c, e as PolylineEntity);
   return c;
 }
 
@@ -146,7 +148,7 @@ export function lwVerts(e: LwPolylineEntity): BV[] {
 
 /** 2D·3D POLYLINE의 그려지는 정점(스플라인 틀 정점 제외) */
 export function polyVerts(e: PolylineEntity): PolyVertex[] {
-  return e.vertices.filter((v) => !(v.flags & 16));
+  return polyVertices(e).filter((v) => !(v.flags & 16));
 }
 
 export function splineNurbs(e: SplineEntity): Nurbs | null {
@@ -383,7 +385,7 @@ export function makePolyline(src: Entity, pieces: readonly Piece[], closed: bool
       ...inherit(src),
       kind: '2d',
       flags: (closed ? 1 : 0) | (src.flags & 128),
-      vertices: vs,
+      ...packPoly(vs),
       elevation: z,
       defaultStartWidth: constantWidth,
       defaultEndWidth: constantWidth,
@@ -421,7 +423,7 @@ export function make3dPolyline(src: Entity, pieces: readonly Piece[], closed: bo
     ...inherit(src),
     kind: '3d',
     flags: 8 | (closed ? 1 : 0),
-    vertices: vs,
+    ...packPoly(vs),
     elevation: 0,
     defaultStartWidth: 0,
     defaultEndWidth: 0,

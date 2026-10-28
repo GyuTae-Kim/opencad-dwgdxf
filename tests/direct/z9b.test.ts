@@ -10,6 +10,7 @@ import { registerDrawCommands } from '../../src/app/draw';
 import { browserGlobals } from '../polish/fakes';
 import { type RealApp, makeApp, settle } from '../polish/real-app';
 import { type DirectCommandLine, FakePicker } from './fakes';
+import { polyVertices } from '../../src/core/polyverts';
 
 vi.mock('../../src/app/view', async (orig) => ({ ...(await orig<object>()), CadView: (await import('../polish/fakes')).FakeView }));
 vi.mock('../../src/app/commandline', async (orig) => ({ ...(await orig<object>()), CommandLine: (await import('./fakes')).DirectCommandLine }));
@@ -36,7 +37,7 @@ function setup() {
 
 const verts = (h: RealApp) => {
   const p = [...h.doc.entityIndex.values()].find((e): e is PolylineEntity => e.type === 'POLYLINE')!;
-  return p.vertices.map((v) => [v.location.x, v.location.y, v.location.z].map((n) => Math.round(n * 1e9) / 1e9));
+  return polyVertices(p).map((v) => [v.location.x, v.location.y, v.location.z].map((n) => Math.round(n * 1e9) / 1e9));
 };
 
 describe('3DPOLY의 Z(진짜 App)', () => {

@@ -10,6 +10,7 @@ import { pathLoop } from '../../render/hatch';
 import { type Box, type Curve, TAU, clipXLines, derivAt, entitiesToCurves, isCircle, pointAt, reverseNurbs, roughBox, splineSub } from './curves';
 import { Graph, buildGraph, pointInRing, signedArea } from './graph';
 import { bulgeVertices, lwCount, lwVertices, packBulge } from '../../core/lwpoly';
+import { polyVertices as unpackPoly } from '../../core/polyverts';
 import { boundaryObjects } from '../geom/bpoly';
 import { inherit } from '../geom/path';
 
@@ -768,7 +769,7 @@ function polyVertices(e: Entity): { x: number; y: number; bulge: number }[] | nu
       break;
     case 'POLYLINE': {
       const smooth = !!(e.flags & 4);
-      const vs = e.vertices.filter((v) => !(v.flags & 16));
+      const vs = unpackPoly(e).filter((v) => !(v.flags & 16));
       world = e.kind === '3d';
       ext = world ? undefined : e.extrusion;
       z = e.elevation;

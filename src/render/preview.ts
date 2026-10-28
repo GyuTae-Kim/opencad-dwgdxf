@@ -48,8 +48,8 @@ export function anchorOf(e: Entity): [number, number] | null {
       return v.length >= 3 && flat(e) ? [v[0]!, v[1]!] : null;
     }
     case 'POLYLINE': {
-      const v = e.vertices[0];
-      return v && (e.kind !== '2d' || flat(e)) ? [v.location.x, v.location.y] : null;
+      const v = e.verts;
+      return v.length >= 3 && (e.kind !== '2d' || flat(e)) ? [v[0]!, v[1]!] : null;
     }
     case 'HATCH': {
       if (!flat(e)) return null;

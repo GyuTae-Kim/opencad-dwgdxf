@@ -34,6 +34,7 @@ import { entityPath, splineNurbs } from '../../src/edit/geom/path';
 import { pieceAt } from '../../src/edit/geom/curve';
 import { nurbsPoint } from '../../src/edit/geom/nurbs';
 import { P, V, arc, ellipse, fitSpline, line, lw, near, newDoc, poly2d, renders, spline } from '../edit/helpers';
+import { polyVertices, setPolyVertices } from '../../src/core/polyverts';
 
 const doc = newDoc();
 const one = (r: { replace?: Entity[]; add?: Entity[]; message?: string }): Entity => {
@@ -95,10 +96,13 @@ describe('폴리선 정점 추가·제거', () => {
   });
   it('구형 2D 폴리선도 같다(정점 플래그·Z를 잇는다)', () => {
     const p = poly2d([[0, 0], [10, 0], [10, 10]]) as PolylineEntity;
-    p.vertices.forEach((v) => (v.location.z = 3));
+    setPolyVertices(
+      p,
+      polyVertices(p).map((v) => ({ ...v, location: { ...v.location, z: 3 } })),
+    );
     const r = one(polyAddVertex(p, 'm1', V(12, 5))) as PolylineEntity;
-    expect(r.vertices.map((v) => [v.location.x, v.location.y, v.location.z])).toEqual([[0, 0, 3], [10, 0, 3], [12, 5, 3], [10, 10, 3]]);
-    expect((one(polyRemoveVertex(p, 'v1')) as PolylineEntity).vertices.length).toBe(2);
+    expect(polyVertices(r).map((v) => [v.location.x, v.location.y, v.location.z])).toEqual([[0, 0, 3], [10, 0, 3], [12, 5, 3], [10, 10, 3]]);
+    expect(polyVertices(one(polyRemoveVertex(p, 'v1')) as PolylineEntity).length).toBe(2);
   });
 });
 

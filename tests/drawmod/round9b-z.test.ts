@@ -13,6 +13,7 @@ import { runPointOverride } from '../../src/app/osnap-override';
 import { WORLD } from '../../src/app/ucs';
 import { registerDrawCommands } from '../../src/app/draw';
 import { makeHarness, modelEntities } from '../cmds2/harness';
+import { polyVertices } from '../../src/core/polyverts';
 
 const close = (a: number, b: number) => expect(a).toBeCloseTo(b, 9);
 
@@ -72,7 +73,7 @@ describe('3DPOLY·3DFACE의 Z', () => {
     await h.run('3DPOLY', ['0,0,0', '10,0,5', '@0,10', '@0,0,-5', '5<90,3', '1,1', '']);
     const p = modelEntities(h.doc, 'POLYLINE')[0] as PolylineEntity;
     expect(p.kind).toBe('3d');
-    expect(p.vertices.map((v) => [v.location.x, v.location.y, v.location.z].map((n) => Math.round(n * 1e9) / 1e9))).toEqual([
+    expect(polyVertices(p).map((v) => [v.location.x, v.location.y, v.location.z].map((n) => Math.round(n * 1e9) / 1e9))).toEqual([
       [0, 0, 0],
       [10, 0, 5],
       [10, 10, 5],
@@ -88,7 +89,7 @@ describe('3DPOLY·3DFACE의 Z', () => {
     const h = harness();
     await h.run('3DPOLY', ['0,0,1', '0,0,1', '4,0,1', '4,4,9', 'U', '4,4,3', '']);
     const p = modelEntities(h.doc, 'POLYLINE')[0] as PolylineEntity;
-    expect(p.vertices.map((v) => v.location.z)).toEqual([1, 1, 3]);
+    expect(polyVertices(p).map((v) => v.location.z)).toEqual([1, 1, 3]);
   });
 
   it('3DFACE: 구석마다 Z, 상대 좌표는 앞 점의 Z', async () => {

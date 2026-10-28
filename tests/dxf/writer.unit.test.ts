@@ -11,6 +11,7 @@ import { textChunks } from '../../src/io/dxf/wentities';
 import { DXF_VERSIONS } from '../../src/io/dxf/tagwriter';
 import { addSampleEntities } from './writer.samples';
 import { checkStructure } from './writer.helpers';
+import { polyVertices } from '../../src/core/polyverts';
 
 /** ASCII DXF → (코드, 값) 목록(R2007+는 UTF-8) */
 function tagsOf(data: Uint8Array, utf8 = true): [number, string][] {
@@ -222,7 +223,7 @@ describe('DXF 쓰기: 객체 규칙', () => {
     expect(codes).toEqual(expect.arrayContaining(['entity.mleader_exploded', 'entity.mesh_as_polyface', 'entity.dimension_dropped']));
     const back = readDxf(r15.data).blocks.get('*MODEL_SPACE')!.entities;
     expect(back.some((e) => e.type === 'MULTILEADER' || e.type === 'MESH')).toBe(false);
-    expect(back.some((e) => e.type === 'POLYLINE' && e.kind === 'polyface' && e.vertices.length > 5)).toBe(true);
+    expect(back.some((e) => e.type === 'POLYLINE' && e.kind === 'polyface' && polyVertices(e).length > 5)).toBe(true);
     const r24 = readDxf(writeDxf(doc, { version: 'AC1024' }).data).blocks.get('*MODEL_SPACE')!.entities;
     expect(r24.some((e) => e.type === 'MULTILEADER')).toBe(true);
     expect(r24.some((e) => e.type === 'MESH')).toBe(true);

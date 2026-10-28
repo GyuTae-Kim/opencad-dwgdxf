@@ -4,6 +4,7 @@
  */
 import type { CadDocument, Entity, Vec3 } from '../../src/core/model';
 import { lwVertices } from '../../src/core/lwpoly';
+import { polyLocs } from '../../src/core/polyverts';
 
 export type Summary = Record<string, unknown>;
 
@@ -65,7 +66,7 @@ export function summarizeEntity(e: Entity): Summary {
       break;
     case 'POLYLINE':
       d.flags = e.flags;
-      d.vertices = e.vertices.map((v) => p3(v.location));
+      d.vertices = polyLocs(e).map((v) => p3(v));
       break;
     case 'SPLINE':
       d.degree = e.degree;

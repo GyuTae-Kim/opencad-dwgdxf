@@ -32,6 +32,7 @@ import type {
 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { lwCount, lwHasWidths, vertCount } from '../../core/lwpoly';
+import { polyBulge, polyCount, polyEndWidth, polyFace, polyFlags, polyIsFaceRecord, polyLoc, polyStartWidth, polyTangent, polyX, polyY, polyZ } from '../../core/polyverts';
 import { clampedKnots } from '../../geom/curves';
 import { CollectSink, kindOf, rawTagValid, rawTagsValid, type TagSink } from './tagwriter';
 import type { WriteContext } from './wcontext';
@@ -558,8 +559,10 @@ function writePolylineHead(w: TagOut, e: PolylineEntity): void {
     let m = e.mCount;
     let n = e.nCount;
     if (e.kind === 'polyface') {
-      m = e.vertices.filter((v) => !v.faceIndices || v.flags & 64).length;
-      n = e.vertices.length - m;
+      const nv = polyCount(e);
+      m = 0;
+      for (let i = 0; i < nv; i++) if (!polyIsFaceRecord(e, i)) m++;
+      n = nv - m;
     }
     w.t(71, m);
     w.t(72, n);
@@ -574,7 +577,9 @@ function writePolylineHead(w: TagOut, e: PolylineEntity): void {
 
 function writeVertices(w: TagOut, e: PolylineEntity, h: string, paper: boolean): void {
   const ctx = w.ctx;
-  for (const v of e.vertices) {
+  for (let i = 0, nv = polyCount(e); i < nv; i++) {
+    const vflags = polyFlags(e, i);
+    const faceIndices = polyFace(e, i);
     const vh = ctx.alloc();
     w.t(0, 'VERTEX');
     w.t(5, vh);
@@ -584,8 +589,8 @@ function writeVertices(w: TagOut, e: PolylineEntity, h: string, paper: boolean):
     }
     if (paper) w.t(67, 1);
     w.t(8, e.layer || '0');
-    let flags = v.flags;
-    const face = e.kind === 'polyface' && v.faceIndices && v.faceIndices.length > 0 && !(v.flags & 64);
+    let flags = vflags;
+    const face = e.kind === 'polyface' && faceIndices && faceIndices.length > 0 && !(vflags & 64);
     if (e.kind === '3d') flags |= 32;
     else if (e.kind === 'mesh') flags |= 64;
     else if (e.kind === 'polyface') flags = face ? 128 : 192;
@@ -597,17 +602,21 @@ function writeVertices(w: TagOut, e: PolylineEntity, h: string, paper: boolean):
       }
     }
     // 2D 정점의 Z(30)도 모델 값 그대로 — AutoCAD는 고도(POLYLINE 30)와 다른 정점 Z를 그대로 적고, 그릴 때는 고도만 쓴다
-    w.p3(10, face ? { x: 0, y: 0, z: 0 } : e.kind === '2d' ? { x: v.location.x, y: v.location.y, z: fin(v.location.z) } : v.location);
+    w.p3(10, face ? { x: 0, y: 0, z: 0 } : e.kind === '2d' ? { x: polyX(e, i), y: polyY(e, i), z: fin(polyZ(e, i)) } : polyLoc(e, i));
     if (e.kind === '2d') {
-      if (v.startWidth) w.t(40, v.startWidth);
-      if (v.endWidth) w.t(41, v.endWidth);
-      if (v.bulge) w.t(42, v.bulge);
+      const sw = polyStartWidth(e, i);
+      const ew = polyEndWidth(e, i);
+      const bulge = polyBulge(e, i);
+      if (sw) w.t(40, sw);
+      if (ew) w.t(41, ew);
+      if (bulge) w.t(42, bulge);
     }
     w.t(70, flags);
-    if (e.kind === '2d' && v.flags & 2 && v.tangent !== undefined) w.deg(50, v.tangent);
+    const tangent = polyTangent(e, i);
+    if (e.kind === '2d' && vflags & 2 && tangent !== undefined) w.deg(50, tangent);
     if (face) {
-      const idx = v.faceIndices!;
-      for (let i = 0; i < Math.min(4, idx.length); i++) w.t(71 + i, idx[i]!);
+      const idx = faceIndices!;
+      for (let k = 0; k < Math.min(4, idx.length); k++) w.t(71 + k, idx[k]!);
     }
   }
   seqend(w, h, e.layer, paper);

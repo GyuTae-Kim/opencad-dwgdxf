@@ -29,7 +29,6 @@ import type {
   MeshEntity,
   Ole2FrameEntity,
   PointEntity,
-  PolyVertex,
   RawTag,
   PolylineEntity,
   ShapeEntity,
@@ -47,6 +46,7 @@ import type {
   XLineEntity,
 } from '../../core/model';
 import { BYLAYER, SHARED_BYLAYER_COLOR, entityDefaults } from '../../core/model';
+import type { PolyAccum } from '../../core/polyverts';
 import { rawColorToCad } from '../../core/color';
 import type { DxfRecord, TagValue } from './records';
 import { DEG, Tags, handle, hexToBytes, int, name, num, parseColor, parseDimOverrides, parseXData, str } from './tagutil';
@@ -336,7 +336,12 @@ function polylineHead(c: Common): PolylineEntity {
     type: 'POLYLINE',
     kind,
     flags,
-    vertices: [],
+    verts: [],
+    bulges: undefined,
+    widths: undefined,
+    vflags: undefined,
+    tangents: undefined,
+    faceRecs: undefined,
     elevation: t.point(10).z,
     defaultStartWidth: t.num(40),
     defaultEndWidth: t.num(41),
@@ -350,24 +355,21 @@ function polylineHead(c: Common): PolylineEntity {
   return e;
 }
 
-function vertex(c: Common, defaults?: { startWidth: number; endWidth: number }): PolyVertex {
+/** VERTEX 하나를 평탄 정점 자료에 더한다(정점 객체를 만들지 않는다) */
+function vertex(c: Common, acc: PolyAccum, defaults?: { startWidth: number; endWidth: number }): void {
   const t = c.tags;
   const flags = t.int(70);
+  const p = t.point(10);
   // 폭이 적히지 않은 정점은 POLYLINE의 기본 폭을 쓴다
-  const v: PolyVertex = {
-    location: t.point(10),
-    bulge: t.num(42),
-    startWidth: t.has(40) ? t.num(40) : (defaults?.startWidth ?? 0),
-    endWidth: t.has(41) ? t.num(41) : (defaults?.endWidth ?? 0),
-    flags,
-  };
-  if (flags & 2 && t.has(50)) v.tangent = t.num(50) * DEG;
+  const startWidth = t.has(40) ? t.num(40) : (defaults?.startWidth ?? 0);
+  const endWidth = t.has(41) ? t.num(41) : (defaults?.endWidth ?? 0);
+  const tangent = flags & 2 && t.has(50) ? t.num(50) * DEG : undefined;
+  let face: number[] | undefined;
   if (t.has(71)) {
-    const idx = [t.int(71), t.int(72), t.int(73), t.int(74)];
-    while (idx.length && idx[idx.length - 1] === 0) idx.pop();
-    v.faceIndices = idx;
+    face = [t.int(71), t.int(72), t.int(73), t.int(74)];
+    while (face.length && face[face.length - 1] === 0) face.pop();
   }
-  return v;
+  acc.add(p.x, p.y, p.z, t.num(42), startWidth, endWidth, flags, tangent, face);
 }
 
 function spline(c: Common): SplineEntity {
@@ -1832,7 +1834,7 @@ export function parseEntity(rec: DxfRecord, ctx: EntityContext): Entity | null {
   }
 }
 
-/** VERTEX 레코드 → 정점 */
-export function parseVertex(rec: DxfRecord, defaults?: { startWidth: number; endWidth: number }): PolyVertex {
-  return vertex(splitCommon(rec), defaults);
+/** VERTEX 레코드 → 평탄 정점 자료에 더하기 */
+export function parseVertex(rec: DxfRecord, acc: PolyAccum, defaults?: { startWidth: number; endWidth: number }): void {
+  vertex(splitCommon(rec), acc, defaults);
 }

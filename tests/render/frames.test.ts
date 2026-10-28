@@ -13,6 +13,7 @@ import { STYLE_FLAG_NO_PLOT, StyleTable, resolveStyles } from '../../src/render/
 import { TextEngine } from '../../src/text/layout';
 import { P, add, newDoc } from '../hatch/helpers';
 import { packLw } from '../../src/core/lwpoly';
+import { packPoly, polyVertices } from '../../src/core/polyverts';
 
 let serial = 0x900;
 const H = () => (serial++).toString(16).toUpperCase();
@@ -143,7 +144,7 @@ describe('폴리선 그리기', () => {
       handle: H(),
       kind: '2d',
       flags: 2,
-      vertices: [v(0, 0, 0.6), v(20, 10, -0.6), v(40, 0, 0)],
+      ...packPoly([v(0, 0, 0.6), v(20, 10, -0.6), v(40, 0, 0)]),
       elevation: 0,
       defaultStartWidth: 0,
       defaultEndWidth: 0,
@@ -168,7 +169,7 @@ describe('폴리선 그리기', () => {
     ].join('\n');
     const doc = readCadFile(new TextEncoder().encode(dxf), 'w.dxf');
     const pl = [...doc.entityIndex.values()].find((e) => e.type === 'POLYLINE') as PolylineEntity;
-    expect(pl.vertices.map((x) => [x.startWidth, x.endWidth])).toEqual([
+    expect(polyVertices(pl).map((x) => [x.startWidth, x.endWidth])).toEqual([
       [3, 3],
       [1, 0],
     ]);

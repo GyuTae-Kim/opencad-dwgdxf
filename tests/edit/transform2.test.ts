@@ -26,6 +26,7 @@ import { copyEntity } from '../../src/edit/geom/query';
 import { type Affine, affApply, affInv, affMirror, affMul, affRotate, affScale, affTranslate } from '../../src/edit/geom/math';
 import { NEG_Z, P, V, circle, deg, line, mtext, near, newDoc, renders, text } from './helpers';
 import { bulgeVertices, packBulge } from '../../src/core/lwpoly';
+import { packPoly } from '../../src/core/polyverts';
 
 const base = (h: string) => ({ ...entityDefaults(), handle: h });
 const one = (r: { replace?: Entity[]; add?: Entity[] }) => [...(r.replace ?? []), ...(r.add ?? [])][0]!;
@@ -152,7 +153,7 @@ const others = (): [string, Entity][] => [
   ['공차', { type: 'TOLERANCE', ...base('TO'), dimStyle: 'Standard', insert: P(2, 2), text: '{\\Fgdt;j}%%v0.1', direction: P(1, 0) } as ToleranceEntity],
   ['메시', { type: 'MESH', ...base('MS'), vertices: [P(0, 0), P(1, 0), P(1, 1)], faces: [[0, 1, 2]], edges: [], subdivision: 0 } as MeshEntity],
   ['표', { type: 'ACAD_TABLE', ...base('TB'), block: '*T1', insert: P(3, 3), direction: P(1, 0), scale: P(1, 1, 1), rotation: 0, rows: 1, columns: 1, rowHeights: [5], columnWidths: [20] } as TableEntity],
-  ['3D 폴리선', { type: 'POLYLINE', ...base('P3'), kind: '3d', flags: 8, vertices: [P(0, 0, 0), P(5, 0, 1), P(5, 5, 2)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })), elevation: 0, defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0 } as PolylineEntity],
+  ['3D 폴리선', { type: 'POLYLINE', ...base('P3'), kind: '3d', flags: 8, ...packPoly([P(0, 0, 0), P(5, 0, 1), P(5, 5, 2)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))), elevation: 0, defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0 } as PolylineEntity],
   ['블록 참조(속성, −Z)', { type: 'INSERT', ...base('IN'), block: 'B', insert: P(3, 1), scale: P(2, 1.5, 1), rotation: deg(20), columnCount: 1, rowCount: 1, columnSpacing: 0, rowSpacing: 0, extrusion: NEG_Z, attribs: [{ ...(text(3, 2, 'V', 1) as TextEntity), type: 'ATTRIB', handle: 'AT', tag: 'T', attFlags: 0, extrusion: NEG_Z } as AttribEntity] } as InsertEntity],
   ['MINSERT', { type: 'INSERT', ...base('MI'), block: 'B', insert: P(0, 0), scale: P(1, 1, 1), rotation: 0, columnCount: 3, rowCount: 2, columnSpacing: 4, rowSpacing: 3, attribs: [] } as InsertEntity],
   ['모양', { type: 'SHAPE', ...base('SH'), insert: P(1, 1), size: 2, name: 'BOX', rotation: 0, widthFactor: 1, oblique: 0 } as ShapeEntity],

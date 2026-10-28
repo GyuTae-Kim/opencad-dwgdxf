@@ -37,6 +37,7 @@ import { defaultLayout } from '../../../core/finalize';
 import { DIM_VAR_DEFAULTS } from '../../../core/dimvars';
 import { codepageToEncoding, decoderFor, dwgCodepageName } from '../../../core/codepage';
 import { proxyEntities } from '../../../edit/geom/proxygeom';
+import { packPoly, polyCount } from '../../../core/polyverts';
 import { fingerprint } from '../rawbody';
 import { R2000, R2004, R2007, R2018 } from '../version';
 import { dxfSatText, encodeSatBytes, satVersion } from '../../acis';
@@ -107,7 +108,7 @@ function acisWirePolylines(e: Entity): PolylineEntity[] {
       transparency: e.transparency,
       kind: '3d',
       flags: 8,
-      vertices: w.map((q) => ({ location: { x: q.x, y: q.y, z: q.z }, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })),
+      ...packPoly(w.map((q) => ({ location: { x: q.x, y: q.y, z: q.z }, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))),
       elevation: 0,
       defaultStartWidth: 0,
       defaultEndWidth: 0,
@@ -762,7 +763,8 @@ export class WCtx {
       pe.subs = e.attribs.map((a) => this.take(a.handle));
       pe.seqend = this.alloc();
     } else if (!pe.raw && e.type === 'POLYLINE') {
-      pe.subs = e.vertices.map(() => this.alloc());
+      pe.subs = [];
+      for (let i = 0, n = polyCount(e); i < n; i++) pe.subs.push(this.alloc());
       pe.seqend = this.alloc();
     } else if (pe.raw && e.type === 'INSERT') {
       // 원본 본문으로 쓰는 INSERT는 없다(속성이 있으면 모델로 쓴다)

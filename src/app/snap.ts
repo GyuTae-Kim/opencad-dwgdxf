@@ -13,6 +13,7 @@ import { bulgeArc, ccwSweep, fitPointsCurve, nurbsPoints } from '../geom/curves'
 import type { Picker } from './pick';
 import type { Pt, SnapKind } from './view';
 import { lwVertices } from '../core/lwpoly';
+import { polyVertices } from '../core/polyverts';
 import { entityPath } from '../edit/geom/path';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, pieceNearest } from '../edit/geom/curve';
 import { commonTangentCurves, tangentNearPick, tangentsFromPoint } from '../edit/geom/tangent';
@@ -139,7 +140,7 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
       polySnaps(withOcs(m, e.extrusion), lwVertices(e), e.closed, e.elevation, out);
       return;
     case 'POLYLINE': {
-      const vs = e.vertices.filter((v) => !(v.flags & 16) && !(v.faceIndices && !(v.flags & 64)));
+      const vs = polyVertices(e).filter((v) => !(v.flags & 16) && !(v.faceIndices && !(v.flags & 64)));
       if (e.kind === '2d') polySnaps(withOcs(m, e.extrusion), vs.map((v) => ({ x: v.location.x, y: v.location.y, bulge: e.flags & 2 ? 0 : v.bulge })), (e.flags & 1) !== 0, e.elevation, out);
       else for (const v of vs) out.push({ ...apply(m, v.location.x, v.location.y, v.location.z), kind: 'end' });
       return;
@@ -454,7 +455,9 @@ export function geometricCenter(e: Entity): Pt | null {
     return c ? applyXY(withOcs(identity(), e.extrusion), c.x, c.y, e.elevation) : null;
   }
   if (e.type === 'POLYLINE' && e.kind === '2d' && e.flags & 1) {
-    const vs = e.vertices.filter((v) => !(v.flags & 16)).map((v) => ({ x: v.location.x, y: v.location.y, bulge: e.flags & 2 ? 0 : v.bulge }));
+    const vs = polyVertices(e)
+      .filter((v) => !(v.flags & 16))
+      .map((v) => ({ x: v.location.x, y: v.location.y, bulge: e.flags & 2 ? 0 : v.bulge }));
     const c = polygonCentroid(vs);
     return c ? applyXY(withOcs(identity(), e.extrusion), c.x, c.y, e.elevation) : null;
   }

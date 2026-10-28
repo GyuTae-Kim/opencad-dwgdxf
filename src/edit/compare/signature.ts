@@ -9,6 +9,7 @@
  */
 import type { CadDocument, Entity, HatchEdge, HatchPath, Vec2, Vec3 } from '../../core/model';
 import { bulgeVertices, lwVertices } from '../../core/lwpoly';
+import { polyVertices } from '../../core/polyverts';
 
 /** COMPAREPROPS 비트 */
 export const PROP_COLOR = 1;
@@ -340,10 +341,11 @@ export function entitySignature(e: Entity, opt: CompareOptions, doc?: CadDocumen
       break;
     }
     case 'POLYLINE': {
-      const v0 = e.vertices[0];
+      const ev = polyVertices(e);
+      const v0 = ev[0];
       if (v0) s.anchor(v0.location.x, v0.location.y);
-      s.k(e.kind, e.flags & 0xff, e.vertices.length, e.mCount, e.nCount, e.smoothType);
-      for (const v of e.vertices) {
+      s.k(e.kind, e.flags & 0xff, ev.length, e.mCount, e.nCount, e.smoothType);
+      for (const v of ev) {
         s.k(v.flags & 0xff, v.faceIndices?.join(','));
         s.p(v.location);
         s.n(v.bulge ?? 0, v.startWidth ?? 0, v.endWidth ?? 0);

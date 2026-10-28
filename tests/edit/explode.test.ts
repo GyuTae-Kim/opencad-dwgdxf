@@ -27,6 +27,7 @@ import { entityPath } from '../../src/edit/geom/path';
 import { flattenPath, pathNearest, pathSize } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, arc, circle, deg, line, lw, mtext, near, newDoc, poly2d, renders, text } from './helpers';
 import { packBulge } from '../../src/core/lwpoly';
+import { packPoly } from '../../src/core/polyverts';
 
 const base = (h = '') => ({ ...entityDefaults(), handle: h });
 
@@ -128,7 +129,7 @@ describe('explodeEntity — 폴리선', () => {
       ...base('P3'),
       kind: '3d',
       flags: 8,
-      vertices: [P(0, 0, 0), P(5, 0, 2), P(5, 5, 4)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })),
+      ...packPoly([P(0, 0, 0), P(5, 0, 2), P(5, 5, 4)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))),
       elevation: 0,
       defaultStartWidth: 0,
       defaultEndWidth: 0,
@@ -149,7 +150,7 @@ describe('explodeEntity — 폴리선', () => {
       ...base('PF'),
       kind: 'polyface',
       flags: 64,
-      vertices: [v(0, 0), v(1, 0), v(1, 1), v(0, 1), { location: P(0, 0), bulge: 0, startWidth: 0, endWidth: 0, flags: 128, faceIndices: [1, 2, 3, -4] }],
+      ...packPoly([v(0, 0), v(1, 0), v(1, 1), v(0, 1), { location: P(0, 0), bulge: 0, startWidth: 0, endWidth: 0, flags: 128, faceIndices: [1, 2, 3, -4] }]),
       elevation: 0,
       defaultStartWidth: 0,
       defaultEndWidth: 0,
@@ -169,7 +170,7 @@ describe('explodeEntity — 폴리선', () => {
       handle: 'PM',
       kind: 'mesh',
       flags: 16,
-      vertices: [v(0, 0), v(0, 1), v(0, 2), v(1, 0), v(1, 1), v(1, 2)],
+      ...packPoly([v(0, 0), v(0, 1), v(0, 2), v(1, 0), v(1, 1), v(1, 2)]),
       mCount: 2,
       nCount: 3,
     };

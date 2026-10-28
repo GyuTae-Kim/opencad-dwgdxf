@@ -30,6 +30,7 @@ import type {
 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { bulgeVertices, lwVertices, numArray, setLwVertices, vertCount } from '../../core/lwpoly';
+import { polyVertices, setPolyVertices } from '../../core/polyverts';
 import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
 import { moveDimensionText } from '../dim/create';
 import { type EllPiece, pieceAt } from './curve';
@@ -99,17 +100,18 @@ export function gripPoints(e: Entity, doc: CadDocument): GripPoint[] {
         planProj(e.extrusion, e.elevation),
       );
     case 'POLYLINE': {
+      const ev = polyVertices(e);
       if (e.kind === '2d') {
-        const idx = e.vertices.map((v, i) => (v.flags & 16 ? -1 : i)).filter((i) => i >= 0);
+        const idx = ev.map((v, i) => (v.flags & 16 ? -1 : i)).filter((i) => i >= 0);
         const grips = polyGrips(
-          idx.map((i) => ({ x: e.vertices[i]!.location.x, y: e.vertices[i]!.location.y, bulge: e.vertices[i]!.bulge })),
+          idx.map((i) => ({ x: ev[i]!.location.x, y: ev[i]!.location.y, bulge: ev[i]!.bulge })),
           (e.flags & 1) !== 0,
           planProj(e.extrusion, e.elevation),
         );
         // 그립 번호는 원래 정점 번호로
         return grips.map((q) => ({ ...q, id: q.id[0] + String(idx[Number(q.id.slice(1))]) }));
       }
-      return e.vertices.map((v, i) => (e.kind === 'polyface' && v.faceIndices && !(v.flags & 64) ? null : g('v' + i, v.location, 'vertex'))).filter((x): x is GripPoint => !!x);
+      return ev.map((v, i) => (e.kind === 'polyface' && v.faceIndices && !(v.flags & 64) ? null : g('v' + i, v.location, 'vertex'))).filter((x): x is GripPoint => !!x);
     }
     case 'SPLINE':
       if (e.fitPoints.length >= 2) return e.fitPoints.map((p, i) => g('f' + i, p, 'fit'));
@@ -579,27 +581,32 @@ function lwGrip(e: LwPolylineEntity, id: string, to: Vec2): LwPolylineEntity {
 function polylineGrip(e: PolylineEntity, id: string, to: Vec2): PolylineEntity {
   const r = cloneEntity(e);
   const i = Number(id.slice(1));
+  const ev = polyVertices(e);
+  const rv = polyVertices(r);
   if (e.kind !== '2d') {
-    const v = r.vertices[i]!;
+    const v = rv[i]!;
     v.location = { x: to.x, y: to.y, z: v.location.z };
+    setPolyVertices(r, rv);
     return r;
   }
   const P = planProj(e.extrusion, e.elevation);
   const q = affApply(affInv(P)!, to);
   if (id[0] === 'v') {
-    r.vertices[i]!.location = { x: q.x, y: q.y, z: e.vertices[i]!.location.z };
+    rv[i]!.location = { x: q.x, y: q.y, z: ev[i]!.location.z };
+    setPolyVertices(r, rv);
     return r;
   }
   // 세그먼트 i → 다음 그려지는 정점
-  const idx = e.vertices.map((v, k) => (v.flags & 16 ? -1 : k)).filter((k) => k >= 0);
+  const idx = ev.map((v, k) => (v.flags & 16 ? -1 : k)).filter((k) => k >= 0);
   const pos = idx.indexOf(i);
   const j = idx[(pos + 1) % idx.length]!;
-  const vs = [i, j].map((k) => ({ x: e.vertices[k]!.location.x, y: e.vertices[k]!.location.y, bulge: e.vertices[k]!.bulge }));
+  const vs = [i, j].map((k) => ({ x: ev[k]!.location.x, y: ev[k]!.location.y, bulge: ev[k]!.bulge }));
   const gp = segMid(vs[0]!, vs[1]!, vs[0]!.bulge);
   segmentGrip(vs, 0, false, q, sub(q, gp));
-  r.vertices[i]!.location = { ...r.vertices[i]!.location, x: vs[0]!.x, y: vs[0]!.y };
-  r.vertices[i]!.bulge = vs[0]!.bulge;
-  r.vertices[j]!.location = { ...r.vertices[j]!.location, x: vs[1]!.x, y: vs[1]!.y };
+  rv[i]!.location = { ...rv[i]!.location, x: vs[0]!.x, y: vs[0]!.y };
+  rv[i]!.bulge = vs[0]!.bulge;
+  rv[j]!.location = { ...rv[j]!.location, x: vs[1]!.x, y: vs[1]!.y };
+  setPolyVertices(r, rv);
   return r;
 }
 

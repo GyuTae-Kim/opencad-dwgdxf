@@ -7,6 +7,7 @@
 import type { CadDocument, Entity, Vec3 } from '../../core/model';
 import { isNaturalExt, isPlanarExt } from '../geom/ocs';
 import { transformEntity } from '../geom/transform';
+import { polyVertices, setPolyVertices } from '../../core/polyverts';
 
 const z0 = (p: Vec3): Vec3 => ({ x: p.x, y: p.y, z: 0 });
 const z0opt = (p: Vec3 | undefined): Vec3 | undefined => (p ? z0(p) : undefined);
@@ -62,7 +63,10 @@ export function flattenEntity(e: Entity, doc: CadDocument): FlattenResult {
       break;
     case 'POLYLINE':
       out.elevation = 0;
-      for (const v of out.vertices) v.location = z0(v.location);
+      setPolyVertices(
+        out,
+        polyVertices(out).map((v) => ({ ...v, location: z0(v.location) })),
+      );
       break;
     case 'SPLINE':
       out.controlPoints = out.controlPoints.map(z0);

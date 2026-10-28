@@ -27,6 +27,7 @@ import {
   tableKey,
 } from '../../core/model';
 import { finalizeDocument } from '../../core/finalize';
+import { PolyAccum } from '../../core/polyverts';
 import { attachAcisWires } from '../acis';
 import { acdsRecords } from './acds';
 import { codepageToEncoding, decoderFor, dwgCodepageName } from '../../core/codepage';
@@ -651,12 +652,15 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
         if (c && c.entity && c.kind === 'attrib') e.attribs.push(c.entity as AttribEntity);
       }
     } else if (e.type === 'POLYLINE') {
+      const acc = new PolyAccum();
       for (const ch of childList(p)) {
         const c = parsed.get(ch);
         used.add(ch);
         // 2D 정점의 Z는 파일 값 그대로 둔다(그릴 때는 폴리선 고도를 쓴다 — AutoCAD가 같은 도면을 DXF로 쓸 때도 정점 Z를 그대로 적는다)
-        if (c && c.vertex) e.vertices.push(c.vertex);
+        const v = c?.vertex;
+        if (v) acc.add(v.location.x, v.location.y, v.location.z, v.bulge, v.startWidth, v.endWidth, v.flags, v.tangent, v.faceIndices);
       }
+      Object.assign(e, acc.finish());
     }
     if (p.seqend) used.add(p.seqend);
   };

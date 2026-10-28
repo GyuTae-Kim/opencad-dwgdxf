@@ -17,6 +17,7 @@ import { attachAcisWires } from '../acis';
 import { CadReadError } from '../../core/errors';
 import { codepageToEncoding } from '../../core/codepage';
 import { finalizeDocument } from '../../core/finalize';
+import { PolyAccum } from '../../core/polyverts';
 import { type DxfRecord, type RecordStream, isStringCode, openDxf } from './records';
 import { type EntityContext, parseEntity, parseVertex } from './entities';
 import { createTableHandles, readTableEntry, resolveDimStyleHandles } from './tables';
@@ -127,10 +128,12 @@ function takeEntity(rec: DxfRecord, stream: RecordStream, ctx: EntityContext): E
     const pl = e as PolylineEntity;
     let p = stream.peek();
     const widths = { startWidth: pl.defaultStartWidth, endWidth: pl.defaultEndWidth };
+    const acc = new PolyAccum();
     while (p && p.type === 'VERTEX') {
-      pl.vertices.push(parseVertex(stream.next()!, widths));
+      parseVertex(stream.next()!, acc, widths);
       p = stream.peek();
     }
+    Object.assign(pl, acc.finish());
     if (p && p.type === 'SEQEND') stream.next();
   } else if (e.type === 'INSERT') {
     const ins = e as InsertEntity;

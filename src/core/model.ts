@@ -187,6 +187,7 @@ export interface LwPolylineEntity extends EntityBase {
   elevation: number;
 }
 
+/** POLYLINE 정점 하나를 풀어 쓴 모양(편집 계산용). 문서에는 PolylineEntity.verts 등 평탄 배열로 둔다(src/core/polyverts.ts) */
 export interface PolyVertex {
   /** 2D 폴리선은 OCS, 3D·메시는 WCS */
   location: Vec3;
@@ -208,7 +209,21 @@ export interface PolylineEntity extends EntityBase {
   kind: PolylineKind;
   /** POLYLINE 70 플래그 */
   flags: number;
-  vertices: PolyVertex[];
+  /**
+   * 정점 평탄 좌표 [x0, y0, z0, x1, y1, z1, …](2D는 OCS, 3D·메시는 WCS, 폴리페이스 면 레코드도 한 칸). 정점 수 = length / 3.
+   * 큰 도면에서 정점마다 객체를 두지 않으려고(문서 메모리·GC) 수만 이어 둔다. 풀어 쓰기·되담기는 src/core/polyverts.ts
+   */
+  verts: number[];
+  /** 정점별 볼록 [b0, b1, …]. 모두 +0이면 없다 */
+  bulges?: number[];
+  /** 정점별 폭 [시작0, 끝0, 시작1, 끝1, …]. 모두 +0이면 없다 */
+  widths?: number[];
+  /** 정점 플래그(VERTEX 70) [f0, f1, …]. 모두 0이면 없다 */
+  vflags?: number[];
+  /** 곡선 맞춤 접선 방향(라디안) [t0, t1, …], 접선이 없는 정점은 null. 하나도 없으면 없다 */
+  tangents?: (number | null)[];
+  /** 폴리페이스 면 레코드의 정점 번호(71~74) [i0, i1, …], 면 레코드가 아닌 정점은 null. 하나도 없으면 없다 */
+  faceRecs?: (number[] | null)[];
   /** 2D 폴리선의 고도(그룹 10의 Z) */
   elevation: number;
   defaultStartWidth: number;

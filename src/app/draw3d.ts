@@ -9,6 +9,7 @@ import { formatLength } from '../core/units';
 import type { App, CommandContext, PointResult } from './app';
 import { addEntities, currentElevation, currentProps } from './draw';
 import type { Pt } from './view';
+import { packPoly } from '../core/polyverts';
 
 const P3 = (p: Pt, z: number): Vec3 => ({ x: p.x, y: p.y, z });
 
@@ -84,7 +85,7 @@ export function registerDraw3dCommands(app: App): void {
           handle: handle ?? '',
           kind: '3d',
           flags: 8 | (closed ? 1 : 0),
-          vertices: pts.map((p) => ({ location: { ...p }, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })),
+          ...packPoly(pts.map((p) => ({ location: { ...p }, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))),
           elevation: 0,
           defaultStartWidth: 0,
           defaultEndWidth: 0,

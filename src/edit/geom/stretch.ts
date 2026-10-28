@@ -10,6 +10,7 @@
 import type { BlockDef, CadDocument, DimensionEntity, Entity, HatchEntity, MLineEntity, SplineEntity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { bulgeVertices, lwPoints, lwVertices, packBulge, setLwVertices } from '../../core/lwpoly';
+import { polyVertices, setPolyVertices } from '../../core/polyverts';
 import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { type Affine, add, affApply, affInv, affTranslate, ccwSweep, dist, norm, normAngle, pointInPolygon, rot90, sub } from './math';
 import { cloneEntity, freshEntity, makeArc } from './path';
@@ -88,11 +89,12 @@ function keyPoints(e: Entity): Vec2[] {
       return lwPoints(e).map((v) => affApply(pr, v));
     }
     case 'POLYLINE': {
+      const ev = polyVertices(e);
       if (e.kind === '2d') {
         const pr = planProj(e.extrusion, e.elevation);
-        return e.vertices.map((v) => affApply(pr, v.location));
+        return ev.map((v) => affApply(pr, v.location));
       }
-      return e.vertices.filter((v) => !v.faceIndices || v.flags & 64).map((v) => P(v.location));
+      return ev.filter((v) => !v.faceIndices || v.flags & 64).map((v) => P(v.location));
     }
     case 'SPLINE':
       return [...e.controlPoints, ...e.fitPoints].map((p) => P(p));
@@ -232,13 +234,16 @@ function partial(e: Entity, inside: (p: Vec2) => boolean, d: Vec2, doc: CadDocum
       if (e.kind === '2d') {
         const pr = planProj(e.extrusion, e.elevation);
         const inv = affInv(pr)!;
-        r.vertices = e.vertices.map((v) => {
-          const w = affApply(pr, v.location);
-          if (!inside(w)) return { ...v, location: { ...v.location } };
-          const q = affApply(inv, add(w, d));
-          return { ...v, location: { x: q.x, y: q.y, z: v.location.z } };
-        });
-      } else r.vertices = e.vertices.map((v) => ((!v.faceIndices || v.flags & 64) && In(v.location) ? { ...v, location: mv(v.location, d) } : { ...v, location: { ...v.location } }));
+        setPolyVertices(
+          r,
+          polyVertices(e).map((v) => {
+            const w = affApply(pr, v.location);
+            if (!inside(w)) return { ...v, location: { ...v.location } };
+            const q = affApply(inv, add(w, d));
+            return { ...v, location: { x: q.x, y: q.y, z: v.location.z } };
+          }),
+        );
+      } else setPolyVertices(r, polyVertices(e).map((v) => ((!v.faceIndices || v.flags & 64) && In(v.location) ? { ...v, location: mv(v.location, d) } : { ...v, location: { ...v.location } })));
       return { replace: [r] };
     }
     case 'SPLINE':

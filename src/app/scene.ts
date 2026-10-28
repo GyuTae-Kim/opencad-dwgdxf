@@ -11,6 +11,7 @@ import type { GLRenderer, GpuScene } from '../render/webgl';
 import type { SceneMessage } from '../worker/protocol';
 import { bulgePolylinePoints, circlePoints, ellipsePoints, nurbsPoints } from '../geom/curves';
 import { lwVertices } from '../core/lwpoly';
+import { polyVertices } from '../core/polyverts';
 
 export class SpaceScene {
   gpu: GpuScene;
@@ -223,7 +224,7 @@ export function outlineOf(e: Entity): number[] | null {
       return pts;
     }
     case 'POLYLINE': {
-      const vs = e.vertices.map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge ?? 0 }));
+      const vs = polyVertices(e).map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge ?? 0 }));
       return bulgePolylinePoints(vs, true, polySize(vs.map((v) => [v.x, v.y])) * 1e-3);
     }
     case 'CIRCLE':

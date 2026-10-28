@@ -7,6 +7,7 @@ import type { CadDocument, DimensionEntity, Entity, Vec3 } from '../../core/mode
 import { createDiameterDimension, createLinearDimension, createOrdinateDimension, createRadialDimension } from '../dim/create';
 import { dimVars } from '../dim/vars';
 import { lwVertices } from '../../core/lwpoly';
+import { polyLocs } from '../../core/polyverts';
 
 export interface P {
   x: number;
@@ -57,7 +58,7 @@ export function qdimGeometry(ents: readonly Entity[]): QdimGeometry {
         break;
       }
       case 'POLYLINE':
-        for (const v of e.vertices) add(v.location);
+        for (const p of polyLocs(e)) add(p);
         break;
       case 'ARC':
         add({ x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle) });

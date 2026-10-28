@@ -22,6 +22,7 @@ import type {
 } from '../../core/model';
 import { ellipsePoints, nurbsPoints, fitPointsCurve, TAU } from '../../geom/curves';
 import { lwVertices } from '../../core/lwpoly';
+import { packPoly } from '../../core/polyverts';
 import { rawTagsValid } from './tagwriter';
 import { proxyEntities } from '../../edit/geom/proxygeom';
 import { satDxfTags } from '../acis';
@@ -53,7 +54,7 @@ function polyline(e: Entity, kind: PolylineEntity['kind'], vertices: PolyVertex[
     type: 'POLYLINE',
     kind,
     flags,
-    vertices,
+    ...packPoly(vertices),
     elevation,
     defaultStartWidth: 0,
     defaultEndWidth: 0,

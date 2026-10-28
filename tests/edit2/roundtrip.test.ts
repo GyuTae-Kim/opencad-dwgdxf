@@ -16,6 +16,7 @@ import { fitPolyline, splinePolyline } from '../../src/edit/geom/pedit';
 import { closeSpline, refit } from '../../src/edit/geom/splinedit';
 import { V, line, lw, near } from '../edit/helpers';
 import { lwVertices } from '../../src/core/lwpoly';
+import { polyVertices } from '../../src/core/polyverts';
 
 describe('DXF 왕복', () => {
   it('새 객체를 쓰고 읽으면 같다', () => {
@@ -70,11 +71,11 @@ describe('DXF 왕복', () => {
     wipeoutPolygon(w2).forEach((p, i) => near(p, wipeoutPolygon(w)[i]!, 1e-9));
     const f2 = get<PolylineEntity>(fit.handle);
     expect(f2.flags & 2).toBe(2);
-    expect(f2.vertices.map((v) => v.flags)).toEqual(fit.vertices.map((v) => v.flags));
-    f2.vertices.forEach((v, i) => expect(v.bulge).toBeCloseTo(fit.vertices[i]!.bulge, 12));
+    expect(polyVertices(f2).map((v) => v.flags)).toEqual(polyVertices(fit).map((v) => v.flags));
+    polyVertices(f2).forEach((v, i) => expect(v.bulge).toBeCloseTo(polyVertices(fit)[i]!.bulge, 12));
     const s2 = get<PolylineEntity>(spl.handle);
     expect(s2.smoothType).toBe(6);
-    expect(s2.vertices.filter((v) => v.flags & 16).length).toBe(4);
+    expect(polyVertices(s2).filter((v) => v.flags & 16).length).toBe(4);
     const c2 = get<LwPolylineEntity>(cloud.handle);
     expect(lwVertices(c2).length).toBe(lwVertices(cloud).length);
     expect(lwVertices(c2)[0]!.endWidth).toBeCloseTo(lwVertices(cloud)[0]!.endWidth, 12);

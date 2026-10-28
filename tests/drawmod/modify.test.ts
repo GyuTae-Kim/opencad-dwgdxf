@@ -11,6 +11,7 @@ import { line as line0, lw as lw0 } from '../edit/make';
 import { makeHarness, modelEntities } from '../cmds2/harness';
 import { perCommandGroups } from './groups';
 import { runWith } from './ctx';
+import { polyVertices } from '../../src/core/polyverts';
 
 const close = (a: number, b: number, eps = 1e-6) => expect(Math.abs(a - b)).toBeLessThan(eps);
 const line = (x0: number, y0: number, x1: number, y1: number): Entity => ({ ...line0(x0, y0, x1, y1), handle: '' });
@@ -175,7 +176,7 @@ describe('PEDIT 정점 편집 끊기·직선화·접선', () => {
     await h.run('PEDIT', [{ pick: pl.handle, at: [5, 0] }, 'E', 'T', '90', 'X', 'F', '']);
     const p2 = h.doc.entityIndex.get(pl.handle)!;
     expect(p2.type).toBe('POLYLINE');
-    const first = (p2 as PolylineEntity).vertices[0]!;
+    const first = polyVertices(p2 as PolylineEntity)[0]!;
     expect(first.flags & 2).toBe(2);
     close(first.tangent!, Math.PI / 2);
     // 맞춤: 첫 세그먼트는 위(+Y)로 출발하는 호

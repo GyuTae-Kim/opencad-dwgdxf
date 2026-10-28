@@ -9,6 +9,7 @@ import { packLw } from '../../core/lwpoly';
 import { type Mat, apply, applyDir, identity, mat, multiply } from '../../geom/matrix';
 import { ccwSweep } from '../../geom/curves';
 import { parseProxyGraphics } from '../../render/proxy';
+import { packPoly } from '../../core/polyverts';
 
 type P3 = [number, number, number];
 
@@ -81,7 +82,7 @@ export function proxyEntities(e: UnknownEntity, decode?: (b: Uint8Array) => stri
         mDensity: 0,
         nDensity: 0,
         smoothType: 0,
-        vertices: pts.map((p) => ({ location: p, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })),
+        ...packPoly(pts.map((p) => ({ location: p, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))),
       } as Entity);
     }
   };

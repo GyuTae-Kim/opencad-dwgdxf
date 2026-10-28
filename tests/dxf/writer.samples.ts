@@ -6,6 +6,7 @@ import type { AttribEntity, BlockDef, CadDocument, DictionaryObject, Entity, Hat
 import { entityDefaults, tableKey } from '../../src/core/model';
 import { finalizeDocument } from '../../src/core/finalize';
 import { packBulge, packLw } from '../../src/core/lwpoly';
+import { packPoly } from '../../src/core/polyverts';
 
 /** 문서의 $HANDSEED에서 핸들을 하나씩(편집 세션과 같은 방식) */
 function handles(doc: CadDocument): () => string {
@@ -61,9 +62,9 @@ export function addSampleEntities(doc: CadDocument): void {
   });
   const pv = (x: number, y: number, z = 0, flags = 0) => ({ location: p(x, y, z), bulge: 0, startWidth: 0, endWidth: 0, flags });
   const poly = { defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0, elevation: 0 };
-  push({ ...base('POLYLINE'), ...poly, kind: '2d', flags: 0, vertices: [pv(0, 20), pv(10, 25), pv(20, 20)] });
-  push({ ...base('POLYLINE'), ...poly, kind: '3d', flags: 8, vertices: [pv(0, 30, 1), pv(10, 35, 2), pv(20, 30, 3)] });
-  push({ ...base('POLYLINE'), ...poly, kind: 'mesh', flags: 16, mCount: 2, nCount: 2, vertices: [pv(0, 0, 0), pv(0, 1, 0), pv(1, 0, 1), pv(1, 1, 1)] });
+  push({ ...base('POLYLINE'), ...poly, kind: '2d', flags: 0, ...packPoly([pv(0, 20), pv(10, 25), pv(20, 20)]) });
+  push({ ...base('POLYLINE'), ...poly, kind: '3d', flags: 8, ...packPoly([pv(0, 30, 1), pv(10, 35, 2), pv(20, 30, 3)]) });
+  push({ ...base('POLYLINE'), ...poly, kind: 'mesh', flags: 16, mCount: 2, nCount: 2, ...packPoly([pv(0, 0, 0), pv(0, 1, 0), pv(1, 0, 1), pv(1, 1, 1)]) });
   push({
     ...base('POLYLINE'),
     ...poly,
@@ -71,7 +72,7 @@ export function addSampleEntities(doc: CadDocument): void {
     flags: 64,
     mCount: 3,
     nCount: 1,
-    vertices: [pv(0, 0, 0, 192), pv(1, 0, 0, 192), pv(0, 1, 0, 192), { ...pv(0, 0, 0, 128), faceIndices: [1, 2, 3] }],
+    ...packPoly([pv(0, 0, 0, 192), pv(1, 0, 0, 192), pv(0, 1, 0, 192), { ...pv(0, 0, 0, 128), faceIndices: [1, 2, 3] }]),
   });
   push({
     ...base('SPLINE'),

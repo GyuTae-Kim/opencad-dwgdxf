@@ -27,6 +27,7 @@ import type {
   Vec3,
 } from '../../core/model';
 import { tableKey } from '../../core/model';
+import { polyLocs, polyVertices } from '../../core/polyverts';
 import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
 import { dimVars, plainText } from '../../app/inquiry';
 import { builtinArrow } from '../../render/arrows';
@@ -305,7 +306,7 @@ function explodePolyline(e: PolylineEntity): Entity[] {
   if (e.kind === 'mesh') {
     const M = e.mCount;
     const N = e.nCount;
-    const v = e.vertices.map((q) => q.location);
+    const v = polyLocs(e);
     const out: Entity[] = [];
     if (M * N > v.length) return out;
     const cm = (e.flags & 1) !== 0;
@@ -319,9 +320,10 @@ function explodePolyline(e: PolylineEntity): Entity[] {
     return out;
   }
   // 폴리페이스
-  const coords = e.vertices.filter((v) => v.flags & 64 || !v.faceIndices).map((v) => v.location);
+  const ev = polyVertices(e);
+  const coords = ev.filter((v) => v.flags & 64 || !v.faceIndices).map((v) => v.location);
   const out: Entity[] = [];
-  for (const f of e.vertices) {
+  for (const f of ev) {
     if (!f.faceIndices || f.flags & 64) continue;
     const idx = f.faceIndices.filter((k) => k !== 0);
     const pts = idx.map((k) => coords[Math.abs(k) - 1]).filter((p): p is Vec3 => !!p);

@@ -8,6 +8,7 @@ import { hatchLoops } from '../render/hatch';
 import { decodePercent } from '../text/mtext';
 import { definitionName } from '../edit/dynblock';
 import { lwVertices } from '../core/lwpoly';
+import { polyDrawnBulgeVerts, polyVertices } from '../core/polyverts';
 import { childStyleOf } from '../edit/dim/vars';
 
 export const TYPE_NAMES: Record<string, string> = {
@@ -395,7 +396,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): 
       break;
     }
     case 'POLYLINE': {
-      const vs = e.vertices.filter((v) => !(v.flags & 16) && !(v.faceIndices && !(v.flags & 64)));
+      const vs = polyVertices(e).filter((v) => !(v.flags & 16) && !(v.faceIndices && !(v.flags & 64)));
       const closed = (e.flags & 1) !== 0;
       geo.push({ k: '종류', v: { '2d': '2D 폴리선', '3d': '3D 폴리선', mesh: '폴리곤 메시', polyface: '폴리페이스 메시' }[e.kind] });
       geo.push({ k: '정점 수', v: String(vs.length) });
@@ -571,10 +572,7 @@ export function entityLength(e: Entity): number | null {
       return polyLength(lwVertices(e), e.closed);
     case 'POLYLINE':
       if (e.kind !== '2d') return null;
-      return polyLength(
-        e.vertices.filter((v) => !(v.flags & 16)).map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge })),
-        (e.flags & 1) !== 0,
-      );
+      return polyLength(polyDrawnBulgeVerts(e), (e.flags & 1) !== 0);
     case 'SPLINE':
       return splineLength(e);
     default:

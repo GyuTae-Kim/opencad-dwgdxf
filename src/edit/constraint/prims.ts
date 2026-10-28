@@ -12,6 +12,7 @@ import { insertionPoint } from '../geom/query';
 import { transformEntity } from '../geom/transform';
 import { partIndex } from './types';
 import { lwVertices, packLw } from '../../core/lwpoly';
+import { packPoly, polyBulge, polyCount, polyFlags, polyLoc, polyVertices } from '../../core/polyverts';
 
 const TAU = Math.PI * 2;
 
@@ -66,8 +67,8 @@ function addPt(vs: Vars, p: Vec2, position = true): number {
 function polyIndices(e: PolylineEntity): number[] | null {
   if (e.kind !== '2d' || e.flags & 6) return null;
   const out: number[] = [];
-  for (let i = 0; i < e.vertices.length; i++) {
-    const f = e.vertices[i]!.flags;
+  for (let i = 0, n = polyCount(e); i < n; i++) {
+    const f = polyFlags(e, i);
     if (f & (1 | 8 | 16)) return null;
     out.push(i);
   }
@@ -170,11 +171,11 @@ export function makePrim(e: Entity, vs: Vars): Prim | null {
       const m = planProj(e.extrusion, e.elevation);
       const flip = affDet(m) < 0 ? -1 : 1;
       const closed = (e.flags & 1) !== 0;
-      const v = idx.map((i) => addPt(vs, affApply(m, e.vertices[i]!.location)));
+      const v = idx.map((i) => addPt(vs, affApply(m, polyLoc(e, i))));
       const segs = closed ? idx.length : idx.length - 1;
       const b: number[] = [];
       for (let i = 0; i < segs; i++) {
-        const bu = (e.vertices[idx[i]!]!.bulge || 0) * flip;
+        const bu = (polyBulge(e, idx[i]!) || 0) * flip;
         b.push(Math.abs(bu) > 1e-12 ? addVar(vs, bu, true) : -1);
       }
       return { k: 'poly', h, e, v, b, closed, idx };
@@ -520,13 +521,13 @@ export function writePrim(pr: Prim, x: X, doc: CadDocument): Entity {
         return out;
       }
       const z = planZ(e.extrusion, e.elevation);
-      const vertices = e.vertices.map((v) => ({ ...v, location: { ...v.location } }));
+      const vertices = polyVertices(e);
       pr.idx.forEach((vi, k) => {
         const v = vertices[vi]!;
         v.location = { x: x[pr.v[k]!]!, y: x[pr.v[k]! + 1]!, z };
         v.bulge = k < pr.b.length && pr.b[k]! >= 0 ? x[pr.b[k]!]! : 0;
       });
-      const out: PolylineEntity = { ...e, elevation: z, vertices };
+      const out: PolylineEntity = { ...e, elevation: z, ...packPoly(vertices) };
       delete out.extrusion;
       return out;
     }
