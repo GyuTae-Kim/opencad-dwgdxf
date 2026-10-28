@@ -6,6 +6,10 @@ import type { AttribEntity, BlockDef, CadDocument, DictionaryObject, Entity, Hat
 import { entityDefaults, tableKey } from '../../src/core/model';
 import { finalizeDocument } from '../../src/core/finalize';
 import { packBulge, packLw } from '../../src/core/lwpoly';
+import { packPoly } from '../../src/core/polyverts';
+import { packEdges } from '../../src/core/hatchedges';
+import { packMesh } from '../../src/core/meshdata';
+import { pack3 } from '../../src/core/flat3';
 
 /** 문서의 $HANDSEED에서 핸들을 하나씩(편집 세션과 같은 방식) */
 function handles(doc: CadDocument): () => string {
@@ -61,9 +65,9 @@ export function addSampleEntities(doc: CadDocument): void {
   });
   const pv = (x: number, y: number, z = 0, flags = 0) => ({ location: p(x, y, z), bulge: 0, startWidth: 0, endWidth: 0, flags });
   const poly = { defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0, elevation: 0 };
-  push({ ...base('POLYLINE'), ...poly, kind: '2d', flags: 0, vertices: [pv(0, 20), pv(10, 25), pv(20, 20)] });
-  push({ ...base('POLYLINE'), ...poly, kind: '3d', flags: 8, vertices: [pv(0, 30, 1), pv(10, 35, 2), pv(20, 30, 3)] });
-  push({ ...base('POLYLINE'), ...poly, kind: 'mesh', flags: 16, mCount: 2, nCount: 2, vertices: [pv(0, 0, 0), pv(0, 1, 0), pv(1, 0, 1), pv(1, 1, 1)] });
+  push({ ...base('POLYLINE'), ...poly, kind: '2d', flags: 0, ...packPoly([pv(0, 20), pv(10, 25), pv(20, 20)]) });
+  push({ ...base('POLYLINE'), ...poly, kind: '3d', flags: 8, ...packPoly([pv(0, 30, 1), pv(10, 35, 2), pv(20, 30, 3)]) });
+  push({ ...base('POLYLINE'), ...poly, kind: 'mesh', flags: 16, mCount: 2, nCount: 2, ...packPoly([pv(0, 0, 0), pv(0, 1, 0), pv(1, 0, 1), pv(1, 1, 1)]) });
   push({
     ...base('POLYLINE'),
     ...poly,
@@ -71,7 +75,7 @@ export function addSampleEntities(doc: CadDocument): void {
     flags: 64,
     mCount: 3,
     nCount: 1,
-    vertices: [pv(0, 0, 0, 192), pv(1, 0, 0, 192), pv(0, 1, 0, 192), { ...pv(0, 0, 0, 128), faceIndices: [1, 2, 3] }],
+    ...packPoly([pv(0, 0, 0, 192), pv(1, 0, 0, 192), pv(0, 1, 0, 192), { ...pv(0, 0, 0, 128), faceIndices: [1, 2, 3] }]),
   });
   push({
     ...base('SPLINE'),
@@ -177,7 +181,7 @@ export function addSampleEntities(doc: CadDocument): void {
     defPoint: p(80, 65),
     arc: { center: p(80, 50), start: p(90, 50), end: p(80, 60), startAngle: 0, endAngle: Math.PI / 2, partial: false },
   });
-  push({ ...base('LEADER'), dimStyle: 'Standard', vertices: [p(0, 0), p(10, 10), p(20, 10)], arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 2.5, textWidth: 0 });
+  push({ ...base('LEADER'), dimStyle: 'Standard', verts: pack3([p(0, 0), p(10, 10), p(20, 10)]), arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 2.5, textWidth: 0 });
   const ml: MLeaderEntity = {
     ...(base('MULTILEADER') as unknown as MLeaderEntity),
     leaderLineType: 1,
@@ -258,25 +262,25 @@ export function addSampleEntities(doc: CadDocument): void {
     paths: [
       {
         flags: 1,
-        edges: [
+        edgeData: packEdges([
           { type: 'line', start: { x: 0, y: 0 }, end: { x: 20, y: 0 } },
           { type: 'arc', center: { x: 20, y: 10 }, radius: 10, startAngle: -Math.PI / 2, endAngle: Math.PI / 2, ccw: true },
           { type: 'line', start: { x: 20, y: 20 }, end: { x: 0, y: 20 } },
           { type: 'arc', center: { x: 0, y: 10 }, radius: 10, startAngle: -Math.PI / 2, endAngle: Math.PI / 2, ccw: false },
-        ],
+        ]),
       },
       {
         flags: 0,
-        edges: [
+        edgeData: packEdges([
           { type: 'ellipse', center: { x: 10, y: 10 }, majorAxis: { x: 4, y: 0 }, ratio: 0.5, startAngle: 0, endAngle: Math.PI * 2, ccw: true },
-        ],
+        ]),
       },
       {
         flags: 0,
-        edges: [
+        edgeData: packEdges([
           { type: 'spline', degree: 3, rational: false, periodic: false, knots: [0, 0, 0, 0, 1, 1, 1, 1], controlPoints: [ { x: 30, y: 0 }, { x: 35, y: 5 }, { x: 40, y: -5 }, { x: 45, y: 0 } ] },
           { type: 'line', start: { x: 45, y: 0 }, end: { x: 30, y: 0 } },
-        ],
+        ]),
       },
     ],
   } as HatchEntity);
@@ -317,7 +321,7 @@ export function addSampleEntities(doc: CadDocument): void {
     ],
   });
   push({ ...base('TOLERANCE'), dimStyle: 'Standard', insert: p(0, 250), text: '{\\Fgdt;j}%%v0.1%%v', direction: p(1, 0) });
-  push({ ...base('MESH'), vertices: [p(0, 0), p(1, 0), p(1, 1), p(0, 1), p(0.5, 0.5, 1)], faces: [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]], edges: [], subdivision: 0 });
+  push({ ...base('MESH'), ...packMesh([p(0, 0), p(1, 0), p(1, 1), p(0, 1), p(0.5, 0.5, 1)], [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]], []), subdivision: 0 });
   push({
     ...base('SPLINE'),
     flags: 0,

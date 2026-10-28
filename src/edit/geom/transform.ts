@@ -19,6 +19,7 @@ import type {
   ViewportEntity,
 } from '../../core/model';
 import { lwCount, tidyWidths } from '../../core/lwpoly';
+import { polyVertices, setPolyVertices } from '../../core/polyverts';
 import { fitPointsCurve } from '../../geom/curves';
 import { ellipseFromConjugate, ellipseFromConjugate3 } from './conic';
 import { type ArcPiece, type EllPiece } from './curve';
@@ -53,6 +54,7 @@ import { xformMText, xformShape, xformText, xformTolerance } from './xtext';
 import { xformHatch } from './xhatch';
 import { xformDimension, xformLeader, xformMLeader, xformTable } from './xannot';
 import { xformArcText } from '../textools/arctext';
+import { meshVertices, packMesh } from '../../core/meshdata';
 
 export function transformEntity(e: Entity, m: Affine, doc: CadDocument, opts: TransformOptions = {}): EditResult {
   return transformOne(e, m, doc, opts);
@@ -220,7 +222,11 @@ function transformOne(e: Entity, m: Affine, doc: CadDocument, opt: TransformOpti
       return same(e, xformMLine(e, m, opt));
     case 'MESH': {
       const r = cloneEntity(e);
-      r.vertices = e.vertices.map((p) => P3(m, p, opt));
+      r.verts = packMesh(
+        meshVertices(e).map((p) => P3(m, p, opt)),
+        [],
+        [],
+      ).verts;
       return same(e, r);
     }
     case 'PDFUNDERLAY':
@@ -345,13 +351,17 @@ function splineIn(src: Entity, n: import('./nurbs').Nurbs, closed: boolean, ext:
 function xformPolyline(e: PolylineEntity, m: Affine, opt: TransformOptions): EditResult {
   if (e.kind !== '2d') {
     const r = cloneEntity(e);
-    r.vertices = e.vertices.map((v) => ({ ...v, location: P3(m, v.location, opt) }));
+    setPolyVertices(
+      r,
+      polyVertices(e).map((v) => ({ ...v, location: P3(m, v.location, opt) })),
+    );
     r.extrusion = xformNormal(m, e.extrusion);
     return same(e, r);
   }
   const pm = planeMap(e.extrusion, e.elevation, m, opt.dz ?? 0);
   const sim = affSimilarity(pm.A);
-  const curved = e.vertices.some((v) => Math.abs(v.bulge) > 1e-12);
+  const ev = polyVertices(e);
+  const curved = ev.some((v) => Math.abs(v.bulge) > 1e-12);
   if (!sim && curved) {
     const vs = polyVerts(e);
     const pieces = bulgePieces(
@@ -366,12 +376,15 @@ function xformPolyline(e: PolylineEntity, m: Affine, opt: TransformOptions): Edi
   const s = sim ? sim.s : affScaleOf(pm.A);
   const flip = affDet(pm.A) < 0 ? -1 : 1;
   const r = cloneEntity(e);
-  r.vertices = e.vertices.map((v) => {
-    const q = affApply(pm.A, v.location);
-    const nv = { ...v, location: { x: q.x, y: q.y, z: v.location.z }, bulge: v.bulge * flip, startWidth: v.startWidth * s, endWidth: v.endWidth * s };
-    if (v.tangent !== undefined) nv.tangent = normAngle(affAngle(pm.A, v.tangent));
-    return nv;
-  });
+  setPolyVertices(
+    r,
+    ev.map((v) => {
+      const q = affApply(pm.A, v.location);
+      const nv = { ...v, location: { x: q.x, y: q.y, z: v.location.z }, bulge: v.bulge * flip, startWidth: v.startWidth * s, endWidth: v.endWidth * s };
+      if (v.tangent !== undefined) nv.tangent = normAngle(affAngle(pm.A, v.tangent));
+      return nv;
+    }),
+  );
   r.defaultStartWidth = e.defaultStartWidth * s;
   r.defaultEndWidth = e.defaultEndWidth * s;
   r.elevation = pm.z;

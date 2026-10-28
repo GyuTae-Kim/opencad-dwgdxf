@@ -4,6 +4,7 @@ import type { Entity, HatchEntity, HatchPath, LineEntity } from '../../src/core/
 import { boundaryFromEntities, createHatch, detectBoundary, pathsFillPoint, rebuildAssociative } from '../../src/edit/hatch';
 import { P, add, arc, area, circle, defineBlock, ellipse, insert, insideHatch, line, lw, newDoc, rect, spline } from './helpers';
 import { bulgeVertices } from '../../src/core/lwpoly';
+import { hatchEdges } from '../../src/core/hatchedges';
 
 const PI = Math.PI;
 const near = (a: number, b: number, tol = 1e-6) => expect(Math.abs(a - b), `${a} ≈ ${b}`).toBeLessThan(tol);
@@ -67,7 +68,7 @@ describe('점 선택: 섬', () => {
     const got = detectBoundary(doc, list, { x: 15, y: 5 }, { textBoxes: [box, outside] })!;
     expect(got.paths.length).toBe(2);
     expect(got.paths[1]!.flags).toBe(24);
-    expect(got.paths[1]!.edges!.length).toBe(4);
+    expect(hatchEdges(got.paths[1]!).length).toBe(4);
     expect(got.boundaryHandles).toContain('T1');
     expect(got.boundaryHandles).not.toContain('T2');
     near(total(got.paths), 200 - 12);
@@ -137,7 +138,7 @@ describe('점 선택: 겹친 도형과 곡선', () => {
     const got = detectBoundary(doc, list, { x: 5, y: 0.1 })!;
     const p = got.paths[0]!;
     expect(p.polyline).toBeUndefined();
-    expect(p.edges!.map((e) => e.type).sort()).toEqual(['ellipse', 'line']);
+    expect(hatchEdges(p).map((e) => e.type).sort()).toEqual(['ellipse', 'line']);
     near(area(p), (PI * 50) / 2, 1e-2);
   });
 
@@ -170,9 +171,9 @@ describe('점 선택: 겹친 도형과 곡선', () => {
     const list = add(doc, s, line(-2, 1, 12, 1));
     const got = detectBoundary(doc, list, { x: 5, y: 3 })!;
     const p = got.paths[0]!;
-    const types = p.edges!.map((e) => e.type);
+    const types = hatchEdges(p).map((e) => e.type);
     expect(types.sort()).toEqual(['line', 'spline']);
-    const sp = p.edges!.find((e) => e.type === 'spline')!;
+    const sp = hatchEdges(p).find((e) => e.type === 'spline')!;
     if (sp.type !== 'spline') throw new Error();
     expect(sp.knots.length).toBe(sp.controlPoints.length + sp.degree + 1);
     // 넓이: 곡선 아래 넓이(y > 1)를 숫자로
@@ -204,7 +205,7 @@ describe('점 선택: 겹친 도형과 곡선', () => {
     const ins2 = insert('B1', 0, 0, 4, 2, 0);
     add(doc, ins2);
     const g2 = detectBoundary(doc, [ins2], { x: 0.2, y: 0.2 })!;
-    expect(g2.paths[1]!.edges!.some((e) => e.type === 'ellipse')).toBe(true);
+    expect(hatchEdges(g2.paths[1]!).some((e) => e.type === 'ellipse')).toBe(true);
     near(total(g2.paths), 8 - PI * 1 * 0.5, 1e-3);
   });
 
@@ -273,9 +274,9 @@ describe('객체 선택', () => {
     expect(paths[0]!.sources).toEqual([r!.handle]);
     const circ = paths.find((p) => p.sources![0] === c!.handle)!;
     expect(circ.flags & 16).toBe(16);
-    expect(circ.edges).toEqual([expect.objectContaining({ type: 'arc', radius: 2, startAngle: 0, endAngle: 2 * PI })]);
+    expect(hatchEdges(circ)).toEqual([expect.objectContaining({ type: 'arc', radius: 2, startAngle: 0, endAngle: 2 * PI })]);
     const ell = paths.find((p) => p.sources![0] === e!.handle)!;
-    expect(ell.edges![0]!.type).toBe('ellipse');
+    expect(hatchEdges(ell)[0]!.type).toBe('ellipse');
     near(total(paths), 400 - 4 * PI - 8 * PI, 1e-3);
   });
 

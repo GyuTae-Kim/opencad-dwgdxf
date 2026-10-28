@@ -10,8 +10,10 @@ import { pathLoop } from '../../render/hatch';
 import { type Box, type Curve, TAU, clipXLines, derivAt, entitiesToCurves, isCircle, pointAt, reverseNurbs, roughBox, splineSub } from './curves';
 import { Graph, buildGraph, pointInRing, signedArea } from './graph';
 import { bulgeVertices, lwCount, lwVertices, packBulge } from '../../core/lwpoly';
+import { polyVertices as unpackPoly } from '../../core/polyverts';
 import { boundaryObjects } from '../geom/bpoly';
 import { inherit } from '../geom/path';
+import { hatchEdges, packEdges } from '../../core/hatchedges';
 
 export type IslandStyle = 'normal' | 'outer' | 'ignore';
 
@@ -488,7 +490,7 @@ function loopToPath(g: Graph, walk: readonly number[], flags: number, preferPoly
       }
     }
   }
-  return { flags: flags & ~F_POLYLINE, edges, sources };
+  return { flags: flags & ~F_POLYLINE, edgeData: packEdges(edges), sources };
 }
 
 /** 반모서리 고리를 거꾸로(방향 바꾸기) */
@@ -581,7 +583,7 @@ function addTextIslands(r: DetectResult, found: Region, boxes: { handle: string;
     for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += pts[j]!.x * pts[i]!.y - pts[i]!.x * pts[j]!.y;
     const ring = a > 0 ? [...pts].reverse() : pts;
     const edges: HatchEdge[] = ring.map((q, i) => ({ type: 'line', start: { x: q.x, y: q.y }, end: { x: ring[(i + 1) % ring.length]!.x, y: ring[(i + 1) % ring.length]!.y } }));
-    r.paths.push({ flags: F_TEXTBOX | F_OUTERMOST, edges, sources: b.handle ? [b.handle] : [] });
+    r.paths.push({ flags: F_TEXTBOX | F_OUTERMOST, edgeData: packEdges(edges), sources: b.handle ? [b.handle] : [] });
     if (b.handle && !r.boundaryHandles.includes(b.handle)) r.boundaryHandles.push(b.handle);
   }
 }
@@ -738,7 +740,7 @@ function reversePath(p: HatchPath): HatchPath {
     });
     return { ...p, polyline: { closed: p.polyline.closed, verts: packBulge(out) } };
   }
-  const edges: HatchEdge[] = (p.edges ?? []).map((e): HatchEdge => {
+  const edges: HatchEdge[] = hatchEdges(p).map((e): HatchEdge => {
     switch (e.type) {
       case 'line':
         return { type: 'line', start: { ...e.end }, end: { ...e.start } };
@@ -751,7 +753,7 @@ function reversePath(p: HatchPath): HatchPath {
       }
     }
   });
-  return { ...p, edges: edges.reverse() };
+  return { ...p, edgeData: packEdges(edges.reverse()) };
 }
 
 /** 닫힌 폴리선·2D 면 → 월드 꼭짓점(볼록도 포함). 기운 평면이면 null */
@@ -768,7 +770,7 @@ function polyVertices(e: Entity): { x: number; y: number; bulge: number }[] | nu
       break;
     case 'POLYLINE': {
       const smooth = !!(e.flags & 4);
-      const vs = e.vertices.filter((v) => !(v.flags & 16));
+      const vs = unpackPoly(e).filter((v) => !(v.flags & 16));
       world = e.kind === '3d';
       ext = world ? undefined : e.extrusion;
       z = e.elevation;
@@ -823,11 +825,11 @@ function directPath(doc: CadDocument, e: Entity): HatchPath | null {
     const edge: HatchEdge = isCircle(c)
       ? { type: 'arc', center: { ...c.c }, radius: Math.hypot(c.u.x, c.u.y), startAngle: 0, endAngle: TAU, ccw: true }
       : { type: 'ellipse', center: { ...c.c }, majorAxis: { ...c.u }, ratio: c.ratio, startAngle: 0, endAngle: TAU, ccw: true };
-    return { flags: F_EXTERNAL, edges: [edge], sources };
+    return { flags: F_EXTERNAL, edgeData: packEdges([edge]), sources };
   }
   if (c.kind === 'spline') {
     const sp = splineSub(c, c.t0, c.t1);
-    return { flags: F_EXTERNAL, edges: [{ type: 'spline', degree: sp.degree, rational: !!sp.weights, periodic: false, knots: sp.knots, controlPoints: sp.ctrl, weights: sp.weights }], sources };
+    return { flags: F_EXTERNAL, edgeData: packEdges([{ type: 'spline', degree: sp.degree, rational: !!sp.weights, periodic: false, knots: sp.knots, controlPoints: sp.ctrl, weights: sp.weights }]), sources };
   }
   return null;
 }

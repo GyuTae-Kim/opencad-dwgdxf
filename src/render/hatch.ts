@@ -6,6 +6,7 @@ import earcut from 'earcut';
 import type { HatchEntity, HatchPath, HatchPatternLine } from '../core/model';
 import { arcPoints, bulgeFlatPoints, ccwSweep, ellipsePoints, interpolateFitPoints, nurbsPoints } from '../geom/curves';
 import { dashInterval } from './linetype';
+import { hatchEdges } from '../core/hatchedges';
 
 /** 경로 하나 → 닫힌 고리 [x, y, …] */
 export function pathLoop(p: HatchPath, tol: number): number[] {
@@ -16,7 +17,7 @@ export function pathLoop(p: HatchPath, tol: number): number[] {
     if (n >= 2 && Math.abs(out[n - 2]! - x) < 1e-12 && Math.abs(out[n - 1]! - y) < 1e-12) return;
     out.push(x, y);
   };
-  for (const e of p.edges ?? []) {
+  for (const e of hatchEdges(p)) {
     switch (e.type) {
       case 'line':
         push(e.start.x, e.start.y);

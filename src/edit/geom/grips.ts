@@ -30,6 +30,7 @@ import type {
 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { bulgeVertices, lwVertices, numArray, setLwVertices, vertCount } from '../../core/lwpoly';
+import { polyVertices, setPolyVertices } from '../../core/polyverts';
 import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
 import { moveDimensionText } from '../dim/create';
 import { type EllPiece, pieceAt } from './curve';
@@ -44,6 +45,9 @@ import { keepIdentity } from './trim';
 import { type EditResult, type GripPoint, MSG, allocBlockName } from './types';
 import { updateDimNumber } from './xannot';
 import { mtextDir } from './xtext';
+import { hatchEdges, packEdges } from '../../core/hatchedges';
+import { meshVertexCount, meshVertices } from '../../core/meshdata';
+import { leaderCount, leaderVertices } from '../../core/flat3';
 
 export interface GripOptions {
   /** 호 중간 그립: 'stretch'(기본, 세 점 호) 또는 'radius'(반지름만) */
@@ -99,17 +103,18 @@ export function gripPoints(e: Entity, doc: CadDocument): GripPoint[] {
         planProj(e.extrusion, e.elevation),
       );
     case 'POLYLINE': {
+      const ev = polyVertices(e);
       if (e.kind === '2d') {
-        const idx = e.vertices.map((v, i) => (v.flags & 16 ? -1 : i)).filter((i) => i >= 0);
+        const idx = ev.map((v, i) => (v.flags & 16 ? -1 : i)).filter((i) => i >= 0);
         const grips = polyGrips(
-          idx.map((i) => ({ x: e.vertices[i]!.location.x, y: e.vertices[i]!.location.y, bulge: e.vertices[i]!.bulge })),
+          idx.map((i) => ({ x: ev[i]!.location.x, y: ev[i]!.location.y, bulge: ev[i]!.bulge })),
           (e.flags & 1) !== 0,
           planProj(e.extrusion, e.elevation),
         );
         // 그립 번호는 원래 정점 번호로
         return grips.map((q) => ({ ...q, id: q.id[0] + String(idx[Number(q.id.slice(1))]) }));
       }
-      return e.vertices.map((v, i) => (e.kind === 'polyface' && v.faceIndices && !(v.flags & 64) ? null : g('v' + i, v.location, 'vertex'))).filter((x): x is GripPoint => !!x);
+      return ev.map((v, i) => (e.kind === 'polyface' && v.faceIndices && !(v.flags & 64) ? null : g('v' + i, v.location, 'vertex'))).filter((x): x is GripPoint => !!x);
     }
     case 'SPLINE':
       if (e.fitPoints.length >= 2) return e.fitPoints.map((p, i) => g('f' + i, p, 'fit'));
@@ -142,7 +147,7 @@ export function gripPoints(e: Entity, doc: CadDocument): GripPoint[] {
     case 'DIMENSION':
       return dimPoints(e).map((k) => g(k.key, k.p, k.key === 'textMid' ? 'text' : 'end'));
     case 'LEADER':
-      return e.vertices.map((v, i) => g('v' + i, v, 'vertex'));
+      return leaderVertices(e).map((v, i) => g('v' + i, v, 'vertex'));
     case 'MULTILEADER': {
       const out = [g('content', e.context.contentBase, 'ins')];
       e.context.leaders.forEach((ld, li) => {
@@ -164,7 +169,7 @@ export function gripPoints(e: Entity, doc: CadDocument): GripPoint[] {
     case 'MLINE':
       return e.vertices.map((v, i) => g('v' + i, v.position, 'vertex'));
     case 'MESH':
-      return e.vertices.map((v, i) => g('v' + i, v, 'vertex'));
+      return meshVertices(e).map((v, i) => g('v' + i, v, 'vertex'));
     case 'VIEWPORT': {
       const c = e.center;
       const w = e.width / 2;
@@ -246,7 +251,7 @@ function hatchGrips(e: HatchEntity, doc: CadDocument): GripPoint[] {
   e.paths.forEach((p, k) => {
     const pts: Vec2[] = [];
     if (p.polyline) for (const v of bulgeVertices(p.polyline.verts)) pts.push(v);
-    else for (const ed of p.edges ?? []) if (ed.type === 'line') pts.push(ed.start);
+    else for (const ed of hatchEdges(p)) if (ed.type === 'line') pts.push(ed.start);
     pts.forEach((q, i) => {
       const w = affApply(P, q);
       minX = Math.min(minX, w.x);
@@ -346,7 +351,12 @@ export function gripMove(e: Entity, id: string, to: Vec2, doc: CadDocument, opts
     case 'LEADER': {
       const i = Number(id.slice(1));
       const r = cloneEntity(e);
-      r.vertices[i] = { x: to.x, y: to.y, z: e.vertices[i]!.z };
+      if (Number.isInteger(i) && i >= 0 && i < leaderCount(e)) {
+        const vs = numArray(r.verts);
+        vs[i * 3] = to.x;
+        vs[i * 3 + 1] = to.y;
+        r.verts = vs;
+      }
       return { replace: [r] };
     }
     case 'MULTILEADER': {
@@ -398,7 +408,12 @@ export function gripMove(e: Entity, id: string, to: Vec2, doc: CadDocument, opts
     case 'MESH': {
       const i = Number(id.slice(1));
       const r = cloneEntity(e);
-      r.vertices[i] = { x: to.x, y: to.y, z: e.vertices[i]!.z };
+      if (Number.isInteger(i) && i >= 0 && i < meshVertexCount(e)) {
+        const vs = numArray(r.verts);
+        vs[i * 3] = to.x;
+        vs[i * 3 + 1] = to.y;
+        r.verts = vs;
+      }
       return { replace: [r] };
     }
     case 'VIEWPORT': {
@@ -579,27 +594,32 @@ function lwGrip(e: LwPolylineEntity, id: string, to: Vec2): LwPolylineEntity {
 function polylineGrip(e: PolylineEntity, id: string, to: Vec2): PolylineEntity {
   const r = cloneEntity(e);
   const i = Number(id.slice(1));
+  const ev = polyVertices(e);
+  const rv = polyVertices(r);
   if (e.kind !== '2d') {
-    const v = r.vertices[i]!;
+    const v = rv[i]!;
     v.location = { x: to.x, y: to.y, z: v.location.z };
+    setPolyVertices(r, rv);
     return r;
   }
   const P = planProj(e.extrusion, e.elevation);
   const q = affApply(affInv(P)!, to);
   if (id[0] === 'v') {
-    r.vertices[i]!.location = { x: q.x, y: q.y, z: e.vertices[i]!.location.z };
+    rv[i]!.location = { x: q.x, y: q.y, z: ev[i]!.location.z };
+    setPolyVertices(r, rv);
     return r;
   }
   // 세그먼트 i → 다음 그려지는 정점
-  const idx = e.vertices.map((v, k) => (v.flags & 16 ? -1 : k)).filter((k) => k >= 0);
+  const idx = ev.map((v, k) => (v.flags & 16 ? -1 : k)).filter((k) => k >= 0);
   const pos = idx.indexOf(i);
   const j = idx[(pos + 1) % idx.length]!;
-  const vs = [i, j].map((k) => ({ x: e.vertices[k]!.location.x, y: e.vertices[k]!.location.y, bulge: e.vertices[k]!.bulge }));
+  const vs = [i, j].map((k) => ({ x: ev[k]!.location.x, y: ev[k]!.location.y, bulge: ev[k]!.bulge }));
   const gp = segMid(vs[0]!, vs[1]!, vs[0]!.bulge);
   segmentGrip(vs, 0, false, q, sub(q, gp));
-  r.vertices[i]!.location = { ...r.vertices[i]!.location, x: vs[0]!.x, y: vs[0]!.y };
-  r.vertices[i]!.bulge = vs[0]!.bulge;
-  r.vertices[j]!.location = { ...r.vertices[j]!.location, x: vs[1]!.x, y: vs[1]!.y };
+  rv[i]!.location = { ...rv[i]!.location, x: vs[0]!.x, y: vs[0]!.y };
+  rv[i]!.bulge = vs[0]!.bulge;
+  rv[j]!.location = { ...rv[j]!.location, x: vs[1]!.x, y: vs[1]!.y };
+  setPolyVertices(r, rv);
   return r;
 }
 
@@ -638,14 +658,16 @@ function hatchGrip(e: HatchEntity, id: string, d: Vec2): HatchEntity {
       vs[i * 3 + 1] = vs[i * 3 + 1]! + dl.y;
     }
     p.polyline.verts = vs;
-  } else if (p.edges) {
-    const lines = p.edges.map((ed, j) => (ed.type === 'line' ? j : -1)).filter((j) => j >= 0);
+  } else if (p.edgeData) {
+    const edges = hatchEdges(p);
+    const lines = edges.map((ed, j) => (ed.type === 'line' ? j : -1)).filter((j) => j >= 0);
     const j = lines[i];
     if (j !== undefined) {
-      const ed = p.edges[j]!;
+      const ed = edges[j]!;
       if (ed.type === 'line') ed.start = { x: ed.start.x + dl.x, y: ed.start.y + dl.y };
-      const prev = p.edges[(j - 1 + p.edges.length) % p.edges.length]!;
+      const prev = edges[(j - 1 + edges.length) % edges.length]!;
       if (prev.type === 'line') prev.end = { x: prev.end.x + dl.x, y: prev.end.y + dl.y };
+      p.edgeData = packEdges(edges);
     }
   }
   for (const pp of r.paths) pp.sources = undefined;

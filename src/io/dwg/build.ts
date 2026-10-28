@@ -27,6 +27,7 @@ import {
   tableKey,
 } from '../../core/model';
 import { finalizeDocument } from '../../core/finalize';
+import { PolyAccum } from '../../core/polyverts';
 import { attachAcisWires } from '../acis';
 import { acdsRecords } from './acds';
 import { codepageToEncoding, decoderFor, dwgCodepageName } from '../../core/codepage';
@@ -85,6 +86,7 @@ import { RAW_TAG_TYPES, decodeRawTags } from './objects/rawtags';
 import { decodeTableStyleBody } from './objects/tableraw';
 import { parseDimOverrides } from './xdata';
 import { adoptSummaryInfo, parseSummaryInfo } from '../dwgprops';
+import { leaderCount, leaderVertices, pack3 } from '../../core/flat3';
 
 /** 원본 본문을 남기는 도형 */
 const RAW_TYPES = new Set(['UNKNOWN', 'REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE', 'OLE2FRAME', 'OLEFRAME', 'ACAD_TABLE', 'MULTILEADER', 'MESH']);
@@ -598,11 +600,12 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
         e.textWidth = ann.extents.width;
       }
     }
-    if (e.creation !== 0 || !e.annotation || e.vertices.length < 2) continue;
+    if (e.creation !== 0 || !e.annotation || leaderCount(e) < 2) continue;
     const xd = e.horizontalDirection ?? { x: 1, y: 0, z: 0 };
-    const n = e.vertices.length;
-    const a = e.vertices[n - 2];
-    const bpt = e.vertices[n - 1];
+    const lv = leaderVertices(e);
+    const n = lv.length;
+    const a = lv[n - 2]!;
+    const bpt = lv[n - 1]!;
     const dx = bpt.x - a.x;
     const dy = bpt.y - a.y;
     const dz = bpt.z - a.z;
@@ -619,7 +622,8 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
     const L = asz * sc;
     if (!(L > 0)) continue;
     const sgn = e.hooklineDirection ? 1 : -1;
-    e.vertices.splice(n - 1, 0, { x: bpt.x + (sgn * L * xd.x) / xl, y: bpt.y + (sgn * L * xd.y) / xl, z: bpt.z + (sgn * L * xd.z) / xl });
+    lv.splice(n - 1, 0, { x: bpt.x + (sgn * L * xd.x) / xl, y: bpt.y + (sgn * L * xd.y) / xl, z: bpt.z + (sgn * L * xd.z) / xl });
+    e.verts = pack3(lv);
     e.hookline = true;
   }
 
@@ -651,12 +655,15 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
         if (c && c.entity && c.kind === 'attrib') e.attribs.push(c.entity as AttribEntity);
       }
     } else if (e.type === 'POLYLINE') {
+      const acc = new PolyAccum();
       for (const ch of childList(p)) {
         const c = parsed.get(ch);
         used.add(ch);
         // 2D 정점의 Z는 파일 값 그대로 둔다(그릴 때는 폴리선 고도를 쓴다 — AutoCAD가 같은 도면을 DXF로 쓸 때도 정점 Z를 그대로 적는다)
-        if (c && c.vertex) e.vertices.push(c.vertex);
+        const v = c?.vertex;
+        if (v) acc.add(v.location.x, v.location.y, v.location.z, v.bulge, v.startWidth, v.endWidth, v.flags, v.tangent, v.faceIndices);
       }
+      Object.assign(e, acc.finish());
     }
     if (p.seqend) used.add(p.seqend);
   };

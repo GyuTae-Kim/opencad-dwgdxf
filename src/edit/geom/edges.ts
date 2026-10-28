@@ -10,6 +10,7 @@ import { entityPath } from './path';
 import { planProj } from './ocs';
 import { explodeEntity } from './explode';
 import { textOutline } from './textjust';
+import { leaderVertices } from '../../core/flat3';
 
 function segs(points: Vec2[], closed: boolean): LinePiece[] {
   const out: LinePiece[] = [];
@@ -39,7 +40,7 @@ export function edgePieces(e: Entity, doc?: CadDocument, depth = 0): Piece[] {
     }
     case 'LEADER':
       return segs(
-        e.vertices.map((v) => ({ x: v.x, y: v.y })),
+        leaderVertices(e).map((v) => ({ x: v.x, y: v.y })),
         false,
       );
     case 'MLINE': {

@@ -7,6 +7,7 @@ import { tableKey } from '../../core/model';
 import { type Mat, identity, multiply, ocsMatrix, rotationZ, scaling, translation } from '../../geom/matrix';
 import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { lwCount, lwVertices } from '../../core/lwpoly';
+import { polyVertices } from '../../core/polyverts';
 
 export const TAU = Math.PI * 2;
 
@@ -404,7 +405,7 @@ function addEntity(ctx: Ctx, e: Entity, src: string, m: Mat, depth: number, chai
     }
     case 'POLYLINE': {
       if (e.kind === 'mesh' || e.kind === 'polyface') return;
-      const vs = e.vertices.filter((v) => !(v.flags & 16));
+      const vs = polyVertices(e).filter((v) => !(v.flags & 16));
       if (vs.length < 2) return;
       const closed = !!(e.flags & 1);
       if (e.kind === '3d') {

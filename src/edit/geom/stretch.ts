@@ -10,6 +10,7 @@
 import type { BlockDef, CadDocument, DimensionEntity, Entity, HatchEntity, MLineEntity, SplineEntity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { bulgeVertices, lwPoints, lwVertices, packBulge, setLwVertices } from '../../core/lwpoly';
+import { polyVertices, setPolyVertices } from '../../core/polyverts';
 import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { type Affine, add, affApply, affInv, affTranslate, ccwSweep, dist, norm, normAngle, pointInPolygon, rot90, sub } from './math';
 import { cloneEntity, freshEntity, makeArc } from './path';
@@ -19,6 +20,9 @@ import { keepIdentity } from './trim';
 import { type EditResult, allocBlockName, mergeResults } from './types';
 import { dimMeasure, updateDimNumber } from './xannot';
 import { layoutArcText } from '../../text/arctext';
+import { hatchEdges, packEdges } from '../../core/hatchedges';
+import { meshVertices, packMesh } from '../../core/meshdata';
+import { leaderVertices, pack3 } from '../../core/flat3';
 
 /** 걸침 영역: 두 점이면 사각형 */
 function polygonOf(crossing: readonly Vec2[]): Vec2[] {
@@ -88,11 +92,12 @@ function keyPoints(e: Entity): Vec2[] {
       return lwPoints(e).map((v) => affApply(pr, v));
     }
     case 'POLYLINE': {
+      const ev = polyVertices(e);
       if (e.kind === '2d') {
         const pr = planProj(e.extrusion, e.elevation);
-        return e.vertices.map((v) => affApply(pr, v.location));
+        return ev.map((v) => affApply(pr, v.location));
       }
-      return e.vertices.filter((v) => !v.faceIndices || v.flags & 64).map((v) => P(v.location));
+      return ev.filter((v) => !v.faceIndices || v.flags & 64).map((v) => P(v.location));
     }
     case 'SPLINE':
       return [...e.controlPoints, ...e.fitPoints].map((p) => P(p));
@@ -129,7 +134,7 @@ function keyPoints(e: Entity): Vec2[] {
     case 'DIMENSION':
       return dimPoints(e).map((k) => k.p);
     case 'LEADER':
-      return e.vertices.map((v) => P(v));
+      return leaderVertices(e).map((v) => P(v));
     case 'MULTILEADER': {
       const out: Vec2[] = [P(e.context.contentBase)];
       for (const ld of e.context.leaders) {
@@ -151,7 +156,7 @@ function keyPoints(e: Entity): Vec2[] {
     case 'MLINE':
       return e.vertices.map((v) => P(v.position));
     case 'MESH':
-      return e.vertices.map((v) => P(v));
+      return meshVertices(e).map((v) => P(v));
     case 'REGION':
     case '3DSOLID':
     case 'BODY':
@@ -232,13 +237,16 @@ function partial(e: Entity, inside: (p: Vec2) => boolean, d: Vec2, doc: CadDocum
       if (e.kind === '2d') {
         const pr = planProj(e.extrusion, e.elevation);
         const inv = affInv(pr)!;
-        r.vertices = e.vertices.map((v) => {
-          const w = affApply(pr, v.location);
-          if (!inside(w)) return { ...v, location: { ...v.location } };
-          const q = affApply(inv, add(w, d));
-          return { ...v, location: { x: q.x, y: q.y, z: v.location.z } };
-        });
-      } else r.vertices = e.vertices.map((v) => ((!v.faceIndices || v.flags & 64) && In(v.location) ? { ...v, location: mv(v.location, d) } : { ...v, location: { ...v.location } }));
+        setPolyVertices(
+          r,
+          polyVertices(e).map((v) => {
+            const w = affApply(pr, v.location);
+            if (!inside(w)) return { ...v, location: { ...v.location } };
+            const q = affApply(inv, add(w, d));
+            return { ...v, location: { x: q.x, y: q.y, z: v.location.z } };
+          }),
+        );
+      } else setPolyVertices(r, polyVertices(e).map((v) => ((!v.faceIndices || v.flags & 64) && In(v.location) ? { ...v, location: mv(v.location, d) } : { ...v, location: { ...v.location } })));
       return { replace: [r] };
     }
     case 'SPLINE':
@@ -247,7 +255,7 @@ function partial(e: Entity, inside: (p: Vec2) => boolean, d: Vec2, doc: CadDocum
       return stretchDimension(e, inside, d, doc, opts);
     case 'LEADER': {
       const r = cloneEntity(e);
-      r.vertices = e.vertices.map((v) => (In(v) ? mv(v, d) : { ...v }));
+      r.verts = pack3(leaderVertices(e).map((v) => (In(v) ? mv(v, d) : { ...v })));
       return { replace: [r] };
     }
     case 'MULTILEADER': {
@@ -285,7 +293,11 @@ function partial(e: Entity, inside: (p: Vec2) => boolean, d: Vec2, doc: CadDocum
       return { replace: [stretchMLine(e, In, d)] };
     case 'MESH': {
       const r = cloneEntity(e);
-      r.vertices = e.vertices.map((v) => (In(v) ? mv(v, d) : { ...v }));
+      r.verts = packMesh(
+        meshVertices(e).map((v) => (In(v) ? mv(v, d) : { ...v })),
+        [],
+        [],
+      ).verts;
       return { replace: [r] };
     }
     case 'OLE2FRAME':
@@ -489,7 +501,7 @@ function hatchPoints(e: HatchEntity): Vec2[] {
   const out: Vec2[] = [];
   for (const p of e.paths) {
     if (p.polyline) for (const v of bulgeVertices(p.polyline.verts)) out.push(affApply(pr, v));
-    for (const ed of p.edges ?? []) {
+    for (const ed of hatchEdges(p)) {
       if (ed.type === 'line') out.push(affApply(pr, ed.start), affApply(pr, ed.end));
       else if (ed.type === 'arc' || ed.type === 'ellipse') out.push(affApply(pr, ed.center));
       else for (const q of ed.fitPoints?.length ? ed.fitPoints : ed.controlPoints) out.push(affApply(pr, q));
@@ -508,12 +520,14 @@ function stretchHatch(e: HatchEntity, inside: (p: Vec2) => boolean, d: Vec2): Ha
   };
   for (const p of r.paths) {
     if (p.polyline) p.polyline.verts = packBulge(bulgeVertices(p.polyline.verts).map((v) => ({ ...v, ...mvp(v) })));
-    if (p.edges)
-      p.edges = p.edges.map((ed) => {
-        if (ed.type === 'line') return { ...ed, start: mvp(ed.start), end: mvp(ed.end) };
-        if (ed.type === 'arc' || ed.type === 'ellipse') return { ...ed, center: mvp(ed.center) };
-        return { ...ed, controlPoints: ed.controlPoints.map(mvp), fitPoints: ed.fitPoints?.map(mvp) };
-      });
+    if (p.edgeData)
+      p.edgeData = packEdges(
+        hatchEdges(p).map((ed) => {
+          if (ed.type === 'line') return { ...ed, start: mvp(ed.start), end: mvp(ed.end) };
+          if (ed.type === 'arc' || ed.type === 'ellipse') return { ...ed, center: mvp(ed.center) };
+          return { ...ed, controlPoints: ed.controlPoints.map(mvp), fitPoints: ed.fitPoints?.map(mvp) };
+        }),
+      );
     p.sources = undefined;
   }
   r.associative = false;

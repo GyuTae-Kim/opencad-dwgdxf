@@ -21,6 +21,7 @@ import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { dialog, form, h } from './ui/dom';
 import type { Pt } from './view';
+import { pack3 } from '../core/flat3';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
@@ -245,7 +246,7 @@ export function registerAnnot2Leader(app: App): void {
         ...props,
         type: 'LEADER',
         dimStyle,
-        vertices: geom.vertices.map((q) => v3(q)),
+        verts: pack3(geom.vertices.map((q) => v3(q))),
         arrowHead: s.arrow !== '_None',
         pathType: s.spline ? 1 : 0,
         creation: annotation?.type === 'MTEXT' ? 0 : annotation?.type === 'TOLERANCE' ? 1 : annotation?.type === 'INSERT' ? 2 : 3,

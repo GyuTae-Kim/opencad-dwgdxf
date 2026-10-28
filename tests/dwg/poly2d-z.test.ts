@@ -10,6 +10,7 @@ import { createNewDocument } from '../../src/core/newdoc';
 import { readDwg, writeDwg } from '../../src/io/dwg';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
+import { packPoly, polyVertices } from '../../src/core/polyverts';
 
 let seq = 0x7c00;
 const h = () => (seq++).toString(16).toUpperCase();
@@ -26,7 +27,7 @@ describe('2D POLYLINE 정점 Z', () => {
     kind: '2d',
     flags: 0,
     elevation,
-    vertices: [P(0, 0, z), P(10, 0, z), P(10, 10, z)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 0 })),
+    ...packPoly([P(0, 0, z), P(10, 0, z), P(10, 10, z)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 0 }))),
     defaultStartWidth: 0,
     defaultEndWidth: 0,
     mCount: 0,
@@ -41,7 +42,7 @@ describe('2D POLYLINE 정점 Z', () => {
     const b = poly(6, 0);
     const doc = createNewDocument('metric');
     ms(doc).push(a, b);
-    const zs = (d: CadDocument, e: PolylineEntity) => find<PolylineEntity>(d, e.handle).vertices.map((v) => v.location.z);
+    const zs = (d: CadDocument, e: PolylineEntity) => polyVertices(find<PolylineEntity>(d, e.handle)).map((v) => v.location.z);
     for (const back of [readDxf(writeDxf(doc, { version: 'AC1032' }).data), readDxf(writeDxf(doc, { version: 'AC1009' }).data), readDwg(writeDwg(doc, { version: 'AC1032' }).data), readDwg(writeDwg(doc, { version: 'AC1015' }).data)]) {
       expect(zs(back, a)).toEqual([-4.25, -4.25, -4.25]);
       expect(zs(back, b)).toEqual([0, 0, 0]);

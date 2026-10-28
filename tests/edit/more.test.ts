@@ -17,6 +17,9 @@ import * as G from '../../src/edit/geom';
 import { entityPath } from '../../src/edit/geom/path';
 import { pathNearest } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, circle, deg, line, lw, near, newDoc, renders, text, xline } from './helpers';
+import { packPoly, polyVertices } from '../../src/core/polyverts';
+import { packEdges } from '../../src/core/hatchedges';
+import { hatchEdges } from '../../src/core/hatchedges';
 
 const base = (h: string) => ({ ...entityDefaults(), handle: h });
 const all = (r: G.EditResult) => [...(r.replace ?? []), ...(r.add ?? [])];
@@ -132,7 +135,7 @@ describe('모따기·모깎기: 구성선·3D 폴리선', () => {
       ...base('P3'),
       kind: '3d',
       flags: 8,
-      vertices: [P(0, 10), P(0, 0)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })),
+      ...packPoly([P(0, 10), P(0, 0)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))),
       elevation: 0,
       defaultStartWidth: 0,
       defaultEndWidth: 0,
@@ -145,7 +148,7 @@ describe('모따기·모깎기: 구성선·3D 폴리선', () => {
     const r = G.fillet(p, V(0, 5), line(0, 0, 10, 0), V(5, 0), 2);
     const np = r.replace!.find((e) => e.handle === 'P3') as PolylineEntity;
     expect(np.kind).toBe('3d');
-    near(np.vertices.at(-1)!.location, P(0, 2));
+    near(polyVertices(np).at(-1)!.location, P(0, 2));
   });
 });
 
@@ -194,13 +197,13 @@ describe('주석 객체: 신축·그립·분해', () => {
       patternScale: 1,
       patternDouble: false,
       elevation: 0,
-      paths: [{ flags: 1, edges: [{ type: 'line', start: V(0, 0), end: V(5, 0) }, { type: 'line', start: V(5, 0), end: V(5, 5) }, { type: 'line', start: V(5, 5), end: V(0, 0) }] }],
+      paths: [{ flags: 1, edgeData: packEdges([{ type: 'line', start: V(0, 0), end: V(5, 0) }, { type: 'line', start: V(5, 0), end: V(5, 5) }, { type: 'line', start: V(5, 5), end: V(0, 0) }]) }],
       patternLines: [],
       pixelSize: 0,
       seedPoints: [],
     };
     const hg = G.gripMove(h, 'p0.1', V(7, 0), doc).replace![0] as HatchEntity;
-    const ed = hg.paths[0]!.edges!;
+    const ed = hatchEdges(hg.paths[0]!);
     expect(ed[1]!.type === 'line' && ed[1]!.start.x).toBe(7);
     expect(ed[0]!.type === 'line' && ed[0]!.end.x).toBe(7);
     renders(doc, [r, hg]);

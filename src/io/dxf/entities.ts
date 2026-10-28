@@ -29,7 +29,6 @@ import type {
   MeshEntity,
   Ole2FrameEntity,
   PointEntity,
-  PolyVertex,
   RawTag,
   PolylineEntity,
   ShapeEntity,
@@ -47,6 +46,8 @@ import type {
   XLineEntity,
 } from '../../core/model';
 import { BYLAYER, SHARED_BYLAYER_COLOR, entityDefaults } from '../../core/model';
+import type { PolyAccum } from '../../core/polyverts';
+import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../core/hatchedges';
 import { rawColorToCad } from '../../core/color';
 import type { DxfRecord, TagValue } from './records';
 import { DEG, Tags, handle, hexToBytes, int, name, num, parseColor, parseDimOverrides, parseXData, str } from './tagutil';
@@ -336,7 +337,12 @@ function polylineHead(c: Common): PolylineEntity {
     type: 'POLYLINE',
     kind,
     flags,
-    vertices: [],
+    verts: [],
+    bulges: undefined,
+    widths: undefined,
+    vflags: undefined,
+    tangents: undefined,
+    faceRecs: undefined,
     elevation: t.point(10).z,
     defaultStartWidth: t.num(40),
     defaultEndWidth: t.num(41),
@@ -350,24 +356,21 @@ function polylineHead(c: Common): PolylineEntity {
   return e;
 }
 
-function vertex(c: Common, defaults?: { startWidth: number; endWidth: number }): PolyVertex {
+/** VERTEX 하나를 평탄 정점 자료에 더한다(정점 객체를 만들지 않는다) */
+function vertex(c: Common, acc: PolyAccum, defaults?: { startWidth: number; endWidth: number }): void {
   const t = c.tags;
   const flags = t.int(70);
+  const p = t.point(10);
   // 폭이 적히지 않은 정점은 POLYLINE의 기본 폭을 쓴다
-  const v: PolyVertex = {
-    location: t.point(10),
-    bulge: t.num(42),
-    startWidth: t.has(40) ? t.num(40) : (defaults?.startWidth ?? 0),
-    endWidth: t.has(41) ? t.num(41) : (defaults?.endWidth ?? 0),
-    flags,
-  };
-  if (flags & 2 && t.has(50)) v.tangent = t.num(50) * DEG;
+  const startWidth = t.has(40) ? t.num(40) : (defaults?.startWidth ?? 0);
+  const endWidth = t.has(41) ? t.num(41) : (defaults?.endWidth ?? 0);
+  const tangent = flags & 2 && t.has(50) ? t.num(50) * DEG : undefined;
+  let face: number[] | undefined;
   if (t.has(71)) {
-    const idx = [t.int(71), t.int(72), t.int(73), t.int(74)];
-    while (idx.length && idx[idx.length - 1] === 0) idx.pop();
-    v.faceIndices = idx;
+    face = [t.int(71), t.int(72), t.int(73), t.int(74)];
+    while (face.length && face[face.length - 1] === 0) face.pop();
   }
-  return v;
+  acc.add(p.x, p.y, p.z, t.num(42), startWidth, endWidth, flags, tangent, face);
 }
 
 function spline(c: Common): SplineEntity {
@@ -688,13 +691,18 @@ function dimension(c: Common, subtype?: DimensionEntity['subtype']): DimensionEn
 
 function leader(c: Common): LeaderEntity {
   const t = c.tags;
-  const vertices: Vec3[] = [];
-  for (let i = 0; i < t.length; i++) if (t.codes[i] === 10) vertices.push(t.pointAt(i));
+  // 정점은 평탄 좌표로(src/core/flat3.ts)
+  const verts: number[] = [];
+  for (let i = 0; i < t.length; i++)
+    if (t.codes[i] === 10) {
+      const p = t.pointAt(i);
+      verts.push(p.x, p.y, p.z);
+    }
   const e = {
     ...c.base,
     type: 'LEADER',
     dimStyle: name(t.str(3, 'Standard')),
-    vertices,
+    verts: verts.slice(),
     arrowHead: t.int(71, 1) === 1,
     pathType: t.int(72),
     creation: t.int(73, 3),
@@ -1197,7 +1205,8 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
           ne = int(at(i));
           i++;
         }
-        const edges: HatchEdge[] = [];
+        // 모서리는 객체 없이 수 배열 기록으로(src/core/hatchedges.ts)
+        const edges: number[] = [];
         for (let k = 0; k < ne && i < n; k++) {
           if (codes[i] !== 72) break;
           const et = int(at(i));
@@ -1207,7 +1216,7 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
             i += 2;
             const en = codes[i] === 11 ? p2At(i) : { x: 0, y: 0 };
             i += 2;
-            edges.push({ type: 'line', start: s, end: en });
+            edges.push(EDGE_LINE, s.x, s.y, en.x, en.y);
           } else if (et === 2) {
             let center = { x: 0, y: 0 };
             let radius = 0;
@@ -1229,7 +1238,7 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
               } else break;
             }
             const [s0, e0] = ccw ? [sa, ea] : [360 - ea, 360 - sa];
-            edges.push({ type: 'arc', center, radius, startAngle: s0 * DEG, endAngle: e0 * DEG, ccw });
+            edges.push(EDGE_ARC, center.x, center.y, radius, s0 * DEG, e0 * DEG, ccw ? 1 : 0);
           } else if (et === 3) {
             let center = { x: 0, y: 0 };
             let major = { x: 1, y: 0 };
@@ -1255,7 +1264,7 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
               } else break;
             }
             const [s0, e0] = ccw ? [sa, ea] : [360 - ea, 360 - sa];
-            edges.push({ type: 'ellipse', center, majorAxis: major, ratio, startAngle: s0 * DEG, endAngle: e0 * DEG, ccw });
+            edges.push(EDGE_ELLIPSE, center.x, center.y, major.x, major.y, ratio, s0 * DEG, e0 * DEG, ccw ? 1 : 0);
           } else if (et === 4) {
             const sp = {
               type: 'spline' as const,
@@ -1300,12 +1309,12 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
             }
             if (!sp.weights!.length) delete sp.weights;
             if (!sp.fitPoints!.length) delete sp.fitPoints;
-            edges.push(sp);
+            packEdge(sp, edges);
           } else {
             break;
           }
         }
-        path.edges = edges;
+        path.edgeData = edges.slice();
       }
       // 연관 경계 객체
       if (codes[i] === 97) {
@@ -1624,9 +1633,10 @@ function table(c: Common, version: string): TableEntity {
 function mesh(c: Common): MeshEntity {
   const t = c.tags;
   const codes = t.codes;
-  const vertices: Vec3[] = [];
-  const faces: number[][] = [];
-  const edges: [number, number][] = [];
+  // 정점·면·모서리는 수 배열로(src/core/meshdata.ts)
+  const verts: number[] = [];
+  const faceData: number[] = [];
+  const edgePairs: number[] = [];
   let i = 0;
   const n = codes.length;
   let subdivision = 0;
@@ -1638,7 +1648,8 @@ function mesh(c: Common): MeshEntity {
       i++;
       for (let k = 0; k < nv && i < n; k++) {
         if (codes[i] !== 10) break;
-        vertices.push(t.pointAt(i));
+        const p = t.pointAt(i);
+        verts.push(p.x, p.y, p.z);
         i += 3;
       }
       i--;
@@ -1650,17 +1661,18 @@ function mesh(c: Common): MeshEntity {
       i--;
       for (let k = 0; k < list.length; ) {
         const cnt = list[k]!;
-        faces.push(list.slice(k + 1, k + 1 + cnt));
+        const f = list.slice(k + 1, k + 1 + cnt);
+        faceData.push(f.length, ...f);
         k += cnt + 1;
       }
     } else if (code === 94) {
       const ne = int(t.values[i]);
       i++;
-      for (let k = 0; k < ne && i + 1 < n && codes[i] === 90; k++, i += 2) edges.push([int(t.values[i]), int(t.values[i + 1])]);
+      for (let k = 0; k < ne && i + 1 < n && codes[i] === 90; k++, i += 2) edgePairs.push(int(t.values[i]), int(t.values[i + 1]));
       i--;
     }
   }
-  return { ...c.base, type: 'MESH', vertices, faces, edges, subdivision } as MeshEntity;
+  return { ...c.base, type: 'MESH', verts: verts.slice(), faceData: faceData.slice(), edgePairs: edgePairs.slice(), subdivision } as MeshEntity;
 }
 
 function underlay(c: Common, type: UnderlayEntity['type']): UnderlayEntity {
@@ -1832,7 +1844,7 @@ export function parseEntity(rec: DxfRecord, ctx: EntityContext): Entity | null {
   }
 }
 
-/** VERTEX 레코드 → 정점 */
-export function parseVertex(rec: DxfRecord, defaults?: { startWidth: number; endWidth: number }): PolyVertex {
-  return vertex(splitCommon(rec), defaults);
+/** VERTEX 레코드 → 평탄 정점 자료에 더하기 */
+export function parseVertex(rec: DxfRecord, acc: PolyAccum, defaults?: { startWidth: number; endWidth: number }): void {
+  vertex(splitCommon(rec), acc, defaults);
 }

@@ -19,6 +19,7 @@ import { entityPath } from '../../src/edit/geom/path';
 import { pathNearest } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, arc, circle, deg, fitSpline, line, lw, mtext, near, newDoc, renders, spline, text } from './helpers';
 import { bulgeVertices, lwVertices, packBulge } from '../../src/core/lwpoly';
+import { leaderVertices, pack3 } from '../../src/core/flat3';
 
 const doc = newDoc();
 const win = [V(4, -1), V(20, 20)]; // x ≥ 4 쪽을 덮는 걸침 창
@@ -145,9 +146,9 @@ describe('stretch', () => {
     renders(d, [o]);
   });
   it('지시선·해치', () => {
-    const ld: LeaderEntity = { type: 'LEADER', ...entityDefaults(), handle: 'LD', dimStyle: 'Standard', vertices: [P(0, 0), P(5, 5)], arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 };
+    const ld: LeaderEntity = { type: 'LEADER', ...entityDefaults(), handle: 'LD', dimStyle: 'Standard', verts: pack3([P(0, 0), P(5, 5)]), arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 };
     const o = stretch([ld], win, D, doc).replace![0] as LeaderEntity;
-    near(o.vertices[1]!, P(8, 6));
+    near(leaderVertices(o)[1]!, P(8, 6));
     const h: HatchEntity = {
       type: 'HATCH',
       ...entityDefaults(),

@@ -2,6 +2,7 @@
 import type { BlockDef, CadDocument, Entity, LwVertex, Vec2, Vec3 } from '../../src/core/model';
 import { MODEL_SPACE, createDocument, entityDefaults } from '../../src/core/model';
 import { packLw } from '../../src/core/lwpoly';
+import { packPoly } from '../../src/core/polyverts';
 
 export const P = (x: number, y: number, z = 0): Vec3 => ({ x, y, z });
 export const V = (x: number, y: number): Vec2 => ({ x, y });
@@ -48,7 +49,7 @@ export function poly2d(pts: [number, number, number?][], closed = false): Entity
     ...base(),
     kind: '2d',
     flags: closed ? 1 : 0,
-    vertices: pts.map(([x, y, b]) => ({ location: P(x, y), bulge: b ?? 0, startWidth: 0, endWidth: 0, flags: 0 })),
+    ...packPoly(pts.map(([x, y, b]) => ({ location: P(x, y), bulge: b ?? 0, startWidth: 0, endWidth: 0, flags: 0 }))),
     elevation: 0,
     defaultStartWidth: 0,
     defaultEndWidth: 0,

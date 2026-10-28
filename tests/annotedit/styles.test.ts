@@ -16,6 +16,7 @@ import { registerFieldCommands, setFieldEval, updateFieldsOn } from '../../src/a
 import { encodeFieldXData } from '../../src/edit/field/store';
 import { activeEditor } from '../../src/app/textedit/editor';
 import { makeApp, settle } from '../polish/real-app';
+import { leaderVertices, pack3 } from '../../src/core/flat3';
 
 vi.mock('../../src/app/view', async (orig) => ({ ...(await orig<object>()), CadView: (await import('../polish/fakes')).FakeView }));
 vi.mock('../../src/app/commandline', async (orig) => ({ ...(await orig<object>()), CommandLine: (await import('../polish/fakes')).FakeCommandLine }));
@@ -217,16 +218,16 @@ describe('지시선 연관·치수 문자 각도·FIELDEVAL', () => {
     const h = setup();
     registerLeaderAssoc(h.app);
     const note = add(h, mtext('주석', 10, 10));
-    const ld = add(h, { ...entityDefaults(), type: 'LEADER', handle: '', dimStyle: 'Standard', vertices: [{ x: 0, y: 0, z: 0 }, { x: 8, y: 9, z: 0 }], arrowHead: true, pathType: 0, creation: 0, hooklineDirection: 0, hookline: false, textHeight: 2.5, textWidth: 0, horizontalDirection: { x: 1, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, annotation: note.handle } as LeaderEntity);
+    const ld = add(h, { ...entityDefaults(), type: 'LEADER', handle: '', dimStyle: 'Standard', verts: pack3([{ x: 0, y: 0, z: 0 }, { x: 8, y: 9, z: 0 }]), arrowHead: true, pathType: 0, creation: 0, hooklineDirection: 0, hookline: false, textHeight: 2.5, textWidth: 0, horizontalDirection: { x: 1, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, annotation: note.handle } as LeaderEntity);
     const n2 = { ...structuredClone(note), reactors: [ld.handle] };
     h.st.session.commit({ label: 'LINK', ops: [{ kind: 'modify', block: h.st.space, before: note, after: n2 }] });
     const before = h.doc.entityIndex.get(note.handle)!;
     h.st.session.commit({ label: 'MOVE', ops: [{ kind: 'modify', block: h.st.space, before, after: { ...structuredClone(before), insert: { x: 15, y: 12, z: 0 } } as Entity }] });
     const moved = h.doc.entityIndex.get(ld.handle) as LeaderEntity;
-    expect(moved.vertices[1]).toMatchObject({ x: 13, y: 11 });
-    expect(moved.vertices[0]).toMatchObject({ x: 0, y: 0 });
+    expect(leaderVertices(moved)[1]).toMatchObject({ x: 13, y: 11 });
+    expect(leaderVertices(moved)[0]).toMatchObject({ x: 0, y: 0 });
     h.st.session.undo();
-    expect((h.doc.entityIndex.get(ld.handle) as LeaderEntity).vertices[1]).toMatchObject({ x: 8, y: 9 });
+    expect(leaderVertices(h.doc.entityIndex.get(ld.handle) as LeaderEntity)[1]).toMatchObject({ x: 8, y: 9 });
   });
 
   it('DIMLINEAR 각도(A): 치수 문자 각도(53)', async () => {

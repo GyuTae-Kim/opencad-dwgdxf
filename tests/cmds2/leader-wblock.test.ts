@@ -13,6 +13,7 @@ import { registerDashWblockCommand, wblockTarget } from '../../src/app/wblockcmd
 import { takeErased } from '../../src/app/util2-ui';
 import { circle, line } from '../edit/make';
 import { makeHarness, modelEntities } from './harness';
+import { leaderVertices } from '../../src/core/flat3';
 
 function addBlock(doc: CadDocument, name: string): void {
   const def: BlockDef = { name, handle: 'C1', recordHandle: 'C2', basePoint: { x: 0, y: 0, z: 0 }, flags: 0, entities: [{ ...line(0, 0, 1, 1), owner: 'C2' }] };
@@ -42,7 +43,7 @@ describe('LEADER', () => {
     expect(mt!.reactors).toEqual([ld!.handle]);
     expect(ld!.creation).toBe(0);
     expect(ld!.hookline).toBe(true);
-    expect(ld!.vertices.length).toBe(3);
+    expect(leaderVertices(ld!).length).toBe(3);
     expect(ld!.arrowHead).toBe(true);
     expect(h.prompts.slice(0, 5)).toEqual([
       '지시선 시작점 지정:',
@@ -60,7 +61,7 @@ describe('LEADER', () => {
     const [ld] = modelEntities(h.doc, 'LEADER');
     expect(ld!.pathType).toBe(1);
     expect(ld!.arrowHead).toBe(false);
-    expect(ld!.vertices.map((v) => [v.x, v.y])).toEqual([
+    expect(leaderVertices(ld!).map((v) => [v.x, v.y])).toEqual([
       [0, 0],
       [5, 0],
       [12, 3],

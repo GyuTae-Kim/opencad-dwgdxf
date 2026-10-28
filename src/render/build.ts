@@ -70,6 +70,7 @@ import { mlineDrawing } from '../edit/mline/draw';
 import { toleranceLayout } from '../edit/annot/tolerance';
 import { breakRuns } from '../edit/annot/mleader';
 import { type AnnoDisplay, annoDisplayFor } from '../edit/annoscale/view';
+import { leaderVertices } from '../core/flat3';
 
 export interface BuildOptions {
   text: TextEngine;
@@ -1149,15 +1150,23 @@ export class SceneBuilder {
       }
       case 'MESH': {
         const r = this.resolve(e, ctx);
-        const v = e.vertices.map((p) => applyXY(ctx.m, p.x, p.y, p.z));
-        if (e.edges.length) for (const [a, b] of e.edges) this.out.segment(v[a]!.x, v[a]!.y, v[b]!.x, v[b]!.y, r.style);
-        else
-          for (const f of e.faces)
-            for (let i = 0; i < f.length; i++) {
-              const a = v[f[i]!];
-              const b = v[f[(i + 1) % f.length]!];
+        // 평탄 자료를 바로 읽는다(src/core/meshdata.ts)
+        const V = e.verts;
+        const v: { x: number; y: number }[] = [];
+        for (let i = 0; i + 2 < V.length; i += 3) v.push(applyXY(ctx.m, V[i]!, V[i + 1]!, V[i + 2]!));
+        const E = e.edgePairs;
+        if (E.length >= 2) for (let k = 0; k + 1 < E.length; k += 2) this.out.segment(v[E[k]!]!.x, v[E[k]!]!.y, v[E[k + 1]!]!.x, v[E[k + 1]!]!.y, r.style);
+        else {
+          const F = e.faceData;
+          for (let k = 0; k < F.length; k += F[k]! + 1) {
+            const n = F[k]!;
+            for (let i = 0; i < n; i++) {
+              const a = v[F[k + 1 + i]!];
+              const b = v[F[k + 1 + ((i + 1) % n)]!];
               if (a && b) this.out.segment(a.x, a.y, b.x, b.y, r.style);
             }
+          }
+        }
         return;
       }
       case 'OLE2FRAME':
@@ -1365,34 +1374,49 @@ export class SceneBuilder {
 
   private polyline(e: Extract<Entity, { type: 'POLYLINE' }>, ctx: Ctx): void {
     const r = this.resolve(e, ctx);
+    // 정점 평탄 좌표를 바로 읽는다(src/core/polyverts.ts). 틀 정점(16)은 그리지 않는다
+    const V = e.verts;
+    const F = e.vflags;
+    const nAll = (V.length / 3) | 0;
     if (e.kind === '2d') {
       const m = this.ocsM(ctx, e.extrusion);
-      const vs = e.vertices.filter((v) => !(v.flags & 16));
-      const wide = e.defaultStartWidth > 0 || e.defaultEndWidth > 0 || vs.some((v) => v.startWidth > 0 || v.endWidth > 0);
+      const B = e.bulges;
+      const W = e.widths;
+      let wide = e.defaultStartWidth > 0 || e.defaultEndWidth > 0;
+      if (!wide && W) {
+        for (let i = 0; i < nAll; i++) {
+          if (F && F[i]! & 16) continue;
+          if (W[i * 2]! > 0 || W[i * 2 + 1]! > 0) {
+            wide = true;
+            break;
+          }
+        }
+      }
       const xyb: number[] = [];
-      for (const v of vs) xyb.push(v.location.x, v.location.y, v.bulge);
-      let ws: number[] | null = null;
-      if (wide) {
-        ws = [];
-        for (const v of vs) ws.push(v.startWidth, v.endWidth);
+      let ws: number[] | null = wide ? [] : null;
+      let n = 0;
+      for (let i = 0; i < nAll; i++) {
+        if (F && F[i]! & 16) continue;
+        xyb.push(V[i * 3]!, V[i * 3 + 1]!, B ? B[i]! : 0);
+        if (ws) ws.push(W ? W[i * 2]! : 0, W ? W[i * 2 + 1]! : 0);
+        n++;
       }
       // 맞춤(curve-fit) 폴리선도 정점의 볼록도가 실제 호다
-      this.polyCommon(xyb, vs.length, ws, (e.flags & 1) !== 0, (e.flags & 128) !== 0, m, e.elevation, r, ctx);
+      this.polyCommon(xyb, n, ws, (e.flags & 1) !== 0, (e.flags & 128) !== 0, m, e.elevation, r, ctx);
       return;
     }
     if (e.kind === '3d') {
-      const vs = e.vertices.filter((v) => !(v.flags & 16));
-      const pts = this.xf3(
-        ctx.m,
-        vs.flatMap((v) => [v.location.x, v.location.y, v.location.z]),
-      );
+      const flat: number[] = [];
+      for (let i = 0; i < nAll; i++) if (!(F && F[i]! & 16)) flat.push(V[i * 3]!, V[i * 3 + 1]!, V[i * 3 + 2]!);
+      const pts = this.xf3(ctx.m, flat);
       this.stroke(pts, (e.flags & 1) !== 0, r, ctx);
       return;
     }
     if (e.kind === 'mesh') {
       const M = e.mCount;
       const N = e.nCount;
-      const v = e.vertices.map((q) => applyXY(ctx.m, q.location.x, q.location.y, q.location.z));
+      const v: { x: number; y: number }[] = [];
+      for (let i = 0; i < nAll; i++) v.push(applyXY(ctx.m, V[i * 3]!, V[i * 3 + 1]!, V[i * 3 + 2]!));
       if (M * N > v.length || M < 1 || N < 1) return;
       const closedM = (e.flags & 1) !== 0;
       const closedN = (e.flags & 32) !== 0;
@@ -1410,12 +1434,14 @@ export class SceneBuilder {
         }
       return;
     }
-    // 폴리페이스
-    const coords = e.vertices.filter((v) => v.flags & 64 || !v.faceIndices);
-    const pts = coords.map((q) => applyXY(ctx.m, q.location.x, q.location.y, q.location.z));
-    for (const f of e.vertices) {
-      if (!f.faceIndices || f.flags & 64) continue;
-      const idx = f.faceIndices;
+    // 폴리페이스: 좌표 정점(메시 정점 플래그 64이거나 면 번호가 없는 것)과 면 레코드
+    const FR = e.faceRecs;
+    const pts: { x: number; y: number }[] = [];
+    for (let i = 0; i < nAll; i++) if ((F && F[i]! & 64) || !FR?.[i]) pts.push(applyXY(ctx.m, V[i * 3]!, V[i * 3 + 1]!, V[i * 3 + 2]!));
+    if (!FR) return;
+    for (let k = 0; k < nAll; k++) {
+      const idx = FR[k];
+      if (!idx || (F && F[k]! & 64)) continue;
       for (let i = 0; i < idx.length; i++) {
         const a = idx[i]!;
         if (a < 0) continue; // 숨긴 모서리
@@ -1828,12 +1854,13 @@ export class SceneBuilder {
   private leader(e: LeaderEntity, ctx: Ctx): void {
     const r = this.resolve(e, ctx);
     const v = this.dimVars(e.dimStyle, e.overrides, { subtype: 'LEADER' });
-    if (e.vertices.length < 2) return;
+    const nv = (e.verts.length / 3) | 0;
+    if (nv < 2) return;
     let pts3: number[];
-    if (e.pathType === 1 && e.vertices.length > 2) {
-      const s = interpolateFitPoints(e.vertices);
+    if (e.pathType === 1 && nv > 2) {
+      const s = interpolateFitPoints(leaderVertices(e));
       pts3 = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, this.localTol(ctx.m));
-    } else pts3 = e.vertices.flatMap((p) => [p.x, p.y, p.z]);
+    } else pts3 = e.verts.slice(0, nv * 3);
     const pts = this.xf3(ctx.m, pts3);
     let color = e.color;
     if (e.overrides && e.overrides[176] !== undefined) color = { aci: Number(e.overrides[176]) };

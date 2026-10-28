@@ -8,6 +8,7 @@ import { ccwSweep, dist, rot90 } from './math';
 import { domain, normalizeNurbs } from './nurbs';
 import { bulgePieces, makePolyline } from './path';
 import { bulgeVertices } from '../../core/lwpoly';
+import { hatchEdges } from '../../core/hatchedges';
 
 /** 해치 모서리 → 조각 */
 export function hatchEdgePiece(ed: HatchEdge): Piece | null {
@@ -48,7 +49,7 @@ export function hatchPathPieces(path: HatchPath): Piece[] {
     const vs = bulgeVertices(path.polyline.verts).map((v) => ({ x: v.x, y: v.y, bulge: v.bulge, sw: 0, ew: 0 }));
     return bulgePieces(vs, true, [1, 0, 0, 1, 0, 0]);
   }
-  const raw = (path.edges ?? []).map(hatchEdgePiece).filter((p): p is Piece => !!p && pieceLength(p) > 0);
+  const raw = hatchEdges(path).map(hatchEdgePiece).filter((p): p is Piece => !!p && pieceLength(p) > 0);
   const out: Piece[] = [];
   for (const p of raw) {
     const prev = out[out.length - 1];

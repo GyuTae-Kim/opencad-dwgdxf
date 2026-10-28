@@ -14,7 +14,6 @@ import type {
   MLeaderEntity,
   MTextEntity,
   PolylineEntity,
-  PolyVertex,
   SplineEntity,
   TableEntity,
   TextEntity,
@@ -31,9 +30,13 @@ import { eedOf, wcolor } from './common';
 import { lwIndex } from './util';
 import { tableKey } from '../../../core/model';
 import { lwCount, lwHasBulge, vertCount } from '../../../core/lwpoly';
+import { polyBulge, polyCount, polyEndWidth, polyFace, polyFlags, polyLoc, polyStartWidth, polyTangent } from '../../../core/polyverts';
 import { tableCellsOut } from '../../tablecells';
 import { tableOld, tableR24, writeIO } from '../tablecodec';
 import { tableToOld, tableToR24 } from '../tablemodel';
+import { hatchEdges } from '../../../core/hatchedges';
+import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../../core/meshdata';
+import { leaderVertices } from '../../../core/flat3';
 
 const Z: Vec3 = { x: 0, y: 0, z: 1 };
 const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
@@ -547,23 +550,25 @@ export class EntityWriter {
         d.BS(2);
         d.B(0);
         d.BL(e.subdivision);
-        d.BL(e.vertices.length);
-        for (const v of e.vertices) d.BD3(v);
+        const faces = meshFaces(e);
+        const edges = meshEdges(e);
+        d.BL(meshVertexCount(e));
+        for (const v of meshVertices(e)) d.BD3(v);
         let nf = 0;
-        for (const f of e.faces) nf += 1 + f.length;
+        for (const f of faces) nf += 1 + f.length;
         d.BL(nf);
-        for (const f of e.faces) {
+        for (const f of faces) {
           d.BL(f.length);
           for (const i of f) d.BL(i);
         }
-        d.BL(e.edges.length);
-        for (const [a, b] of e.edges) {
+        d.BL(edges.length);
+        for (const [a, b] of edges) {
           d.BL(a);
           d.BL(b);
         }
         // 주름 값: 모서리마다 0
-        d.BL(e.edges.length);
-        for (let i = 0; i < e.edges.length; i++) d.BD(0);
+        d.BL(edges.length);
+        for (let i = 0; i < edges.length; i++) d.BD(0);
         d.BL(0); // 그 뒤 개수(AutoCAD 표본은 0)
         break;
       }
@@ -932,8 +937,8 @@ export class EntityWriter {
     } else if (e.kind === 'polyface') {
       let nv = 0;
       let nf = 0;
-      for (const v of e.vertices) {
-        if (v.faceIndices) nf++;
+      for (let i = 0, n = polyCount(e); i < n; i++) {
+        if (polyFace(e, i)) nf++;
         else nv++;
       }
       d.BS(e.mCount || nv);
@@ -956,36 +961,41 @@ export class EntityWriter {
     for (let i = 0; i < vs.length; i++) {
       const prev = ver < R2004 && i > 0 ? vs[i - 1] : 0;
       const next = ver < R2004 ? (i + 1 < vs.length ? vs[i + 1] : pe.seqend!) : 0;
-      this.vertex(e, e.vertices[i], vs[i], { owner: h, mode: 0, prev, next });
+      this.vertex(e, i, vs[i], { owner: h, mode: 0, prev, next });
     }
     this.seqend(e, pe.seqend!, h, ver < R2004 ? (vs[vs.length - 1] ?? 0) : 0);
   }
 
-  private vertex(p: PolylineEntity, v: PolyVertex, h: number, l: Links): void {
+  /** 정점 i(평탄 좌표에서 바로 읽는다) */
+  private vertex(p: PolylineEntity, i: number, h: number, l: Links): void {
     const d = this.ow.dat;
     const base = { ...p, xdata: undefined, xdict: undefined, reactors: undefined } as Entity;
+    const flags = polyFlags(p, i);
+    const face = p.kind === 'polyface' ? polyFace(p, i) : undefined;
     if (p.kind === '2d') {
       this.ow.begin(T.VERTEX_2D, h, null);
       this.common(base, l);
-      d.RC(v.flags & 0xff);
-      d.BD3(v.location);
-      if (v.startWidth === v.endWidth && v.startWidth !== 0) d.BD(-v.startWidth);
+      d.RC(flags & 0xff);
+      d.BD3(polyLoc(p, i));
+      const sw = polyStartWidth(p, i);
+      const ew = polyEndWidth(p, i);
+      if (sw === ew && sw !== 0) d.BD(-sw);
       else {
-        d.BD(v.startWidth);
-        d.BD(v.endWidth);
+        d.BD(sw);
+        d.BD(ew);
       }
-      d.BD(v.bulge);
+      d.BD(polyBulge(p, i));
       if (this.ver >= R2010) d.BL(0);
-      d.BD(v.tangent ?? 0);
-    } else if (p.kind === 'polyface' && v.faceIndices) {
+      d.BD(polyTangent(p, i) ?? 0);
+    } else if (face) {
       this.ow.begin(T.VERTEX_PFACE_FACE, h, null);
       this.common(base, l);
-      for (let i = 0; i < 4; i++) d.BS(v.faceIndices[i] ?? 0);
+      for (let k = 0; k < 4; k++) d.BS(face[k] ?? 0);
     } else {
       this.ow.begin(p.kind === '3d' ? T.VERTEX_3D : p.kind === 'mesh' ? T.VERTEX_MESH : T.VERTEX_PFACE, h, null);
       this.common(base, l);
-      d.RC(v.flags & 0xff);
-      d.BD3(v.location);
+      d.RC(flags & 0xff);
+      d.BD3(polyLoc(p, i));
     }
     this.done(h);
   }
@@ -1198,7 +1208,7 @@ export class EntityWriter {
     this.common(e, l);
     const d = this.ow.dat;
     // 읽기가 덧붙인 걸이선 점(마지막 점 바로 앞)을 뺀다
-    let verts = e.vertices;
+    let verts = leaderVertices(e);
     if (e.hookline && verts.length >= 3) verts = [...verts.slice(0, verts.length - 2), verts[verts.length - 1]];
     d.B(0);
     d.BS(e.creation);
@@ -1277,7 +1287,7 @@ export class EntityWriter {
       if (flags & 4) anyDerived = true;
       d.BL(flags);
       if (!(flags & 2)) {
-        const edges = p.edges ?? [];
+        const edges = hatchEdges(p);
         d.BL(edges.length);
         for (const ed of edges) {
           if (ed.type === 'line') {

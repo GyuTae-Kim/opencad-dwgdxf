@@ -15,6 +15,7 @@ import { type EditOp, EditSession } from '../../src/edit/session';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { writeDwg } from '../../src/io/dwg/writer/index';
 import { readCadFile } from '../../src/io/index';
+import { leaderVertices, pack3 } from '../../src/core/flat3';
 
 const P = (x: number, y: number) => ({ x, y, z: 0 });
 
@@ -73,7 +74,7 @@ function build(): { doc: CadDocument; handles: Record<string, string> } {
     type: 'LEADER',
     handle: s.newHandle(),
     dimStyle: 'ISO-25',
-    vertices: lv.vertices.map((q) => P(q.x, q.y)),
+    verts: pack3(lv.vertices.map((q) => P(q.x, q.y))),
     arrowHead: true,
     pathType: 0,
     creation: 0,
@@ -148,8 +149,8 @@ describe('주석 편집 기록 왕복', () => {
       const ld = get(handles.leader) as LeaderEntity;
       expect(ld.annotation).toBe(handles.mtext);
       expect(ld.creation).toBe(0);
-      expect(ld.vertices.length).toBe(3);
-      expect(ld.vertices[1]).toMatchObject({ x: 217.5, y: 30 });
+      expect(leaderVertices(ld).length).toBe(3);
+      expect(leaderVertices(ld)[1]).toMatchObject({ x: 217.5, y: 30 });
       expect((get(handles.mtext) as MTextEntity).reactors).toContain(handles.leader);
       // 공차
       expect((get(handles.tol) as ToleranceEntity).text).toBe((orig(handles.tol) as ToleranceEntity).text);

@@ -5,6 +5,7 @@
 import type { CadDocument, Entity, PolyVertex, SplineEntity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { lwVertices, setLwVertices } from '../../core/lwpoly';
+import { polyCount, polyVertices, polyX, polyY, setPolyVertices } from '../../core/polyverts';
 import { pathLoop } from '../../render/hatch';
 import { type Piece, pathBox, pieceBox, pieceNearest } from './curve';
 import { edgePieces } from './edges';
@@ -204,10 +205,10 @@ export function entityBounds(e: Entity, doc: CadDocument, depth = 0): Box | null
       break;
     }
     case 'MESH':
-      for (const p of e.vertices) growBox(b, p.x, p.y);
+      for (let i = 0; i + 2 < e.verts.length; i += 3) growBox(b, e.verts[i]!, e.verts[i + 1]!);
       break;
     case 'POLYLINE':
-      for (const v of e.vertices) growBox(b, v.location.x, v.location.y);
+      for (let i = 0, n = polyCount(e); i < n; i++) growBox(b, polyX(e, i), polyY(e, i));
       break;
     case 'SHAPE': {
       const P = planProj(e.extrusion, e.insert.z);
@@ -291,14 +292,15 @@ export function reverseEntity(e: Entity): EditResult {
     case 'POLYLINE': {
       if (e.kind !== '2d' && e.kind !== '3d') return { message: MSG.cannotReverse };
       const r = cloneEntity(e);
-      const frame = e.vertices.filter((v) => v.flags & 16);
-      const drawn = e.vertices.filter((v) => !(v.flags & 16));
+      const ev = polyVertices(e);
+      const frame = ev.filter((v) => v.flags & 16);
+      const drawn = ev.filter((v) => !(v.flags & 16));
       const rev = reverseBulged(
         drawn.map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge, startWidth: v.startWidth, endWidth: v.endWidth })),
         (e.flags & 1) !== 0,
       );
       const order = reverseOrder(drawn.length, (e.flags & 1) !== 0);
-      r.vertices = [
+      setPolyVertices(r, [
         ...order.map((k, i): PolyVertex => {
           const v = drawn[k]!;
           const nv: PolyVertex = { ...v, location: { ...v.location }, bulge: rev[i]!.bulge, startWidth: rev[i]!.startWidth, endWidth: rev[i]!.endWidth };
@@ -306,7 +308,7 @@ export function reverseEntity(e: Entity): EditResult {
           return nv;
         }),
         ...frame.reverse().map((v) => ({ ...v, location: { ...v.location } })),
-      ];
+      ]);
       return { replace: [r] };
     }
     case 'SPLINE':

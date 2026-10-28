@@ -26,6 +26,11 @@ import { copyEntity } from '../../src/edit/geom/query';
 import { type Affine, affApply, affInv, affMirror, affMul, affRotate, affScale, affTranslate } from '../../src/edit/geom/math';
 import { NEG_Z, P, V, circle, deg, line, mtext, near, newDoc, renders, text } from './helpers';
 import { bulgeVertices, packBulge } from '../../src/core/lwpoly';
+import { packPoly } from '../../src/core/polyverts';
+import { packEdges } from '../../src/core/hatchedges';
+import { hatchEdges } from '../../src/core/hatchedges';
+import { packMesh } from '../../src/core/meshdata';
+import { leaderVertices, pack3 } from '../../src/core/flat3';
 
 const base = (h: string) => ({ ...entityDefaults(), handle: h });
 const one = (r: { replace?: Entity[]; add?: Entity[] }) => [...(r.replace ?? []), ...(r.add ?? [])][0]!;
@@ -125,12 +130,12 @@ function hatch(): HatchEntity {
       { flags: 3, polyline: { closed: true, verts: packBulge([{ x: 0, y: 0, bulge: 0 }, { x: 10, y: 0, bulge: 0.4 }, { x: 10, y: 10, bulge: 0 }, { x: 0, y: 10, bulge: 0 }]) } },
       {
         flags: 0,
-        edges: [
+        edgeData: packEdges([
           { type: 'line', start: V(2, 2), end: V(4, 2) },
           { type: 'arc', center: V(4, 3), radius: 1, startAngle: -Math.PI / 2, endAngle: Math.PI / 2, ccw: true },
           { type: 'line', start: V(4, 4), end: V(2, 4) },
           { type: 'ellipse', center: V(2, 3), majorAxis: V(0, 1), ratio: 0.5, startAngle: 0, endAngle: Math.PI, ccw: true },
-        ],
+        ]),
       },
     ],
     patternLines: [{ angle: deg(45), base: V(0, 0), offset: V(-2.245, 2.245), dashes: [] }],
@@ -142,7 +147,7 @@ function hatch(): HatchEntity {
 const others = (): [string, Entity][] => [
   ['점', { type: 'POINT', ...base('PT'), position: P(1, 2), angle: 0 } as PointEntity],
   ['치수', dim()],
-  ['지시선', { type: 'LEADER', ...base('LD'), dimStyle: 'Standard', vertices: [P(0, 0), P(5, 5), P(10, 5)], arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 2, textWidth: 5 } as LeaderEntity],
+  ['지시선', { type: 'LEADER', ...base('LD'), dimStyle: 'Standard', verts: pack3([P(0, 0), P(5, 5), P(10, 5)]), arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 2, textWidth: 5 } as LeaderEntity],
   ['다중 지시선', mleader()],
   ['해치', hatch()],
   ['솔리드(−Z)', { type: 'SOLID', ...base('SO'), points: [P(0, 0), P(4, 0), P(0, 3), P(4, 3)], invisibleEdges: 0, extrusion: NEG_Z } as FaceEntity],
@@ -150,9 +155,9 @@ const others = (): [string, Entity][] => [
   ['이미지', { type: 'IMAGE', ...base('IM'), insert: P(1, 1), uVector: P(0.1, 0), vVector: P(0, 0.1), imageSize: V(100, 50), displayFlags: 1, clipping: false, brightness: 50, contrast: 50, fade: 0, clipBoundaryType: 1, clipBoundary: [] } as ImageEntity],
   ['여러 줄', { type: 'MLINE', ...base('MLN'), styleName: 'Standard', scale: 1, justification: 1, flags: 1, startPoint: P(0, 0), normal: P(0, 0, 1), elementCount: 2, vertices: [P(0, 0), P(10, 0), P(10, 10)].map((p, i) => ({ position: p, direction: i < 2 ? P(1, 0) : P(0, 1), miter: i === 1 ? P(-Math.SQRT1_2, Math.SQRT1_2) : i === 0 ? P(0, 1) : P(-1, 0), elements: [{ params: [i === 1 ? 0.5 * Math.SQRT2 : 0.5, 0], fillParams: [] }, { params: [i === 1 ? -0.5 * Math.SQRT2 : -0.5, 0], fillParams: [] }] })) } as MLineEntity],
   ['공차', { type: 'TOLERANCE', ...base('TO'), dimStyle: 'Standard', insert: P(2, 2), text: '{\\Fgdt;j}%%v0.1', direction: P(1, 0) } as ToleranceEntity],
-  ['메시', { type: 'MESH', ...base('MS'), vertices: [P(0, 0), P(1, 0), P(1, 1)], faces: [[0, 1, 2]], edges: [], subdivision: 0 } as MeshEntity],
+  ['메시', { type: 'MESH', ...base('MS'), ...packMesh([P(0, 0), P(1, 0), P(1, 1)], [[0, 1, 2]], []), subdivision: 0 } as MeshEntity],
   ['표', { type: 'ACAD_TABLE', ...base('TB'), block: '*T1', insert: P(3, 3), direction: P(1, 0), scale: P(1, 1, 1), rotation: 0, rows: 1, columns: 1, rowHeights: [5], columnWidths: [20] } as TableEntity],
-  ['3D 폴리선', { type: 'POLYLINE', ...base('P3'), kind: '3d', flags: 8, vertices: [P(0, 0, 0), P(5, 0, 1), P(5, 5, 2)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })), elevation: 0, defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0 } as PolylineEntity],
+  ['3D 폴리선', { type: 'POLYLINE', ...base('P3'), kind: '3d', flags: 8, ...packPoly([P(0, 0, 0), P(5, 0, 1), P(5, 5, 2)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))), elevation: 0, defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0 } as PolylineEntity],
   ['블록 참조(속성, −Z)', { type: 'INSERT', ...base('IN'), block: 'B', insert: P(3, 1), scale: P(2, 1.5, 1), rotation: deg(20), columnCount: 1, rowCount: 1, columnSpacing: 0, rowSpacing: 0, extrusion: NEG_Z, attribs: [{ ...(text(3, 2, 'V', 1) as TextEntity), type: 'ATTRIB', handle: 'AT', tag: 'T', attFlags: 0, extrusion: NEG_Z } as AttribEntity] } as InsertEntity],
   ['MINSERT', { type: 'INSERT', ...base('MI'), block: 'B', insert: P(0, 0), scale: P(1, 1, 1), rotation: 0, columnCount: 3, rowCount: 2, columnSpacing: 4, rowSpacing: 3, attribs: [] } as InsertEntity],
   ['모양', { type: 'SHAPE', ...base('SH'), insert: P(1, 1), size: 2, name: 'BOX', rotation: 0, widthFactor: 1, oblique: 0 } as ShapeEntity],
@@ -212,7 +217,7 @@ describe('transformEntity — 주석·기타 객체', () => {
     expect(Math.hypot(sc.patternLines[0]!.offset.x, sc.patternLines[0]!.offset.y)).toBeCloseTo(2 * Math.hypot(2.245, 2.245));
     // 비균등: 볼록도 경로 → 모서리 경로(타원)
     const nu = one(transformEntity(hatch(), affScale(2, 1), doc)) as HatchEntity;
-    expect(nu.paths[0]!.edges!.some((e) => e.type === 'ellipse')).toBe(true);
+    expect(hatchEdges(nu.paths[0]!).some((e) => e.type === 'ellipse')).toBe(true);
   });
   it('다중 지시선: 점·문자 방향, 대칭은 읽을 수 있게', () => {
     const doc = makeDoc();
@@ -260,7 +265,7 @@ describe('transformEntity — 주석·기타 객체', () => {
       for (const k of ['defPoint', 'defPoint2', 'defPoint3', 'textMid'] as const) near(d1[k], d0[k], 1e-9);
       const l0 = others()[2]![1] as LeaderEntity;
       const l1 = one(transformEntity(one(transformEntity(l0, m, doc)), inv, doc)) as LeaderEntity;
-      l0.vertices.forEach((v, i) => near(l1.vertices[i]!, v, 1e-9));
+      leaderVertices(l0).forEach((v, i) => near(leaderVertices(l1)[i]!, v, 1e-9));
       const h0 = hatch();
       const h1 = one(transformEntity(one(transformEntity(h0, m, doc)), inv, doc)) as HatchEntity;
       bulgeVertices(h0.paths[0]!.polyline!.verts).forEach((v, i) => {

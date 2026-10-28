@@ -22,6 +22,7 @@ import { currentProps, textDialog } from './draw';
 import { askText } from './util2-ui';
 import { registerLeaderAssoc } from './leaderassoc';
 import type { Pt } from './view';
+import { pack3 } from '../core/flat3';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
@@ -266,7 +267,7 @@ function commitLeader(app: App, ctx: CommandContext, pts: Pt[], annotation: Enti
     ...currentProps(app),
     type: 'LEADER',
     dimStyle,
-    vertices: geom.vertices.map((q) => v3(q)),
+    verts: pack3(geom.vertices.map((q) => v3(q))),
     arrowHead: fmt.arrow,
     pathType: fmt.spline ? 1 : 0,
     creation: link ? leaderCreationType(annotation) : 3,

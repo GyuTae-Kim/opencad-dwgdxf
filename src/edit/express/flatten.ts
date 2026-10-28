@@ -7,6 +7,8 @@
 import type { CadDocument, Entity, Vec3 } from '../../core/model';
 import { isNaturalExt, isPlanarExt } from '../geom/ocs';
 import { transformEntity } from '../geom/transform';
+import { polyVertices, setPolyVertices } from '../../core/polyverts';
+import { leaderVertices, pack3 } from '../../core/flat3';
 
 const z0 = (p: Vec3): Vec3 => ({ x: p.x, y: p.y, z: 0 });
 const z0opt = (p: Vec3 | undefined): Vec3 | undefined => (p ? z0(p) : undefined);
@@ -62,7 +64,10 @@ export function flattenEntity(e: Entity, doc: CadDocument): FlattenResult {
       break;
     case 'POLYLINE':
       out.elevation = 0;
-      for (const v of out.vertices) v.location = z0(v.location);
+      setPolyVertices(
+        out,
+        polyVertices(out).map((v) => ({ ...v, location: z0(v.location) })),
+      );
       break;
     case 'SPLINE':
       out.controlPoints = out.controlPoints.map(z0);
@@ -111,7 +116,7 @@ export function flattenEntity(e: Entity, doc: CadDocument): FlattenResult {
       if (out.arc) out.arc = { ...out.arc, center: z0(out.arc.center), start: z0(out.arc.start), end: z0(out.arc.end), leader1: z0opt(out.arc.leader1), leader2: z0opt(out.arc.leader2) };
       break;
     case 'LEADER':
-      out.vertices = out.vertices.map(z0);
+      out.verts = pack3(leaderVertices(out).map(z0));
       break;
     case 'HATCH':
     case 'MPOLYGON':

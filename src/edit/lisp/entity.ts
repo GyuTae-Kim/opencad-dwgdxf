@@ -18,6 +18,7 @@ import { wcmatch } from './text';
 import { makeObject, mergeXData, modLayer, modObject, objectGroups, objectOf, readXData, recordXData, tableRecordGroups, xdataPair } from './objects';
 import { Cons, Ename, LispError, Real, fromArray, isNum, numOf, toArray, type Value } from './types';
 import { lwCount, lwVertices, setLwVertices } from '../../core/lwpoly';
+import { polyCount, polyHas, polyVertex, polyVertices, setPolyVertices } from '../../core/polyverts';
 
 type Pair = [number, Value];
 
@@ -70,7 +71,7 @@ function buildOrder(d: LispDrawing): Order {
         for (const a of e.attribs) if (a.handle) list.push(a.handle);
         list.push(SEQEND + e.handle);
       } else if (e.type === 'POLYLINE') {
-        e.vertices.forEach((_, i) => list.push(`${VERTEX}${e.handle}:${i}`));
+        for (let i = 0, n = polyCount(e); i < n; i++) list.push(`${VERTEX}${e.handle}:${i}`);
         list.push(SEQEND + e.handle);
       }
     }
@@ -89,7 +90,7 @@ export function exists(d: LispDrawing, h: string): boolean {
   if (h.startsWith(VERTEX)) {
     const [ph, i] = h.slice(VERTEX.length).split(':');
     const p = d.doc.entityIndex.get(ph!);
-    return !!p && p.type === 'POLYLINE' && Number(i) < p.vertices.length;
+    return !!p && p.type === 'POLYLINE' && Number(i) < polyCount(p);
   }
   return d.doc.entityIndex.has(h) && (!!topKey(d, h) || isAttrib(d, h));
 }
@@ -205,7 +206,7 @@ export function entityGroups(it: Interp, d: LispDrawing, h: string): Pair[] | nu
   if (h.startsWith(VERTEX)) {
     const [ph, is] = h.slice(VERTEX.length).split(':');
     const p = d.doc.entityIndex.get(ph!);
-    const v = p?.type === 'POLYLINE' ? p.vertices[Number(is)] : undefined;
+    const v = p?.type === 'POLYLINE' && polyHas(p, Number(is)) ? polyVertex(p, Number(is)) : undefined;
     if (!p || !v) return null;
     return [
       [-1, it.ename(h)],
@@ -680,16 +681,20 @@ export function entmod(it: Interp, d: LispDrawing, list: Value): Value {
     const [ph, is] = h.slice(VERTEX.length).split(':');
     const p = d.doc.entityIndex.get(ph!);
     const i = Number(is);
-    if (p?.type !== 'POLYLINE' || !p.vertices[i]) return null;
+    if (p?.type !== 'POLYLINE' || !polyHas(p, i)) return null;
     const after = cloneEntity(p) as PolylineEntity;
-    const vx = { ...after.vertices[i]! };
+    const avs = polyVertices(after);
+    const vx = { ...avs[i]! };
     for (const [c, v] of pairs) {
       if (c === 10) vx.location = pv(c, v);
       else if (c === 40) vx.startWidth = nv(c, v);
       else if (c === 41) vx.endWidth = nv(c, v);
       else if (c === 42) vx.bulge = nv(c, v);
     }
-    after.vertices = after.vertices.map((x, j) => (j === i ? vx : x));
+    setPolyVertices(
+      after,
+      avs.map((x, j) => (j === i ? vx : x)),
+    );
     const key = topKey(d, p.handle);
     if (!key) return null;
     d.commit([{ kind: 'modify', block: key, before: p, after }], 'ENTMOD');

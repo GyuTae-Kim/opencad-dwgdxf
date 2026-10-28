@@ -9,6 +9,9 @@
  */
 import type { CadDocument, Entity, HatchEdge, HatchPath, Vec2, Vec3 } from '../../core/model';
 import { bulgeVertices, lwVertices } from '../../core/lwpoly';
+import { polyVertices } from '../../core/polyverts';
+import { firstEdge, hatchEdges } from '../../core/hatchedges';
+import { leaderVertices } from '../../core/flat3';
 
 /** COMPAREPROPS 비트 */
 export const PROP_COLOR = 1;
@@ -161,7 +164,7 @@ function hatchPath(s: Builder, p: HatchPath): void {
     s.k(p.polyline.closed, vs.length);
     for (const v of vs) s.n(v.x, v.y, v.bulge ?? 0);
   }
-  for (const e of p.edges ?? []) hatchEdge(s, e);
+  for (const e of hatchEdges(p)) hatchEdge(s, e);
 }
 
 function hatchEdge(s: Builder, e: HatchEdge): void {
@@ -340,10 +343,11 @@ export function entitySignature(e: Entity, opt: CompareOptions, doc?: CadDocumen
       break;
     }
     case 'POLYLINE': {
-      const v0 = e.vertices[0];
+      const ev = polyVertices(e);
+      const v0 = ev[0];
       if (v0) s.anchor(v0.location.x, v0.location.y);
-      s.k(e.kind, e.flags & 0xff, e.vertices.length, e.mCount, e.nCount, e.smoothType);
-      for (const v of e.vertices) {
+      s.k(e.kind, e.flags & 0xff, ev.length, e.mCount, e.nCount, e.smoothType);
+      for (const v of ev) {
         s.k(v.flags & 0xff, v.faceIndices?.join(','));
         s.p(v.location);
         s.n(v.bulge ?? 0, v.startWidth ?? 0, v.endWidth ?? 0);
@@ -450,10 +454,11 @@ export function entitySignature(e: Entity, opt: CompareOptions, doc?: CadDocumen
       break;
     }
     case 'LEADER': {
-      const v0 = e.vertices[0];
+      const lv = leaderVertices(e);
+      const v0 = lv[0];
       if (v0) s.anchor(v0.x, v0.y);
-      s.k(up(e.dimStyle), e.arrowHead, e.pathType, e.creation, e.hooklineDirection, e.hookline, e.vertices.length);
-      for (const v of e.vertices) s.p(v);
+      s.k(up(e.dimStyle), e.arrowHead, e.pathType, e.creation, e.hooklineDirection, e.hookline, lv.length);
+      for (const v of lv) s.p(v);
       s.n(e.textHeight, e.textWidth);
       break;
     }
@@ -461,7 +466,7 @@ export function entitySignature(e: Entity, opt: CompareOptions, doc?: CadDocumen
     case 'MPOLYGON': {
       const p0 = e.paths[0];
       const pv = p0?.polyline?.verts;
-      const q = (pv && pv.length >= 3 ? { x: pv[0]!, y: pv[1]! } : undefined) ?? (p0?.edges?.[0] ? edgeStart(p0.edges[0]) : undefined);
+      const q = (pv && pv.length >= 3 ? { x: pv[0]!, y: pv[1]! } : undefined) ?? (p0 && firstEdge(p0) ? edgeStart(firstEdge(p0)!) : undefined);
       if (q) s.anchor(q.x, q.y);
       s.k(up(e.patternName), e.solid, e.hatchStyle, e.patternType, e.patternDouble, e.paths.length);
       if (e.gradient?.enabled) {

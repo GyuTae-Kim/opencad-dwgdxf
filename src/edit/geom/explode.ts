@@ -27,6 +27,7 @@ import type {
   Vec3,
 } from '../../core/model';
 import { tableKey } from '../../core/model';
+import { polyLocs, polyVertices } from '../../core/polyverts';
 import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
 import { dimVars, plainText } from '../../app/inquiry';
 import { builtinArrow } from '../../render/arrows';
@@ -40,6 +41,8 @@ import { mapBlockContents } from './xannot';
 import { metrics, mtextDir } from './xtext';
 import { type Nurbs, domain, normalizeNurbs, subNurbs } from './nurbs';
 import { explodeArcText } from '../textools/arctext';
+import { meshFaces, meshVertices } from '../../core/meshdata';
+import { leaderVertices } from '../../core/flat3';
 
 export function explodeEntity(e: Entity, doc: CadDocument): EditResult {
   const done = (add: Entity[], extra: Partial<EditResult> = {}): EditResult => (add.length ? { remove: e.handle ? [e.handle] : [], add, ...extra } : { message: MSG.cannotExplode });
@@ -52,7 +55,8 @@ export function explodeEntity(e: Entity, doc: CadDocument): EditResult {
       return done(explodePolyline(e));
     case 'MESH': {
       const out: Entity[] = [];
-      for (const f of e.faces) out.push(...faceEntities(e, f.map((i) => e.vertices[i]!).filter(Boolean), f.map(() => true)));
+      const mv = meshVertices(e);
+      for (const f of meshFaces(e)) out.push(...faceEntities(e, f.map((i) => mv[i]!).filter(Boolean), f.map(() => true)));
       return done(out);
     }
     case 'DIMENSION': {
@@ -305,7 +309,7 @@ function explodePolyline(e: PolylineEntity): Entity[] {
   if (e.kind === 'mesh') {
     const M = e.mCount;
     const N = e.nCount;
-    const v = e.vertices.map((q) => q.location);
+    const v = polyLocs(e);
     const out: Entity[] = [];
     if (M * N > v.length) return out;
     const cm = (e.flags & 1) !== 0;
@@ -319,9 +323,10 @@ function explodePolyline(e: PolylineEntity): Entity[] {
     return out;
   }
   // 폴리페이스
-  const coords = e.vertices.filter((v) => v.flags & 64 || !v.faceIndices).map((v) => v.location);
+  const ev = polyVertices(e);
+  const coords = ev.filter((v) => v.flags & 64 || !v.faceIndices).map((v) => v.location);
   const out: Entity[] = [];
-  for (const f of e.vertices) {
+  for (const f of ev) {
     if (!f.faceIndices || f.flags & 64) continue;
     const idx = f.faceIndices.filter((k) => k !== 0);
     const pts = idx.map((k) => coords[Math.abs(k) - 1]).filter((p): p is Vec3 => !!p);
@@ -397,12 +402,13 @@ function polyEntities(src: Entity, v: Vec3[], spline: boolean): Entity[] {
 }
 
 function explodeLeader(e: LeaderEntity, doc: CadDocument): Entity[] {
-  const out = polyEntities(e, e.vertices, e.pathType === 1);
-  if (e.arrowHead && e.vertices.length >= 2) {
+  const lv = leaderVertices(e);
+  const out = polyEntities(e, lv, e.pathType === 1);
+  if (e.arrowHead && lv.length >= 2) {
     const v = dimVars(doc, e);
     const asz = (Number(v.DIMASZ) || 2.5) * (Number(v.DIMSCALE) || 1);
-    const a = e.vertices[0]!;
-    const b = e.vertices[1]!;
+    const a = lv[0]!;
+    const b = lv[1]!;
     out.push(...arrowEntities(e, doc, String(v.DIMLDRBLK || v.DIMBLK || ''), a, Math.atan2(a.y - b.y, a.x - b.x), asz, a.z));
   }
   return out;

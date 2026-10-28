@@ -27,6 +27,9 @@ import { entityPath } from '../../src/edit/geom/path';
 import { flattenPath, pathNearest, pathSize } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, arc, circle, deg, line, lw, mtext, near, newDoc, poly2d, renders, text } from './helpers';
 import { packBulge } from '../../src/core/lwpoly';
+import { packPoly } from '../../src/core/polyverts';
+import { packMesh } from '../../src/core/meshdata';
+import { pack3 } from '../../src/core/flat3';
 
 const base = (h = '') => ({ ...entityDefaults(), handle: h });
 
@@ -128,7 +131,7 @@ describe('explodeEntity — 폴리선', () => {
       ...base('P3'),
       kind: '3d',
       flags: 8,
-      vertices: [P(0, 0, 0), P(5, 0, 2), P(5, 5, 4)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })),
+      ...packPoly([P(0, 0, 0), P(5, 0, 2), P(5, 5, 4)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))),
       elevation: 0,
       defaultStartWidth: 0,
       defaultEndWidth: 0,
@@ -149,7 +152,7 @@ describe('explodeEntity — 폴리선', () => {
       ...base('PF'),
       kind: 'polyface',
       flags: 64,
-      vertices: [v(0, 0), v(1, 0), v(1, 1), v(0, 1), { location: P(0, 0), bulge: 0, startWidth: 0, endWidth: 0, flags: 128, faceIndices: [1, 2, 3, -4] }],
+      ...packPoly([v(0, 0), v(1, 0), v(1, 1), v(0, 1), { location: P(0, 0), bulge: 0, startWidth: 0, endWidth: 0, flags: 128, faceIndices: [1, 2, 3, -4] }]),
       elevation: 0,
       defaultStartWidth: 0,
       defaultEndWidth: 0,
@@ -169,12 +172,12 @@ describe('explodeEntity — 폴리선', () => {
       handle: 'PM',
       kind: 'mesh',
       flags: 16,
-      vertices: [v(0, 0), v(0, 1), v(0, 2), v(1, 0), v(1, 1), v(1, 2)],
+      ...packPoly([v(0, 0), v(0, 1), v(0, 2), v(1, 0), v(1, 1), v(1, 2)]),
       mCount: 2,
       nCount: 3,
     };
     expect(explodeEntity(mesh, doc).add!.length).toBe(2);
-    const m: MeshEntity = { type: 'MESH', ...base('M'), vertices: [P(0, 0), P(1, 0), P(1, 1), P(0, 1), P(2, 0)], faces: [[0, 1, 2, 3], [1, 4, 2]], edges: [], subdivision: 0 };
+    const m: MeshEntity = { type: 'MESH', ...base('M'), ...packMesh([P(0, 0), P(1, 0), P(1, 1), P(0, 1), P(2, 0)], [[0, 1, 2, 3], [1, 4, 2]], []), subdivision: 0 };
     expect(explodeEntity(m, doc).add!.length).toBe(2);
   });
 });
@@ -320,7 +323,7 @@ describe('explodeEntity — 주석·문자·해치', () => {
     expect(explodeEntity({ ...h, solid: true }, doc).message).toBeTruthy();
   });
   it('지시선 → 선 + 화살촉', () => {
-    const l: LeaderEntity = { type: 'LEADER', ...base('L'), dimStyle: 'Standard', vertices: [P(0, 0), P(5, 5), P(10, 5)], arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 };
+    const l: LeaderEntity = { type: 'LEADER', ...base('L'), dimStyle: 'Standard', verts: pack3([P(0, 0), P(5, 5), P(10, 5)]), arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 };
     const r = explodeEntity(l, doc);
     expect(r.add!.filter((e) => e.type === 'LINE').length).toBeGreaterThanOrEqual(2);
     expect(r.add!.some((e) => e.type === 'SOLID')).toBe(true);

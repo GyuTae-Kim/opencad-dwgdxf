@@ -17,6 +17,7 @@ import type { FromWorker, PreviewView, SceneMessage, ToWorker } from './protocol
 import { applyOps } from '../edit/session';
 import { sendDocument } from './doctransfer';
 import { unboxLw } from '../core/lwpoly';
+import { unboxPoly } from '../core/polyverts';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -170,6 +171,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
         for (const op of msg.ops) {
           const e = op.kind === 'add' ? op.entity : op.kind === 'modify' ? op.after : null;
           if (e?.type === 'LWPOLYLINE') unboxLw(e, e);
+          else if (e?.type === 'POLYLINE') unboxPoly(e, e);
         }
         applyOps(doc, msg.ops);
         break;

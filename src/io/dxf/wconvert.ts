@@ -22,11 +22,14 @@ import type {
 } from '../../core/model';
 import { ellipsePoints, nurbsPoints, fitPointsCurve, TAU } from '../../geom/curves';
 import { lwVertices } from '../../core/lwpoly';
+import { packPoly } from '../../core/polyverts';
 import { rawTagsValid } from './tagwriter';
 import { proxyEntities } from '../../edit/geom/proxygeom';
 import { satDxfTags } from '../acis';
 import { codepageToEncoding, decoderFor } from '../../core/codepage';
 import type { WriteContext } from './wcontext';
+import { meshFaces, meshVertices } from '../../core/meshdata';
+import { leaderCount, leaderVertices } from '../../core/flat3';
 
 const ACIS = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
 
@@ -53,7 +56,7 @@ function polyline(e: Entity, kind: PolylineEntity['kind'], vertices: PolyVertex[
     type: 'POLYLINE',
     kind,
     flags,
-    vertices,
+    ...packPoly(vertices),
     elevation,
     defaultStartWidth: 0,
     defaultEndWidth: 0,
@@ -248,11 +251,11 @@ function invalid(e: Entity): boolean {
     case 'ELLIPSE':
       return Math.hypot(e.majorAxis.x, e.majorAxis.y, e.majorAxis.z) < 1e-12 || !(e.ratio > 0);
     case 'LEADER':
-      return e.vertices.length < 2;
+      return leaderCount(e) < 2;
     case 'SPLINE':
       return e.degree < 1 || (e.controlPoints.length === 0 && e.fitPoints.length === 0);
     case 'MESH':
-      return !e.vertices.length || !e.faces.length;
+      return !e.verts.length || !e.faceData.length;
   }
   return false;
 }
@@ -348,10 +351,11 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
       return null;
     case 'MESH':
       if (ver < 1024) {
-        if (!e.vertices.length || !e.faces.length) return [];
+        if (!e.verts.length || !e.faceData.length) return [];
         ctx.warn('entity.mesh_as_polyface', '이 버전에 없는 MESH를 폴리페이스 메시로 썼습니다.');
-        const vs: PolyVertex[] = e.vertices.map((p) => v(p, 192));
-        for (const f of e.faces) {
+        const mverts = meshVertices(e);
+        const vs: PolyVertex[] = mverts.map((p) => v(p, 192));
+        for (const f of meshFaces(e)) {
           if (f.length < 3) continue;
           // 폴리페이스 면은 정점 4개까지 → 그보다 많으면 부채꼴 삼각형으로 나눈다.
           const groups: number[][] = [];
@@ -364,8 +368,8 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
           }
         }
         const pl = polyline(e, 'polyface', vs, 64, e.handle);
-        pl.mCount = e.vertices.length;
-        pl.nCount = vs.length - e.vertices.length;
+        pl.mCount = mverts.length;
+        pl.nCount = vs.length - mverts.length;
         return [pl];
       }
       return null;
@@ -449,9 +453,9 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
       return out;
     }
     case 'LEADER': {
-      if (e.vertices.length < 2) return [];
+      if (leaderCount(e) < 2) return [];
       ctx.warn('r12.leader_as_polyline', 'R12에 없는 LEADER를 폴리선으로 썼습니다.');
-      return [polyline(e, '3d', e.vertices.map((p) => v(p, 32)), 8, e.handle)];
+      return [polyline(e, '3d', leaderVertices(e).map((p) => v(p, 32)), 8, e.handle)];
     }
     case 'XLINE':
     case 'RAY':

@@ -7,6 +7,7 @@
  */
 import type { CadDocument, Entity, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
+import { firstEdge } from '../core/hatchedges';
 
 export interface PreviewPlan {
   /** 맞춰 보일 사각형과 여백 비율(View.zoomRect와 같은 뜻) */
@@ -48,15 +49,15 @@ export function anchorOf(e: Entity): [number, number] | null {
       return v.length >= 3 && flat(e) ? [v[0]!, v[1]!] : null;
     }
     case 'POLYLINE': {
-      const v = e.vertices[0];
-      return v && (e.kind !== '2d' || flat(e)) ? [v.location.x, v.location.y] : null;
+      const v = e.verts;
+      return v.length >= 3 && (e.kind !== '2d' || flat(e)) ? [v[0]!, v[1]!] : null;
     }
     case 'HATCH': {
       if (!flat(e)) return null;
       const p = e.paths[0];
       const v = p?.polyline?.verts;
       if (v && v.length >= 3) return [v[0]!, v[1]!];
-      const ed = p?.edges?.[0];
+      const ed = p ? firstEdge(p) : undefined;
       if (ed?.type === 'line') return [ed.start.x, ed.start.y];
       if (ed?.type === 'arc') return [ed.center.x, ed.center.y];
       return null;

@@ -44,6 +44,7 @@ import {
   MSG_UNSUPPORTED,
 } from './types';
 import { lwPoints, lwVertices, setLwVertices } from '../../core/lwpoly';
+import { polyLocs, polyVertices, setPolyVertices } from '../../core/polyverts';
 
 export class DynError extends Error {}
 
@@ -131,9 +132,11 @@ function stretchEntity(e: Entity, pts: readonly number[], d: Vec3, doc: CadDocum
       if (e.kind === 'polyface' || e.kind === 'mesh') return null;
       if (e.kind === '2d' && e.extrusion && Math.abs(e.extrusion.z - 1) > 1e-9) return null;
       const r = structuredClone(e);
-      r.vertices.forEach((v, i) => {
+      const rv = polyVertices(r);
+      rv.forEach((v, i) => {
         if (set.has(i)) v.location = mv(v.location);
       });
+      setPolyVertices(r, rv);
       return r;
     }
     case 'SOLID':
@@ -177,7 +180,7 @@ function stretchPoints(e: Entity): { x: number; y: number }[] | null {
     case 'LWPOLYLINE':
       return flat ? lwPoints(e) : null;
     case 'POLYLINE':
-      return e.kind === 'polyface' || e.kind === 'mesh' ? null : e.vertices.map((v) => v.location);
+      return e.kind === 'polyface' || e.kind === 'mesh' ? null : polyLocs(e);
     case 'SOLID':
     case 'TRACE':
     case '3DFACE':

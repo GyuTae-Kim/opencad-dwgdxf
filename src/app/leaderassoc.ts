@@ -9,6 +9,7 @@ import type { EditOp, Transaction } from '../edit/session';
 import type { App } from './app';
 import type { DocState } from './docstate';
 import { addHook } from './hooks';
+import { leaderCount, leaderVertices, pack3 } from '../core/flat3';
 
 /** 주석 객체의 기준점(옮긴 양을 잴 점) */
 function anchorOf(e: Entity): Vec3 | null {
@@ -24,12 +25,14 @@ export function followLeader(leader: LeaderEntity, before: Entity, after: Entity
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   if (Math.abs(dx) < 1e-12 && Math.abs(dy) < 1e-12) return null;
-  const n = leader.vertices.length;
+  const n = leaderCount(leader);
   if (n < 2) return null;
   const c = structuredClone(leader);
   // 갈고리선이 있으면 마지막 두 점(갈고리선 시작·끝)이 주석과 함께 움직인다
   const from = c.hookline && n >= 3 ? n - 2 : n - 1;
-  for (let i = from; i < n; i++) c.vertices[i] = { x: c.vertices[i]!.x + dx, y: c.vertices[i]!.y + dy, z: c.vertices[i]!.z };
+  const vs = leaderVertices(c);
+  for (let i = from; i < n; i++) vs[i] = { x: vs[i]!.x + dx, y: vs[i]!.y + dy, z: vs[i]!.z };
+  c.verts = pack3(vs);
   return c;
 }
 

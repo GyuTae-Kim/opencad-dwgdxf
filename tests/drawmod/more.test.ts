@@ -12,6 +12,7 @@ import { boundsOf } from '../../src/edit/geom/query';
 import { lw as lw0 } from '../edit/make';
 import { makeHarness, modelEntities } from '../cmds2/harness';
 import { perCommandGroups } from './groups';
+import { polyVertices } from '../../src/core/polyverts';
 
 const close = (a: number, b: number, eps = 1e-6) => expect(Math.abs(a - b)).toBeLessThan(eps);
 const square = (x: number, y: number, s = 1): Entity => ({ ...lw0([[x, y], [x + s, y], [x + s, y + s], [x, y + s]], true), handle: '' });
@@ -54,8 +55,8 @@ describe('3DPOLY·3DFACE·TRACE', () => {
     const [p] = ofType<PolylineEntity>(h, 'POLYLINE');
     expect(p!.kind).toBe('3d');
     expect(p!.flags & 9).toBe(9);
-    expect(p!.vertices.length).toBe(3);
-    expect(p!.vertices.every((v) => v.location.z === 2 && v.flags === 32)).toBe(true);
+    expect(polyVertices(p!).length).toBe(3);
+    expect(polyVertices(p!).every((v) => v.location.z === 2 && v.flags === 32)).toBe(true);
   });
 
   it('3DFACE: 보이지 않음(I)은 그 점에서 시작하는 모서리를 숨긴다, 다음 면은 3·4번째 점에서', async () => {

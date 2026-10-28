@@ -45,6 +45,7 @@ import type {
   XData,
   XLineEntity,
 } from '../../../core/model';
+import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../../core/hatchedges';
 import { BYLAYER, SHARED_BYLAYER_COLOR } from '../../../core/model';
 import { tidyWidths, zeros } from '../../../core/lwpoly';
 import { decodeCadEscapes } from '../../../core/codepage';
@@ -782,7 +783,12 @@ function readPolyline(or: ObjectReader, b: Omit<EntityBase, 'type'>, out: Parsed
     type: 'POLYLINE',
     kind: '2d',
     flags: 0,
-    vertices: [],
+    verts: [],
+    bulges: undefined,
+    widths: undefined,
+    vflags: undefined,
+    tangents: undefined,
+    faceRecs: undefined,
     elevation: 0,
     defaultStartWidth: 0,
     defaultEndWidth: 0,
@@ -1284,8 +1290,12 @@ function readLeader(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names)
   const creation = r.BS();
   const pathType = r.BS();
   const n = r.checkCount(r.BL(), 64);
-  const vertices: Vec3[] = [];
-  for (let i = 0; i < n; i++) vertices.push(r.BD3());
+  // 정점은 평탄 좌표로(src/core/flat3.ts)
+  const verts: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const p = r.BD3();
+    verts.push(p.x, p.y, p.z);
+  }
   r.BD3(); // 원점
   const normal = r.BD3();
   const horizontalDirection = r.BD3();
@@ -1322,7 +1332,7 @@ function readLeader(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names)
     ...b,
     type: 'LEADER',
     dimStyle,
-    vertices,
+    verts: verts.slice(),
     arrowHead,
     pathType,
     creation,
@@ -1609,11 +1619,14 @@ function readHatch(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: 'HATCH')
     if (flags & 4) anyDerived = true;
     if (!(flags & 2)) {
       const ns = r.checkCount(r.BL(), 8);
-      const edges: HatchEdge[] = [];
+      // 모서리는 객체 없이 수 배열 기록으로(src/core/hatchedges.ts)
+      const edges: number[] = [];
       for (let s = 0; s < ns; s++) {
         const et = r.RC();
         if (et === 1) {
-          edges.push({ type: 'line', start: r.RD2(), end: r.RD2() });
+          const a = r.RD2();
+          const b = r.RD2();
+          edges.push(EDGE_LINE, a.x, a.y, b.x, b.y);
         } else if (et === 2) {
           const center = r.RD2();
           const radius = r.BD();
@@ -1621,7 +1634,7 @@ function readHatch(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: 'HATCH')
           const ea = r.BD();
           const ccw = r.B() === 1;
           const [s0, e0] = ccwAngles(sa, ea, ccw);
-          edges.push({ type: 'arc', center, radius, startAngle: s0, endAngle: e0, ccw });
+          edges.push(EDGE_ARC, center.x, center.y, radius, s0, e0, ccw ? 1 : 0);
         } else if (et === 3) {
           const center = r.RD2();
           const majorAxis = r.RD2();
@@ -1630,7 +1643,7 @@ function readHatch(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: 'HATCH')
           const ea = r.BD();
           const ccw = r.B() === 1;
           const [s0, e0] = ccwAngles(sa, ea, ccw);
-          edges.push({ type: 'ellipse', center, majorAxis, ratio, startAngle: s0, endAngle: e0, ccw });
+          edges.push(EDGE_ELLIPSE, center.x, center.y, majorAxis.x, majorAxis.y, ratio, s0, e0, ccw ? 1 : 0);
         } else if (et === 4) {
           const degree = r.BL();
           const rational = r.B() === 1;
@@ -1657,12 +1670,12 @@ function readHatch(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: 'HATCH')
               edge.endTangent = r.RD2();
             }
           }
-          edges.push(edge);
+          packEdge(edge, edges);
         } else {
           throw new DwgFormatError(`해치 경계 종류 ${et}`);
         }
       }
-      path.edges = edges;
+      path.edgeData = edges.slice();
     } else {
       const bulges = r.B() === 1;
       const closed = r.B() === 1;
@@ -2073,24 +2086,30 @@ function readMesh(or: ObjectReader, b: Omit<EntityBase, 'type'>): MeshEntity {
   r.BS(); // 버전
   r.B(); // 접힘 혼합
   const subdivision = r.BL();
+  // 정점·면·모서리는 수 배열로(src/core/meshdata.ts)
   const nv = r.checkCount(r.BL(), 64);
-  const vertices: Vec3[] = [];
-  for (let i = 0; i < nv; i++) vertices.push(r.BD3());
+  const verts: number[] = [];
+  for (let i = 0; i < nv; i++) {
+    const p = r.BD3();
+    verts.push(p.x, p.y, p.z);
+  }
   const nf = r.checkCount(r.BL(), 2);
-  const faces: number[][] = [];
+  const faceData: number[] = [];
   for (let i = 0; i < nf; ) {
     const n = r.BL();
     i++;
     if (n <= 0 || n > nf) break;
-    const f: number[] = [];
-    for (let k = 0; k < n; k++) f.push(r.BL());
+    faceData.push(n);
+    for (let k = 0; k < n; k++) faceData.push(r.BL());
     i += n;
-    faces.push(f);
   }
   const ne = r.checkCount(r.BL(), 2);
-  const edges: [number, number][] = [];
-  for (let i = 0; i < ne; i++) edges.push([r.BL(), r.BL()]);
-  return { ...b, type: 'MESH', vertices, faces, edges, subdivision };
+  const edgePairs: number[] = [];
+  for (let i = 0; i < ne; i++) {
+    const a = r.BL();
+    edgePairs.push(a, r.BL());
+  }
+  return { ...b, type: 'MESH', verts: verts.slice(), faceData: faceData.slice(), edgePairs: edgePairs.slice(), subdivision };
 }
 
 function readUnderlay(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: UnderlayEntity['type']): UnderlayEntity {

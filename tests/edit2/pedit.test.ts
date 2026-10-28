@@ -20,6 +20,7 @@ import {
 } from '../../src/edit/geom/pedit';
 import { V, arc, line, lw, near, newDoc, poly2d, renders } from '../edit/helpers';
 import { lwVertices } from '../../src/core/lwpoly';
+import { polyVertices, setPolyVertices } from '../../src/core/polyverts';
 
 const doc = newDoc();
 const zig = () =>
@@ -90,16 +91,16 @@ describe('PEDIT 맞춤(F)', () => {
     const f = fitPolyline(zig()) as PolylineEntity;
     expect(f.type).toBe('POLYLINE');
     expect(f.flags & 2).toBe(2);
-    expect(f.vertices.length).toBe(7);
-    expect(f.vertices.filter((v) => v.flags & 1).length).toBe(3);
+    expect(polyVertices(f).length).toBe(7);
+    expect(polyVertices(f).filter((v) => v.flags & 1).length).toBe(3);
     const path = entityPath(f)!;
     for (let i = 0; i + 1 < path.pieces.length; i++) near(pieceTangent(path.pieces[i]!, 1), pieceTangent(path.pieces[i + 1]!, 0), 1e-6);
     for (const q of [V(0, 0), V(10, 5), V(20, 0), V(30, 5)]) expect(pathNearest(path, q).d).toBeLessThan(1e-9);
     // 비곡선화하면 처음 틀
     const d = decurve(f) as PolylineEntity;
     expect(d.flags & 2).toBe(0);
-    expect(d.vertices.length).toBe(4);
-    expect(d.vertices.every((v) => v.bulge === 0)).toBe(true);
+    expect(polyVertices(d).length).toBe(4);
+    expect(polyVertices(d).every((v) => v.bulge === 0)).toBe(true);
   });
   it('닫힌 맞춤 폴리선', () => {
     const sq = lw(
@@ -112,7 +113,7 @@ describe('PEDIT 맞춤(F)', () => {
       true,
     );
     const f = fitPolyline(sq as LwPolylineEntity) as PolylineEntity;
-    expect(f.vertices.length).toBe(8);
+    expect(polyVertices(f).length).toBe(8);
     const path = entityPath(f)!;
     const n = path.pieces.length;
     for (let i = 0; i < n; i++) near(pieceTangent(path.pieces[i]!, 1), pieceTangent(path.pieces[(i + 1) % n]!, 0), 1e-6);
@@ -124,8 +125,8 @@ describe('PEDIT 스플라인(S)', () => {
     const s = splinePolyline(zig(), 6, 8);
     expect(s.flags & 4).toBe(4);
     expect(s.smoothType).toBe(6);
-    const frame = s.vertices.filter((v) => v.flags & 16);
-    const gen = s.vertices.filter((v) => v.flags & 8);
+    const frame = polyVertices(s).filter((v) => v.flags & 16);
+    const gen = polyVertices(s).filter((v) => v.flags & 8);
     expect(frame.length).toBe(4);
     expect(gen.length).toBe(25);
     near(gen[0]!.location, V(0, 0));
@@ -136,7 +137,7 @@ describe('PEDIT 스플라인(S)', () => {
     expect(m.flags & 4).toBe(4);
     expect(frameVerts(m)[1]!.y).toBe(15);
     const d = decurve(s) as PolylineEntity;
-    expect(d.vertices.length).toBe(4);
+    expect(polyVertices(d).length).toBe(4);
     expect(d.smoothType).toBe(0);
   });
   it('3D 폴리선 스플라인', () => {
@@ -149,14 +150,16 @@ describe('PEDIT 스플라인(S)', () => {
       kind: '3d',
       flags: 8,
     };
-    p.vertices.forEach((v, i) => {
+    const pv = polyVertices(p);
+    pv.forEach((v, i) => {
       v.location.z = i;
       v.flags = 32;
     });
+    setPolyVertices(p, pv);
     const s = splinePolyline(p, 5, 4);
     expect(s.kind).toBe('3d');
-    expect(s.vertices.filter((v) => v.flags & 16).every((v) => v.flags & 32)).toBe(true);
-    expect(s.vertices.find((v) => v.flags & 8)!.location.z).toBe(0);
+    expect(polyVertices(s).filter((v) => v.flags & 16).every((v) => v.flags & 32)).toBe(true);
+    expect(polyVertices(s).find((v) => v.flags & 8)!.location.z).toBe(0);
   });
 });
 
@@ -170,7 +173,7 @@ describe('PEDIT 단순 편집', () => {
       [0, 0],
       [1, 0],
     ]) as PolylineEntity, 3) as PolylineEntity;
-    expect(p2.vertices.every((v) => v.startWidth === 3 && v.endWidth === 3)).toBe(true);
+    expect(polyVertices(p2).every((v) => v.startWidth === 3 && v.endWidth === 3)).toBe(true);
   });
   it('정점 삽입·이동·삭제·폭', () => {
     const p = zig();

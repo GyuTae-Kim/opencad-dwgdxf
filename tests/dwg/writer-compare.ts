@@ -14,6 +14,10 @@
 import type { CadColor, CadDocument, Entity } from '../../src/core/model';
 import { decodeCadEscapes } from '../../src/core/codepage';
 import { nearestAci } from '../../src/io/dwg/color';
+import { polyVertices } from '../../src/core/polyverts';
+import { leaderVertices } from '../../src/core/flat3';
+import { meshEdges, meshFaces, meshVertices } from '../../src/core/meshdata';
+import { hatchEdges } from '../../src/core/hatchedges';
 
 const ACIS = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
 
@@ -113,8 +117,47 @@ function colorPaths(o: unknown, ver: number, back = false): unknown {
   return r;
 }
 
+/**
+ * 평탄 좌표(POLYLINE·지시선·MESH 정점, 해치 모서리 수 배열)를 예전 객체 모양으로 풀어 견준다.
+ * 건너뛰는 키(지시선 vertices, 해치 스플라인 모서리 fitPoints 등)가 예전처럼 듣는다.
+ */
+function unflat(x: Entity): Entity {
+  const r = x as unknown as Record<string, unknown>;
+  switch (x.type) {
+    case 'POLYLINE': {
+      const { verts, bulges, widths, vflags, tangents, faceRecs, ...rest } = r;
+      void [verts, bulges, widths, vflags, tangents, faceRecs];
+      return { ...rest, vertices: polyVertices(x) } as unknown as Entity;
+    }
+    case 'LEADER': {
+      const { verts, ...rest } = r;
+      void verts;
+      return { ...rest, vertices: leaderVertices(x) } as unknown as Entity;
+    }
+    case 'MESH': {
+      const { verts, faceData, edgePairs, ...rest } = r;
+      void [verts, faceData, edgePairs];
+      return { ...rest, vertices: meshVertices(x), faces: meshFaces(x), edges: meshEdges(x) } as unknown as Entity;
+    }
+    case 'HATCH':
+    case 'MPOLYGON':
+      return {
+        ...x,
+        paths: x.paths.map((p) => {
+          if (!p.edgeData) return p;
+          const { edgeData, ...rest } = p;
+          void edgeData;
+          return { ...rest, edges: hatchEdges(p) };
+        }),
+      } as unknown as Entity;
+  }
+  return x;
+}
+
 /** 도형 하나 비교 */
-export function compareEntity(e: Entity, a: Entity, o: CompareOptions): string[] {
+export function compareEntity(e0: Entity, a0: Entity, o: CompareOptions): string[] {
+  const e = unflat(e0);
+  const a = unflat(a0);
   const out: string[] = [];
   const ver = o.ver;
   const t = e.type;

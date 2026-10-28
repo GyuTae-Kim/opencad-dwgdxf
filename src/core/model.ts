@@ -187,6 +187,7 @@ export interface LwPolylineEntity extends EntityBase {
   elevation: number;
 }
 
+/** POLYLINE 정점 하나를 풀어 쓴 모양(편집 계산용). 문서에는 PolylineEntity.verts 등 평탄 배열로 둔다(src/core/polyverts.ts) */
 export interface PolyVertex {
   /** 2D 폴리선은 OCS, 3D·메시는 WCS */
   location: Vec3;
@@ -208,7 +209,21 @@ export interface PolylineEntity extends EntityBase {
   kind: PolylineKind;
   /** POLYLINE 70 플래그 */
   flags: number;
-  vertices: PolyVertex[];
+  /**
+   * 정점 평탄 좌표 [x0, y0, z0, x1, y1, z1, …](2D는 OCS, 3D·메시는 WCS, 폴리페이스 면 레코드도 한 칸). 정점 수 = length / 3.
+   * 큰 도면에서 정점마다 객체를 두지 않으려고(문서 메모리·GC) 수만 이어 둔다. 풀어 쓰기·되담기는 src/core/polyverts.ts
+   */
+  verts: number[];
+  /** 정점별 볼록 [b0, b1, …]. 모두 +0이면 없다 */
+  bulges?: number[];
+  /** 정점별 폭 [시작0, 끝0, 시작1, 끝1, …]. 모두 +0이면 없다 */
+  widths?: number[];
+  /** 정점 플래그(VERTEX 70) [f0, f1, …]. 모두 0이면 없다 */
+  vflags?: number[];
+  /** 곡선 맞춤 접선 방향(라디안) [t0, t1, …], 접선이 없는 정점은 null. 하나도 없으면 없다 */
+  tangents?: (number | null)[];
+  /** 폴리페이스 면 레코드의 정점 번호(71~74) [i0, i1, …], 면 레코드가 아닌 정점은 null. 하나도 없으면 없다 */
+  faceRecs?: (number[] | null)[];
   /** 2D 폴리선의 고도(그룹 10의 Z) */
   elevation: number;
   defaultStartWidth: number;
@@ -392,7 +407,8 @@ export interface DimensionEntity extends EntityBase {
 export interface LeaderEntity extends EntityBase {
   type: 'LEADER';
   dimStyle: string;
-  vertices: Vec3[];
+  /** 정점 평탄 좌표 [x0, y0, z0, …](WCS). 큰 도면의 문서 메모리를 줄이려고 수만 이어 둔다(풀어 쓰기는 src/core/flat3.ts) */
+  verts: number[];
   /** 71: 화살표 사용 */
   arrowHead: boolean;
   /** 72: 0 직선, 1 스플라인 */
@@ -562,7 +578,11 @@ export interface HatchPath {
   flags: number;
   /** 폴리선 경계(flags & 2) */
   polyline?: HatchPolyline;
-  edges?: HatchEdge[];
+  /**
+   * 모서리 경계(선·호·타원호·스플라인)를 모서리 객체 대신 수 배열 하나로 둔다(큰 도면의 문서 메모리·GC).
+   * 기록 형식과 풀어 쓰기(hatchEdges)·되담기(packEdges)는 src/core/hatchedges.ts
+   */
+  edgeData?: number[];
   /** 연관 경계 객체 핸들 */
   sources?: string[];
 }
@@ -750,9 +770,12 @@ export interface TableEntity extends EntityBase {
 
 export interface MeshEntity extends EntityBase {
   type: 'MESH';
-  vertices: Vec3[];
-  faces: number[][];
-  edges: [number, number][];
+  /** 정점 평탄 좌표 [x0, y0, z0, …](WCS). 큰 도면의 문서 메모리를 줄이려고 수만 이어 둔다(풀어 쓰기는 src/core/meshdata.ts) */
+  verts: number[];
+  /** 면들 [면0의 정점 수, 번호…, 면1의 정점 수, 번호…, …] */
+  faceData: number[];
+  /** 모서리 [a0, b0, a1, b1, …] */
+  edgePairs: number[];
   subdivision: number;
 }
 

@@ -14,6 +14,9 @@ import { readDxf } from '../../src/io/dxf/reader';
 import { FIXTURES } from '../oracle/ezdxf';
 import { dwgFixtures } from './oracle';
 import { packBulge, packLw } from '../../src/core/lwpoly';
+import { packPoly } from '../../src/core/polyverts';
+import { packEdges } from '../../src/core/hatchedges';
+import { pack3 } from '../../src/core/flat3';
 
 export const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 export const WRITE_VERSIONS = ['AC1015', 'AC1018', 'AC1024', 'AC1027', 'AC1032'] as const;
@@ -91,8 +94,8 @@ export function syntheticDocument(): CadDocument {
   add({ ...base(), type: 'ELLIPSE', center: { x: 50, y: 10, z: 0 }, majorAxis: { x: 10, y: 0, z: 0 }, ratio: 0.5, startParam: 0, endParam: Math.PI * 2 } as Entity);
   add({ ...base(), type: 'POINT', position: { x: 1, y: 2, z: 3 }, angle: 0 } as Entity);
   add({ ...base(), type: 'LWPOLYLINE', ...packLw([{ x: 0, y: 0, bulge: 0, startWidth: 0, endWidth: 0 }, { x: 10, y: 0, bulge: 0.5, startWidth: 1, endWidth: 2 }, { x: 10, y: 10, bulge: 0, startWidth: 0, endWidth: 0 }]), closed: true, plinegen: false, constantWidth: 0, elevation: 3 } as Entity);
-  add({ ...base(), type: 'POLYLINE', kind: '2d', flags: 1, elevation: 2, defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0, vertices: [0, 1, 2].map((i) => ({ location: { x: i * 5, y: i, z: 2 }, bulge: i === 1 ? 0.3 : 0, startWidth: 0.5, endWidth: 0.5, flags: 0 })) } as Entity);
-  add({ ...base(), type: 'POLYLINE', kind: '3d', flags: 8, elevation: 0, defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0, vertices: [0, 1, 2].map((i) => ({ location: { x: i, y: i * 2, z: i * 3 }, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })) } as Entity);
+  add({ ...base(), type: 'POLYLINE', kind: '2d', flags: 1, elevation: 2, defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0, ...packPoly([0, 1, 2].map((i) => ({ location: { x: i * 5, y: i, z: 2 }, bulge: i === 1 ? 0.3 : 0, startWidth: 0.5, endWidth: 0.5, flags: 0 }))) } as Entity);
+  add({ ...base(), type: 'POLYLINE', kind: '3d', flags: 8, elevation: 0, defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0, ...packPoly([0, 1, 2].map((i) => ({ location: { x: i, y: i * 2, z: i * 3 }, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))) } as Entity);
   add({
     ...base(),
     type: 'POLYLINE',
@@ -106,12 +109,12 @@ export function syntheticDocument(): CadDocument {
     mDensity: 0,
     nDensity: 0,
     smoothType: 0,
-    vertices: [
+    ...packPoly([
       { location: { x: 0, y: 0, z: 0 }, bulge: 0, startWidth: 0, endWidth: 0, flags: 192 },
       { location: { x: 1, y: 0, z: 0 }, bulge: 0, startWidth: 0, endWidth: 0, flags: 192 },
       { location: { x: 0, y: 1, z: 0 }, bulge: 0, startWidth: 0, endWidth: 0, flags: 192 },
       { location: { x: 0, y: 0, z: 0 }, bulge: 0, startWidth: 0, endWidth: 0, flags: 128, faceIndices: [1, 2, -3] },
-    ],
+    ]),
   } as Entity);
   add({ ...base(), type: 'SPLINE', flags: 8, degree: 3, knots: [0, 0, 0, 0, 1, 1, 1, 1], controlPoints: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 2, z: 0 }, { x: 3, y: 2, z: 0 }, { x: 4, y: 0, z: 0 }], fitPoints: [], knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10, normal: { x: 0, y: 0, z: 1 } } as Entity);
   add({ ...base(), type: 'SPLINE', flags: 8, degree: 3, knots: [], controlPoints: [], fitPoints: [{ x: 0, y: 0, z: 0 }, { x: 5, y: 5, z: 0 }, { x: 10, y: 0, z: 0 }], knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10, startTangent: { x: 1, y: 1, z: 0 }, endTangent: { x: 1, y: -1, z: 0 }, normal: { x: 0, y: 0, z: 1 } } as Entity);
@@ -152,12 +155,12 @@ export function syntheticDocument(): CadDocument {
       { flags: 3, polyline: { closed: true, verts: packBulge([{ x: 0, y: 0, bulge: 0 }, { x: 5, y: 0, bulge: 0.4 }, { x: 5, y: 5, bulge: 0 }]) } },
       {
         flags: 0,
-        edges: [
+        edgeData: packEdges([
           { type: 'line', start: { x: 10, y: 0 }, end: { x: 15, y: 0 } },
           { type: 'arc', center: { x: 15, y: 2.5 }, radius: 2.5, startAngle: -Math.PI / 2, endAngle: Math.PI / 2, ccw: true },
           { type: 'line', start: { x: 15, y: 5 }, end: { x: 10, y: 5 } },
           { type: 'ellipse', center: { x: 10, y: 2.5 }, majorAxis: { x: 0, y: 2.5 }, ratio: 0.5, startAngle: 0, endAngle: Math.PI, ccw: true },
-        ],
+        ]),
       },
     ],
     patternLines: [],
@@ -176,7 +179,7 @@ export function syntheticDocument(): CadDocument {
     patternScale: 2,
     patternDouble: false,
     elevation: 0,
-    paths: [{ flags: 1, edges: [{ type: 'line', start: { x: 0, y: 0 }, end: { x: 9, y: 0 } }, { type: 'line', start: { x: 9, y: 0 }, end: { x: 0, y: 9 } }, { type: 'line', start: { x: 0, y: 9 }, end: { x: 0, y: 0 } }] }],
+    paths: [{ flags: 1, edgeData: packEdges([{ type: 'line', start: { x: 0, y: 0 }, end: { x: 9, y: 0 } }, { type: 'line', start: { x: 9, y: 0 }, end: { x: 0, y: 9 } }, { type: 'line', start: { x: 0, y: 9 }, end: { x: 0, y: 0 } }]) }],
     patternLines: [{ angle: Math.PI / 4, base: { x: 0, y: 0 }, offset: { x: -2.2, y: 2.2 }, dashes: [] }],
     pixelSize: 0,
     seedPoints: [],
@@ -205,7 +208,7 @@ export function syntheticDocument(): CadDocument {
     lineSpacingStyle: 1,
     lineSpacingFactor: 1,
   } as Entity);
-  add({ ...base(), type: 'LEADER', dimStyle: 'ISO-25', vertices: [{ x: 0, y: 0, z: 0 }, { x: 5, y: 5, z: 0 }, { x: 10, y: 5, z: 0 }], arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 } as Entity);
+  add({ ...base(), type: 'LEADER', dimStyle: 'ISO-25', verts: pack3([{ x: 0, y: 0, z: 0 }, { x: 5, y: 5, z: 0 }, { x: 10, y: 5, z: 0 }]), arrowHead: true, pathType: 0, creation: 3, hooklineDirection: 0, hookline: false, textHeight: 0, textWidth: 0 } as Entity);
   add({ ...base(), type: 'TOLERANCE', dimStyle: 'ISO-25', insert: { x: 0, y: 30, z: 0 }, text: '{\\Fgdt;j}%%v0.1', direction: { x: 1, y: 0, z: 0 } } as Entity);
   add({ ...base(), type: 'MLINE', styleName: 'Standard', scale: 1, justification: 0, flags: 1, startPoint: { x: 0, y: 40, z: 0 }, normal: { x: 0, y: 0, z: 1 }, elementCount: 2, vertices: [0, 1].map((i) => ({ position: { x: i * 10, y: 40, z: 0 }, direction: { x: 1, y: 0, z: 0 }, miter: { x: 0, y: 1, z: 0 }, elements: [{ params: [0.5, 0], fillParams: [] }, { params: [-0.5, 0], fillParams: [] }] })) } as Entity);
   return doc;

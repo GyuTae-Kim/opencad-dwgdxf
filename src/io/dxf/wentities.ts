@@ -32,6 +32,7 @@ import type {
 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { lwCount, lwHasWidths, vertCount } from '../../core/lwpoly';
+import { polyBulge, polyCount, polyEndWidth, polyFace, polyFlags, polyIsFaceRecord, polyLoc, polyStartWidth, polyTangent, polyX, polyY, polyZ } from '../../core/polyverts';
 import { clampedKnots } from '../../geom/curves';
 import { CollectSink, kindOf, rawTagValid, rawTagsValid, type TagSink } from './tagwriter';
 import type { WriteContext } from './wcontext';
@@ -39,6 +40,9 @@ import { mtextPlainLines } from './wconvert';
 import { annoDimWriteOverrides } from '../annoscale';
 import { parseDimOverrides } from './tagutil';
 import { acdbTableTags, tableCellsOut } from '../tablecells';
+import { hatchEdges } from '../../core/hatchedges';
+import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../core/meshdata';
+import { leaderCount, leaderVertices } from '../../core/flat3';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -558,8 +562,10 @@ function writePolylineHead(w: TagOut, e: PolylineEntity): void {
     let m = e.mCount;
     let n = e.nCount;
     if (e.kind === 'polyface') {
-      m = e.vertices.filter((v) => !v.faceIndices || v.flags & 64).length;
-      n = e.vertices.length - m;
+      const nv = polyCount(e);
+      m = 0;
+      for (let i = 0; i < nv; i++) if (!polyIsFaceRecord(e, i)) m++;
+      n = nv - m;
     }
     w.t(71, m);
     w.t(72, n);
@@ -574,7 +580,9 @@ function writePolylineHead(w: TagOut, e: PolylineEntity): void {
 
 function writeVertices(w: TagOut, e: PolylineEntity, h: string, paper: boolean): void {
   const ctx = w.ctx;
-  for (const v of e.vertices) {
+  for (let i = 0, nv = polyCount(e); i < nv; i++) {
+    const vflags = polyFlags(e, i);
+    const faceIndices = polyFace(e, i);
     const vh = ctx.alloc();
     w.t(0, 'VERTEX');
     w.t(5, vh);
@@ -584,8 +592,8 @@ function writeVertices(w: TagOut, e: PolylineEntity, h: string, paper: boolean):
     }
     if (paper) w.t(67, 1);
     w.t(8, e.layer || '0');
-    let flags = v.flags;
-    const face = e.kind === 'polyface' && v.faceIndices && v.faceIndices.length > 0 && !(v.flags & 64);
+    let flags = vflags;
+    const face = e.kind === 'polyface' && faceIndices && faceIndices.length > 0 && !(vflags & 64);
     if (e.kind === '3d') flags |= 32;
     else if (e.kind === 'mesh') flags |= 64;
     else if (e.kind === 'polyface') flags = face ? 128 : 192;
@@ -597,17 +605,21 @@ function writeVertices(w: TagOut, e: PolylineEntity, h: string, paper: boolean):
       }
     }
     // 2D 정점의 Z(30)도 모델 값 그대로 — AutoCAD는 고도(POLYLINE 30)와 다른 정점 Z를 그대로 적고, 그릴 때는 고도만 쓴다
-    w.p3(10, face ? { x: 0, y: 0, z: 0 } : e.kind === '2d' ? { x: v.location.x, y: v.location.y, z: fin(v.location.z) } : v.location);
+    w.p3(10, face ? { x: 0, y: 0, z: 0 } : e.kind === '2d' ? { x: polyX(e, i), y: polyY(e, i), z: fin(polyZ(e, i)) } : polyLoc(e, i));
     if (e.kind === '2d') {
-      if (v.startWidth) w.t(40, v.startWidth);
-      if (v.endWidth) w.t(41, v.endWidth);
-      if (v.bulge) w.t(42, v.bulge);
+      const sw = polyStartWidth(e, i);
+      const ew = polyEndWidth(e, i);
+      const bulge = polyBulge(e, i);
+      if (sw) w.t(40, sw);
+      if (ew) w.t(41, ew);
+      if (bulge) w.t(42, bulge);
     }
     w.t(70, flags);
-    if (e.kind === '2d' && v.flags & 2 && v.tangent !== undefined) w.deg(50, v.tangent);
+    const tangent = polyTangent(e, i);
+    if (e.kind === '2d' && vflags & 2 && tangent !== undefined) w.deg(50, tangent);
     if (face) {
-      const idx = v.faceIndices!;
-      for (let i = 0; i < Math.min(4, idx.length); i++) w.t(71 + i, idx[i]!);
+      const idx = faceIndices!;
+      for (let k = 0; k < Math.min(4, idx.length); k++) w.t(71 + k, idx[k]!);
     }
   }
   seqend(w, h, e.layer, paper);
@@ -772,8 +784,8 @@ function writeLeader(w: TagOut, e: LeaderEntity): void {
   w.t(75, e.hookline ? 1 : 0);
   w.t(40, fin(e.textHeight));
   w.t(41, fin(e.textWidth));
-  w.t(76, e.vertices.length);
-  for (const v of e.vertices) w.p3(10, v);
+  w.t(76, leaderCount(e));
+  for (const v of leaderVertices(e)) w.p3(10, v);
   w.h(340, e.annotation);
   if (e.normal) w.p3(210, e.normal);
   if (e.horizontalDirection) w.p3(211, e.horizontalDirection);
@@ -1019,7 +1031,7 @@ function writePath(w: TagOut, p: HatchPath, mpolygon: boolean): void {
     }
   } else {
     w.t(92, p.flags & ~2);
-    const edges = (p.edges ?? []).filter((e) => e.type !== 'spline' || e.controlPoints.length > e.degree || (e.fitPoints?.length ?? 0) >= 2);
+    const edges = hatchEdges(p).filter((e) => e.type !== 'spline' || e.controlPoints.length > e.degree || (e.fitPoints?.length ?? 0) >= 2);
     w.t(93, edges.length);
     for (const e of edges) writeEdge(w, e);
   }
@@ -1535,21 +1547,23 @@ export function writeEntity(s: TagSink, e: Entity, ctx: WriteContext, owner: str
       w.t(71, 2);
       w.t(72, 0);
       w.t(91, e.subdivision);
-      w.t(92, e.vertices.length);
-      for (const v of e.vertices) w.p3(10, v);
-      const size = e.faces.reduce((a, f) => a + f.length + 1, 0);
+      const faces = meshFaces(e);
+      const edges = meshEdges(e);
+      w.t(92, meshVertexCount(e));
+      for (const v of meshVertices(e)) w.p3(10, v);
+      const size = faces.reduce((a, f) => a + f.length + 1, 0);
       w.t(93, size);
-      for (const f of e.faces) {
+      for (const f of faces) {
         w.t(90, f.length);
         for (const i of f) w.t(90, i);
       }
-      w.t(94, e.edges.length);
-      for (const [a, b] of e.edges) {
+      w.t(94, edges.length);
+      for (const [a, b] of edges) {
         w.t(90, a);
         w.t(90, b);
       }
-      w.t(95, e.edges.length);
-      for (let i = 0; i < e.edges.length; i++) w.t(140, 0);
+      w.t(95, edges.length);
+      for (let i = 0; i < edges.length; i++) w.t(140, 0);
       w.t(90, 0);
       break;
     }

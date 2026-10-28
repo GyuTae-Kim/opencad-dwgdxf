@@ -32,6 +32,8 @@ import { insertionPoint, intersections } from '../geom/query';
 import { generateDimensionGeometry } from './generate';
 import { type P, add, ccw, cross, dir, dist, dot, intersect, madd, mid, perp, sub, unit } from './vec';
 import { lwCount } from '../../core/lwpoly';
+import { polyDrawnPoints } from '../../core/polyverts';
+import { leaderVertices } from '../../core/flat3';
 
 // ---------------------------------------------------------------------------
 // 기록
@@ -362,11 +364,11 @@ function candidates(e: Entity, osnap: number): Cand[] {
     case OSNAP.START: {
       if (e.type === 'SOLID' || e.type === 'TRACE') e.points.forEach((q, i) => push(`v${i}`, ocsToWcs(q, e.extrusion)));
       else if (e.type === '3DFACE') e.points.forEach((q, i) => push(`v${i}`, q));
-      else if (e.type === 'LEADER') e.vertices.forEach((q, i) => push(`v${i}`, q));
+      else if (e.type === 'LEADER') leaderVertices(e).forEach((q, i) => push(`v${i}`, q));
       else if (!fullCurve(e)) {
         const path = pathPieces(e);
         if (!path || (e.type === 'SPLINE' && path.closed)) return out;
-        const nv = e.type === 'LWPOLYLINE' ? lwCount(e) : e.type === 'POLYLINE' ? e.vertices.filter((v) => !(v.flags & 16)).length : 2;
+        const nv = e.type === 'LWPOLYLINE' ? lwCount(e) : e.type === 'POLYLINE' ? polyDrawnPoints(e).length : 2;
         const poly = POLY.has(e.type);
         path.pieces.forEach((pc, k) => {
           const s = segOf(pc) ?? k;

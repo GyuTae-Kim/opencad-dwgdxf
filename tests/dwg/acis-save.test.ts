@@ -12,6 +12,7 @@ import { satDxfTags, satWires } from '../../src/io/acis';
 import { readDwg, writeDwg } from '../../src/io/dwg';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
+import { polyVertices } from '../../src/core/polyverts';
 
 /** 사각형 영역(판 7.0, (10, 20)으로 옮기는 몸체 변환) */
 const sat = (version: number) =>
@@ -84,7 +85,7 @@ describe('ACIS 객체를 다른 버전 DWG로', () => {
       expect(polys.length).toBe(4);
       expect(polys[0]!.handle).toBe('9A1');
       expect(polys.every((p) => p.kind === '3d' && p.color.aci === 3)).toBe(true);
-      expect(polys.map((p) => p.vertices.map((q) => [q.location.x, q.location.y]))).toEqual(e.wires!.map((w) => w.map((q) => [q.x, q.y])));
+      expect(polys.map((p) => polyVertices(p).map((q) => [q.location.x, q.location.y]))).toEqual(e.wires!.map((w) => w.map((q) => [q.x, q.y])));
       expect(back.warnings).toEqual([]);
     });
   }

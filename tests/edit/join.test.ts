@@ -5,6 +5,7 @@ import { entityPath } from '../../src/edit/geom/path';
 import { flattenPath, pathNearest } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, arc, circle, deg, ellipse, line, lw, near, newDoc, poly2d, renders, spline } from './helpers';
 import { lwVertices } from '../../src/core/lwpoly';
+import { polyVertices } from '../../src/core/polyverts';
 
 const doc = newDoc();
 
@@ -99,7 +100,7 @@ describe('joinEntities', () => {
     const r3 = joinEntities([line(0, 0, 5, 0), { ...line(5, 0, 5, 5), start: P(5, 0, 0), end: P(5, 5, 3) } as Entity]);
     const p3 = r3.add![0] as PolylineEntity;
     expect(p3.kind).toBe('3d');
-    expect(p3.vertices.at(-1)!.location.z).toBe(3);
+    expect(polyVertices(p3).at(-1)!.location.z).toBe(3);
   });
   it('스플라인이 끼면 SPLINE', () => {
     const s = spline([

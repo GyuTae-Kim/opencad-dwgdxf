@@ -6,6 +6,8 @@ import { tableKey } from '../../core/model';
 import { plainText, TYPE_NAMES } from '../../app/inquiry';
 import { hasWildcard, wcmatch } from './wildcard';
 import { lwCount, lwPoint } from '../../core/lwpoly';
+import { polyCount, polyLoc } from '../../core/polyverts';
+import { at3, leaderCount } from '../../core/flat3';
 
 export type PropKind = 'name' | 'text' | 'number' | 'color' | 'lineweight' | 'transparency';
 
@@ -64,7 +66,7 @@ function anchor(e: Entity): { x: number; y: number } | null {
     case 'LWPOLYLINE':
       return lwCount(e) ? lwPoint(e, 0) : null;
     case 'POLYLINE':
-      return e.vertices[0]?.location ?? null;
+      return polyCount(e) ? polyLoc(e, 0) : null;
     case 'TEXT':
     case 'ATTRIB':
     case 'ATTDEF':
@@ -86,7 +88,7 @@ function anchor(e: Entity): { x: number; y: number } | null {
     case 'DIMENSION':
       return e.textMid;
     case 'LEADER':
-      return e.vertices[0] ?? null;
+      return leaderCount(e) ? at3(e.verts, 0) : null;
     default:
       return null;
   }
