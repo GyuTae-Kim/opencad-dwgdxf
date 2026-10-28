@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:oracle": "vite-node scripts/oracle/require.ts && vitest run",
     "test:watch": "vitest",
     "check:seo": "opencad-site check-seo",
     "update:content-dates": "vite build && opencad-site update-content-dates",

@@ -179,12 +179,18 @@ npm run build     # dist/
 | `CAD_DWG_PYTHON` | (선택) 그 모듈을 불러올 수 있는 파이썬. 기준 도구와 ezdxf가 다른 환경에 있을 때만 줍니다(없으면 `CAD_PYTHON`) |
 
 ```bash
-CAD_PYTHON=~/envs/cad/bin/python CAD_FIXTURES=~/cad-fixtures CAD_DWG_ORACLE=<모듈 이름> npm test
+CAD_PYTHON=~/envs/cad/bin/python CAD_FIXTURES=~/cad-fixtures CAD_DWG_ORACLE=<모듈 이름> npm run test:oracle
+npm run test:oracle -- tests/dwg    # 일부만
 ```
+
+`npm run test:oracle`은 세 변수를 모두 쓸 수 있는지 먼저 보고, 하나라도 쓸 수 없으면 무엇이 없는지 알리고 시험을 돌리지 않습니다.
+`npm test`는 이때 대조 시험을 조용히 건너뛰어 통과한 것처럼 보이고, CI도 대조 시험을 건너뛰므로 대조 시험의 실패는 이 명령으로만 드러납니다.
+리더·쓰기·도형 계산처럼 파일 해석 결과가 바뀔 수 있는 변경은 고치기 전과 후에 `npm run test:oracle`을 돌려 실패 목록이 같은지(새 실패가 없는지) 확인합니다.
 
 ezdxf 요약과 기준 도구가 바꾼 DXF는 `.runtime/`에 캐시해 두 번째부터 빠릅니다.
 기준은 DWG를 같은 판의 DXF로 바꿔 견주므로 DXF 표현에서만 생기는 차이(예: R2000~R2007 DXF는 동적 블록 정의를 `*U<n>` 익명 블록으로 씁니다 — AutoCAD도 같습니다)는
-근거와 함께 `tests/dwg/normalize.ts`에서 맞춥니다.
+근거와 함께 `tests/dwg/normalize.ts`에서 맞춥니다. 기준 DXF는 맞춤점 자료만 담은 스플라인을 맞춤점만으로 쓰고, AutoCAD와 이 앱의 DWG 리더는
+같은 자료로 구한 조정점·매듭을 함께 둡니다. 이 차이는 기준을 AutoCAD DXF 꼴로 바꿔 견줍니다(맞춤점 수·좌표·끝 접선과 채운 조정점 좌표는 그대로 견줍니다).
 
 ### 실제 도면 훑기
 
