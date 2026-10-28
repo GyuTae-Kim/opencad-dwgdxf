@@ -28,6 +28,7 @@ import { proxyEntities } from '../../edit/geom/proxygeom';
 import { satDxfTags } from '../acis';
 import { codepageToEncoding, decoderFor } from '../../core/codepage';
 import type { WriteContext } from './wcontext';
+import { meshFaces, meshVertices } from '../../core/meshdata';
 
 const ACIS = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
 
@@ -253,7 +254,7 @@ function invalid(e: Entity): boolean {
     case 'SPLINE':
       return e.degree < 1 || (e.controlPoints.length === 0 && e.fitPoints.length === 0);
     case 'MESH':
-      return !e.vertices.length || !e.faces.length;
+      return !e.verts.length || !e.faceData.length;
   }
   return false;
 }
@@ -349,10 +350,11 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
       return null;
     case 'MESH':
       if (ver < 1024) {
-        if (!e.vertices.length || !e.faces.length) return [];
+        if (!e.verts.length || !e.faceData.length) return [];
         ctx.warn('entity.mesh_as_polyface', '이 버전에 없는 MESH를 폴리페이스 메시로 썼습니다.');
-        const vs: PolyVertex[] = e.vertices.map((p) => v(p, 192));
-        for (const f of e.faces) {
+        const mverts = meshVertices(e);
+        const vs: PolyVertex[] = mverts.map((p) => v(p, 192));
+        for (const f of meshFaces(e)) {
           if (f.length < 3) continue;
           // 폴리페이스 면은 정점 4개까지 → 그보다 많으면 부채꼴 삼각형으로 나눈다.
           const groups: number[][] = [];
@@ -365,8 +367,8 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
           }
         }
         const pl = polyline(e, 'polyface', vs, 64, e.handle);
-        pl.mCount = e.vertices.length;
-        pl.nCount = vs.length - e.vertices.length;
+        pl.mCount = mverts.length;
+        pl.nCount = vs.length - mverts.length;
         return [pl];
       }
       return null;

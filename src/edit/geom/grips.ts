@@ -46,6 +46,7 @@ import { type EditResult, type GripPoint, MSG, allocBlockName } from './types';
 import { updateDimNumber } from './xannot';
 import { mtextDir } from './xtext';
 import { hatchEdges, packEdges } from '../../core/hatchedges';
+import { meshVertexCount, meshVertices } from '../../core/meshdata';
 
 export interface GripOptions {
   /** 호 중간 그립: 'stretch'(기본, 세 점 호) 또는 'radius'(반지름만) */
@@ -167,7 +168,7 @@ export function gripPoints(e: Entity, doc: CadDocument): GripPoint[] {
     case 'MLINE':
       return e.vertices.map((v, i) => g('v' + i, v.position, 'vertex'));
     case 'MESH':
-      return e.vertices.map((v, i) => g('v' + i, v, 'vertex'));
+      return meshVertices(e).map((v, i) => g('v' + i, v, 'vertex'));
     case 'VIEWPORT': {
       const c = e.center;
       const w = e.width / 2;
@@ -401,7 +402,12 @@ export function gripMove(e: Entity, id: string, to: Vec2, doc: CadDocument, opts
     case 'MESH': {
       const i = Number(id.slice(1));
       const r = cloneEntity(e);
-      r.vertices[i] = { x: to.x, y: to.y, z: e.vertices[i]!.z };
+      if (Number.isInteger(i) && i >= 0 && i < meshVertexCount(e)) {
+        const vs = numArray(r.verts);
+        vs[i * 3] = to.x;
+        vs[i * 3 + 1] = to.y;
+        r.verts = vs;
+      }
       return { replace: [r] };
     }
     case 'VIEWPORT': {

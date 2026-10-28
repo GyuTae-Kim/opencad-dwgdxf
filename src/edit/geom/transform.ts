@@ -54,6 +54,7 @@ import { xformMText, xformShape, xformText, xformTolerance } from './xtext';
 import { xformHatch } from './xhatch';
 import { xformDimension, xformLeader, xformMLeader, xformTable } from './xannot';
 import { xformArcText } from '../textools/arctext';
+import { meshVertices, packMesh } from '../../core/meshdata';
 
 export function transformEntity(e: Entity, m: Affine, doc: CadDocument, opts: TransformOptions = {}): EditResult {
   return transformOne(e, m, doc, opts);
@@ -221,7 +222,11 @@ function transformOne(e: Entity, m: Affine, doc: CadDocument, opt: TransformOpti
       return same(e, xformMLine(e, m, opt));
     case 'MESH': {
       const r = cloneEntity(e);
-      r.vertices = e.vertices.map((p) => P3(m, p, opt));
+      r.verts = packMesh(
+        meshVertices(e).map((p) => P3(m, p, opt)),
+        [],
+        [],
+      ).verts;
       return same(e, r);
     }
     case 'PDFUNDERLAY':

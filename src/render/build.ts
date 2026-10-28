@@ -1149,15 +1149,23 @@ export class SceneBuilder {
       }
       case 'MESH': {
         const r = this.resolve(e, ctx);
-        const v = e.vertices.map((p) => applyXY(ctx.m, p.x, p.y, p.z));
-        if (e.edges.length) for (const [a, b] of e.edges) this.out.segment(v[a]!.x, v[a]!.y, v[b]!.x, v[b]!.y, r.style);
-        else
-          for (const f of e.faces)
-            for (let i = 0; i < f.length; i++) {
-              const a = v[f[i]!];
-              const b = v[f[(i + 1) % f.length]!];
+        // 평탄 자료를 바로 읽는다(src/core/meshdata.ts)
+        const V = e.verts;
+        const v: { x: number; y: number }[] = [];
+        for (let i = 0; i + 2 < V.length; i += 3) v.push(applyXY(ctx.m, V[i]!, V[i + 1]!, V[i + 2]!));
+        const E = e.edgePairs;
+        if (E.length >= 2) for (let k = 0; k + 1 < E.length; k += 2) this.out.segment(v[E[k]!]!.x, v[E[k]!]!.y, v[E[k + 1]!]!.x, v[E[k + 1]!]!.y, r.style);
+        else {
+          const F = e.faceData;
+          for (let k = 0; k < F.length; k += F[k]! + 1) {
+            const n = F[k]!;
+            for (let i = 0; i < n; i++) {
+              const a = v[F[k + 1 + i]!];
+              const b = v[F[k + 1 + ((i + 1) % n)]!];
               if (a && b) this.out.segment(a.x, a.y, b.x, b.y, r.style);
             }
+          }
+        }
         return;
       }
       case 'OLE2FRAME':

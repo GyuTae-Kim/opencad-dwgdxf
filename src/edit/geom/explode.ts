@@ -41,6 +41,7 @@ import { mapBlockContents } from './xannot';
 import { metrics, mtextDir } from './xtext';
 import { type Nurbs, domain, normalizeNurbs, subNurbs } from './nurbs';
 import { explodeArcText } from '../textools/arctext';
+import { meshFaces, meshVertices } from '../../core/meshdata';
 
 export function explodeEntity(e: Entity, doc: CadDocument): EditResult {
   const done = (add: Entity[], extra: Partial<EditResult> = {}): EditResult => (add.length ? { remove: e.handle ? [e.handle] : [], add, ...extra } : { message: MSG.cannotExplode });
@@ -53,7 +54,8 @@ export function explodeEntity(e: Entity, doc: CadDocument): EditResult {
       return done(explodePolyline(e));
     case 'MESH': {
       const out: Entity[] = [];
-      for (const f of e.faces) out.push(...faceEntities(e, f.map((i) => e.vertices[i]!).filter(Boolean), f.map(() => true)));
+      const mv = meshVertices(e);
+      for (const f of meshFaces(e)) out.push(...faceEntities(e, f.map((i) => mv[i]!).filter(Boolean), f.map(() => true)));
       return done(out);
     }
     case 'DIMENSION': {

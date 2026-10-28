@@ -1628,9 +1628,10 @@ function table(c: Common, version: string): TableEntity {
 function mesh(c: Common): MeshEntity {
   const t = c.tags;
   const codes = t.codes;
-  const vertices: Vec3[] = [];
-  const faces: number[][] = [];
-  const edges: [number, number][] = [];
+  // 정점·면·모서리는 수 배열로(src/core/meshdata.ts)
+  const verts: number[] = [];
+  const faceData: number[] = [];
+  const edgePairs: number[] = [];
   let i = 0;
   const n = codes.length;
   let subdivision = 0;
@@ -1642,7 +1643,8 @@ function mesh(c: Common): MeshEntity {
       i++;
       for (let k = 0; k < nv && i < n; k++) {
         if (codes[i] !== 10) break;
-        vertices.push(t.pointAt(i));
+        const p = t.pointAt(i);
+        verts.push(p.x, p.y, p.z);
         i += 3;
       }
       i--;
@@ -1654,17 +1656,18 @@ function mesh(c: Common): MeshEntity {
       i--;
       for (let k = 0; k < list.length; ) {
         const cnt = list[k]!;
-        faces.push(list.slice(k + 1, k + 1 + cnt));
+        const f = list.slice(k + 1, k + 1 + cnt);
+        faceData.push(f.length, ...f);
         k += cnt + 1;
       }
     } else if (code === 94) {
       const ne = int(t.values[i]);
       i++;
-      for (let k = 0; k < ne && i + 1 < n && codes[i] === 90; k++, i += 2) edges.push([int(t.values[i]), int(t.values[i + 1])]);
+      for (let k = 0; k < ne && i + 1 < n && codes[i] === 90; k++, i += 2) edgePairs.push(int(t.values[i]), int(t.values[i + 1]));
       i--;
     }
   }
-  return { ...c.base, type: 'MESH', vertices, faces, edges, subdivision } as MeshEntity;
+  return { ...c.base, type: 'MESH', verts: verts.slice(), faceData: faceData.slice(), edgePairs: edgePairs.slice(), subdivision } as MeshEntity;
 }
 
 function underlay(c: Common, type: UnderlayEntity['type']): UnderlayEntity {

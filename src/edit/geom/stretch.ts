@@ -21,6 +21,7 @@ import { type EditResult, allocBlockName, mergeResults } from './types';
 import { dimMeasure, updateDimNumber } from './xannot';
 import { layoutArcText } from '../../text/arctext';
 import { hatchEdges, packEdges } from '../../core/hatchedges';
+import { meshVertices, packMesh } from '../../core/meshdata';
 
 /** 걸침 영역: 두 점이면 사각형 */
 function polygonOf(crossing: readonly Vec2[]): Vec2[] {
@@ -154,7 +155,7 @@ function keyPoints(e: Entity): Vec2[] {
     case 'MLINE':
       return e.vertices.map((v) => P(v.position));
     case 'MESH':
-      return e.vertices.map((v) => P(v));
+      return meshVertices(e).map((v) => P(v));
     case 'REGION':
     case '3DSOLID':
     case 'BODY':
@@ -291,7 +292,11 @@ function partial(e: Entity, inside: (p: Vec2) => boolean, d: Vec2, doc: CadDocum
       return { replace: [stretchMLine(e, In, d)] };
     case 'MESH': {
       const r = cloneEntity(e);
-      r.vertices = e.vertices.map((v) => (In(v) ? mv(v, d) : { ...v }));
+      r.verts = packMesh(
+        meshVertices(e).map((v) => (In(v) ? mv(v, d) : { ...v })),
+        [],
+        [],
+      ).verts;
       return { replace: [r] };
     }
     case 'OLE2FRAME':

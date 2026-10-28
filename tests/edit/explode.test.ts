@@ -28,6 +28,7 @@ import { flattenPath, pathNearest, pathSize } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, arc, circle, deg, line, lw, mtext, near, newDoc, poly2d, renders, text } from './helpers';
 import { packBulge } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
+import { packMesh } from '../../src/core/meshdata';
 
 const base = (h = '') => ({ ...entityDefaults(), handle: h });
 
@@ -175,7 +176,7 @@ describe('explodeEntity — 폴리선', () => {
       nCount: 3,
     };
     expect(explodeEntity(mesh, doc).add!.length).toBe(2);
-    const m: MeshEntity = { type: 'MESH', ...base('M'), vertices: [P(0, 0), P(1, 0), P(1, 1), P(0, 1), P(2, 0)], faces: [[0, 1, 2, 3], [1, 4, 2]], edges: [], subdivision: 0 };
+    const m: MeshEntity = { type: 'MESH', ...base('M'), ...packMesh([P(0, 0), P(1, 0), P(1, 1), P(0, 1), P(2, 0)], [[0, 1, 2, 3], [1, 4, 2]], []), subdivision: 0 };
     expect(explodeEntity(m, doc).add!.length).toBe(2);
   });
 });

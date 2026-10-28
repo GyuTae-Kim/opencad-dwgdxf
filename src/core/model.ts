@@ -769,9 +769,12 @@ export interface TableEntity extends EntityBase {
 
 export interface MeshEntity extends EntityBase {
   type: 'MESH';
-  vertices: Vec3[];
-  faces: number[][];
-  edges: [number, number][];
+  /** 정점 평탄 좌표 [x0, y0, z0, …](WCS). 큰 도면의 문서 메모리를 줄이려고 수만 이어 둔다(풀어 쓰기는 src/core/meshdata.ts) */
+  verts: number[];
+  /** 면들 [면0의 정점 수, 번호…, 면1의 정점 수, 번호…, …] */
+  faceData: number[];
+  /** 모서리 [a0, b0, a1, b1, …] */
+  edgePairs: number[];
   subdivision: number;
 }
 

@@ -29,6 +29,7 @@ import { bulgeVertices, packBulge } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
 import { packEdges } from '../../src/core/hatchedges';
 import { hatchEdges } from '../../src/core/hatchedges';
+import { packMesh } from '../../src/core/meshdata';
 
 const base = (h: string) => ({ ...entityDefaults(), handle: h });
 const one = (r: { replace?: Entity[]; add?: Entity[] }) => [...(r.replace ?? []), ...(r.add ?? [])][0]!;
@@ -153,7 +154,7 @@ const others = (): [string, Entity][] => [
   ['이미지', { type: 'IMAGE', ...base('IM'), insert: P(1, 1), uVector: P(0.1, 0), vVector: P(0, 0.1), imageSize: V(100, 50), displayFlags: 1, clipping: false, brightness: 50, contrast: 50, fade: 0, clipBoundaryType: 1, clipBoundary: [] } as ImageEntity],
   ['여러 줄', { type: 'MLINE', ...base('MLN'), styleName: 'Standard', scale: 1, justification: 1, flags: 1, startPoint: P(0, 0), normal: P(0, 0, 1), elementCount: 2, vertices: [P(0, 0), P(10, 0), P(10, 10)].map((p, i) => ({ position: p, direction: i < 2 ? P(1, 0) : P(0, 1), miter: i === 1 ? P(-Math.SQRT1_2, Math.SQRT1_2) : i === 0 ? P(0, 1) : P(-1, 0), elements: [{ params: [i === 1 ? 0.5 * Math.SQRT2 : 0.5, 0], fillParams: [] }, { params: [i === 1 ? -0.5 * Math.SQRT2 : -0.5, 0], fillParams: [] }] })) } as MLineEntity],
   ['공차', { type: 'TOLERANCE', ...base('TO'), dimStyle: 'Standard', insert: P(2, 2), text: '{\\Fgdt;j}%%v0.1', direction: P(1, 0) } as ToleranceEntity],
-  ['메시', { type: 'MESH', ...base('MS'), vertices: [P(0, 0), P(1, 0), P(1, 1)], faces: [[0, 1, 2]], edges: [], subdivision: 0 } as MeshEntity],
+  ['메시', { type: 'MESH', ...base('MS'), ...packMesh([P(0, 0), P(1, 0), P(1, 1)], [[0, 1, 2]], []), subdivision: 0 } as MeshEntity],
   ['표', { type: 'ACAD_TABLE', ...base('TB'), block: '*T1', insert: P(3, 3), direction: P(1, 0), scale: P(1, 1, 1), rotation: 0, rows: 1, columns: 1, rowHeights: [5], columnWidths: [20] } as TableEntity],
   ['3D 폴리선', { type: 'POLYLINE', ...base('P3'), kind: '3d', flags: 8, ...packPoly([P(0, 0, 0), P(5, 0, 1), P(5, 5, 2)].map((location) => ({ location, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 }))), elevation: 0, defaultStartWidth: 0, defaultEndWidth: 0, mCount: 0, nCount: 0, mDensity: 0, nDensity: 0, smoothType: 0 } as PolylineEntity],
   ['블록 참조(속성, −Z)', { type: 'INSERT', ...base('IN'), block: 'B', insert: P(3, 1), scale: P(2, 1.5, 1), rotation: deg(20), columnCount: 1, rowCount: 1, columnSpacing: 0, rowSpacing: 0, extrusion: NEG_Z, attribs: [{ ...(text(3, 2, 'V', 1) as TextEntity), type: 'ATTRIB', handle: 'AT', tag: 'T', attFlags: 0, extrusion: NEG_Z } as AttribEntity] } as InsertEntity],

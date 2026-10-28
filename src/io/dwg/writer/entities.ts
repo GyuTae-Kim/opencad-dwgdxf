@@ -35,6 +35,7 @@ import { tableCellsOut } from '../../tablecells';
 import { tableOld, tableR24, writeIO } from '../tablecodec';
 import { tableToOld, tableToR24 } from '../tablemodel';
 import { hatchEdges } from '../../../core/hatchedges';
+import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../../core/meshdata';
 
 const Z: Vec3 = { x: 0, y: 0, z: 1 };
 const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
@@ -548,23 +549,25 @@ export class EntityWriter {
         d.BS(2);
         d.B(0);
         d.BL(e.subdivision);
-        d.BL(e.vertices.length);
-        for (const v of e.vertices) d.BD3(v);
+        const faces = meshFaces(e);
+        const edges = meshEdges(e);
+        d.BL(meshVertexCount(e));
+        for (const v of meshVertices(e)) d.BD3(v);
         let nf = 0;
-        for (const f of e.faces) nf += 1 + f.length;
+        for (const f of faces) nf += 1 + f.length;
         d.BL(nf);
-        for (const f of e.faces) {
+        for (const f of faces) {
           d.BL(f.length);
           for (const i of f) d.BL(i);
         }
-        d.BL(e.edges.length);
-        for (const [a, b] of e.edges) {
+        d.BL(edges.length);
+        for (const [a, b] of edges) {
           d.BL(a);
           d.BL(b);
         }
         // 주름 값: 모서리마다 0
-        d.BL(e.edges.length);
-        for (let i = 0; i < e.edges.length; i++) d.BD(0);
+        d.BL(edges.length);
+        for (let i = 0; i < edges.length; i++) d.BD(0);
         d.BL(0); // 그 뒤 개수(AutoCAD 표본은 0)
         break;
       }

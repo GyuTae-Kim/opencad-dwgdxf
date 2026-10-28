@@ -2082,24 +2082,30 @@ function readMesh(or: ObjectReader, b: Omit<EntityBase, 'type'>): MeshEntity {
   r.BS(); // 버전
   r.B(); // 접힘 혼합
   const subdivision = r.BL();
+  // 정점·면·모서리는 수 배열로(src/core/meshdata.ts)
   const nv = r.checkCount(r.BL(), 64);
-  const vertices: Vec3[] = [];
-  for (let i = 0; i < nv; i++) vertices.push(r.BD3());
+  const verts: number[] = [];
+  for (let i = 0; i < nv; i++) {
+    const p = r.BD3();
+    verts.push(p.x, p.y, p.z);
+  }
   const nf = r.checkCount(r.BL(), 2);
-  const faces: number[][] = [];
+  const faceData: number[] = [];
   for (let i = 0; i < nf; ) {
     const n = r.BL();
     i++;
     if (n <= 0 || n > nf) break;
-    const f: number[] = [];
-    for (let k = 0; k < n; k++) f.push(r.BL());
+    faceData.push(n);
+    for (let k = 0; k < n; k++) faceData.push(r.BL());
     i += n;
-    faces.push(f);
   }
   const ne = r.checkCount(r.BL(), 2);
-  const edges: [number, number][] = [];
-  for (let i = 0; i < ne; i++) edges.push([r.BL(), r.BL()]);
-  return { ...b, type: 'MESH', vertices, faces, edges, subdivision };
+  const edgePairs: number[] = [];
+  for (let i = 0; i < ne; i++) {
+    const a = r.BL();
+    edgePairs.push(a, r.BL());
+  }
+  return { ...b, type: 'MESH', verts: verts.slice(), faceData: faceData.slice(), edgePairs: edgePairs.slice(), subdivision };
 }
 
 function readUnderlay(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: UnderlayEntity['type']): UnderlayEntity {

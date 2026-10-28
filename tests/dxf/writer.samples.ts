@@ -8,6 +8,7 @@ import { finalizeDocument } from '../../src/core/finalize';
 import { packBulge, packLw } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
 import { packEdges } from '../../src/core/hatchedges';
+import { packMesh } from '../../src/core/meshdata';
 
 /** 문서의 $HANDSEED에서 핸들을 하나씩(편집 세션과 같은 방식) */
 function handles(doc: CadDocument): () => string {
@@ -319,7 +320,7 @@ export function addSampleEntities(doc: CadDocument): void {
     ],
   });
   push({ ...base('TOLERANCE'), dimStyle: 'Standard', insert: p(0, 250), text: '{\\Fgdt;j}%%v0.1%%v', direction: p(1, 0) });
-  push({ ...base('MESH'), vertices: [p(0, 0), p(1, 0), p(1, 1), p(0, 1), p(0.5, 0.5, 1)], faces: [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]], edges: [], subdivision: 0 });
+  push({ ...base('MESH'), ...packMesh([p(0, 0), p(1, 0), p(1, 1), p(0, 1), p(0.5, 0.5, 1)], [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]], []), subdivision: 0 });
   push({
     ...base('SPLINE'),
     flags: 0,

@@ -41,6 +41,7 @@ import { annoDimWriteOverrides } from '../annoscale';
 import { parseDimOverrides } from './tagutil';
 import { acdbTableTags, tableCellsOut } from '../tablecells';
 import { hatchEdges } from '../../core/hatchedges';
+import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../core/meshdata';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -1545,21 +1546,23 @@ export function writeEntity(s: TagSink, e: Entity, ctx: WriteContext, owner: str
       w.t(71, 2);
       w.t(72, 0);
       w.t(91, e.subdivision);
-      w.t(92, e.vertices.length);
-      for (const v of e.vertices) w.p3(10, v);
-      const size = e.faces.reduce((a, f) => a + f.length + 1, 0);
+      const faces = meshFaces(e);
+      const edges = meshEdges(e);
+      w.t(92, meshVertexCount(e));
+      for (const v of meshVertices(e)) w.p3(10, v);
+      const size = faces.reduce((a, f) => a + f.length + 1, 0);
       w.t(93, size);
-      for (const f of e.faces) {
+      for (const f of faces) {
         w.t(90, f.length);
         for (const i of f) w.t(90, i);
       }
-      w.t(94, e.edges.length);
-      for (const [a, b] of e.edges) {
+      w.t(94, edges.length);
+      for (const [a, b] of edges) {
         w.t(90, a);
         w.t(90, b);
       }
-      w.t(95, e.edges.length);
-      for (let i = 0; i < e.edges.length; i++) w.t(140, 0);
+      w.t(95, edges.length);
+      for (let i = 0; i < edges.length; i++) w.t(140, 0);
       w.t(90, 0);
       break;
     }

@@ -205,7 +205,7 @@ export function entityBounds(e: Entity, doc: CadDocument, depth = 0): Box | null
       break;
     }
     case 'MESH':
-      for (const p of e.vertices) growBox(b, p.x, p.y);
+      for (let i = 0; i + 2 < e.verts.length; i += 3) growBox(b, e.verts[i]!, e.verts[i + 1]!);
       break;
     case 'POLYLINE':
       for (let i = 0, n = polyCount(e); i < n; i++) growBox(b, polyX(e, i), polyY(e, i));
