@@ -7,7 +7,7 @@ import type { Entity } from '../../src/core/model';
 import { entityDefaults } from '../../src/core/model';
 import { DynInput, dynRelative } from '../../src/app/dyninput';
 import { parseOverride, runPointOverride } from '../../src/app/osnap-override';
-import { ALL_SNAPS, DEFAULT_SNAPS, extAnchorsOf, extSnaps, findSnap, geometricCenter, lineInter, parSnaps, polygonCentroid, tangentPoints } from '../../src/app/snap';
+import { ALL_SNAPS, DEFAULT_SNAPS, extAnchorsOf, extSnaps, findSnap, geometricCenter, parSnaps, polygonCentroid, tangentPoints } from '../../src/app/snap';
 import { Lasso, simplify } from '../../src/app/lasso';
 import { ctrlAction } from '../../src/app/keys';
 import { DragGhost, pressKind } from '../../src/app/dragmove';
@@ -207,11 +207,6 @@ describe('스냅 기하(snap)', () => {
     const lw = (closed: boolean) => ({ ...entityDefaults(), type: 'LWPOLYLINE', handle: '', closed, elevation: 0, verts: [0, 0, 0, 4, 0, 0, 4, 2, 0, 0, 2, 0], widths: undefined }) as unknown as Entity;
     expect(near(geometricCenter(lw(true))!, { x: 2, y: 1 })).toBe(true);
     expect(geometricCenter(lw(false))).toBeNull();
-  });
-
-  it('가상 교차점: 두 선분을 늘린 직선의 교점, 나란하면 없음', () => {
-    expect(near(lineInter([0, 0, 1, 0, 5, -3, 5, -1], 0, 4)!, { x: 5, y: 0 })).toBe(true);
-    expect(lineInter([0, 0, 1, 0, 0, 1, 1, 1], 0, 4)).toBeNull();
   });
 
   it('findSnap: 원 테두리 위에서 중심, 기준점이 있으면 접점, 연장선·평행 획득점', () => {

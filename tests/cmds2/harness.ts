@@ -149,8 +149,11 @@ export function makeHarness(setup?: (doc: CadDocument) => void): Harness {
             const kw = kwOf(t, opt.keywords ?? []);
             if (kw) return { keyword: kw.key };
             if (opt.preferNumber && /^-?[\d.]+(?:e-?\d+)?$/i.test(t)) return { text: t };
-            const p = parsePointInput(t, opt.base ?? null, null);
-            if (p) return { point: p, snap: null };
+            // App.parsePoint처럼 point는 평면 좌표만, 입력이 정한 Z는 z(@ 상대 좌표는 기준점의 Z, dz는 기준점에 Z가 없으면 고도에서)
+            const b = opt.base ?? null;
+            const elev = Number(doc.header.get('$ELEVATION') ?? 0) || 0;
+            const p = parsePointInput(t, b ? { x: b.x, y: b.y, ...(b.z !== undefined ? { z: b.z } : {}) } : null, null, elev);
+            if (p) return { point: { x: p.x, y: p.y }, ...(p.z !== undefined ? { z: p.z } : {}), snap: null };
             if (opt.allowText || opt.preferNumber) return { text: t };
             throw new Error(`점이 아닌 입력: ${t} (${prompt})`);
           }

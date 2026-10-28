@@ -133,11 +133,14 @@
 - [x] 시스템 변수 바로 입력·SYSVDLG·ALIASEDIT·OPTIONS(화면에 바로 반영)·DWGPROPS(DWG 요약 정보 왕복), PAGESETUP 관리자, PLOT 배치에 적용·브라우저 인쇄
 - [x] 스냅 표식 위 Tab 순환(겹친 스냅 점), LINE의 지연된 접점(점에서 원에 그은 접선, 두 원의 공통 접선)
 - [x] 지연된 접점을 PLINE 시작점·XLINE 첫 점·CIRCLE 3P로, Ttr·TTT는 접점 스냅 점 요청, 폴리선 호 구간의 접점 스냅
-- [ ] 오른쪽 버튼 끌어 놓기 메뉴, 가상 교차점 정밀화, AUTOSNAP 마그넷·추적 비트, 타원·스플라인의 접점 스냅
+- [ ] 오른쪽 버튼 끌어 놓기 메뉴, AUTOSNAP 마그넷·추적 비트
+- [x] 타원·타원호·스플라인의 접점 스냅(기준점에서 그은 접점, LINE·XLINE·PLINE·CIRCLE 3P·Ttr·TTT의 지연된 접점), 가상 교차점을 객체의 정확한 형상으로(호 → 원, 타원호 → 타원, 블록 안 객체)
 - [x] Ctrl 순환 다기능 그립(GRIPMULTIFUNCTIONAL — 초기값 3, 1 Ctrl 순환, 2 커서를 올리면 뜨는 메뉴), 회전·축척 그립의 참조(R)
 - [ ] 화살표 반전 값
 - [x] PLINE 호 Ctrl 방향 전환
-- [ ] SPLINE 공차 근사, 매듭 방식 보존, 3DPOLY의 Z 입력, ARRAYPOLAR 회전축
+- [x] 3DPOLY·3DFACE의 Z 입력(x,y,z·@ 상대·원통·구 좌표, 동적 입력, 점 필터, 객체 점에 붙인 스냅의 Z — OSNAPZ 0)
+- [ ] SPLINE 공차 근사, 매듭 방식 보존, ARRAYPOLAR 회전축
+- [ ] 2D 명령에 준 Z(AutoCAD는 LINE에 준 Z로 3D 선을, CIRCLE 중심의 Z로 고도를 정한다 — 지금은 고도에 평면으로), OSNAPZ 1·교차점·근처점의 Z, UCS 원점의 Z
 - [ ] 표 셀 제자리 편집, 자동 쌓기·철자 검사·배경 마스크, QDIM·DIMJOGGED 머리말 재지정
 - [ ] VIEW에 UCS 저장, 사용자 특성 10개 넘게, 배치 플롯 범위·윈도우, 브라우저마다 다른 contenteditable·시간에 민감한 오른쪽 클릭 실기기 확인
 

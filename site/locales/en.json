@@ -4499,7 +4499,7 @@
   "선, 호, 열린 폴리선 또는 스플라인을 선택해야 합니다.": "You must select a line, arc, open polyline, or spline.",
   "선, 호, 원, 타원 또는 폴리선을 선택해야 합니다.": "You must select a line, arc, circle, ellipse, or polyline.",
   "선, 호, 원, 타원, 폴리선, 스플라인을 선택하십시오.": "Select a line, arc, circle, ellipse, polyline, or spline.",
-  "선, 호, 원을 선택하십시오.": "Select a line, arc, or circle.",
+  "선, 호, 원, 타원, 스플라인을 선택하십시오.": "Select a line, arc, circle, ellipse, or spline.",
   "선, 호, 타원형 호, 열린 폴리선, 열린 스플라인을 선택하십시오.": "Select a line, arc, elliptical arc, open polyline, or open spline.",
   "선, 호, 폴리선 세그먼트를 선택하십시오.": "Select a line, arc, or polyline segment.",
   "선·폴리선·원·호 그리기, 이동·복사·자르기·모깎기 같은 수정, 그립 편집": "Drawing lines, polylines, circles, and arcs, modifications such as moving, copying, cutting, and filleting, and grip editing",

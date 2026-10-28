@@ -98,7 +98,7 @@ describe('CIRCLE 3P·Ttr의 지연된 접점', () => {
     h.add(line(0, 0, 10, 0));
     h.add(line(0, 0, 0, 10));
     await h.run('CIRCLE', ['T', '50,50', '5,0', '0,5', '2']);
-    expect(h.printed).toContain('선, 호, 원을 선택하십시오.');
+    expect(h.printed).toContain('선, 호, 원, 타원, 스플라인을 선택하십시오.');
     const c = modelEntities(h.doc, 'CIRCLE')[0] as CircleEntity;
     expect(c.center.x).toBeCloseTo(2, 9);
     expect(c.center.y).toBeCloseTo(2, 9);

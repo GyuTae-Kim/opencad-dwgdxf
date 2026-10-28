@@ -6,7 +6,8 @@
 import type { Entity, EntityBase, LwVertex, SplineEntity, Vec2, Vec3 } from '../../core/model';
 import { bulgeArc, clampedKnots, interpolateFitPoints } from '../../geom/curves';
 import type { Piece } from './curve';
-import { pieceNearest } from './curve';
+import { pieceAt, pieceD1, pieceNearest } from './curve';
+import { footNear, osculatingPiece } from './tangent';
 import { ccwSweep, dist, wrapPi } from './math';
 import { interpolate } from './nurbs';
 import { inherit } from './path';
@@ -192,6 +193,19 @@ function meet(A: Locus, B: Locus): Vec2[] {
  */
 export function circleTTR(p1: Piece, pick1: Vec2, p2: Piece, pick2: Vec2, r: number): { c: Vec2; r: number } | null {
   if (!(r > 0)) return null;
+  return solveWithCurves(
+    [
+      { piece: p1, pick: pick1 },
+      { piece: p2, pick: pick2 },
+    ],
+    (its) => {
+      const [a, b] = its as { piece: Piece; pick: Vec2 }[];
+      return ttrAnalytic(a!.piece, a!.pick, b!.piece, b!.pick, r);
+    },
+  );
+}
+
+function ttrAnalytic(p1: Piece, pick1: Vec2, p2: Piece, pick2: Vec2, r: number): { c: Vec2; r: number } | null {
   const c1 = carrier(p1);
   const c2 = carrier(p2);
   if (!c1 || !c2) return null;
@@ -226,6 +240,59 @@ export function circleTTT(picks: readonly { piece: Piece; pick: Vec2 }[]): { c: 
  * 원 식끼리 빼면 일차식이 되므로 일차식 둘 + 이차식 하나(원이 없으면 일차식 셋)로 푼다.
  */
 export function circleThrough(items: readonly CircleItem[]): { c: Vec2; r: number } | null {
+  if (items.length !== 3) return null;
+  return solveWithCurves(items, throughAnalytic);
+}
+
+/**
+ * 타원·타원호·스플라인(NURBS)이 든 원 문제: 곡선을 접할 자리의 곡률원(거의 곧으면 접선)으로 바꿔 해석적으로 풀고,
+ * 그 원의 중심에서 곡선에 내린 수선의 발에서 곡률원을 다시 잡아 되풀이한다. 고정점에서는 원이 발에서 곡선과 같은 접선을
+ * 가지므로(중심 → 발 = 곡선의 법선, 곡률원도 그 법선 위) 곡선에 접한다. 곡률원은 곡선과 2차까지 맞아 빨리 수렴한다.
+ * 첫 바퀴는 고른 점에서, 다음부터는 앞 바퀴의 발에서 해를 고른다. 수렴하지 않거나 접점이 범위 밖(스플라인)이면 null.
+ * 타원호는 원호처럼 연장해서(타원 전체) 본다. 곡선이 없으면 해석적 풀이 그대로.
+ */
+function solveWithCurves(items: readonly CircleItem[], solve: (items: readonly CircleItem[]) => { c: Vec2; r: number } | null): { c: Vec2; r: number } | null {
+  const curved = items.map((it) => 'piece' in it && (it.piece.k === 'ell' || it.piece.k === 'nurbs'));
+  if (!curved.some(Boolean)) return solve(items);
+  const ts = items.map((it, i) => (curved[i] && 'piece' in it ? pieceNearest(it.piece, it.pick, it.piece.k !== 'ell').t : 0));
+  let size = 1;
+  for (const it of items) size = Math.max(size, Math.hypot('point' in it ? it.point.x : it.pick.x, 'point' in it ? it.point.y : it.pick.y));
+  let prev: { c: Vec2; r: number } | null = null;
+  for (let k = 0; k < 60; k++) {
+    const approx = items.map((it, i): CircleItem => {
+      if (!curved[i] || !('piece' in it)) return it;
+      const foot = pieceAt(it.piece, ts[i]!);
+      return { piece: osculatingPiece(it.piece, ts[i]!), pick: k === 0 ? it.pick : foot };
+    });
+    const s = solve(approx);
+    if (!s) return null;
+    items.forEach((it, i) => {
+      if (curved[i] && 'piece' in it) ts[i] = footNear(it.piece, s.c, ts[i]!, it.piece.k === 'ell');
+    });
+    const done = prev && dist(prev.c, s.c) + Math.abs(prev.r - s.r) <= 1e-13 * Math.max(size, s.r);
+    prev = s;
+    if (done) break;
+  }
+  if (!prev) return null;
+  // 곡선마다 발에서 접하는지(거리 = 반지름, 반지름 ⟂ 곡선)
+  const tol = 1e-7 * Math.max(size, prev.r);
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i]!;
+    if (!curved[i] || !('piece' in it)) continue;
+    const pc = it.piece;
+    const tt = ts[i]!;
+    if (pc.k === 'nurbs' && (tt < -1e-9 || tt > 1 + 1e-9)) return null;
+    const P = pieceAt(pc, tt);
+    const D = pieceD1(pc, tt);
+    const w = { x: P.x - prev.c.x, y: P.y - prev.c.y };
+    const lw = Math.hypot(w.x, w.y);
+    const ld = Math.hypot(D.x, D.y);
+    if (Math.abs(lw - prev.r) > tol || !(ld > 0) || Math.abs(w.x * D.x + w.y * D.y) > 1e-7 * lw * ld) return null;
+  }
+  return prev;
+}
+
+function throughAnalytic(items: readonly CircleItem[]): { c: Vec2; r: number } | null {
   if (items.length !== 3) return null;
   const picks = items.map((it) => ('point' in it ? { pick: it.point } : { pick: it.pick }));
   const cs = items.map((it) => ('point' in it ? ({ k: 'circle', c: it.point, r: 0 } as const) : carrier(it.piece)));

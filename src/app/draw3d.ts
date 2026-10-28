@@ -1,14 +1,21 @@
 /**
  * 3D 객체 작성(평면도에서 그리는 것): 3DPOLY(3D 폴리선), 3DFACE(3D 면, 보이지 않는 모서리), TRACE(폭 있는 선, TRACEWID).
- * Z는 지금 고도(ELEVATION) — 점 입력은 평면 좌표만 받는다. 프롬프트는 AutoCAD 2026 한국어판을 따른다.
+ * 3DPOLY·3DFACE의 점은 좌표 입력이 정한 Z(x,y,z·@dx,dy,dz·원통·구 좌표·점 필터)와 객체 정의점(끝점·중간점·중심 등)에 잡힌
+ * 스냅의 Z(AutoCAD OSNAPZ 0)를 쓰고, Z를 주지 않은 점(빈 곳 클릭·x,y·교차점 등)은 지금 고도(ELEVATION).
+ * @ 상대 좌표는 앞 점의 Z를 잇는다. TRACE는 평면 객체라 고도에 그린다. 프롬프트는 AutoCAD 2026 한국어판을 따른다.
  */
 import type { Entity, FaceEntity, PolylineEntity, Vec3 } from '../core/model';
 import { formatLength } from '../core/units';
-import type { App, CommandContext } from './app';
+import type { App, CommandContext, PointResult } from './app';
 import { addEntities, currentElevation, currentProps } from './draw';
 import type { Pt } from './view';
 
 const P3 = (p: Pt, z: number): Vec3 => ({ x: p.x, y: p.y, z });
+
+/** 점 결과의 3D 점: 입력이 Z를 정했으면 그 Z, 아니면 고도 */
+export function point3(r: Extract<PointResult, { point: Pt }>, elevation: number): Vec3 {
+  return { x: r.point.x, y: r.point.y, z: r.z ?? elevation };
+}
 
 /** TRACE 구간들의 네 구석(이음은 두 변의 바깥 선이 만나는 자리로 맞춘다) */
 export function tracePoints(pts: readonly Pt[], width: number): [Pt, Pt, Pt, Pt][] {
@@ -63,9 +70,9 @@ export function registerDraw3dCommands(app: App): void {
     title: '3D 폴리선',
     async run(ctx: CommandContext) {
       const z = currentElevation(app);
-      const s = await ctx.getPoint('폴리선의 시작점 지정:');
+      const s = await ctx.getPoint('폴리선의 시작점 지정:', { snapZ: true });
       if (!('point' in s)) return;
-      const pts: Pt[] = [s.point];
+      const pts: Vec3[] = [point3(s, z)];
       let handle: string | null = null;
       let closed = false;
       const entity = (): Entity => {
@@ -77,7 +84,7 @@ export function registerDraw3dCommands(app: App): void {
           handle: handle ?? '',
           kind: '3d',
           flags: 8 | (closed ? 1 : 0),
-          vertices: pts.map((p) => ({ location: P3(p, z), bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })),
+          vertices: pts.map((p) => ({ location: { ...p }, bulge: 0, startWidth: 0, endWidth: 0, flags: 32 })),
           elevation: 0,
           defaultStartWidth: 0,
           defaultEndWidth: 0,
@@ -103,6 +110,7 @@ export function registerDraw3dCommands(app: App): void {
         const r = await ctx.getPoint(pts.length >= 3 ? '선의 끝점 지정 또는 [닫기(C)/명령 취소(U)]:' : '선의 끝점 지정 또는 [명령 취소(U)]:', {
           base: last,
           keywords: kws,
+          snapZ: true,
           rubber: (q) => [{ pts: [...pts, q].flatMap((p) => [p.x, p.y]) }],
         });
         if ('enter' in r) return;
@@ -123,10 +131,12 @@ export function registerDraw3dCommands(app: App): void {
           continue;
         }
         if (!('point' in r)) continue;
-        if (Math.hypot(r.point.x - last.x, r.point.y - last.y) < 1e-12) continue;
-        pts.push(r.point);
+        const q = point3(r, z);
+        // 같은 점은 건너뛴다(평면도에서 겹쳐도 Z가 다르면 세로 구간)
+        if (Math.hypot(q.x - last.x, q.y - last.y, q.z - last.z) < 1e-12) continue;
+        pts.push(q);
         commit();
-        app.lastPoint = r.point;
+        app.lastPoint = q;
       }
     },
   });
@@ -140,17 +150,17 @@ export function registerDraw3dCommands(app: App): void {
       const z = currentElevation(app);
       const { thickness: _t, ...props } = base();
       void _t;
-      /** 점 하나(보이지 않음(I)을 먼저 입력하면 그 점에서 시작하는 모서리를 숨긴다) */
-      const ask = async (prompt: string, from: Pt | null, allowEnd: boolean): Promise<{ p: Pt; hidden: boolean } | 'end' | null> => {
+      /** 점 하나(보이지 않음(I)을 먼저 입력하면 그 점에서 시작하는 모서리를 숨긴다). Z는 입력이 정한 것, 아니면 고도 */
+      const ask = async (prompt: string, from: Vec3 | null, allowEnd: boolean): Promise<{ p: Vec3; hidden: boolean } | 'end' | null> => {
         let hidden = false;
         for (;;) {
-          const r = await ctx.getPoint(prompt, { base: from, keywords: [{ key: 'I', label: '보이지 않음' }] });
+          const r = await ctx.getPoint(prompt, { base: from, keywords: [{ key: 'I', label: '보이지 않음' }], snapZ: true });
           if ('keyword' in r) {
             hidden = true;
             continue;
           }
           if ('enter' in r) return allowEnd ? 'end' : null;
-          if ('point' in r) return { p: r.point, hidden };
+          if ('point' in r) return { p: point3(r, z), hidden };
         }
       };
       const a = await ask('첫 번째 점 지정 또는 [보이지 않음(I)]:', null, false);
@@ -167,7 +177,7 @@ export function registerDraw3dCommands(app: App): void {
         // 모서리 비트: 1 = 1→2, 2 = 2→3, 4 = 3→4, 8 = 4→1(그 모서리를 시작하는 점에서 보이지 않음(I))
         let edges = (p1.hidden ? 1 : 0) | (p2.hidden ? 2 : 0) | (c.hidden ? 4 : 0) | (p4.hidden ? 8 : 0);
         if (p4 === c || !d || d === 'end') edges = (p1.hidden ? 1 : 0) | (p2.hidden ? 2 : 0) | (c.hidden ? 4 : 0);
-        const face: FaceEntity = { ...props, type: '3DFACE', handle: '', points: [P3(p1.p, z), P3(p2.p, z), P3(c.p, z), P3(p4.p, z)], invisibleEdges: edges };
+        const face: FaceEntity = { ...props, type: '3DFACE', handle: '', points: [{ ...p1.p }, { ...p2.p }, { ...c.p }, { ...p4.p }], invisibleEdges: edges };
         addEntities(app, ctx, [face as Entity], '3DFACE');
         // 다음 면은 세 번째·네 번째 점에서 이어진다(AutoCAD와 같다)
         p1 = { p: c.p, hidden: false };

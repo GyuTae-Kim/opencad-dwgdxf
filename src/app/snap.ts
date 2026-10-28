@@ -2,22 +2,27 @@
  * 객체 스냅: 끝점·중간점·중심·기하학적 중심·노드·사분점·교차점·연장선·삽입·수직·접점·근처점·가상 교차점·평행.
  * 연장선(EXT)·평행(PAR)은 커서를 끝점·선분 위에 잠시 머물러 얻은 획득점(SnapContext, 앱이 모은다)을 쓴다.
  * 중심·기하학적 중심은 원·호·닫힌 폴리선의 테두리 위에 커서를 두어도 잡힌다(AutoCAD와 같다).
- * 접점은 원·호와 폴리선의 호 구간에 잡힌다(AutoCAD와 같다). 지연된 접점은 명령이 받겠다고 한 점 요청에서만이고,
+ * 접점은 원·호·폴리선의 호 구간·타원·타원호·스플라인에 잡힌다(AutoCAD와 같다 — 타원은 해석적, 스플라인은 매개변수 위 근 찾기).
+ * 지연된 접점은 명령이 받겠다고 한 점 요청에서만이고,
  * 원을 그리는 명령(CIRCLE 3P·Ttr·TTT)은 선·폴리선 직선 구간·구성선·광선에도 받는다(SnapContext.deferTanLines).
  */
 import type { CadDocument, Entity } from '../core/model';
 import { tableKey } from '../core/model';
-import { type Mat, applyXY, identity, multiply, rotationZ, scaling, translation, withOcs } from '../geom/matrix';
+import { type Mat, apply, applyXY, identity, multiply, rotationZ, scaling, translation, withOcs } from '../geom/matrix';
 import { bulgeArc, ccwSweep, interpolateFitPoints, nurbsPoints } from '../geom/curves';
 import type { Picker } from './pick';
 import type { Pt, SnapKind } from './view';
 import { lwVertices } from '../core/lwpoly';
 import { entityPath } from '../edit/geom/path';
-import type { ArcPiece, LinePiece } from '../edit/geom/curve';
+import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, pieceNearest } from '../edit/geom/curve';
+import { commonTangentCurves, tangentNearPick, tangentsFromPoint } from '../edit/geom/tangent';
+import { apparentSnaps } from './snap-app';
 
 export interface SnapPoint {
   x: number;
   y: number;
+  /** 객체 정의점(끝점·중간점·중심·사분점·노드·삽입점)의 WCS Z. 교차점·접점·근처점 등 평면도에서 구한 점은 없음 */
+  z?: number;
   kind: SnapKind;
   /** 스냅 점을 준 객체(교차점·근처점처럼 선분에서 구한 것은 없음) */
   handle?: string;
@@ -72,8 +77,8 @@ export interface SnapContext {
 }
 
 function arcSnaps(m: Mat, cx: number, cy: number, z: number, r: number, a0: number, sweep: number, full: boolean, out: SnapPoint[]): void {
-  const P = (a: number) => applyXY(m, cx + r * Math.cos(a), cy + r * Math.sin(a), z);
-  const c = applyXY(m, cx, cy, z);
+  const P = (a: number) => apply(m, cx + r * Math.cos(a), cy + r * Math.sin(a), z);
+  const c = apply(m, cx, cy, z);
   out.push({ ...c, kind: 'cen' });
   for (let k = 0; k < 4; k++) {
     const a = (k * Math.PI) / 2;
@@ -86,7 +91,7 @@ function arcSnaps(m: Mat, cx: number, cy: number, z: number, r: number, a0: numb
 
 function polySnaps(m: Mat, vs: { x: number; y: number; bulge: number }[], closed: boolean, z: number, out: SnapPoint[]): void {
   const n = vs.length;
-  for (const v of vs) out.push({ ...applyXY(m, v.x, v.y, z), kind: 'end' });
+  for (const v of vs) out.push({ ...apply(m, v.x, v.y, z), kind: 'end' });
   const segs = closed ? n : n - 1;
   for (let i = 0; i < segs; i++) {
     const a = vs[i]!;
@@ -94,9 +99,9 @@ function polySnaps(m: Mat, vs: { x: number; y: number; bulge: number }[], closed
     const arc = bulgeArc(a.x, a.y, b.x, b.y, a.bulge);
     if (arc) {
       const am = arc.a0 + arc.sweep / 2;
-      out.push({ ...applyXY(m, arc.cx + arc.r * Math.cos(am), arc.cy + arc.r * Math.sin(am), z), kind: 'mid' });
-      out.push({ ...applyXY(m, arc.cx, arc.cy, z), kind: 'cen' });
-    } else out.push({ ...applyXY(m, (a.x + b.x) / 2, (a.y + b.y) / 2, z), kind: 'mid' });
+      out.push({ ...apply(m, arc.cx + arc.r * Math.cos(am), arc.cy + arc.r * Math.sin(am), z), kind: 'mid' });
+      out.push({ ...apply(m, arc.cx, arc.cy, z), kind: 'cen' });
+    } else out.push({ ...apply(m, (a.x + b.x) / 2, (a.y + b.y) / 2, z), kind: 'mid' });
   }
 }
 
@@ -104,9 +109,9 @@ function polySnaps(m: Mat, vs: { x: number; y: number; bulge: number }[], closed
 export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[], depth = 0): void {
   switch (e.type) {
     case 'LINE': {
-      const a = applyXY(m, e.start.x, e.start.y, e.start.z);
-      const b = applyXY(m, e.end.x, e.end.y, e.end.z);
-      out.push({ ...a, kind: 'end' }, { ...b, kind: 'end' }, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, kind: 'mid' });
+      const a = apply(m, e.start.x, e.start.y, e.start.z);
+      const b = apply(m, e.end.x, e.end.y, e.end.z);
+      out.push({ ...a, kind: 'end' }, { ...b, kind: 'end' }, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2, kind: 'mid' });
       return;
     }
     case 'CIRCLE':
@@ -119,8 +124,8 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
       const n = e.extrusion ?? { x: 0, y: 0, z: 1 };
       const M = e.majorAxis;
       const mn = { x: (n.y * M.z - n.z * M.y) * e.ratio, y: (n.z * M.x - n.x * M.z) * e.ratio, z: (n.x * M.y - n.y * M.x) * e.ratio };
-      const P = (t: number) => applyXY(m, e.center.x + M.x * Math.cos(t) + mn.x * Math.sin(t), e.center.y + M.y * Math.cos(t) + mn.y * Math.sin(t), e.center.z + M.z * Math.cos(t) + mn.z * Math.sin(t));
-      out.push({ ...applyXY(m, e.center.x, e.center.y, e.center.z), kind: 'cen' });
+      const P = (t: number) => apply(m, e.center.x + M.x * Math.cos(t) + mn.x * Math.sin(t), e.center.y + M.y * Math.cos(t) + mn.y * Math.sin(t), e.center.z + M.z * Math.cos(t) + mn.z * Math.sin(t));
+      out.push({ ...apply(m, e.center.x, e.center.y, e.center.z), kind: 'cen' });
       const full = Math.abs(e.endParam - e.startParam - Math.PI * 2) < 1e-9 || Math.abs(e.endParam - e.startParam) < 1e-12;
       const sweep = full ? Math.PI * 2 : ccwSweep(e.startParam, e.endParam);
       for (let k = 0; k < 4; k++) {
@@ -136,7 +141,7 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
     case 'POLYLINE': {
       const vs = e.vertices.filter((v) => !(v.flags & 16) && !(v.faceIndices && !(v.flags & 64)));
       if (e.kind === '2d') polySnaps(withOcs(m, e.extrusion), vs.map((v) => ({ x: v.location.x, y: v.location.y, bulge: e.flags & 2 ? 0 : v.bulge })), (e.flags & 1) !== 0, e.elevation, out);
-      else for (const v of vs) out.push({ ...applyXY(m, v.location.x, v.location.y, v.location.z), kind: 'end' });
+      else for (const v of vs) out.push({ ...apply(m, v.location.x, v.location.y, v.location.z), kind: 'end' });
       return;
     }
     case 'SPLINE': {
@@ -147,28 +152,28 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
         pts = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e9);
       } else return;
       if (!(e.flags & 1)) {
-        out.push({ ...applyXY(m, pts[0]!, pts[1]!, pts[2]!), kind: 'end' });
-        out.push({ ...applyXY(m, pts[pts.length - 3]!, pts[pts.length - 2]!, pts[pts.length - 1]!), kind: 'end' });
+        out.push({ ...apply(m, pts[0]!, pts[1]!, pts[2]!), kind: 'end' });
+        out.push({ ...apply(m, pts[pts.length - 3]!, pts[pts.length - 2]!, pts[pts.length - 1]!), kind: 'end' });
       }
-      for (const f of e.fitPoints) out.push({ ...applyXY(m, f.x, f.y, f.z), kind: 'nod' });
+      for (const f of e.fitPoints) out.push({ ...apply(m, f.x, f.y, f.z), kind: 'nod' });
       return;
     }
     case 'POINT':
-      out.push({ ...applyXY(m, e.position.x, e.position.y, e.position.z), kind: 'nod' });
+      out.push({ ...apply(m, e.position.x, e.position.y, e.position.z), kind: 'nod' });
       return;
     case 'TEXT':
     case 'ATTRIB':
     case 'ATTDEF': {
       const p = e.alignPoint && (e.halign !== 0 || e.valign !== 0) && e.halign !== 3 && e.halign !== 5 ? e.alignPoint : e.insert;
-      out.push({ ...applyXY(withOcs(m, e.extrusion), p.x, p.y, p.z), kind: 'ins' });
+      out.push({ ...apply(withOcs(m, e.extrusion), p.x, p.y, p.z), kind: 'ins' });
       return;
     }
     case 'MTEXT':
-      out.push({ ...applyXY(m, e.insert.x, e.insert.y, e.insert.z), kind: 'ins' });
+      out.push({ ...apply(m, e.insert.x, e.insert.y, e.insert.z), kind: 'ins' });
       return;
     case 'INSERT': {
       const om = withOcs(m, e.extrusion);
-      out.push({ ...applyXY(om, e.insert.x, e.insert.y, e.insert.z), kind: 'ins' });
+      out.push({ ...apply(om, e.insert.x, e.insert.y, e.insert.z), kind: 'ins' });
       for (const a of e.attribs) entitySnaps(doc, a, m, out, depth + 1);
       if (depth >= 3) return;
       const b = doc.blocks.get(tableKey(e.block));
@@ -179,24 +184,24 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
       return;
     }
     case 'DIMENSION':
-      for (const p of [e.defPoint, e.defPoint2, e.defPoint3, e.defPoint4]) if (p.x || p.y || p.z) out.push({ ...applyXY(m, p.x, p.y, p.z), kind: 'nod' });
+      for (const p of [e.defPoint, e.defPoint2, e.defPoint3, e.defPoint4]) if (p.x || p.y || p.z) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'nod' });
       return;
     case 'SOLID':
     case 'TRACE': {
       const om = withOcs(m, e.extrusion);
-      for (const p of e.points) out.push({ ...applyXY(om, p.x, p.y, p.z), kind: 'end' });
+      for (const p of e.points) out.push({ ...apply(om, p.x, p.y, p.z), kind: 'end' });
       return;
     }
     case '3DFACE':
-      for (const p of e.points) out.push({ ...applyXY(m, p.x, p.y, p.z), kind: 'end' });
+      for (const p of e.points) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'end' });
       return;
     case 'LEADER':
-      for (const p of e.vertices) out.push({ ...applyXY(m, p.x, p.y, p.z), kind: 'end' });
+      for (const p of e.vertices) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'end' });
       return;
     case 'MULTILEADER':
       for (const l of e.context.leaders) {
-        for (const ln of l.lines) for (const p of ln.vertices) out.push({ ...applyXY(m, p.x, p.y, p.z), kind: 'end' });
-        if (l.lastLeaderPoint) out.push({ ...applyXY(m, l.lastLeaderPoint.x, l.lastLeaderPoint.y, l.lastLeaderPoint.z), kind: 'end' });
+        for (const ln of l.lines) for (const p of ln.vertices) out.push({ ...apply(m, p.x, p.y, p.z), kind: 'end' });
+        if (l.lastLeaderPoint) out.push({ ...apply(m, l.lastLeaderPoint.x, l.lastLeaderPoint.y, l.lastLeaderPoint.z), kind: 'end' });
       }
       return;
     case 'VIEWPORT': {
@@ -207,7 +212,7 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
         [1, 1],
         [-1, 1],
       ] as const)
-        out.push({ ...applyXY(m, c.x + (sx * e.width) / 2, c.y + (sy * e.height) / 2, c.z), kind: 'end' });
+        out.push({ ...apply(m, c.x + (sx * e.width) / 2, c.y + (sy * e.height) / 2, c.z), kind: 'end' });
       return;
     }
     default:
@@ -235,23 +240,6 @@ function segInter(a: number[], i: number, j: number): Pt | null {
   const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / d;
   const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / d;
   if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9) return null;
-  return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) };
-}
-
-/** 두 선분을 무한히 늘린 직선의 교점(가상 교차점). 나란하면 null */
-export function lineInter(a: number[], i: number, j: number): Pt | null {
-  const x1 = a[i]!;
-  const y1 = a[i + 1]!;
-  const x2 = a[i + 2]!;
-  const y2 = a[i + 3]!;
-  const x3 = a[j]!;
-  const y3 = a[j + 1]!;
-  const x4 = a[j + 2]!;
-  const y4 = a[j + 3]!;
-  const d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-  const l = Math.hypot(x2 - x1, y2 - y1) * Math.hypot(x4 - x3, y4 - y3);
-  if (l < 1e-24 || Math.abs(d) < 1e-9 * l) return null;
-  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / d;
   return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) };
 }
 
@@ -537,18 +525,44 @@ export function circleOf(e: Entity): WorldCircle | null {
   return null;
 }
 
-/** 접점이 잡히는 객체(원·호·폴리선, 원 그리기에서는 선·구성선·광선도)의 평면도 조각 — 타원·스플라인 등은 빈 목록 */
-function tanPieces(e: Entity, lines: boolean): (ArcPiece | LinePiece)[] {
+/** 접점이 잡히는 곡선 조각: 원·호, 타원·타원호, 스플라인(NURBS) */
+export type TanCurve = ArcPiece | EllPiece | NurbsPiece;
+
+/**
+ * 접점이 잡히는 객체(원·호·폴리선 호 구간·타원·타원호·스플라인, 원 그리기에서는 선·구성선·광선도)의 평면도 조각.
+ * AutoCAD 객체 스냅 설명처럼 접점은 원·호·타원·타원호·폴리선 호·스플라인에 잡힌다
+ */
+function tanPieces(e: Entity, lines: boolean): (TanCurve | LinePiece)[] {
   const ok =
     e.type === 'CIRCLE' ||
     e.type === 'ARC' ||
+    e.type === 'ELLIPSE' ||
+    e.type === 'SPLINE' ||
     e.type === 'LWPOLYLINE' ||
     (e.type === 'POLYLINE' && (e.kind === '2d' || (lines && e.kind === '3d'))) ||
     (lines && (e.type === 'LINE' || e.type === 'XLINE' || e.type === 'RAY'));
   if (!ok) return [];
   const path = entityPath(e);
   if (!path) return [];
-  return path.pieces.filter((pc): pc is ArcPiece | LinePiece => pc.k === 'arc' || (lines && pc.k === 'line' && Math.hypot(pc.b.x - pc.a.x, pc.b.y - pc.a.y) > 0));
+  return path.pieces.filter((pc): pc is TanCurve | LinePiece => pc.k === 'arc' || pc.k === 'ell' || pc.k === 'nurbs' || (lines && pc.k === 'line' && Math.hypot(pc.b.x - pc.a.x, pc.b.y - pc.a.y) > 0));
+}
+
+/**
+ * 지연된 접점 하나 풀기(원·호·타원·스플라인): 점 p에서 곡선에 그은 접선의 접점 중 곡선 범위 안에 있고 찍은 자리(pick)에 가까운 것.
+ * 원·호는 tangentFrom과 같다. 없으면 null
+ */
+export function tangentFromCurve(c: TanCurve, pick: Pt, p: Pt): Pt | null {
+  if (c.k === 'arc') return tangentFrom(arcPieceCircle(c), pick, p);
+  return tangentNearPick(c, pick, p);
+}
+
+/**
+ * 지연된 접점 둘 풀기: 두 곡선의 공통 접선 중 두 접점이 곡선 범위 안에 있고 찍은 자리에 가장 가까운 것.
+ * 둘 다 원·호면 해석적(commonTangent), 타원·스플라인이 끼면 수치(src/edit/geom/tangent.ts). 없으면 null
+ */
+export function commonTangentOf(c1: TanCurve, pick1: Pt, c2: TanCurve, pick2: Pt): [Pt, Pt] | null {
+  if (c1.k === 'arc' && c2.k === 'arc') return commonTangent(arcPieceCircle(c1), pick1, arcPieceCircle(c2), pick2);
+  return commonTangentCurves(c1, pick1, c2, pick2);
 }
 
 /** 호 조각(부호 있는 중심각)을 도면 좌표의 반시계 원·호로 */
@@ -569,11 +583,11 @@ function nearestOnLine(pc: LinePiece, p: Pt): Pt {
 }
 
 /**
- * 접점 대상 조각: 객체에서 pick에 가장 가까운 원·호·폴리선 호 구간(lines면 선·폴리선 직선 구간·구성선·광선도).
+ * 접점 대상 조각: 객체에서 pick에 가장 가까운 원·호·폴리선 호 구간·타원·타원호·스플라인(lines면 선·폴리선 직선 구간·구성선·광선도).
  * 지연된 접점을 받은 명령이 스냅 점(객체 위)으로 대상을 다시 찾는다. 대상이 아니면 null
  */
-export function tanPieceAt(e: Entity, pick: Pt, lines = false): ArcPiece | LinePiece | null {
-  let best: ArcPiece | LinePiece | null = null;
+export function tanPieceAt(e: Entity, pick: Pt, lines = false): TanCurve | LinePiece | null {
+  let best: TanCurve | LinePiece | null = null;
   let bd = Infinity;
   for (const pc of tanPieces(e, lines)) {
     let d: number;
@@ -584,10 +598,10 @@ export function tanPieceAt(e: Entity, pick: Pt, lines = false): ArcPiece | LineP
       d = onArc(a, c.a0, c.sweep)
         ? Math.abs(Math.hypot(pick.x - c.cx, pick.y - c.cy) - c.r)
         : Math.min(...[c.a0, c.a0 + c.sweep].map((t) => Math.hypot(pick.x - c.cx - c.r * Math.cos(t), pick.y - c.cy - c.r * Math.sin(t))));
-    } else {
+    } else if (pc.k === 'line') {
       const q = nearestOnLine(pc, pick);
       d = Math.hypot(q.x - pick.x, q.y - pick.y);
-    }
+    } else d = pieceNearest(pc, pick).d;
     if (d < bd - 1e-12) {
       bd = d;
       best = pc;
@@ -608,9 +622,14 @@ function deferredTanNear(e: Entity, p: Pt, lines: boolean): { q: Pt; d: number }
       if (!onArc(a, c.a0, c.sweep)) continue;
       q = { x: c.cx + c.r * Math.cos(a), y: c.cy + c.r * Math.sin(a) };
       d = Math.abs(Math.hypot(p.x - c.cx, p.y - c.cy) - c.r);
-    } else {
+    } else if (pc.k === 'line') {
       q = nearestOnLine(pc, p);
       d = Math.hypot(q.x - p.x, q.y - p.y);
+    } else {
+      // 타원·스플라인: 곡선 위 가장 가까운 점(범위 안)
+      const n = pieceNearest(pc, p);
+      q = n.p;
+      d = n.d;
     }
     if (!best || d < best.d) best = { q, d };
   }
@@ -661,12 +680,17 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
         // 지연된 접점: 커서에서 가장 가까운 원·호(폴리선 호 구간 포함, 원 그리기는 선도) 위 점 — 접점은 명령이 다음 점을 받은 뒤 구한다
         const t = deferredTanNear(e, p, !!ctx.deferTanLines);
         if (t) considerAt({ ...t.q, kind: 'tan', handle: c.handle, deferred: true }, t.d);
-      } else if (base)
+      } else if (base && (e.type !== 'SPLINE' || picker.distance(c.handle, p.x, p.y) <= aperture))
+        // 스플라인은 접점을 근 찾기로 구하므로, 커서가 그 곡선 가까이(조준창 안)일 때만 — 접점은 곡선 위라 그보다 멀면 잡히지 않는다
         for (const pc of tanPieces(e, false)) {
-          if (pc.k !== 'arc') continue;
-          const circ = arcPieceCircle(pc);
-          for (const q of tangentPoints(base, { x: circ.cx, y: circ.cy }, circ.r))
-            if (onArc(Math.atan2(q.y - circ.cy, q.x - circ.cx), circ.a0, circ.sweep)) consider({ ...q, kind: 'tan', handle: c.handle });
+          if (pc.k === 'arc') {
+            const circ = arcPieceCircle(pc);
+            for (const q of tangentPoints(base, { x: circ.cx, y: circ.cy }, circ.r))
+              if (onArc(Math.atan2(q.y - circ.cy, q.x - circ.cx), circ.a0, circ.sweep)) consider({ ...q, kind: 'tan', handle: c.handle });
+          } else if (pc.k !== 'line') {
+            // 타원·타원호(해석적)·스플라인(근 찾기): 기준점에서 그은 접선의 접점
+            for (const s of tangentsFromPoint(pc, base)) consider({ ...s.p, kind: 'tan', handle: c.handle });
+          }
         }
     }
   }
@@ -722,14 +746,8 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
     }
   }
   if (modes.has('app')) {
-    // 가상 교차점: 근처 선분을 늘려 만나는 점(조준창의 4배 안의 선분끼리, 교점은 조준창 안)
-    const segs = picker.segmentsNear(p.x, p.y, aperture * 4, 200);
-    const n = segs.length / 4;
-    for (let i = 0; i < n; i++)
-      for (let j = i + 1; j < n; j++) {
-        const q = lineInter(segs, i * 4, j * 4);
-        if (q) consider({ ...q, kind: 'app' });
-      }
+    // 가상 교차점: 근처 객체의 곡선을 늘린 것(선 → 무한선, 호 → 원, 타원호 → 타원)끼리의 정확한 교점(snap-app.ts)
+    for (const q of apparentSnaps(doc, picker, p, aperture)) consider({ x: q.x, y: q.y, kind: 'app', handle: q.handle, handle2: q.handle2 });
   }
   // 알맞은 차례(점수가 같으면 먼저 찾은 것), 같은 자리는 하나만. Tab으로 돌 후보는 앞의 MAX_CYCLE개면 된다(촘촘한 해치 위에서도 가볍게)
   found.sort((a, b) => a.score - b.score);
