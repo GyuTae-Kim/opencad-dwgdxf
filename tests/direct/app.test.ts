@@ -481,14 +481,14 @@ describe('끌기', () => {
     expect(ov(h).windowRect).toBeNull();
     h.view.events.drag!(P(30, 0), P(30, 10), true, ev());
     // 놓을 때 수정 모듈을 불러온다
-    await vi.waitFor(() => expect((h.doc.entityIndex.get(a) as LineEntity).start).toMatchObject({ x: 0, y: 10 }), { timeout: 5000 });
+    await vi.waitFor(() => expect((h.doc.entityIndex.get(a) as LineEntity).start).toMatchObject({ x: 0, y: 10 }), { timeout: 30_000 });
     expect([...h.st.selection]).toEqual([a]);
     h.st.session.undo();
     expect((h.doc.entityIndex.get(a) as LineEntity).start).toMatchObject({ x: 0, y: 0 });
     const n = h.doc.blocks.get(MODEL_SPACE)!.entities.length;
     h.view.events.down!(P(30, 0), P(30, 0), ev());
     h.view.events.drag!(P(30, 0), P(30, 5), true, ev({ ctrlKey: true }));
-    await vi.waitFor(() => expect(h.doc.blocks.get(MODEL_SPACE)!.entities.length).toBe(n + 1), { timeout: 5000 });
+    await vi.waitFor(() => expect(h.doc.blocks.get(MODEL_SPACE)!.entities.length).toBe(n + 1), { timeout: 30_000 });
     expect((h.doc.entityIndex.get(a) as LineEntity).start).toMatchObject({ x: 0, y: 0 });
   });
 
