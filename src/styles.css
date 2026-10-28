@@ -1864,6 +1864,76 @@ button.aci.on {
   margin-top: 4px;
   color: #ff8a80;
 }
+/* 입력 대화상자의 직접 만든 칸(제도 설정 추가 각도 목록 — polar-addlist.ts) */
+.form-row.custom {
+  align-items: start;
+}
+.form-row.custom > span {
+  padding-top: 4px;
+}
+.polar-add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 190px;
+  min-width: 0;
+  max-width: 100%;
+}
+.polar-add-list {
+  height: 124px;
+  overflow: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  background: var(--bg-input);
+  outline: 0;
+}
+.polar-add-list:focus {
+  border-color: var(--accent);
+}
+.polar-add-item {
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+.polar-add-item:hover {
+  background: var(--bg-hover);
+}
+.polar-add-item[aria-selected='true'] {
+  background: var(--bg-active);
+  color: #fff;
+}
+.form .form-row .polar-add .polar-add-edit {
+  width: 100%;
+}
+.form .form-row .polar-add .polar-add-edit[hidden] {
+  display: none;
+}
+.polar-add-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.polar-add-btns .btn:disabled {
+  opacity: 0.5;
+}
+.polar-add-msg {
+  min-height: 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.polar-add-msg.err {
+  color: var(--danger);
+}
+@media (max-width: 759.98px) {
+  .polar-add-btns .btn {
+    min-height: 36px;
+  }
+}
 
 /* 선종류 목록 */
 .lt-list {

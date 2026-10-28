@@ -6,7 +6,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   POLARADDANG_MAX,
+  addPolarAngle,
   formatDeg,
+  formatPolarAngle,
+  parseAngleText,
+  removePolarAngle,
   formatPolarAddAng,
   normDeg,
   otrackDirections,
@@ -55,7 +59,7 @@ describe('POLARANG·POLARADDANG 글', () => {
   it('증분 각도는 0.1~360도의 수(목록에 없는 각도도)', () => {
     expect([parsePolarAng('90'), parsePolarAng(' 22.5 '), parsePolarAng('7.5'), parsePolarAng('360')]).toEqual([90, 22.5, 7.5, 360]);
     for (const bad of ['0', '-15', '361', 'abc', '', '1e2', '0.05']) expect(typeof parsePolarAng(bad)).toBe('string');
-    expect(parsePolarAng('0')).toBe('증분 각도는 0.1과(와) 360 사이의 수(도)여야 합니다.');
+    expect(parsePolarAng('0')).toBe('증분 각도는 0.1과(와) 360 사이의 각도여야 합니다.');
   });
 
   it('추가 각도는 ;로 나눈 도, 0~360으로 바꾸고 같은 각도는 한 번, 10개까지, 빈 글·"."은 없음', () => {
@@ -63,7 +67,7 @@ describe('POLARANG·POLARADDANG 글', () => {
     expect(parsePolarAddAng(' 10 ; 75.50 ;; -15 ; 370 ; 10 ')).toEqual([10, 75.5, 345]);
     expect(parsePolarAddAng('"30"')).toEqual([30]);
     expect([parsePolarAddAng(''), parsePolarAddAng('.'), parsePolarAddAng('  ')]).toEqual([[], [], []]);
-    expect(parsePolarAddAng('10,75')).toBe('추가 각도 "10,75"은(는) 수가 아닙니다. 각도(도)를 ;로 나눠 입력하십시오.');
+    expect(parsePolarAddAng('10,75')).toBe('추가 각도 "10,75"을(를) 각도로 읽을 수 없습니다. 각도를 ;로 나눠 입력하십시오.');
     const eleven = Array.from({ length: POLARADDANG_MAX + 1 }, (_, i) => i * 5).join(';');
     expect(parsePolarAddAng(eleven)).toBe('추가 각도는 10개까지입니다.');
     expect(parsePolarAddAng(eleven.split(';').slice(0, 10).join(';'))).toHaveLength(10);
@@ -87,7 +91,7 @@ describe('POLARANG·POLARADDANG 글', () => {
     expect(setBrowserSysvar('POLARMODE', 2.5)).toBe('0과(와) 15 사이의 정수가 필요합니다.');
     expect(setBrowserSysvar('POLARMODE', 13)).toBeNull();
     expect(setBrowserSysvarText('POLARADDANG', ' 75 ; 10 ')).toBeNull();
-    expect(setBrowserSysvarText('POLARADDANG', 'x')).toContain('수가 아닙니다');
+    expect(setBrowserSysvarText('POLARADDANG', 'x')).toContain('각도로 읽을 수 없습니다');
     off();
     expect(seen).toEqual(['POLARANG=22.5', 'POLARMODE=13', 'POLARADDANG=75;10']);
     expect([browserSysvar('POLARMODE'), browserSysvar('POLARANG'), browserSysvarText('POLARADDANG')]).toEqual([13, 22.5, '75;10']);
@@ -99,6 +103,77 @@ describe('POLARANG·POLARADDANG 글', () => {
     prefSet('opencad.sysvar.POLARADDANG', '1;x');
     prefSet('opencad.sysvar.POLARANG', '0');
     expect([browserSysvarText('POLARADDANG'), browserSysvar('POLARANG')]).toEqual(['', 90]);
+  });
+});
+
+describe('각도 단위(AUNITS·AUPREC)로 보이기·받기 — 저장값은 도', () => {
+  const U = (aunits: number, auprec = 0) => ({ aunits, auprec });
+
+  it('십진 도·도/분/초·그라드·라디안: AUPREC 자릿수, 값이 달라 보이면 다시 읽힐 때까지 자릿수를 늘린다', () => {
+    expect([formatPolarAngle(90), formatPolarAngle(22.5), formatPolarAngle(0.1), formatPolarAngle(360)]).toEqual(['90', '22.5', '0.1', '360']);
+    expect([formatPolarAngle(90, U(0, 2)), formatPolarAngle(22.5, U(0, 4))]).toEqual(['90.00', '22.5000']);
+    // 도/분/초(AutoLISP angtos 1과 같은 꼴): 0 → 도, 1·2 → 분, 3·4 → 초, 5부터 초의 소수
+    expect([formatPolarAngle(90, U(1)), formatPolarAngle(22.5, U(1)), formatPolarAngle(7.5, U(1, 4)), formatPolarAngle(10.123, U(1))]).toEqual(['90d', "22d30'", `7d30'0"`, `10d7'22.8"`]);
+    expect([formatPolarAngle(90, U(2)), formatPolarAngle(22.5, U(2)), formatPolarAngle(45, U(2, 2))]).toEqual(['100g', '25g', '50.00g']);
+    expect([formatPolarAngle(90, U(3, 4)), formatPolarAngle(180, U(3, 2))]).toEqual(['1.57079633r', '3.14159265r']);
+    // 측량 단위: 증분(크기)은 도/분/초, 추가 각도(방향)는 방위
+    expect([formatPolarAngle(22.5, U(4)), formatPolarAngle(10, U(4), true), formatPolarAngle(22.5, U(4), true), formatPolarAngle(100, U(4), true), formatPolarAngle(200, U(4), true), formatPolarAngle(300, U(4), true)]).toEqual([
+      "22d30'",
+      'N 80d E',
+      "N 67d30' E",
+      'N 10d W',
+      'S 70d W',
+      'S 30d E',
+    ]);
+    expect([0, 90, 180, 270].map((d) => formatPolarAngle(d, U(4), true))).toEqual(['E', 'N', 'W', 'S']);
+    // 맞지 않는 AUNITS·AUPREC은 십진 도·0~8
+    expect([formatPolarAngle(45, U(9, -3)), formatPolarAngle(45, U(0, 20))]).toEqual(['45', '45.00000000']);
+    // 어느 단위든 보인 글을 다시 읽으면 같은 각도
+    for (const u of [U(0), U(1), U(2), U(3), U(4), U(1, 8), U(2, 3)])
+      for (const d of [0.1, 5, 7.5, 10.123456, 22.5, 90, 359.5]) {
+        expect(parseAngleText(formatPolarAngle(d, u), u.aunits)).toBeCloseTo(d, 5);
+        expect(parseAngleText(formatPolarAngle(d, u, true), u.aunits, true)).toBeCloseTo(d, 5);
+      }
+  });
+
+  it('받기: 단위 표시가 있으면 그 단위, 없으면 AUNITS의 단위(0·1·4 도, 2 그라드, 3 라디안), 방향은 방위도', () => {
+    expect([parseAngleText("22d30'", 0), parseAngleText('25g', 0), parseAngleText('45°', 3), parseAngleText(' 10 ', 1), parseAngleText('10', 4)]).toEqual([22.5, 22.5, 45, 10, 10]);
+    expect([parseAngleText('50', 2), parseAngleText(String(Math.PI / 2), 3), parseAngleText('-15', 0)]).toEqual([45, 90, -15]);
+    expect(parseAngleText('0.5r', 0)).toBeCloseTo(28.64788976, 7);
+    expect([parseAngleText('N 80d E', 4, true), parseAngleText('s 30d e', 0, true), parseAngleText('W', 0, true), parseAngleText("N 67d30' E", 1, true)]).toEqual([10, 300, 180, 22.5]);
+    // 증분 각도(크기)는 방위를 받지 않는다. 지수·못 읽는 글은 null
+    expect([parseAngleText('N 80d E', 4), parseAngleText('1e2', 0), parseAngleText('abc', 0), parseAngleText('', 0), parseAngleText('N x E', 4, true)]).toEqual([null, null, null, null, null]);
+  });
+
+  it('증분 각도: 제도 설정은 도면 단위로 읽고(경계 문구도 그 단위), 명령행은 도 — 단위 표시는 어디서나', () => {
+    expect([parsePolarAng('50', U(2)), parsePolarAng('22d30\'', U(1)), parsePolarAng('25g'), parsePolarAng('0.25r')]).toEqual([45, 22.5, 22.5, 14.323944878]);
+    expect(parsePolarAng('500', U(2))).toBe('증분 각도는 0.111111g과(와) 400g 사이의 각도여야 합니다.');
+    expect(parsePolarAng('0', U(1))).toBe("증분 각도는 0d6'과(와) 360d 사이의 각도여야 합니다.");
+    expect(parsePolarAng('N 80d E', U(4))).toBe("증분 각도는 0d6'과(와) 360d 사이의 각도여야 합니다.");
+  });
+
+  it('POLARADDANG 글의 항목도 단위 표시·방위를 받아 도로 저장한다', () => {
+    expect(parsePolarAddAng('N 80d E;25g;10;0.5r')).toEqual([10, 22.5, 28.647890]);
+    expect(parsePolarAddAng('50;N', U(2))).toEqual([45, 90]);
+    expect(formatPolarAddAng(parsePolarAddAng("7d30';S 30d E") as number[])).toBe('7.5;300');
+  });
+
+  it('추가 각도 새로 만들기·삭제: 10개까지, 같은 방향은 거르고, 0~360 밖은 같은 방향으로 넣고 알린다', () => {
+    expect(addPolarAngle([], "22d30'", U(1))).toEqual({ list: [22.5], index: 0, note: null });
+    expect(addPolarAngle([22.5], '25g', U(1))).toEqual({ error: "추가 각도 22d30'은(는) 이미 목록에 있습니다." });
+    expect(addPolarAngle([10], '-10')).toEqual({ list: [10, 350], index: 1, note: '-10을(를) 같은 방향인 350(으)로 넣었습니다(추가 각도는 0 이상 360 미만).' });
+    expect(addPolarAngle([10], '370')).toEqual({ error: '추가 각도 10은(는) 이미 목록에 있습니다.' });
+    expect(addPolarAngle([0], '359.9999999')).toEqual({ error: '추가 각도 0은(는) 이미 목록에 있습니다.' });
+    expect(addPolarAngle([], 'S 30d E', U(4))).toEqual({ list: [300], index: 0, note: null });
+    expect(addPolarAngle([], '50', U(2))).toEqual({ list: [45], index: 0, note: null });
+    expect(addPolarAngle([], ' x ')).toEqual({ error: '"x"을(를) 각도로 읽을 수 없습니다.' });
+    const ten = Array.from({ length: POLARADDANG_MAX }, (_, i) => i * 7);
+    expect(addPolarAngle(ten, '1')).toEqual({ error: '추가 각도는 10개까지입니다.' });
+    expect(addPolarAngle(ten.slice(1), '1')).toMatchObject({ index: 9 });
+    expect(removePolarAngle([1, 2, 3], 1)).toEqual({ list: [1, 3], index: 1 });
+    expect(removePolarAngle([1, 2, 3], 2)).toEqual({ list: [1, 2], index: 1 });
+    expect(removePolarAngle([1], 0)).toEqual({ list: [], index: -1 });
+    expect(removePolarAngle([1, 2], -1)).toEqual({ list: [1, 2], index: 0 });
   });
 });
 
