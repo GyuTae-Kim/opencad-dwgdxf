@@ -66,6 +66,9 @@ export class FakeView {
   screenToWorld(x: number, y: number): Pt {
     return { x, y };
   }
+  worldToScreen(x: number, y: number): Pt {
+    return { x, y };
+  }
   paperPoint(x: number, y: number): Pt {
     return { x, y };
   }

@@ -259,6 +259,13 @@ export function registerTableCommands(app: App): void {
       }
       const cur = st.doc.header.get(key);
       if (cur === undefined) {
+        // 머리말에 없는 이 브라우저 변수(AUTOSNAP·PICKBOX …)·세션 변수(POLARMODE·DYNMODE …)는 변수 이름을 친 것과 같게(전에는 "없습니다")
+        const { promptSysvar, sysvarInfo } = await import('./sysvars');
+        const info = sysvarInfo(app, key.slice(1));
+        if (info && info.source !== 'header') {
+          await promptSysvar(app, ctx, info.name);
+          return;
+        }
         ctx.print(`변수 "${name}"이(가) 이 도면에 없습니다.`, 'err');
         return;
       }

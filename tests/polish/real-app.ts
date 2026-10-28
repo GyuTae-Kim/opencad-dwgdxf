@@ -5,6 +5,7 @@
 import { App, type UiHooks } from '../../src/app/app';
 import { DocState } from '../../src/app/docstate';
 import { bindCommitHooks } from '../../src/app/hooks';
+import { prefSet } from '../../src/app/mgr-ui';
 import { createNewDocument } from '../../src/core/newdoc';
 import type { CadDocument } from '../../src/core/model';
 import { EditSession } from '../../src/edit/session';
@@ -24,6 +25,8 @@ export interface RealApp {
 }
 
 export function makeApp(setup?: (doc: CadDocument) => void): RealApp {
+  // F10·F11(극좌표·객체 스냅 추적)은 이 브라우저에 저장되는 AUTOSNAP 8·16이다. 앞 시험이 바꾼 값이 남지 않게 기본값(63, 둘 다 켜짐)에서 시작한다
+  prefSet('opencad.sysvar.AUTOSNAP', null);
   const app = new App({} as HTMLElement);
   const ui: Record<string, number> = {};
   const count = (k: string) => () => {

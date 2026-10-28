@@ -126,6 +126,8 @@ describe('동적 입력', () => {
 
   it('Tab으로 거리 칸을 잠그면 커서가 움직여도 그 거리, 각도 칸에 값을 치고 Enter면 그 점', async () => {
     const h = setup();
+    // 극좌표 추적(F10, 기본 켜짐)은 끈다: 켜져 있으면 (3, 4)가 90° 정렬 경로 (0, 4)로 간다
+    h.app.polarOn = false;
     const got = pointCmd(h, 'PT', { base: P(0, 0) });
     void h.app.run('PT');
     await settle();

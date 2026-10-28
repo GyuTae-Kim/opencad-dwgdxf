@@ -52,13 +52,25 @@ export function optionValue(name: string): number {
 
 const hex6 = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
-/** AutoSnap 칸(OPTIONS 제도 탭) ↔ AUTOSNAP 비트: 1 표식기, 2 AutoSnap 툴팁, 4 마그넷(AutoCAD 도움말). 8·16·32(추적)는 건드리지 않는다 */
-export function autosnapFields(bits: number): { marker: boolean; tooltip: boolean; magnet: boolean } {
-  return { marker: (bits & 1) !== 0, tooltip: (bits & 2) !== 0, magnet: (bits & 4) !== 0 };
+/**
+ * OPTIONS 제도 탭 칸 ↔ AUTOSNAP 비트(AutoCAD 도움말): AutoSnap 설정의 1 표식기·2 AutoSnap 툴팁·4 마그넷, AutoTrack 설정의 32 AutoTrack 툴팁.
+ * 8(극좌표 추적)·16(객체 스냅 추적)은 F10·F11의 켜기·끄기라 이 탭에 칸이 없고(AutoCAD도 제도 설정 대화상자에 있다) 건드리지 않는다
+ */
+export interface AutosnapFields {
+  marker: boolean;
+  tooltip: boolean;
+  magnet: boolean;
+  trackTip: boolean;
 }
 
-export function autosnapBits(old: number, v: { marker: boolean; tooltip: boolean; magnet: boolean }): number {
-  return (old & ~7) | (v.marker ? 1 : 0) | (v.tooltip ? 2 : 0) | (v.magnet ? 4 : 0);
+export function autosnapFields(bits: number): AutosnapFields {
+  return { marker: (bits & 1) !== 0, tooltip: (bits & 2) !== 0, magnet: (bits & 4) !== 0, trackTip: (bits & 32) !== 0 };
+}
+
+/** 칸 값을 지금 AUTOSNAP(old)에 담는다. trackTip을 주지 않으면 32도 그대로 */
+export function autosnapBits(old: number, v: Omit<AutosnapFields, 'trackTip'> & { trackTip?: boolean }): number {
+  const keep = v.trackTip === undefined ? ~7 : ~(7 | 32);
+  return (old & keep) | (v.marker ? 1 : 0) | (v.tooltip ? 2 : 0) | (v.magnet ? 4 : 0) | (v.trackTip ? 32 : 0);
 }
 
 /** SHORTCUTMENU 비트 ↔ 대화상자 칸(1 기본 모드 메뉴, 2 편집 모드 메뉴, 4 명령 모드 늘 메뉴, 8 옵션이 있을 때만, 16 시간에 민감한 오른쪽 클릭) */
@@ -137,12 +149,18 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   const marker = checkIn(asf.marker, '표식기');
   const magnet = checkIn(asf.magnet, '마그넷');
   const tooltip = checkIn(asf.tooltip, 'AutoSnap 툴팁 표시');
+  const trackTip = checkIn(asf.trackTip, 'AutoTrack 툴팁 표시');
   const markerSize = numIn(autosnapMarkerSize(), 'AutoSnap 표식기 크기');
   const aperture = numIn(browserSysvar('APERTURE'), '조준창 크기');
   const drafting = h(
     'div',
     { class: 'mgr-dlg' },
-    group('AutoSnap 설정', row('표식기(M)', marker), row('마그넷(G)', magnet), row('AutoSnap 툴팁 표시(T)', tooltip)),
+    h(
+      'div',
+      { class: 'mgr-cols' },
+      group('AutoSnap 설정', row('표식기(M)', marker), row('마그넷(G)', magnet), row('AutoSnap 툴팁 표시(T)', tooltip)),
+      group('AutoTrack 설정', row('AutoTrack 툴팁 표시(K)', trackTip)),
+    ),
     h('div', { class: 'mgr-cols' }, group('AutoSnap 표식기 크기(S)', row('1~20', markerSize)), group('조준창 크기(Z)', row('픽셀(1~50)', aperture))),
   );
   // 사용자 기본 설정
@@ -241,7 +259,8 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   set('PICKFIRST', pickfirst.checked ? 1 : 0);
   set('PICKADD', pickadd.checked ? 0 : 2);
   set('SELECTIONPREVIEW', (spCmd.checked ? 1 : 0) | (spIdle.checked ? 2 : 0));
-  set('AUTOSNAP', autosnapBits(as, { marker: marker.checked, tooltip: tooltip.checked, magnet: magnet.checked }));
+  // 추적 비트(8·16)는 지금 값에 담는다(대화상자를 연 동안 F10·F11·상태 막대로 바꾼 것을 되돌리지 않게)
+  set('AUTOSNAP', autosnapBits(browserSysvar('AUTOSNAP'), { marker: marker.checked, tooltip: tooltip.checked, magnet: magnet.checked, trackTip: trackTip.checked }));
   set('APERTURE', r.aperture);
   set('SHORTCUTMENU', shortcutMenuBits({ menus: menus.checked, def: defMode.value as 'repeat', edit: editMode.value as 'repeat', cmd: cmdMode.value as 'enter', timed: timed.checked }));
   set('SHORTCUTMENUDURATION', r.duration);

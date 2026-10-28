@@ -58,7 +58,8 @@ export const BROWSER_VARS: readonly BrowserVar[] = [
   { name: 'GRIPMULTIFUNCTIONAL', def: 3, min: 0, max: 3, desc: '다기능 그립 옵션(1 Ctrl 순환, 2 커서를 올리면 뜨는 메뉴)' },
   { name: 'CURSORSIZE', def: 5, min: 1, max: 100, desc: '십자선 크기(화면 크기의 %)' },
   { name: 'APERTURE', def: 10, min: 1, max: 50, desc: '객체 스냅 조준창 크기(픽셀)' },
-  { name: 'AUTOSNAP', def: 63, min: 0, max: 63, desc: 'AutoSnap 표식기·마그넷·툴팁·추적 표시(비트)' },
+  // 8·16은 F10·F11의 켜기·끄기와 같은 상태(App.polarOn·otrackOn이 이 값을 읽고 쓴다)
+  { name: 'AUTOSNAP', def: 63, min: 0, max: 63, desc: 'AutoSnap 표식기·툴팁·마그넷, 극좌표·객체 스냅 추적(F10·F11)과 그 툴팁(비트)' },
   { name: 'PICKFIRST', def: 1, min: 0, max: 1, desc: '명령 전에 객체 선택(명사/동사 선택)' },
   { name: 'PICKADD', def: 2, min: 0, max: 2, desc: '선택 세트에 추가(Shift로 추가)' },
   { name: 'PICKAUTO', def: 5, min: 0, max: 7, desc: '객체 선택 프롬프트의 자동 윈도우·걸침 선택' },

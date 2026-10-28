@@ -6,6 +6,8 @@ import { registerBlockCommands } from '../../src/app/blocks';
 import { registerTableCommands } from '../../src/app/tables';
 import { registerDashCommands } from '../../src/app/dashcmds';
 import { scriptRunner } from '../../src/app/script';
+import { browserSysvar } from '../../src/app/sysvars';
+import { prefSet } from '../../src/app/mgr-ui';
 import { makeScriptApp, type ScriptApp } from './app';
 
 let hs = 0xf000;
@@ -109,6 +111,19 @@ describe('SCRIPT 통합: 선·원·블록 삽입·해치', () => {
     const h = setup();
     expect(await h.script('PDMODE 3\n')).toBe('idle');
     expect(h.doc.header.get('$PDMODE')).toBe(3);
+  });
+
+  it('SETVAR는 머리말에 없는 이 브라우저 변수(AUTOSNAP — 8·16은 F10·F11)도 바꾼다. 모르는 이름은 그대로 알린다', async () => {
+    const h = setup();
+    try {
+      expect(await h.script('SETVAR AUTOSNAP 47\n')).toBe('idle');
+      expect(browserSysvar('AUTOSNAP')).toBe(47);
+      expect(h.doc.header.has('$AUTOSNAP')).toBe(false);
+      await h.script('SETVAR NOSUCHVAR\n');
+      expect(h.errors().join('\n')).toContain('변수 "NOSUCHVAR"이(가) 이 도면에 없습니다.');
+    } finally {
+      prefSet('opencad.sysvar.AUTOSNAP', null);
+    }
   });
 
   it('스크립트에서는 대화상자 명령 대신 명령행 버전(INSERT → -INSERT, ATTREQ 0)', async () => {

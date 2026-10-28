@@ -132,7 +132,7 @@ export function showSnapMarker(autosnap: number): boolean {
   return (autosnap & 1) !== 0;
 }
 
-/** 객체 스냅 툴팁(스냅 이름)을 보이는지(AUTOSNAP 2 — 4는 마그넷) */
+/** 객체 스냅 툴팁(스냅 이름)을 보이는지(AUTOSNAP 2 — 4는 마그넷, magnetOn) */
 export function showSnapTip(autosnap: number): boolean {
   return (autosnap & 2) !== 0;
 }
@@ -140,6 +140,38 @@ export function showSnapTip(autosnap: number): boolean {
 /** 극좌표·객체 스냅 추적 툴팁(거리 < 각도)을 보이는지(AUTOSNAP 32) */
 export function showTrackTip(autosnap: number): boolean {
   return (autosnap & 32) !== 0;
+}
+
+/** AutoSnap 마그넷(AUTOSNAP 4): 커서가 스냅점을 잡으면 십자선을 그 점에 붙여 고정한다(AutoCAD 도움말) */
+export function magnetOn(autosnap: number): boolean {
+  return (autosnap & 4) !== 0;
+}
+
+/** 극좌표 추적이 켜져 있는지(AUTOSNAP 8 — F10·상태 막대 단추와 같은 상태) */
+export function polarTrackOn(autosnap: number): boolean {
+  return (autosnap & 8) !== 0;
+}
+
+/** 객체 스냅 추적이 켜져 있는지(AUTOSNAP 16 — F11·상태 막대 단추와 같은 상태) */
+export function objectTrackOn(autosnap: number): boolean {
+  return (autosnap & 16) !== 0;
+}
+
+/** 추적 비트(8 극좌표, 16 객체 스냅)만 바꾼 AUTOSNAP. 주지 않은 칸과 나머지 비트는 그대로 */
+export function withTracking(autosnap: number, v: { polar?: boolean; otrack?: boolean }): number {
+  let out = autosnap;
+  if (v.polar !== undefined) out = v.polar ? out | 8 : out & ~8;
+  if (v.otrack !== undefined) out = v.otrack ? out | 16 : out & ~16;
+  return out;
+}
+
+/**
+ * 십자선을 그릴 화면 점. 마그넷이 켜져 있고 객체 스냅점을 잡았으면 그 점(화면 좌표)에 붙이고, 끄면 커서 그대로 둔다
+ * (표식기만 스냅점에 보이고, 누르면 그래도 스냅점을 쓴다). 커서가 없으면(터치) 그대로 없다
+ */
+export function magnetCursor<P extends { x: number; y: number }>(cursor: P | null, snapScreen: P | null, autosnap: number): P | null {
+  if (!cursor || !snapScreen || !magnetOn(autosnap)) return cursor;
+  return snapScreen;
 }
 
 /** 시간에 민감한 오른쪽 클릭이 켜져 있으면 길게 누름 기준(밀리초), 꺼져 있으면 null */
