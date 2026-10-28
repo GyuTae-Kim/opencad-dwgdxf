@@ -277,6 +277,8 @@ export function registerDrawCommands(app: App): void {
       let start = first;
       let prev = first;
       let count = 0;
+      /** 그린 선분의 시작점. 명령 취소(U)로 하나씩 되돌린다 — 다음 선분의 시작점 */
+      const froms: Pt[] = [];
       for (;;) {
         const kws = count >= 2 ? [{ key: 'C', label: '닫기' }, { key: 'U', label: '명령 취소' }] : [{ key: 'U', label: '명령 취소' }];
         const d = deferred;
@@ -297,9 +299,9 @@ export function registerDrawCommands(app: App): void {
         if ('keyword' in r) {
           if (r.keyword === 'U') {
             if (count > 0 && st.session.undoLastStep(ctx.group, 1)) {
-              const last = st.doc.entityIndex.get(app.lastCreated[app.lastCreated.length - 1] ?? '');
+              // 되돌린 선분의 시작점에서 잇는다(전에는 되돌린 선분의 핸들로 찾다가 지워져 늘 첫 점으로 돌아갔다)
               count--;
-              prev = last && last.type === 'LINE' && count > 0 ? { x: last.end.x, y: last.end.y } : start;
+              prev = froms.pop() ?? start;
               if (count === 0) prev = start;
             }
             continue;
@@ -326,6 +328,7 @@ export function registerDrawCommands(app: App): void {
         if (dist(prev, p) < 1e-12) continue;
         addEntities(app, ctx, [{ ...base(), type: 'LINE', handle: '', start: v3(prev, elev), end: v3(p, elev) } as Entity], 'LINE');
         setTangent(app, p, ang(prev, p));
+        froms.push(prev);
         prev = p;
         app.lastPoint = p;
         count++;

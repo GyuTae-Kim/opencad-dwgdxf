@@ -107,6 +107,18 @@ describe('SCRIPT 통합: 선·원·블록 삽입·해치', () => {
     expect(lines[0]).toMatchObject({ start: { x: 0, y: 0 }, end: { x: 20, y: 0 } });
   });
 
+  it('LINE의 명령 취소(U)는 마지막 선분만 되돌리고 남은 선분의 끝에서 잇는다(모두 되돌리면 첫 점에서)', async () => {
+    const h = setup();
+    expect(await h.script('LINE 0,0 10,0 10,10 U 20,0\n\n')).toBe('idle');
+    const ends = () => h.model('LINE').map((l) => [l.start.x, l.start.y, l.end.x, l.end.y]);
+    expect(ends()).toEqual([
+      [0, 0, 10, 0],
+      [10, 0, 20, 0],
+    ]);
+    expect(await h.script('LINE 0,50 10,50 10,60 10,70 U U 30,50 U U 0,40\n\n')).toBe('idle');
+    expect(ends().slice(2)).toEqual([[0, 50, 0, 40]]);
+  });
+
   it('명령이 아닌 도면 변수는 SETVAR로', async () => {
     const h = setup();
     expect(await h.script('PDMODE 3\n')).toBe('idle');
