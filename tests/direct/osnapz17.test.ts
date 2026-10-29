@@ -101,6 +101,13 @@ describe('객체 위 점의 Z(entityZAt)', () => {
     const s = Math.SQRT1_2;
     const tilted = circle(0, 0, 5, V(0, -s, s)) as CircleEntity;
     expect(r9(entityZAt(tilted, P(0, 2))!)).toBe(2);
+    // 스플라인: 조정점이 한 높이면 그 높이, 아니면 곡선 위(1차는 조정점을 잇는 꺾은선)
+    const sp = (ctrl: Vec3[], degree: number) => ({ ...entityDefaults(), type: 'SPLINE', handle: '', degree, flags: 0, knots: [], controlPoints: ctrl, fitPoints: [] }) as unknown as Entity;
+    expect(entityZAt(sp([V(0, 0, 4), V(5, 5, 4), V(10, 0, 4), V(15, 5, 4)], 3), P(7, 2))).toBe(4);
+    expect(r9(entityZAt(sp([V(0, 0, 0), V(10, 0, 10), V(20, 0, 0)], 1), P(15, 0))!)).toBe(5);
+    const cubic = entityZAt(sp([V(0, 0, 0), V(10, 0, 10), V(20, 0, 10), V(30, 0, 0)], 3), P(15, 0))!;
+    // 대칭인 3차 곡선의 가운데 높이: (0 + 3·10 + 3·10 + 0) / 8 = 7.5
+    expect(cubic).toBeCloseTo(7.5, 3);
     // 블록 참조 등 모르는 객체
     expect(entityZAt({ ...entityDefaults(), type: 'POINT', handle: '', position: V(0, 0, 1) } as Entity, P(0, 0))).toBeUndefined();
   });

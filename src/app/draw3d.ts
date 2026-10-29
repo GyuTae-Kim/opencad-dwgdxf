@@ -1,7 +1,8 @@
 /**
  * 3D 객체 작성(평면도에서 그리는 것): 3DPOLY(3D 폴리선), 3DFACE(3D 면, 보이지 않는 모서리), TRACE(폭 있는 선, TRACEWID).
- * 3DPOLY·3DFACE의 점은 좌표 입력이 정한 Z(x,y,z·@dx,dy,dz·원통·구 좌표·점 필터)와 객체 정의점(끝점·중간점·중심 등)에 잡힌
- * 스냅의 Z(AutoCAD OSNAPZ 0)를 쓰고, Z를 주지 않은 점(빈 곳 클릭·x,y·교차점 등)은 지금 고도(ELEVATION).
+ * 3DPOLY·3DFACE의 점은 좌표 입력이 정한 Z(x,y,z·@dx,dy,dz·원통·구 좌표·점 필터)와 객체에 잡힌 스냅 점의 Z(정의점·근처점·수직·접점,
+ * 3D에서도 만나는 교차점 — snapz.ts, AutoCAD OSNAPZ 0)를 쓰고, Z를 주지 않은 점(빈 곳 클릭·x,y·평면도에서만 겹친 교차점 등)과
+ * OSNAPZ 1일 때의 스냅 점은 지금 고도(ELEVATION).
  * @ 상대 좌표는 앞 점의 Z를 잇는다. TRACE는 평면 객체라 고도에 그린다. 프롬프트는 AutoCAD 2026 한국어판을 따른다.
  */
 import type { Entity, FaceEntity, PolylineEntity, Vec3 } from '../core/model';

@@ -55,13 +55,32 @@ function ocsPlaneZ(e: Entity, x: number, y: number, z: number, q: Pt): number | 
   return planeZ(p0, e.extrusion ?? Z_UP, q);
 }
 
-/** 스플라인의 3D 꺾은선(맞춤점만 있으면 맞춤 곡선) */
+/** 점들의 범위 상자 대각선 길이 */
+function spanOf(pts: readonly Vec3[]): number {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let z0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  let z1 = -Infinity;
+  for (const p of pts) {
+    x0 = Math.min(x0, p.x);
+    y0 = Math.min(y0, p.y);
+    z0 = Math.min(z0, p.z);
+    x1 = Math.max(x1, p.x);
+    y1 = Math.max(y1, p.y);
+    z1 = Math.max(z1, p.z);
+  }
+  return Math.hypot(x1 - x0, y1 - y0, z1 - z0);
+}
+
+/** 스플라인의 3D 꺾은선(맞춤점만 있으면 맞춤 곡선). 높이를 읽을 만큼 잘게(크기의 10만분의 1 — 매듭 구간마다 64칸까지) */
 function splinePoints(e: Entity & { type: 'SPLINE' }): Vec3[] {
   let flat: number[];
-  if (e.controlPoints.length >= 2) flat = nurbsPoints(e.degree, e.knots, e.controlPoints, e.weights, 1e9);
+  if (e.controlPoints.length >= 2) flat = nurbsPoints(e.degree, e.knots, e.controlPoints, e.weights, Math.max(1e-9, spanOf(e.controlPoints) * 1e-5));
   else if (e.fitPoints.length >= 2) {
     const s = fitPointsCurve(e);
-    flat = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e9);
+    flat = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, Math.max(1e-9, spanOf(s.ctrl) * 1e-5));
   } else return e.fitPoints.slice();
   const out: Vec3[] = [];
   for (let i = 0; i + 2 < flat.length; i += 3) out.push({ x: flat[i]!, y: flat[i + 1]!, z: flat[i + 2]! });
