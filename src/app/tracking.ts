@@ -60,19 +60,31 @@ function nearestRay(from: Pt, w: Pt, angles: number[], tol: number): { q: Pt; di
   return best;
 }
 
-/** 극좌표 정렬선의 툴팁: 각도를 잴 0도 방향(라디안 — UCS X축 또는 상대 극좌표의 마지막 선분)과 이름 */
+/**
+ * 정렬선의 툴팁: 각도를 잴 0도 방향(라디안 — 도면 단위의 0 방향(UCS X축 + ANGBASE) 또는 상대 극좌표의 마지막 선분),
+ * 재는 방향(cw — ANGDIR 1이면 시계 방향), 각도 글(angle — 잰 각도(라디안, 0~2π)를 AUNITS로. 없으면 십진 도 "45°"), 이름
+ */
 export interface PolarTip {
   ref?: number;
+  cw?: boolean;
+  angle?: (a: number) => string;
   /** 기본 "극좌표"(상대면 "상대 극좌표") */
   label?: string;
 }
 
-/** 극좌표 추적: 기준점에서 증분 각도 방향. 툴팁 각도는 tip.ref에서 잰다 */
+/** 정렬선 방향 a(라디안)를 tip의 0도 방향·재는 방향으로 잰 각도 글 */
+function tipAngle(a: number, tip: PolarTip): string {
+  const ref = tip.ref ?? 0;
+  const m = tip.cw ? ref - a : a - ref;
+  return tip.angle ? tip.angle((((m % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI))) : `${deg(m)}°`;
+}
+
+/** 극좌표 추적: 기준점에서 증분 각도 방향. 툴팁 각도는 tip.ref에서 tip.cw 쪽으로 잰다 */
 export function polarTrack(base: Pt, w: Pt, angles: number[], tol: number, fmt: (v: number) => string, tip: PolarTip = {}): TrackResult | null {
   const r = nearestRay(base, w, angles, tol);
   if (!r) return null;
   const len = Math.hypot(r.q.x - base.x, r.q.y - base.y);
-  return { p: r.q, lines: [{ from: base, dir: r.dir }], tip: `${tip.label ?? '극좌표'}: ${fmt(len)} < ${deg(r.angle - (tip.ref ?? 0))}°` };
+  return { p: r.q, lines: [{ from: base, dir: r.dir }], tip: `${tip.label ?? '극좌표'}: ${fmt(len)} < ${tipAngle(r.angle, tip)}` };
 }
 
 function intersect(a: TrackLine, b: TrackLine): Pt | null {
@@ -84,17 +96,19 @@ function intersect(a: TrackLine, b: TrackLine): Pt | null {
 
 /**
  * 객체 스냅 추적: 획득점(그리고 극좌표가 켜져 있으면 기준점)에서 나가는 정렬선.
- * 두 정렬선이 커서 근처에서 만나면 그 교점. 툴팁 각도는 획득점은 ref(UCS X축)에서, 기준점은 baseTip.ref에서 잰다
+ * 두 정렬선이 커서 근처에서 만나면 그 교점. 툴팁 각도는 획득점은 ref(수 — 0도 방향, 또는 PolarTip — 도면 단위의 0 방향·재는 방향·각도 글)로,
+ * 기준점은 baseTip으로 잰다(baseTip에 없는 칸은 ref의 것)
  */
-export function objectTrack(acquired: readonly Acquired[], w: Pt, angles: number[], tol: number, base: Pt | null, baseAngles: number[] | null, fmt: (v: number) => string, ref = 0, baseTip: PolarTip = {}): TrackResult | null {
-  const cands: { line: TrackLine; q: Pt; d: number; label: string; angle: number; from: Pt }[] = [];
+export function objectTrack(acquired: readonly Acquired[], w: Pt, angles: number[], tol: number, base: Pt | null, baseAngles: number[] | null, fmt: (v: number) => string, ref: number | PolarTip = 0, baseTip: PolarTip = {}): TrackResult | null {
+  const acqTip: PolarTip = typeof ref === 'number' ? { ref } : ref;
+  const cands: { line: TrackLine; q: Pt; d: number; label: string; angle: string; from: Pt }[] = [];
   for (const a of acquired) {
     const r = nearestRay(a.p, w, angles, tol);
-    if (r) cands.push({ line: { from: a.p, dir: r.dir }, q: r.q, d: r.d, label: a.label, angle: r.angle - ref, from: a.p });
+    if (r) cands.push({ line: { from: a.p, dir: r.dir }, q: r.q, d: r.d, label: a.label, angle: tipAngle(r.angle, acqTip), from: a.p });
   }
   if (base && baseAngles) {
     const r = nearestRay(base, w, baseAngles, tol);
-    if (r) cands.push({ line: { from: base, dir: r.dir }, q: r.q, d: r.d, label: baseTip.label ?? '극좌표', angle: r.angle - (baseTip.ref ?? ref), from: base });
+    if (r) cands.push({ line: { from: base, dir: r.dir }, q: r.q, d: r.d, label: baseTip.label ?? '극좌표', angle: tipAngle(r.angle, { ...acqTip, ...baseTip }), from: base });
   }
   if (!cands.length) return null;
   cands.sort((x, y) => x.d - y.d);
@@ -105,10 +119,10 @@ export function objectTrack(acquired: readonly Acquired[], w: Pt, angles: number
       if (p && Math.hypot(p.x - w.x, p.y - w.y) <= tol * 1.5) {
         const A = cands[i]!;
         const B = cands[j]!;
-        return { p, lines: [A.line, B.line], tip: `${A.label}: < ${deg(A.angle)}°, ${B.label}: < ${deg(B.angle)}°` };
+        return { p, lines: [A.line, B.line], tip: `${A.label}: < ${A.angle}, ${B.label}: < ${B.angle}` };
       }
     }
   const c = cands[0]!;
   const len = Math.hypot(c.q.x - c.from.x, c.q.y - c.from.y);
-  return { p: c.q, lines: [c.line], tip: `${c.label}: ${fmt(len)} < ${deg(c.angle)}°` };
+  return { p: c.q, lines: [c.line], tip: `${c.label}: ${fmt(len)} < ${c.angle}` };
 }

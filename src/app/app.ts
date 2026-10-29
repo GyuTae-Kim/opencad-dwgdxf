@@ -25,8 +25,8 @@ import type { MeasureResult } from './measure-result';
 import { Picker } from './pick';
 import { SELECT_HELP, SELECT_METHODS, SELECT_OPTIONS, runSelectMethod, selectMethodOf } from './selmethod';
 import { DEFAULT_SNAPS, SNAP_NAMES, type SnapPoint, findSnaps } from './snap';
-import { type Acquired, objectTrack, polarTrack } from './tracking';
-import { type PolarSettings, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire } from './polar';
+import { type Acquired, type PolarTip, objectTrack, polarTrack } from './tracking';
+import { type PolarSettings, angleBase, clockwise, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire, trackAngleText } from './polar';
 import { gripPoints } from '../edit/geom';
 import { dynGrips, isDynamicReference } from '../edit/dynblock';
 import { spaceTolerance } from '../render/build';
@@ -939,7 +939,7 @@ export class App {
     // 동적 입력 칸을 잠갔으면 Enter·값으로 그 칸들을 합친 점
     if (r.kind === 'point' && this.dynOn && interactive && this.dyn.locked) {
       const st = this.active;
-      const p = st ? this.dyn.resolve(t, r.base, this.cursorWorld, currentUcs(st), st.units.aunits) : null;
+      const p = st ? this.dyn.resolve(t, r.base, this.cursorWorld, currentUcs(st), st.units.aunits, st.units) : null;
       if (p) {
         if (this.outsideLimits(p)) return;
         this.cmd.print(`${this.promptOf(r)} ${[...this.dyn.locks.filter((x) => x !== null), t].filter(Boolean).join(' ')}`);
@@ -1029,7 +1029,8 @@ export class App {
     const lastW = base ?? this.lastPoint;
     const lastZ = lastW?.z;
     const last = lastW ? { ...(conv ? toUcs(u, lastW) : { x: lastW.x, y: lastW.y }), ...(lastZ !== undefined ? { z: lastZ } : {}) } : null;
-    const pu = parsePointInput(wcs ? t.slice(1) : t, last, dir && conv ? dirToUcs(u, dir) : dir, this.elevation());
+    // 극좌표의 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로
+    const pu = parsePointInput(wcs ? t.slice(1) : t, last, dir && conv ? dirToUcs(u, dir) : dir, this.elevation(), this.active?.units);
     if (!pu) return null;
     const w = conv ? toWcs(u, pu) : { x: pu.x, y: pu.y };
     return pu.z === undefined ? w : { ...w, z: pu.z };
@@ -1793,19 +1794,23 @@ export class App {
     const fmt = (v: number) => formatLength(v, st.units);
     // Shift를 누르는 동안 직교를 뒤집는다(켜져 있으면 끄고, 꺼져 있으면 켠다)
     const ortho = this.orthoOn !== this.shiftHeld;
-    // 극좌표 각도는 UCS X축 기준(절대), POLARMODE 1이면 마지막으로 그린 선분 기준(상대). 증분 각도의 배수와 POLARMODE 4면 추가 각도
+    // 극좌표 각도는 도면 단위의 0 방향(UCS X축 + ANGBASE)에서 ANGDIR 쪽으로(절대), POLARMODE 1이면 마지막으로 그린 선분에서(상대).
+    // 증분 각도의 배수와 POLARMODE 4면 추가 각도. 툴팁 각도는 그 0 방향에서 같은 쪽으로 재서 AUNITS·AUPREC로 보인다
     const ua = currentUcs(st).angle;
     const ps = this.polar;
+    const units = st.units;
+    const cw = clockwise(units);
     const polarActive = this.polarOn && !ortho;
-    const pref = polarReference(ps.mode, ua, this.lastSegmentDir());
-    const pa = polarActive ? polarDirections(ps, pref.ref) : null;
-    const ptip = { ref: pref.ref, label: pref.relative ? '상대 극좌표' : '극좌표' };
+    const pref = polarReference(ps.mode, ua, this.lastSegmentDir(), angleBase(units));
+    const pa = polarActive ? polarDirections(ps, pref.ref, cw) : null;
+    const ptip: PolarTip = { ref: pref.ref, cw, angle: (a) => trackAngleText(a, units, pref.relative), label: pref.relative ? '상대 극좌표' : '극좌표' };
     // 획득점: 객체 스냅 추적이 켜져 있으면 획득한 점, 임시 추적점(TT)은 꺼져 있어도
     const temp = this.tempTrack?.req === r ? this.tempTrack.points : [];
     const acq = [...(this.otrackOn ? this.acquired : []), ...temp];
     if (acq.length) {
-      // 획득점에서는 수평·수직(POLARMODE 2이고 극좌표 추적 중이면 극좌표 추적 설정의 각도 — UCS 기준)
-      const t = objectTrack(acq, w, otrackDirections(ps, polarActive, ua), tol, r.base, pa, fmt, ua, ptip);
+      // 획득점에서는 수평·수직(POLARMODE 2이고 극좌표 추적 중이면 극좌표 추적 설정의 각도 — 절대 극좌표와 같은 0 방향). 툴팁은 절대 각도
+      const atip: PolarTip = { ref: ua + angleBase(units), cw, angle: (a) => trackAngleText(a, units, false) };
+      const t = objectTrack(acq, w, otrackDirections(ps, polarActive, ua, units), tol, r.base, pa, fmt, atip, ptip);
       if (t) return { p: t.p, snap: null, track: t };
     }
     if (r.base && pa) {
@@ -1830,7 +1835,7 @@ export class App {
   private dynLock(r: PointRequest, res: ResolvedPoint): ResolvedPoint {
     const st = this.active;
     if (!st || !this.dynOn || !this.dyn.locked) return res;
-    return { p: this.dyn.constrain(r.base, res.p, currentUcs(st), st.units.aunits), snap: null };
+    return { p: this.dyn.constrain(r.base, res.p, currentUcs(st), st.units.aunits, st.units), snap: null };
   }
 
   /**
@@ -1954,7 +1959,7 @@ export class App {
       o.dynFields = null;
       return;
     }
-    o.dynFields = this.dyn.fields(r.base, q, this.cmd.input.value, currentUcs(st), (v) => formatLength(v, st.units));
+    o.dynFields = this.dyn.fields(r.base, q, this.cmd.input.value, currentUcs(st), (v) => formatLength(v, st.units), st.units);
   }
 
   /** 마지막으로 해석한 커서 점(동적 입력 칸) */
