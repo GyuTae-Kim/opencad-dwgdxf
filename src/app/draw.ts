@@ -115,8 +115,8 @@ const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 const dist = (a: Pt, b: Pt) => Math.hypot(b.x - a.x, b.y - a.y);
 const ang = (a: Pt, b: Pt) => Math.atan2(b.y - a.y, b.x - a.x);
 
-/** 숫자 입력(거리·반지름 등). 점을 찍으면 base에서 그 점까지 거리 */
-async function getDistance(ctx: CommandContext, prompt: string, base: Pt | null, def?: number): Promise<number> {
+/** 숫자 입력(거리·반지름 등). 점을 찍으면 base에서 그 점까지 거리(PLINE·DIST 다중 점) */
+export async function getDistance(ctx: CommandContext, prompt: string, base: Pt | null, def?: number): Promise<number> {
   for (;;) {
     const r = await ctx.getPoint(def !== undefined ? `${prompt} <${fmt(ctx, def)}>:` : `${prompt}:`, { base, allowText: true });
     if ('enter' in r && def !== undefined) return def;
@@ -129,7 +129,7 @@ async function getDistance(ctx: CommandContext, prompt: string, base: Pt | null,
   }
 }
 
-async function getAngle(ctx: CommandContext, prompt: string, base: Pt | null, def = 0): Promise<number> {
+export async function getAngle(ctx: CommandContext, prompt: string, base: Pt | null, def = 0): Promise<number> {
   for (;;) {
     const r = await ctx.getPoint(`${prompt} <${((def * 180) / Math.PI).toFixed(0)}>:`, { base, preferNumber: true });
     if ('enter' in r) return def;
@@ -242,7 +242,7 @@ function noteSegment(app: App, dir: number): void {
 }
 
 /** 세 점(시작·중간·끝)으로 호: 반시계 시작각·끝각 */
-function arc3p(a: Pt, m: Pt, b: Pt): { c: Pt; r: number; a0: number; a1: number } | null {
+export function arc3p(a: Pt, m: Pt, b: Pt): { c: Pt; r: number; a0: number; a1: number } | null {
   const k = circle3p(a, m, b);
   if (!k) return null;
   let a0 = ang(k.c, a);
@@ -1769,7 +1769,7 @@ function norm(a: number): number {
   return r < 0 ? r + TAU : r;
 }
 
-function polyPreview(vs: LwVertex[], closed: boolean): number[] {
+export function polyPreview(vs: readonly Pick<LwVertex, 'x' | 'y' | 'bulge'>[], closed: boolean): number[] {
   const out: number[] = [];
   if (!vs.length) return out;
   out.push(vs[0]!.x, vs[0]!.y);

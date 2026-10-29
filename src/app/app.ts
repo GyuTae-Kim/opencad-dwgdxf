@@ -107,6 +107,8 @@ interface PointRequest {
   /** 끌기 미리보기. snap은 지금 커서가 잡은 객체 스냅(지연된 접점 미리보기 등) */
   rubber?: (p: Pt, snap?: PointSnap | null) => { pts: number[]; closed?: boolean; fill?: boolean; dashed?: boolean }[];
   ghost?: (p: Pt) => OverlayGeom[];
+  /** 커서 툴팁 글(DIST 다중 점의 누적 거리). 객체 스냅·추적 툴팁이 먼저다 */
+  tip?: (p: Pt) => string | null;
   /** 접점(TAN)을 지연된 접점으로 받는다(명령이 다음 점을 받은 뒤 접점을 구한다 — LINE·PLINE·XLINE·CIRCLE) */
   deferTan: boolean;
   /** 지연된 접점을 선에도 받는다(원을 그리는 명령) */
@@ -182,6 +184,8 @@ export interface PointOptions {
   keywords?: Keyword[];
   rubber?: PointRequest['rubber'];
   ghost?: PointRequest['ghost'];
+  /** 커서 툴팁 글(객체 스냅 이름·추적 툴팁이 없을 때) */
+  tip?: PointRequest['tip'];
   allowText?: boolean;
   preferNumber?: boolean;
   /** 접점 스냅을 지연된 접점으로 받는다 */
@@ -221,6 +225,11 @@ export interface Command {
   transparent?: boolean;
   /** 열린 도면이 없어도 실행 */
   noDoc?: boolean;
+  /**
+   * 프롬프트에서 작은따옴표를 붙여 친 이름('DIST)만 투명 명령으로 돈다. 리본·휴대폰 단추·메뉴로 시작하면
+   * 투명이 아닌 명령처럼 앞 명령을 끝낸다(transparent가 참이면 이 값은 보지 않는다)
+   */
+  quotedTransparent?: boolean;
   run(ctx: CommandContext, arg?: string): Promise<void> | void;
 }
 
@@ -509,8 +518,8 @@ export class App {
     return out.sort((a, b) => a.score - b.score);
   }
 
-  /** 명령 실행. arg가 있으면 첫 프롬프트의 답으로 쓴다 */
-  async run(name: string, arg?: string): Promise<void> {
+  /** 명령 실행. arg가 있으면 첫 프롬프트의 답으로 쓴다. quoted: 프롬프트에서 작은따옴표를 붙여 친 이름(quotedTransparent 명령이 투명으로) */
+  async run(name: string, arg?: string, quoted = false): Promise<void> {
     const c = this.findCommand(name);
     if (!c) {
       const raw = name.trim().toUpperCase().replace(/^[_.']+/, '');
@@ -522,7 +531,8 @@ export class App {
       this.cmd.print('열린 도면이 없습니다. 먼저 파일을 여십시오.', 'err');
       return;
     }
-    const prev = this.running && !c.transparent ? this.running : null;
+    const transparent = !!c.transparent || (quoted && !!c.quotedTransparent);
+    const prev = this.running && !transparent ? this.running : null;
     if (prev) {
       this.cancel(true);
       // 앞 명령은 취소를 받은 뒤에도 더 묻지 못하고(요청이 곧바로 거절된다), 남긴 미리보기는 지금 지운다.
@@ -530,7 +540,7 @@ export class App {
       prev.ctrl.abort();
       this.resetCommandUi();
     }
-    const outer = this.running && c.transparent ? this.running : null;
+    const outer = this.running && transparent ? this.running : null;
     const nested = !!outer;
     const saved = nested ? this.request : null;
     if (nested) this.request = null;
@@ -651,6 +661,8 @@ export class App {
   private promptOf(r: Request): string {
     if (!r.keywords.length) return r.prompt;
     if (r.prompt.includes('[')) return r.prompt;
+    // 키워드가 모두 <기본값>으로 보이면 그대로(DIST "두 번째 점 지정 또는 <다중 점>:" — M을 쳐도 된다)
+    if (r.keywords.every((k) => r.prompt.includes(`<${k.label}>`))) return r.prompt;
     const kw = r.keywords.map((k) => `${k.label}(${k.key})`).join('/');
     return r.prompt.replace(/:$/, '') + ` [${kw}]:`;
   }
@@ -665,6 +677,7 @@ export class App {
         keywords: opt.keywords ?? [],
         rubber: opt.rubber,
         ghost: opt.ghost,
+        tip: opt.tip,
         deferTan: !!opt.deferTan,
         deferTanLines: !!opt.deferTanLines,
         snaps: opt.snaps?.length ? new Set(opt.snaps) : null,
@@ -930,7 +943,7 @@ export class App {
       }
       // 객체 선택 중에도 투명 명령('FILTER 등)
       if (t.startsWith("'")) {
-        void this.run(t.slice(1));
+        void this.run(t.slice(1), undefined, true);
         return;
       }
       const up = t.toUpperCase();
@@ -979,7 +992,7 @@ export class App {
       return;
     }
     if (t.startsWith("'")) {
-      void this.run(t.slice(1));
+      void this.run(t.slice(1), undefined, true);
       return;
     }
     if (r.kind === 'point') {
@@ -2018,6 +2031,7 @@ export class App {
       const as = this.settings.autosnap;
       if (snap && showSnapTip(as)) o.tip = snap.deferred ? '지연된 접점' : (SNAP_NAMES[snap.kind] ?? null);
       else if (track && !snap && showTrackTip(as)) o.tip = track.tip;
+      else if (r.tip) o.tip = r.tip(p);
       else if (!this.dynOn) o.tip = null;
       else if (r.base && !o.dynFields) {
         const d = Math.hypot(p.x - r.base.x, p.y - r.base.y);

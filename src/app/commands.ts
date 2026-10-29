@@ -15,6 +15,8 @@ import { h } from './ui/dom';
 import { type MeasureFormat, angleResult, areaResult, distance3d, distanceResult, pointResult, radiusResult } from './measure-result';
 import { currentUcs, dirToUcs, toUcs } from './ucs';
 import { displayDirection } from './polar';
+import { measureMultiple, pathLength as multiLength } from './distmulti';
+import { polyPreview } from './draw';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -164,10 +166,16 @@ export function registerCommands(app: App): void {
     name: 'DIST',
     aliases: ['DI'],
     title: '거리',
+    // 도움말 DIST: 투명 사용('DIST) — 다른 명령의 프롬프트에서 재고 그 명령으로 돌아간다. 단추·메뉴로 시작하면 이전처럼 앞 명령을 끝낸다
+    quotedTransparent: true,
     async run(ctx) {
       const a = await needPoint3(app, ctx, '첫 번째 점 지정:');
-      const b = await needPoint3(app, ctx, '두 번째 점 지정:', a);
-      reportDistance(app, ctx, a, b);
+      // <다중 점>은 기본값(Enter — 도움말 용어집: 꺾쇠 괄호 안 값은 Enter로 받는 기본값), M도 같다
+      for (;;) {
+        const r = await ctx.getPoint('두 번째 점 지정 또는 <다중 점>:', { base: base3(app, a), snapZ: true, keywords: [{ key: 'M', label: '다중 점' }] });
+        if ('point' in r) return reportDistance(app, ctx, a, point3(app, r));
+        if ('enter' in r || 'keyword' in r) return multiDistance(app, ctx, a);
+      }
     },
   });
   app.register({
@@ -194,8 +202,15 @@ export function registerCommands(app: App): void {
           if ('enter' in r) return;
           if (!('point' in r)) continue;
           const a = point3(app, r);
-          const b = await needPoint3(app, ctx, '두 번째 점 지정:', a);
-          reportDistance(app, ctx, a, b);
+          // 도움말 MEASUREGEOM 거리: 다중 점은 이어지는 점 사이 거리의 누적 합계
+          for (;;) {
+            const r2 = await ctx.getPoint('두 번째 점 지정 또는 [다중 점(M)]:', { base: base3(app, a), snapZ: true, keywords: [{ key: 'M', label: '다중 점' }] });
+            if ('enter' in r2) throw new CancelError();
+            if ('point' in r2) reportDistance(app, ctx, a, point3(app, r2));
+            else if ('keyword' in r2) await multiDistance(app, ctx, a);
+            else continue;
+            break;
+          }
           continue;
         }
         if (mode === 'R') {
@@ -524,6 +539,17 @@ function reportDistance(app: App, ctx: CommandContext, a: Pt3, b: Pt3): void {
     { p: b, text: `${L(app, d)}${unitSuffix(app)}` },
   ];
   app.view.overlay.rubber = [{ pts: [a.x, a.y, b.x, b.y] }];
+  persistMarks(app);
+}
+
+/** DIST·MEASUREGEOM 거리의 다중 점(distmulti.ts): 끝나면 지나온 경로와 누적 거리를 잠시 남긴다 */
+async function multiDistance(app: App, ctx: CommandContext, first: Pt3): Promise<void> {
+  const flat = !app.active!.isModel;
+  const vs = await measureMultiple(ctx, first, { point3: (r) => point3(app, r), base: (p) => base3(app, p), length: (v) => L(app, v), unit: unitSuffix(app), flat });
+  if (vs.length < 2) return;
+  const end = vs[vs.length - 1]!;
+  app.view.overlay.marks = [{ p: first }, { p: end, text: `${L(app, multiLength(vs, flat))}${unitSuffix(app)}` }];
+  app.view.overlay.rubber = [{ pts: polyPreview(vs, false) }];
   persistMarks(app);
 }
 
