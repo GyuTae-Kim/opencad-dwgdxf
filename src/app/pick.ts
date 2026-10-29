@@ -342,13 +342,16 @@ export class Picker {
     return i === undefined ? undefined : this.boxes[i];
   }
 
-  /** 점 근처 선분들(스냅 교차점·근처점용) */
-  segmentsNear(x: number, y: number, tol: number, limit = 4000): number[] {
+  /** 점 근처 선분들(스냅 교차점·근처점용). owners를 주면 선분마다 그 객체의 핸들을 같은 차례로 담는다(스냅 점의 Z) */
+  segmentsNear(x: number, y: number, tol: number, limit = 4000, owners?: string[]): number[] {
     const out: number[] = [];
     for (const b of this.candidates(x, y, tol)) {
       const s = this.geometry(b.handle).segs;
       for (let i = 0; i + 3 < s.length; i += 4) {
-        if (distSeg(x, y, s[i]!, s[i + 1]!, s[i + 2]!, s[i + 3]!) <= tol) out.push(s[i]!, s[i + 1]!, s[i + 2]!, s[i + 3]!);
+        if (distSeg(x, y, s[i]!, s[i + 1]!, s[i + 2]!, s[i + 3]!) <= tol) {
+          out.push(s[i]!, s[i + 1]!, s[i + 2]!, s[i + 3]!);
+          owners?.push(b.handle);
+        }
         if (out.length > limit * 4) return out;
       }
     }

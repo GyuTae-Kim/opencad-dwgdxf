@@ -33,9 +33,13 @@ function setup(warnings: { code: string; message: string; count?: number; detail
   return { ...h, saves, downloads };
 }
 
-/** 명령이 동적 가져오기(fieldcmds)를 기다리므로 조건이 될 때까지 돈다 */
+/**
+ * 명령이 동적 가져오기(fieldcmds)를 기다리므로 조건이 될 때까지 돈다. 횟수가 아니라 시간(15초)으로 기다린다 —
+ * 기계가 바쁠 때 가져오기가 2초를 넘겨 대화상자가 늦게 뜨면 횟수로 세던 기다림이 먼저 끝나 시험이 실패했다
+ */
 async function until(cond: () => boolean): Promise<void> {
-  for (let i = 0; i < 200 && !cond(); i++) await new Promise((r) => setTimeout(r, 10));
+  const end = Date.now() + 15000;
+  while (!cond() && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
   await settle();
 }
 

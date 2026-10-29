@@ -6,6 +6,7 @@
 import type { CadDocument, Entity } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
 import { lwVertices } from '../../src/core/lwpoly';
+import { polyVertices } from '../../src/core/polyverts';
 import { fenceHits, polygonHits } from '../../src/edit/geom/selpoly';
 import { entityPath } from '../../src/edit/geom/path';
 import { flattenPath, pathSize } from '../../src/edit/geom/curve';
@@ -83,6 +84,18 @@ export function geometryOf(e: Entity): Geom {
         const b = vs[(i + 1) % vs.length]!;
         segs.push(a.x, a.y, b.x, b.y);
       }
+      break;
+    }
+    case 'POLYLINE': {
+      // 3D 폴리선(평면도)
+      const vs = polyVertices(e).map((v) => v.location);
+      const n = e.flags & 1 ? vs.length : vs.length - 1;
+      for (let i = 0; i < n; i++) segs.push(vs[i]!.x, vs[i]!.y, vs[(i + 1) % vs.length]!.x, vs[(i + 1) % vs.length]!.y);
+      break;
+    }
+    case '3DFACE': {
+      const p = e.points;
+      for (let i = 0; i < 4; i++) segs.push(p[i]!.x, p[i]!.y, p[(i + 1) % 4]!.x, p[(i + 1) % 4]!.y);
       break;
     }
     case 'ELLIPSE':
@@ -169,11 +182,15 @@ export class FakePicker {
       .filter((b) => this.distance(b.handle, x, y) <= tol)
       .map((b) => b.handle);
   }
-  segmentsNear(x: number, y: number, tol: number): number[] {
+  segmentsNear(x: number, y: number, tol: number, _limit?: number, owners?: string[]): number[] {
     const out: number[] = [];
     for (const b of this.candidates(x, y, tol)) {
       const s = this.geometry(b.handle).segs;
-      for (let i = 0; i + 3 < s.length; i += 4) if (distSeg(x, y, s, i) <= tol) out.push(s[i]!, s[i + 1]!, s[i + 2]!, s[i + 3]!);
+      for (let i = 0; i + 3 < s.length; i += 4)
+        if (distSeg(x, y, s, i) <= tol) {
+          out.push(s[i]!, s[i + 1]!, s[i + 2]!, s[i + 3]!);
+          owners?.push(b.handle);
+        }
     }
     return out;
   }

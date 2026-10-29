@@ -137,6 +137,24 @@ export function toDrawingAngle(a: number, c: AngleConvention): number {
   return norm(clockwise(c) ? -d : d);
 }
 
+/**
+ * 0 방향 없이 재는 각도 크기(ROTATE의 회전 각도)의 부호: 입력·표시 값 ↔ 시계 반대 방향 라디안. ANGDIR 1이면 부호를 뒤집는다
+ * (AutoCAD 도움말 "About Rotating Objects": 양의 각도는 도면 단위의 방향 설정에 따라 시계 반대 방향 또는 시계 방향으로 돌린다).
+ * 두 번 쓰면 제자리라 들이고 내보내기에 함께 쓴다
+ */
+export function signedAngle(a: number, c: AngleConvention): number {
+  return clockwise(c) ? -a : a;
+}
+
+/**
+ * 방향 각도의 표시 값(DIST의 "XY 평면에서의 각도"): a는 UCS X축에서 시계 반대 방향으로 잰 라디안.
+ * 도면 단위의 0 방향(ANGBASE)에서 ANGDIR 쪽으로 잰 각도(0 ≤ θ < 2π — 도움말 "Direction Control": 0 방향은 각도의 입력과 표시에,
+ * "Advanced Setup": 양의 방향은 각도를 입력하고 보이는 방향). 측량 단위(AUNITS 4)는 방위라 절대 방향(UCS 기준) 그대로
+ */
+export function displayDirection(a: number, units: AngleConvention & { aunits?: number }): number {
+  return units.aunits === 4 ? norm(a) : toDrawingAngle(a, units);
+}
+
 const RAD = Math.PI / 180;
 /** 같은 각도로 볼 차이(도). 저장하는 글(formatDeg)이 소수 여섯째 자리까지다 */
 const SAME_DEG = 1e-6;

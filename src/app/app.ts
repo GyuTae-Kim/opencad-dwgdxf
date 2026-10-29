@@ -115,7 +115,7 @@ interface PointRequest {
   snaps: ReadonlySet<SnapKind> | null;
   /** Ctrl(⌘)을 눌렀다 떼면(그 사이 다른 키·클릭 없이) 이 키워드로 끝낸다(다기능 그립의 Ctrl 순환) */
   ctrlTap: string | null;
-  /** 3D 명령: 객체 정의점에 잡힌 스냅의 Z를 결과 z로(AutoCAD OSNAPZ 0) */
+  /** 객체에 잡힌 스냅 점의 Z를 결과 z로(LINE·CIRCLE 중심·3D 명령 — AutoCAD OSNAPZ 0, 1이면 받지 않는다) */
   snapZ: boolean;
   allowText: boolean;
   /** 명령이 글을 받는다고 한 요청(allowText): 객체 스냅 재지정 이름도 글로 돌려준다 */
@@ -192,7 +192,10 @@ export interface PointOptions {
   snaps?: SnapKind[];
   /** Ctrl을 눌렀다 떼면 이 키워드로 끝낸다 */
   ctrlTap?: string;
-  /** 3D 명령(3DPOLY·3DFACE): 끝점·중간점·중심 등 객체 정의점에 잡힌 스냅의 Z를 결과 z로 받는다(AutoCAD OSNAPZ 0) */
+  /**
+   * 객체에 잡힌 스냅 점(끝점·중간점·중심·교차점·근처점 등)의 Z를 결과 z로 받는다(LINE·CIRCLE 중심·3DPOLY·3DFACE — AutoCAD OSNAPZ 0).
+   * OSNAPZ 1(App.osnapZ)이면 받지 않는다(지금 고도)
+   */
   snapZ?: boolean;
 }
 
@@ -250,6 +253,11 @@ export class App {
   private readonly aliases = new Map<string, string>();
   osnapOn = true;
   readonly snapModes = new Set<SnapKind>(DEFAULT_SNAPS);
+  /**
+   * OSNAPZ(AutoCAD 도움말: 저장하지 않는 세션 변수, 초기값 0). 켜면(1) 객체 스냅 점의 Z 대신 지금 고도(ELEVATION)를 쓴다.
+   * 스냅의 Z를 받는 명령(LINE·CIRCLE 중심·3DPOLY·3DFACE)에만 뜻이 있다. OPTIONS 제도 탭의 "Z 값을 현재 고도로 대체"와 같은 값
+   */
+  osnapZ = false;
   private ortho = false;
   /** 격자 표시(F7)·격자 스냅(F9) */
   gridOn = false;
@@ -2188,8 +2196,9 @@ export class App {
         return;
       }
       if (this.outsideLimits(p)) return;
-      // 3D 명령(snapZ)은 객체 정의점에 잡힌 스냅의 Z를 받는다(AutoCAD OSNAPZ 0). 그 밖의 점은 Z 없이(고도)
-      const z = r.snapZ && snap?.z !== undefined ? snap.z : undefined;
+      // 스냅의 Z를 받는 요청(snapZ — LINE·CIRCLE 중심·3DPOLY·3DFACE)은 객체에 잡힌 스냅 점의 Z를 받는다(OSNAPZ 0).
+      // OSNAPZ 1이면 그 Z를 지금 고도로 바꾼다(Z 없이 — 명령이 고도를 쓴다). 그 밖의 점·요청은 Z 없이(고도)
+      const z = r.snapZ && !this.osnapZ && snap?.z !== undefined ? snap.z : undefined;
       this.lastPoint = z === undefined ? p : { ...p, z };
       this.finishPoint(r, { point: p, ...(z !== undefined ? { z } : {}), snap: snap ? { kind: snap.kind, handle: snap.handle, handle2: snap.handle2, ...(snap.deferred ? { deferred: true } : {}) } : null, ...(ev.shiftKey ? { shift: true } : {}), ...(ev.ctrlKey || ev.metaKey ? { ctrl: true } : {}) });
       return;

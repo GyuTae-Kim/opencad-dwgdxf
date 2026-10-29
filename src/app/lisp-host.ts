@@ -247,6 +247,9 @@ function sessionVar(app: App, n: string): Value | undefined {
     }
     case 'ORTHOMODE':
       return app.orthoOn ? 1 : 0;
+    // OSNAPZ: 저장하지 않는 세션 변수(AutoCAD 도움말) — 1이면 객체 스냅 점의 Z를 지금 고도로
+    case 'OSNAPZ':
+      return app.osnapZ ? 1 : 0;
     case 'SNAPMODE':
       return app.snapOn ? 1 : 0;
     case 'GRIDMODE':
@@ -365,6 +368,12 @@ export function setSysVar(app: App, name: string, v: Value): string | null {
       app.dynOn = v !== 0;
       app.ui?.refreshStatus?.();
       return null;
+    case 'OSNAPZ': {
+      const b = int01();
+      if (b === null) return '';
+      app.osnapZ = b === 1;
+      return null;
+    }
     case 'FILEDIA':
     case 'CMDDIA':
     case 'CMDECHO': {

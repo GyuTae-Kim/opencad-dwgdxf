@@ -22,9 +22,9 @@ export interface MeasureFormat {
   unit: string;
 }
 
-/** 두 점 사이: 큰 값은 거리, 보조 줄은 XY 평면 각도·ΔX·ΔY(ΔZ는 0이 아닐 때만) */
-export function distanceResult(f: MeasureFormat, dx: number, dy: number, dz = 0): MeasureResult {
-  let ang = Math.atan2(dy, dx);
+/** 두 점 사이: 큰 값은 거리, 보조 줄은 XY 평면 각도·ΔX·ΔY(ΔZ는 0이 아닐 때만). angle을 주면 그 각도(도면 단위의 0 방향·방향으로 잰 값) */
+export function distanceResult(f: MeasureFormat, dx: number, dy: number, dz = 0, angle?: number): MeasureResult {
+  let ang = angle ?? Math.atan2(dy, dx);
   if (ang < 0) ang += Math.PI * 2;
   const details = [
     { k: '각도', v: f.angle(ang) },
