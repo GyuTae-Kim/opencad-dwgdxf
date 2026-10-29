@@ -361,9 +361,12 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
   for (const r of results)
     for (const e of r.add ?? []) {
       fixBlock(e);
+      // 놓일 자리(소유 블록·도면 공간 표지)를 치수 그림보다 먼저: 그림 문자가 모형 공간 치수의 음수 DIMLFAC만 1로 쓴다
+      // (edit/dim/vars.ts measureVars — 전에는 자리 없이 그려 도면 공간 QDIM·DIMJOGGED·붙여 넣기도 1을 썼다)
+      if (block?.recordHandle) e.owner = block.recordHandle;
+      e.paperSpace = /^\*PAPER_SPACE/i.test(st.space) ? true : undefined;
       regen(e, undefined);
       prepareNew(st, e, block?.recordHandle);
-      e.paperSpace = /^\*PAPER_SPACE/i.test(st.space) ? true : undefined;
       ops.push({ kind: 'add', block: st.space, entity: e });
       out.added.push(e.handle);
     }
