@@ -30,8 +30,11 @@ export interface PendingInput {
 /** 스냅·추적·직교를 적용한 점 */
 export interface ResolvedPoint {
   p: Pt;
-  /** z: 객체에 잡힌 스냅 점의 WCS Z(snapz.ts — 스냅의 Z를 받는 요청이 snapZ로 받는다) */
-  snap: { p: Pt; kind: SnapKind; handle?: string; handle2?: string; deferred?: boolean; z?: number } | null;
+  /**
+   * z: 객체에 잡힌 스냅 점의 WCS Z(snapz.ts — 스냅의 Z를 받는 요청이 snapZ로 받는다).
+   * viewport: 도면 공간에서 뷰포트에 보이는 모형 객체에 잡은 점이면 그 뷰포트 핸들과 모형 좌표(vpsnap.ts)
+   */
+  snap: { p: Pt; kind: SnapKind; handle?: string; handle2?: string; deferred?: boolean; z?: number; viewport?: { handle: string; model: Pt } } | null;
   track?: TrackResult;
 }
 

@@ -38,6 +38,16 @@ export interface SnapPoint {
   lines?: { from: Pt; dir: Pt }[];
   /** 지연된 접점: 기준점이 아직 없어 원·호 위 찍은 자리만 정했다(명령이 다음 점을 받은 뒤 접점을 구한다) */
   deferred?: boolean;
+  /** 도면 공간에서 뷰포트에 보이는 모형 객체에 잡은 점(vpsnap.ts): 그 뷰포트와 모형 좌표. x·y는 종이 좌표다 */
+  viewport?: ViewportSnap;
+}
+
+/** 뷰포트 안 모형 객체 스냅의 출처 */
+export interface ViewportSnap {
+  /** 뷰포트 핸들 */
+  handle: string;
+  /** 스냅 점의 모형 좌표(평면) */
+  model: Pt;
 }
 
 /** 제도 설정 대화상자의 순서(AutoCAD 2026) */
@@ -654,7 +664,25 @@ export function findSnap(doc: CadDocument, picker: Picker, p: Pt, aperture: numb
  * 커서 근처의 스냅점 후보 전부(알맞은 차례 — 거리와 종류 우선순위). 같은 자리의 후보는 하나만 둔다.
  * 겹친 후보는 스냅 표식 위에서 Tab으로 돈다(AutoCAD와 같다). 첫 후보가 findSnap의 결과다.
  */
-export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: number, modes: ReadonlySet<SnapKind>, base?: Pt | null, ctx?: SnapContext): SnapPoint[] {
+/**
+ * 두 스냅 목록(각 findSnaps 결과)을 점수 차례로 합친다(같은 자리는 하나만, 앞의 MAX_CYCLE개).
+ * scores는 findSnaps가 채운 점수(커서까지 거리 / 조준창 + 종류 차례) — 조준창으로 나눈 값이라 축척이 다른 공간끼리 견줄 수 있다
+ */
+export function mergeSnaps(a: readonly SnapPoint[], b: readonly SnapPoint[], scores: ReadonlyMap<SnapPoint, number>, aperture: number): SnapPoint[] {
+  if (!b.length) return [...a];
+  const all = [...a, ...b].map((s, i) => ({ s, i, score: scores.get(s) ?? Infinity }));
+  all.sort((x, y) => x.score - y.score || x.i - y.i);
+  const out: SnapPoint[] = [];
+  const eps = aperture * 1e-6;
+  for (const { s } of all) {
+    if (out.length >= MAX_CYCLE) break;
+    if (!out.some((o) => Math.abs(o.x - s.x) <= eps && Math.abs(o.y - s.y) <= eps)) out.push(s);
+  }
+  return out;
+}
+
+/** scores를 주면 돌려준 점마다 그 점수를 담는다(mergeSnaps) */
+export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: number, modes: ReadonlySet<SnapKind>, base?: Pt | null, ctx?: SnapContext, scores?: Map<SnapPoint, number>): SnapPoint[] {
   if (!modes.size) return [];
   const cands = picker.candidates(p.x, p.y, aperture);
   const found: { s: SnapPoint; score: number }[] = [];
@@ -771,9 +799,12 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
   found.sort((a, b) => a.score - b.score);
   const out: SnapPoint[] = [];
   const eps = aperture * 1e-6;
-  for (const { s } of found) {
+  for (const { s, score } of found) {
     if (out.length >= MAX_CYCLE) break;
-    if (!out.some((o) => Math.abs(o.x - s.x) <= eps && Math.abs(o.y - s.y) <= eps)) out.push(s);
+    if (!out.some((o) => Math.abs(o.x - s.x) <= eps && Math.abs(o.y - s.y) <= eps)) {
+      out.push(s);
+      scores?.set(s, score);
+    }
   }
   for (const s of out) {
     const hs = objs.get(s);

@@ -15,8 +15,11 @@ import { h } from './ui/dom';
 import { type MeasureFormat, angleResult, areaResult, distance3d, distanceResult, pointResult, radiusResult } from './measure-result';
 import { currentUcs, dirToUcs, toUcs } from './ucs';
 import { displayDirection } from './polar';
-import { measureMultiple, pathLength as multiLength } from './distmulti';
+import { type MultiHost, measureMultiple } from './distmulti';
 import { polyPreview } from './draw';
+import type { ViewportSnap } from './snap';
+import type { ViewportXf } from './scene';
+import { type PaperPick, layoutXfs, projectedDelta, projectionViewport } from './vpsnap';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -53,6 +56,25 @@ async function needPoint3(app: App, ctx: CommandContext, prompt: string, base?: 
     if ('enter' in r) throw new CancelError();
     if ('point' in r) return point3(app, r);
   }
+}
+
+/** DIST의 첫 점: 도면 공간에서는 뷰포트에 보이는 모형 객체에도 스냅하고 그 스냅(투영 거리)을 함께 */
+async function needDistPoint(app: App, ctx: CommandContext, prompt: string): Promise<{ p: Pt3; vp: ViewportSnap | null }> {
+  for (;;) {
+    const r = await ctx.getPoint(prompt, { snapZ: true, viewportSnaps: true });
+    if ('enter' in r) throw new CancelError();
+    if ('point' in r) return { p: point3(app, r), vp: r.snap?.viewport ?? null };
+  }
+}
+
+/**
+ * 도면 공간 DIST의 투영 뷰포트(vpsnap.ts — 도움말 DIST: 단일 뷰포트에 보이는 모형 공간 객체에 객체 스냅을 쓰면 화면과 나란한 평면에
+ * 투영한 2D 모형 공간 거리). 배치의 도면 공간이고 점이 모두 같은 뷰포트 하나의 모형 스냅일 때만, 아니면 null
+ */
+function distProjection(app: App, pts: readonly PaperPick[]): ViewportXf | null {
+  const st = app.active!;
+  if (st.isModel || st.msVp) return null;
+  return projectionViewport(layoutXfs(st.doc, st.layoutFor(st.displaySpace)), pts);
 }
 
 /** LIST가 일반 특성 가운데 보이는 것(도움말 LIST: BYLAYER가 아닐 때의 색상·선종류·선가중치·투명도, 0이 아닌 두께) */
@@ -169,12 +191,21 @@ export function registerCommands(app: App): void {
     // 도움말 DIST: 투명 사용('DIST) — 다른 명령의 프롬프트에서 재고 그 명령으로 돌아간다. 단추·메뉴로 시작하면 이전처럼 앞 명령을 끝낸다
     quotedTransparent: true,
     async run(ctx) {
-      const a = await needPoint3(app, ctx, '첫 번째 점 지정:');
+      // 배치의 도면 공간에서는 뷰포트에 보이는 모형 객체에도 스냅하고, 두 점이 같은 뷰포트 하나의 모형 스냅이면 투영 거리(vpsnap.ts)
+      const { p: a, vp: va } = await needDistPoint(app, ctx, '첫 번째 점 지정:');
       // <다중 점>은 기본값(Enter — 도움말 용어집: 꺾쇠 괄호 안 값은 Enter로 받는 기본값), M도 같다
       for (;;) {
-        const r = await ctx.getPoint('두 번째 점 지정 또는 <다중 점>:', { base: base3(app, a), snapZ: true, keywords: [{ key: 'M', label: '다중 점' }] });
-        if ('point' in r) return reportDistance(app, ctx, a, point3(app, r));
-        if ('enter' in r || 'keyword' in r) return multiDistance(app, ctx, a);
+        const r = await ctx.getPoint('두 번째 점 지정 또는 <다중 점>:', { base: base3(app, a), snapZ: true, viewportSnaps: true, keywords: [{ key: 'M', label: '다중 점' }] });
+        if ('point' in r) {
+          const b = point3(app, r);
+          const vb = r.snap?.viewport ?? null;
+          const vx = distProjection(app, [
+            { p: a, viewport: va },
+            { p: b, viewport: vb },
+          ]);
+          return reportDistance(app, ctx, a, b, vx && va && vb ? projectedDelta(vx, va.model, vb.model) : undefined);
+        }
+        if ('enter' in r || 'keyword' in r) return multiDistance(app, ctx, a, { vp: va });
       }
     },
   });
@@ -514,15 +545,19 @@ export function zoomToHandles(app: App, hs: string[]): void {
 
 /**
  * DIST·MEASUREGEOM 거리의 결과 두 줄. AutoCAD 도움말 DIST: 모형 공간에서는 3D 거리이고 X·Y·Z 증분과 각도를 현재 UCS 기준으로 잰다.
- * Z를 생략한 점은 지금 고도(point3). 배치의 도면 공간에서는 2D 거리(도면 공간 단위)라 Z를 보지 않는다
+ * Z를 생략한 점은 지금 고도(point3). 배치의 도면 공간에서는 2D 거리(도면 공간 단위)라 Z를 보지 않는다.
+ * projected: 도면 공간에서 단일 뷰포트의 모형 객체 두 점을 화면과 나란한 평면에 투영한 증분(모형 단위, 화면 축 — vpsnap.ts projectedDelta).
+ * 주면 그 값을 지금 UCS(도면 공간 UCS)로 돌려 거리·증분·각도로 쓴다(도움말에는 거리만 있어 증분·각도의 기준은 이 앱이 정했다)
  */
-function reportDistance(app: App, ctx: CommandContext, a: Pt3, b: Pt3): void {
+function reportDistance(app: App, ctx: CommandContext, a: Pt3, b: Pt3, projected?: Pt): void {
   const st = app.active!;
   // XY 평면에서의 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로(측량 단위는 방위 — polar.ts displayDirection).
   // 이 앱의 UCS는 평면 안의 원점·회전뿐이라 UCS의 Z 증분은 WCS Z 증분과 같다
-  const du = dirToUcs(currentUcs(st), { x: b.x - a.x, y: b.y - a.y });
-  const dx = du.x;
-  const dy = du.y;
+  const du = dirToUcs(currentUcs(st), projected ?? { x: b.x - a.x, y: b.y - a.y });
+  // 투영 증분은 뷰 비틀기·UCS로 돌린 값이라 축과 나란한 선의 다른 증분이 계산 끝자리만큼 남는다 — 0으로
+  const tiny = projected ? 1e-12 * Math.hypot(du.x, du.y) : 0;
+  const dx = Math.abs(du.x) <= tiny ? 0 : du.x;
+  const dy = Math.abs(du.y) <= tiny ? 0 : du.y;
   let dz = st.isModel ? b.z - a.z : 0;
   // 같은 높이로 보이는 두 점(스냅 Z의 계산 끝자리)은 0
   if (Math.abs(dz) <= 1e-12 * Math.max(1, Math.abs(a.z), Math.abs(b.z))) dz = 0;
@@ -543,13 +578,18 @@ function reportDistance(app: App, ctx: CommandContext, a: Pt3, b: Pt3): void {
   persistMarks(app);
 }
 
-/** DIST·MEASUREGEOM 거리의 다중 점(distmulti.ts): 끝나면 지나온 경로와 누적 거리를 잠시 남긴다 */
-async function multiDistance(app: App, ctx: CommandContext, first: Pt3): Promise<void> {
+/**
+ * DIST·MEASUREGEOM 거리의 다중 점(distmulti.ts): 끝나면 지나온 경로와 누적 거리를 잠시 남긴다.
+ * dist를 주면 DIST(도면 공간에서 뷰포트 안 모형 객체 스냅과 투영 거리 — vp는 첫 점의 뷰포트 안 모형 스냅)
+ */
+async function multiDistance(app: App, ctx: CommandContext, first: Pt3, dist?: { vp: ViewportSnap | null }): Promise<void> {
   const flat = !app.active!.isModel;
-  const vs = await measureMultiple(ctx, first, { point3: (r) => point3(app, r), base: (p) => base3(app, p), length: (v) => L(app, v), unit: unitSuffix(app), flat });
+  const host: MultiHost = { point3: (r) => point3(app, r), base: (p) => base3(app, p), length: (v) => L(app, v), unit: unitSuffix(app), flat };
+  if (dist) host.projection = (pts) => distProjection(app, pts)?.k ?? null;
+  const { vs, total } = await measureMultiple(ctx, first, host, dist?.vp ?? null);
   if (vs.length < 2) return;
   const end = vs[vs.length - 1]!;
-  app.view.overlay.marks = [{ p: first }, { p: end, text: `${L(app, multiLength(vs, flat))}${unitSuffix(app)}` }];
+  app.view.overlay.marks = [{ p: first }, { p: end, text: `${L(app, total)}${unitSuffix(app)}` }];
   app.view.overlay.rubber = [{ pts: polyPreview(vs, false) }];
   persistMarks(app);
 }

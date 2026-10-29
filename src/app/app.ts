@@ -24,7 +24,8 @@ import { CommandLine, parsePointInput } from './commandline';
 import type { MeasureResult } from './measure-result';
 import { Picker } from './pick';
 import { SELECT_HELP, SELECT_METHODS, SELECT_OPTIONS, runSelectMethod, selectMethodOf } from './selmethod';
-import { DEFAULT_SNAPS, SNAP_NAMES, type SnapPoint, findSnaps } from './snap';
+import { DEFAULT_SNAPS, SNAP_NAMES, type SnapPoint, type ViewportSnap, findSnaps, mergeSnaps } from './snap';
+import { layoutXfs, viewportSnaps } from './vpsnap';
 import { type Acquired, type PolarTip, objectTrack, polarTrack } from './tracking';
 import { type PolarSettings, angleBase, clockwise, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire, trackAngleText } from './polar';
 import { gripPoints } from '../edit/geom';
@@ -89,6 +90,8 @@ export interface PointSnap {
   handle2?: string;
   /** 지연된 접점(getPoint의 deferTan): point는 원·호 위 찍은 자리, 접점은 명령이 다음 점으로 구한다 */
   deferred?: boolean;
+  /** 도면 공간에서 뷰포트에 보이는 모형 객체에 잡은 점(getPoint의 viewportSnaps — handle·handle2는 모형 객체): 그 뷰포트와 모형 좌표 */
+  viewport?: ViewportSnap;
 }
 
 /**
@@ -120,6 +123,8 @@ interface PointRequest {
   ctrlTap: string | null;
   /** 객체에 잡힌 스냅 점의 Z를 결과 z로(LINE·CIRCLE 중심·3D 명령 — AutoCAD OSNAPZ 0, 1이면 받지 않는다) */
   snapZ: boolean;
+  /** 도면 공간에서 뷰포트에 보이는 모형 객체에도 스냅한다(DIST — vpsnap.ts) */
+  viewportSnaps: boolean;
   allowText: boolean;
   /** 명령이 글을 받는다고 한 요청(allowText): 객체 스냅 재지정 이름도 글로 돌려준다 */
   freeText: boolean;
@@ -202,6 +207,11 @@ export interface PointOptions {
    * OSNAPZ 1(App.osnapZ)이면 받지 않는다(지금 고도)
    */
   snapZ?: boolean;
+  /**
+   * 배치의 도면 공간에서 뷰포트에 보이는 모형 객체에도 스냅한다(도움말 "To Set Dimension Scale for Creating Dimensions in a Layout":
+   * 도면 공간에서 객체 스냅으로 모형 공간 점에 스냅한다). 결과 snap.viewport에 그 뷰포트와 모형 좌표를 싣는다(DIST의 투영 거리)
+   */
+  viewportSnaps?: boolean;
 }
 
 export interface CommandContext {
@@ -685,6 +695,7 @@ export class App {
         snaps: opt.snaps?.length ? new Set(opt.snaps) : null,
         ctrlTap: opt.ctrlTap ?? null,
         snapZ: !!opt.snapZ,
+        viewportSnaps: !!opt.viewportSnaps,
         allowText: !!opt.allowText || !!opt.preferNumber,
         freeText: !!opt.allowText,
         preferNumber: !!opt.preferNumber,
@@ -1146,8 +1157,8 @@ export class App {
       }
       const st = this.active;
       const p = await runPointOverride(ov, {
-        // 더 묻는 점도 원래 요청처럼 스냅의 Z를 받는다(3D 명령)
-        getPoint: (prompt, o) => this.requestPoint(prompt, { ...(o ?? {}), snapZ: r.snapZ }, r.signal),
+        // 더 묻는 점도 원래 요청처럼 스냅의 Z를 받고(3D 명령), 뷰포트 안 모형 객체에 스냅한다(DIST — 만든 점은 스냅 없는 점이다)
+        getPoint: (prompt, o) => this.requestPoint(prompt, { ...(o ?? {}), snapZ: r.snapZ, viewportSnaps: r.viewportSnaps }, r.signal),
         print: (t, c) => this.cmd.print(t, c),
         ucs: currentUcs(st),
         elevation: this.elevation(),
@@ -1578,15 +1589,19 @@ export class App {
 
   picker(): Picker | null {
     const st = this.active;
-    if (!st) return null;
-    const scene = st.scenes.get(st.space);
+    return st ? this.pickerFor(st, st.space) : null;
+  }
+
+  /** 공간 하나의 고르기(도면 공간의 뷰포트 안 모형 스냅은 모형 공간 것을 쓴다) */
+  pickerFor(st: DocState, space: string): Picker | null {
+    const scene = st.scenes.get(space);
     if (!scene) return null;
-    const key = `${st.docId}:${st.space}`;
+    const key = `${st.docId}:${space}`;
     let p = this.pickers.get(key);
     if (!p) {
-      p = new Picker(st.doc, scene.entities, this.text, st.space);
+      p = new Picker(st.doc, scene.entities, this.text, space);
       this.pickers.set(key, p);
-      const ed = st.edits.get(st.space);
+      const ed = st.edits.get(space);
       if (ed) {
         for (const h of ed.hidden) p.exclude.add(h);
         p.extra = ed.overlay ? [...ed.overlay.entities] : [];
@@ -1823,20 +1838,28 @@ export class App {
     const pk = this.picker();
     const modes = this.snapModesFor(r);
     this.lastSnaps = [];
-    if (pk && modes?.size) {
+    // 배치의 도면 공간에서 뷰포트에 보이는 모형 객체에도 스냅하는 요청(DIST — vpsnap.ts)
+    const vpModel = r.viewportSnaps && !st.isModel && !st.msVp && modes?.size ? this.pickerFor(st, MODEL_SPACE) : null;
+    if ((pk || vpModel) && modes?.size) {
       // 조준창(APERTURE, 픽셀). 보지 못하고 손가락으로 찍은 점은 두 배
       const aperture = this.settings.aperture * this.view.pixelSize() * (this.blindTouch ? 2 : 1);
       // Tab으로 도는 중이면 Tab을 누른 자리의 후보 목록을 그대로 쓴다(커서가 조준창 밖으로 나가면 처음부터)
       const cyc = this.snapCycle;
       if (cyc && (cyc.req !== r || Math.hypot(w.x - cyc.at.x, w.y - cyc.at.y) > aperture)) this.snapCycle = null;
-      const list = this.snapCycle?.list ?? findSnaps(st.doc, pk, w, aperture, modes, r.base, { ext: this.extAnchors, par: this.parDirs.map((d) => d.dir), deferTan: r.deferTan, deferTanLines: r.deferTanLines });
+      let list = this.snapCycle?.list;
+      if (!list) {
+        const scores = new Map<SnapPoint, number>();
+        const own = pk ? findSnaps(st.doc, pk, w, aperture, modes, r.base, { ext: this.extAnchors, par: this.parDirs.map((d) => d.dir), deferTan: r.deferTan, deferTanLines: r.deferTanLines }, scores) : [];
+        const vps = vpModel ? viewportSnaps(st.doc, layoutXfs(st.doc, st.layoutFor(st.displaySpace)), vpModel, st.layers, w, aperture, modes, r.base, scores) : [];
+        list = mergeSnaps(own, vps, scores, aperture);
+      }
       this.lastSnaps = list;
       const s = this.snapCycle ? list[this.snapCycle.i % list.length] : list[0];
       if (s) {
         const p = { x: s.x, y: s.y };
         // 연장선·평행은 정렬선을 함께 보인다
         const track = s.lines?.length ? { p, lines: s.lines, tip: SNAP_NAMES[s.kind] ?? '' } : undefined;
-        return { p, snap: { p, kind: s.kind, handle: s.handle, handle2: s.handle2, ...(s.deferred ? { deferred: true } : {}), ...(s.z !== undefined ? { z: s.z } : {}) }, track };
+        return { p, snap: { p, kind: s.kind, handle: s.handle, handle2: s.handle2, ...(s.deferred ? { deferred: true } : {}), ...(s.z !== undefined ? { z: s.z } : {}), ...(s.viewport ? { viewport: s.viewport } : {}) }, track };
       }
     }
     // 확장 지점: 객체 스냅이 없으면 고리가 추적·격자 스냅·직교를 대신할 수 있다(등각투영 제도)
@@ -2244,7 +2267,7 @@ export class App {
       // OSNAPZ 1이면 그 Z를 지금 고도로 바꾼다(Z 없이 — 명령이 고도를 쓴다). 그 밖의 점·요청은 Z 없이(고도)
       const z = r.snapZ && !this.osnapZ && snap?.z !== undefined ? snap.z : undefined;
       this.lastPoint = z === undefined ? p : { ...p, z };
-      this.finishPoint(r, { point: p, ...(z !== undefined ? { z } : {}), snap: snap ? { kind: snap.kind, handle: snap.handle, handle2: snap.handle2, ...(snap.deferred ? { deferred: true } : {}) } : null, ...(ev.shiftKey ? { shift: true } : {}), ...(ev.ctrlKey || ev.metaKey ? { ctrl: true } : {}) });
+      this.finishPoint(r, { point: p, ...(z !== undefined ? { z } : {}), snap: snap ? { kind: snap.kind, handle: snap.handle, handle2: snap.handle2, ...(snap.deferred ? { deferred: true } : {}), ...(snap.viewport ? { viewport: snap.viewport } : {}) } : null, ...(ev.shiftKey ? { shift: true } : {}), ...(ev.ctrlKey || ev.metaKey ? { ctrl: true } : {}) });
       return;
     }
     const pk = this.picker();
