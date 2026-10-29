@@ -16,7 +16,7 @@ import type { DisplayList } from '../render/displaylist';
 import { AIM_HOLD_MS, aimPoint } from './aim';
 import { RightDragGesture } from './rightdrag';
 import { DEFAULT_SETTINGS, RightClickTimer, type Settings, crosshairArm, gripHalf, showSnapMarker, snapMarkerRadius, timedRightClick, wheelZoom } from './settings';
-import { type VpView, fitScale, lockedPaperCamera, paperScaledView, patchOf, rememberView, scaledView, validView, viewOf, viewOfCamera, windowView } from './vpzoom';
+import { type LimitsRect, type VpView, fitScale, limitsScale, limitsView, lockedPaperCamera, paperScaledView, patchOf, rememberView, scaledView, validView, viewOf, viewOfCamera, windowView } from './vpzoom';
 
 /** 뷰포트 화면표시 잠금 플래그 */
 const VP_LOCKED = 0x4000;
@@ -510,6 +510,27 @@ export class CadView {
     if (m.locked) return 'locked';
     this.setViewportView(m.vp, m.paper, paperScaledView(m.vp, n), true);
     return 'done';
+  }
+
+  /**
+   * ZOOM n(접미사 없음 — 도움말: 도면 한계에 대한 축척): 뷰 가운데를 그대로 두고 한계 lim이 뷰를 꼭 채우는 배율의 n배.
+   * MSPACE(잠기지 않은 뷰포트)면 모형 한계가 그 뷰포트를 채우는 뷰의 n배(뷰포트 가운데 그대로), 잠긴 뷰포트면 배치 전체를 그 배율로.
+   * 한계를 쓸 수 없으면 false(부르는 쪽이 nX처럼)
+   */
+  zoomLimits(n: number, lim: LimitsRect): boolean {
+    const m = this.msZoom();
+    if (m && !m.locked) {
+      const v = limitsView(m.vp, lim, n);
+      if (!v) return false;
+      this.setViewportView(m.vp, m.paper, v, true);
+      return true;
+    }
+    const ar = this.area();
+    const s = limitsScale(lim, ar.w, ar.h, n);
+    if (!s) return false;
+    const c = this.camera();
+    this.setCamera({ cx: c.cx, cy: c.cy, scale: clampScale(s) }, true);
+    return true;
   }
 
   /** ZOOM 중심: 모형 점 (x, y)를 뷰 가운데(MSPACE면 뷰포트 가운데)에, 뷰 높이 height(없으면 지금 높이) */

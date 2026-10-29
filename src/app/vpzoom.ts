@@ -4,6 +4,7 @@
  * - ZOOM: 현재 뷰포트의 뷰 배율을 바꾼다. 윈도우는 고른 영역이 창을 채우고, 범위는 모든 객체의 범위를, 객체는 고른 객체를 뷰 가운데에
  *   가장 크게 보인다. 중심은 중심점과 배율 또는 높이(높이가 작을수록 크게)로 정한 뷰, 이전은 앞 뷰(10개까지)다.
  *   축척은 nX가 현재 뷰에 대해, nXP가 도면 공간 단위에 대해(.5XP면 모형 공간을 도면 공간 단위의 절반 축척으로) 바꾼다.
+ *   접미사 없는 n은 도면 한계에 대해(2면 도면 한계로 줌했을 때 크기의 두 배 — 23차 limitsScale·limitsView).
  * - "About Scaling Views in Layout Viewports": 뷰포트 축척은 도면 공간 단위 ÷ 모형 공간 단위이고, 뷰포트 안 모형 공간에서
  *   ZOOM의 XP로 바꿀 수 있다. 뷰포트 테두리 크기를 바꿔도 뷰 축척은 그대로다.
  * - "To Lock the Scale of a Layout Viewport": 화면표시가 잠긴 뷰포트에서도 줌은 되지만 배치 전체에 걸리고 뷰포트 축척은 그대로다.
@@ -93,7 +94,33 @@ export function paperScaledView(vp: VpFrame, n: number): VpView {
   return { ...viewOf(vp), viewHeight: vp.height / n };
 }
 
-/** ZOOM 축척 입력: nX(현재 뷰에 대해), nXP(도면 공간 단위에 대해), 접미사 없는 n. 숫자가 아니거나 0 이하면 null */
+/** 도면 한계(모형 $LIMMIN·$LIMMAX, 배치는 그 배치의 한계) */
+export interface LimitsRect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * ZOOM n(접미사 없음 — 도움말 ZOOM 축척: 도면 한계에 대한 축척, 2를 넣으면 도면 한계로 줌했을 때 크기의 두 배로 보인다):
+ * 한계가 W×H 틀을 꼭 채우는 배율(여백 없음)의 n배. 한계의 폭이나 높이가 0이거나 값이 이상하면 null(부르는 쪽이 nX처럼)
+ */
+export function limitsScale(lim: LimitsRect, W: number, H: number, n: number): number | null {
+  const w = Math.abs(lim.x1 - lim.x0);
+  const h = Math.abs(lim.y1 - lim.y0);
+  if (!(w > 0 && h > 0 && n > 0) || !Number.isFinite(w) || !Number.isFinite(h)) return null;
+  const s = fitScale(w, h, W, H, 0);
+  return s ? s * n : null;
+}
+
+/** MSPACE의 ZOOM n: 뷰포트 가운데를 그대로 두고 모형 한계가 뷰포트를 꼭 채우는 뷰의 n배(뷰 높이 = 뷰포트 높이 ÷ (한계 배율 × n)) */
+export function limitsView(vp: VpFrame, lim: LimitsRect, n: number): VpView | null {
+  const k = limitsScale(lim, vp.width, vp.height, n);
+  return k ? { ...viewOf(vp), viewHeight: vp.height / k } : null;
+}
+
+/** ZOOM 축척 입력: nX(현재 뷰에 대해), nXP(도면 공간 단위에 대해), 접미사 없는 n(도면 한계에 대해). 숫자가 아니거나 0 이하면 null */
 export function parseZoomFactor(text: string): { n: number; unit: '' | 'x' | 'xp' } | null {
   const m = /^\s*(\d+(?:\.\d*)?|\.\d+)\s*(xp|x)?\s*$/i.exec(text);
   if (!m) return null;
