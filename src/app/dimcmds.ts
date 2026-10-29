@@ -23,7 +23,9 @@ import {
   createRadialDimension,
   dimensionText,
   generateDimensionGeometry,
+  measureVars,
   nextDimBlockName,
+  placeIn,
   rawDimVars,
 } from '../edit/dim';
 import type { DimKindName } from '../edit/dim/format';
@@ -130,11 +132,10 @@ export function addDimension(app: App, ctx: CommandContext, dim: DimensionEntity
   const st = app.active!;
   withStyleOverrides(st.doc, dim);
   const assoc = snapNewDimension(app, dim, refs);
+  // 놓일 공간을 먼저 정한다: 치수 그림의 문자가 모형 공간 치수의 음수 DIMLFAC를 1로 쓴다(edit/dim/vars.ts measureVars)
+  placeDimension(st, dim);
   const blockOps = dimensionBlockOps(st, dim, false);
-  const space = st.doc.blocks.get(st.space);
   dim.handle = st.session.newHandle();
-  if (space?.recordHandle) dim.owner = space.recordHandle;
-  dim.paperSpace = /^\*PAPER_SPACE/i.test(st.space) ? true : undefined;
   const assocOps = assoc ? newDimensionAssocOps(app, dim, refs) : [];
   const ops: EditOp[] = [...blockOps, { kind: 'add', block: st.space, entity: dim }, ...assocOps];
   st.session.commit({ label, ops, group: ctx.group });
@@ -142,6 +143,11 @@ export function addDimension(app: App, ctx: CommandContext, dim: DimensionEntity
   const n = ops.length + finishNewDimension(app, ctx, dim.handle, label);
   printDimText(app, ctx, shownDim);
   return n;
+}
+
+/** 새 치수가 지금 공간에 놓이는 자리(소유 블록 레코드와 도면 공간 표지 — edit/dim/vars.ts placeIn) */
+function placeDimension(st: DocState, dim: DimensionEntity): void {
+  placeIn(st.doc, st.space, dim);
 }
 
 /**
@@ -177,7 +183,7 @@ function printDimText(app: App, ctx: CommandContext, dim: DimensionEntity): void
   const kind: DimKindName = dim.subtype === 'ARC_DIMENSION' ? 'arc' : t === 2 || t === 5 ? 'angular' : t === 3 ? 'diameter' : t === 4 ? 'radius' : t === 6 ? 'ordinate' : 'linear';
   let shown: string;
   try {
-    shown = dimensionText(rawDimVars(st.doc, dim), kind, dim.measurement, '').measured;
+    shown = dimensionText(measureVars(st.doc, dim), kind, dim.measurement, '').measured;
   } catch {
     shown = formatLength(dim.measurement, st.units);
   }
@@ -211,6 +217,8 @@ export function preview(app: App, make: (p: Pt) => DimensionEntity | null): (p: 
     const pk = app.picker();
     const d = make(p);
     if (!pk || !d) return [];
+    // 놓일 공간에서 그리는 것과 같게(모형 공간 치수의 음수 DIMLFAC는 1)
+    if (!d.owner && d.paperSpace === undefined) placeDimension(app.active!, d);
     try {
       const g = generateDimensionGeometry(app.active!.doc, d);
       return [pk.geometryOf(g.entities)];

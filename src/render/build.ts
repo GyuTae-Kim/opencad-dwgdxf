@@ -63,7 +63,7 @@ import { type Affine, type TextEngine, type TextLayout, affMul } from '../text/l
 import { type ShxFont, ShxRunner } from '../text/shx';
 import { parseProxyGraphics } from './proxy';
 import { type DimensionGeometry, generateDimensionGeometry } from '../edit/dim/generate';
-import { childStyleOf } from '../edit/dim/vars';
+import { childStyleOf, linearFactor } from '../edit/dim/vars';
 import { arcTextDrawParts, arcTextUseProxy } from './arctext';
 import { codepageToEncoding, decoderFor } from '../core/codepage';
 import { mlineDrawing } from '../edit/mline/draw';
@@ -1790,7 +1790,8 @@ export class SceneBuilder {
       const mid = { x: (a.x + bb.x) / 2, y: (a.y + bb.y) / 2 };
       const off = txt * 0.6;
       ang = dir;
-      label(value * num(v.DIMLFAC, 1), { x: mid.x - Math.sin(ang) * off, y: mid.y + Math.cos(ang) * off }, ang);
+      // 음수 DIMLFAC는 도면 공간에서만 그 크기를, 모형 공간 치수에서는 1(도움말 DIMLFAC — 이전에는 음수 값을 그렸다)
+      label(value * linearFactor(this.doc, v.DIMLFAC, e), { x: mid.x - Math.sin(ang) * off, y: mid.y + Math.cos(ang) * off }, ang);
       return;
     }
     if (kind === 3 || kind === 4) {

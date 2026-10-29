@@ -21,4 +21,4 @@ export {
 export { builtinArrowBlock } from './arrows';
 export { dimensionText } from './format';
 export { measureText, type MeasureText, type TextBox } from './textbox';
-export { dimVars, rawDimVars } from './vars';
+export { dimVars, measureVars, placeIn, rawDimVars } from './vars';

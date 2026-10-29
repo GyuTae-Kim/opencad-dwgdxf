@@ -23,6 +23,7 @@ import {
   createRadialDimension,
   dimVars,
   generateDimensionGeometry,
+  placeIn,
 } from '../edit/dim';
 import { OSNAP, type PointRef, circlePointRef } from '../edit/dim/assoc';
 import { createJoggedDimension } from '../edit/annot/create';
@@ -115,7 +116,13 @@ export function registerDimSmartCommand(app: App): void {
         const pk = app.picker();
         if (!pk || !d) return [];
         try {
-          return [pk.geometryOf(generateDimensionGeometry(doc, d).entities)];
+          // 자리가 없는 새 치수는 지금 공간에 놓인 것처럼(모형 공간 치수의 음수 DIMLFAC는 1 — edit/dim/vars.ts)
+          let y = d;
+          if (!d.owner && d.paperSpace === undefined) {
+            y = { ...d };
+            placeIn(doc, app.active!.space, y);
+          }
+          return [pk.geometryOf(generateDimensionGeometry(doc, y).entities)];
         } catch {
           return [];
         }

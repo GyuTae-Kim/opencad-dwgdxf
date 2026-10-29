@@ -10,7 +10,7 @@ import { decodePercent } from '../text/mtext';
 import { definitionName } from '../edit/dynblock';
 import { lwVertices } from '../core/lwpoly';
 import { polyDrawnBulgeVerts, polyVertices } from '../core/polyverts';
-import { childStyleOf } from '../edit/dim/vars';
+import { childStyleOf, linearFactor } from '../edit/dim/vars';
 import { ctrlCount, fitCount, leaderCount, splineCtrl } from '../core/flat3';
 
 export const TYPE_NAMES: Record<string, string> = {
@@ -274,8 +274,9 @@ export function dimDisplayText(doc: CadDocument, d: DimensionEntity): { text: st
     formatted = formatAngle(m, { aunits: Number(v.DIMAUNIT ?? 0) === 1 ? 1 : Number(v.DIMAUNIT ?? 0), auprec: prec });
     formatted = zeroSuppress(formatted.replace('°', ''), Number(v.DIMAZIN ?? 0)) + (Number(v.DIMAUNIT ?? 0) === 0 ? '°' : '');
   } else {
-    // 음수 DIMLFAC(도면 공간에서만 — 뷰포트 축척 맞춤)는 크기만: 치수 그림의 문자(edit/dim/format.ts)와 같게
-    const lfac = Math.abs(Number(v.DIMLFAC ?? 1) || 1);
+    // 음수 DIMLFAC는 도면 공간에서만 그 크기를, 모형 공간 치수에서는 1(도움말 DIMLFAC — edit/dim/vars.ts linearFactor):
+    // 치수 그림의 문자(edit/dim/format.ts, measureVars)와 같게
+    const lfac = linearFactor(doc, v.DIMLFAC, d);
     let val = m * lfac;
     const rnd = Number(v.DIMRND ?? 0);
     if (rnd > 0) val = Math.round(val / rnd) * rnd;

@@ -3,7 +3,7 @@
  * 핸들 값(340~347)은 이름으로 바꾸고, 크기 변수는 DIMSCALE을 곱해 둔다.
  */
 import { DIM_HANDLE_CODES, DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../../core/dimvars';
-import { type CadDocument, type DimStyle, type DimensionEntity, type TextStyle, tableKey } from '../../core/model';
+import { type CadDocument, type DimStyle, type DimensionEntity, MODEL_SPACE, type TextStyle, tableKey } from '../../core/model';
 
 export type RawVars = Record<string, number | string>;
 
@@ -123,6 +123,55 @@ export function rawDimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle'
   return out;
 }
 
+/** 치수가 놓인 공간을 아는 데 쓰는 값(도면 공간 표지 67, 소유 블록 레코드) */
+export interface DimPlace {
+  paperSpace?: boolean;
+  owner?: string;
+}
+
+/**
+ * 치수가 놓인 공간: 도면 공간 표지가 있거나 소유자가 배치 블록이면 'paper', 소유자가 모형 공간 블록이거나 소유자가 없으면 'model'
+ * (DWG는 모형 공간 객체에 소유자 핸들을 적지 않고, R12 DXF의 객체 구역도 67이 없으면 모형 공간이다), 다른 블록 정의 안이면 null(모른다).
+ * 새 치수는 놓기 전에 placeIn으로 자리를 정한다
+ */
+export function dimSpace(doc: CadDocument, d: DimPlace): 'model' | 'paper' | null {
+  if (d.paperSpace) return 'paper';
+  const o = d.owner;
+  if (!o) return 'model';
+  const ms = doc.blocks.get(MODEL_SPACE)?.recordHandle;
+  if (ms && o === ms) return 'model';
+  for (const l of doc.layouts) if (l.blockRecord === o && tableKey(l.blockName) !== MODEL_SPACE) return 'paper';
+  return null;
+}
+
+/** 새 치수를 공간 space(블록 키)에 놓을 자리로: 소유 블록 레코드와 도면 공간 표지(dimSpace — 측정 문자의 DIMLFAC 규칙이 본다) */
+export function placeIn(doc: CadDocument, space: string, d: DimPlace): void {
+  const b = doc.blocks.get(space);
+  if (b?.recordHandle) d.owner = b.recordHandle;
+  d.paperSpace = /^\*PAPER_SPACE/i.test(space) ? true : undefined;
+}
+
+/**
+ * 측정 문자에 쓰는 치수 변수: rawDimVars에서 모형 공간 치수의 음수 DIMLFAC만 1로 바꾼다.
+ * 근거(AutoCAD 도움말, 우리말 요약): DIMLFAC — 양수는 모형 공간과 도면 공간 치수 모두에, 음수는 도면 공간에만 쓴다.
+ * .NET 개발 안내서 "Dimension in Model Space and Paper Space" — 모형 공간에서 치수를 기입하면 DIMLFAC가 0보다 작아도 1.0을 쓴다.
+ * 도면 공간과 공간을 모르는 치수(다른 블록 정의 안)는 이전처럼 그 크기를 쓴다(edit/dim/format.ts). 저장 값은 바꾸지 않는다
+ */
+export function measureVars(doc: CadDocument, d: Parameters<typeof rawDimVars>[1] & DimPlace): RawVars {
+  const r = rawDimVars(doc, d);
+  if (num(r.DIMLFAC, 1) < 0 && dimSpace(doc, d) === 'model') r.DIMLFAC = 1;
+  return r;
+}
+
+/**
+ * 측정값에 곱하는 DIMLFAC 크기(measureVars와 같은 규칙): 모형 공간 치수의 음수는 1, 그 밖에는 그 크기
+ * (.NET 개발 안내서: DIMLFAC가 0보다 작으면 잰 거리에 그 절댓값을 곱한다)
+ */
+export function linearFactor(doc: CadDocument, lfac: number | string | undefined, d: DimPlace): number {
+  const f = num(lfac, 1) || 1;
+  return f < 0 && dimSpace(doc, d) === 'model' ? 1 : Math.abs(f);
+}
+
 const str = (v: number | string | undefined): string => (v === undefined || v === null ? '' : String(v));
 
 /** 크기에 DIMSCALE을 곱한 치수 변수 */
@@ -177,8 +226,9 @@ export interface DimVars {
   txtdirection: number;
 }
 
-export function dimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle' | 'overrides'> & { xdata?: DimensionEntity['xdata']; dimType?: number; subtype?: string }): DimVars {
-  const r = rawDimVars(doc, d);
+export function dimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle' | 'overrides'> & { xdata?: DimensionEntity['xdata']; dimType?: number; subtype?: string } & DimPlace): DimVars {
+  // 치수 그림의 문자: 모형 공간 치수의 음수 DIMLFAC는 1(measureVars)
+  const r = measureVars(doc, d);
   let scale = num(r.DIMSCALE, 1);
   if (!(scale > 0)) scale = 1;
   const S = (k: string, def: number) => num(r[k], def) * scale;
