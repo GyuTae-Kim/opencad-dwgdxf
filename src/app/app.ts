@@ -26,6 +26,7 @@ import { Picker } from './pick';
 import { SELECT_HELP, SELECT_METHODS, SELECT_OPTIONS, runSelectMethod, selectMethodOf } from './selmethod';
 import { DEFAULT_SNAPS, SNAP_NAMES, type SnapPoint, type ViewportSnap, findSnaps, mergeSnaps } from './snap';
 import { type ViewportPick, geometryToPaper, layoutXfs, viewportPick, viewportSnaps } from './vpsnap';
+import { coverBoxes } from './overlay-place';
 import { type Acquired, type PolarTip, objectTrack, polarTrack } from './tracking';
 import { type PolarSettings, angleBase, clockwise, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire, trackAngleText } from './polar';
 import { gripPoints } from '../edit/geom';
@@ -407,6 +408,8 @@ export class App {
         if (this.lastCommand) void this.run(this.lastCommand);
       },
     });
+    // 도면 위 측정 결과 글·커서 툴팁이 비킬 떠 있는 판: 명령행과 셸이 더하는 것(휴대폰 보기 모드의 측정 띠·특성 시트)
+    this.view.covers = () => coverBoxes(this.view.el, [this.cmd.el, ...this.coverEls]);
     this.view.on({
       move: (w, s, ev) => this.onMove(w, s, ev),
       down: (w, s, ev) => this.onDown(w, s, ev),
@@ -877,6 +880,8 @@ export class App {
 
   /** 마지막으로 만든 객체(L 옵션) */
   lastCreated: string[] = [];
+  /** 명령행 말고 보기 위에 떠 있는 판(셸이 더한다 — 휴대폰 보기 모드의 측정 띠·특성 시트). 도면 위 글이 비킨다(overlay-place.ts) */
+  coverEls: Element[] = [];
   /** 파일이 연결된 래스터 이미지(열쇠 = 파일 이름 소문자) */
   readonly imageKeys = new Set<string>();
   /** 파일이 연결된 PDF 언더레이 페이지(열쇠 → 폭·높이, 인치) */

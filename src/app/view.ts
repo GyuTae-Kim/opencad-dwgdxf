@@ -14,6 +14,7 @@ import type { LoadPreview } from './loadpreview';
 import { type OverlayScene, type PaperInfo, type ViewportXf, layoutViewports, paperInfo, viewportXf } from './scene';
 import type { DisplayList } from '../render/displaylist';
 import { AIM_HOLD_MS, aimPoint } from './aim';
+import { type Box, placeLabel, placeTip } from './overlay-place';
 import { RightDragGesture } from './rightdrag';
 import { DEFAULT_SETTINGS, RightClickTimer, type Settings, crosshairArm, gripHalf, showSnapMarker, snapMarkerRadius, timedRightClick, wheelZoom } from './settings';
 import { type LimitsRect, type VpView, fitScale, limitsScale, limitsView, lockedPaperCamera, paperScaledView, patchOf, rememberView, scaledView, validView, viewOf, viewOfCamera, windowView } from './vpzoom';
@@ -101,6 +102,10 @@ export interface ViewEvents {
   viewportView?(vp: ViewportEntity, patch: Pick<ViewportEntity, 'viewHeight' | 'viewCenter'>): void;
 }
 
+/** 측정 결과 글(12px 고정폭)의 기준선 위·아래 높이(자리 고르기) */
+const LABEL_ASC = 10;
+const LABEL_DESC = 3;
+
 const DARK_BG = 0x212830;
 const LAYOUT_BG = 0x3b414b;
 
@@ -138,6 +143,12 @@ export class CadView {
   private aimRelease = false;
   /** 길게 눌러 정밀 조준을 쓸지(앱: 휴대폰 보기 모드이거나 명령이 입력을 기다릴 때). 없으면 쓰지 않는다 */
   aimEnabled: (() => boolean) | null = null;
+  /** 보기 위에 떠 있는 판(명령행·휴대폰 보기 모드의 측정 띠 …)의 보기 기준 상자(앱이 넣는다). 측정 결과 글·커서 툴팁이 비킨다 */
+  covers: (() => Box[]) | null = null;
+  /** 마지막으로 그린 측정 결과 글 상자(보기 좌표 — 시험·헤드리스 확인용) */
+  labelBoxes: Box[] = [];
+  /** 마지막으로 그린 커서 툴팁(동적 입력 상자 포함) 상자. 없으면 null */
+  tipBox: Box | null = null;
 
   /** 정밀 조준 중인지(조준을 떼어 넘기는 누르기 포함) — 앱은 이때 터치여도 커서·스냅 미리보기를 보인다 */
   get aiming(): boolean {
@@ -990,6 +1001,9 @@ export class CadView {
     const o = this.overlay;
     const dark = s ? (s.isModel && !s.msVp ? isDark(this.modelBg) : true) : true;
     const W = (x: number, y: number) => this.worldToScreen(x, y);
+    // 보기 위에 떠 있는 판(명령행·측정 띠 …)의 자리: 글을 그릴 때만 한 번 잰다
+    let coverList: Box[] | null = null;
+    const covers = (): Box[] => (coverList ??= this.covers?.() ?? []);
     // 배치: 인쇄 가능 영역 점선, MSPACE의 활성 뷰포트 굵은 테두리
     let vpRect: [number, number, number, number] | null = null;
     if (s && s.onLayout) {
@@ -1186,6 +1200,8 @@ export class CadView {
       g.stroke();
       g.restore();
     }
+    // 측정 결과 글: 점 오른쪽 위가 기본, 보기 가장자리에서 잘리거나 떠 있는 판(명령행·측정 띠)에 가리면 비킨다(overlay-place.ts)
+    this.labelBoxes = [];
     for (const m of o.marks) {
       const q = W(m.p.x, m.p.y);
       g.save();
@@ -1199,7 +1215,10 @@ export class CadView {
       if (m.text) {
         g.font = '12px ui-monospace, Menlo, monospace';
         g.fillStyle = dark ? '#ffe6a3' : '#7a4c00';
-        g.fillText(uiText(m.text), q.x + 7, q.y - 6);
+        const text = uiText(m.text);
+        const at = placeLabel(q, g.measureText(text).width, LABEL_ASC, LABEL_DESC, this.w, this.h, covers());
+        g.fillText(text, at.x, at.y);
+        this.labelBoxes.push(at.box);
       }
       g.restore();
     }
@@ -1271,7 +1290,8 @@ export class CadView {
       }
       g.restore();
     }
-    if (o.dynFields?.length && o.cursor) this.drawDynFields(g, o.cursor, o.tip ?? '', o.dynFields);
+    this.tipBox = null;
+    if (o.dynFields?.length && o.cursor) this.drawDynFields(g, o.cursor, o.tip ?? '', o.dynFields, covers());
     else if ((o.tip || o.dynInput) && o.cursor) {
       g.save();
       g.font = '11.5px ui-monospace, Menlo, monospace';
@@ -1279,9 +1299,10 @@ export class CadView {
       const typed = o.dynInput ? `${o.dynInput}▏` : '';
       const tw = Math.max(tip ? g.measureText(tip).width : 0, typed ? g.measureText(typed).width + 8 : 0);
       const hgt = (tip ? 20 : 0) + (typed ? 22 : 0);
-      const x = Math.min(o.cursor.x + 18, this.w - tw - 14);
-      // 정밀 조준이면 십자선 위(아래에는 손가락이 있다)
-      const y = o.aim ? Math.max(4, o.cursor.y - 26 - hgt) : Math.min(o.cursor.y + 22, this.h - hgt - 4);
+      // 커서 오른쪽 아래(정밀 조준이면 십자선 위 — 아래에는 손가락이 있다), 떠 있는 판과 겹치면 뒤집은 빈자리(overlay-place.ts)
+      const at = placeTip(o.cursor, tw + 12, hgt, o.aim, this.w, this.h, covers(), 2);
+      const { x, y } = at;
+      this.tipBox = at.box;
       if (tip) {
         g.fillStyle = 'rgba(37,44,54,0.95)';
         g.strokeStyle = '#5b6a7e';
@@ -1306,7 +1327,7 @@ export class CadView {
   }
 
   /** 동적 입력: 커서 옆 문구 아래에 칸 두 개(지금 칸 파란 테두리, 잠긴 칸 자물쇠) */
-  private drawDynFields(g: CanvasRenderingContext2D, c: Pt, tip: string, fields: { text: string; locked: boolean; active: boolean }[]): void {
+  private drawDynFields(g: CanvasRenderingContext2D, c: Pt, tip: string, fields: { text: string; locked: boolean; active: boolean }[], covers: readonly Box[]): void {
     g.save();
     g.font = '11.5px ui-monospace, Menlo, monospace';
     tip = uiText(tip);
@@ -1316,9 +1337,11 @@ export class CadView {
     const tw = tip ? g.measureText(tip).width + 12 : 0;
     const boxW = Math.max(total, tw);
     const hgt = (tip ? 22 : 0) + 20;
-    const x = Math.min(c.x + 18, this.w - boxW - 4);
-    // 정밀 조준이면 십자선 위(아래에는 손가락이 있다)
-    let y = this.overlay.aim ? Math.max(4, c.y - 26 - hgt) : Math.min(c.y + 22, this.h - hgt - 4);
+    // 커서 오른쪽 아래(정밀 조준이면 십자선 위 — 아래에는 손가락이 있다), 떠 있는 판과 겹치면 뒤집은 빈자리(overlay-place.ts)
+    const at = placeTip(c, boxW, hgt, this.overlay.aim, this.w, this.h, covers, 4);
+    this.tipBox = at.box;
+    const x = at.x;
+    let y = at.y;
     if (tip) {
       g.fillStyle = 'rgba(37,44,54,0.95)';
       g.strokeStyle = '#5b6a7e';
