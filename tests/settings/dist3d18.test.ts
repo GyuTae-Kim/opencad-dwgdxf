@@ -1,9 +1,10 @@
 /**
- * 18차: 조회 명령의 Z.
+ * 18차: 조회 명령과 상태 막대의 Z.
  * - distance3d: 3D 거리와 XY 평면으로부터의 각도(XY 평면 각도와 같은 0~360 꼴 — 아래로 기울면 270~360)
  * - 진짜 App DIST·MEASUREGEOM 거리: 도움말 DIST(모형 공간은 3D 거리, X·Y·Z 증분과 각도는 현재 UCS 기준, Z를 생략한 점은 지금 고도,
  *   배치의 도면 공간은 2D 거리)와 객체 스냅 점의 Z(OSNAPZ 0, 1이면 고도)
  * - ID: 도움말 ID(UCS 좌표 X·Y·Z, 3D 객체에 스냅하면 그 지점의 Z, 마지막 점으로 둔다)
+ * - 상태 막대 좌표: 도움말 COORDS·상태 막대(커서 위치의 절대 좌표 — Z도 절대 값). 스냅 점이면 그 Z, 아니면 지금 고도
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Entity, LineEntity, Vec3 } from '../../src/core/model';
@@ -211,5 +212,52 @@ describe('ID의 UCS 좌표와 Z(진짜 App)', () => {
     await settle();
     await h.type('*10,0,2');
     expect(idLine(h)).toEqual(['X = 0.0000     Y = -10.0000     Z = 2.0000']);
+  });
+});
+
+describe('상태 막대 좌표의 Z(진짜 App)', () => {
+  const capture = (h: ReturnType<typeof setup>) => {
+    const coords: string[] = [];
+    h.app.ui.setCoords = (t: string) => void coords.push(t);
+    const move = (p: Pt) => {
+      h.view.events.move!(p, p, ev());
+      return coords.at(-1);
+    };
+    return move;
+  };
+
+  it('명령이 없으면 지금 고도', () => {
+    const h = setup();
+    h.doc.header.set('$ELEVATION', 2.5);
+    const move = capture(h);
+    expect(move(P(3, 4))).toBe('3.0000, 4.0000, 2.5000');
+  });
+
+  it('점 요청 중 객체 스냅 점이면 그 점의 Z, 빈 곳은 고도, OSNAPZ 1이면 고도', async () => {
+    const h = setup();
+    h.add(line3(V(0, 0, 6), V(10, 0, 2)));
+    const move = capture(h);
+    void h.app.run('DIST');
+    await settle();
+    expect(move(P(0.2, 0.1))).toBe('0.0000, 0.0000, 6.0000');
+    expect(move(P(9.9, -0.1))).toBe('10.0000, 0.0000, 2.0000');
+    expect(move(P(5, 20))).toBe('5.0000, 20.0000, 0.0000');
+    h.app.osnapZ = true;
+    expect(move(P(0.2, 0.1))).toBe('0.0000, 0.0000, 0.0000');
+    h.cl.escape();
+    await settle();
+  });
+
+  it('돌린 UCS에서도 X·Y는 UCS, Z는 그대로', async () => {
+    const h = setup();
+    h.add(line3(V(10, 0, 7), V(10, 10, 7)));
+    h.doc.header.set('$UCSXDIR', { x: 0, y: 1, z: 0 });
+    h.doc.header.set('$UCSYDIR', { x: -1, y: 0, z: 0 });
+    const move = capture(h);
+    void h.app.run('DIST');
+    await settle();
+    expect(move(P(10.1, 0.2))).toBe('0.0000, -10.0000, 7.0000');
+    h.cl.escape();
+    await settle();
   });
 });

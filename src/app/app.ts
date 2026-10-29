@@ -1059,6 +1059,14 @@ export class App {
     return typeof v === 'number' && Number.isFinite(v) ? v : 0;
   }
 
+  /**
+   * 커서 자리의 Z(상태 막대 좌표): 객체에 잡힌 스냅 점이면 그 점의 Z(OSNAPZ 0 — 도움말 "About Using Object Snaps in 3D"),
+   * OSNAPZ 1이거나 스냅이 없으면 지금 고도(커서는 고도의 XY 평면 위 — 도움말 ELEV: X·Y만 준 점의 Z가 고도)
+   */
+  cursorZ(snap: ResolvedPoint['snap']): number {
+    return !this.osnapZ && snap?.z !== undefined && Number.isFinite(snap.z) ? snap.z : this.elevation();
+  }
+
   /** 점 결과: point는 평면 좌표만, Z를 정한 입력이면 z(2D 명령은 쓰지 않는다) */
   private static pointResult(p: Pt & { z?: number }): { point: Pt; z?: number } {
     return p.z === undefined ? { point: { x: p.x, y: p.y } } : { point: { x: p.x, y: p.y }, z: p.z };
@@ -2022,8 +2030,9 @@ export class App {
       o.windowRect = { a: this.windowStart.screen, b: s };
       this.updateSelectPreview();
     }
+    // 상태 막대 좌표(도움말 COORDS: 절대 좌표 X, Y, Z — Z도 절대 값). 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로
     const pu = toUcs(currentUcs(st), p);
-    this.ui.setCoords(`${formatLength(pu.x, st.units)}, ${formatLength(pu.y, st.units)}, ${formatLength(0, st.units)}`);
+    this.ui.setCoords(`${formatLength(pu.x, st.units)}, ${formatLength(pu.y, st.units)}, ${formatLength(this.cursorZ(snap), st.units)}`);
     // 다기능 그립: 선택한 객체의 그립 위(명령 없음)
     if (!r && !this.running && !this.press) this.updateGripHover(w, ev);
     // 선택 미리보기(가만히 있을 때)
