@@ -4,7 +4,8 @@
  * 모형 공간 점에 스냅한다).
  * - 순수 함수: 뷰포트 변환(장면과 같은 모형 → 종이), 덮는지(사각형·자르기 경계), 투영 증분(축척·뷰 비틀기), 투영 뷰포트 고르기,
  *   뷰포트 안 모형 스냅(동결·꺼진 도면층, 뷰포트 밖 점), 스냅 목록 합치기
- * - 진짜 App: 두 점 DIST(축척·비틀기·도면 공간 UCS), 한 점만 모형 스냅, 다른 뷰포트, 겹친 뷰포트, 다중 점, 'DIST, MEASUREGEOM(그대로), 모형 공간(그대로)
+ * - 진짜 App: 두 점 DIST(축척·비틀기·도면 공간 UCS), 한 점만 모형 스냅, 다른 뷰포트, 겹친 뷰포트, 다중 점, 'DIST, MEASUREGEOM(23차부터 같은 투영),
+ *   모형 공간(그대로)
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Entity, LineEntity, Vec3, ViewportEntity } from '../../src/core/model';
@@ -387,7 +388,7 @@ describe('도면 공간 DIST의 투영 거리(진짜 App)', () => {
     expect(lines.map((l) => [l.start.x, l.start.y, l.end.x, l.end.y])).toEqual([[10, 10, 150.4, 120.3]]);
   });
 
-  it('MEASUREGEOM 거리는 그대로(도움말에 투영이 없다 — 뷰포트 안 모형 객체에 스냅하지 않고 도면 공간 거리)', async () => {
+  it('MEASUREGEOM 거리도 같은 투영(23차 — 도움말 MEASUREGEOM: AREA·DIST·MASSPROP과 같은 계산을 많이 한다. 21·22차에는 도면 공간 거리 100이었다)', async () => {
     const h = setup();
     h.viewport([50, 50, 350, 250], 0.1, P(500, 300));
     h.add(line3(V(0, 0), V(1000, 0)));
@@ -395,7 +396,7 @@ describe('도면 공간 DIST의 투영 거리(진짜 App)', () => {
     await settle();
     await h.at(P(150.5, 120.2));
     await h.at(P(250.5, 120.2));
-    expect(h.result()).toEqual(['거리 = 100.0000 mm,  XY 평면에서의 각도 = 0°,  XY 평면으로부터의 각도 = 0°', 'X 증분 = 100.0000,  Y 증분 = 0.0000,  Z 증분 = 0.0000']);
+    expect(h.result()).toEqual(['거리 = 1000.0000 mm,  XY 평면에서의 각도 = 0°,  XY 평면으로부터의 각도 = 0°', 'X 증분 = 1000.0000,  Y 증분 = 0.0000,  Z 증분 = 0.0000']);
     await h.type('X');
   });
 

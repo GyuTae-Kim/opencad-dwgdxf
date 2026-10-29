@@ -3,6 +3,11 @@
  * 치수 그림(익명 *D 블록)은 src/edit/dim의 생성기가 치수 스타일대로 만든다.
  * DIMASSOC가 2이면 객체 스냅으로 찍은 점·고른 객체에 치수를 연관시킨다(dimassoc.ts), 0이면 분해된 치수를 만든다.
  * 프롬프트와 옵션은 AutoCAD 2026 한국어판을 따른다.
+ * 배치의 도면 공간(22·23차): 점은 뷰포트에 보이는 모형 객체에도 스냅하고, 객체 고르기는 단일 뷰포트에 보이는 모형 객체도 고른다(vpsnap.ts).
+ * 근거(AutoCAD 도움말, 우리말 요약): "To Set Dimension Scale for Creating Dimensions in a Layout" — 도면 공간에서 모형 공간 점에
+ * 객체 스냅으로 잡거나 객체를 바로 골라 모형 공간 값의 치수를 만든다. DIMLFAC — 반지름·지름·좌표를 포함한 모든 선형 치수 거리에
+ * 곱하고, 각도 치수에는 효과가 없다. 그래서 모형 객체를 재는 선형·정렬·반지름·지름·호 길이·세로좌표 치수는 뷰포트 축척을
+ * DIMLFAC 재지정(viewportScaled)으로 맞추고, 각도 치수는 그대로 둔다(뷰포트 변환은 회전과 확대뿐이라 각도가 같다).
  */
 import type { BlockDef, BlockRecord, CadDocument, DimensionEntity, Entity, Layer, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
@@ -25,7 +30,7 @@ import type { DimKindName } from '../edit/dim/format';
 import { angularSpan } from '../edit/dim/angular';
 import { OSNAP, type PointRef, circlePointRef } from '../edit/dim/assoc';
 import type { EditOp } from '../edit/session';
-import type { App, CommandContext, Keyword } from './app';
+import type { App, CommandContext, EntityResult, Keyword } from './app';
 import { finishNewDimension, inheritedRef, newDimensionAssocOps, objectRef, pointRef, snapNewDimension } from './dimassoc';
 import type { DocState } from './docstate';
 import { textDialog } from './draw';
@@ -34,9 +39,24 @@ import { applyOverrides } from '../edit/annot/override';
 import type { OverlayGeom, Pt } from './view';
 import { lwCount, lwVertices } from '../core/lwpoly';
 import type { ViewportXf } from './scene';
-import { paperProjection } from './vpsnap';
+import { circleToPaper, layoutXfs, modelToPaperVp, paperProjection } from './vpsnap';
+import { plainText } from './inquiry';
 
 const v3 = (p: Pt): Vec3 => ({ x: p.x, y: p.y, z: 0 });
+
+/** 치수 명령의 객체 고르기: 도면 공간이면 단일 뷰포트에 보이는 모형 객체도(결과의 viewport) */
+const VP_PICK = { viewportPick: true } as const;
+
+/** 도면 공간에서 고른 뷰포트 안 모형 객체(getEntity의 viewportPick)의 뷰포트 변환. 배치 객체를 골랐으면 null */
+function pickedViewport(app: App, r: EntityResult): ViewportXf | null {
+  if (!('handle' in r) || !r.viewport) return null;
+  const st = app.active!;
+  const h = r.viewport.handle;
+  return layoutXfs(st.doc, st.layoutFor(st.displaySpace)).find((v) => v.vp.handle === h) ?? null;
+}
+
+/** 모형 점을 그 뷰포트로 본 종이 점(Z는 0 — 도면 공간 점). vx가 없으면(배치 객체) 그대로 */
+const toPaper = (vx: ViewportXf | null, p: Vec3): Vec3 => (vx ? v3(modelToPaperVp(vx, p)) : p);
 
 /** 블록 이름이 이 치수 하나만 쓰는 익명 블록인지 */
 function ownBlock(doc: CadDocument, dim: DimensionEntity): boolean {
@@ -161,7 +181,8 @@ function printDimText(app: App, ctx: CommandContext, dim: DimensionEntity): void
   } catch {
     shown = formatLength(dim.measurement, st.units);
   }
-  ctx.print(`치수 문자 = ${dim.text && dim.text !== '<>' ? dim.text.replace('<>', shown) : shown}`);
+  // 각도·지름·호 기호(\U+00B0 등)와 서식 코드는 글자로(이전에는 코드 그대로 보였다)
+  ctx.print(`치수 문자 = ${plainText(dim.text && dim.text !== '<>' ? dim.text.replace('<>', shown) : shown)}`);
 }
 
 /** 원·호 객체(연관 참조용) */
@@ -285,16 +306,25 @@ export function registerDimCommands(app: App): void {
     let vx: ViewportXf | null = null;
     const r1 = await ctx.getPoint('첫 번째 치수보조선 원점 지정 또는 <객체 선택>:', { viewportSnaps: true });
     if ('enter' in r1) {
-      const pick = await ctx.getEntity('치수기입할 객체 선택:');
+      // 도면 공간이면 단일 뷰포트에 보이는 모형 선·호·폴리선 세그먼트도 고른다: 원점은 그 뷰포트로 본 종이 점, 값은 뷰포트 축척으로 맞춘다
+      const pick = await ctx.getEntity('치수기입할 객체 선택:', undefined, VP_PICK);
       if (!('handle' in pick)) return;
       const picked = doc.entityIndex.get(pick.handle);
-      const o = originsFromEntity(picked, pick.point);
+      const pvx = pickedViewport(app, pick);
+      const o = originsFromEntity(picked, pvx && pick.viewport ? pick.viewport.model : pick.point);
       if (!o) {
         ctx.print('선, 호, 폴리선 세그먼트를 선택하십시오.', 'err');
         return;
       }
-      [p1, p2] = o;
-      refs = [objectRef(app, picked, OSNAP.END, p1), objectRef(app, picked, OSNAP.END, p2)];
+      if (pvx) {
+        // 공간을 넘는 연관은 아직 만들지 않는다(비연관 — 원점 스냅과 같다)
+        p1 = modelToPaperVp(pvx, o[0]);
+        p2 = modelToPaperVp(pvx, o[1]);
+        vx = pvx;
+      } else {
+        [p1, p2] = o;
+        refs = [objectRef(app, picked, OSNAP.END, p1), objectRef(app, picked, OSNAP.END, p2)];
+      }
     } else if ('point' in r1) {
       p1 = r1.point;
       const ref1 = pointRef(app, r1);
@@ -349,15 +379,17 @@ export function registerDimCommands(app: App): void {
       let vertex: Pt = { x: 0, y: 0 };
       let bounds: number[] = [];
       const angTo = (c: { x: number; y: number }, q: { x: number; y: number }) => Math.atan2(q.y - c.y, q.x - c.x);
-      const r = await ctx.getEntity('호, 원, 선을 선택하거나 <정점 지정>:');
+      // 도면 공간이면 단일 뷰포트에 보이는 모형 호·원·선도 고르고(그 뷰포트로 본 종이 형상으로 잰다 — 각도는 축척과 무관),
+      // 정점·끝점은 뷰포트에 보이는 모형 객체에도 스냅한다. 모형 객체 쪽은 연관하지 않는다(공간을 넘는 연관은 아직 없다)
+      const r = await ctx.getEntity('호, 원, 선을 선택하거나 <정점 지정>:', undefined, VP_PICK);
       if ('enter' in r) {
-        const v = await ctx.getPoint('각도 정점 지정:');
+        const v = await ctx.getPoint('각도 정점 지정:', { viewportSnaps: true });
         if (!('point' in v)) return;
         const rv = pointRef(app, v);
-        const a = await ctx.getPoint('첫 번째 각도 끝점 지정:', { base: v.point });
+        const a = await ctx.getPoint('첫 번째 각도 끝점 지정:', { base: v.point, viewportSnaps: true });
         if (!('point' in a)) return;
         const ra = pointRef(app, a);
-        const b = await ctx.getPoint('두 번째 각도 끝점 지정:', { base: v.point });
+        const b = await ctx.getPoint('두 번째 각도 끝점 지정:', { base: v.point, viewportSnaps: true });
         if (!('point' in b)) return;
         refs = [ra, pointRef(app, b), rv];
         vertex = v.point;
@@ -365,41 +397,53 @@ export function registerDimCommands(app: App): void {
         make = (p) => createAngularDimension(doc, v3(v.point), v3(a.point), v3(b.point), v3(p), { text: o.text });
       } else if ('handle' in r) {
         const e = doc.entityIndex.get(r.handle);
+        const vx1 = pickedViewport(app, r);
         if (e?.type === 'LINE') {
-          const r2 = await ctx.getEntity('두 번째 선 선택:');
+          const r2 = await ctx.getEntity('두 번째 선 선택:', undefined, VP_PICK);
           if (!('handle' in r2)) return;
           const e2 = doc.entityIndex.get(r2.handle);
           if (e2?.type !== 'LINE') {
             ctx.print('선을 선택하십시오.', 'err');
             return;
           }
-          refs = [objectRef(app, e, OSNAP.END, e.start), objectRef(app, e, OSNAP.END, e.end), objectRef(app, e2, OSNAP.END, e2.start), objectRef(app, e2, OSNAP.END, e2.end)];
-          const d1 = { x: e.end.x - e.start.x, y: e.end.y - e.start.y };
-          const d2 = { x: e2.end.x - e2.start.x, y: e2.end.y - e2.start.y };
+          const vx2 = pickedViewport(app, r2);
+          const ref = (vx: ViewportXf | null, l: typeof e, p: Vec3) => (vx ? null : objectRef(app, l, OSNAP.END, p));
+          refs = [ref(vx1, e, e.start), ref(vx1, e, e.end), ref(vx2, e2, e2.start), ref(vx2, e2, e2.end)];
+          const s1 = toPaper(vx1, e.start);
+          const t1 = toPaper(vx1, e.end);
+          const s2 = toPaper(vx2, e2.start);
+          const t2 = toPaper(vx2, e2.end);
+          const d1 = { x: t1.x - s1.x, y: t1.y - s1.y };
+          const d2 = { x: t2.x - s2.x, y: t2.y - s2.y };
           const den = d1.x * d2.y - d1.y * d2.x;
           if (Math.abs(den) > 1e-12) {
-            const t = ((e2.start.x - e.start.x) * d2.y - (e2.start.y - e.start.y) * d2.x) / den;
-            vertex = { x: e.start.x + d1.x * t, y: e.start.y + d1.y * t };
+            const t = ((s2.x - s1.x) * d2.y - (s2.y - s1.y) * d2.x) / den;
+            vertex = { x: s1.x + d1.x * t, y: s1.y + d1.y * t };
             const h1 = Math.atan2(d1.y, d1.x);
             const h2 = Math.atan2(d2.y, d2.x);
             bounds = [h1, h2, h1 + Math.PI, h2 + Math.PI];
           }
-          make = (p) => createAngular2LineDimension(doc, e.start, e.end, e2.start, e2.end, v3(p), { text: o.text });
+          make = (p) => createAngular2LineDimension(doc, s1, t1, s2, t2, v3(p), { text: o.text });
         } else if (e?.type === 'ARC') {
-          const a = { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle), z: 0 };
-          const b = { x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle), z: 0 };
-          refs = [objectRef(app, e, OSNAP.END, a), objectRef(app, e, OSNAP.END, b), objectRef(app, e, OSNAP.CEN, e.center)];
-          vertex = e.center;
-          bounds = [e.startAngle, e.endAngle];
-          make = (p) => createAngularDimension(doc, e.center, a, b, v3(p), { text: o.text });
+          const am = { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle), z: 0 };
+          const bm = { x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle), z: 0 };
+          refs = vx1 ? [] : [objectRef(app, e, OSNAP.END, am), objectRef(app, e, OSNAP.END, bm), objectRef(app, e, OSNAP.CEN, e.center)];
+          const c = toPaper(vx1, e.center);
+          const a = toPaper(vx1, am);
+          const b = toPaper(vx1, bm);
+          const tw = vx1?.twist ?? 0;
+          vertex = c;
+          bounds = [e.startAngle - tw, e.endAngle - tw];
+          make = (p) => createAngularDimension(doc, c, a, b, v3(p), { text: o.text });
         } else if (e?.type === 'CIRCLE') {
           const first = r.point;
-          const b = await ctx.getPoint('각도의 두 번째 끝점 지정:', { base: e.center });
+          const c = toPaper(vx1, e.center);
+          const b = await ctx.getPoint('각도의 두 번째 끝점 지정:', { base: c, ...(vx1 ? { viewportSnaps: true } : {}) });
           if (!('point' in b)) return;
-          refs = [circlePointRef(e, first), pointRef(app, b), objectRef(app, e, OSNAP.CEN, e.center)];
-          vertex = e.center;
-          bounds = [angTo(e.center, first), angTo(e.center, b.point)];
-          make = (p) => createAngularDimension(doc, e.center, v3(first), v3(b.point), v3(p), { text: o.text });
+          refs = vx1 ? [] : [circlePointRef(e, first), pointRef(app, b), objectRef(app, e, OSNAP.CEN, e.center)];
+          vertex = c;
+          bounds = [angTo(c, first), angTo(c, b.point)];
+          make = (p) => createAngularDimension(doc, c, v3(first), v3(b.point), v3(p), { text: o.text });
         } else {
           ctx.print('호, 원, 선을 선택하십시오.', 'err');
           return;
@@ -448,10 +492,13 @@ export function registerDimCommands(app: App): void {
   const radial = (kind: 'radius' | 'diameter' | 'arc') => async (ctx: CommandContext) => {
     const st = app.active!;
     const doc = st.doc;
-    const r = await ctx.getEntity(kind === 'arc' ? '호 또는 폴리선 호 세그먼트 선택:' : '호 또는 원 선택:');
+    // 도면 공간이면 단일 뷰포트에 보이는 모형 호·원도 고른다: 그 뷰포트로 본 종이 원·호에 치수를 두고 값은 뷰포트 축척으로 맞춘다
+    const r = await ctx.getEntity(kind === 'arc' ? '호 또는 폴리선 호 세그먼트 선택:' : '호 또는 원 선택:', undefined, VP_PICK);
     if (!('handle' in r)) return;
     const picked = circleEntity(doc.entityIndex.get(r.handle));
-    const c = circleOf(picked);
+    const vx = pickedViewport(app, r);
+    const c0 = circleOf(picked);
+    const c = c0 && vx ? circleToPaper(vx, c0) : c0;
     if (!c || (kind === 'arc' && c.a0 === undefined)) {
       ctx.print(kind === 'arc' ? '호를 선택하십시오.' : '호 또는 원을 선택하십시오.', 'err');
       return;
@@ -460,7 +507,10 @@ export function registerDimCommands(app: App): void {
     const center = v3(c.c);
     // 호 길이 치수의 부분(P): 호 위 두 점 사이만
     let span: { a0: number; a1: number } | null = null;
-    const make = (p: Pt): DimensionEntity => withDimOpts(make1(p), o);
+    const make = (p: Pt): DimensionEntity => {
+      const d = withDimOpts(make1(p), o);
+      return vx ? viewportScaled(doc, d, vx.k) : d;
+    };
     // 지시선(L): 90°보다 큰 호에서만(AutoCAD와 같다). 치수 호에서 재는 호로 반지름 방향(문자 쪽 각도)
     let leader = false;
     const sweepOf = () => {
@@ -515,9 +565,11 @@ export function registerDimCommands(app: App): void {
           a = a0 + t;
           return a;
         };
-        const q1 = await ctx.getPoint('호 길이 치수의 첫 번째 점 지정:');
+        // 뷰포트 안 모형 호면 두 점도 그 뷰포트에 보이는 모형 객체에 스냅한다
+        const vs = vx ? { viewportSnaps: true } : {};
+        const q1 = await ctx.getPoint('호 길이 치수의 첫 번째 점 지정:', vs);
         if (!('point' in q1)) continue;
-        const q2 = await ctx.getPoint('호 길이 치수의 두 번째 점 지정:');
+        const q2 = await ctx.getPoint('호 길이 치수의 두 번째 점 지정:', vs);
         if (!('point' in q2)) continue;
         const b0 = onArc(q1.point);
         const b1 = onArc(q2.point);
@@ -532,9 +584,10 @@ export function registerDimCommands(app: App): void {
       }
       if ('point' in p) {
         const d = make(p.point);
-        // 반지름 [15 현 위 점, 10 중심], 지름 [15, 10 반대쪽 현 위 점], 호 길이 [13 시작, 14 끝, 15 중심]
+        // 반지름 [15 현 위 점, 10 중심], 지름 [15, 10 반대쪽 현 위 점], 호 길이 [13 시작, 14 끝, 15 중심].
+        // 뷰포트 안 모형 객체는 연관하지 않는다(공간을 넘는 연관은 아직 없다)
         let refs: (PointRef | null)[] = [];
-        if (picked) {
+        if (picked && !vx) {
           if (kind === 'arc') refs = [objectRef(app, picked, OSNAP.END, d.defPoint2), objectRef(app, picked, OSNAP.END, d.defPoint3), objectRef(app, picked, OSNAP.CEN, d.defPoint4)];
           else if (kind === 'radius') refs = [circlePointRef(picked, d.defPoint4), objectRef(app, picked, OSNAP.CEN, d.defPoint)];
           else refs = [circlePointRef(picked, d.defPoint4), circlePointRef(picked, d.defPoint)];
@@ -676,13 +729,19 @@ export function registerDimCommands(app: App): void {
     async run(ctx) {
       const st = app.active!;
       const doc = st.doc;
-      const f = await ctx.getPoint('피쳐 위치 지정:');
+      // 도면 공간이면 피쳐 위치가 뷰포트에 보이는 모형 객체에도 스냅하고, 단일 뷰포트의 모형 스냅이면 그 축척으로 맞춘다
+      // (DIMLFAC는 좌표에도 곱한다. 데이텀은 도움말대로 지금 UCS 원점 — 도면 공간 좌표에서 잰 거리를 모형 단위로)
+      const f = await ctx.getPoint('피쳐 위치 지정:', { viewportSnaps: true });
       if (!('point' in f)) return;
       const fr = pointRef(app, f);
+      const vx = f.snap?.viewport ? paperProjection(st, [{ p: f.point, viewport: f.snap.viewport }]) : null;
       const o: DimOpts = {};
       let xAxis: boolean | undefined;
       for (;;) {
-        const make = (p: Pt) => withDimOpts(createOrdinateDimension(doc, v3(f.point), v3(p), { text: o.text, xAxis }), o);
+        const make = (p: Pt) => {
+          const d = withDimOpts(createOrdinateDimension(doc, v3(f.point), v3(p), { text: o.text, xAxis }), o);
+          return vx ? viewportScaled(doc, d, vx.k) : d;
+        };
         const p = await ctx.getPoint('지시선 끝점을 지정 또는 [X데이텀(X)/Y데이텀(Y)/여러 줄 문자(M)/문자(T)/각도(A)]:', {
           base: f.point,
           keywords: [{ key: 'X', label: 'X데이텀' }, { key: 'Y', label: 'Y데이텀' }, { key: 'M', label: '여러 줄 문자' }, { key: 'T', label: '문자' }, { key: 'A', label: '각도' }],

@@ -25,7 +25,7 @@ import type { MeasureResult } from './measure-result';
 import { Picker } from './pick';
 import { SELECT_HELP, SELECT_METHODS, SELECT_OPTIONS, runSelectMethod, selectMethodOf } from './selmethod';
 import { DEFAULT_SNAPS, SNAP_NAMES, type SnapPoint, type ViewportSnap, findSnaps, mergeSnaps } from './snap';
-import { layoutXfs, viewportSnaps } from './vpsnap';
+import { type ViewportPick, geometryToPaper, layoutXfs, viewportPick, viewportSnaps } from './vpsnap';
 import { type Acquired, type PolarTip, objectTrack, polarTrack } from './tracking';
 import { type PolarSettings, angleBase, clockwise, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire, trackAngleText } from './polar';
 import { gripPoints } from '../edit/geom';
@@ -34,7 +34,7 @@ import { spaceTolerance } from '../render/build';
 import { ask, closeMenu, keyboardControl, showMenu, toast } from './ui/dom';
 import { kindName as entityKindName } from '../edit/extract';
 import { EditManager } from './edits';
-import { OverlayScene, layoutViewports, paperInfo } from './scene';
+import { OverlayScene, type ViewportXf, layoutViewports, paperInfo } from './scene';
 import { expandXrefBounds } from './refs';
 import type { EditOp } from '../edit/session';
 import { isEditableTable } from '../edit/table/entity';
@@ -136,14 +136,21 @@ interface PointRequest {
   reject: (e: unknown) => void;
 }
 
-/** 객체를 고른 결과. shift: 고를 때 Shift를 누르고 있었는지(자르기·연장 전환 등) */
-export type EntityPick = { handle: string; point: Pt; shift?: boolean };
+/**
+ * 객체를 고른 결과. shift: 고를 때 Shift를 누르고 있었는지(자르기·연장 전환 등).
+ * viewport: 도면 공간에서 뷰포트에 보이는 모형 객체를 고른 것(getEntity의 viewportPick — handle은 모형 객체, point는 종이 좌표)
+ */
+export type EntityPick = { handle: string; point: Pt; shift?: boolean; viewport?: ViewportSnap };
 export type EntityResult = EntityPick | { keyword: string } | { enter: true };
 /** getEntity(…, { emptyPick: true })에서 빈 곳을 누르거나 좌표를 입력한 결과(point는 도면 좌표, 스냅 없음) */
 export type EmptyPick = { point: Pt; empty: true; shift?: boolean };
-/** getEntity 옵션. emptyPick: 빈 곳 클릭·좌표 입력도 돌려받는다(EmptyPick) */
+/**
+ * getEntity 옵션. emptyPick: 빈 곳 클릭·좌표 입력도 돌려받는다(EmptyPick).
+ * viewportPick: 배치의 도면 공간에서 그 자리에 배치 객체가 없으면 단일 뷰포트에 보이는 모형 객체를 고른다(치수 명령 — vpsnap.viewportPick)
+ */
 export interface EntityOptions {
   emptyPick?: boolean;
+  viewportPick?: boolean;
 }
 
 interface EntityRequest {
@@ -151,6 +158,7 @@ interface EntityRequest {
   prompt: string;
   keywords: Keyword[];
   emptyPick: boolean;
+  viewportPick: boolean;
   signal: AbortSignal;
   resolve: (r: EntityResult | EmptyPick) => void;
   reject: (e: unknown) => void;
@@ -220,6 +228,8 @@ export interface CommandContext {
   print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void;
   getPoint(prompt: string, opt?: PointOptions): Promise<PointResult>;
   getEntity(prompt: string, keywords?: Keyword[]): Promise<EntityResult>;
+  /** viewportPick만: 도면 공간에서 뷰포트에 보이는 모형 객체도 고른다(결과의 viewport) */
+  getEntity(prompt: string, keywords: Keyword[] | undefined, opt: EntityOptions & { emptyPick?: false }): Promise<EntityResult>;
   /** emptyPick: 빈 곳 클릭·좌표 입력도 EmptyPick으로 돌려받는다(기존 호출의 동작은 그대로) */
   getEntity(prompt: string, keywords: Keyword[] | undefined, opt: EntityOptions): Promise<EntityResult | EmptyPick>;
   /** 객체 고르기(이미 고른 것이 있으면 그것). 빈 배열이면 아무것도 고르지 않음 */
@@ -911,6 +921,7 @@ export class App {
         prompt,
         keywords,
         emptyPick: !!opt.emptyPick,
+        viewportPick: !!opt.viewportPick,
         signal,
         resolve: (r) => {
           if (this.request === req) this.request = null;
@@ -2203,14 +2214,40 @@ export class App {
   private updateHover(w: Pt): void {
     const pk = this.picker();
     if (!pk) return;
-    const h = pk.pick(w.x, w.y, this.view.overlay.pickbox * this.view.pixelSize());
-    if (h === this.hoverHandle) return;
-    this.hoverHandle = h;
+    const tol = this.view.overlay.pickbox * this.view.pixelSize();
+    const h = pk.pick(w.x, w.y, tol);
+    // 객체 요청(viewportPick)에서 배치 객체가 없으면 뷰포트에 보이는 모형 객체를 종이 위치에 강조한다
+    const r = this.request;
+    const vp = !h && r?.kind === 'entity' ? this.viewportPickAt(r, w, tol) : null;
+    const key = vp ? `vp:${vp.pick.viewport.handle}:${vp.pick.handle}` : h;
+    if (key === this.hoverHandle) return;
+    this.hoverHandle = key;
     // 호버 강조는 선택 미리보기(SELECTIONPREVIEW)가 켜져 있을 때만(하이퍼링크 툴팁은 그대로)
     const show = previewOn(this.settings.selectionPreview, !!this.request || !!this.running);
-    this.view.overlay.hover = show && h && !this.active?.selection.has(h) ? pk.geometry(h) : null;
-    this.view.el.title = h && this.hoverTip && !this.request ? (this.hoverTip(h) ?? '') : '';
+    if (vp) {
+      const g = this.pickerFor(this.active!, MODEL_SPACE)?.geometry(vp.pick.handle);
+      this.view.overlay.hover = show && g ? geometryToPaper(vp.vx, g) : null;
+      this.view.el.title = '';
+    } else {
+      this.view.overlay.hover = show && h && !this.active?.selection.has(h) ? pk.geometry(h) : null;
+      this.view.el.title = h && this.hoverTip && !this.request ? (this.hoverTip(h) ?? '') : '';
+    }
     this.view.requestOverlay();
+  }
+
+  /**
+   * 객체 요청(viewportPick)에서 배치 객체가 없는 자리: 배치의 도면 공간이면 단일 뷰포트에 보이는 모형 객체(vpsnap.viewportPick)와
+   * 그 뷰포트 변환. 모형 공간·뷰포트 안 모형 공간(MSPACE)·블록 편집기에서는 null(전과 같다)
+   */
+  private viewportPickAt(r: EntityRequest, w: Pt, tol: number): { pick: ViewportPick; vx: ViewportXf } | null {
+    const st = this.active;
+    if (!r.viewportPick || !st || st.isModel || st.msVp) return null;
+    const model = this.pickerFor(st, MODEL_SPACE);
+    if (!model) return null;
+    const vxs = layoutXfs(st.doc, st.layoutFor(st.displaySpace));
+    const pick = viewportPick(vxs, model, st.layers, w, tol);
+    const vx = pick && vxs.find((v) => v.vp.handle === pick.viewport.handle);
+    return pick && vx ? { pick, vx } : null;
   }
 
   /** 종이 좌표의 점이 든 뷰포트(가장 앞) */
@@ -2276,7 +2313,10 @@ export class App {
     const shift = ev.shiftKey ? { shift: true as const } : {};
     if (r?.kind === 'entity') {
       const h = pk.pick(w.x, w.y, tol);
+      // 배치 객체가 먼저, 없으면(viewportPick) 단일 뷰포트에 보이는 모형 객체
+      const vp = h ? null : this.viewportPickAt(r, w, tol);
       if (h) r.resolve({ handle: h, point: w, ...shift });
+      else if (vp) r.resolve({ handle: vp.pick.handle, point: w, viewport: vp.pick.viewport, ...shift });
       else if (r.emptyPick) {
         this.lastPoint = w;
         r.resolve({ point: w, empty: true, ...shift });

@@ -8,7 +8,9 @@
  * 투영 거리는 두 모형 점의 평면 거리다(종이 거리 ÷ 축척과 같다).
  * 도움말에 없어 이 앱이 정한 것: 증분과 XY 평면 각도는 화면(지금 도면 공간 UCS) 방향으로 잰 모형 단위 값, 점 하나만 모형 스냅이거나
  * 두 점의 뷰포트가 다르거나 그 점을 덮는 뷰포트가 둘 이상이면 도면 공간 2D 거리(전과 같다).
- * 뷰포트 안 모형 스냅은 DIST의 점 요청과 선형·정렬 치수의 치수보조선 원점(22차, dimcmds.ts)에서만 잡는다.
+ * 뷰포트 안 모형 스냅은 DIST·MEASUREGEOM 거리(23차 — 도움말 MEASUREGEOM: AREA·DIST·MASSPROP과 같은 계산을 많이 한다)의 점 요청과
+ * 도면 공간 치수의 점 요청(22차 선형·정렬 원점, 23차 각도 정점·끝점·세로좌표 피쳐·호 길이 부분 점 — dimcmds.ts)에서만 잡는다.
+ * 23차: 치수 명령의 객체 고르기도 도면 공간에서 단일 뷰포트에 보이는 모형 객체를 고른다(viewportPick — 위 도움말의 "객체를 바로 골라").
  */
 import type { CadDocument, Entity, Layout } from '../core/model';
 import { tableKey } from '../core/model';
@@ -17,7 +19,7 @@ import { pointInPolygon } from '../render/displaylist';
 import type { Picker } from './pick';
 import { type ViewportXf, layoutViewports, viewportXf } from './scene';
 import { type SnapPoint, type ViewportSnap, findSnaps } from './snap';
-import type { Pt, SnapKind } from './view';
+import type { OverlayGeom, Pt, SnapKind } from './view';
 
 /** 뷰포트 변환 가운데 이 모듈이 쓰는 것(시험이 직접 만든다) */
 export type VpXf = Pick<ViewportXf, 'k' | 'twist' | 'refX' | 'refY' | 'clip'> & { vp: Pick<ViewportXf['vp'], 'handle' | 'center' | 'width' | 'height'> };
@@ -98,6 +100,15 @@ export function paperProjection(
   return projectionViewport(layoutXfs(st.doc, st.layoutFor(st.displaySpace)), pts);
 }
 
+/** 뷰포트에 보이는 모형 객체인지(도면층이 꺼지거나 동결되지 않았고 그 뷰포트에서 동결되지 않은 것) */
+function visibleIn(vx: Pick<ViewportXf, 'frozen'>, layers: ReadonlyMap<string, LayerState>): (e: Entity) => boolean {
+  return (e) => {
+    const k = tableKey(e.layer);
+    const l = layers.get(k);
+    return (!l || (l.on && !l.frozen)) && !vx.frozen.has(k);
+  };
+}
+
 /** 후보를 거른 고르기(같은 색인·형상 캐시를 쓴다) */
 function filtered(pk: Picker, ok: (e: Entity) => boolean): Picker {
   const v = Object.create(pk) as Picker;
@@ -128,13 +139,8 @@ export function viewportSnaps(
   const out: SnapPoint[] = [];
   for (const vx of vxs) {
     if (!(vx.k > 0) || !viewportCovers(vx, p)) continue;
-    const visible = (e: Entity) => {
-      const k = tableKey(e.layer);
-      const l = layers.get(k);
-      return (!l || (l.on && !l.frozen)) && !vx.frozen.has(k);
-    };
     const local = new Map<SnapPoint, number>();
-    const found = findSnaps(doc, filtered(model, visible), paperToModelVp(vx, p), aperture / vx.k, modes, base ? paperToModelVp(vx, base) : null, undefined, local);
+    const found = findSnaps(doc, filtered(model, visibleIn(vx, layers)), paperToModelVp(vx, p), aperture / vx.k, modes, base ? paperToModelVp(vx, base) : null, undefined, local);
     for (const s of found) {
       if (s.deferred || s.lines) continue;
       const q = modelToPaperVp(vx, s);
@@ -146,5 +152,50 @@ export function viewportSnaps(
       scores.set(t, local.get(s) ?? Infinity);
     }
   }
+  return out;
+}
+
+/** 도면 공간에서 고른 뷰포트 안 모형 객체(getEntity의 viewportPick): 모형 객체 핸들과 그 뷰포트·고른 자리의 모형 좌표 */
+export interface ViewportPick {
+  handle: string;
+  viewport: ViewportSnap;
+}
+
+/**
+ * 종이 점 p에서 단일 뷰포트에 보이는 모형 객체 고르기(도움말 "To Set Dimension Scale for Creating Dimensions in a Layout":
+ * 도면 공간에서 객체를 바로 골라 모형 공간 값의 치수를 만든다). p를 덮는 뷰포트가 하나뿐일 때만(DIST의 "단일 뷰포트"와 같은 규칙 —
+ * 겹친 자리는 어느 뷰포트의 객체인지 알 수 없다) 그 뷰포트에서 보이는 모형 객체 가운데 허용 거리(tol ÷ 축척) 안의 가장 가까운 것
+ */
+export function viewportPick(vxs: readonly (VpXf & Pick<ViewportXf, 'frozen'>)[], model: Picker, layers: ReadonlyMap<string, LayerState>, p: Pt, tol: number): ViewportPick | null {
+  const cover = vxs.filter((v) => v.k > 0 && viewportCovers(v, p));
+  if (cover.length !== 1) return null;
+  const vx = cover[0]!;
+  const m = paperToModelVp(vx, p);
+  const h = filtered(model, visibleIn(vx, layers)).pick(m.x, m.y, tol / vx.k);
+  return h ? { handle: h, viewport: { handle: vx.vp.handle, model: m } } : null;
+}
+
+/** 모형 형상(선분·삼각형)을 뷰포트로 본 종이 형상(고를 때 강조) */
+export function geometryToPaper(vx: VpXf, g: OverlayGeom): OverlayGeom {
+  const map = (a: readonly number[]) => {
+    const out: number[] = new Array(a.length);
+    for (let i = 0; i + 1 < a.length; i += 2) {
+      const q = modelToPaperVp(vx, { x: a[i]!, y: a[i + 1]! });
+      out[i] = q.x;
+      out[i + 1] = q.y;
+    }
+    return out;
+  };
+  return g.tris ? { segs: map(g.segs), tris: map(g.tris) } : { segs: map(g.segs) };
+}
+
+/**
+ * 모형 원·호를 뷰포트로 본 종이 원·호: 중심은 뷰포트 변환, 반지름은 축척배, 각도는 비틀기만큼 돈다
+ * (뷰포트 변환은 회전과 확대뿐이라 원은 원, 반시계 호는 반시계 호로 간다)
+ */
+export function circleToPaper<T extends { c: Pt; r: number; a0?: number; a1?: number }>(vx: VpXf, c: T): T {
+  const out = { ...c, c: modelToPaperVp(vx, c.c), r: c.r * vx.k };
+  if (c.a0 !== undefined) out.a0 = c.a0 - vx.twist;
+  if (c.a1 !== undefined) out.a1 = c.a1 - vx.twist;
   return out;
 }
