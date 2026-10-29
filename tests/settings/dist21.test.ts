@@ -41,6 +41,8 @@ const P = (x: number, y: number): Pt => ({ x, y });
 const V = (x: number, y: number, z = 0): Vec3 => ({ x, y, z });
 const ev = () => ({ pointerType: 'mouse', shiftKey: false, ctrlKey: false, metaKey: false, clientX: 0, clientY: 0 }) as PointerEvent;
 const line3 = (a: Vec3, b: Vec3, o: Partial<LineEntity> = {}) => ({ ...entityDefaults(), type: 'LINE', handle: '', start: a, end: b, ...o }) as LineEntity;
+/** 화면에 남긴 마지막 표시(DIST가 둘째 점에 거리 글을 단다) */
+const lastMark = (h: { view: { overlay: { marks: unknown[] } } }) => h.view.overlay.marks.at(-1) as { p: Pt; text?: string };
 
 /** 뷰포트 변환을 직접(장면 렌더러의 drawViewport 행렬: 화면 y 아래, 모형 (dx, dy) → [k·c, −k·s; −k·s, −k·c], c = cos(−비틀기)) */
 function rendererPaper(vx: VpXf, m: Pt): Pt {
@@ -274,8 +276,8 @@ describe('도면 공간 DIST의 투영 거리(진짜 App)', () => {
     expect(h.result()).toEqual(['거리 = 1000.0000 mm,  XY 평면에서의 각도 = 0°,  XY 평면으로부터의 각도 = 0°', 'X 증분 = 1000.0000,  Y 증분 = 0.0000,  Z 증분 = 0.0000']);
     // 휴대폰 결과 카드도 모형 거리, 표시는 종이의 두 점
     expect(h.cmd.lines.at(-1)!.measure!.value).toBe('1000.0000 mm');
-    expect(h.view.overlay.marks.at(-1)!.text).toBe('1000.0000 mm');
-    expect(h.view.overlay.marks.at(-1)!.p.x).toBeCloseTo(250, 9);
+    expect(lastMark(h).text).toBe('1000.0000 mm');
+    expect(lastMark(h).p.x).toBeCloseTo(250, 9);
   });
 
   it('뷰 비틀기 30°·도면 공간 UCS 90°: 거리는 같고 증분·각도는 화면(도면 공간 UCS) 방향', async () => {
@@ -355,7 +357,7 @@ describe('도면 공간 DIST의 투영 거리(진짜 App)', () => {
     await h.type('');
     expect(totals()).toEqual(['거리 = 1000.0000 mm', '거리 = 1500.0000 mm']);
     expect(h.cmd.lines.at(-1)!.measure!.value).toBe('1500.0000 mm');
-    expect(h.view.overlay.marks.at(-1)!.text).toBe('1500.0000 mm');
+    expect(lastMark(h).text).toBe('1500.0000 mm');
     // 길이(L)로 친 구간이 끼면 전체가 도면 공간 거리
     void h.app.run('DIST');
     await settle();
