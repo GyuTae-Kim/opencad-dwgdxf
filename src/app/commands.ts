@@ -20,6 +20,7 @@ import { polyPreview } from './draw';
 import type { ViewportSnap } from './snap';
 import type { ViewportXf } from './scene';
 import { type PaperPick, layoutXfs, projectedDelta, projectionViewport } from './vpsnap';
+import { parseZoomFactor } from './vpzoom';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -77,6 +78,22 @@ function distProjection(app: App, pts: readonly PaperPick[]): ViewportXf | null 
   return projectionViewport(layoutXfs(st.doc, st.layoutFor(st.displaySpace)), pts);
 }
 
+const VP_LOCKED_MSG = '화면표시가 잠긴 뷰포트는 축척을 바꾸지 않습니다.';
+
+/**
+ * ZOOM 축척 입력(도움말 ZOOM 축척): nX는 현재 뷰에 대해(MSPACE면 뷰포트 가운데를 두고), nXP는 도면 공간 단위에 대해 — 뷰포트 안 모형
+ * 공간이면 뷰포트 축척을 n으로(화면표시가 잠긴 뷰포트는 축척을 바꾸지 않는다), 뷰포트 밖이면 이전처럼 nX.
+ * 접미사 없는 n(도면 한계에 대해)은 아직 nX처럼 다룬다
+ */
+function zoomByFactor(app: App, ctx: CommandContext, f: { n: number; unit: '' | 'x' | 'xp' }): void {
+  if (f.unit === 'xp') {
+    const r = app.view.zoomPaperScale(f.n);
+    if (r === 'locked') ctx.print(VP_LOCKED_MSG, 'err');
+    if (r !== 'none') return;
+  }
+  app.view.zoomCenter(f.n);
+}
+
 /** LIST가 일반 특성 가운데 보이는 것(도움말 LIST: BYLAYER가 아닐 때의 색상·선종류·선가중치·투명도, 0이 아닌 두께) */
 const LIST_GENERAL = new Set(['색상', '선종류', '선가중치', '투명도', '두께']);
 
@@ -107,17 +124,18 @@ export function registerCommands(app: App): void {
     async run(ctx, arg) {
       const kws = [
         { key: 'A', label: '전체' },
+        { key: 'C', label: '중심' },
         { key: 'E', label: '범위' },
         { key: 'P', label: '이전' },
         { key: 'W', label: '윈도우' },
         { key: 'O', label: '객체' },
         { key: 'S', label: '축척' },
       ];
-      let r: PointResult = arg ? { keyword: arg.toUpperCase() } : await ctx.getPoint('윈도우 구석 지정, 축척 비율(nX 또는 nXP) 입력, 또는 [전체(A)/범위(E)/이전(P)/윈도우(W)/객체(O)/축척(S)] <실시간>:', { keywords: kws, allowText: true });
+      let r: PointResult = arg ? { keyword: arg.toUpperCase() } : await ctx.getPoint('윈도우 구석 지정, 축척 비율(nX 또는 nXP) 입력, 또는 [전체(A)/중심(C)/범위(E)/이전(P)/윈도우(W)/객체(O)/축척(S)] <실시간>:', { keywords: kws, allowText: true });
       if ('text' in r) {
-        const m = /^([\d.]+)\s*(x|xp)?$/i.exec(r.text);
-        if (m) {
-          app.view.zoomCenter(parseFloat(m[1]!));
+        const f = parseZoomFactor(r.text);
+        if (f) {
+          zoomByFactor(app, ctx, f);
           return;
         }
         r = { keyword: r.text.toUpperCase() };
@@ -143,11 +161,40 @@ export function registerCommands(app: App): void {
       } else if (k === 'O') {
         const hs = await app.selectedOrPick(ctx);
         zoomToHandles(app, hs);
+      } else if (k === 'C') {
+        // 도움말 ZOOM 중심: 중심점과 배율 또는 높이(높이가 작을수록 크게). 배율은 축척과 같은 nX·nXP, Enter는 지금 높이
+        const c = await needPoint(ctx, '중심점 지정:');
+        const cur = app.view.viewHeight();
+        for (;;) {
+          const t = await ctx.getPoint(`배율 또는 높이 입력 <${L(app, cur)}>:`, { allowText: true });
+          if ('enter' in t) {
+            app.view.zoomCenterAt(c.x, c.y);
+            return;
+          }
+          if (!('text' in t)) continue;
+          const f = parseZoomFactor(t.text);
+          if (!f) {
+            ctx.print('0보다 큰 값을 입력하십시오.', 'err');
+            continue;
+          }
+          let height = f.unit === 'x' ? cur / f.n : f.n;
+          if (f.unit === 'xp') {
+            const vp = app.view.msViewport();
+            if (vp?.locked) {
+              ctx.print(VP_LOCKED_MSG, 'err');
+              return;
+            }
+            // 뷰포트 안이면 뷰포트 축척 n(뷰 높이 = 뷰포트 높이 ÷ n), 밖이면 이전처럼 nX
+            height = vp ? vp.height / f.n : cur / f.n;
+          }
+          app.view.zoomCenterAt(c.x, c.y, height);
+          return;
+        }
       } else if (k === 'S') {
-        const t = await ctx.getPoint('축척 비율 입력(nX):', { allowText: true });
+        const t = await ctx.getPoint('축척 비율 입력(nX 또는 nXP):', { allowText: true });
         if ('text' in t) {
-          const f = parseFloat(t.text);
-          if (f > 0) app.view.zoomCenter(f);
+          const f = parseZoomFactor(t.text);
+          if (f) zoomByFactor(app, ctx, f);
         }
       }
     },
@@ -165,10 +212,8 @@ export function registerCommands(app: App): void {
       ctx.print('가운데 버튼으로 끌거나, 두 점을 찍어 이동합니다.');
       const a = await needPoint(ctx, '기준점 지정:');
       const b = await needPoint(ctx, '두 번째 점 지정:', a);
-      const [x0, y0, x1, y1] = app.view.visibleWorld();
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      app.view.zoomRect(x0 - dx, y0 - dy, x1 - dx, y1 - dy, true, 0);
+      // 배율은 그대로(MSPACE면 그 뷰포트의 뷰를 옮긴다 — 이전에는 화면 크기 창을 뷰포트에 맞춰 축소했다)
+      app.view.panWorld(b.x - a.x, b.y - a.y);
     },
   });
   app.register({

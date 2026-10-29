@@ -8,6 +8,7 @@ import type { SceneMessage } from '../worker/protocol';
 import { type OverlayScene, SpaceScene } from './scene';
 import { EditSession } from '../edit/session';
 import type { GLRenderer } from '../render/webgl';
+import type { VpViewPatch } from './vpzoom';
 
 export interface Camera {
   cx: number;
@@ -65,6 +66,8 @@ export class DocState {
   private readonly sceneLayerNames = new Map<string, string[]>();
   readonly cameras = new Map<string, Camera>();
   readonly prevCameras = new Map<string, Camera[]>();
+  /** 배치 뷰포트마다(핸들) ZOOM 이전이 되돌릴 뷰(MSPACE에서 바꾼 뷰포트의 뷰) */
+  readonly vpPrevViews = new Map<string, VpViewPatch[]>();
   /** 모형 타일 뷰포트(VPORTS) */
   tiles: TileSet | null = null;
   space: string = MODEL_SPACE;

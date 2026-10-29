@@ -16,6 +16,10 @@ import type { DisplayList } from '../render/displaylist';
 import { AIM_HOLD_MS, aimPoint } from './aim';
 import { RightDragGesture } from './rightdrag';
 import { DEFAULT_SETTINGS, RightClickTimer, type Settings, crosshairArm, gripHalf, showSnapMarker, snapMarkerRadius, timedRightClick, wheelZoom } from './settings';
+import { type VpView, fitScale, lockedPaperCamera, paperScaledView, patchOf, rememberView, scaledView, validView, viewOf, viewOfCamera, windowView } from './vpzoom';
+
+/** 뷰포트 화면표시 잠금 플래그 */
+const VP_LOCKED = 0x4000;
 
 export interface Pt {
   x: number;
@@ -299,36 +303,60 @@ export class CadView {
     }
   }
 
+  /** MSPACE의 활성 뷰포트와 화면표시 잠금(종이 카메라로 그리는 중이면 없다) */
+  private msZoom(): { vp: ViewportEntity; vx: ViewportXf; paper: Camera; locked: boolean } | null {
+    const s = this.state;
+    const m = s?.msVp && !this.paperCam ? this.msInfo(s) : null;
+    return m ? { ...m, locked: (m.vp.flags & VP_LOCKED) !== 0 } : null;
+  }
+
+  /** 공간 key의 지금 카메라를 이전 화면 목록에 남긴다 */
+  private rememberCamera(s: DocState, key: string): void {
+    const prev = s.cameras.get(key);
+    if (!prev) return;
+    const list = s.prevCameras.get(key) ?? [];
+    list.push({ ...prev });
+    if (list.length > 30) list.shift();
+    s.prevCameras.set(key, list);
+  }
+
+  /**
+   * MSPACE(잠기지 않은 뷰포트): 뷰포트의 뷰를 바꾼다(도움말 ZOOM — 줌은 현재 뷰포트의 뷰를 바꾼다).
+   * remember면 바꾸기 전 뷰를 그 뷰포트의 이전 뷰로 남긴다(ZOOM 이전)
+   */
+  private setViewportView(vp: ViewportEntity, paper: Camera, v: VpView, remember: boolean): void {
+    const s = this.state;
+    if (!s || !validView(v)) return;
+    // 화면 배율(종이 배율 × 뷰포트 축척)이 카메라 한도 밖이면 한도로
+    const scale = (paper.scale * vp.height) / v.viewHeight;
+    const clamped = clampScale(scale);
+    const view = clamped === scale ? v : { ...v, viewHeight: (paper.scale * vp.height) / clamped };
+    if (remember) {
+      const list = s.vpPrevViews.get(vp.handle) ?? [];
+      rememberView(list, vp);
+      s.vpPrevViews.set(vp.handle, list);
+    }
+    this.events?.viewportView?.(vp, patchOf(vp, view));
+    this.requestRender();
+    this.events?.viewChanged();
+  }
+
   private setCamera(c: Camera, remember = true): void {
     const s = this.state;
     if (!s) return;
-    if (s.msVp && !this.paperCam) {
-      const m = this.msInfo(s);
-      if (m) {
-        const { vp, vx, paper } = m;
-        if (vp.flags & 0x4000) {
-          // 잠긴 뷰포트: 뷰는 그대로 두고 종이 공간을 확대·이동한다
-          s.cameras.set(s.msVp.layout, { cx: vp.center.x + (c.cx - vx.refX) * vx.k, cy: vp.center.y + (c.cy - vx.refY) * vx.k, scale: clampScale(c.scale / vx.k) });
-        } else {
-          const k = c.scale / paper.scale;
-          const refX = c.cx - (paper.cx - vp.center.x) / k;
-          const refY = c.cy - (paper.cy - vp.center.y) / k;
-          this.events?.viewportView?.(vp, { viewHeight: vp.height / k, viewCenter: { x: refX - vp.viewTarget.x, y: refY - vp.viewTarget.y } });
-        }
+    const m = this.msZoom();
+    if (s.msVp && m) {
+      if (m.locked) {
+        // 잠긴 뷰포트: 뷰는 그대로 두고 배치(종이 공간) 전체를 확대·이동한다(도움말 "To Lock the Scale of a Layout Viewport")
+        if (remember) this.rememberCamera(s, s.msVp.layout);
+        const p = lockedPaperCamera(m.vp, c);
+        s.cameras.set(s.msVp.layout, { ...p, scale: clampScale(p.scale) });
         this.requestRender();
         this.events?.viewChanged();
-        return;
-      }
+      } else this.setViewportView(m.vp, m.paper, viewOfCamera(m.vp, c, m.paper), remember);
+      return;
     }
-    if (remember) {
-      const prev = s.cameras.get(s.space);
-      if (prev) {
-        const list = s.prevCameras.get(s.space) ?? [];
-        list.push({ ...prev });
-        if (list.length > 30) list.shift();
-        s.prevCameras.set(s.space, list);
-      }
-    }
+    if (remember) this.rememberCamera(s, s.space);
     s.cameras.set(s.space, c);
     this.requestRender();
     this.events?.viewChanged();
@@ -431,37 +459,93 @@ export class CadView {
   zoomExtents(remember = true): void {
     const b = this.spaceBounds();
     if (!b) {
-      this.setCamera({ cx: 0, cy: 0, scale: 1 }, remember);
+      // 뷰포트 안 모형이 비었으면 뷰포트의 뷰를 그대로 둔다
+      if (!this.msZoom()) this.setCamera({ cx: 0, cy: 0, scale: 1 }, remember);
       return;
     }
     this.zoomRect(b.minX, b.minY, b.maxX, b.maxY, remember, 0.04);
   }
 
   zoomRect(x0: number, y0: number, x1: number, y1: number, remember = true, margin = 0.02): void {
-    const w = Math.max(Math.abs(x1 - x0), 1e-9);
-    const h = Math.max(Math.abs(y1 - y0), 1e-9);
-    // MSPACE: 뷰포트 크기에 맞춘다
-    const m = this.state?.msVp && !this.paperCam ? this.msInfo(this.state) : null;
+    const m = this.msZoom();
+    if (m && !m.locked) {
+      // MSPACE: 창 가운데가 뷰포트 가운데로, 창이 뷰포트를 채운다(이전에는 화면 가운데에 놓여 뷰포트 밖으로 밀렸다)
+      this.setViewportView(m.vp, m.paper, windowView(m.vp, x0, y0, x1, y1, margin), remember);
+      return;
+    }
+    // 모형·배치(타일이면 활성 타일). 잠긴 뷰포트의 MSPACE면 배치 전체를 화면에 맞춘다(setCamera가 종이 카메라로 옮긴다)
     const ar = this.area();
-    const W = m ? m.vp.width * m.paper.scale : ar.w;
-    const H = m ? m.vp.height * m.paper.scale : ar.h;
-    const sx = (W * (1 - margin * 2)) / w;
-    const sy = (H * (1 - margin * 2)) / h;
-    let scale = Math.min(sx, sy);
-    if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+    const scale = fitScale(x1 - x0, y1 - y0, ar.w, ar.h, margin) ?? 1;
     this.setCamera({ cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, scale: clampScale(scale) }, remember);
   }
 
+  /** ZOOM 이전: MSPACE면 그 뷰포트의 이전 뷰(잠긴 뷰포트면 배치 화면의 이전), 아니면 이 공간의 이전 화면 */
   zoomPrevious(): boolean {
     const s = this.state;
-    if (!s || s.msVp) return false;
-    const list = s.prevCameras.get(s.space);
+    if (!s) return false;
+    const m = this.msZoom();
+    if (s.msVp && m && !m.locked) {
+      const v = s.vpPrevViews.get(m.vp.handle)?.pop();
+      if (!v) return false;
+      this.events?.viewportView?.(m.vp, v);
+      this.requestRender();
+      this.events?.viewChanged();
+      return true;
+    }
+    if (s.msVp && !m) return false;
+    const key = s.msVp ? s.msVp.layout : s.space;
+    const list = s.prevCameras.get(key);
     const c = list?.pop();
     if (!c) return false;
-    s.cameras.set(s.space, c);
+    s.cameras.set(key, c);
     this.requestRender();
     this.events?.viewChanged();
     return true;
+  }
+
+  /** ZOOM nXP: MSPACE면 뷰포트 가운데를 그대로 두고 도면 공간 단위에 대한 축척을 n으로. 잠긴 뷰포트는 바꾸지 않는다 */
+  zoomPaperScale(n: number): 'done' | 'locked' | 'none' {
+    const m = this.msZoom();
+    if (!this.state?.msVp || !m) return 'none';
+    if (m.locked) return 'locked';
+    this.setViewportView(m.vp, m.paper, paperScaledView(m.vp, n), true);
+    return 'done';
+  }
+
+  /** ZOOM 중심: 모형 점 (x, y)를 뷰 가운데(MSPACE면 뷰포트 가운데)에, 뷰 높이 height(없으면 지금 높이) */
+  zoomCenterAt(x: number, y: number, height?: number): void {
+    const m = this.msZoom();
+    if (m && !m.locked) {
+      this.setViewportView(m.vp, m.paper, { refX: x, refY: y, viewHeight: height && height > 0 ? height : m.vp.viewHeight }, true);
+      return;
+    }
+    const c = this.camera();
+    this.setCamera({ cx: x, cy: y, scale: height && height > 0 ? clampScale(this.area().h / height) : c.scale }, true);
+  }
+
+  /** MSPACE의 활성 뷰포트(종이 높이·화면표시 잠금). 뷰포트 안이 아니면 null */
+  msViewport(): { height: number; locked: boolean } | null {
+    const m = this.msZoom();
+    return m ? { height: m.vp.height, locked: m.locked } : null;
+  }
+
+  /** 지금 뷰 높이(도면 단위 — MSPACE면 그 뷰포트의 뷰 높이) */
+  viewHeight(): number {
+    const m = this.msZoom();
+    if (m && !m.locked) return m.vp.viewHeight;
+    return this.area().h / this.camera().scale;
+  }
+
+  /** 도면(MSPACE면 모형) 거리 (dx, dy)만큼 뷰를 옮긴다(PAN 두 점) — 배율 그대로 */
+  panWorld(dx: number, dy: number): void {
+    const m = this.msZoom();
+    if (m && !m.locked) {
+      const v = viewOf(m.vp);
+      this.setViewportView(m.vp, m.paper, { ...v, refX: v.refX - dx, refY: v.refY - dy }, true);
+      return;
+    }
+    const c = this.camera();
+    this.setCamera({ cx: c.cx - dx, cy: c.cy - dy, scale: c.scale }, true);
   }
 
   /** 화면 점(sx, sy)을 고정하고 배율을 f배 */
@@ -475,7 +559,13 @@ export class CadView {
     this.setCamera({ cx, cy, scale }, remember);
   }
 
+  /** 뷰 가운데를 그대로 두고 f배(ZOOM nX). MSPACE면 뷰포트 가운데(잠긴 뷰포트면 화면 가운데에서 배치 전체) */
   zoomCenter(f: number): void {
+    const m = this.msZoom();
+    if (m && !m.locked) {
+      this.setViewportView(m.vp, m.paper, scaledView(m.vp, f), true);
+      return;
+    }
     const a = this.area();
     this.zoomAt(a.x + a.w / 2, a.y + a.h / 2, f, true);
   }
