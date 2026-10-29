@@ -114,6 +114,19 @@ export function limitsScale(lim: LimitsRect, W: number, H: number, n: number): n
   return s ? s * n : null;
 }
 
+/**
+ * ZOOM 전체(24차 — 도움말 ZOOM 전체: 보이는 모든 객체와 격자 한계(LIMITS) 같은 시각 보조를 보이게, 보이는 객체의 범위와 격자 한계
+ * 가운데 큰 쪽에 맞춘다): 범위와 한계를 함께 담는 사각형(한쪽이 다른 쪽을 담으면 큰 쪽 그대로).
+ * 한계가 없거나 넓이가 0·이상한 값이면 범위 그대로, 범위가 없으면(빈 도면) 한계, 둘 다 없으면 null
+ */
+export function allRect(ext: { minX: number; minY: number; maxX: number; maxY: number } | null, lim: LimitsRect | null): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  const ok = !!lim && [lim.x0, lim.y0, lim.x1, lim.y1].every(Number.isFinite) && Math.abs(lim.x1 - lim.x0) > 0 && Math.abs(lim.y1 - lim.y0) > 0;
+  if (!ok) return ext;
+  const l = { minX: Math.min(lim.x0, lim.x1), minY: Math.min(lim.y0, lim.y1), maxX: Math.max(lim.x0, lim.x1), maxY: Math.max(lim.y0, lim.y1) };
+  if (!ext) return l;
+  return { minX: Math.min(ext.minX, l.minX), minY: Math.min(ext.minY, l.minY), maxX: Math.max(ext.maxX, l.maxX), maxY: Math.max(ext.maxY, l.maxY) };
+}
+
 /** MSPACE의 ZOOM n: 뷰포트 가운데를 그대로 두고 모형 한계가 뷰포트를 꼭 채우는 뷰의 n배(뷰 높이 = 뷰포트 높이 ÷ (한계 배율 × n)) */
 export function limitsView(vp: VpFrame, lim: LimitsRect, n: number): VpView | null {
   const k = limitsScale(lim, vp.width, vp.height, n);

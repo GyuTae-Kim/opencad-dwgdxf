@@ -17,7 +17,7 @@ import { AIM_HOLD_MS, aimPoint } from './aim';
 import { type Box, placeLabel, placeTip } from './overlay-place';
 import { RightDragGesture } from './rightdrag';
 import { DEFAULT_SETTINGS, RightClickTimer, type Settings, crosshairArm, gripHalf, showSnapMarker, snapMarkerRadius, timedRightClick, wheelZoom } from './settings';
-import { type LimitsRect, type VpView, fitScale, limitsScale, limitsView, lockedPaperCamera, paperScaledView, patchOf, rememberView, scaledView, validView, viewOf, viewOfCamera, windowView } from './vpzoom';
+import { type LimitsRect, type VpView, allRect, fitScale, limitsScale, limitsView, lockedPaperCamera, paperScaledView, patchOf, rememberView, scaledView, validView, viewOf, viewOfCamera, windowView } from './vpzoom';
 
 /** 뷰포트 화면표시 잠금 플래그 */
 const VP_LOCKED = 0x4000;
@@ -475,6 +475,19 @@ export class CadView {
       return;
     }
     this.zoomRect(b.minX, b.minY, b.maxX, b.maxY, remember, 0.04);
+  }
+
+  /**
+   * ZOOM 전체: 공간 범위와 도면 한계(lim)를 함께 담게(vpzoom.allRect — 범위 줌과 같은 여백). 한계가 없거나 쓸 수 없으면 범위 줌과 같고,
+   * 화면표시가 잠긴 뷰포트의 MSPACE도 범위 줌과 같다(이전과 같다)
+   */
+  zoomAll(lim: LimitsRect | null): void {
+    const r = this.msZoom()?.locked ? null : allRect(this.spaceBounds(), lim);
+    if (!r) {
+      this.zoomExtents();
+      return;
+    }
+    this.zoomRect(r.minX, r.minY, r.maxX, r.maxY, true, 0.04);
   }
 
   zoomRect(x0: number, y0: number, x1: number, y1: number, remember = true, margin = 0.02): void {

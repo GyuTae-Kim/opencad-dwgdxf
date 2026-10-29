@@ -97,7 +97,7 @@ function zoomByFactor(app: App, ctx: CommandContext, f: { n: number; unit: '' | 
 }
 
 /**
- * ZOOM n의 기준 한계(도움말 ZOOM 축척 n — 도면 한계, LIMITS가 정한 격자 한계): 모형 공간과 뷰포트 안 모형 공간(MSPACE)은 모형 한계
+ * ZOOM n과 전체(A — 24차)의 기준 한계(도움말 ZOOM 축척 n — 도면 한계, LIMITS가 정한 격자 한계): 모형 공간과 뷰포트 안 모형 공간(MSPACE)은 모형 한계
  * ($LIMMIN·$LIMMAX), 배치의 도면 공간은 그 배치의 한계(없으면 $PLIMMIN·$PLIMMAX — LIMITS·STATUS와 같다). 값이 없으면 null
  */
 function zoomLimitsOf(app: App): LimitsRect | null {
@@ -171,7 +171,9 @@ export function registerCommands(app: App): void {
         return;
       }
       const k = (r as { keyword: string }).keyword;
-      if (k === 'A' || k === 'E') app.view.zoomExtents();
+      // 전체(A): 보이는 객체의 범위와 도면 한계(LIMITS) 가운데 큰 쪽(도움말 ZOOM 전체 — 둘을 함께 담는다), 범위(E): 객체 범위만
+      if (k === 'A') app.view.zoomAll(zoomLimitsOf(app));
+      else if (k === 'E') app.view.zoomExtents();
       else if (k === 'P') {
         if (!app.view.zoomPrevious()) ctx.print('이전 화면이 없습니다.');
       } else if (k === 'W') {

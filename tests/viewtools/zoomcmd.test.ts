@@ -46,6 +46,7 @@ function setup(msvp: { locked: boolean } | null = null, limitsOk = true) {
     zoomCenterAt: rec('zoomCenterAt'),
     zoomPrevious: rec('zoomPrevious', false),
     zoomExtents: rec('zoomExtents'),
+    zoomAll: rec('zoomAll'),
     zoomRect: rec('zoomRect'),
     panWorld: rec('panWorld'),
     viewHeight: () => 600,
@@ -162,6 +163,23 @@ describe('ZOOM·PAN 명령(진짜 App)', () => {
     void h.app.run('PAN');
     await settle();
     await h.type('0,0', '100,50');
-    expect(h.calls).toEqual([['zoomRect', -100, -300, 1100, 800], ['zoomExtents'], ['zoomExtents'], ['zoomPrevious'], ['panWorld', 100, 50]]);
+    // 전체(A — 24차): 범위 줌이 아니라 도면 한계와 함께(도움말 ZOOM 전체 — 범위와 격자 한계 가운데 큰 쪽)
+    expect(h.calls).toEqual([['zoomRect', -100, -300, 1100, 800], ['zoomExtents'], ['zoomAll', { x0: 0, y0: 0, x1: 420, y1: 297 }], ['zoomPrevious'], ['panWorld', 100, 50]]);
+  });
+
+  it('전체(A): 배치의 도면 공간은 그 배치의 한계, 한계가 없으면 null(화면이 범위 줌으로)', async () => {
+    const p = setup(null);
+    const lay = p.doc.layouts.find((l) => l.blockName.toUpperCase() === PAPER_SPACE)!;
+    lay.limitsMin = { x: -5, y: 0 };
+    lay.limitsMax = { x: 297, y: 210 };
+    p.st.space = PAPER_SPACE;
+    await p.zoom('A');
+    const none = setup(null);
+    none.doc.header.delete('$LIMMAX');
+    await none.zoom('A');
+    expect([...p.calls, ...none.calls]).toEqual([
+      ['zoomAll', { x0: -5, y0: 0, x1: 297, y1: 210 }],
+      ['zoomAll', null],
+    ]);
   });
 });
