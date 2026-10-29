@@ -12,8 +12,8 @@ import { type LayerPatch, patchLayers } from './layers';
 import { entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName } from './inquiry';
 import type { Pt } from './view';
 import { h } from './ui/dom';
-import { type MeasureFormat, angleResult, areaResult, distanceResult, pointResult, radiusResult } from './measure-result';
-import { currentUcs, dirToUcs } from './ucs';
+import { type MeasureFormat, angleResult, areaResult, distance3d, distanceResult, pointResult, radiusResult } from './measure-result';
+import { currentUcs, dirToUcs, toUcs } from './ucs';
 import { displayDirection } from './polar';
 
 function pointOf(r: PointResult): Pt | null {
@@ -26,6 +26,30 @@ async function needPoint(ctx: CommandContext, prompt: string, base?: Pt | null):
     if ('enter' in r) throw new CancelError();
     const p = pointOf(r);
     if (p) return p;
+  }
+}
+
+/** 조회 명령(DIST·MEASUREGEOM 거리·ID)의 점: 평면 좌표와 그 Z */
+type Pt3 = Pt & { z: number };
+
+/**
+ * 점 결과의 Z: 좌표에 준 Z(x,y,z·@ 상대 좌표·점 필터), 객체에 잡힌 스냅 점의 Z(snapZ — OSNAPZ 0, 1이면 고도), 아니면 지금 고도
+ * (도움말 DIST: Z를 생략한 점은 지금 고도. ID: 3D 객체에 스냅하면 Z는 그 객체의 고른 지점의 Z)
+ */
+function point3(app: App, r: Extract<PointResult, { point: Pt }>): Pt3 {
+  return { x: r.point.x, y: r.point.y, z: r.z !== undefined && Number.isFinite(r.z) ? r.z : app.elevation() };
+}
+
+/** 다음 점 요청의 기준점: 고도가 아닌 Z면 함께(@ 상대 좌표·동적 입력·직접 거리가 그 Z를 잇는다 — LINE과 같다) */
+function base3(app: App, p: Pt3): Pt & { z?: number } {
+  return p.z !== app.elevation() ? p : { x: p.x, y: p.y };
+}
+
+async function needPoint3(app: App, ctx: CommandContext, prompt: string, base?: Pt3): Promise<Pt3> {
+  for (;;) {
+    const r = await ctx.getPoint(prompt, { base: base ? base3(app, base) : null, snapZ: true });
+    if ('enter' in r) throw new CancelError();
+    if ('point' in r) return point3(app, r);
   }
 }
 
@@ -138,8 +162,8 @@ export function registerCommands(app: App): void {
     aliases: ['DI'],
     title: '거리',
     async run(ctx) {
-      const a = await needPoint(ctx, '첫 번째 점 지정:');
-      const b = await needPoint(ctx, '두 번째 점 지정:', a);
+      const a = await needPoint3(app, ctx, '첫 번째 점 지정:');
+      const b = await needPoint3(app, ctx, '두 번째 점 지정:', a);
       reportDistance(app, ctx, a, b);
     },
   });
@@ -159,14 +183,15 @@ export function registerCommands(app: App): void {
       for (;;) {
         if (mode === 'X') return;
         if (mode === 'D') {
-          const r = await ctx.getPoint('첫 번째 점 지정 또는 [거리(D)/반지름(R)/각도(A)/면적(AR)/종료(X)] <거리>:', { keywords: kws });
+          const r = await ctx.getPoint('첫 번째 점 지정 또는 [거리(D)/반지름(R)/각도(A)/면적(AR)/종료(X)] <거리>:', { keywords: kws, snapZ: true });
           if ('keyword' in r) {
             mode = r.keyword;
             continue;
           }
           if ('enter' in r) return;
-          const a = pointOf(r)!;
-          const b = await needPoint(ctx, '두 번째 점 지정:', a);
+          if (!('point' in r)) continue;
+          const a = point3(app, r);
+          const b = await needPoint3(app, ctx, '두 번째 점 지정:', a);
           reportDistance(app, ctx, a, b);
           continue;
         }
@@ -247,9 +272,12 @@ export function registerCommands(app: App): void {
     name: 'ID',
     title: '점 좌표',
     async run(ctx) {
-      const p = await needPoint(ctx, '점 지정:');
-      ctx.print(`X = ${L(app, p.x)}     Y = ${L(app, p.y)}     Z = ${L(app, 0)}`, 'res', pointResult(measureFormat(app), p.x, p.y));
-      app.view.overlay.marks = [{ p, text: `${L(app, p.x)}, ${L(app, p.y)}` }];
+      // AutoCAD 도움말 ID: 지정한 자리의 UCS 좌표 X·Y·Z를 보이고 그 점을 마지막 점으로 둔다. 3D 객체에 스냅하면 Z는 그 객체의 고른 지점의 Z.
+      // 스냅이 없고 Z를 주지 않은 점은 지금 고도(ELEV). 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로
+      const p = await needPoint3(app, ctx, '점 지정:');
+      const pu = toUcs(currentUcs(app.active), p);
+      ctx.print(`X = ${L(app, pu.x)}     Y = ${L(app, pu.y)}     Z = ${L(app, p.z)}`, 'res', pointResult(measureFormat(app), pu.x, pu.y, p.z));
+      app.view.overlay.marks = [{ p: { x: p.x, y: p.y }, text: `${L(app, pu.x)}, ${L(app, pu.y)}` }];
       app.view.requestOverlay();
       // 명령이 끝나도 표시를 잠시 남긴다(DIST처럼 — 휴대폰 보기 모드에서 어디를 쟀는지 보이게)
       persistMarks(app);
@@ -460,20 +488,29 @@ export function zoomToHandles(app: App, hs: string[]): void {
   app.view.zoomRect(minX - pad, minY - pad, maxX + pad, maxY + pad);
 }
 
-function reportDistance(app: App, ctx: CommandContext, a: Pt, b: Pt): void {
+/**
+ * DIST·MEASUREGEOM 거리의 결과 두 줄. AutoCAD 도움말 DIST: 모형 공간에서는 3D 거리이고 X·Y·Z 증분과 각도를 현재 UCS 기준으로 잰다.
+ * Z를 생략한 점은 지금 고도(point3). 배치의 도면 공간에서는 2D 거리(도면 공간 단위)라 Z를 보지 않는다
+ */
+function reportDistance(app: App, ctx: CommandContext, a: Pt3, b: Pt3): void {
   const st = app.active!;
-  // 증분과 각도는 지금 UCS에서 잰다(AutoCAD 도움말 DIST: 모형 공간에서 X·Y·Z 증분과 각도는 현재 UCS 기준).
-  // XY 평면에서의 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로(측량 단위는 방위 — polar.ts displayDirection)
+  // XY 평면에서의 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로(측량 단위는 방위 — polar.ts displayDirection).
+  // 이 앱의 UCS는 평면 안의 원점·회전뿐이라 UCS의 Z 증분은 WCS Z 증분과 같다
   const du = dirToUcs(currentUcs(st), { x: b.x - a.x, y: b.y - a.y });
   const dx = du.x;
   const dy = du.y;
-  const d = Math.hypot(dx, dy);
+  let dz = st.isModel ? b.z - a.z : 0;
+  // 같은 높이로 보이는 두 점(스냅 Z의 계산 끝자리)은 0
+  if (Math.abs(dz) <= 1e-12 * Math.max(1, Math.abs(a.z), Math.abs(b.z))) dz = 0;
+  const { d, rise } = distance3d(dx, dy, dz);
   const u = st.units;
   const ang = displayDirection(Math.atan2(dy, dx), u);
+  // XY 평면으로부터의 각도: 기운 각도라 측량 단위(방위)가 아니라 도/분/초로
+  const riseText = formatAngle(rise, u.aunits === 4 ? { aunits: 1, auprec: u.auprec } : u);
   // 두 줄이 같은 값을 단다(결과 카드는 한 덩어리로 묶는다)
-  const m = distanceResult(measureFormat(app), dx, dy, 0, ang);
-  ctx.print(`거리 = ${L(app, d)}${unitSuffix(app)},  XY 평면에서의 각도 = ${formatAngle(ang, u)},  XY 평면으로부터의 각도 = 0`, 'res', m);
-  ctx.print(`X 증분 = ${L(app, dx)},  Y 증분 = ${L(app, dy)},  Z 증분 = ${L(app, 0)}`, 'res', m);
+  const m = distanceResult(measureFormat(app), dx, dy, dz, ang);
+  ctx.print(`거리 = ${L(app, d)}${unitSuffix(app)},  XY 평면에서의 각도 = ${formatAngle(ang, u)},  XY 평면으로부터의 각도 = ${riseText}`, 'res', m);
+  ctx.print(`X 증분 = ${L(app, dx)},  Y 증분 = ${L(app, dy)},  Z 증분 = ${L(app, dz)}`, 'res', m);
   app.view.overlay.marks = [
     { p: a },
     { p: b, text: `${L(app, d)}${unitSuffix(app)}` },

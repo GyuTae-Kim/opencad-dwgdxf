@@ -152,7 +152,8 @@
 - [x] ROTATE의 회전 각도 숫자는 ANGDIR 쪽으로(도움말 "About Rotating Objects"), 참조의 참조 각도·새 각도 숫자는 절대 각도(UCS X축 + ANGBASE에서 ANGDIR 쪽),
   DIST·MEASUREGEOM 거리의 X·Y 증분과 XY 평면 각도를 현재 UCS에서 재고 각도를 0 방향·방향으로(도움말 DIST, "Direction Control", "Advanced Setup")(2026-10-29)
 - [ ] 그 밖의 각도 입력과 표시에 ANGBASE·ANGDIR — 명령별 도움말에 각도 기준이 없어 그대로 둔 것: 그립 회전·MOCORO 회전 각도, TEXT·MTEXT 회전 각도,
-  INSERT·블록 회전 각도, LIST·특성 팔레트의 선 각도·호 시작/끝 각도, 그 밖의 getangle 밖 각도 프롬프트. ROTATE에서 점으로 준 회전 각도가 ANGBASE에서 재는지도 도움말에 없다.
+  INSERT·블록 회전 각도, LIST·특성 팔레트의 선 각도·호 시작/끝 각도, 그 밖의 getangle 밖 각도 프롬프트. ROTATE에서 점으로 준 회전 각도가 ANGBASE에서 재는지도 도움말에 없다
+  (18차에 TEXT·LIST 도움말을 다시 찾아보았으나 각도 기준을 적은 곳이 없었다. LIST 도움말은 위치를 현재 UCS 기준 X·Y·Z로 보인다고 적는다 — 지금 LIST·특성은 WCS 좌표).
   각도 숫자 입력이 AUNITS(그라드·라디안·방위)를 따르는지(지금 ROTATE는 도). SETVAR·명령행에서 방위(N 80d E)로 준 POLARADDANG은 아직 동쪽 0·반시계 기준으로 읽는다(제도 설정은 도면 기준)
 - [x] 타원·타원호·스플라인의 접점 스냅(기준점에서 그은 접점, LINE·XLINE·PLINE·CIRCLE 3P·Ttr·TTT의 지연된 접점), 가상 교차점을 객체의 정확한 형상으로(호 → 원, 타원호 → 타원, 블록 안 객체)
 - [x] CIRCLE Ttr·TTT·3P에서 원이 곡선에 한 점으로만 닿는 경계(이중근), 점에서 스플라인에 그은 접선의 표본 한 칸 안 두 접점
@@ -167,8 +168,11 @@
   OSNAPZ 세션 변수(1이면 LINE·CIRCLE·3DPOLY·3DFACE의 스냅 점이 고도)와 OPTIONS 제도 탭의 "Z 값을 현재 고도로 대체"(도움말 OSNAPZ, "About Using Object Snaps in 3D")(2026-10-29)
 - [ ] 다른 2D 명령(PLINE·ARC·ELLIPSE·RECTANG 등)에 준 Z와 스냅 점의 Z: PLINE·ARC 도움말과 ELEV 도움말에 2D 객체의 고도를 어느 점의 Z로 정하는지 없다.
   CIRCLE 3P·2P·Ttr·TTT의 Z. 평면도에서만 겹친 교차점(도움말은 3D에서 만나지 않는 두 객체의 보이는 교차점을 가상 교차점이라 한다 — 교차점 스냅이 그런 점에 잡히는지는 없어 그대로),
-  가상 교차점·연장선·평행 스냅의 Z, 블록 참조 안 객체 위 근처점·교차점의 Z. DIST의 3D 거리(도움말: 모형 공간은 3D 거리, Z를 생략한 점은 고도 — 지금은 평면 거리),
-  상태 막대 좌표의 Z(스냅 점의 Z를 보이지 않는다), UCS 원점의 Z, UCS를 WCS로 바꿀 때 고도를 0으로(도움말 ELEV)
+  가상 교차점·연장선·평행 스냅의 Z, 블록 참조 안 객체 위 근처점·교차점의 Z. UCS 원점의 Z, UCS를 WCS로 바꿀 때 고도를 0으로(도움말 ELEV)
+- [x] DIST·MEASUREGEOM 거리의 3D(좌표의 Z·스냅 점의 Z·Z를 생략하면 고도, 3D 거리·Z 증분·XY 평면으로부터의 각도, 도면 공간은 2D — 도움말 DIST),
+  ID의 UCS 좌표와 Z(도움말 ID), 상태 막대 좌표의 Z(스냅 점의 Z, 없으면 고도 — 도움말 상태 막대·COORDS)(2026-10-29)
+- [ ] DIST의 여러 점(M — 누적 거리, 호·길이 옵션)과 투명 명령('DIST), COORDS 0·2·3(지정할 때만·상대 극좌표·지리 좌표), 도면 공간에서 단일 뷰포트의 모형 객체를
+  스냅했을 때 화면과 나란한 평면에 투영한 모형 공간 거리(도움말 DIST). XY 평면으로부터의 각도가 아래로 기울 때 음수 대신 270~360으로 보이는지는 도움말에 없다
 - [ ] 표 셀 제자리 편집, 자동 쌓기·철자 검사·배경 마스크, QDIM·DIMJOGGED 머리말 재지정
 - [ ] VIEW에 UCS 저장, 사용자 특성 10개 넘게, 배치 플롯 범위·윈도우, 브라우저마다 다른 contenteditable·시간에 민감한 오른쪽 클릭 실기기 확인
 
