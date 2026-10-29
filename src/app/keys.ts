@@ -1,11 +1,11 @@
 /**
  * Ctrl(맥은 ⌘) 단축키 가운데 AutoCAD 2026의 제도 보조·입력 키(Shift·Alt 없이):
  *   Ctrl+G 격자, Ctrl+B 스냅, Ctrl+L 직교, Ctrl+F 객체 스냅, Ctrl+U 극좌표, Ctrl+H PICKSTYLE(그룹 선택),
- *   Ctrl+K 하이퍼링크, Ctrl+0 화면 정리, Ctrl+8 빠른 계산기, Ctrl+J·Ctrl+M Enter, Ctrl+\ 취소.
+ *   Ctrl+I 상태 막대 좌표 표시 돌리기(COORDS), Ctrl+K 하이퍼링크, Ctrl+0 화면 정리, Ctrl+8 빠른 계산기, Ctrl+J·Ctrl+M Enter, Ctrl+\ 취소.
  * 브라우저가 페이지에 넘기지 않는 조합(Ctrl+N·W·T·Tab, 맥의 ⌘H·⌘M·⌘Q)은 여기서 다룰 수 없다.
  * 열기·저장·명령 취소 같은 그 밖의 Ctrl 키는 app.ts onKey가 직접 다룬다.
  */
-export type Toggle = 'grid' | 'snap' | 'ortho' | 'osnap' | 'polar' | 'pickstyle';
+export type Toggle = 'grid' | 'snap' | 'ortho' | 'osnap' | 'polar' | 'pickstyle' | 'coords';
 
 export type KeyAction = { toggle: Toggle } | { run: string } | { enter: true } | { cancel: true };
 
@@ -16,6 +16,7 @@ const MAP: Record<string, KeyAction> = {
   f: { toggle: 'osnap' },
   u: { toggle: 'polar' },
   h: { toggle: 'pickstyle' },
+  i: { toggle: 'coords' },
   k: { run: 'HYPERLINK' },
   '0': { run: 'CLEANSCREENON' },
   '8': { run: 'QUICKCALC' },

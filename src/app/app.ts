@@ -68,6 +68,7 @@ import {
   withTracking,
 } from './settings';
 import { browserSysvar, browserSysvarText, onSysvarChange, setBrowserSysvar } from './sysvars';
+import { COORDS_NOTE, coordsMode, coordsText, nextCoordsMode } from './coords';
 import { optionValue } from './options';
 
 export class CancelError extends Error {
@@ -1093,7 +1094,22 @@ export class App {
       this.tempTrack = null;
       this.refreshAcquired();
     }
+    // COORDS 0: 상태 막대 좌표는 점을 지정할 때만(그 점의 절대 좌표 — Z는 준 Z, 커서로 찍은 점이면 그 자리의 Z, 아니면 고도)
+    if ('point' in res && this.active && coordsMode() === 0) {
+      const p = res.point;
+      const at = this.lastResolved && Math.abs(this.lastResolved.x - p.x) < 1e-9 && Math.abs(this.lastResolved.y - p.y) < 1e-9;
+      this.ui.setCoords(coordsText(this.active, p, res.z ?? (at ? this.coordsZ : this.elevation()), null));
+    }
     r.resolve(res);
+  }
+
+  /** 상태 막대 좌표 표시 방식을 돌린다(도움말: 점을 물을 때 좌표 표시를 누르거나 Ctrl+I — COORDS 0 → 1 → 2 → 0) */
+  cycleCoords(): void {
+    const v = nextCoordsMode(coordsMode());
+    setBrowserSysvar('COORDS', v);
+    this.cmd.print(COORDS_NOTE[v]);
+    const m = this.lastMove;
+    if (m && v !== 0) this.onMove(m.w, m.s, m.ev, true);
   }
 
   /**
@@ -2001,6 +2017,8 @@ export class App {
 
   /** 마지막으로 해석한 커서 점(동적 입력 칸) */
   private lastResolved: Pt | null = null;
+  /** 커서 자리의 Z(상태 막대 좌표 — COORDS 0이 찍은 점에 쓴다) */
+  private coordsZ = 0;
 
   private onMove(w: Pt, s: Pt, ev: PointerEvent, fromKey = false): void {
     const o = this.view.overlay;
@@ -2044,9 +2062,11 @@ export class App {
       o.windowRect = { a: this.windowStart.screen, b: s };
       this.updateSelectPreview();
     }
-    // 상태 막대 좌표(도움말 COORDS: 절대 좌표 X, Y, Z — Z도 절대 값). 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로
-    const pu = toUcs(currentUcs(st), p);
-    this.ui.setCoords(`${formatLength(pu.x, st.units)}, ${formatLength(pu.y, st.units)}, ${formatLength(this.cursorZ(snap), st.units)}`);
+    // 상태 막대 좌표(도움말 COORDS — coords.ts): 1은 절대 좌표 X, Y, Z(Z도 절대 값), 2는 점을 물을 때 기준점에서 상대 극좌표,
+    // 0은 점을 지정할 때만(finishPoint). 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로
+    this.coordsZ = this.cursorZ(snap);
+    const cm = coordsMode();
+    if (cm !== 0) this.ui.setCoords(coordsText(st, p, this.coordsZ, cm === 2 && r?.kind === 'point' ? r.base : null));
     // 다기능 그립: 선택한 객체의 그립 위(명령 없음)
     if (!r && !this.running && !this.press) this.updateGripHover(w, ev);
     // 선택 미리보기(가만히 있을 때)
@@ -2866,6 +2886,8 @@ export class App {
         return this.toggleOsnap();
       case 'polar':
         return this.togglePolar();
+      case 'coords':
+        return this.cycleCoords();
       case 'pickstyle':
         void import('./util2-select').then((m) => {
           const v = m.pickstyle() ^ 1;

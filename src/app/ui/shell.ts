@@ -944,7 +944,11 @@ export class Shell implements UiHooks {
     this.drawingHost.append(this.start, this.busy);
     this.workspace.append(this.drawingHost);
     this.layoutTabs = h('div', { class: 'layouttabs' });
-    this.coords = h('span', { class: 'coords' });
+    // 도움말 "상태 막대의 좌표 표시 바꾸기": 점을 물을 때 좌표 표시를 누르면(또는 Ctrl+I) 표시 방식(COORDS)을 돌린다
+    this.coords = h('span', { class: 'coords', title: '좌표 (Ctrl+I) · 점을 지정할 때 누르면 표시 방식(COORDS)을 바꿉니다' });
+    this.coords.addEventListener('click', () => {
+      if (this.app?.pendingInput?.kind === 'point') this.app.cycleCoords();
+    });
     this.status = h('div', { class: 'statusbar' });
     root.replaceChildren(this.title, this.ribbonTabs, this.ribbon, this.fileTabs, this.workspace, this.layoutTabs, this.status, this.fileInput);
     this.fileInput.addEventListener('change', () => {

@@ -26,8 +26,8 @@ export interface RealApp {
 
 export function makeApp(setup?: (doc: CadDocument) => void): RealApp {
   // F10·F11(극좌표·객체 스냅 추적)은 이 브라우저에 저장되는 AUTOSNAP 8·16이다. 앞 시험이 바꾼 값이 남지 않게 기본값(63, 둘 다 켜짐)에서 시작한다.
-  // 극좌표 추적 방식(POLARMODE)·증분 각도(POLARANG)·추가 각도(POLARADDANG)도 이 브라우저 값이라 초기값(0, 90도, 없음)으로
-  for (const n of ['AUTOSNAP', 'POLARMODE', 'POLARANG', 'POLARADDANG']) prefSet(`opencad.sysvar.${n}`, null);
+  // 극좌표 추적 방식(POLARMODE)·증분 각도(POLARANG)·추가 각도(POLARADDANG)·상태 막대 좌표(COORDS)도 이 브라우저 값이라 초기값(0, 90도, 없음, 1)으로
+  for (const n of ['AUTOSNAP', 'POLARMODE', 'POLARANG', 'POLARADDANG', 'COORDS']) prefSet(`opencad.sysvar.${n}`, null);
   const app = new App({} as HTMLElement);
   const ui: Record<string, number> = {};
   const count = (k: string) => () => {
