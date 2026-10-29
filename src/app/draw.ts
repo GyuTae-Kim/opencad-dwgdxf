@@ -11,6 +11,7 @@ import { registerUndoCommand } from './undocmd';
 import { registerDraw3dCommands } from './draw3d';
 import type { App, CommandContext, PointResult, PointSnap } from './app';
 import { type TanCurve, commonTangentOf, tangentFromCurve, tanPieceAt } from './snap';
+import { entityZAt } from './snapz';
 import { CancelError } from './app';
 import type { Pt } from './view';
 import { registerTextCommands } from './textedit/commands';
@@ -91,10 +92,11 @@ function deferredPiece(app: App, snap: PointSnap | null | undefined, at: Pt): Pi
   return e ? tanPieceAt(e, at, true) : null;
 }
 
-/** 지연된 접점 하나 풀기용: 점 요청 결과에서 찍은 자리와 곡선 */
+/** 지연된 접점 하나 풀기용: 점 요청 결과에서 찍은 자리와 곡선(h: 그 객체 — 접점의 Z) */
 interface Deferred {
   c: TanCurve;
   pick: Pt;
+  h?: string;
 }
 
 /** 지연된 접점과 다음 점(또는 다음 지연된 접점)으로 접선의 두 끝. 접선이 없으면 null */
@@ -264,7 +266,8 @@ export function registerDrawCommands(app: App): void {
     async run(ctx) {
       const st = app.active!;
       // 점의 Z: 좌표 입력이 Z를 정했으면(x,y,z·@ 상대 좌표가 앞 점의 Z를 잇는 것·원통·구 좌표·점 필터) 그 Z, 아니면 지금 고도.
-      // AutoCAD 도움말 ELEV: 3D 점에 X·Y만 주면 지금 고도가 새 객체의 Z다 — Z를 준 점은 그 Z로 3D 선이 된다. 객체 스냅의 Z(OSNAPZ)는 아직 쓰지 않는다
+      // AutoCAD 도움말 ELEV: 3D 점에 X·Y만 주면 지금 고도가 새 객체의 Z다 — Z를 준 점은 그 Z로 3D 선이 된다.
+      // 객체에 잡힌 스냅 점(끝점·중간점·중심·교차점·근처점·접점 등)은 그 객체 위의 Z(도움말 OSNAPZ 0 — snapZ), OSNAPZ 1이면 지금 고도
       const elev = currentElevation(app);
       const zOf = (r: PointResult) => ('point' in r && r.z !== undefined && Number.isFinite(r.z) ? r.z : elev);
       /** 다음 점 요청의 기준점: 고도가 아닌 Z면 함께(@ 상대 좌표·동적 입력·직접 거리가 그 Z를 잇는다) */
@@ -272,12 +275,18 @@ export function registerDrawCommands(app: App): void {
       const keepLast = (p: Pt, z: number) => {
         app.lastPoint = z !== elev ? { x: p.x, y: p.y, z } : p;
       };
+      /** 지연된 접점이 풀린 점(곡선 위)의 Z: 그 곡선 위의 Z, OSNAPZ 1이거나 모르면 지금 고도 */
+      const tanZ = (h: string | undefined, q: Pt): number => {
+        const e = h && !app.osnapZ ? st.doc.entityIndex.get(h) : undefined;
+        const z = e ? entityZAt(e, q) : undefined;
+        return z !== undefined && Number.isFinite(z) ? z : elev;
+      };
       let first: Pt | null = null;
       let firstZ = elev;
       // 지연된 접점(첫 점을 접점 스냅으로 원·호·타원·스플라인 위에 찍음): 둘째 점을 받은 뒤 접점을 구한다(AutoCAD와 같다)
       let deferred: Deferred | null = null;
       for (;;) {
-        const r = await ctx.getPoint('첫 번째 점 지정:', { deferTan: true });
+        const r = await ctx.getPoint('첫 번째 점 지정:', { deferTan: true, snapZ: true });
         if ('enter' in r) {
           // Enter = 직전 선의 끝점에서 이어 그리기
           if (app.lastPoint) {
@@ -289,12 +298,12 @@ export function registerDrawCommands(app: App): void {
           firstZ = zOf(r);
         }
         const c = 'point' in r ? deferredCircle(app, r.snap, r.point) : null;
-        if (c && first) deferred = { c, pick: first };
+        if (c && first) deferred = { c, pick: first, h: 'point' in r ? r.snap?.handle : undefined };
         if (first) break;
       }
       const solve = (d: Deferred, p: Pt, snap: PointSnap | null | undefined) => solveDeferred(app, d, p, snap);
       let start = first;
-      const startZ = firstZ;
+      let startZ = firstZ;
       let prev = first;
       let prevZ = firstZ;
       let count = 0;
@@ -306,6 +315,7 @@ export function registerDrawCommands(app: App): void {
         const r = await ctx.getPoint(count >= 2 ? '다음 점 지정 또는 [닫기(C)/명령 취소(U)]:' : '다음 점 지정 또는 [명령 취소(U)]:', {
           base: based(prev, prevZ),
           keywords: kws,
+          snapZ: true,
           ...(d
             ? {
                 deferTan: true,
@@ -344,15 +354,19 @@ export function registerDrawCommands(app: App): void {
           continue;
         }
         let p = pt(r)!;
-        const pz = zOf(r);
+        let pz = zOf(r);
         if (d) {
-          const seg = solve(d, p, 'point' in r ? r.snap : null);
+          const snap = 'point' in r ? r.snap : null;
+          const seg = solve(d, p, snap);
           if (!seg) {
             ctx.print('그 점에서는 접선을 그을 수 없습니다. 다시 지정하십시오.', 'err');
             continue;
           }
           [start, p] = seg;
           prev = start;
+          // 접점은 곡선 위의 점: 그 곡선의 Z(둘째 점도 지연된 접점이면 그 곡선의 Z)
+          startZ = prevZ = tanZ(d.h, start);
+          if (snap?.deferred) pz = tanZ(snap.handle, p);
           deferred = null;
         }
         // 같은 3D 점은 건너뛴다(평면에서 같은 자리라도 Z가 다르면 Z축 방향의 선)
@@ -691,6 +705,8 @@ export function registerDrawCommands(app: App): void {
       const r0: PointResult = preset
         ? { keyword: preset }
         : await ctx.getPoint('원에 대한 중심점 지정 또는 [3점(3P)/2점(2P)/Ttr - 접선 접선 반지름(T)]:', {
+            // 중심에 잡힌 객체 스냅 점의 Z가 원의 고도(OSNAPZ 0)
+            snapZ: true,
             keywords: [
               { key: '3P', label: '3점' },
               { key: '2P', label: '2점' },
@@ -699,8 +715,8 @@ export function registerDrawCommands(app: App): void {
           });
       let c: Pt;
       let rad: number;
-      // 원의 고도: 중심점을 Z와 함께 주면(x,y,z·@ 상대 좌표 등) 그 Z, 아니면 지금 고도(AutoCAD 도움말 ELEV — X·Y만 준 점의 Z가 고도).
-      // 3P·2P·Ttr·TTT는 지금 고도
+      // 원의 고도: 중심점을 Z와 함께 주면(x,y,z·@ 상대 좌표 등) 그 Z, 객체 스냅으로 잡은 중심점은 그 점의 Z(OSNAPZ 0 — 1이면 고도),
+      // 아니면 지금 고도(AutoCAD 도움말 ELEV — X·Y만 준 점의 Z가 고도). 3P·2P·Ttr·TTT는 지금 고도
       let cz = currentElevation(app);
       // 접선 객체: 선·호·원(폴리선의 직선·호 구간 포함)·타원·타원호를 연장해서 보고, 스플라인은 그 범위 안에서 접한다.
       // AutoCAD처럼 접점 스냅(지연된 접점)만 켠 점 요청으로

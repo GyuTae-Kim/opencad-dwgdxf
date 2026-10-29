@@ -19,11 +19,16 @@ import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, pieceNea
 import { commonTangentCurves, tangentNearPick, tangentsFromPoint } from '../edit/geom/tangent';
 import { apparentSnaps } from './snap-app';
 import { leaderVertices } from '../core/flat3';
+import { entityZAt, intersectionZ } from './snapz';
 
 export interface SnapPoint {
   x: number;
   y: number;
-  /** 객체 정의점(끝점·중간점·중심·사분점·노드·삽입점)의 WCS Z. 교차점·접점·근처점 등 평면도에서 구한 점은 없음 */
+  /**
+   * 스냅 점의 WCS Z(객체의 3D 위치 — AutoCAD OSNAPZ 0). 정의점(끝점·중간점·중심·기하학적 중심·사분점·노드·삽입점)은 그 Z,
+   * 교차점·근처점·수직·접점은 그 점이 놓인 객체 위의 Z(snapz.ts — 교차점은 두 객체가 3D에서도 만날 때만).
+   * 연장선·평행·가상 교차점·지연된 접점과 Z를 모르는 객체(블록 참조 안 등)는 없음
+   */
   z?: number;
   kind: SnapKind;
   /** 스냅 점을 준 객체(교차점·근처점처럼 선분에서 구한 것은 없음) */
@@ -448,19 +453,19 @@ export function polygonCentroid(vs: readonly { x: number; y: number; bulge: numb
   return { x: cx / (3 * A), y: cy / (3 * A) };
 }
 
-/** 닫힌 폴리선의 기하학적 중심(도면 좌표). 닫히지 않았으면 null */
-export function geometricCenter(e: Entity): Pt | null {
+/** 닫힌 폴리선의 기하학적 중심(도면 좌표, z는 폴리선 평면 위 — 객체 스냅의 Z). 닫히지 않았으면 null */
+export function geometricCenter(e: Entity): (Pt & { z: number }) | null {
   if (e.type === 'LWPOLYLINE') {
     if (!e.closed) return null;
     const c = polygonCentroid(lwVertices(e));
-    return c ? applyXY(withOcs(identity(), e.extrusion), c.x, c.y, e.elevation) : null;
+    return c ? apply(withOcs(identity(), e.extrusion), c.x, c.y, e.elevation) : null;
   }
   if (e.type === 'POLYLINE' && e.kind === '2d' && e.flags & 1) {
     const vs = polyVertices(e)
       .filter((v) => !(v.flags & 16))
       .map((v) => ({ x: v.location.x, y: v.location.y, bulge: e.flags & 2 ? 0 : v.bulge }));
     const c = polygonCentroid(vs);
-    return c ? applyXY(withOcs(identity(), e.extrusion), c.x, c.y, e.elevation) : null;
+    return c ? apply(withOcs(identity(), e.extrusion), c.x, c.y, e.elevation) : null;
   }
   return null;
 }
@@ -660,6 +665,12 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
     found.push({ s, score: d / aperture + (PRIORITY[s.kind] ?? 1) * 0.15 });
   };
   const consider = (s: SnapPoint) => considerAt(s, Math.hypot(s.x - p.x, s.y - p.y));
+  // 평면도에서 구한 점(교차점·근처점·수직·접점)이 놓인 객체: 후보를 고른 뒤 그 객체 위의 Z를 단다(snapz.ts)
+  const objs = new Map<SnapPoint, (string | undefined)[]>();
+  const onObj = (s: SnapPoint, ...hs: (string | undefined)[]): SnapPoint => {
+    objs.set(s, hs);
+    return s;
+  };
   const m = identity();
   for (const c of cands.slice(0, 200)) {
     const e = picker.entity(c.handle);
@@ -675,7 +686,7 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
         const g = geometricCenter(e);
         if (g) considerAt({ ...g, kind: 'gcen', handle: c.handle }, aperture * 0.5);
       } else if (round) {
-        const cp = applyXY(withOcs(m, e.extrusion), e.center.x, e.center.y, e.center.z);
+        const cp = apply(withOcs(m, e.extrusion), e.center.x, e.center.y, e.center.z);
         considerAt({ ...cp, kind: 'cen', handle: c.handle }, aperture * 0.5);
       }
     }
@@ -690,10 +701,10 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
           if (pc.k === 'arc') {
             const circ = arcPieceCircle(pc);
             for (const q of tangentPoints(base, { x: circ.cx, y: circ.cy }, circ.r))
-              if (onArc(Math.atan2(q.y - circ.cy, q.x - circ.cx), circ.a0, circ.sweep)) consider({ ...q, kind: 'tan', handle: c.handle });
+              if (onArc(Math.atan2(q.y - circ.cy, q.x - circ.cx), circ.a0, circ.sweep)) consider(onObj({ ...q, kind: 'tan', handle: c.handle }, c.handle));
           } else if (pc.k !== 'line') {
             // 타원·타원호(해석적)·스플라인(근 찾기): 기준점에서 그은 접선의 접점
-            for (const s of tangentsFromPoint(pc, base)) consider({ ...s.p, kind: 'tan', handle: c.handle });
+            for (const s of tangentsFromPoint(pc, base)) consider(onObj({ ...s.p, kind: 'tan', handle: c.handle }, c.handle));
           }
         }
     }
@@ -702,8 +713,11 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
   if (modes.has('par') && base && ctx?.par?.length) for (const s of parSnaps(base, ctx.par, p, aperture)) consider(s);
   const needSegs = modes.has('int') || modes.has('nea') || (modes.has('per') && base);
   if (needSegs) {
-    const segs = picker.segmentsNear(p.x, p.y, aperture, 800);
+    // 선분마다 그 객체(교차점·근처점·수직의 Z를 구한다 — 후보가 정해진 뒤 앞의 것만)
+    const owners: string[] = [];
+    const segs = picker.segmentsNear(p.x, p.y, aperture, 800, owners);
     const n = segs.length / 4;
+    const own = (i: number) => (owners.length === n ? owners[i] : undefined);
     if (modes.has('int') && n > 1) {
       for (let i = 0; i < n; i++)
         for (let j = i + 1; j < n; j++) {
@@ -717,7 +731,7 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
             (Math.abs(q.x - segs[j * 4]!) < 1e-12 && Math.abs(q.y - segs[j * 4 + 1]!) < 1e-12) ||
             (Math.abs(q.x - segs[j * 4 + 2]!) < 1e-12 && Math.abs(q.y - segs[j * 4 + 3]!) < 1e-12);
           if (shared && shared2) continue;
-          consider({ ...q, kind: 'int' });
+          consider(onObj({ ...q, kind: 'int' }, own(i), own(j)));
         }
     }
     if (modes.has('per') && base) {
@@ -732,7 +746,7 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
         if (l2 < 1e-24) continue;
         const t = ((base.x - x0) * dx + (base.y - y0) * dy) / l2;
         if (t < 0 || t > 1) continue;
-        consider({ x: x0 + dx * t, y: y0 + dy * t, kind: 'per' });
+        consider(onObj({ x: x0 + dx * t, y: y0 + dy * t, kind: 'per' }, own(i)));
       }
     }
     if (modes.has('nea') && !found.length) {
@@ -745,7 +759,7 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
         const dy = y1 - y0;
         const l2 = dx * dx + dy * dy;
         const t = l2 > 0 ? Math.max(0, Math.min(1, ((p.x - x0) * dx + (p.y - y0) * dy) / l2)) : 0;
-        consider({ x: x0 + dx * t, y: y0 + dy * t, kind: 'nea' });
+        consider(onObj({ x: x0 + dx * t, y: y0 + dy * t, kind: 'nea' }, own(i)));
       }
     }
   }
@@ -760,6 +774,17 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
   for (const { s } of found) {
     if (out.length >= MAX_CYCLE) break;
     if (!out.some((o) => Math.abs(o.x - s.x) <= eps && Math.abs(o.y - s.y) <= eps)) out.push(s);
+  }
+  for (const s of out) {
+    const hs = objs.get(s);
+    if (!hs) continue;
+    const zs = hs.map((h) => {
+      const e = h ? picker.entity(h) : undefined;
+      return e ? entityZAt(e, s) : undefined;
+    });
+    // 교차점은 두 객체가 그 자리에서 같은 Z를 지날 때만(3D에서도 만날 때). 평면도에서만 겹치면 Z 없이(지금 고도 — 전과 같다)
+    const z = zs.length >= 2 ? intersectionZ(zs[0], zs[1]) : zs[0];
+    if (z !== undefined) s.z = z;
   }
   return out;
 }

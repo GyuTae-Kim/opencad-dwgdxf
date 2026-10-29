@@ -2,7 +2,8 @@
  * OPTIONS(옵션 대화상자): 열기 및 저장·화면표시·선택·제도·사용자 기본 설정 탭. AutoCAD 2026의 같은 칸만 둔다.
  * 값은 시스템 변수(sysvars.ts의 이 브라우저 변수 — PICKBOX·GRIPSIZE·CURSORSIZE·APERTURE·AUTOSNAP·POLARMODE(8)·PICKFIRST·PICKADD·
  * SELECTIONPREVIEW·SHORTCUTMENU·SHORTCUTMENUDURATION)와 이 브라우저 보관 값(SAVETIME·COLORTHEME·기본 저장 형식·도면 영역 배경색·
- * AutoSnap 표식기 크기)으로 저장한다. 화면·입력은 App.settings(settings.ts)가 optionValue로 읽고, 값이 바뀌면
+ * AutoSnap 표식기 크기)으로 저장한다. 제도 탭의 "Z 값을 현재 고도로 대체"는 세션 변수 OSNAPZ(App.osnapZ — 저장하지 않는다).
+ * 화면·입력은 App.settings(settings.ts)가 optionValue로 읽고, 값이 바뀌면
  * onSysvarChange로 바로 다시 읽는다(표식기 크기는 저장 뒤 이어지는 변수 저장의 알림 때 함께 읽힌다).
  */
 import type { App, CommandContext } from './app';
@@ -162,6 +163,8 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
     shiftAcquire(browserSysvar('POLARMODE')) ? 'shift' : 'auto',
     '정렬점 획득',
   );
+  // 객체 스냅 옵션: Z 값을 현재 고도로 대체(OSNAPZ — 저장하지 않는 세션 변수라 이 브라우저에 두지 않는다)
+  const osnapZ = checkIn(app.osnapZ, 'Z 값을 현재 고도로 대체');
   const drafting = h(
     'div',
     { class: 'mgr-dlg' },
@@ -173,6 +176,7 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
     ),
     h('div', { class: 'mgr-cols' }, group('정렬점 획득', row('객체 스냅 추적점', acquire))),
     h('div', { class: 'mgr-cols' }, group('AutoSnap 표식기 크기(S)', row('1~20', markerSize)), group('조준창 크기(Z)', row('픽셀(1~50)', aperture))),
+    group('객체 스냅 옵션', row('Z 값을 현재 고도로 대체(R)', osnapZ), h('div', { class: 'mgr-note' }, 'OSNAPZ — 이 세션에만 씁니다(저장하지 않음).')),
   );
   // 사용자 기본 설정
   const sm = shortcutMenuFields(browserSysvar('SHORTCUTMENU'));
@@ -275,6 +279,7 @@ async function optionsDialog(app: App, ctx: CommandContext, startTab: number): P
   // POLARMODE는 8만 바꾼다(1·2·4는 제도 설정에서 — 대화상자를 연 동안 바꾼 것을 되돌리지 않게 지금 값에 담는다)
   set('POLARMODE', polarModeBits(browserSysvar('POLARMODE'), { shiftAcquire: acquire.value === 'shift' }));
   set('APERTURE', r.aperture);
+  app.osnapZ = osnapZ.checked;
   set('SHORTCUTMENU', shortcutMenuBits({ menus: menus.checked, def: defMode.value as 'repeat', edit: editMode.value as 'repeat', cmd: cmdMode.value as 'enter', timed: timed.checked }));
   set('SHORTCUTMENUDURATION', r.duration);
   app.view?.requestOverlay?.();

@@ -30,7 +30,7 @@ export interface PendingInput {
 /** 스냅·추적·직교를 적용한 점 */
 export interface ResolvedPoint {
   p: Pt;
-  /** z: 객체 정의점에 잡힌 스냅의 WCS Z(3D 명령이 snapZ로 받는다) */
+  /** z: 객체에 잡힌 스냅 점의 WCS Z(snapz.ts — 스냅의 Z를 받는 요청이 snapZ로 받는다) */
   snap: { p: Pt; kind: SnapKind; handle?: string; handle2?: string; deferred?: boolean; z?: number } | null;
   track?: TrackResult;
 }

@@ -306,6 +306,29 @@ describe('극좌표 추적 설정 연기 시험(POLARMODE·POLARANG·POLARADDANG
     await again;
     expect(browserSysvar('POLARMODE')).toBe(5);
   });
+
+  it('OPTIONS 제도 탭의 Z 값을 현재 고도로 대체: 세션 변수 OSNAPZ(이 브라우저에 저장하지 않는다)', async () => {
+    const h = makeHarness();
+    registerOptions(h.app);
+    const app = h.app as unknown as { osnapZ?: boolean };
+    app.osnapZ = false;
+    const run = h.run('OPTIONS', []);
+    await tick();
+    const z = input('Z 값을 현재 고도로 대체');
+    expect(z.checked).toBe(false);
+    z.checked = true;
+    ok();
+    await run;
+    expect(app.osnapZ).toBe(true);
+    expect(Object.keys(localStorage).some((k) => k.toUpperCase().includes('OSNAPZ'))).toBe(false);
+    const again = h.run('OPTIONS', []);
+    await tick();
+    expect(input('Z 값을 현재 고도로 대체').checked).toBe(true);
+    input('Z 값을 현재 고도로 대체').checked = false;
+    ok();
+    await again;
+    expect(app.osnapZ).toBe(false);
+  });
 });
 
 describe('페이지 설정 관리자 연기 시험', () => {

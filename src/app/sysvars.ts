@@ -3,7 +3,7 @@
  * SYSVDLG(시스템 변수 목록·검색·편집 대화상자).
  *
  * 변수는 세 곳에 있다.
- *  - 세션 변수: 앱 상태(OSMODE·ORTHOMODE·SNAPMODE·GRIDMODE·DYNMODE, FILEDIA·CMDDIA·CMDECHO)와 읽기 전용 값(DWGNAME·CDATE …).
+ *  - 세션 변수: 앱 상태(OSMODE·OSNAPZ·ORTHOMODE·SNAPMODE·GRIDMODE·DYNMODE, FILEDIA·CMDDIA·CMDECHO)와 읽기 전용 값(DWGNAME·CDATE …).
  *    AutoLISP getvar·setvar와 같은 구현(lisp-host.ts)을 쓴다.
  *  - 이 브라우저 변수(AutoCAD의 레지스트리 자리): PICKBOX·GRIPSIZE·GRIPMULTIFUNCTIONAL·CURSORSIZE·APERTURE·AUTOSNAP·POLARMODE·POLARANG·
  *    PICKFIRST·SELECTIONPREVIEW·SHORTCUTMENU·ATTDIA·ATTREQ …(수)와 POLARADDANG(글). localStorage에 두고, 바뀌면 onSysvarChange 구독자에게
@@ -284,6 +284,7 @@ const DESC: Record<string, string> = {
   MIRRTEXT: '대칭할 때 문자도 뒤집기',
   ORTHOMODE: '직교 모드',
   OSMODE: '실행 중인 객체 스냅(비트)',
+  OSNAPZ: '객체 스냅 점의 Z를 현재 고도로 대체(1)',
   PDMODE: '점 표시 유형',
   PDSIZE: '점 표시 크기',
   PLINEWID: '폴리선 기본 폭',
@@ -338,7 +339,7 @@ function headerKind(name: string, v: HeaderValue | undefined): SysvarKind {
 // ---------------------------------------------------------------------------
 
 // POLARMODE는 13차까지 여기서 극좌표 추적 켜기·끄기였다. 14차부터 AutoCAD처럼 이 브라우저 변수(비트)이고 켜기·끄기는 AUTOSNAP 8
-const SESSION_RW = ['OSMODE', 'ORTHOMODE', 'SNAPMODE', 'GRIDMODE', 'DYNMODE', 'FILEDIA', 'CMDDIA', 'CMDECHO'];
+const SESSION_RW = ['OSMODE', 'OSNAPZ', 'ORTHOMODE', 'SNAPMODE', 'GRIDMODE', 'DYNMODE', 'FILEDIA', 'CMDDIA', 'CMDECHO'];
 const SESSION_RO = ['DWGNAME', 'DWGPREFIX', 'DWGTITLED', 'CDATE', 'DATE', 'MILLISECS', 'ACADVER', 'PRODUCT', 'PLATFORM', 'LOCALE', 'CTAB', 'LASTPOINT', 'SDI', 'LISPINIT', 'UNDOCTL', 'ERRNO'];
 
 function lispToHeader(v: Value | undefined): HeaderValue | undefined {
