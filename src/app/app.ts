@@ -1052,8 +1052,8 @@ export class App {
     return pu.z === undefined ? w : { ...w, z: pu.z };
   }
 
-  /** 새 객체의 고도(ELEVATION, 배치에서는 PELEVATION — draw.ts currentElevation과 같다) */
-  private elevation(): number {
+  /** 새 객체의 고도(ELEVATION, 배치에서는 PELEVATION — draw.ts currentElevation과 같다). Z를 주지 않은 점의 Z(조회 명령도) */
+  elevation(): number {
     const st = this.active;
     const v = st?.doc.header.get(st.isModel === false ? '$PELEVATION' : '$ELEVATION');
     return typeof v === 'number' && Number.isFinite(v) ? v : 0;

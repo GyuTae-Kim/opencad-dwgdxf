@@ -22,6 +22,19 @@ export interface MeasureFormat {
   unit: string;
 }
 
+/**
+ * DIST의 두 점 사이(지금 UCS의 증분 dx·dy·dz — 도움말 DIST: 모형 공간은 3D 거리, X·Y·Z 증분과 각도는 현재 UCS 기준).
+ * d: 3D 거리. rise: XY 평면으로부터의 각도 — 두 점을 잇는 선이 XY 평면에서 기운 각도를 XY 평면 각도와 같은 0 ≤ θ < 2π 꼴로
+ * (위로 기울면 0~90°, 아래로 기울면 270~360°, Z축과 나란하면 90°·270°, 같은 높이면 0)
+ */
+export function distance3d(dx: number, dy: number, dz: number): { d: number; rise: number } {
+  const flat = Math.hypot(dx, dy);
+  let rise = dz === 0 ? 0 : Math.atan2(dz, flat);
+  if (Math.abs(rise) < 1e-15) rise = 0;
+  else if (rise < 0) rise += Math.PI * 2;
+  return { d: Math.hypot(flat, dz), rise };
+}
+
 /** 두 점 사이: 큰 값은 거리, 보조 줄은 XY 평면 각도·ΔX·ΔY(ΔZ는 0이 아닐 때만). angle을 주면 그 각도(도면 단위의 0 방향·방향으로 잰 값) */
 export function distanceResult(f: MeasureFormat, dx: number, dy: number, dz = 0, angle?: number): MeasureResult {
   let ang = angle ?? Math.atan2(dy, dx);
