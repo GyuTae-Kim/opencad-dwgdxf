@@ -149,8 +149,11 @@
 - [ ] 상대 극좌표일 때 동적 입력 각도 칸(지금은 절대 극좌표와 같은 도면 단위의 0 방향 기준). 제도 설정 동적 입력 탭·치수 입력 설정 도움말에는 그리는 중의 각도 기준이 없다
 - [x] 극좌표 추적의 0 방향·방향을 ANGBASE·ANGDIR로(증분 각도의 배수·추가 각도·POLARMODE 2의 객체 스냅 추적), 추적 툴팁 각도를 AUNITS·AUPREC로,
   동적 입력 각도 칸과 명령행 극좌표(d<a·@d<a·원통·구)도 같은 기준(도움말 "About Polar Tracking and PolarSnap", "About Entering 2D Polar Coordinates")(2026-10-29)
-- [ ] 그 밖의 각도 입력(회전·문자·블록 각도, getangle 밖의 각도 프롬프트)과 LIST·DIST의 각도 표시에 ANGBASE·ANGDIR — 명령마다 도움말 근거를 찾아야 한다.
-  SETVAR·명령행에서 방위(N 80d E)로 준 POLARADDANG은 아직 동쪽 0·반시계 기준으로 읽는다(제도 설정은 도면 기준)
+- [x] ROTATE의 회전 각도 숫자는 ANGDIR 쪽으로(도움말 "About Rotating Objects"), 참조의 참조 각도·새 각도 숫자는 절대 각도(UCS X축 + ANGBASE에서 ANGDIR 쪽),
+  DIST·MEASUREGEOM 거리의 X·Y 증분과 XY 평면 각도를 현재 UCS에서 재고 각도를 0 방향·방향으로(도움말 DIST, "Direction Control", "Advanced Setup")(2026-10-29)
+- [ ] 그 밖의 각도 입력과 표시에 ANGBASE·ANGDIR — 명령별 도움말에 각도 기준이 없어 그대로 둔 것: 그립 회전·MOCORO 회전 각도, TEXT·MTEXT 회전 각도,
+  INSERT·블록 회전 각도, LIST·특성 팔레트의 선 각도·호 시작/끝 각도, 그 밖의 getangle 밖 각도 프롬프트. ROTATE에서 점으로 준 회전 각도가 ANGBASE에서 재는지도 도움말에 없다.
+  각도 숫자 입력이 AUNITS(그라드·라디안·방위)를 따르는지(지금 ROTATE는 도). SETVAR·명령행에서 방위(N 80d E)로 준 POLARADDANG은 아직 동쪽 0·반시계 기준으로 읽는다(제도 설정은 도면 기준)
 - [x] 타원·타원호·스플라인의 접점 스냅(기준점에서 그은 접점, LINE·XLINE·PLINE·CIRCLE 3P·Ttr·TTT의 지연된 접점), 가상 교차점을 객체의 정확한 형상으로(호 → 원, 타원호 → 타원, 블록 안 객체)
 - [x] CIRCLE Ttr·TTT·3P에서 원이 곡선에 한 점으로만 닿는 경계(이중근), 점에서 스플라인에 그은 접선의 표본 한 칸 안 두 접점
 - [x] Ctrl 순환 다기능 그립(GRIPMULTIFUNCTIONAL — 초기값 3, 1 Ctrl 순환, 2 커서를 올리면 뜨는 메뉴), 회전·축척 그립의 참조(R)
@@ -160,7 +163,12 @@
 - [x] SPLINE 매듭 방식 보존(맞춤 방식은 DXF 70에 1024 + 매듭 비트, AutoCAD와 같은 보간)
 - [ ] SPLINE 공차 근사, ARRAYPOLAR 회전축
 - [x] LINE에 준 Z로 3D 선(@ 상대 좌표는 앞 점의 Z, Z축 방향 선, 닫기·명령 취소), CIRCLE 중심점에 준 Z로 원의 고도(도움말 ELEV — X·Y만 준 점이 고도)(2026-10-29)
-- [ ] LINE·CIRCLE의 객체 스냅 Z(OSNAPZ 0), 다른 2D 명령(PLINE·ARC·ELLIPSE 등)에 준 Z, OSNAPZ 1·교차점·근처점의 Z, UCS 원점의 Z
+- [x] LINE·CIRCLE 중심의 객체 스냅 Z(OSNAPZ 0 — 정의점·근처점·수직·접점은 객체 위 높이, 교차점은 3D에서도 만날 때만, 지연된 접점은 곡선 위),
+  OSNAPZ 세션 변수(1이면 LINE·CIRCLE·3DPOLY·3DFACE의 스냅 점이 고도)와 OPTIONS 제도 탭의 "Z 값을 현재 고도로 대체"(도움말 OSNAPZ, "About Using Object Snaps in 3D")(2026-10-29)
+- [ ] 다른 2D 명령(PLINE·ARC·ELLIPSE·RECTANG 등)에 준 Z와 스냅 점의 Z: PLINE·ARC 도움말과 ELEV 도움말에 2D 객체의 고도를 어느 점의 Z로 정하는지 없다.
+  CIRCLE 3P·2P·Ttr·TTT의 Z. 평면도에서만 겹친 교차점(도움말은 3D에서 만나지 않는 두 객체의 보이는 교차점을 가상 교차점이라 한다 — 교차점 스냅이 그런 점에 잡히는지는 없어 그대로),
+  가상 교차점·연장선·평행 스냅의 Z, 블록 참조 안 객체 위 근처점·교차점의 Z. DIST의 3D 거리(도움말: 모형 공간은 3D 거리, Z를 생략한 점은 고도 — 지금은 평면 거리),
+  상태 막대 좌표의 Z(스냅 점의 Z를 보이지 않는다), UCS 원점의 Z, UCS를 WCS로 바꿀 때 고도를 0으로(도움말 ELEV)
 - [ ] 표 셀 제자리 편집, 자동 쌓기·철자 검사·배경 마스크, QDIM·DIMJOGGED 머리말 재지정
 - [ ] VIEW에 UCS 저장, 사용자 특성 10개 넘게, 배치 플롯 범위·윈도우, 브라우저마다 다른 contenteditable·시간에 민감한 오른쪽 클릭 실기기 확인
 
