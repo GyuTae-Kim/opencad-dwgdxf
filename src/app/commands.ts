@@ -290,9 +290,9 @@ export function registerCommands(app: App): void {
       for (;;) {
         if (mode === 'X') return;
         if (mode === 'D') {
-          // 도움말 MEASUREGEOM: AREA·DIST·MASSPROP과 같은 계산을 많이 한다 — 거리는 DIST와 같은 규칙(23차): 배치의 도면 공간에서는
-          // 뷰포트에 보이는 모형 객체에도 스냅하고, 두 점이 같은 뷰포트 하나의 모형 스냅이면 투영한 모형 공간 거리(vpsnap.ts)
-          const r = await ctx.getPoint('첫 번째 점 지정 또는 [거리(D)/반지름(R)/각도(A)/면적(AR)/종료(X)] <거리>:', { keywords: kws, snapZ: true, viewportSnaps: true });
+          // 도면 공간에서는 도면 공간 객체에만 스냅하고 도면 공간 거리(21·22차와 같다). 도움말 MEASUREGEOM에는 도면 공간의 투영 이야기가 없고
+          // "AREA·DIST·MASSPROP과 같은 계산을 많이 한다"는 한 문장뿐이라, 23차에 DIST의 투영을 붙였다가 리뷰 뒤 되돌렸다
+          const r = await ctx.getPoint('첫 번째 점 지정 또는 [거리(D)/반지름(R)/각도(A)/면적(AR)/종료(X)] <거리>:', { keywords: kws, snapZ: true });
           if ('keyword' in r) {
             mode = r.keyword;
             continue;
@@ -300,20 +300,12 @@ export function registerCommands(app: App): void {
           if ('enter' in r) return;
           if (!('point' in r)) continue;
           const a = point3(app, r);
-          const va = r.snap?.viewport ?? null;
           // 도움말 MEASUREGEOM 거리: 다중 점은 이어지는 점 사이 거리의 누적 합계
           for (;;) {
-            const r2 = await ctx.getPoint('두 번째 점 지정 또는 [다중 점(M)]:', { base: base3(app, a), snapZ: true, viewportSnaps: true, keywords: [{ key: 'M', label: '다중 점' }] });
+            const r2 = await ctx.getPoint('두 번째 점 지정 또는 [다중 점(M)]:', { base: base3(app, a), snapZ: true, keywords: [{ key: 'M', label: '다중 점' }] });
             if ('enter' in r2) throw new CancelError();
-            if ('point' in r2) {
-              const b = point3(app, r2);
-              const vb = r2.snap?.viewport ?? null;
-              const vx = distProjection(app, [
-                { p: a, viewport: va },
-                { p: b, viewport: vb },
-              ]);
-              reportDistance(app, ctx, a, b, vx && va && vb ? projectedDelta(vx, va.model, vb.model) : undefined);
-            } else if ('keyword' in r2) await multiDistance(app, ctx, a, { vp: va });
+            if ('point' in r2) reportDistance(app, ctx, a, point3(app, r2));
+            else if ('keyword' in r2) await multiDistance(app, ctx, a);
             else continue;
             break;
           }
@@ -655,7 +647,7 @@ function reportDistance(app: App, ctx: CommandContext, a: Pt3, b: Pt3, projected
 
 /**
  * DIST·MEASUREGEOM 거리의 다중 점(distmulti.ts): 끝나면 지나온 경로와 누적 거리를 잠시 남긴다.
- * dist를 주면 도면 공간에서 뷰포트 안 모형 객체 스냅과 투영 거리(vp는 첫 점의 뷰포트 안 모형 스냅 — DIST, 23차부터 MEASUREGEOM 거리도)
+ * dist를 주면 DIST(도면 공간에서 뷰포트 안 모형 객체 스냅과 투영 거리 — vp는 첫 점의 뷰포트 안 모형 스냅)
  */
 async function multiDistance(app: App, ctx: CommandContext, first: Pt3, dist?: { vp: ViewportSnap | null }): Promise<void> {
   const flat = !app.active!.isModel;

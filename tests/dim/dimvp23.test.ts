@@ -1,11 +1,11 @@
 /**
- * 23차: 도면 공간의 다른 치수와 측정에 뷰포트 안 모형 객체.
+ * 23차: 도면 공간의 다른 치수에 뷰포트 안 모형 객체.
  * 도움말 "To Set Dimension Scale for Creating Dimensions in a Layout"(도면 공간에서 모형 공간 점에 객체 스냅으로 잡거나 객체를 바로 골라
- * 모형 공간 값의 치수를 만든다), DIMLFAC(반지름·지름·좌표를 포함한 모든 선형 치수 거리에 곱하고, 각도 치수에는 효과가 없다),
- * MEASUREGEOM(AREA·DIST·MASSPROP과 같은 계산을 많이 한다 — 거리는 DIST의 투영 규칙).
+ * 모형 공간 값의 치수를 만든다), DIMLFAC(반지름·지름·좌표를 포함한 모든 선형 치수 거리에 곱하고, 각도 치수에는 효과가 없다).
+ * MEASUREGEOM 거리는 21·22차 그대로(도움말에 도면 공간의 투영 이야기가 없다 — 23차에 DIST의 투영을 붙였다가 리뷰 뒤 되돌렸다).
  * - 순수 함수: 뷰포트 안 모형 객체 고르기(단일 뷰포트·도면층·겹친 자리), 원·호·형상의 종이 변환(비틀기)
  * - 진짜 App: DIMRADIUS·DIMDIAMETER·DIMARC(부분 포함)·DIMANGULAR(호·두 선·원·정점)·DIMORDINATE·DIMLINEAR <객체 선택>,
- *   배치 객체가 먼저, 겹친 뷰포트, 모형 공간(그대로 연관), 고를 때 강조, MEASUREGEOM 거리(두 점·한 점만·다중 점)
+ *   배치 객체가 먼저, 겹친 뷰포트, 모형 공간(그대로 연관), 고를 때 강조, MEASUREGEOM 거리는 그대로(두 점·다중 점)
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ArcEntity, CircleEntity, DimensionEntity, Entity, LineEntity, Vec3, ViewportEntity } from '../../src/core/model';
@@ -439,10 +439,12 @@ describe('도면 공간 각도·세로좌표·선형 <객체 선택>(진짜 App)
   });
 });
 
-describe('도면 공간 MEASUREGEOM 거리(진짜 App) — DIST와 같은 투영 규칙', () => {
+describe('도면 공간 MEASUREGEOM 거리(진짜 App) — 21·22차 그대로', () => {
+  // 23차에 DIST의 투영을 붙였다가 리뷰 뒤 되돌렸다: 도움말 MEASUREGEOM에는 도면 공간의 투영 이야기가 없고
+  // "AREA·DIST·MASSPROP과 같은 계산을 많이 한다"는 한 문장뿐이라 21차 결정(도면 공간 거리)을 뒤집기에 근거가 약하다
   const result = (h: ReturnType<typeof setup>) => h.out().filter((t) => /^(거리|X 증분) =/.test(t));
 
-  it('두 점이 같은 뷰포트 하나의 모형 끝점 스냅이면 모형 공간 거리', async () => {
+  it('뷰포트 안 모형 끝점 자리를 눌러도 모형 객체에 스냅하지 않고 도면 공간 거리', async () => {
     const h = setup('measure');
     h.viewport(VP, 0.1, C);
     h.add(line3(V(0, 0), V(1000, 0)));
@@ -450,25 +452,13 @@ describe('도면 공간 MEASUREGEOM 거리(진짜 App) — DIST와 같은 투영
     await settle();
     await h.at(P(150.5, 120.2));
     await h.at(P(250.5, 120.2));
-    expect(result(h)).toEqual(['거리 = 1000.0000 mm,  XY 평면에서의 각도 = 0°,  XY 평면으로부터의 각도 = 0°', 'X 증분 = 1000.0000,  Y 증분 = 0.0000,  Z 증분 = 0.0000']);
-    expect(h.cmd.lines.at(-1)!.measure!.value).toBe('1000.0000 mm');
+    expect(result(h)).toEqual(['거리 = 100.0000 mm,  XY 평면에서의 각도 = 0°,  XY 평면으로부터의 각도 = 0°', 'X 증분 = 100.0000,  Y 증분 = 0.0000,  Z 증분 = 0.0000']);
+    expect(h.cmd.lines.at(-1)!.measure!.value).toBe('100.0000 mm');
     await h.type('X');
     expect(h.app.busyCommand).toBeFalsy();
   });
 
-  it('한 점만 모형 스냅이면 도면 공간 거리(DIST와 같다)', async () => {
-    const h = setup('measure');
-    h.viewport(VP, 0.1, C);
-    h.add(line3(V(0, 0), V(1000, 0)));
-    void h.app.run('MEASUREGEOM');
-    await settle();
-    await h.at(P(150.5, 120.2));
-    await h.type('200,120');
-    expect(result(h)[0]).toBe('거리 = 50.0000 mm,  XY 평면에서의 각도 = 0°,  XY 평면으로부터의 각도 = 0°');
-    await h.type('X');
-  });
-
-  it('다중 점(M): 모든 점이 같은 뷰포트의 모형 스냅이면 모형 좌표로 누적', async () => {
+  it('다중 점(M)도 누른 도면 공간 점 그대로 누적', async () => {
     const h = setup('measure');
     h.viewport(VP, 0.1, C);
     h.add(line3(V(0, 0), V(1000, 0)));
@@ -480,7 +470,8 @@ describe('도면 공간 MEASUREGEOM 거리(진짜 App) — DIST와 같은 투영
     await h.at(P(250.4, 119.6));
     await h.at(P(250.3, 170.4));
     await h.type('');
-    expect(h.out().filter((t) => t.startsWith('거리 =')).at(-1)).toBe('거리 = 1500.0000 mm');
+    const paper = Math.hypot(250.4 - 150.5, 119.6 - 120.2) + Math.hypot(250.3 - 250.4, 170.4 - 119.6);
+    expect(h.out().filter((t) => t.startsWith('거리 =')).at(-1)).toBe(`거리 = ${paper.toFixed(4)} mm`);
     await h.type('X');
   });
 });
