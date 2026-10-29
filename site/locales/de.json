@@ -1910,6 +1910,7 @@
   "극좌표 추적(P)": "Polarverfolgung (P)",
   "극좌표(P)": "Polar (P)",
   "극좌표: {0} < {1}°": "Polarkoordinaten: {0} < {1}°",
+  "돌출 방향": "Extrusionsrichtung",
   "상대 극좌표": "Relativ polar",
   "상대 극좌표: {0} < {1}°": "Relativ polar: {0} < {1}°",
   "극좌표 각도 측정": "Polarwinkelmessung",

@@ -9,7 +9,7 @@ import { ccwSweep } from '../geom/curves';
 import type { App, CommandContext, PointResult } from './app';
 import { CancelError } from './app';
 import { type LayerPatch, patchLayers } from './layers';
-import { entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName } from './inquiry';
+import { type ListFrame, entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName } from './inquiry';
 import type { Pt } from './view';
 import { h } from './ui/dom';
 import { type MeasureFormat, angleResult, areaResult, distance3d, distanceResult, pointResult, radiusResult } from './measure-result';
@@ -52,6 +52,9 @@ async function needPoint3(app: App, ctx: CommandContext, prompt: string, base?: 
     if ('point' in r) return point3(app, r);
   }
 }
+
+/** LIST가 일반 특성 가운데 보이는 것(도움말 LIST: BYLAYER가 아닐 때의 색상·선종류·선가중치·투명도, 0이 아닌 두께) */
+const LIST_GENERAL = new Set(['색상', '선종류', '선가중치', '투명도', '두께']);
 
 const L = (app: App, v: number) => formatLength(v, app.active!.units);
 const area = (app: App, v: number) => {
@@ -290,14 +293,19 @@ export function registerCommands(app: App): void {
     async run(ctx) {
       const hs = await app.selectedOrPick(ctx);
       const st = app.active!;
+      // AutoCAD 도움말 LIST: 위치는 현재 UCS 기준 X·Y·Z, 색상·선종류·선가중치·투명도는 BYLAYER가 아닐 때, 두께는 0이 아닐 때,
+      // 돌출 방향은 현재 UCS의 Z축과 다를 때 UCS 좌표로. 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로(ID와 같다)
+      const ucs = currentUcs(st);
+      const frame: ListFrame = { point: (p) => ({ ...toUcs(ucs, p), z: p.z }), dir: (v) => ({ ...dirToUcs(ucs, v), z: v.z }) };
       let total = 0;
       let n = 0;
       for (const hd of hs.slice(0, 200)) {
         const e = app.entity(hd);
         if (!e) continue;
         ctx.print(`${typeName(e)}  도면층: "${e.layer}"  공간: ${st.isModel ? '모형 공간' : '도면 공간'}  핸들 = ${e.handle}`, 'res');
-        for (const g of entityProperties(st.doc, e, st.units).slice(1))
-          for (const row of g.rows) ctx.print(`    ${row.k}: ${row.v}`);
+        const [general, ...groups] = entityProperties(st.doc, e, st.units, frame);
+        for (const row of general!.rows) if (LIST_GENERAL.has(row.k) && !/^bylayer$/i.test(row.v)) ctx.print(`    ${row.k}: ${row.v}`);
+        for (const g of groups) for (const row of g.rows) ctx.print(`    ${row.k}: ${row.v}`);
         const len = entityLength(e);
         if (len !== null) {
           total += len;
