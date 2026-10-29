@@ -3,8 +3,8 @@
  * 놓으면 옮긴다. 놓을 때 Ctrl(⌘)을 누르고 있으면 복사한다. 한 번의 편집(명령 취소 한 단계, 이름 MOVE·COPY — AutoCAD와 같다).
  * 누른 곳 판정(pressKind): 그립 위면 그립(그립 편집은 클릭으로), 선택한 객체 위면 끌어 옮기기, 그 밖은 창·올가미 선택.
  * 오른쪽 버튼으로 끌면 놓은 자리에 바로 가기 메뉴(여기로 이동·여기로 복사·블록으로 붙여넣기·취소)를 띄운다(AutoCAD 도움말
- * "About Copying Objects": "If you drag with the right mouse button instead of the left, a shortcut menu is displayed after you
- * drag the objects"). 끌기 판정은 rightdrag.ts RightDragGesture(화면이 몬다), 메뉴 항목은 dropMenuItems.
+ * "About Copying Objects": 왼쪽 대신 오른쪽 버튼으로 끌면 끈 뒤 바로 가기 메뉴가 뜬다). 끌기 판정은 rightdrag.ts RightDragGesture(화면이 몬다),
+ * 메뉴 항목은 dropMenuItems.
  * 편집 적용은 수정 명령과 같은 commitResults(구속·연관 치수 따라가기 포함)를 쓰되, app.ts와 순환하지 않게 놓을 때 불러온다.
  */
 import { copyEntity, transformEntity } from '../edit/geom';

@@ -10,10 +10,10 @@
  * 극좌표 추적 켜기·끄기는 POLARMODE가 아니라 AUTOSNAP 8(F10)이다(settings.ts polarTrackOn).
  * 제도 설정·상태 막대는 두 각도를 도면의 각도 단위(AUNITS·AUPREC)로 보이고 그 단위로 받는다(AutoCAD 도움말의 POLARADDANG:
  * "The AUNITS system variable sets the format for display of angles"). 저장값은 그대로 도다(formatPolarAngle·parseAngleText).
- * 각도의 0 방향과 양의 방향은 도면 단위(ANGBASE·ANGDIR)를 따른다(AutoCAD 도움말 "About Polar Tracking and PolarSnap":
- * "The orientation of 0 depends on the angle you set in the Drawing Units dialog box", 스냅 방향(시계·반시계)은 도면 단위의 방향).
+ * 각도의 0 방향과 양의 방향은 도면 단위(ANGBASE·ANGDIR)를 따른다(AutoCAD 도움말 "About Polar Tracking and PolarSnap": 0의 방향은
+ * 도면 단위 대화상자에서 정한 각도를, 스냅 방향(시계·반시계)은 도면 단위에서 정한 방향을 따른다).
  * 증분 각도의 배수와 추가 각도는 모두 그 0 방향에서 ANGDIR 쪽으로 잰다(AngleConvention). 추적 툴팁의 각도도 그렇게 재서
- * AUNITS·AUPREC로 보인다(trackAngleText — 도면 단위 대화상자: "Sets the current display format for angles").
+ * AUNITS·AUPREC로 보인다(trackAngleText — 도움말 "Drawing Units Dialog Box": 각도 형식·정밀도는 각도를 보이는 형식·자릿수).
  * 화면·DOM을 가져오지 않는다(시험이 가볍게 쓴다).
  */
 import { formatAngle, parseAngle } from '../core/units';

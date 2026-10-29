@@ -264,8 +264,7 @@ export function registerDrawCommands(app: App): void {
     async run(ctx) {
       const st = app.active!;
       // 점의 Z: 좌표 입력이 Z를 정했으면(x,y,z·@ 상대 좌표가 앞 점의 Z를 잇는 것·원통·구 좌표·점 필터) 그 Z, 아니면 지금 고도.
-      // AutoCAD 도움말 ELEV: "The current elevation is the default Z value for new objects when you specify only X and Y values
-      // for a 3D point" — X·Y만 준 점이 고도이고, Z를 준 점은 3D 선이 된다. 객체 스냅의 Z(OSNAPZ)는 아직 쓰지 않는다
+      // AutoCAD 도움말 ELEV: 3D 점에 X·Y만 주면 지금 고도가 새 객체의 Z다 — Z를 준 점은 그 Z로 3D 선이 된다. 객체 스냅의 Z(OSNAPZ)는 아직 쓰지 않는다
       const elev = currentElevation(app);
       const zOf = (r: PointResult) => ('point' in r && r.z !== undefined && Number.isFinite(r.z) ? r.z : elev);
       /** 다음 점 요청의 기준점: 고도가 아닌 Z면 함께(@ 상대 좌표·동적 입력·직접 거리가 그 Z를 잇는다) */

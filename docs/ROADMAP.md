@@ -136,7 +136,9 @@
 - [x] AUTOSNAP 비트를 AutoCAD 도움말대로(2 AutoSnap 툴팁, 4 마그넷 — 전에는 둘을 바꿔 읽어 AutoCAD 값을 주면 다른 칸이 꺼졌다)
 - [x] AUTOSNAP 마그넷(4 — 잡은 스냅점에 십자선을 붙인다)과 추적 비트(8·16 — F10·F11·상태 막대·DSETTINGS·OPTIONS·AUTOSNAP 값이 한 상태, 이 브라우저에 저장),
   OPTIONS의 AutoTrack 툴팁 표시(32), SETVAR로 머리말에 없는 이 브라우저·세션 변수 바꾸기(2026-10-28)
-- [ ] 오른쪽 버튼 끌어 놓기 메뉴
+- [x] 오른쪽 버튼 끌어 놓기 메뉴(고른 객체를 오른쪽 버튼으로 끌어 놓은 자리에 여기로 이동·여기로 복사·블록으로 붙여넣기·취소 — 도움말 "About Copying Objects",
+  각각 명령 취소 한 단계, Esc, 손가락은 길게 누르기가 정밀 조준이라 없음)(2026-10-29)
+- [ ] 오른쪽 버튼으로 다른 도면·다른 앱으로 끌어 놓기(도움말 "About Copying Objects"는 열린 도면 사이와 다른 앱으로도 끌 수 있다고 적는다 — 이 앱은 한 화면에 도면 하나라 하지 않았다)
 - [x] POLARMODE를 AutoCAD 뜻(1 마지막 선분 기준 각도, 2 객체 스냅 추적에 극좌표 각도, 4 추가 각도, 8 Shift로 획득)으로, 켜기·끄기는 AUTOSNAP 8만,
   POLARANG(증분 각도 — 목록 밖 각도도)·POLARADDANG(추가 각도)을 이 브라우저에 저장하고 제도 설정·OPTIONS·상태 막대에서 고르기, LINE 명령 취소(U) 뒤 시작점(2026-10-28)
 - [ ] 지연된 접점이 첫 점일 때의 극좌표 추적 기준점(도움말에 없어 지금은 찍은 자리)
@@ -144,8 +146,11 @@
   POLARANG·POLARADDANG을 도면의 각도 단위(AUNITS·AUPREC)로 보이고 받기(저장값은 도, 명령행은 도에 단위 표시도)(2026-10-28)
 - [ ] 상대 극좌표(POLARMODE 1)의 "고른 객체": 지금은 LINE·PLINE이 마지막으로 그린 선분만 기준으로 삼는다. 기준점을 기존 선의 끝점에 스냅했을 때 그 선을 기준으로 삼는지는
   공개 도움말(POLARMODE "selected objects", 제도 설정 "last segment drawn", 극좌표 각도 설정 절차 "last object you created")에 자세히 없어 하지 않았다
-- [ ] 상대 극좌표일 때 동적 입력 각도 칸(지금은 UCS 기준 각도). 제도 설정 동적 입력 탭·치수 입력 설정 도움말에는 그리는 중의 각도 기준이 없다
-- [ ] 극좌표 추적 툴팁의 각도를 AUNITS로, 극좌표 0도 방향에 ANGBASE·ANGDIR 반영(도움말 "About Polar Tracking": 0 방향과 방향은 도면 단위 설정을 따른다 — 지금은 UCS X축에서 시계 반대 방향)
+- [ ] 상대 극좌표일 때 동적 입력 각도 칸(지금은 절대 극좌표와 같은 도면 단위의 0 방향 기준). 제도 설정 동적 입력 탭·치수 입력 설정 도움말에는 그리는 중의 각도 기준이 없다
+- [x] 극좌표 추적의 0 방향·방향을 ANGBASE·ANGDIR로(증분 각도의 배수·추가 각도·POLARMODE 2의 객체 스냅 추적), 추적 툴팁 각도를 AUNITS·AUPREC로,
+  동적 입력 각도 칸과 명령행 극좌표(d<a·@d<a·원통·구)도 같은 기준(도움말 "About Polar Tracking and PolarSnap", "About Entering 2D Polar Coordinates")(2026-10-29)
+- [ ] 그 밖의 각도 입력(회전·문자·블록 각도, getangle 밖의 각도 프롬프트)과 LIST·DIST의 각도 표시에 ANGBASE·ANGDIR — 명령마다 도움말 근거를 찾아야 한다.
+  SETVAR·명령행에서 방위(N 80d E)로 준 POLARADDANG은 아직 동쪽 0·반시계 기준으로 읽는다(제도 설정은 도면 기준)
 - [x] 타원·타원호·스플라인의 접점 스냅(기준점에서 그은 접점, LINE·XLINE·PLINE·CIRCLE 3P·Ttr·TTT의 지연된 접점), 가상 교차점을 객체의 정확한 형상으로(호 → 원, 타원호 → 타원, 블록 안 객체)
 - [x] CIRCLE Ttr·TTT·3P에서 원이 곡선에 한 점으로만 닿는 경계(이중근), 점에서 스플라인에 그은 접선의 표본 한 칸 안 두 접점
 - [x] Ctrl 순환 다기능 그립(GRIPMULTIFUNCTIONAL — 초기값 3, 1 Ctrl 순환, 2 커서를 올리면 뜨는 메뉴), 회전·축척 그립의 참조(R)
@@ -154,7 +159,8 @@
 - [x] 3DPOLY·3DFACE의 Z 입력(x,y,z·@ 상대·원통·구 좌표, 동적 입력, 점 필터, 객체 점에 붙인 스냅의 Z — OSNAPZ 0)
 - [x] SPLINE 매듭 방식 보존(맞춤 방식은 DXF 70에 1024 + 매듭 비트, AutoCAD와 같은 보간)
 - [ ] SPLINE 공차 근사, ARRAYPOLAR 회전축
-- [ ] 2D 명령에 준 Z(AutoCAD는 LINE에 준 Z로 3D 선을, CIRCLE 중심의 Z로 고도를 정한다 — 지금은 고도에 평면으로), OSNAPZ 1·교차점·근처점의 Z, UCS 원점의 Z
+- [x] LINE에 준 Z로 3D 선(@ 상대 좌표는 앞 점의 Z, Z축 방향 선, 닫기·명령 취소), CIRCLE 중심점에 준 Z로 원의 고도(도움말 ELEV — X·Y만 준 점이 고도)(2026-10-29)
+- [ ] LINE·CIRCLE의 객체 스냅 Z(OSNAPZ 0), 다른 2D 명령(PLINE·ARC·ELLIPSE 등)에 준 Z, OSNAPZ 1·교차점·근처점의 Z, UCS 원점의 Z
 - [ ] 표 셀 제자리 편집, 자동 쌓기·철자 검사·배경 마스크, QDIM·DIMJOGGED 머리말 재지정
 - [ ] VIEW에 UCS 저장, 사용자 특성 10개 넘게, 배치 플롯 범위·윈도우, 브라우저마다 다른 contenteditable·시간에 민감한 오른쪽 클릭 실기기 확인
 

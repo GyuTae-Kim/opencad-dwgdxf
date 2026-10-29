@@ -1,7 +1,6 @@
 /**
  * 오른쪽 버튼 끌기 판정(화면 좌표 — 픽셀). 화면(view.ts)이 포인터 이벤트로 몰고, 끌어 놓으면 앱이 메뉴를 띄운다(dragmove.ts dropMenuItems).
- * AutoCAD 도움말 "About Copying Objects": "If you drag with the right mouse button instead of the left, a shortcut menu is displayed
- * after you drag the objects." 화면·DOM을 가져오지 않는다(시험이 가볍게 쓴다).
+ * AutoCAD 도움말 "About Copying Objects": 왼쪽 대신 오른쪽 버튼으로 끌면 끈 뒤 바로 가기 메뉴가 뜬다. 화면·DOM을 가져오지 않는다(시험이 가볍게 쓴다).
  */
 
 interface Pt {
