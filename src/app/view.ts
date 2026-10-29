@@ -14,6 +14,7 @@ import type { LoadPreview } from './loadpreview';
 import { type OverlayScene, type PaperInfo, type ViewportXf, layoutViewports, paperInfo, viewportXf } from './scene';
 import type { DisplayList } from '../render/displaylist';
 import { AIM_HOLD_MS, aimPoint } from './aim';
+import { RightDragGesture } from './rightdrag';
 import { DEFAULT_SETTINGS, RightClickTimer, type Settings, crosshairArm, gripHalf, showSnapMarker, snapMarkerRadius, timedRightClick, wheelZoom } from './settings';
 
 export interface Pt {
@@ -85,6 +86,10 @@ export interface ViewEvents {
   drag(a: Pt, b: Pt, done: boolean, ev: PointerEvent): void;
   /** held: 시간에 민감한 오른쪽 클릭(SHORTCUTMENU 16)이 켜져 있을 때 누른 시간(밀리초). 모르면 없다 */
   context(world: Pt, screen: Pt, ev: MouseEvent, held?: number): void;
+  /** 마우스·펜의 오른쪽 버튼을 눌렀다: 여기서 끌 수 있으면(고른 객체 위) true — 그러면 끌기·놓기를 rightDrag로 알린다 */
+  rightDown?(world: Pt, screen: Pt, ev: PointerEvent): boolean;
+  /** 오른쪽 버튼 끌기(화면 좌표 — a 누른 자리, b 지금 자리): move 끄는 중, drop 놓았다, cancel 포인터가 취소됐다 */
+  rightDrag?(a: Pt, b: Pt, phase: 'move' | 'drop' | 'cancel', ev: PointerEvent): void;
   dblclick(world: Pt, screen: Pt, ev: MouseEvent): void;
   leave(): void;
   viewChanged(): void;
@@ -1259,34 +1264,44 @@ export class CadView {
     this.events?.context(pc.world, pc.screen, pc.ev, held);
   }
 
+  /** 오른쪽 버튼 끌어 놓기(고른 객체 위에서 누른 오른쪽 버튼 — dragmove.ts) */
+  private readonly rightDrag = new RightDragGesture();
+
+  /** 오른쪽 클릭(contextmenu)을 앱에 넘긴다: 시간에 민감한 오른쪽 클릭이면 누른 시간과 함께 */
+  private sendContext(ev: MouseEvent): void {
+    const p = this.local(ev);
+    const w = this.screenToWorld(p.x, p.y);
+    const dur = timedRightClick(this.prefs);
+    if (dur === null) {
+      this.events?.context(w, p, ev);
+      return;
+    }
+    const r = this.rightClick.context(performance.now());
+    if (r !== 'wait') {
+      this.events?.context(w, p, ev, r);
+      return;
+    }
+    // 누른 채 왔다(macOS·Linux): 떼면 그 시간으로, 기준 시간이 지나도록 누르고 있으면 메뉴로
+    if (this.rightPending) clearTimeout(this.rightPending.timer);
+    this.rightPending = {
+      world: w,
+      screen: p,
+      ev,
+      timer: window.setTimeout(() => {
+        if (this.rightClick.timeout()) this.flushRight(dur);
+      }, dur),
+    };
+  }
+
   private bindInput(): void {
     const el = this.el;
     el.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
       // 길게 눌러 조준하는 동안(안드로이드는 길게 누르면 메뉴를 보낸다) 메뉴를 띄우지 않는다
       if (this.aim) return;
-      const p = this.local(ev);
-      const w = this.screenToWorld(p.x, p.y);
-      const dur = timedRightClick(this.prefs);
-      if (dur === null) {
-        this.events?.context(w, p, ev);
-        return;
-      }
-      const r = this.rightClick.context(performance.now());
-      if (r !== 'wait') {
-        this.events?.context(w, p, ev, r);
-        return;
-      }
-      // 누른 채 왔다(macOS·Linux): 떼면 그 시간으로, 기준 시간이 지나도록 누르고 있으면 메뉴로
-      if (this.rightPending) clearTimeout(this.rightPending.timer);
-      this.rightPending = {
-        world: w,
-        screen: p,
-        ev,
-        timer: window.setTimeout(() => {
-          if (this.rightClick.timeout()) this.flushRight(dur);
-        }, dur),
-      };
+      // 고른 객체 위에서 누른 오른쪽 버튼: 끌었는지 볼 때까지 미루고, 끌어 놓은 것이면 버린다
+      if (this.rightDrag.context(performance.now(), () => this.sendContext(ev)) !== 'pass') return;
+      this.sendContext(ev);
     });
     window.addEventListener('pointerup', (ev) => {
       if (ev.button !== 2) return;
@@ -1359,6 +1374,14 @@ export class CadView {
         el.setPointerCapture(ev.pointerId);
         this.events?.down(this.screenToWorld(p.x, p.y), p, ev);
       }
+      // 오른쪽 버튼(마우스·펜): 고른 객체 위면 끌어 놓기를 지켜본다(손가락은 길게 누르기가 정밀 조준이라 하지 않는다)
+      if (ev.button === 2) {
+        this.rightDrag.cancel();
+        if (this.events?.rightDown?.(this.screenToWorld(p.x, p.y), p, ev)) {
+          this.rightDrag.down(p);
+          el.setPointerCapture(ev.pointerId);
+        }
+      }
     });
     el.addEventListener('pointermove', (ev) => {
       if (!this.state) return;
@@ -1389,6 +1412,10 @@ export class CadView {
         const c = this.panning.cam;
         this.setCamera({ cx: c.cx - (p.x - this.panning.x) / c.scale, cy: c.cy + (p.y - this.panning.y) / c.scale, scale: c.scale }, false);
         return;
+      }
+      if (this.rightDrag.active && ev.pointerType !== 'touch') {
+        const a = this.rightDrag.move(p);
+        if (a) this.events?.rightDrag?.(a, p, 'move', ev);
       }
       // 타일 뷰포트: 활성이 아닌 타일 위에서는 보통 화살표 커서
       const tl = this.tiled();
@@ -1426,6 +1453,17 @@ export class CadView {
           if (!cancel) this.events?.click(this.screenToWorld(p.x, p.y), p, ev);
         }
         if (this.touches.size === 0) this.leftDown = null;
+        return;
+      }
+      // 오른쪽 버튼 끌어 놓기: 끌었으면 놓은 자리를 알리고(앱이 메뉴), 아니면 미뤄 둔 오른쪽 클릭을 보낸다
+      if (ev.button === 2 && this.rightDrag.active) {
+        if (cancel) {
+          this.rightDrag.cancel();
+          this.events?.rightDrag?.(p, p, 'cancel', ev);
+          return;
+        }
+        const r = this.rightDrag.up(performance.now());
+        if (r && 'drop' in r) this.events?.rightDrag?.(r.drop, p, 'drop', ev);
         return;
       }
       if (this.panning) {

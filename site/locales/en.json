@@ -4108,6 +4108,8 @@
   "블록으로 변환": "block",
   "블록으로 변환(C)": "Convert to block (C)",
   "블록으로 붙여넣기": "Paste as block",
+  "여기로 이동": "Move here",
+  "여기로 복사": "Copy here",
   "블록을 객체에 정렬하시겠습니까?": "Do you want to align blocks to objects?",
   "블록을 넣을 도면을 먼저 여십시오.": "First open the drawing where you want to insert the block.",
   "블록을 넣을 때 속성 값 묻기": "Ask for property values when inserting a block",

@@ -104,6 +104,8 @@ export interface MenuItem {
 let openMenu: HTMLDivElement | null = null;
 /** 메뉴를 열기 전에 초점이 있던 곳(Esc로 닫으면 돌려준다) */
 let menuOpener: HTMLElement | null = null;
+/** 지금 메뉴가 닫힐 때 부를 것(항목을 고르든 Esc·바깥 누르기·다른 메뉴로 닫히든) */
+let menuClosed: (() => void) | null = null;
 
 export function closeMenu(restoreFocus = false): void {
   const had = !!openMenu;
@@ -111,13 +113,16 @@ export function closeMenu(restoreFocus = false): void {
   openMenu = null;
   if (had && restoreFocus && menuOpener?.isConnected) menuOpener.focus({ preventScroll: true });
   menuOpener = null;
+  const done = menuClosed;
+  menuClosed = null;
+  done?.();
 }
 
 /**
  * 바로가기 메뉴. 키보드: 위·아래 화살표·Home·End로 옮기고 Enter·Space로 고르며, Esc는 닫고 연 곳으로 초점을 돌린다(Tab도 닫는다).
- * 키보드로 연 메뉴(초점이 단추 등에 있을 때)는 첫 항목에 초점을 둔다
+ * 키보드로 연 메뉴(초점이 단추 등에 있을 때)는 첫 항목에 초점을 둔다. onClose는 메뉴가 닫힐 때 한 번(항목의 run보다 먼저)
  */
-export function showMenu(x: number, y: number, items: MenuItem[]): void {
+export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose?: () => void } = {}): void {
   closeMenu();
   const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
   const m = h('div', { class: 'menu', role: 'menu' });
@@ -185,6 +190,7 @@ export function showMenu(x: number, y: number, items: MenuItem[]): void {
   m.style.top = `${pos.top + oy}px`;
   openMenu = m;
   menuOpener = opener;
+  menuClosed = opt.onClose ?? null;
   // 키보드로 연 메뉴는 첫 항목으로(마우스로 연 메뉴는 초점을 옮기지 않아 그리던 자리의 키 입력이 그대로 간다)
   if (opener && focusVisible(opener)) enabled()[0]?.focus();
   setTimeout(() => {

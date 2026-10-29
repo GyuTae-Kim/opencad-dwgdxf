@@ -43,7 +43,7 @@ import { maximized } from './viewtools-vpmax';
 import { DynInput, dynRelative } from './dyninput';
 import { type Override, parseOverride, runPointOverride } from './osnap-override';
 import { type ExtAnchor, findExtAnchor, segmentDirAt } from './snap';
-import { DragGhost, commitDrag, pressKind } from './dragmove';
+import { DragGhost, type DropAction, commitDrag, dropMenuItems, pasteDragAsBlock, pressKind } from './dragmove';
 import { Lasso } from './lasso';
 import { CtrlTap, ctrlAction } from './keys';
 import { commandLineMenu, commandMenu, idleMenu, osnapItems, showContextMenu } from './ctxmenu';
@@ -327,6 +327,8 @@ export class App {
   private lastMove: { w: Pt; s: Pt; ev: PointerEvent } | null = null;
   /** 왼쪽 버튼을 누른 곳의 뜻(명령이 없을 때): 그립, 끌어 옮기기, 창·올가미 */
   private press: { kind: 'grip' | 'move' | 'window'; world: Pt; screen: Pt; ghost?: DragGhost; lasso?: Lasso; started?: boolean } | null = null;
+  /** 오른쪽 버튼 끌어 놓기(고른 객체 위에서 누른 자리, 끄는 동안의 미리보기, 놓은 뒤 메뉴가 열려 있는지) */
+  private rightPress: { world: Pt; ghost?: DragGhost; menu?: boolean } | null = null;
   /** 명령 없이 객체를 고른 마지막 클릭(두 번 누르기의 두 번째 클릭이 막 생긴 그립을 눌러도 그립 편집으로 가지 않게) */
   private lastPickClick: { time: number; screen: Pt } | null = null;
   /** 핫 그립(Shift+클릭으로 여럿) */
@@ -373,6 +375,8 @@ export class App {
       click: (w, s, ev) => this.onClick(w, s, ev),
       drag: (a, b, done, ev) => this.onDrag(a, b, done, ev),
       context: (w, s, ev, held) => this.onContext(w, s, ev, held),
+      rightDown: (w, s, ev) => this.onRightDown(w, s, ev),
+      rightDrag: (a, b, phase, ev) => this.onRightDrag(a, b, phase, ev),
       dblclick: (w, s) => this.onDblClick(w, s),
       leave: () => {
         this.ui.setCoords('');
@@ -608,6 +612,10 @@ export class App {
       this.running.ctrl.abort();
       this.running = null;
       if (!silent) this.cmd.print('*취소*');
+    } else if (this.rightPress && (this.rightPress.ghost || this.rightPress.menu)) {
+      // 오른쪽 버튼 끌기·끌어 놓기 메뉴: Esc는 끌기만 그만둔다(선택은 그대로 — 메뉴의 [취소]와 같다)
+      if (this.rightPress.menu) closeMenu();
+      this.endRightDrag();
     } else if (this.windowStart || this.press?.lasso) {
       this.windowStart = null;
       this.press = null;
@@ -2421,6 +2429,70 @@ export class App {
     void commitDrag(this, [...st.selection], d, copy);
   }
 
+  /**
+   * 오른쪽 버튼을 눌렀다(마우스·펜): 명령이 없고 고른 객체 위(그립이 아닌 곳 — 왼쪽 끌기와 같은 판정)면 끌어 놓기를 지켜본다.
+   * 보기 모드·명령 중·선택 없음·손가락은 아니다(손가락의 길게 누르기는 정밀 조준)
+   */
+  private onRightDown(w: Pt, _s: Pt, ev: PointerEvent): boolean {
+    void _s;
+    if (this.rightPress?.menu) closeMenu();
+    this.rightPress = null;
+    const st = this.active;
+    if (!st || this.viewOnly || this.request || this.running || !st.selection.size || ev.pointerType === 'touch' || this.windowStart) return false;
+    const onGrip = !!this.gripAt(w);
+    const hit = onGrip ? null : (this.picker()?.pick(w.x, w.y, this.view.overlay.pickbox * this.view.pixelSize()) ?? null);
+    if (pressKind({ onGrip, hit, selected: st.selection, busy: false }) !== 'move') return false;
+    this.rightPress = { world: w };
+    return true;
+  }
+
+  /**
+   * 오른쪽 버튼으로 고른 객체를 끈다: 미리보기가 따라오고, 놓으면 그 자리에 메뉴(여기로 이동·여기로 복사·블록으로 붙여넣기·취소 —
+   * AutoCAD 도움말 "About Copying Objects"). 기준점은 누른 자리. 메뉴가 닫히면(고르든 Esc·바깥을 누르든) 미리보기를 치운다
+   */
+  private onRightDrag(a: Pt, b: Pt, phase: 'move' | 'drop' | 'cancel', ev: PointerEvent): void {
+    void a;
+    const st = this.active;
+    const pr = this.rightPress;
+    if (!st || !pr || pr.menu) return;
+    if (phase === 'cancel') {
+      this.endRightDrag();
+      return;
+    }
+    const wb = this.view.screenToWorld(b.x, b.y);
+    const d = { x: wb.x - pr.world.x, y: wb.y - pr.world.y };
+    const o = this.view.overlay;
+    if (!pr.ghost) {
+      const pk = this.picker();
+      pr.ghost = new DragGhost(pk ? [...st.selection].slice(0, 3000).map((h) => pk.geometry(h)) : []);
+      this.clearHover();
+    }
+    o.ghost = pr.ghost.at(d.x, d.y);
+    o.rubber = [{ pts: [pr.world.x, pr.world.y, wb.x, wb.y], dashed: true }];
+    o.tip = null;
+    this.view.requestOverlay();
+    if (phase === 'move') return;
+    pr.menu = true;
+    const handles = [...st.selection];
+    const base = { ...pr.world };
+    const act = (k: DropAction) => {
+      if (this.active !== st) return;
+      if (k === 'block') void pasteDragAsBlock(this, handles, base, wb);
+      else void commitDrag(this, handles, d, k === 'copy');
+    };
+    showMenu(ev.clientX, ev.clientY, dropMenuItems(act), { onClose: () => this.rightPress === pr && this.endRightDrag() });
+  }
+
+  /** 오른쪽 버튼 끌어 놓기를 끝낸다(미리보기를 치운다) */
+  private endRightDrag(): void {
+    if (!this.rightPress) return;
+    this.rightPress = null;
+    const o = this.view.overlay;
+    o.ghost = [];
+    o.rubber = [];
+    this.view.requestOverlay();
+  }
+
   /** 창·올가미로 고른 것을 선택에 더하거나 빼거나 바꾼다(객체 선택 중이면 단계로 남기고 단일이면 끝) */
   private applyPicked(hits: string[], mode: PickMode): void {
     const r = this.request;
@@ -2597,6 +2669,8 @@ export class App {
   private onContext(w: Pt, _s: Pt, ev: MouseEvent, held?: number): void {
     void _s;
     closeMenu();
+    // 끌지 않은 오른쪽 클릭이다(끌어 놓기를 지켜보던 것은 끝)
+    this.endRightDrag();
     // 보기 모드: 편집 명령 메뉴를 띄우지 않는다(안드로이드 길게 누르기도 여기로 온다)
     if (this.viewOnly) return;
     if (this.windowStart) {
