@@ -9,7 +9,7 @@ import { ccwSweep } from '../geom/curves';
 import type { App, CommandContext, PointResult } from './app';
 import { CancelError } from './app';
 import { type LayerPatch, patchLayers } from './layers';
-import { type ListFrame, entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName } from './inquiry';
+import { type ListFrame, entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName, zeroish } from './inquiry';
 import type { Pt } from './view';
 import { h } from './ui/dom';
 import { type MeasureFormat, angleResult, areaResult, distance3d, distanceResult, pointResult, radiusResult } from './measure-result';
@@ -293,7 +293,8 @@ export function registerCommands(app: App): void {
       // AutoCAD 도움말 ID: 지정한 자리의 UCS 좌표 X·Y·Z를 보이고 그 점을 마지막 점으로 둔다. 3D 객체에 스냅하면 Z는 그 객체의 고른 지점의 Z.
       // 스냅이 없고 Z를 주지 않은 점은 지금 고도(ELEV). 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로
       const p = await needPoint3(app, ctx, '점 지정:');
-      const pu = toUcs(currentUcs(app.active), p);
+      const q = toUcs(currentUcs(app.active), p);
+      const pu = { x: zeroish(q.x), y: zeroish(q.y) };
       ctx.print(`X = ${L(app, pu.x)}     Y = ${L(app, pu.y)}     Z = ${L(app, p.z)}`, 'res', pointResult(measureFormat(app), pu.x, pu.y, p.z));
       app.view.overlay.marks = [{ p: { x: p.x, y: p.y }, text: `${L(app, pu.x)}, ${L(app, pu.y)}` }];
       app.view.requestOverlay();

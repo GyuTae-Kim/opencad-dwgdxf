@@ -397,7 +397,8 @@ export class App {
       rightDrag: (a, b, phase, ev) => this.onRightDrag(a, b, phase, ev),
       dblclick: (w, s) => this.onDblClick(w, s),
       leave: () => {
-        this.ui.setCoords('');
+        // COORDS 0은 지정한 점을 그대로 둔다. 점을 묻는 동안에도 마지막 값을 둬서 좌표 표시를 눌러 COORDS를 바꿀 수 있게 한다
+        if (coordsMode() !== 0 && this.request?.kind !== 'point') this.ui.setCoords('');
       },
       viewChanged: () => {
         this.refreshSelectionOverlay();

@@ -621,6 +621,10 @@ button {
   min-width: 220px;
   font-family: var(--mono);
   color: var(--text-dim);
+  /* 비어 있어도 누를 수 있게 막대 높이를 채운다(점을 물을 때 누르면 COORDS를 돌린다) */
+  align-self: stretch;
+  display: flex;
+  align-items: center;
 }
 .status-sep {
   width: 1px;

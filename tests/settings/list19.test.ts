@@ -93,6 +93,21 @@ describe('LIST 위치는 현재 UCS 기준 X·Y·Z(도움말 LIST)', () => {
     expect(out).toContain('    델타 Y: 20.0000');
   });
 
+  it('돌린 UCS의 계산 끝자리로 0이 "-0.0000"이 되지 않는다(LIST·ID)', async () => {
+    const h = setup();
+    h.ucs90(50, 0);
+    const l = h.add(line3(V(0, 0, 30), V(200, 0, 10)));
+    const out = await h.list(l);
+    // cos 90° ≈ 6e-17: (0 − 50) × cos 90° = −3e-15
+    expect(out).toContain('    시작점: 0.0000, 50.0000, 30.0000');
+    expect(out).toContain('    끝점: 0.0000, -150.0000, 10.0000');
+    h.app.clearSelection();
+    void h.app.run('ID');
+    await settle();
+    await h.type('*0,0,0');
+    expect(h.out().filter((t) => /^X = /.test(t))).toEqual(['X = 0.0000     Y = 50.0000     Z = 0.0000']);
+  });
+
   it('OCS 객체(돌출 방향 0,0,−1인 원): 중심은 WCS로 바꾼 뒤 UCS로, 돌출 방향 줄', async () => {
     const h = setup();
     const c = h.add({ ...entityDefaults(), type: 'CIRCLE', handle: '', center: V(10, 5, 3), radius: 2, extrusion: V(0, 0, -1) } as CircleEntity);

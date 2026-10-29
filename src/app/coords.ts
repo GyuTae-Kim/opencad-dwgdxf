@@ -11,6 +11,7 @@ import type { DocState } from './docstate';
 import { browserSysvar } from './sysvars';
 import { displayDirection } from './polar';
 import { currentUcs, dirToUcs, toUcs } from './ucs';
+import { zeroish } from './inquiry';
 
 type Pt = { x: number; y: number };
 
@@ -36,9 +37,11 @@ export const COORDS_NOTE: Record<CoordsMode, string> = {
 
 /** 상대 극좌표 "거리<각도, Z": 지금 UCS에서 잰 평면 거리, 각도는 도면 단위의 0 방향·방향(극좌표 입력 d<a와 같은 기준) */
 export function polarText(u: UnitSettings, ucs: ReturnType<typeof currentUcs>, base: Pt, p: Pt, z: number): string {
-  const d = dirToUcs(ucs, { x: p.x - base.x, y: p.y - base.y });
+  const r = dirToUcs(ucs, { x: p.x - base.x, y: p.y - base.y });
+  // 돌린 UCS의 계산 끝자리(−1e-15)가 각도를 360°로, 0을 "-0.0000"으로 보이지 않게
+  const d = { x: zeroish(r.x), y: zeroish(r.y) };
   const a = displayDirection(Math.atan2(d.y, d.x), u);
-  return `${formatLength(Math.hypot(d.x, d.y), u)}<${formatAngle(a, u)}, ${formatLength(z, u)}`;
+  return `${formatLength(Math.hypot(d.x, d.y), u)}<${formatAngle(a, u)}, ${formatLength(zeroish(z), u)}`;
 }
 
 /**
@@ -50,5 +53,5 @@ export function coordsText(st: DocState, p: Pt, z: number, base: Pt | null): str
   const ucs = currentUcs(st);
   if (base) return polarText(u, ucs, base, p, z);
   const pu = toUcs(ucs, p);
-  return `${formatLength(pu.x, u)}, ${formatLength(pu.y, u)}, ${formatLength(z, u)}`;
+  return `${formatLength(zeroish(pu.x), u)}, ${formatLength(zeroish(pu.y), u)}, ${formatLength(zeroish(z), u)}`;
 }

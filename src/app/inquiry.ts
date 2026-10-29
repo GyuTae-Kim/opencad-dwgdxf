@@ -334,6 +334,9 @@ export interface ListFrame {
 /** 단위 벡터 성분(돌출 방향): 길이 단위가 아니라 소수 넷째 자리 */
 const unitText = (v: number) => (Math.abs(v) < 5e-5 ? 0 : v).toFixed(4);
 
+/** 좌표계를 돌린 계산 끝자리(cos 90° ≈ 6e-17 등)로 0이 "-0.0000"으로 보이지 않게(보이는 자릿수보다 훨씬 작은 값만 0) */
+export const zeroish = (v: number) => (Math.abs(v) < 1e-9 ? 0 : v);
+
 export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, frame?: ListFrame): PropGroup[] {
   const L = (v: number) => formatLength(v, u);
   const A = (v: number) => formatAngle(v, u);
@@ -342,7 +345,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
     if (!frame) return `${L(p.x)}, ${L(p.y)}${p.z ? `, ${L(p.z)}` : ''}`;
     const p3 = { x: p.x, y: p.y, z: p.z ?? 0 };
     const q = frame.point(ocs && !isNaturalExt(e.extrusion) ? ocsToWcs(p3, e.extrusion) : p3);
-    return `${L(q.x)}, ${L(q.y)}, ${L(q.z)}`;
+    return `${L(zeroish(q.x))}, ${L(zeroish(q.y))}, ${L(zeroish(q.z))}`;
   };
   const area = (v: number) => formatLength(v, { lunits: u.lunits === 3 || u.lunits === 4 ? 2 : u.lunits, luprec: u.luprec });
   const general: PropRow[] = [

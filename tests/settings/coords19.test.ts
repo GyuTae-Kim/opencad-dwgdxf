@@ -112,6 +112,40 @@ describe('상태 막대 좌표(진짜 App)', () => {
     expect(h.move(P(0, 5))).toBe('5.0000<0°, 0.0000');
     h.cl.escape();
     await settle();
+    // 원점을 옮기고 −90° 돌린 UCS(X축 = WCS −Y): 계산 끝자리(−3e-15·−3e-16)가 "-0.0000"이나 360°로 보이지 않는다
+    h.doc.header.set('$UCSORG', { x: 50, y: 0, z: 0 });
+    h.doc.header.set('$UCSXDIR', { x: 0, y: -1, z: 0 });
+    h.doc.header.set('$UCSYDIR', { x: 1, y: 0, z: 0 });
+    expect(h.move(P(0, 0))).toBe('0.0000, -50.0000, 0.0000');
+    void h.app.run('DIST');
+    await settle();
+    await h.type('*50,0');
+    expect(h.move(P(50, -5))).toBe('5.0000<0°, 0.0000');
+    expect(h.move(P(55, 0))).toBe('5.0000<90°, 0.0000');
+    h.cl.escape();
+    await settle();
+  });
+
+  it('도면 밖으로 나가면 지우되, 점을 묻는 동안과 COORDS 0은 남긴다(좌표 표시를 눌러 바꿀 수 있게)', async () => {
+    const h = setup();
+    h.move(P(3, 4));
+    h.view.events.leave!();
+    expect(h.coordsOut.at(-1)).toBe('');
+    void h.app.run('DIST');
+    await settle();
+    h.move(P(3, 4));
+    h.view.events.leave!();
+    expect(h.coordsOut.at(-1)).toBe('3.0000, 4.0000, 0.0000');
+    h.cl.escape();
+    await settle();
+    const z = setup(0);
+    void z.app.run('DIST');
+    await settle();
+    await z.type('1,2');
+    z.view.events.leave!();
+    expect(z.coordsOut).toEqual(['1.0000, 2.0000, 0.0000']);
+    z.cl.escape();
+    await settle();
   });
 
   it('COORDS 0: 커서를 움직여도 그대로, 점을 지정하면 그 점(준 Z, 아니면 고도)', async () => {
