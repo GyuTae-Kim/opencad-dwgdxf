@@ -7,7 +7,7 @@
 import type { BlockDef, DimensionEntity, Entity, LeaderEntity, MLeaderEntity, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
-import { builtinArrowBlock, dimensionText, generateDimensionGeometry, measureVars, moveDimensionText, rawDimVars } from '../edit/dim';
+import { builtinArrowBlock, dimensionText, generateDimensionGeometry, measureVars, moveDimensionText, placeIn, rawDimVars } from '../edit/dim';
 import { BREAKER_TYPES, type DimBreak, breakSize, breakerPieces, dimFrame, readBreaks, readJogLine, toFrame, writeBreaks, writeJogLine, defaultJogPoint } from '../edit/dim/extras';
 import { autoSpacing, dimHome, dimJustify, dimNewText, dimOblique, dimRotateText, isAngularDim, isLinearDim, linearFeetW, spaceDimensions } from '../edit/annot/dimedit';
 import { createJoggedDimension } from '../edit/annot/create';
@@ -23,6 +23,8 @@ import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import type { Pt } from './view';
 import { askAngle, commitChanged, dimGhost } from './annot2-common';
+import { VP_PICK, pickedViewport, viewportScaled } from './dimcmds';
+import { circleToPaper } from './vpsnap';
 import { registerAnnot2Leader } from './annot2-leader';
 import { registerAnnot2Misc } from './annot2-misc';
 
@@ -344,7 +346,11 @@ export function registerAnnot2Commands(app: App): void {
     async run(ctx) {
       const st = app.active!;
       const doc = st.doc;
-      const r = await ctx.getEntity('호 또는 원 선택:');
+      // 도면 공간이면 단일 뷰포트에 보이는 모형 호·원도 고른다(24차 — DIMRADIUS와 같다): 그 뷰포트로 본 종이 원·호에 치수를 두고
+      // 반지름 값은 뷰포트 축척 재지정(dimcmds.viewportScaled)으로 모형 공간 값, 공간을 넘는 연관은 만들지 않는다.
+      // 근거(AutoCAD 도움말, 우리말 요약): "To Set Dimension Scale for Creating Dimensions in a Layout" — 도면 공간에서 객체를 바로 골라
+      // 모형 공간 값의 치수를 만든다. DIMLFAC — 반지름을 포함한 모든 선형 치수 거리에 곱한다
+      const r = await ctx.getEntity('호 또는 원 선택:', undefined, VP_PICK);
       if (!('handle' in r)) return;
       const e = doc.entityIndex.get(r.handle);
       if (e?.type !== 'CIRCLE' && e?.type !== 'ARC') {
@@ -352,9 +358,11 @@ export function registerAnnot2Commands(app: App): void {
         return;
       }
       app.clearSelection();
-      const center = e.center;
-      const radius = e.radius;
-      const oc = await ctx.getPoint('중심 위치 재지정 지정:');
+      const vx = pickedViewport(app, r);
+      const pc = vx ? circleToPaper(vx, { c: e.center, r: e.radius }) : null;
+      const center: Vec3 = pc ? v3(pc.c) : e.center;
+      const radius = pc ? pc.r : e.radius;
+      const oc = await ctx.getPoint('중심 위치 재지정 지정:', vx ? { viewportSnaps: true } : {});
       if (!('point' in oc)) return;
       const ovr = v3(oc.point, center.z);
       const o: { text?: string; rot?: number } = {};
@@ -364,8 +372,11 @@ export function registerAnnot2Commands(app: App): void {
         // 꺾기를 아직 안 정했으면 재지정 중심과 호 사이 가운데
         const t = (ovr.x - chord.x) * Math.cos(a) + (ovr.y - chord.y) * Math.sin(a);
         const j = jog ?? { x: chord.x + (Math.cos(a) * t) / 2, y: chord.y + (Math.sin(a) * t) / 2 };
-        const d = createJoggedDimension(doc, center, radius, v3(tp, center.z), ovr, v3(j, center.z), { text: o.text, jogAngle: undefined });
+        let d = createJoggedDimension(doc, center, radius, v3(tp, center.z), ovr, v3(j, center.z), { text: o.text, jogAngle: undefined });
         if (o.rot) d.textRotation = o.rot;
+        if (vx) d = viewportScaled(doc, d, vx.k);
+        // 놓일 공간을 먼저 정한다: 안내의 측정값과 미리 보기가 모형 공간 치수의 음수 DIMLFAC를 1로 쓴다(edit/dim/vars.ts)
+        placeIn(doc, st.space, d);
         return d;
       };
       ctx.print(`치수 문자 = ${shownText(app, build({ x: center.x + radius, y: center.y }, null))}`);
@@ -399,10 +410,10 @@ export function registerAnnot2Commands(app: App): void {
       const j = await ctx.getPoint('꺾기 위치 지정:', { ghost: dimGhost(app, (q) => build(tp0, q)) });
       if (!('point' in j)) return;
       const a = commitResults(app, ctx, [{ add: [build(tp0, j.point)] }], 'DIMJOGGED', { quiet: true });
-      // 연관: [15 현 위 점, 10 중심] — 재지정 중심·꺾기 점은 중심을 따라 옮긴다
+      // 연관: [15 현 위 점, 10 중심] — 재지정 중심·꺾기 점은 중심을 따라 옮긴다(뷰포트 안 모형 원·호는 연관하지 않는다)
       const h = a.added[0];
       const d = h ? doc.entityIndex.get(h) : undefined;
-      if (h && d?.type === 'DIMENSION') attachAssociation(app, ctx, h, [circlePointRef(e, d.defPoint4), objectRef(app, e, OSNAP.CEN, d.defPoint), null, null], 'DIMJOGGED');
+      if (h && !vx && d?.type === 'DIMENSION') attachAssociation(app, ctx, h, [circlePointRef(e, d.defPoint4), objectRef(app, e, OSNAP.CEN, d.defPoint), null, null], 'DIMJOGGED');
       if (h) finishNewDimension(app, ctx, h, 'DIMJOGGED');
     },
   });

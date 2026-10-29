@@ -94,6 +94,8 @@ export function makeHarness(setup?: (doc: CadDocument) => void): Harness {
       commands.set(c.name.toUpperCase(), c);
     },
     picker: () => picker,
+    // 모형 공간만 다루는 틀: 도면 공간의 뷰포트 안 모형 객체는 없다(App.viewportObjectAt)
+    viewportObjectAt: () => null,
     view: { overlay, pixelSize: () => 0.02, requestOverlay() {}, requestRender() {} },
     cmd: { print: (t: string) => printed.push(t), acceptSpaces: false },
     ui: { setBusy() {} },

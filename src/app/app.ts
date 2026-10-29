@@ -2240,8 +2240,16 @@ export class App {
    * 그 뷰포트 변환. 모형 공간·뷰포트 안 모형 공간(MSPACE)·블록 편집기에서는 null(전과 같다)
    */
   private viewportPickAt(r: EntityRequest, w: Pt, tol: number): { pick: ViewportPick; vx: ViewportXf } | null {
+    return r.viewportPick ? this.viewportObjectAt(w, tol) : null;
+  }
+
+  /**
+   * 배치의 도면 공간에서 종이 점 w(허용 거리 tol, 종이 단위)에 단일 뷰포트로 보이는 모형 객체와 그 뷰포트 변환(vpsnap.viewportPick).
+   * 객체 요청의 viewportPick과 스마트 치수 DIM의 마우스 아래 객체(24차)가 쓴다. 모형 공간·MSPACE·블록 편집기에서는 null
+   */
+  viewportObjectAt(w: Pt, tol: number): { pick: ViewportPick; vx: ViewportXf } | null {
     const st = this.active;
-    if (!r.viewportPick || !st || st.isModel || st.msVp) return null;
+    if (!st || st.isModel || st.msVp) return null;
     const model = this.pickerFor(st, MODEL_SPACE);
     if (!model) return null;
     const vxs = layoutXfs(st.doc, st.layoutFor(st.displaySpace));
