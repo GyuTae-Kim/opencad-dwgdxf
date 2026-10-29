@@ -43,6 +43,8 @@ import { unlockedOnly } from './layers';
 import { form } from './ui/dom';
 import { dynGripEdit } from './dynblock';
 import { currentProps } from './draw';
+import { currentUcs } from './ucs';
+import { angleBase, fromDrawingAngle, signedAngle, toDrawingAngle } from './polar';
 import { constraintEditHook } from './constraints-hook';
 import { arrayAssociativity, createAssocArray, setArrayAssociativity } from './assocarray';
 import { registerArrayCommands } from './arraycmd';
@@ -436,9 +438,21 @@ async function askMove(ctx: CommandContext, ghost: Ghost, prompt: string, keywor
 }
 
 /** 각도 입력(숫자는 도, 점은 기준점에서의 방향) */
-async function askAngle(ctx: CommandContext, prompt: string, base: Pt, def: number, opt: { keywords?: Keyword[]; ghost?: (a: number) => OverlayGeom[] } = {}): Promise<number | { keyword: string }> {
+/**
+ * ROTATE의 각도 입력(돌려주는 값은 도면 좌표의 시계 반대 방향 라디안). 점은 base에서의 방향(그대로).
+ * 숫자(도)는 kind에 따라 도면 단위로 읽는다:
+ *  - rotation(회전 각도 — 0 방향이 없는 크기): ANGDIR 1이면 시계 방향(도움말 "About Rotating Objects")
+ *  - direction(참조의 새 각도 — 절대 각도): 지금 UCS X축 + ANGBASE에서 ANGDIR 쪽으로(도움말 "Direction Control": 0 방향은 각도 입력에)
+ * 기본값도 같은 꼴로 보인다
+ */
+async function askAngle(ctx: CommandContext, prompt: string, base: Pt, def: number, opt: { keywords?: Keyword[]; ghost?: (a: number) => OverlayGeom[]; kind?: 'rotation' | 'direction' } = {}): Promise<number | { keyword: string }> {
+  const st = ctx.app.active!;
+  const conv = st.units;
+  const ua = currentUcs(st).angle;
+  const direction = opt.kind === 'direction';
+  const shown = direction ? toDrawingAngle(def - ua, conv) : signedAngle(def, conv);
   for (;;) {
-    const r = await ctx.getPoint(`${prompt} <${deg(def).toFixed(0)}>:`, {
+    const r = await ctx.getPoint(`${prompt} <${deg(shown).toFixed(0)}>:`, {
       base,
       preferNumber: true,
       keywords: opt.keywords,
@@ -449,7 +463,10 @@ async function askAngle(ctx: CommandContext, prompt: string, base: Pt, def: numb
     if ('point' in r) return ang(base, r.point);
     if ('text' in r) {
       const v = num(r.text);
-      if (v !== null) return (v * Math.PI) / 180;
+      if (v !== null) {
+        const a = (v * Math.PI) / 180;
+        return direction ? ua + fromDrawingAngle(a, conv) : signedAngle(a, conv);
+      }
     }
     ctx.print('각도(도)를 입력하거나 점을 지정하십시오.', 'err');
   }
@@ -729,16 +746,19 @@ export function registerModifyCommands(app: App): void {
           continue;
         }
         if (r.keyword === 'R') {
-          const ref = await ctx.getPoint(`참조 각도 지정 <${deg(Number(m.rotateRef ?? 0)).toFixed(0)}>:`, { preferNumber: true });
+          // 참조 각도·새 각도는 절대 각도: 숫자는 지금 UCS X축 + ANGBASE에서 ANGDIR 쪽으로(점은 두 점의 방향 그대로)
+          const ua = currentUcs(st).angle;
+          const ref = await ctx.getPoint(`참조 각도 지정 <${deg(toDrawingAngle(Number(m.rotateRef ?? 0) - ua, st.units)).toFixed(0)}>:`, { preferNumber: true });
           let refAng = Number(m.rotateRef ?? 0);
-          if ('text' in ref) refAng = ((num(ref.text) ?? 0) * Math.PI) / 180;
+          if ('text' in ref) refAng = ua + fromDrawingAngle(((num(ref.text) ?? 0) * Math.PI) / 180, st.units);
           else if ('point' in ref) {
             const p2 = await ctx.getPoint('두 번째 점 지정:', { base: ref.point });
             if (!('point' in p2)) return;
             refAng = ang(ref.point, p2.point);
           }
           m.rotateRef = refAng;
-          const na = await askAngle(ctx, '새 각도 지정 또는 [점(P)]', base, 0, {
+          const na = await askAngle(ctx, '새 각도 지정 또는 [점(P)]', base, ua + angleBase(st.units), {
+            kind: 'direction',
             keywords: [{ key: 'P', label: '점' }],
             ghost: (a) => ghost.at(rotateAbout(base, a - refAng)),
           });

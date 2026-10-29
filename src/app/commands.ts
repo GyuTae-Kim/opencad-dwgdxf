@@ -13,6 +13,8 @@ import { entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typ
 import type { Pt } from './view';
 import { h } from './ui/dom';
 import { type MeasureFormat, angleResult, areaResult, distanceResult, pointResult, radiusResult } from './measure-result';
+import { currentUcs, dirToUcs } from './ucs';
+import { displayDirection } from './polar';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -459,14 +461,17 @@ export function zoomToHandles(app: App, hs: string[]): void {
 }
 
 function reportDistance(app: App, ctx: CommandContext, a: Pt, b: Pt): void {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
+  const st = app.active!;
+  // 증분과 각도는 지금 UCS에서 잰다(AutoCAD 도움말 DIST: 모형 공간에서 X·Y·Z 증분과 각도는 현재 UCS 기준).
+  // XY 평면에서의 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로(측량 단위는 방위 — polar.ts displayDirection)
+  const du = dirToUcs(currentUcs(st), { x: b.x - a.x, y: b.y - a.y });
+  const dx = du.x;
+  const dy = du.y;
   const d = Math.hypot(dx, dy);
-  let ang = Math.atan2(dy, dx);
-  if (ang < 0) ang += Math.PI * 2;
-  const u = app.active!.units;
+  const u = st.units;
+  const ang = displayDirection(Math.atan2(dy, dx), u);
   // 두 줄이 같은 값을 단다(결과 카드는 한 덩어리로 묶는다)
-  const m = distanceResult(measureFormat(app), dx, dy);
+  const m = distanceResult(measureFormat(app), dx, dy, 0, ang);
   ctx.print(`거리 = ${L(app, d)}${unitSuffix(app)},  XY 평면에서의 각도 = ${formatAngle(ang, u)},  XY 평면으로부터의 각도 = 0`, 'res', m);
   ctx.print(`X 증분 = ${L(app, dx)},  Y 증분 = ${L(app, dy)},  Z 증분 = ${L(app, 0)}`, 'res', m);
   app.view.overlay.marks = [
