@@ -21,7 +21,10 @@ import { entityPath } from '../../src/edit/geom/path';
 import { pathNearest } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, arc, circle, deg, ellipse, fitSpline, line, lw, mtext, near, newDoc, poly2d, renders, spline, text, xline } from './helpers';
 import { lwVertices } from '../../src/core/lwpoly';
-import { splineCtrl } from '../../src/core/flat3';
+import { ctrlCount, splineCtrl, splineFit } from '../../src/core/flat3';
+import { makeFitSpline } from '../../src/edit/geom/drawgeom';
+import { fitMove } from '../../src/edit/geom/splinedit';
+import { dwgSplinePlan } from '../../src/io/dwg/splineflags';
 
 const doc = newDoc();
 const one = (r: { replace?: Entity[]; add?: Entity[] }) => (r.replace ?? r.add ?? [])[0]!;
@@ -130,6 +133,18 @@ describe('gripMove — 곡선', () => {
     const f = { ...(fitSpline([[0, 0], [3, 4], [7, 1]]) as SplineEntity) };
     const of = one(gripMove(f, 'f1', V(3, 6), doc)) as SplineEntity;
     expect(pathNearest(entityPath(of)!, V(3, 6)).d).toBeLessThan(1e-9);
+  });
+  it('스플라인 맞춤점 그립: 조정점을 SPLINEDIT 맞춤점 이동과 같은 곡선으로 다시 구하고 DWG에 맞춤점 자료로 남는다', () => {
+    const s = makeFitSpline({ ...entityDefaults(), layer: '0' }, [P(0, 0), P(40, 30), P(80, 0), P(120, 30)])!;
+    expect(ctrlCount(s)).toBe(6);
+    const g = one(gripMove(s, 'f2', V(80, 20), doc)) as SplineEntity;
+    const m = fitMove(s, 2, V(80, 20))!;
+    expect(splineFit(g)).toEqual([P(0, 0), P(40, 30), P(80, 20), P(120, 30)]);
+    expect(ctrlCount(g)).toBe(6);
+    expect(g.knots).toEqual(m.knots);
+    g.controlVerts.forEach((v, i) => expect(v).toBeCloseTo(m.controlVerts[i]!, 9));
+    expect(dwgSplinePlan(g, true).kind).toBe('fit');
+    expect(pathNearest(entityPath(g)!, V(80, 20)).d).toBeLessThan(1e-9);
   });
   it('구성선 방향', () => {
     const x = xline(0, 0, 1, 0);

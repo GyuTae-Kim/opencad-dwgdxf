@@ -31,7 +31,7 @@ import type {
 import { tableKey } from '../../core/model';
 import { bulgeVertices, lwVertices, numArray, setLwVertices, vertCount } from '../../core/lwpoly';
 import { polyVertices, setPolyVertices } from '../../core/polyverts';
-import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
+import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { moveDimensionText } from '../dim/create';
 import { type EllPiece, pieceAt } from './curve';
 import { makeWipeout, wipeoutPolygon } from './markup';
@@ -631,7 +631,8 @@ function splineGrip(e: SplineEntity, id: string, to: Vec2): SplineEntity {
     fit[i] = { x: to.x, y: to.y, z: fit[i]!.z };
     r.fitVerts = pack3(fit);
     if (ctrlCount(e) >= 2) {
-      const s = interpolateFitPoints(fit, r.startTangent, r.endTangent);
+      // 조정점은 그리기·STRETCH·SPLINEDIT와 같은 곡선으로 다시 구한다(열린 곡선은 AutoCAD 맞춤점 보간 — DWG에 맞춤점 자료로 남는다)
+      const s = fitPointsCurve(r);
       r.degree = s.degree;
       r.knots = s.knots;
       r.controlVerts = pack3(s.ctrl);
