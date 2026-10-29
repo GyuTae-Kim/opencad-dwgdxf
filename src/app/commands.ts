@@ -9,12 +9,14 @@ import { ccwSweep } from '../geom/curves';
 import type { App, CommandContext, PointResult } from './app';
 import { CancelError } from './app';
 import { type LayerPatch, patchLayers } from './layers';
-import { entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName } from './inquiry';
+import { type ListFrame, entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName, zeroish } from './inquiry';
 import type { Pt } from './view';
 import { h } from './ui/dom';
 import { type MeasureFormat, angleResult, areaResult, distance3d, distanceResult, pointResult, radiusResult } from './measure-result';
 import { currentUcs, dirToUcs, toUcs } from './ucs';
 import { displayDirection } from './polar';
+import { measureMultiple, pathLength as multiLength } from './distmulti';
+import { polyPreview } from './draw';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -52,6 +54,9 @@ async function needPoint3(app: App, ctx: CommandContext, prompt: string, base?: 
     if ('point' in r) return point3(app, r);
   }
 }
+
+/** LIST가 일반 특성 가운데 보이는 것(도움말 LIST: BYLAYER가 아닐 때의 색상·선종류·선가중치·투명도, 0이 아닌 두께) */
+const LIST_GENERAL = new Set(['색상', '선종류', '선가중치', '투명도', '두께']);
 
 const L = (app: App, v: number) => formatLength(v, app.active!.units);
 const area = (app: App, v: number) => {
@@ -161,10 +166,16 @@ export function registerCommands(app: App): void {
     name: 'DIST',
     aliases: ['DI'],
     title: '거리',
+    // 도움말 DIST: 투명 사용('DIST) — 다른 명령의 프롬프트에서 재고 그 명령으로 돌아간다. 단추·메뉴로 시작하면 이전처럼 앞 명령을 끝낸다
+    quotedTransparent: true,
     async run(ctx) {
       const a = await needPoint3(app, ctx, '첫 번째 점 지정:');
-      const b = await needPoint3(app, ctx, '두 번째 점 지정:', a);
-      reportDistance(app, ctx, a, b);
+      // <다중 점>은 기본값(Enter — 도움말 용어집: 꺾쇠 괄호 안 값은 Enter로 받는 기본값), M도 같다
+      for (;;) {
+        const r = await ctx.getPoint('두 번째 점 지정 또는 <다중 점>:', { base: base3(app, a), snapZ: true, keywords: [{ key: 'M', label: '다중 점' }] });
+        if ('point' in r) return reportDistance(app, ctx, a, point3(app, r));
+        if ('enter' in r || 'keyword' in r) return multiDistance(app, ctx, a);
+      }
     },
   });
   app.register({
@@ -191,8 +202,15 @@ export function registerCommands(app: App): void {
           if ('enter' in r) return;
           if (!('point' in r)) continue;
           const a = point3(app, r);
-          const b = await needPoint3(app, ctx, '두 번째 점 지정:', a);
-          reportDistance(app, ctx, a, b);
+          // 도움말 MEASUREGEOM 거리: 다중 점은 이어지는 점 사이 거리의 누적 합계
+          for (;;) {
+            const r2 = await ctx.getPoint('두 번째 점 지정 또는 [다중 점(M)]:', { base: base3(app, a), snapZ: true, keywords: [{ key: 'M', label: '다중 점' }] });
+            if ('enter' in r2) throw new CancelError();
+            if ('point' in r2) reportDistance(app, ctx, a, point3(app, r2));
+            else if ('keyword' in r2) await multiDistance(app, ctx, a);
+            else continue;
+            break;
+          }
           continue;
         }
         if (mode === 'R') {
@@ -275,7 +293,8 @@ export function registerCommands(app: App): void {
       // AutoCAD 도움말 ID: 지정한 자리의 UCS 좌표 X·Y·Z를 보이고 그 점을 마지막 점으로 둔다. 3D 객체에 스냅하면 Z는 그 객체의 고른 지점의 Z.
       // 스냅이 없고 Z를 주지 않은 점은 지금 고도(ELEV). 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로
       const p = await needPoint3(app, ctx, '점 지정:');
-      const pu = toUcs(currentUcs(app.active), p);
+      const q = toUcs(currentUcs(app.active), p);
+      const pu = { x: zeroish(q.x), y: zeroish(q.y) };
       ctx.print(`X = ${L(app, pu.x)}     Y = ${L(app, pu.y)}     Z = ${L(app, p.z)}`, 'res', pointResult(measureFormat(app), pu.x, pu.y, p.z));
       app.view.overlay.marks = [{ p: { x: p.x, y: p.y }, text: `${L(app, pu.x)}, ${L(app, pu.y)}` }];
       app.view.requestOverlay();
@@ -290,14 +309,19 @@ export function registerCommands(app: App): void {
     async run(ctx) {
       const hs = await app.selectedOrPick(ctx);
       const st = app.active!;
+      // AutoCAD 도움말 LIST: 위치는 현재 UCS 기준 X·Y·Z, 색상·선종류·선가중치·투명도는 BYLAYER가 아닐 때, 두께는 0이 아닐 때,
+      // 돌출 방향은 현재 UCS의 Z축과 다를 때 UCS 좌표로. 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로(ID와 같다)
+      const ucs = currentUcs(st);
+      const frame: ListFrame = { point: (p) => ({ ...toUcs(ucs, p), z: p.z }), dir: (v) => ({ ...dirToUcs(ucs, v), z: v.z }) };
       let total = 0;
       let n = 0;
       for (const hd of hs.slice(0, 200)) {
         const e = app.entity(hd);
         if (!e) continue;
         ctx.print(`${typeName(e)}  도면층: "${e.layer}"  공간: ${st.isModel ? '모형 공간' : '도면 공간'}  핸들 = ${e.handle}`, 'res');
-        for (const g of entityProperties(st.doc, e, st.units).slice(1))
-          for (const row of g.rows) ctx.print(`    ${row.k}: ${row.v}`);
+        const [general, ...groups] = entityProperties(st.doc, e, st.units, frame);
+        for (const row of general!.rows) if (LIST_GENERAL.has(row.k) && !/^bylayer$/i.test(row.v)) ctx.print(`    ${row.k}: ${row.v}`);
+        for (const g of groups) for (const row of g.rows) ctx.print(`    ${row.k}: ${row.v}`);
         const len = entityLength(e);
         if (len !== null) {
           total += len;
@@ -516,6 +540,17 @@ function reportDistance(app: App, ctx: CommandContext, a: Pt3, b: Pt3): void {
     { p: b, text: `${L(app, d)}${unitSuffix(app)}` },
   ];
   app.view.overlay.rubber = [{ pts: [a.x, a.y, b.x, b.y] }];
+  persistMarks(app);
+}
+
+/** DIST·MEASUREGEOM 거리의 다중 점(distmulti.ts): 끝나면 지나온 경로와 누적 거리를 잠시 남긴다 */
+async function multiDistance(app: App, ctx: CommandContext, first: Pt3): Promise<void> {
+  const flat = !app.active!.isModel;
+  const vs = await measureMultiple(ctx, first, { point3: (r) => point3(app, r), base: (p) => base3(app, p), length: (v) => L(app, v), unit: unitSuffix(app), flat });
+  if (vs.length < 2) return;
+  const end = vs[vs.length - 1]!;
+  app.view.overlay.marks = [{ p: first }, { p: end, text: `${L(app, multiLength(vs, flat))}${unitSuffix(app)}` }];
+  app.view.overlay.rubber = [{ pts: polyPreview(vs, false) }];
   persistMarks(app);
 }
 

@@ -6,7 +6,7 @@
  *  - 세션 변수: 앱 상태(OSMODE·OSNAPZ·ORTHOMODE·SNAPMODE·GRIDMODE·DYNMODE, FILEDIA·CMDDIA·CMDECHO)와 읽기 전용 값(DWGNAME·CDATE …).
  *    AutoLISP getvar·setvar와 같은 구현(lisp-host.ts)을 쓴다.
  *  - 이 브라우저 변수(AutoCAD의 레지스트리 자리): PICKBOX·GRIPSIZE·GRIPMULTIFUNCTIONAL·CURSORSIZE·APERTURE·AUTOSNAP·POLARMODE·POLARANG·
- *    PICKFIRST·SELECTIONPREVIEW·SHORTCUTMENU·ATTDIA·ATTREQ …(수)와 POLARADDANG(글). localStorage에 두고, 바뀌면 onSysvarChange 구독자에게
+ *    PICKFIRST·SELECTIONPREVIEW·SHORTCUTMENU·ATTDIA·ATTREQ·COORDS …(수)와 POLARADDANG(글). localStorage에 두고, 바뀌면 onSysvarChange 구독자에게
  *    알린다(화면이 읽는다).
  *  - 도면 변수: 머리말($PDMODE …). 값을 바꾸면 명령 취소 한 단계(header 편집).
  * 변수 이름이 곧 명령인 것(SAVETIME·COLORTHEME·IMAGEFRAME …)은 그 명령이 먼저 받으므로 여기에 오지 않는다.
@@ -85,6 +85,8 @@ export const BROWSER_VARS: readonly BrowserVar[] = [
   { name: 'ATTDIA', def: 1, min: 0, max: 1, desc: 'INSERT의 속성 값 입력을 대화상자로' },
   { name: 'ATTREQ', def: 1, min: 0, max: 1, desc: '블록을 넣을 때 속성 값 묻기' },
   { name: 'ZOOMFACTOR', def: 60, min: 3, max: 100, desc: '휠 한 칸의 확대·축소 정도' },
+  // 상태 막대 좌표(coords.ts). 3(지리 좌표)은 지리 위치가 있는 도면만이라 받지 않는다
+  { name: 'COORDS', def: 1, min: 0, max: 2, desc: '상태 막대 좌표(0 점을 지정할 때만, 1 계속, 2 점을 물을 때 상대 극좌표)' },
 ];
 
 /** 글 값인 이 브라우저 변수(AutoCAD 2026 초기값) */

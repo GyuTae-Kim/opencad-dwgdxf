@@ -1,5 +1,6 @@
 /** 객체 특성·측정값(특성 창, LIST, 치수 목록) */
-import type { CadColor, CadDocument, DimensionEntity, Entity, HatchEntity } from '../core/model';
+import type { CadColor, CadDocument, DimensionEntity, Entity, HatchEntity, Vec3 } from '../core/model';
+import { isNaturalExt, ocsToWcs } from '../edit/geom/ocs';
 import { tableKey } from '../core/model';
 import { DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../core/dimvars';
 import { type UnitSettings, formatAngle, formatLength } from '../core/units';
@@ -321,10 +322,31 @@ export interface PropGroup {
   rows: PropRow[];
 }
 
-export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): PropGroup[] {
+/**
+ * LIST가 위치를 보이는 좌표계(AutoCAD 도움말 LIST: 위치를 현재 UCS 기준 X·Y·Z로, 돌출 방향은 현재 UCS의 Z축과 다를 때 UCS 좌표로).
+ * point·dir은 WCS를 받는다. 특성 팔레트·DBLIST·휴대폰 정보 카드는 frame 없이 저장된 좌표 그대로다
+ */
+export interface ListFrame {
+  point(p: Vec3): Vec3;
+  dir(v: Vec3): Vec3;
+}
+
+/** 단위 벡터 성분(돌출 방향): 길이 단위가 아니라 소수 넷째 자리 */
+const unitText = (v: number) => (Math.abs(v) < 5e-5 ? 0 : v).toFixed(4);
+
+/** 좌표계를 돌린 계산 끝자리(cos 90° ≈ 6e-17 등)로 0이 "-0.0000"으로 보이지 않게(보이는 자릿수보다 훨씬 작은 값만 0) */
+export const zeroish = (v: number) => (Math.abs(v) < 1e-9 ? 0 : v);
+
+export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, frame?: ListFrame): PropGroup[] {
   const L = (v: number) => formatLength(v, u);
   const A = (v: number) => formatAngle(v, u);
-  const P = (p: { x: number; y: number; z?: number }) => `${L(p.x)}, ${L(p.y)}${p.z ? `, ${L(p.z)}` : ''}`;
+  // LIST(frame)는 늘 X, Y, Z. ocs: 객체 좌표계(OCS)로 저장된 점(원·호 중심, 문자·블록 삽입점, 폴리선 정점, 치수 문자 중간점)
+  const P = (p: { x: number; y: number; z?: number }, ocs = false) => {
+    if (!frame) return `${L(p.x)}, ${L(p.y)}${p.z ? `, ${L(p.z)}` : ''}`;
+    const p3 = { x: p.x, y: p.y, z: p.z ?? 0 };
+    const q = frame.point(ocs && !isNaturalExt(e.extrusion) ? ocsToWcs(p3, e.extrusion) : p3);
+    return `${L(zeroish(q.x))}, ${L(zeroish(q.y))}, ${L(zeroish(q.z))}`;
+  };
   const area = (v: number) => formatLength(v, { lunits: u.lunits === 3 || u.lunits === 4 ? 2 : u.lunits, luprec: u.luprec });
   const general: PropRow[] = [
     { k: '종류', v: typeName(e) },
@@ -356,7 +378,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): 
     }
     case 'CIRCLE':
       geo.push(
-        { k: '중심', v: P(e.center) },
+        { k: '중심', v: P(e.center, true) },
         { k: '반지름', v: L(e.radius) },
         { k: '지름', v: L(e.radius * 2) },
         { k: '둘레', v: L(e.radius * TAU) },
@@ -366,7 +388,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): 
     case 'ARC': {
       const sw = ccwSweep(e.startAngle, e.endAngle);
       geo.push(
-        { k: '중심', v: P(e.center) },
+        { k: '중심', v: P(e.center, true) },
         { k: '반지름', v: L(e.radius) },
         { k: '시작 각도', v: A(e.startAngle) },
         { k: '끝 각도', v: A(e.endAngle) },
@@ -393,7 +415,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): 
       if (e.constantWidth) geo.push({ k: '전역 폭', v: L(e.constantWidth) });
       if (e.elevation) geo.push({ k: '고도', v: L(e.elevation) });
       const v0 = vs[0];
-      if (v0) geo.push({ k: '첫 정점', v: P(v0) });
+      if (v0) geo.push({ k: '첫 정점', v: frame ? P({ x: v0.x, y: v0.y, z: e.elevation ?? 0 }, true) : P(v0) });
       break;
     }
     case 'POLYLINE': {
@@ -441,7 +463,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): 
         { k: '기울기', v: A(e.oblique) },
         { k: '자리맞추기', v: justify(e.halign, e.valign) },
       );
-      geo.push({ k: '위치', v: P(e.insert) });
+      geo.push({ k: '위치', v: P(e.insert, true) });
       break;
     }
     case 'MTEXT': {
@@ -471,7 +493,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): 
       misc.push({ k: '이름', v: dyn ?? e.block });
       if (dyn) misc.push({ k: '표현 블록', v: e.block });
       geo.push(
-        { k: '위치', v: P(e.insert) },
+        { k: '위치', v: P(e.insert, true) },
         { k: '축척 X', v: e.scale.x.toFixed(4) },
         { k: '축척 Y', v: e.scale.y.toFixed(4) },
         { k: '축척 Z', v: e.scale.z.toFixed(4) },
@@ -492,7 +514,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): 
         { k: '문자 재지정', v: e.text ? plainText(e.text) : '없음' },
         { k: '치수 스타일', v: e.dimStyle },
       );
-      geo.push({ k: '문자 위치', v: P(e.textMid) });
+      geo.push({ k: '문자 위치', v: P(e.textMid, true) });
       break;
     }
     case 'HATCH':
@@ -533,6 +555,13 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings): 
     }
     default:
       break;
+  }
+  // LIST: 돌출 방향이 현재 UCS의 Z축(0, 0, 1)과 다르면 UCS 좌표로(이 앱의 UCS Z축은 WCS Z와 같다)
+  if (frame && e.extrusion && !isNaturalExt(e.extrusion)) {
+    const n = e.extrusion;
+    const l = Math.hypot(n.x, n.y, n.z) || 1;
+    const d = frame.dir({ x: n.x / l, y: n.y / l, z: n.z / l });
+    geo.push({ k: '돌출 방향', v: `${unitText(d.x)}, ${unitText(d.y)}, ${unitText(d.z)}` });
   }
   const groups: PropGroup[] = [{ title: '일반', rows: general }];
   if (geo.length) groups.push({ title: '형상', rows: geo });

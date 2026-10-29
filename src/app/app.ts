@@ -68,6 +68,7 @@ import {
   withTracking,
 } from './settings';
 import { browserSysvar, browserSysvarText, onSysvarChange, setBrowserSysvar } from './sysvars';
+import { COORDS_NOTE, coordsMode, coordsText, nextCoordsMode } from './coords';
 import { optionValue } from './options';
 
 export class CancelError extends Error {
@@ -107,6 +108,8 @@ interface PointRequest {
   /** 끌기 미리보기. snap은 지금 커서가 잡은 객체 스냅(지연된 접점 미리보기 등) */
   rubber?: (p: Pt, snap?: PointSnap | null) => { pts: number[]; closed?: boolean; fill?: boolean; dashed?: boolean }[];
   ghost?: (p: Pt) => OverlayGeom[];
+  /** 커서 툴팁 글(DIST 다중 점의 누적 거리). 객체 스냅·추적 툴팁이 먼저다 */
+  tip?: (p: Pt) => string | null;
   /** 접점(TAN)을 지연된 접점으로 받는다(명령이 다음 점을 받은 뒤 접점을 구한다 — LINE·PLINE·XLINE·CIRCLE) */
   deferTan: boolean;
   /** 지연된 접점을 선에도 받는다(원을 그리는 명령) */
@@ -182,6 +185,8 @@ export interface PointOptions {
   keywords?: Keyword[];
   rubber?: PointRequest['rubber'];
   ghost?: PointRequest['ghost'];
+  /** 커서 툴팁 글(객체 스냅 이름·추적 툴팁이 없을 때) */
+  tip?: PointRequest['tip'];
   allowText?: boolean;
   preferNumber?: boolean;
   /** 접점 스냅을 지연된 접점으로 받는다 */
@@ -221,6 +226,11 @@ export interface Command {
   transparent?: boolean;
   /** 열린 도면이 없어도 실행 */
   noDoc?: boolean;
+  /**
+   * 프롬프트에서 작은따옴표를 붙여 친 이름('DIST)만 투명 명령으로 돈다. 리본·휴대폰 단추·메뉴로 시작하면
+   * 투명이 아닌 명령처럼 앞 명령을 끝낸다(transparent가 참이면 이 값은 보지 않는다)
+   */
+  quotedTransparent?: boolean;
   run(ctx: CommandContext, arg?: string): Promise<void> | void;
 }
 
@@ -387,7 +397,8 @@ export class App {
       rightDrag: (a, b, phase, ev) => this.onRightDrag(a, b, phase, ev),
       dblclick: (w, s) => this.onDblClick(w, s),
       leave: () => {
-        this.ui.setCoords('');
+        // COORDS 0은 지정한 점을 그대로 둔다. 점을 묻는 동안에도 마지막 값을 둬서 좌표 표시를 눌러 COORDS를 바꿀 수 있게 한다
+        if (coordsMode() !== 0 && this.request?.kind !== 'point') this.ui.setCoords('');
       },
       viewChanged: () => {
         this.refreshSelectionOverlay();
@@ -509,8 +520,8 @@ export class App {
     return out.sort((a, b) => a.score - b.score);
   }
 
-  /** 명령 실행. arg가 있으면 첫 프롬프트의 답으로 쓴다 */
-  async run(name: string, arg?: string): Promise<void> {
+  /** 명령 실행. arg가 있으면 첫 프롬프트의 답으로 쓴다. quoted: 프롬프트에서 작은따옴표를 붙여 친 이름(quotedTransparent 명령이 투명으로) */
+  async run(name: string, arg?: string, quoted = false): Promise<void> {
     const c = this.findCommand(name);
     if (!c) {
       const raw = name.trim().toUpperCase().replace(/^[_.']+/, '');
@@ -522,7 +533,8 @@ export class App {
       this.cmd.print('열린 도면이 없습니다. 먼저 파일을 여십시오.', 'err');
       return;
     }
-    const prev = this.running && !c.transparent ? this.running : null;
+    const transparent = !!c.transparent || (quoted && !!c.quotedTransparent);
+    const prev = this.running && !transparent ? this.running : null;
     if (prev) {
       this.cancel(true);
       // 앞 명령은 취소를 받은 뒤에도 더 묻지 못하고(요청이 곧바로 거절된다), 남긴 미리보기는 지금 지운다.
@@ -530,7 +542,7 @@ export class App {
       prev.ctrl.abort();
       this.resetCommandUi();
     }
-    const outer = this.running && c.transparent ? this.running : null;
+    const outer = this.running && transparent ? this.running : null;
     const nested = !!outer;
     const saved = nested ? this.request : null;
     if (nested) this.request = null;
@@ -651,6 +663,8 @@ export class App {
   private promptOf(r: Request): string {
     if (!r.keywords.length) return r.prompt;
     if (r.prompt.includes('[')) return r.prompt;
+    // 키워드가 모두 <기본값>으로 보이면 그대로(DIST "두 번째 점 지정 또는 <다중 점>:" — M을 쳐도 된다)
+    if (r.keywords.every((k) => r.prompt.includes(`<${k.label}>`))) return r.prompt;
     const kw = r.keywords.map((k) => `${k.label}(${k.key})`).join('/');
     return r.prompt.replace(/:$/, '') + ` [${kw}]:`;
   }
@@ -665,6 +679,7 @@ export class App {
         keywords: opt.keywords ?? [],
         rubber: opt.rubber,
         ghost: opt.ghost,
+        tip: opt.tip,
         deferTan: !!opt.deferTan,
         deferTanLines: !!opt.deferTanLines,
         snaps: opt.snaps?.length ? new Set(opt.snaps) : null,
@@ -930,7 +945,7 @@ export class App {
       }
       // 객체 선택 중에도 투명 명령('FILTER 등)
       if (t.startsWith("'")) {
-        void this.run(t.slice(1));
+        void this.run(t.slice(1), undefined, true);
         return;
       }
       const up = t.toUpperCase();
@@ -979,7 +994,7 @@ export class App {
       return;
     }
     if (t.startsWith("'")) {
-      void this.run(t.slice(1));
+      void this.run(t.slice(1), undefined, true);
       return;
     }
     if (r.kind === 'point') {
@@ -1080,7 +1095,22 @@ export class App {
       this.tempTrack = null;
       this.refreshAcquired();
     }
+    // COORDS 0: 상태 막대 좌표는 점을 지정할 때만(그 점의 절대 좌표 — Z는 준 Z, 커서로 찍은 점이면 그 자리의 Z, 아니면 고도)
+    if ('point' in res && this.active && coordsMode() === 0) {
+      const p = res.point;
+      const at = this.lastResolved && Math.abs(this.lastResolved.x - p.x) < 1e-9 && Math.abs(this.lastResolved.y - p.y) < 1e-9;
+      this.ui.setCoords(coordsText(this.active, p, res.z ?? (at ? this.coordsZ : this.elevation()), null));
+    }
     r.resolve(res);
+  }
+
+  /** 상태 막대 좌표 표시 방식을 돌린다(도움말: 점을 물을 때 좌표 표시를 누르거나 Ctrl+I — COORDS 0 → 1 → 2 → 0) */
+  cycleCoords(): void {
+    const v = nextCoordsMode(coordsMode());
+    setBrowserSysvar('COORDS', v);
+    this.cmd.print(COORDS_NOTE[v]);
+    const m = this.lastMove;
+    if (m && v !== 0) this.onMove(m.w, m.s, m.ev, true);
   }
 
   /**
@@ -1988,6 +2018,8 @@ export class App {
 
   /** 마지막으로 해석한 커서 점(동적 입력 칸) */
   private lastResolved: Pt | null = null;
+  /** 커서 자리의 Z(상태 막대 좌표 — COORDS 0이 찍은 점에 쓴다) */
+  private coordsZ = 0;
 
   private onMove(w: Pt, s: Pt, ev: PointerEvent, fromKey = false): void {
     const o = this.view.overlay;
@@ -2018,6 +2050,7 @@ export class App {
       const as = this.settings.autosnap;
       if (snap && showSnapTip(as)) o.tip = snap.deferred ? '지연된 접점' : (SNAP_NAMES[snap.kind] ?? null);
       else if (track && !snap && showTrackTip(as)) o.tip = track.tip;
+      else if (r.tip) o.tip = r.tip(p);
       else if (!this.dynOn) o.tip = null;
       else if (r.base && !o.dynFields) {
         const d = Math.hypot(p.x - r.base.x, p.y - r.base.y);
@@ -2030,9 +2063,11 @@ export class App {
       o.windowRect = { a: this.windowStart.screen, b: s };
       this.updateSelectPreview();
     }
-    // 상태 막대 좌표(도움말 COORDS: 절대 좌표 X, Y, Z — Z도 절대 값). 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로
-    const pu = toUcs(currentUcs(st), p);
-    this.ui.setCoords(`${formatLength(pu.x, st.units)}, ${formatLength(pu.y, st.units)}, ${formatLength(this.cursorZ(snap), st.units)}`);
+    // 상태 막대 좌표(도움말 COORDS — coords.ts): 1은 절대 좌표 X, Y, Z(Z도 절대 값), 2는 점을 물을 때 기준점에서 상대 극좌표,
+    // 0은 점을 지정할 때만(finishPoint). 이 앱의 UCS는 평면 안의 원점·회전뿐이라 Z는 WCS Z 그대로
+    this.coordsZ = this.cursorZ(snap);
+    const cm = coordsMode();
+    if (cm !== 0) this.ui.setCoords(coordsText(st, p, this.coordsZ, cm === 2 && r?.kind === 'point' ? r.base : null));
     // 다기능 그립: 선택한 객체의 그립 위(명령 없음)
     if (!r && !this.running && !this.press) this.updateGripHover(w, ev);
     // 선택 미리보기(가만히 있을 때)
@@ -2852,6 +2887,8 @@ export class App {
         return this.toggleOsnap();
       case 'polar':
         return this.togglePolar();
+      case 'coords':
+        return this.cycleCoords();
       case 'pickstyle':
         void import('./util2-select').then((m) => {
           const v = m.pickstyle() ^ 1;
