@@ -302,11 +302,86 @@ describe('POLARANG·POLARADDANG 단위 표시 입력(15차)', () => {
     void h.app.run('PU');
     await settle();
     h.move(at10);
-    expect(h.ov.tip).toMatch(/^극좌표: .+ < 10°$/);
+    // 툴팁 각도는 도면의 각도 단위로(16차 — 그라드: 10도 = 11.1111g, AUPREC 0으로는 값이 달라 보여 네 자리까지)
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 11\.1111g$/);
     h.click(at10);
     await settle();
     const p = (got.at(-1) as { point: Pt }).point;
     expect((Math.atan2(p.y, p.x) * 180) / Math.PI).toBeCloseTo(10, 9);
+  });
+});
+
+describe('도면 단위의 0 방향·양의 방향(ANGBASE·ANGDIR)과 각도 단위(16차)', () => {
+  const at = (deg: number, r: number, dy = 0) => P(Math.cos((deg * Math.PI) / 180) * r, Math.sin((deg * Math.PI) / 180) * r + dy);
+  /** UNITS처럼 머리말을 바꾸고 도면 단위를 다시 읽는다(가짜 화면의 시험 앱은 편집 반영을 거치지 않는다) */
+  const units = (h: H, vals: Record<string, number>) => {
+    h.st.session.commit({ label: 'UNITS', ops: Object.entries(vals).map(([name, after]) => ({ kind: 'header' as const, name, before: h.doc.header.get(name), after })) });
+    h.st.units = unitSettings(h.doc);
+  };
+
+  it('북쪽 0·시계 방향 도면: 추적 방향·툴팁 각도·동적 입력 각도·좌표 입력 @d<a가 모두 북쪽에서 시계 방향', async () => {
+    const h = setup();
+    units(h, { $ANGBASE: Math.PI / 2, $ANGDIR: 1 });
+    expect(h.st.units).toMatchObject({ angbase: Math.PI / 2, angdir: 1 });
+    h.set('POLARANG', 30);
+    const got = pointCmd(h, 'PN', P(0, 0));
+    void h.app.run('PN');
+    await settle();
+    // 북쪽 = 0°, 동쪽 = 90°, UCS 60도 = 북쪽에서 시계 방향 30°
+    h.move(P(0.5, 40));
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 0°$/);
+    h.move(P(40, 0.5));
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 90°$/);
+    h.move(at(60, 50, 1));
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 30°$/);
+    expect(h.ov.tracks[0]!.dir.x).toBeCloseTo(0.5, 9);
+    // 동적 입력의 각도 칸도 같은 기준(커서 그대로의 각도 — 추적한 점)
+    expect(h.ov.dynFields?.[1]?.text).toBe('30°');
+    h.click(at(60, 50, 1));
+    await settle();
+    const p = (got.at(-1) as { point: Pt }).point;
+    expect((Math.atan2(p.y, p.x) * 180) / Math.PI).toBeCloseTo(60, 9);
+    // 360을 나누지 않는 증분(50도)은 시계 방향으로 센다: 북쪽에서 50(UCS 40)은 잡고, 반시계 50(UCS 140)은 아니다
+    h.set('POLARANG', 50);
+    void h.app.run('PN');
+    await settle();
+    h.move(at(140, 100));
+    expect(h.ov.tracks).toEqual([]);
+    h.move(at(40, 100, 1));
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 50°$/);
+    // 추가 각도도 북쪽에서 시계 방향(10 = UCS 80)
+    h.set('POLARADDANG', '10');
+    h.set('POLARMODE', 4);
+    h.move(at(80, 100, 0.5));
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 10°$/);
+    // 각도 단위가 도/분/초면 툴팁도(AUPREC 0)
+    units(h, { $AUNITS: 1 });
+    h.move(at(40, 100, 1));
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 50d$/);
+    h.app.submitInput('');
+    await settle();
+    // 명령행 극좌표: @10<0은 북쪽, @10<90은 동쪽
+    await h.draw('LINE', '0,0', '@10<0', '@10<90', '');
+    const [l1, l2] = h.lines().slice(-2);
+    expect(l1!.end.x).toBeCloseTo(0, 9);
+    expect(l1!.end.y).toBeCloseTo(10, 9);
+    expect(l2!.end.x).toBeCloseTo(10, 9);
+    expect(l2!.end.y).toBeCloseTo(10, 9);
+  });
+
+  it('기본 도면(ANGBASE 0·ANGDIR 0)은 이전과 같다: 동쪽 0°, 시계 반대 방향, @10<90은 위쪽', async () => {
+    const h = setup();
+    pointCmd(h, 'PE', P(0, 0));
+    void h.app.run('PE');
+    await settle();
+    h.move(P(40, 0.5));
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 0°$/);
+    h.move(P(0.5, 40));
+    expect(h.ov.tip).toMatch(/^극좌표: .+ < 90°$/);
+    h.app.submitInput('');
+    await settle();
+    await h.draw('LINE', '0,0', '@10<90', '');
+    expect(h.lines().at(-1)!.end).toMatchObject({ x: expect.closeTo(0, 9), y: expect.closeTo(10, 9) });
   });
 });
 

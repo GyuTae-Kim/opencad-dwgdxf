@@ -2210,51 +2210,60 @@ export function registerModifyCommands(app: App): void {
       if (!('point' in r)) return;
       const list = clip.entities.map((e) => cloneEntity(e));
       const deps = importDependencies(st, clip.doc, list);
-      // AutoCAD처럼 A$C + 16진 8자리 이름의 블록(기준점 = 복사 기준점)
-      let name = '';
-      do name = `A$C${Math.floor(Math.random() * 0x100000000).toString(16).toUpperCase().padStart(8, '0')}`;
-      while (st.doc.blocks.has(tableKey(name)));
-      const recordHandle = st.session.newHandle();
-      // 붙여 넣기·복사와 같게 새 핸들을 주고 원본 본문(dwgRaw)도 버린다. R2013+ ACIS 객체의 원본 본문은
-      // 자료 저장소(AcDs)의 원래 핸들 기록을 가리키므로, 새 핸들로 쓰면 형상 없는 객체가 된다.
-      for (const e of list) prepareNew(st, e, recordHandle);
-      const record: BlockRecord = { name, handle: recordHandle, flags: 0, insertUnits: Number(st.doc.header.get('$INSUNITS') ?? 0) || 0, explodable: true, scalable: true };
-      const def: BlockDef = {
-        name,
-        handle: st.session.newHandle(),
-        recordHandle,
-        basePoint: { x: clip.base.x, y: clip.base.y, z: 0 },
-        flags: 0,
-        layer: '0',
-        entities: list,
-        endHandle: st.session.newHandle(),
-      };
-      const space = st.doc.blocks.get(st.space)!;
-      const ins: Entity = {
-        ...entityDefaults(),
-        ...currentProps(app),
-        type: 'INSERT',
-        handle: st.session.newHandle(),
-        owner: space.recordHandle,
-        block: name,
-        insert: { x: r.point.x, y: r.point.y, z: 0 },
-        scale: { x: 1, y: 1, z: 1 },
-        rotation: 0,
-        columnCount: 1,
-        rowCount: 1,
-        columnSpacing: 0,
-        rowSpacing: 0,
-        attribs: [],
-      };
-      if (/^\*PAPER_SPACE/i.test(st.space)) ins.paperSpace = true;
-      st.selection.clear();
-      st.session.commit({
-        label: 'PASTEBLOCK',
-        ops: [...deps, { kind: 'blockRecord', key: tableKey(name), before: null, after: record }, { kind: 'blockDef', key: tableKey(name), before: null, after: def }, { kind: 'add', block: st.space, entity: ins }],
-        group: ctx.group,
-      });
-      app.setSelection([ins.handle]);
+      const name = pasteAsBlock(app, st, list, clip.base, r.point, { deps, group: ctx.group });
       ctx.print(`블록 "${name}"(객체 ${list.length}개)으로 붙여 넣었습니다.`);
     },
   });
+}
+
+/**
+ * 블록으로 붙여넣기(PASTEBLOCK·오른쪽 버튼 끌어 놓기의 [블록으로 붙여넣기]): list(새로 넣을 사본 — 새 핸들을 준다)를
+ * AutoCAD처럼 A$C + 16진 8자리 이름의 새 블록(기준점 base)으로 정의하고 at에 삽입한다. deps(다른 도면의 정의)와 함께 한 편집 단계,
+ * 새 블록 참조를 고른다. 블록 이름
+ */
+export function pasteAsBlock(app: App, st: DocState, list: Entity[], base: Pt, at: Pt, opt: { deps?: EditOp[]; group?: number } = {}): string {
+  let name = '';
+  do name = `A$C${Math.floor(Math.random() * 0x100000000).toString(16).toUpperCase().padStart(8, '0')}`;
+  while (st.doc.blocks.has(tableKey(name)));
+  const recordHandle = st.session.newHandle();
+  // 붙여 넣기·복사와 같게 새 핸들을 주고 원본 본문(dwgRaw)도 버린다. R2013+ ACIS 객체의 원본 본문은
+  // 자료 저장소(AcDs)의 원래 핸들 기록을 가리키므로, 새 핸들로 쓰면 형상 없는 객체가 된다.
+  for (const e of list) prepareNew(st, e, recordHandle);
+  const record: BlockRecord = { name, handle: recordHandle, flags: 0, insertUnits: Number(st.doc.header.get('$INSUNITS') ?? 0) || 0, explodable: true, scalable: true };
+  const def: BlockDef = {
+    name,
+    handle: st.session.newHandle(),
+    recordHandle,
+    basePoint: { x: base.x, y: base.y, z: 0 },
+    flags: 0,
+    layer: '0',
+    entities: list,
+    endHandle: st.session.newHandle(),
+  };
+  const space = st.doc.blocks.get(st.space)!;
+  const ins: Entity = {
+    ...entityDefaults(),
+    ...currentProps(app),
+    type: 'INSERT',
+    handle: st.session.newHandle(),
+    owner: space.recordHandle,
+    block: name,
+    insert: { x: at.x, y: at.y, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    rotation: 0,
+    columnCount: 1,
+    rowCount: 1,
+    columnSpacing: 0,
+    rowSpacing: 0,
+    attribs: [],
+  };
+  if (/^\*PAPER_SPACE/i.test(st.space)) ins.paperSpace = true;
+  st.selection.clear();
+  st.session.commit({
+    label: 'PASTEBLOCK',
+    ops: [...(opt.deps ?? []), { kind: 'blockRecord', key: tableKey(name), before: null, after: record }, { kind: 'blockDef', key: tableKey(name), before: null, after: def }, { kind: 'add', block: st.space, entity: ins }],
+    group: opt.group,
+  });
+  app.setSelection([ins.handle]);
+  return name;
 }

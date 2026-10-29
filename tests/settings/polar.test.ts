@@ -22,8 +22,16 @@ import {
   polarModeFields,
   polarReference,
   shiftAcquire,
+  angleBase,
+  clockwise,
+  fromDrawingAngle,
+  toDrawingAngle,
+  trackAngleText,
 } from '../../src/app/polar';
 import { objectTrack, polarAngles, polarTrack } from '../../src/app/tracking';
+import { parsePointInput } from '../../src/app/commandline';
+import { DynInput } from '../../src/app/dyninput';
+import { WORLD } from '../../src/app/ucs';
 import { BROWSER_TEXT_VARS, BROWSER_VARS, browserSysvar, browserSysvarText, isBrowserSysvar, onSysvarChange, setBrowserSysvar, setBrowserSysvarText } from '../../src/app/sysvars';
 import { DEFAULT_SETTINGS, readSettings } from '../../src/app/settings';
 import { optionValue } from '../../src/app/options';
@@ -229,5 +237,120 @@ describe('추적 방향', () => {
     expect(both.p.y).toBeCloseTo(10, 9);
     // 커서에 더 가까운 정렬선(기준점의 상대 45도 = 0°)이 먼저
     expect(both.tip).toBe('상대 극좌표: < 0°, 끝점: < 90°');
+  });
+});
+
+describe('도면 단위의 0 방향·양의 방향(ANGBASE·ANGDIR)과 툴팁 각도의 단위(16차)', () => {
+  const S = (mode: number, inc = 90, add: number[] = []) => ({ mode, inc, add });
+  // 측량에서 흔한 설정: 0 방향 북쪽(ANGBASE 90도), 시계 방향(ANGDIR 1)
+  const NORTH_CW = { aunits: 0, auprec: 0, angbase: 90 * D, angdir: 1 };
+
+  it('도면 각도 ↔ UCS 각도: 0 방향에서 ANGDIR 쪽으로 잰다(없으면 그대로)', () => {
+    expect(fromDrawingAngle(30 * D, NORTH_CW) / D).toBeCloseTo(60, 9);
+    expect(toDrawingAngle(60 * D, NORTH_CW) / D).toBeCloseTo(30, 9);
+    expect(toDrawingAngle(0, NORTH_CW) / D).toBeCloseTo(90, 9);
+    expect(fromDrawingAngle(0.3, {})).toBe(0.3);
+    expect([clockwise({ angdir: 1 }), clockwise({}), angleBase({ angbase: Number.NaN })]).toEqual([true, false, 0]);
+  });
+
+  it('절대 극좌표의 0 방향은 UCS X축 + ANGBASE, 상대(마지막 선분)에는 ANGBASE가 없다', () => {
+    expect(polarReference(0, 0.1, 0.5, 0.2).ref).toBeCloseTo(0.3, 12);
+    expect(polarReference(1, 0.1, 0.5, 0.2)).toEqual({ ref: 0.5, relative: true });
+    expect(polarReference(1, 0.1, null, 0.2)).toEqual({ ref: 0.1 + 0.2, relative: false });
+  });
+
+  it('ANGDIR 1이면 시계 방향으로 센다: 360을 나누지 않는 증분과 추가 각도의 방향이 달라진다', () => {
+    expect(degs(polarDirections(S(0, 50), 0, true))).toEqual([0, 10, 60, 110, 160, 210, 260, 310]);
+    expect(degs(polarDirections(S(0, 50), 0, false))).toEqual([0, 50, 100, 150, 200, 250, 300, 350]);
+    // 북쪽 0·시계 방향: 증분 90은 같은 네 방향, 추가 각도 10은 북쪽에서 시계 방향 10도(UCS 80도)
+    expect(degs(polarDirections(S(4, 90, [10]), 90 * D, true))).toEqual([0, 80, 90, 180, 270]);
+    // 0 방향 30도(ANGBASE): 90 증분이 30·120·210·300
+    expect(degs(polarDirections(S(0, 90), 30 * D))).toEqual([30, 120, 210, 300]);
+  });
+
+  it('객체 스냅 추적: 직교로만이면 UCS 축 그대로, 극좌표 각도(2)면 절대 극좌표와 같은 0 방향·방향', () => {
+    expect(degs(otrackDirections(S(0, 45), true, 0, { angbase: 30 * D, angdir: 1 }))).toEqual([0, 90, 180, 270]);
+    expect(degs(otrackDirections(S(2, 90), true, 0, { angbase: 30 * D }))).toEqual([30, 120, 210, 300]);
+    expect(degs(otrackDirections(S(6, 90, [10]), true, 0, NORTH_CW))).toEqual([0, 80, 90, 180, 270]);
+  });
+
+  it('툴팁 각도 글: AUNITS·AUPREC(값이 달라 보이면 네 자리까지), 십진 도는 °, 측량 단위는 절대면 방위·상대면 도/분/초', () => {
+    expect(trackAngleText(45 * D)).toBe('45°');
+    expect(trackAngleText(22.5 * D)).toBe('22.5°');
+    expect(trackAngleText(-90 * D)).toBe('270°');
+    expect(trackAngleText(45 * D, { aunits: 0, auprec: 2 })).toBe('45.00°');
+    expect(trackAngleText(22.5 * D, { aunits: 1, auprec: 0 })).toBe("22d30'");
+    expect(trackAngleText(22.5 * D, { aunits: 2, auprec: 0 })).toBe('25g');
+    expect(trackAngleText(90 * D, { aunits: 3, auprec: 0 })).toBe('1.5708r');
+    // 아무 각도(UCS를 돌린 도면의 직교선)는 네 자리에서 멈춘다
+    expect(trackAngleText(0.3, { aunits: 0, auprec: 0 })).toBe('17.1887°');
+    // 측량 단위: 북쪽 0·시계 방향에서 30도 = 방위 N 30d E. 0 방향이 동쪽이면 30도 = N 60d E
+    expect(trackAngleText(30 * D, { ...NORTH_CW, aunits: 4 })).toBe('N 30d E');
+    expect(trackAngleText(30 * D, { aunits: 4, auprec: 0 })).toBe('N 60d E');
+    expect(trackAngleText(30 * D, { ...NORTH_CW, aunits: 4 }, true)).toBe('30d');
+  });
+
+  it('정렬선 툴팁: 0 방향(ref)에서 cw 쪽으로 재고 각도 글은 angle로', () => {
+    const base = { x: 0, y: 0 };
+    const units = { ...NORTH_CW, aunits: 1 };
+    const tip = { ref: 90 * D, cw: true, angle: (a: number) => trackAngleText(a, units) };
+    const dirs = polarDirections(S(0, 30), 90 * D, true);
+    // UCS 60도(북쪽에서 시계 방향 30도) 근처
+    const t = polarTrack(base, { x: 5, y: 8.7 }, dirs, 1, fmt, tip)!;
+    expect(t.tip).toBe('극좌표: 10.03 < 30d');
+    expect(Math.atan2(t.p.y, t.p.x) / D).toBeCloseTo(60, 9);
+    // 획득점(PolarTip로 준 0 방향)과 기준점(baseTip)
+    const o = objectTrack([{ p: { x: 10, y: 0 }, label: '끝점' }], { x: 16, y: 0.3 }, polarDirections(S(0), 0), 1, null, null, fmt, tip)!;
+    expect(o.tip).toBe('끝점: 6.00 < 90d');
+    const both = objectTrack([{ p: { x: 10, y: 0 }, label: '끝점' }], { x: 10.2, y: 5.9 }, polarDirections(S(0), 0), 1, base, dirs, fmt, tip, { ...tip, label: '극좌표' })!;
+    expect(both.p.x).toBeCloseTo(10, 9);
+    // 기준점의 정렬선은 UCS 30도 = 북쪽에서 시계 방향 60도, 획득점의 수직선은 북쪽 = 0
+    expect(both.tip).toBe('극좌표: < 60d, 끝점: < 0d');
+  });
+
+  it('방위로 준 추가 각도는 도면의 0 방향·방향으로 바꿔 받고, 방위로 보일 때 되돌린다', () => {
+    const sv = { ...NORTH_CW, aunits: 4 };
+    expect(parseAngleText('N 30d E', 4, true, NORTH_CW)).toBeCloseTo(30, 9);
+    expect(parseAngleText('E', 4, true, NORTH_CW)).toBeCloseTo(90, 9);
+    expect(parseAngleText('N 30d E', 4, true)).toBeCloseTo(60, 9);
+    expect(formatPolarAngle(30, sv, true)).toBe('N 30d E');
+    expect(formatPolarAngle(90, sv, true)).toBe('E');
+    expect(parsePolarAddAng('N 30d E;S', sv)).toEqual([30, 180]);
+    const r = addPolarAngle([], 'N 10d W', sv);
+    expect('list' in r && r.list).toEqual([350]);
+  });
+
+  it('극좌표 좌표 입력(d<a·@d<a·원통·구)의 각도도 0 방향에서 ANGDIR 쪽으로', () => {
+    const conv = { angbase: 90 * D, angdir: 1 };
+    const p = parsePointInput('@10<30', { x: 1, y: 1 }, null, 0, conv)!;
+    expect(p.x).toBeCloseTo(1 + 10 * Math.cos(60 * D), 9);
+    expect(p.y).toBeCloseTo(1 + 10 * Math.sin(60 * D), 9);
+    const c = parsePointInput('5<0,2', null, null, 0, conv)!;
+    expect([c.x, c.y, c.z]).toEqual([expect.closeTo(0, 9), expect.closeTo(5, 9), 2]);
+    const s = parsePointInput('10<90<90', null, null, 0, conv)!;
+    expect(s.z).toBeCloseTo(10, 9);
+    // 시계 방향만: 90은 아래쪽
+    const q = parsePointInput('10<90', null, null, 0, { angdir: 1 })!;
+    expect(q.y).toBeCloseTo(-10, 9);
+    // 기본(0·0)은 이전과 같다
+    expect(parsePointInput('10<90', null, null)!.y).toBeCloseTo(10, 9);
+  });
+
+  it('동적 입력의 각도 칸: 커서 각도를 0 방향에서 재서 보이고, 잠근 각도도 그렇게 읽는다', () => {
+    const conv = { angbase: 90 * D, angdir: 1 };
+    const dyn = new DynInput();
+    dyn.sync({});
+    const base = { x: 0, y: 0 };
+    // 커서는 UCS 60도(북쪽에서 시계 방향 30도)
+    const cur = { x: 10 * Math.cos(60 * D), y: 10 * Math.sin(60 * D) };
+    expect(dyn.fields(base, cur, '', WORLD, (v) => v.toFixed(2), conv).map((f) => f.text)).toEqual(['10.00', '30°']);
+    expect(dyn.fields(base, cur, '', WORLD, (v) => v.toFixed(2)).map((f) => f.text)).toEqual(['10.00', '60°']);
+    // 거리 칸에 5를 잠그고 각도 0(북쪽)
+    expect(dyn.tab('5', true)).toBe(true);
+    const r = dyn.resolve('0', base, cur, WORLD, 0, conv)!;
+    expect(r.x).toBeCloseTo(0, 9);
+    expect(r.y).toBeCloseTo(5, 9);
+    const k = dyn.constrain(base, cur, WORLD, 0, conv);
+    expect(Math.hypot(k.x, k.y)).toBeCloseTo(5, 9);
   });
 });

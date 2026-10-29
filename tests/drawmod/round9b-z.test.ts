@@ -1,11 +1,11 @@
 /**
  * 9차 후속: 3D 좌표 입력의 Z.
  * - parsePointInput: x,y,z 절대, @ 상대(마지막 점의 Z를 잇는다), 원통(d<a,z)·구(d<a<b) 좌표, 직접 거리
- * - 3DPOLY·3DFACE는 입력이 정한 Z, Z를 주지 않은 점은 고도. 2D 명령(LINE)은 지금처럼 고도에 평면으로
+ * - 3DPOLY·3DFACE는 입력이 정한 Z, Z를 주지 않은 점은 고도. LINE은 점마다 입력이 정한 Z(3D 선), CIRCLE은 중심점의 Z가 고도(16차)
  * - 점 필터(.XY → Z 숫자)·M2P의 Z
  */
 import { describe, expect, it } from 'vitest';
-import type { FaceEntity, LineEntity, PolylineEntity } from '../../src/core/model';
+import type { CircleEntity, FaceEntity, LineEntity, PolylineEntity } from '../../src/core/model';
 import type { PointResult } from '../../src/app/app';
 import { parsePointInput } from '../../src/app/commandline';
 import { dynRelative } from '../../src/app/dyninput';
@@ -99,12 +99,63 @@ describe('3DPOLY·3DFACE의 Z', () => {
     expect(f.points.map((q) => q.z)).toEqual([0, 1, 1, 2]);
   });
 
-  it('2D 명령(LINE)은 Z를 받아도 지금처럼 고도에 평면으로 그린다', async () => {
+  it('LINE(16차): Z를 준 점은 그 Z로 3D 선, X·Y만 준 점은 고도(AutoCAD 도움말 ELEV)', async () => {
     const h = harness();
     await h.run('LINE', ['0,0,5', '10,0,7', '']);
     const l = modelEntities(h.doc, 'LINE')[0] as LineEntity;
-    expect(l.start).toEqual({ x: 0, y: 0, z: 2 });
-    expect(l.end).toEqual({ x: 10, y: 0, z: 2 });
+    expect(l.start).toEqual({ x: 0, y: 0, z: 5 });
+    expect(l.end).toEqual({ x: 10, y: 0, z: 7 });
+    // 마지막 점에도 Z(다음 LINE의 Enter·@ 상대 좌표가 잇는다)
+    expect(h.app.lastPoint).toMatchObject({ x: 10, y: 0, z: 7 });
+    // Z를 주지 않은 점은 지금처럼 고도에 평면으로
+    await h.run('LINE', ['0,0', '10,0', '']);
+    const flat = modelEntities(h.doc, 'LINE').at(-1) as LineEntity;
+    expect([flat.start.z, flat.end.z]).toEqual([2, 2]);
+    expect(h.app.lastPoint).toEqual({ x: 10, y: 0 });
+  });
+
+  it('LINE: @ 상대 좌표는 앞 점의 Z를 잇고, Z축 방향 선, 닫기(C)·명령 취소(U)도 점마다 Z', async () => {
+    const h = harness();
+    await h.run('LINE', ['0,0,1', '@10,0', '@0,0,4', '@0,10', 'U', '@0,5,-1', 'C']);
+    const ls = modelEntities(h.doc, 'LINE') as LineEntity[];
+    expect(ls.map((l) => [l.start, l.end].map((p) => [p.x, p.y, p.z]))).toEqual([
+      [
+        [0, 0, 1],
+        [10, 0, 1],
+      ],
+      // 평면에서 같은 자리, Z만 다른 선
+      [
+        [10, 0, 1],
+        [10, 0, 5],
+      ],
+      [
+        [10, 0, 5],
+        [10, 5, 4],
+      ],
+      // 닫기: 첫 점(Z 1)으로
+      [
+        [10, 5, 4],
+        [0, 0, 1],
+      ],
+    ]);
+    // 같은 3D 점은 건너뛴다
+    await h.run('LINE', ['3,3,3', '3,3,3', '3,3', '']);
+    const last = modelEntities(h.doc, 'LINE').at(-1) as LineEntity;
+    expect([last.start, last.end]).toEqual([
+      { x: 3, y: 3, z: 3 },
+      { x: 3, y: 3, z: 2 },
+    ]);
+  });
+
+  it('CIRCLE(16차): 중심점에 준 Z가 원의 고도, X·Y만 주면 지금 고도', async () => {
+    const h = harness();
+    await h.run('CIRCLE', ['5,5,9', '3']);
+    await h.run('CIRCLE', ['0,0', '2']);
+    const cs = modelEntities(h.doc, 'CIRCLE') as CircleEntity[];
+    expect(cs.map((c) => [c.center, c.radius])).toEqual([
+      [{ x: 5, y: 5, z: 9 }, 3],
+      [{ x: 0, y: 0, z: 2 }, 2],
+    ]);
   });
 });
 

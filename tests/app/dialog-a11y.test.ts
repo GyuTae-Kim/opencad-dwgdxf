@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** 키보드·화면 읽기 프로그램으로 쓰는 대화상자·메뉴·알림(ui/dom.ts)과 열기 실패 안내(openerror.ts) */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { dialog, focusables, form, keyboardControl, showMenu, toast } from '../../src/app/ui/dom';
+import { closeMenu, dialog, focusables, form, keyboardControl, showMenu, toast } from '../../src/app/ui/dom';
 import { openErrorInfo, openErrorText } from '../../src/app/openerror';
 import { catalogs, registerCatalog, translate } from '../../site/i18n-core.mjs';
 import en from '../../site/locales/en.json';
@@ -110,6 +110,22 @@ describe('메뉴 키보드', () => {
   it('마우스로 연 메뉴(키보드 초점 없음)는 초점을 옮기지 않는다', () => {
     showMenu(10, 10, [{ label: '복사' }]);
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it('onClose는 메뉴가 닫힐 때 한 번: 항목을 고르면 run보다 먼저, Esc·다른 메뉴로 닫혀도(오른쪽 끌어 놓기 미리보기 치우기)', () => {
+    const order: string[] = [];
+    showMenu(0, 0, [{ label: '여기로 이동', run: () => order.push('run') }], { onClose: () => order.push('close') });
+    (document.querySelector('.menu button') as HTMLButtonElement).click();
+    expect(order).toEqual(['close', 'run']);
+    showMenu(0, 0, [{ label: '취소' }], { onClose: () => order.push('esc') });
+    key(document.querySelector('.menu')!, 'Escape');
+    expect(document.querySelector('.menu')).toBeNull();
+    showMenu(0, 0, [{ label: '취소' }], { onClose: () => order.push('replaced') });
+    showMenu(0, 0, [{ label: '다른 메뉴' }]);
+    expect(order).toEqual(['close', 'run', 'esc', 'replaced']);
+    closeMenu();
+    closeMenu();
+    expect(order).toHaveLength(4);
   });
 });
 

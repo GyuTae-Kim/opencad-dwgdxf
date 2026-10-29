@@ -7,6 +7,7 @@
  */
 import { lispUnclosed } from '../edit/lisp/reader';
 import type { MeasureResult } from './measure-result';
+import { type AngleConvention, fromDrawingAngle } from './polar';
 export interface Suggestion {
   name: string;
   title: string;
@@ -320,8 +321,10 @@ const RE_SPHERE = new RegExp(`^${NUM}<${NUM}<${NUM}$`, 'i');
  * 구 "d<a<b"·"@d<a<b", 숫자(직접 거리). 각도는 도.
  * Z: 절대 좌표는 Z를 준 때만 z가 있다. @ 상대 좌표·직접 거리는 마지막 점(last)의 Z를 잇는다. last에 z가 없으면(평면 점)
  * 평면 상대 좌표에는 z가 없고, dz를 준 상대 좌표는 relZ0(고도)에서 잰다.
+ * 극좌표·원통·구 좌표의 XY 평면 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로 잰다(conv — AutoCAD 도움말
+ * "About Entering 2D Polar Coordinates": 기본은 시계 반대 방향, 각도 규칙은 UNITS로 바꾼다). 구 좌표의 올려 본 각은 그대로.
  */
-export function parsePointInput(s: string, last: { x: number; y: number; z?: number } | null, cursorDir: { x: number; y: number } | null, relZ0 = 0): PointInput | null {
+export function parsePointInput(s: string, last: { x: number; y: number; z?: number } | null, cursorDir: { x: number; y: number } | null, relZ0 = 0, conv: AngleConvention = {}): PointInput | null {
   const t = s.trim().replace(/\s+/g, '');
   if (!t) return null;
   const rel = t.startsWith('@');
@@ -337,7 +340,7 @@ export function parsePointInput(s: string, last: { x: number; y: number; z?: num
   const sph = RE_SPHERE.exec(body);
   if (sph) {
     const d = parseFloat(sph[1]!);
-    const a = (parseFloat(sph[2]!) * Math.PI) / 180;
+    const a = fromDrawingAngle((parseFloat(sph[2]!) * Math.PI) / 180, conv);
     const b = (parseFloat(sph[3]!) * Math.PI) / 180;
     const h = d * Math.cos(b);
     return out(base.x + h * Math.cos(a), base.y + h * Math.sin(a), zOf(d * Math.sin(b)));
@@ -345,7 +348,7 @@ export function parsePointInput(s: string, last: { x: number; y: number; z?: num
   const polar = RE_POLAR.exec(body);
   if (polar) {
     const d = parseFloat(polar[1]!);
-    const a = (parseFloat(polar[2]!) * Math.PI) / 180;
+    const a = fromDrawingAngle((parseFloat(polar[2]!) * Math.PI) / 180, conv);
     return out(base.x + d * Math.cos(a), base.y + d * Math.sin(a), zOf(polar[3] !== undefined ? parseFloat(polar[3]) : null));
   }
   const xy = RE_XY.exec(body);

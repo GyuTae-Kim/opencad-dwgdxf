@@ -4,9 +4,12 @@
  * - 입력한 글은 명령행 입력란에 들어가고 지금 칸에 보인다. Tab은 지금 칸의 값을 잠그고 다음 칸으로 옮긴다(잠긴 칸에 자물쇠).
  *   잠긴 값은 커서가 움직여도 그대로이고, 고무줄·미리보기도 그 값에 묶인다(constrain). Enter는 두 칸을 합쳐 점을 만든다(resolve).
  * - 쉼표·<가 든 글은 칸 대신 좌표 입력이다. 두 번째 점부터는 @ 없이 상대 좌표로 읽는다(dynRelative): `10,5` = `@10,5`, `#10,5`는 절대.
+ * - 각도 칸은 극좌표 입력과 같게 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로 잰다(conv — AutoCAD 도움말
+ *   "About Entering 2D Polar Coordinates": 각도 규칙은 UNITS로 바꾼다). 극좌표 추적 툴팁의 각도와 같은 기준이다.
  * 이 모듈은 화면과 앱을 모른다(app.ts가 상태를 들고 view.ts가 칸을 그린다).
  */
 import { parseAngle, parseLength } from '../core/units';
+import { type AngleConvention, fromDrawingAngle, toDrawingAngle } from './polar';
 import { type Ucs, dirToUcs, toUcs, toWcs } from './ucs';
 import type { Pt } from './view';
 
@@ -87,14 +90,14 @@ export class DynInput {
     return v;
   }
 
-  /** 잠긴 값으로 커서 점을 묶는다: 극좌표면 거리·각도, 아니면 UCS X·Y */
-  constrain(base: Pt | null, p: Pt, u: Ucs, aunits = 0): Pt {
+  /** 잠긴 값으로 커서 점을 묶는다: 극좌표면 거리·각도(도면 단위의 0 방향·양의 방향 — conv), 아니면 UCS X·Y */
+  constrain(base: Pt | null, p: Pt, u: Ucs, aunits = 0, conv: AngleConvention = {}): Pt {
     if (!this.locked) return p;
     const [a, b] = this.parts('', !!base, aunits);
     if (base) {
       const d = dirToUcs(u, { x: p.x - base.x, y: p.y - base.y });
       const dist = a ?? Math.hypot(d.x, d.y);
-      const ang = b ?? Math.atan2(d.y, d.x);
+      const ang = b !== null ? fromDrawingAngle(b, conv) : Math.atan2(d.y, d.x);
       const w = { x: Math.cos(ang + u.angle) * dist, y: Math.sin(ang + u.angle) * dist };
       return { x: base.x + w.x, y: base.y + w.y };
     }
@@ -107,7 +110,7 @@ export class DynInput {
    * 칸 입력이 아니면(잠긴 값이 없고 글이 숫자 하나뿐이거나 좌표 글이면) null — 직접 거리·좌표 해석에 맡긴다.
    * 극좌표에서 거리만 있으면 커서 방향(직접 거리), 각도만 있으면 커서까지 거리.
    */
-  resolve(text: string, base: Pt | null, cursor: Pt | null, u: Ucs, aunits = 0): Pt | null {
+  resolve(text: string, base: Pt | null, cursor: Pt | null, u: Ucs, aunits = 0, conv: AngleConvention = {}): Pt | null {
     if (!this.locked) return null;
     const t = text.trim();
     if (t && /[,<]/.test(t)) return null;
@@ -116,22 +119,22 @@ export class DynInput {
     if (base) {
       const d = cursor ? dirToUcs(u, { x: cursor.x - base.x, y: cursor.y - base.y }) : { x: 1, y: 0 };
       const dist = a ?? Math.hypot(d.x, d.y);
-      const ang = b ?? Math.atan2(d.y, d.x);
+      const ang = b !== null ? fromDrawingAngle(b, conv) : Math.atan2(d.y, d.x);
       return { x: base.x + Math.cos(ang + u.angle) * dist, y: base.y + Math.sin(ang + u.angle) * dist };
     }
     const q = cursor ? toUcs(u, cursor) : { x: 0, y: 0 };
     return toWcs(u, { x: a ?? q.x, y: b ?? q.y });
   }
 
-  /** 커서 옆 칸 두 개: 지금 칸에는 입력 중인 글(없으면 커서 값), 잠긴 칸에는 잠긴 값 */
-  fields(base: Pt | null, p: Pt, text: string, u: Ucs, fmtLen: (v: number) => string): DynFieldView[] {
+  /** 커서 옆 칸 두 개: 지금 칸에는 입력 중인 글(없으면 커서 값 — 각도는 도면 단위의 0 방향에서 잰다), 잠긴 칸에는 잠긴 값 */
+  fields(base: Pt | null, p: Pt, text: string, u: Ucs, fmtLen: (v: number) => string, conv: AngleConvention = {}): DynFieldView[] {
     const t = text.trim();
     // 좌표 글(10,5)을 치는 중이면 칸 하나에 글 그대로
     if (t && /[,<]/.test(t)) return [{ text: t, locked: false, active: true }];
     let cur: [string, string];
     if (base) {
       const d = dirToUcs(u, { x: p.x - base.x, y: p.y - base.y });
-      const a = deg(Math.atan2(d.y, d.x));
+      const a = deg(toDrawingAngle(Math.atan2(d.y, d.x), conv));
       cur = [fmtLen(Math.hypot(d.x, d.y)), `${Math.abs(a - Math.round(a)) < 1e-6 ? Math.round(a) : a.toFixed(1)}°`];
     } else {
       const q = toUcs(u, p);

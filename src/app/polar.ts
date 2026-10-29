@@ -10,6 +10,10 @@
  * 극좌표 추적 켜기·끄기는 POLARMODE가 아니라 AUTOSNAP 8(F10)이다(settings.ts polarTrackOn).
  * 제도 설정·상태 막대는 두 각도를 도면의 각도 단위(AUNITS·AUPREC)로 보이고 그 단위로 받는다(AutoCAD 도움말의 POLARADDANG:
  * "The AUNITS system variable sets the format for display of angles"). 저장값은 그대로 도다(formatPolarAngle·parseAngleText).
+ * 각도의 0 방향과 양의 방향은 도면 단위(ANGBASE·ANGDIR)를 따른다(AutoCAD 도움말 "About Polar Tracking and PolarSnap": 0의 방향은
+ * 도면 단위 대화상자에서 정한 각도를, 스냅 방향(시계·반시계)은 도면 단위에서 정한 방향을 따른다).
+ * 증분 각도의 배수와 추가 각도는 모두 그 0 방향에서 ANGDIR 쪽으로 잰다(AngleConvention). 추적 툴팁의 각도도 그렇게 재서
+ * AUNITS·AUPREC로 보인다(trackAngleText — 도움말 "Drawing Units Dialog Box": 각도 형식·정밀도는 각도를 보이는 형식·자릿수).
  * 화면·DOM을 가져오지 않는다(시험이 가볍게 쓴다).
  */
 import { formatAngle, parseAngle } from '../core/units';
@@ -103,6 +107,36 @@ export interface AngleUnits {
 /** 도면이 없을 때와 명령행·SETVAR의 값(저장값 그대로 — 십진 도) */
 export const DEGREE_UNITS: AngleUnits = { aunits: 0, auprec: 0 };
 
+/**
+ * 도면의 각도 0 방향과 양의 방향(UNITS 대화상자의 방향·시계 방향): ANGBASE(라디안, 지금 UCS의 X축에서 시계 반대 방향으로 잰 0 방향),
+ * ANGDIR(1이면 시계 방향이 양). 없으면 0·0(UCS X축에서 시계 반대 방향 — 이전 판과 같다)
+ */
+export interface AngleConvention {
+  angbase?: number;
+  angdir?: number;
+}
+
+/** ANGDIR 1(시계 방향이 양)인지 */
+export function clockwise(c: AngleConvention): boolean {
+  return c.angdir === 1;
+}
+
+/** ANGBASE(라디안, 맞지 않으면 0) */
+export function angleBase(c: AngleConvention): number {
+  return typeof c.angbase === 'number' && Number.isFinite(c.angbase) ? c.angbase : 0;
+}
+
+/** 도면 각도(0 방향에서 ANGDIR 쪽으로 잰 라디안) → UCS X축에서 시계 반대 방향으로 잰 라디안 */
+export function fromDrawingAngle(a: number, c: AngleConvention): number {
+  return angleBase(c) + (clockwise(c) ? -a : a);
+}
+
+/** UCS X축에서 시계 반대 방향으로 잰 라디안 → 도면 각도(0 방향에서 ANGDIR 쪽으로, 0 ≤ θ < 2π) */
+export function toDrawingAngle(a: number, c: AngleConvention): number {
+  const d = a - angleBase(c);
+  return norm(clockwise(c) ? -d : d);
+}
+
 const RAD = Math.PI / 180;
 /** 같은 각도로 볼 차이(도). 저장하는 글(formatDeg)이 소수 여섯째 자리까지다 */
 const SAME_DEG = 1e-6;
@@ -124,14 +158,17 @@ function dirDiff(a: number, b: number): number {
 /**
  * 각도 글 → 도(0~360으로 바꾸지 않는다). 단위 표시가 있으면 그 단위(45d30'15", 45°, 50g, 0.7854r), 없으면 aunits의 단위
  * (0·1·4 도, 2 그라드, 3 라디안 — AutoLISP angtof와 같다). direction이면 측량 방위(N 80d E·N·S·E·W)도 읽는다.
+ * 방위는 절대 방향이라 도면의 0 방향·양의 방향(conv — ANGBASE·ANGDIR)에서 잰 각도로 바꾼다(없으면 동쪽에서 시계 반대 방향).
  * 앱의 각도 해석(core/units parseAngle, AutoLISP angtof)을 그대로 쓴다. 지수(1e2)와 못 읽는 글은 null
  */
-export function parseAngleText(text: string, aunits: number, direction = false): number | null {
+export function parseAngleText(text: string, aunits: number, direction = false, conv: AngleConvention = {}): number | null {
   const t = text.trim();
   if (!t) return null;
   let r: number | null;
-  if (direction && BEARING.test(t)) r = angtof(t, 4);
-  else if (/^[-+]?(\d+\.?\d*|\.\d+)e/i.test(t)) return null;
+  if (direction && BEARING.test(t)) {
+    r = angtof(t, 4);
+    if (r !== null && Number.isFinite(r) && (angleBase(conv) || clockwise(conv))) r = toDrawingAngle(r, conv);
+  } else if (/^[-+]?(\d+\.?\d*|\.\d+)e/i.test(t)) return null;
   else r = parseAngle(t, aunits === 1 || aunits === 4 ? 0 : aunits);
   if (r === null || !Number.isFinite(r)) return null;
   return Math.round((r / RAD) * 1e9) / 1e9;
@@ -139,21 +176,41 @@ export function parseAngleText(text: string, aunits: number, direction = false):
 
 /**
  * 극좌표 각도(도)를 도면 각도 단위의 글로(앱의 각도 표시 — AutoLISP angtos·core/units formatAngle과 같은 꼴, 십진 도는 ° 없이 "22.5").
- * direction이면 방향(추가 각도 — 측량 단위면 방위 "N 80d E"), 아니면 크기(증분 각도 — 측량 단위면 도/분/초).
- * AUPREC 자릿수로 값이 달라 보이면(22.5를 정밀도 0으로 "23") 같은 값으로 다시 읽힐 때까지 자릿수를 늘린다(8자리까지).
+ * direction이면 방향(추가 각도 — 측량 단위면 방위 "N 80d E": 도면의 0 방향·양의 방향(units의 ANGBASE·ANGDIR)에서 잰 각도를 절대 방향으로
+ * 바꿔 보인다), 아니면 크기(증분 각도 — 측량 단위면 도/분/초).
+ * AUPREC 자릿수로 값이 달라 보이면(22.5를 정밀도 0으로 "23") 같은 값으로 다시 읽힐 때까지 자릿수를 늘린다(maxPrec자리까지 — 기본 8).
  * 저장값은 반올림하지 않는다(AutoCAD는 AUPREC으로 반올림한다고 도움말에 적혀 있다 — README)
  */
-export function formatPolarAngle(deg: number, units: AngleUnits = DEGREE_UNITS, direction = false): string {
+export function formatPolarAngle(deg: number, units: AngleUnits & AngleConvention = DEGREE_UNITS, direction = false, maxPrec = 8): string {
   const u = unitsOf(units);
   const mode = u.aunits === 4 && !direction ? 1 : u.aunits;
   const v = Math.abs(deg) < 5e-10 ? 0 : deg;
-  const once = (p: number) => (mode === 0 ? v.toFixed(p) : direction ? angtos(v * RAD, mode, p, 0) : formatAngle(v * RAD, { aunits: mode, auprec: p }));
+  const bearing = direction && mode === 4;
+  const once = (p: number) =>
+    mode === 0 ? v.toFixed(p) : bearing ? angtos(fromDrawingAngle(v * RAD, units), 4, p, 0) : direction ? angtos(v * RAD, mode, p, 0) : formatAngle(v * RAD, { aunits: mode, auprec: p });
+  const last = Math.max(u.auprec, Math.min(8, maxPrec));
   for (let p = u.auprec; ; p++) {
     const s = once(p);
-    if (p >= 8) return s;
-    const back = parseAngleText(s, mode, direction);
+    if (p >= last) return s;
+    const back = parseAngleText(s, mode, direction, units);
     if (back !== null && (direction ? dirDiff(back, v) : Math.abs(back - v)) < SAME_DEG) return s;
   }
+}
+
+/** 추적 툴팁 각도의 자릿수 한도(AUPREC보다 크면 AUPREC까지). 아무 방향(UCS를 돌린 도면의 직교 정렬선)이 8자리로 길어지지 않게 */
+const TIP_PREC = 4;
+
+/**
+ * 극좌표·객체 스냅 추적 툴팁의 각도 글: 0 방향(절대면 ANGBASE, 상대 극좌표면 마지막 선분)에서 ANGDIR 쪽으로 잰 각도 a(라디안)를
+ * 도면 각도 단위(AUNITS·AUPREC)로. 십진 도는 °를 붙인다(이전 판의 툴팁과 같은 꼴). 측량 단위는 절대 방향이면 그 방향의 방위(N 45d E),
+ * 상대 극좌표면 크기(도/분/초). AUPREC로 값이 달라 보이면(22.5를 정밀도 0으로) 다시 읽힐 때까지 TIP_PREC자리까지 늘린다
+ */
+export function trackAngleText(a: number, units: AngleUnits & AngleConvention = DEGREE_UNITS, relative = false): string {
+  const deg = normDeg(Math.round((norm(a) / RAD) * 1e9) / 1e9);
+  const u = unitsOf(units);
+  if (u.aunits === 4 && !relative) return formatPolarAngle(deg, units, true, TIP_PREC);
+  const s = formatPolarAngle(deg, units, false, TIP_PREC);
+  return u.aunits === 0 ? `${s}°` : s;
 }
 
 /**
@@ -177,14 +234,14 @@ function addDeg(raw: number): number {
  * POLARADDANG 글 → 추가 각도 목록(도, 0 ≤ θ < 360, 같은 각도는 한 번). 빈 글과 "."(AutoCAD 문자열 변수의 "없음")은 빈 목록.
  * 항목은 parseAngleText(units — 명령행·SETVAR는 도)로 읽는다. 못 읽는 항목이 있거나 10개가 넘으면 문구
  */
-export function parsePolarAddAng(text: string, units: AngleUnits = DEGREE_UNITS): number[] | string {
+export function parsePolarAddAng(text: string, units: AngleUnits & AngleConvention = DEGREE_UNITS): number[] | string {
   const t = text.trim().replace(/^"(.*)"$/, '$1').trim();
   if (!t || t === '.') return [];
   const out: number[] = [];
   for (const raw of t.split(';')) {
     const p = raw.trim();
     if (!p) continue;
-    const d = parseAngleText(p, unitsOf(units).aunits, true);
+    const d = parseAngleText(p, unitsOf(units).aunits, true, units);
     if (d === null) return `추가 각도 "${p}"을(를) 각도로 읽을 수 없습니다. 각도를 ;로 나눠 입력하십시오.`;
     const v = addDeg(d);
     if (!out.some((x) => Math.abs(x - v) < 1e-9)) out.push(v);
@@ -200,10 +257,10 @@ export type PolarAddResult = { list: number[]; index: number; note: string | nul
  * 추가 각도 목록에 하나 넣기(AutoCAD 제도 설정의 [새로 만들기] — 도움말: 10개까지). 글은 도면 각도 단위로 읽는다(parseAngleText).
  * 10개가 찼거나, 못 읽거나, 같은 방향이 이미 있으면 문구. 0~360 밖(-10, 400)은 같은 방향(350, 40)으로 넣고 알린다
  */
-export function addPolarAngle(list: readonly number[], text: string, units: AngleUnits = DEGREE_UNITS): PolarAddResult {
+export function addPolarAngle(list: readonly number[], text: string, units: AngleUnits & AngleConvention = DEGREE_UNITS): PolarAddResult {
   if (list.length >= POLARADDANG_MAX) return { error: `추가 각도는 ${POLARADDANG_MAX}개까지입니다.` };
   const t = text.trim();
-  const raw = parseAngleText(t, unitsOf(units).aunits, true);
+  const raw = parseAngleText(t, unitsOf(units).aunits, true, units);
   if (raw === null) return { error: `"${t}"을(를) 각도로 읽을 수 없습니다.` };
   const v = addDeg(raw);
   const shown = formatPolarAngle(v, units, true);
@@ -236,27 +293,31 @@ const norm = (a: number) => {
   return Math.abs(r - TAU) < 1e-12 ? 0 : r;
 };
 
-/** 극좌표 추적 방향(라디안, 0 ≤ θ < 2π): 증분 각도의 배수와 POLARMODE 4면 추가 각도, 모두 ref(0도 방향)에서 잰다 */
-export function polarDirections(s: PolarSettings, ref: number): number[] {
+/**
+ * 극좌표 추적 방향(라디안, 0 ≤ θ < 2π): 증분 각도의 배수와 POLARMODE 4면 추가 각도, 모두 ref(0도 방향)에서 잰다.
+ * cw(ANGDIR 1)면 시계 방향으로 잰다 — 360을 나누지 않는 증분(50도)과 추가 각도는 반시계와 다른 방향이 된다
+ */
+export function polarDirections(s: PolarSettings, ref: number, cw = false): number[] {
   const rad = Math.PI / 180;
   const inc = Math.min(POLARANG_MAX, Math.max(POLARANG_MIN, s.inc)) * rad;
-  return polarAngles(inc, s.mode & PM_ADD_ANGLES ? s.add.map((a) => a * rad) : []).map((a) => norm(a + ref));
+  return polarAngles(inc, s.mode & PM_ADD_ANGLES ? s.add.map((a) => a * rad) : []).map((a) => norm(cw ? ref - a : ref + a));
 }
 
 /**
  * 극좌표 각도의 0도 방향(라디안): POLARMODE 1이고 마지막으로 그린 선분이 있으면 그 진행 방향(상대),
- * 아니면 지금 UCS의 X축(절대). 그린 선분이 없으면 상대로 정해 두어도 절대로 잰다
+ * 아니면 지금 UCS의 X축에서 ANGBASE만큼 돈 방향(절대 — 도면 단위의 0 방향). 그린 선분이 없으면 상대로 정해 두어도 절대로 잰다
  */
-export function polarReference(mode: number, ucsAngle: number, lastSegment: number | null): { ref: number; relative: boolean } {
+export function polarReference(mode: number, ucsAngle: number, lastSegment: number | null, angbase = 0): { ref: number; relative: boolean } {
   if (mode & PM_RELATIVE && lastSegment !== null && Number.isFinite(lastSegment)) return { ref: lastSegment, relative: true };
-  return { ref: ucsAngle, relative: false };
+  return { ref: ucsAngle + (Number.isFinite(angbase) ? angbase : 0), relative: false };
 }
 
 /**
  * 객체 스냅 추적에서 획득점이 내는 정렬선 방향(라디안): POLARMODE 2이고 극좌표 각도를 쓸 수 있으면(극좌표 추적이 켜져 있고
- * 직교가 아닐 때) 극좌표 추적 설정의 각도, 아니면 수평·수직. 둘 다 지금 UCS에서 잰다(획득점은 그린 선분과 상관없다)
+ * 직교가 아닐 때) 극좌표 추적 설정의 각도(절대 극좌표처럼 도면 단위의 0 방향·양의 방향 — conv), 아니면 수평·수직(UCS 축 —
+ * 제도 설정 "직교로만 추적"). 획득점은 그린 선분과 상관없다
  */
-export function otrackDirections(s: PolarSettings, polarActive: boolean, ucsAngle: number): number[] {
-  if (polarActive && s.mode & PM_OTRACK_POLAR) return polarDirections(s, ucsAngle);
+export function otrackDirections(s: PolarSettings, polarActive: boolean, ucsAngle: number, conv: AngleConvention = {}): number[] {
+  if (polarActive && s.mode & PM_OTRACK_POLAR) return polarDirections(s, ucsAngle + angleBase(conv), clockwise(conv));
   return polarAngles(Math.PI / 2).map((a) => norm(a + ucsAngle));
 }

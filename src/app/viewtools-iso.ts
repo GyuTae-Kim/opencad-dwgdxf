@@ -14,7 +14,8 @@ import type { Pt } from './view';
 import { formatLength } from '../core/units';
 import { currentUcs, toUcs, toWcs } from './ucs';
 import { objectTrack, polarTrack } from './tracking';
-import type { Acquired } from './tracking';
+import type { Acquired, PolarTip } from './tracking';
+import { angleBase, clockwise, trackAngleText } from './polar';
 import { type ResolvedPoint, addHook } from './hooks';
 import { activeVport, vportSnap } from '../io/vportsnap';
 import { ellipsePoints, TAU } from '../geom/curves';
@@ -138,17 +139,19 @@ export function resolveIsoPoint(app: App, w: Pt, req: { readonly base: Pt | null
   const st = app.active;
   const plane = isoPlaneOf(st);
   if (plane === null || !st) return null;
-  // 1) 극좌표·객체 스냅 추적: 등각 각도(30°·90°·150°…, UCS X축 기준)
+  // 1) 극좌표·객체 스냅 추적: 등각 각도(30°·90°·150°…, UCS X축 기준 — 등각 축은 도면 단위의 0 방향과 상관없다).
+  //    툴팁 각도는 표준 추적과 같게 도면 단위의 0 방향(ANGBASE)에서 ANGDIR 쪽으로 재서 AUNITS·AUPREC로
   const tol = 8 * app.view.pixelSize();
   const fmt = (v: number) => formatLength(v, st.units);
   const u = currentUcs(st);
   const iso = isoPolarAngles().map((a) => a + u.angle);
+  const tip: PolarTip = { ref: u.angle + angleBase(st.units), cw: clockwise(st.units), angle: (a) => trackAngleText(a, st.units) };
   if (app.otrackOn && req.acquired.length) {
-    const t = objectTrack(req.acquired, w, iso, tol, req.base, app.polarOn ? iso : null, fmt);
+    const t = objectTrack(req.acquired, w, iso, tol, req.base, app.polarOn ? iso : null, fmt, tip);
     if (t) return { p: t.p, snap: null, track: t };
   }
   if (req.base && app.polarOn && !app.orthoOn) {
-    const t = polarTrack(req.base, w, iso, tol, fmt);
+    const t = polarTrack(req.base, w, iso, tol, fmt, tip);
     if (t) return { p: t.p, snap: null, track: t };
   }
   // 2) 등각 격자 스냅

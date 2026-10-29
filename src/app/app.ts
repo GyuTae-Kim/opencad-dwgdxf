@@ -25,8 +25,8 @@ import type { MeasureResult } from './measure-result';
 import { Picker } from './pick';
 import { SELECT_HELP, SELECT_METHODS, SELECT_OPTIONS, runSelectMethod, selectMethodOf } from './selmethod';
 import { DEFAULT_SNAPS, SNAP_NAMES, type SnapPoint, findSnaps } from './snap';
-import { type Acquired, objectTrack, polarTrack } from './tracking';
-import { type PolarSettings, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire } from './polar';
+import { type Acquired, type PolarTip, objectTrack, polarTrack } from './tracking';
+import { type PolarSettings, angleBase, clockwise, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire, trackAngleText } from './polar';
 import { gripPoints } from '../edit/geom';
 import { dynGrips, isDynamicReference } from '../edit/dynblock';
 import { spaceTolerance } from '../render/build';
@@ -43,7 +43,7 @@ import { maximized } from './viewtools-vpmax';
 import { DynInput, dynRelative } from './dyninput';
 import { type Override, parseOverride, runPointOverride } from './osnap-override';
 import { type ExtAnchor, findExtAnchor, segmentDirAt } from './snap';
-import { DragGhost, commitDrag, pressKind } from './dragmove';
+import { DragGhost, type DropAction, commitDrag, dropMenuItems, pasteDragAsBlock, pressKind } from './dragmove';
 import { Lasso } from './lasso';
 import { CtrlTap, ctrlAction } from './keys';
 import { commandLineMenu, commandMenu, idleMenu, osnapItems, showContextMenu } from './ctxmenu';
@@ -327,6 +327,8 @@ export class App {
   private lastMove: { w: Pt; s: Pt; ev: PointerEvent } | null = null;
   /** 왼쪽 버튼을 누른 곳의 뜻(명령이 없을 때): 그립, 끌어 옮기기, 창·올가미 */
   private press: { kind: 'grip' | 'move' | 'window'; world: Pt; screen: Pt; ghost?: DragGhost; lasso?: Lasso; started?: boolean } | null = null;
+  /** 오른쪽 버튼 끌어 놓기(고른 객체 위에서 누른 자리, 끄는 동안의 미리보기, 놓은 뒤 메뉴가 열려 있는지) */
+  private rightPress: { world: Pt; ghost?: DragGhost; menu?: boolean } | null = null;
   /** 명령 없이 객체를 고른 마지막 클릭(두 번 누르기의 두 번째 클릭이 막 생긴 그립을 눌러도 그립 편집으로 가지 않게) */
   private lastPickClick: { time: number; screen: Pt } | null = null;
   /** 핫 그립(Shift+클릭으로 여럿) */
@@ -373,6 +375,8 @@ export class App {
       click: (w, s, ev) => this.onClick(w, s, ev),
       drag: (a, b, done, ev) => this.onDrag(a, b, done, ev),
       context: (w, s, ev, held) => this.onContext(w, s, ev, held),
+      rightDown: (w, s, ev) => this.onRightDown(w, s, ev),
+      rightDrag: (a, b, phase, ev) => this.onRightDrag(a, b, phase, ev),
       dblclick: (w, s) => this.onDblClick(w, s),
       leave: () => {
         this.ui.setCoords('');
@@ -608,6 +612,10 @@ export class App {
       this.running.ctrl.abort();
       this.running = null;
       if (!silent) this.cmd.print('*취소*');
+    } else if (this.rightPress && (this.rightPress.ghost || this.rightPress.menu)) {
+      // 오른쪽 버튼 끌기·끌어 놓기 메뉴: Esc는 끌기만 그만둔다(선택은 그대로 — 메뉴의 [취소]와 같다)
+      if (this.rightPress.menu) closeMenu();
+      this.endRightDrag();
     } else if (this.windowStart || this.press?.lasso) {
       this.windowStart = null;
       this.press = null;
@@ -939,7 +947,7 @@ export class App {
     // 동적 입력 칸을 잠갔으면 Enter·값으로 그 칸들을 합친 점
     if (r.kind === 'point' && this.dynOn && interactive && this.dyn.locked) {
       const st = this.active;
-      const p = st ? this.dyn.resolve(t, r.base, this.cursorWorld, currentUcs(st), st.units.aunits) : null;
+      const p = st ? this.dyn.resolve(t, r.base, this.cursorWorld, currentUcs(st), st.units.aunits, st.units) : null;
       if (p) {
         if (this.outsideLimits(p)) return;
         this.cmd.print(`${this.promptOf(r)} ${[...this.dyn.locks.filter((x) => x !== null), t].filter(Boolean).join(' ')}`);
@@ -1029,7 +1037,8 @@ export class App {
     const lastW = base ?? this.lastPoint;
     const lastZ = lastW?.z;
     const last = lastW ? { ...(conv ? toUcs(u, lastW) : { x: lastW.x, y: lastW.y }), ...(lastZ !== undefined ? { z: lastZ } : {}) } : null;
-    const pu = parsePointInput(wcs ? t.slice(1) : t, last, dir && conv ? dirToUcs(u, dir) : dir, this.elevation());
+    // 극좌표의 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로
+    const pu = parsePointInput(wcs ? t.slice(1) : t, last, dir && conv ? dirToUcs(u, dir) : dir, this.elevation(), this.active?.units);
     if (!pu) return null;
     const w = conv ? toWcs(u, pu) : { x: pu.x, y: pu.y };
     return pu.z === undefined ? w : { ...w, z: pu.z };
@@ -1793,19 +1802,23 @@ export class App {
     const fmt = (v: number) => formatLength(v, st.units);
     // Shift를 누르는 동안 직교를 뒤집는다(켜져 있으면 끄고, 꺼져 있으면 켠다)
     const ortho = this.orthoOn !== this.shiftHeld;
-    // 극좌표 각도는 UCS X축 기준(절대), POLARMODE 1이면 마지막으로 그린 선분 기준(상대). 증분 각도의 배수와 POLARMODE 4면 추가 각도
+    // 극좌표 각도는 도면 단위의 0 방향(UCS X축 + ANGBASE)에서 ANGDIR 쪽으로(절대), POLARMODE 1이면 마지막으로 그린 선분에서(상대).
+    // 증분 각도의 배수와 POLARMODE 4면 추가 각도. 툴팁 각도는 그 0 방향에서 같은 쪽으로 재서 AUNITS·AUPREC로 보인다
     const ua = currentUcs(st).angle;
     const ps = this.polar;
+    const units = st.units;
+    const cw = clockwise(units);
     const polarActive = this.polarOn && !ortho;
-    const pref = polarReference(ps.mode, ua, this.lastSegmentDir());
-    const pa = polarActive ? polarDirections(ps, pref.ref) : null;
-    const ptip = { ref: pref.ref, label: pref.relative ? '상대 극좌표' : '극좌표' };
+    const pref = polarReference(ps.mode, ua, this.lastSegmentDir(), angleBase(units));
+    const pa = polarActive ? polarDirections(ps, pref.ref, cw) : null;
+    const ptip: PolarTip = { ref: pref.ref, cw, angle: (a) => trackAngleText(a, units, pref.relative), label: pref.relative ? '상대 극좌표' : '극좌표' };
     // 획득점: 객체 스냅 추적이 켜져 있으면 획득한 점, 임시 추적점(TT)은 꺼져 있어도
     const temp = this.tempTrack?.req === r ? this.tempTrack.points : [];
     const acq = [...(this.otrackOn ? this.acquired : []), ...temp];
     if (acq.length) {
-      // 획득점에서는 수평·수직(POLARMODE 2이고 극좌표 추적 중이면 극좌표 추적 설정의 각도 — UCS 기준)
-      const t = objectTrack(acq, w, otrackDirections(ps, polarActive, ua), tol, r.base, pa, fmt, ua, ptip);
+      // 획득점에서는 수평·수직(POLARMODE 2이고 극좌표 추적 중이면 극좌표 추적 설정의 각도 — 절대 극좌표와 같은 0 방향). 툴팁은 절대 각도
+      const atip: PolarTip = { ref: ua + angleBase(units), cw, angle: (a) => trackAngleText(a, units, false) };
+      const t = objectTrack(acq, w, otrackDirections(ps, polarActive, ua, units), tol, r.base, pa, fmt, atip, ptip);
       if (t) return { p: t.p, snap: null, track: t };
     }
     if (r.base && pa) {
@@ -1830,7 +1843,7 @@ export class App {
   private dynLock(r: PointRequest, res: ResolvedPoint): ResolvedPoint {
     const st = this.active;
     if (!st || !this.dynOn || !this.dyn.locked) return res;
-    return { p: this.dyn.constrain(r.base, res.p, currentUcs(st), st.units.aunits), snap: null };
+    return { p: this.dyn.constrain(r.base, res.p, currentUcs(st), st.units.aunits, st.units), snap: null };
   }
 
   /**
@@ -1954,7 +1967,7 @@ export class App {
       o.dynFields = null;
       return;
     }
-    o.dynFields = this.dyn.fields(r.base, q, this.cmd.input.value, currentUcs(st), (v) => formatLength(v, st.units));
+    o.dynFields = this.dyn.fields(r.base, q, this.cmd.input.value, currentUcs(st), (v) => formatLength(v, st.units), st.units);
   }
 
   /** 마지막으로 해석한 커서 점(동적 입력 칸) */
@@ -2416,6 +2429,70 @@ export class App {
     void commitDrag(this, [...st.selection], d, copy);
   }
 
+  /**
+   * 오른쪽 버튼을 눌렀다(마우스·펜): 명령이 없고 고른 객체 위(그립이 아닌 곳 — 왼쪽 끌기와 같은 판정)면 끌어 놓기를 지켜본다.
+   * 보기 모드·명령 중·선택 없음·손가락은 아니다(손가락의 길게 누르기는 정밀 조준)
+   */
+  private onRightDown(w: Pt, _s: Pt, ev: PointerEvent): boolean {
+    void _s;
+    if (this.rightPress?.menu) closeMenu();
+    this.rightPress = null;
+    const st = this.active;
+    if (!st || this.viewOnly || this.request || this.running || !st.selection.size || ev.pointerType === 'touch' || this.windowStart) return false;
+    const onGrip = !!this.gripAt(w);
+    const hit = onGrip ? null : (this.picker()?.pick(w.x, w.y, this.view.overlay.pickbox * this.view.pixelSize()) ?? null);
+    if (pressKind({ onGrip, hit, selected: st.selection, busy: false }) !== 'move') return false;
+    this.rightPress = { world: w };
+    return true;
+  }
+
+  /**
+   * 오른쪽 버튼으로 고른 객체를 끈다: 미리보기가 따라오고, 놓으면 그 자리에 메뉴(여기로 이동·여기로 복사·블록으로 붙여넣기·취소 —
+   * AutoCAD 도움말 "About Copying Objects"). 기준점은 누른 자리. 메뉴가 닫히면(고르든 Esc·바깥을 누르든) 미리보기를 치운다
+   */
+  private onRightDrag(a: Pt, b: Pt, phase: 'move' | 'drop' | 'cancel', ev: PointerEvent): void {
+    void a;
+    const st = this.active;
+    const pr = this.rightPress;
+    if (!st || !pr || pr.menu) return;
+    if (phase === 'cancel') {
+      this.endRightDrag();
+      return;
+    }
+    const wb = this.view.screenToWorld(b.x, b.y);
+    const d = { x: wb.x - pr.world.x, y: wb.y - pr.world.y };
+    const o = this.view.overlay;
+    if (!pr.ghost) {
+      const pk = this.picker();
+      pr.ghost = new DragGhost(pk ? [...st.selection].slice(0, 3000).map((h) => pk.geometry(h)) : []);
+      this.clearHover();
+    }
+    o.ghost = pr.ghost.at(d.x, d.y);
+    o.rubber = [{ pts: [pr.world.x, pr.world.y, wb.x, wb.y], dashed: true }];
+    o.tip = null;
+    this.view.requestOverlay();
+    if (phase === 'move') return;
+    pr.menu = true;
+    const handles = [...st.selection];
+    const base = { ...pr.world };
+    const act = (k: DropAction) => {
+      if (this.active !== st) return;
+      if (k === 'block') void pasteDragAsBlock(this, handles, base, wb);
+      else void commitDrag(this, handles, d, k === 'copy');
+    };
+    showMenu(ev.clientX, ev.clientY, dropMenuItems(act), { onClose: () => this.rightPress === pr && this.endRightDrag() });
+  }
+
+  /** 오른쪽 버튼 끌어 놓기를 끝낸다(미리보기를 치운다) */
+  private endRightDrag(): void {
+    if (!this.rightPress) return;
+    this.rightPress = null;
+    const o = this.view.overlay;
+    o.ghost = [];
+    o.rubber = [];
+    this.view.requestOverlay();
+  }
+
   /** 창·올가미로 고른 것을 선택에 더하거나 빼거나 바꾼다(객체 선택 중이면 단계로 남기고 단일이면 끝) */
   private applyPicked(hits: string[], mode: PickMode): void {
     const r = this.request;
@@ -2592,6 +2669,8 @@ export class App {
   private onContext(w: Pt, _s: Pt, ev: MouseEvent, held?: number): void {
     void _s;
     closeMenu();
+    // 끌지 않은 오른쪽 클릭이다(끌어 놓기를 지켜보던 것은 끝)
+    this.endRightDrag();
     // 보기 모드: 편집 명령 메뉴를 띄우지 않는다(안드로이드 길게 누르기도 여기로 온다)
     if (this.viewOnly) return;
     if (this.windowStart) {

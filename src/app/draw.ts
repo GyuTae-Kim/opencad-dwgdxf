@@ -263,32 +263,48 @@ export function registerDrawCommands(app: App): void {
     title: '선',
     async run(ctx) {
       const st = app.active!;
+      // 점의 Z: 좌표 입력이 Z를 정했으면(x,y,z·@ 상대 좌표가 앞 점의 Z를 잇는 것·원통·구 좌표·점 필터) 그 Z, 아니면 지금 고도.
+      // AutoCAD 도움말 ELEV: 3D 점에 X·Y만 주면 지금 고도가 새 객체의 Z다 — Z를 준 점은 그 Z로 3D 선이 된다. 객체 스냅의 Z(OSNAPZ)는 아직 쓰지 않는다
       const elev = currentElevation(app);
+      const zOf = (r: PointResult) => ('point' in r && r.z !== undefined && Number.isFinite(r.z) ? r.z : elev);
+      /** 다음 점 요청의 기준점: 고도가 아닌 Z면 함께(@ 상대 좌표·동적 입력·직접 거리가 그 Z를 잇는다) */
+      const based = (p: Pt, z: number): Pt & { z?: number } => (z !== elev ? { x: p.x, y: p.y, z } : p);
+      const keepLast = (p: Pt, z: number) => {
+        app.lastPoint = z !== elev ? { x: p.x, y: p.y, z } : p;
+      };
       let first: Pt | null = null;
+      let firstZ = elev;
       // 지연된 접점(첫 점을 접점 스냅으로 원·호·타원·스플라인 위에 찍음): 둘째 점을 받은 뒤 접점을 구한다(AutoCAD와 같다)
       let deferred: Deferred | null = null;
       for (;;) {
         const r = await ctx.getPoint('첫 번째 점 지정:', { deferTan: true });
         if ('enter' in r) {
           // Enter = 직전 선의 끝점에서 이어 그리기
-          if (app.lastPoint) first = app.lastPoint;
-          else continue;
-        } else first = pt(r);
+          if (app.lastPoint) {
+            first = { x: app.lastPoint.x, y: app.lastPoint.y };
+            firstZ = app.lastPoint.z ?? elev;
+          } else continue;
+        } else {
+          first = pt(r);
+          firstZ = zOf(r);
+        }
         const c = 'point' in r ? deferredCircle(app, r.snap, r.point) : null;
         if (c && first) deferred = { c, pick: first };
         if (first) break;
       }
       const solve = (d: Deferred, p: Pt, snap: PointSnap | null | undefined) => solveDeferred(app, d, p, snap);
       let start = first;
+      const startZ = firstZ;
       let prev = first;
+      let prevZ = firstZ;
       let count = 0;
-      /** 그린 선분(시작점·방향). 명령 취소(U)로 하나씩 되돌린다 — 다음 선분의 시작점과 상대 극좌표의 기준 */
-      const segs: { from: Pt; dir: number }[] = [];
+      /** 그린 선분(시작점·Z·방향). 명령 취소(U)로 하나씩 되돌린다 — 다음 선분의 시작점과 상대 극좌표의 기준 */
+      const segs: { from: Pt; z: number; dir: number }[] = [];
       for (;;) {
         const kws = count >= 2 ? [{ key: 'C', label: '닫기' }, { key: 'U', label: '명령 취소' }] : [{ key: 'U', label: '명령 취소' }];
         const d = deferred;
         const r = await ctx.getPoint(count >= 2 ? '다음 점 지정 또는 [닫기(C)/명령 취소(U)]:' : '다음 점 지정 또는 [명령 취소(U)]:', {
-          base: prev,
+          base: based(prev, prevZ),
           keywords: kws,
           ...(d
             ? {
@@ -307,22 +323,28 @@ export function registerDrawCommands(app: App): void {
               // 되돌린 선분의 시작점에서 잇는다(전에는 되돌린 선분의 핸들로 찾다가 지워져 늘 첫 점으로 돌아갔다).
               // 상대 극좌표의 기준도 남은 마지막 선분으로
               count--;
-              prev = segs.pop()?.from ?? start;
-              if (count === 0) prev = start;
+              const back = segs.pop();
+              prev = back?.from ?? start;
+              prevZ = back?.z ?? startZ;
+              if (count === 0) {
+                prev = start;
+                prevZ = startZ;
+              }
               if (segs.length) noteSegment(app, segs[segs.length - 1]!.dir);
             }
             continue;
           }
           if (r.keyword === 'C') {
-            addEntities(app, ctx, [{ ...base(), type: 'LINE', handle: '', start: v3(prev, elev), end: v3(start, elev) } as Entity], 'LINE');
+            addEntities(app, ctx, [{ ...base(), type: 'LINE', handle: '', start: v3(prev, prevZ), end: v3(start, startZ) } as Entity], 'LINE');
             setTangent(app, start, ang(prev, start));
             noteSegment(app, ang(prev, start));
-            app.lastPoint = start;
+            keepLast(start, startZ);
             return;
           }
           continue;
         }
         let p = pt(r)!;
+        const pz = zOf(r);
         if (d) {
           const seg = solve(d, p, 'point' in r ? r.snap : null);
           if (!seg) {
@@ -333,14 +355,18 @@ export function registerDrawCommands(app: App): void {
           prev = start;
           deferred = null;
         }
-        if (dist(prev, p) < 1e-12) continue;
-        addEntities(app, ctx, [{ ...base(), type: 'LINE', handle: '', start: v3(prev, elev), end: v3(p, elev) } as Entity], 'LINE');
-        setTangent(app, p, ang(prev, p));
-        // 상대 극좌표(POLARMODE 1)의 0도 방향: 마지막으로 그린 선분
-        segs.push({ from: prev, dir: ang(prev, p) });
-        noteSegment(app, segs[segs.length - 1]!.dir);
+        // 같은 3D 점은 건너뛴다(평면에서 같은 자리라도 Z가 다르면 Z축 방향의 선)
+        const flat = dist(prev, p) < 1e-12;
+        if (flat && Math.abs(pz - prevZ) < 1e-12) continue;
+        addEntities(app, ctx, [{ ...base(), type: 'LINE', handle: '', start: v3(prev, prevZ), end: v3(p, pz) } as Entity], 'LINE');
+        // 상대 극좌표(POLARMODE 1)의 0도 방향: 마지막으로 그린 선분(평면에서 길이가 없는 Z축 방향 선은 앞 선분의 방향 그대로)
+        const dir = flat ? (segs[segs.length - 1]?.dir ?? null) : ang(prev, p);
+        if (!flat) setTangent(app, p, ang(prev, p));
+        segs.push({ from: prev, z: prevZ, dir: dir ?? 0 });
+        if (dir !== null) noteSegment(app, dir);
         prev = p;
-        app.lastPoint = p;
+        prevZ = pz;
+        keepLast(p, pz);
         count++;
       }
     },
@@ -673,6 +699,9 @@ export function registerDrawCommands(app: App): void {
           });
       let c: Pt;
       let rad: number;
+      // 원의 고도: 중심점을 Z와 함께 주면(x,y,z·@ 상대 좌표 등) 그 Z, 아니면 지금 고도(AutoCAD 도움말 ELEV — X·Y만 준 점의 Z가 고도).
+      // 3P·2P·Ttr·TTT는 지금 고도
+      let cz = currentElevation(app);
       // 접선 객체: 선·호·원(폴리선의 직선·호 구간 포함)·타원·타원호를 연장해서 보고, 스플라인은 그 범위 안에서 접한다.
       // AutoCAD처럼 접점 스냅(지연된 접점)만 켠 점 요청으로
       // 객체 위의 점을 받는다(객체 스냅이 꺼져 있어도). 좌표 입력·스크립트로 준 점은 그 점에 걸친 객체
@@ -763,6 +792,7 @@ export function registerDrawCommands(app: App): void {
         const p = pt(r0);
         if (!p) return;
         c = p;
+        if ('point' in r0 && r0.z !== undefined && Number.isFinite(r0.z)) cz = r0.z;
         const prev = Number(app.active!.doc.header.get('$CIRCLERAD') ?? 0) || undefined;
         let diameter = false;
         for (;;) {
@@ -793,7 +823,7 @@ export function registerDrawCommands(app: App): void {
       }
       if (!(rad > 0)) return;
       app.active!.doc.header.set('$CIRCLERAD', rad);
-      addEntities(app, ctx, [{ ...base(), type: 'CIRCLE', handle: '', center: v3(c, currentElevation(app)), radius: rad } as Entity], 'CIRCLE');
+      addEntities(app, ctx, [{ ...base(), type: 'CIRCLE', handle: '', center: v3(c, cz), radius: rad } as Entity], 'CIRCLE');
     },
   });
 
