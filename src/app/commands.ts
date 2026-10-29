@@ -19,7 +19,7 @@ import { type MultiHost, measureMultiple } from './distmulti';
 import { polyPreview } from './draw';
 import type { ViewportSnap } from './snap';
 import type { ViewportXf } from './scene';
-import { type PaperPick, layoutXfs, projectedDelta, projectionViewport } from './vpsnap';
+import { type PaperPick, paperProjection, projectedDelta } from './vpsnap';
 import { parseZoomFactor } from './vpzoom';
 
 function pointOf(r: PointResult): Pt | null {
@@ -73,9 +73,7 @@ async function needDistPoint(app: App, ctx: CommandContext, prompt: string): Pro
  * 투영한 2D 모형 공간 거리). 배치의 도면 공간이고 점이 모두 같은 뷰포트 하나의 모형 스냅일 때만, 아니면 null
  */
 function distProjection(app: App, pts: readonly PaperPick[]): ViewportXf | null {
-  const st = app.active!;
-  if (st.isModel || st.msVp) return null;
-  return projectionViewport(layoutXfs(st.doc, st.layoutFor(st.displaySpace)), pts);
+  return paperProjection(app.active!, pts);
 }
 
 const VP_LOCKED_MSG = '화면표시가 잠긴 뷰포트는 축척을 바꾸지 않습니다.';

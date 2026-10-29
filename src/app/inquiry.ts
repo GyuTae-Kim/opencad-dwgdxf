@@ -274,7 +274,8 @@ export function dimDisplayText(doc: CadDocument, d: DimensionEntity): { text: st
     formatted = formatAngle(m, { aunits: Number(v.DIMAUNIT ?? 0) === 1 ? 1 : Number(v.DIMAUNIT ?? 0), auprec: prec });
     formatted = zeroSuppress(formatted.replace('°', ''), Number(v.DIMAZIN ?? 0)) + (Number(v.DIMAUNIT ?? 0) === 0 ? '°' : '');
   } else {
-    const lfac = Number(v.DIMLFAC ?? 1) || 1;
+    // 음수 DIMLFAC(도면 공간에서만 — 뷰포트 축척 맞춤)는 크기만: 치수 그림의 문자(edit/dim/format.ts)와 같게
+    const lfac = Math.abs(Number(v.DIMLFAC ?? 1) || 1);
     let val = m * lfac;
     const rnd = Number(v.DIMRND ?? 0);
     if (rnd > 0) val = Math.round(val / rnd) * rnd;
