@@ -116,8 +116,8 @@ export function syntheticDocument(): CadDocument {
       { location: { x: 0, y: 0, z: 0 }, bulge: 0, startWidth: 0, endWidth: 0, flags: 128, faceIndices: [1, 2, -3] },
     ]),
   } as Entity);
-  add({ ...base(), type: 'SPLINE', flags: 8, degree: 3, knots: [0, 0, 0, 0, 1, 1, 1, 1], controlPoints: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 2, z: 0 }, { x: 3, y: 2, z: 0 }, { x: 4, y: 0, z: 0 }], fitPoints: [], knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10, normal: { x: 0, y: 0, z: 1 } } as Entity);
-  add({ ...base(), type: 'SPLINE', flags: 8, degree: 3, knots: [], controlPoints: [], fitPoints: [{ x: 0, y: 0, z: 0 }, { x: 5, y: 5, z: 0 }, { x: 10, y: 0, z: 0 }], knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10, startTangent: { x: 1, y: 1, z: 0 }, endTangent: { x: 1, y: -1, z: 0 }, normal: { x: 0, y: 0, z: 1 } } as Entity);
+  add({ ...base(), type: 'SPLINE', flags: 8, degree: 3, knots: [0, 0, 0, 0, 1, 1, 1, 1], controlVerts: pack3([{ x: 0, y: 0, z: 0 }, { x: 1, y: 2, z: 0 }, { x: 3, y: 2, z: 0 }, { x: 4, y: 0, z: 0 }]), fitVerts: [], knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10, normal: { x: 0, y: 0, z: 1 } } as Entity);
+  add({ ...base(), type: 'SPLINE', flags: 8, degree: 3, knots: [], controlVerts: [], fitVerts: pack3([{ x: 0, y: 0, z: 0 }, { x: 5, y: 5, z: 0 }, { x: 10, y: 0, z: 0 }]), knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10, startTangent: { x: 1, y: 1, z: 0 }, endTangent: { x: 1, y: -1, z: 0 }, normal: { x: 0, y: 0, z: 1 } } as Entity);
   add({ ...base(), type: 'XLINE', base: { x: 0, y: 0, z: 0 }, direction: { x: 1, y: 0, z: 0 } } as Entity);
   add({ ...base(), type: 'RAY', base: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 1, z: 0 } } as Entity);
   add({ ...base(), type: 'TEXT', insert: { x: 0, y: -10, z: 0 }, alignPoint: { x: 20, y: -10, z: 0 }, height: 2.5, text: '가나다 ABC', rotation: 0.3, widthFactor: 0.8, oblique: 0.1, style: 'Standard', generation: 0, halign: 1, valign: 0 } as Entity);

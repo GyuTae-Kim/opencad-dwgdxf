@@ -19,6 +19,7 @@ import { makeObject, mergeXData, modLayer, modObject, objectGroups, objectOf, re
 import { Cons, Ename, LispError, Real, fromArray, isNum, numOf, toArray, type Value } from './types';
 import { lwCount, lwVertices, setLwVertices } from '../../core/lwpoly';
 import { polyCount, polyHas, polyVertex, polyVertices, setPolyVertices } from '../../core/polyverts';
+import { ctrlCount, fitCount, splineCtrl, splineFit } from '../../core/flat3';
 
 type Pair = [number, Value];
 
@@ -313,12 +314,12 @@ export function entityGroups(it: Interp, d: LispDrawing, h: string): Pair[] | nu
       out.push([100, e.type === 'XLINE' ? 'AcDbXline' : 'AcDbRay'], [10, P3(e.base)], [11, P3(e.direction)]);
       break;
     case 'SPLINE':
-      out.push([100, 'AcDbSpline'], [210, P3(e.normal ?? Z)], [70, e.flags], [71, e.degree], [72, e.knots.length], [73, e.controlPoints.length], [74, e.fitPoints.length]);
+      out.push([100, 'AcDbSpline'], [210, P3(e.normal ?? Z)], [70, e.flags], [71, e.degree], [72, e.knots.length], [73, ctrlCount(e)], [74, fitCount(e)]);
       out.push([42, R(e.knotTolerance)], [43, R(e.controlTolerance)], [44, R(e.fitTolerance)]);
       for (const k of e.knots) out.push([40, R(k)]);
       if (e.weights) for (const w of e.weights) out.push([41, R(w)]);
-      for (const p of e.controlPoints) out.push([10, P3(p)]);
-      for (const p of e.fitPoints) out.push([11, P3(p)]);
+      for (const p of splineCtrl(e)) out.push([10, P3(p)]);
+      for (const p of splineFit(e)) out.push([11, P3(p)]);
       break;
     case 'HATCH':
     case 'MPOLYGON':

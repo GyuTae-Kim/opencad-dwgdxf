@@ -4,6 +4,7 @@
  * 접선 길이는 원호 근사 계수(반지름이 같으면 0.5523·r)를 쓴다. 축은 WCS Z, 높이 0이면 평면 나선형이다.
  */
 import type { SplineEntity, Vec3 } from '../core/model';
+import { pack3 } from '../core/flat3';
 
 export interface HelixSpec {
   center: Vec3;
@@ -73,7 +74,7 @@ export function helixControlPoints(s: HelixSpec): { ctrl: Vec3[]; knots: number[
 }
 
 /** 나선 객체(공통 특성은 부르는 쪽이 채운다) */
-export function helixEntity(s: HelixSpec, props: Omit<SplineEntity, 'type' | 'handle' | 'flags' | 'degree' | 'knots' | 'controlPoints' | 'fitPoints' | 'knotTolerance' | 'controlTolerance' | 'fitTolerance' | 'helix'>): SplineEntity {
+export function helixEntity(s: HelixSpec, props: Omit<SplineEntity, 'type' | 'handle' | 'flags' | 'degree' | 'knots' | 'controlVerts' | 'fitVerts' | 'knotTolerance' | 'controlTolerance' | 'fitTolerance' | 'helix'>): SplineEntity {
   const { ctrl, knots } = helixControlPoints(s);
   const start = at(s, 0).p;
   return {
@@ -84,8 +85,8 @@ export function helixEntity(s: HelixSpec, props: Omit<SplineEntity, 'type' | 'ha
     flags: Math.abs(s.height) < 1e-12 ? 8 : 0,
     degree: 3,
     knots,
-    controlPoints: ctrl,
-    fitPoints: [],
+    controlVerts: pack3(ctrl),
+    fitVerts: [],
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,

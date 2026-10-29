@@ -9,6 +9,7 @@ import { splinePolyline } from '../../src/edit/geom/pedit';
 import { circle, line, poly2d } from '../edit/make';
 import { makeHarness, modelEntities } from '../cmds2/harness';
 import { perCommandGroups } from './groups';
+import { ctrlCount, fitCount } from '../../src/core/flat3';
 
 const close = (a: number, b: number, eps = 1e-6) => expect(Math.abs(a - b)).toBeLessThan(eps);
 const xlines = (doc: CadDocument) => doc.blocks.get(MODEL_SPACE)!.entities.filter((e) => e.type === 'XLINE') as XLineEntity[];
@@ -163,7 +164,7 @@ describe('SPLINE 작성 옵션', () => {
     const [s] = modelEntities(h.doc, 'SPLINE');
     expect(s!.flags & 1).toBe(1);
     expect(s!.flags & 2).toBe(2);
-    expect(s!.fitPoints.length).toBe(4);
+    expect(fitCount(s!)).toBe(4);
   });
 
   it('CV 메서드·차수(D)·끝 접촉부(T)·공차(L)', async () => {
@@ -171,8 +172,8 @@ describe('SPLINE 작성 옵션', () => {
     await h.run('SPLINE', ['M', 'C', 'D', '2', '0,0', '5,5', '10,0', '']);
     const [s] = modelEntities(h.doc, 'SPLINE');
     expect(s!.degree).toBe(2);
-    expect(s!.fitPoints.length).toBe(0);
-    expect(s!.controlPoints.length).toBe(3);
+    expect(fitCount(s!)).toBe(0);
+    expect(ctrlCount(s!)).toBe(3);
     const h2 = harness();
     await h2.run('SPLINE', ['0,0', 'L', '0.5', '5,5', 'T', '10,5']);
     const [t] = modelEntities(h2.doc, 'SPLINE');

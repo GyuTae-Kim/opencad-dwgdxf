@@ -29,7 +29,7 @@ import { satDxfTags } from '../acis';
 import { codepageToEncoding, decoderFor } from '../../core/codepage';
 import type { WriteContext } from './wcontext';
 import { meshFaces, meshVertices } from '../../core/meshdata';
-import { leaderCount, leaderVertices } from '../../core/flat3';
+import { fitCount, leaderCount, leaderVertices, splineCtrl } from '../../core/flat3';
 
 const ACIS = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
 
@@ -209,11 +209,11 @@ function blockInsert(e: Entity, block: string, insert: Vec3, scale: Vec3 = { x: 
 }
 
 function splineToPolyline(e: SplineEntity): PolylineEntity {
-  let ctrl = e.controlPoints;
+  let ctrl = splineCtrl(e);
   let knots = e.knots;
   let degree = e.degree;
   let weights = e.weights;
-  if (ctrl.length < 2 && e.fitPoints.length >= 2) {
+  if (ctrl.length < 2 && fitCount(e) >= 2) {
     const r = fitPointsCurve(e);
     ctrl = r.ctrl;
     knots = r.knots;
@@ -253,7 +253,7 @@ function invalid(e: Entity): boolean {
     case 'LEADER':
       return leaderCount(e) < 2;
     case 'SPLINE':
-      return e.degree < 1 || (e.controlPoints.length === 0 && e.fitPoints.length === 0);
+      return e.degree < 1 || (e.controlVerts.length === 0 && e.fitVerts.length === 0);
     case 'MESH':
       return !e.verts.length || !e.faceData.length;
   }

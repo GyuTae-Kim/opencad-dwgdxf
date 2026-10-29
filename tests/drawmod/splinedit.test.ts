@@ -9,6 +9,7 @@ import { makeFitSpline } from '../../src/edit/geom/drawgeom';
 import { domain, nurbsPoint } from '../../src/edit/geom/nurbs';
 import { splineNurbs } from '../../src/edit/geom/path';
 import { spline } from '../edit/make';
+import { ctrlCount, fitCount } from '../../src/core/flat3';
 
 const close = (a: number, b: number, eps = 1e-6) => expect(Math.abs(a - b)).toBeLessThan(eps);
 
@@ -16,7 +17,7 @@ describe('SPLINEDIT 정점·맞춤 데이터', () => {
   it('정점 삭제: 조정점 하나를 빼고 고정 균일 매듭으로', () => {
     const s = spline([[0, 0], [2, 3], [4, 0], [6, 3], [8, 0]]) as SplineEntity;
     const r = cvDelete(s, 2)!;
-    expect(r.controlPoints.length).toBe(4);
+    expect(ctrlCount(r)).toBe(4);
     expect(r.knots.length).toBe(4 + r.degree + 1);
     expect(cvDelete(spline([[0, 0], [1, 1]]) as SplineEntity, 0)).toBeNull();
   });
@@ -49,7 +50,7 @@ describe('SPLINEDIT 정점·맞춤 데이터', () => {
     ])!;
     const r = fitKink(s, { x: 7.5, y: 3 })!;
     expect(r).toBeTruthy();
-    expect(r.fitPoints.length).toBe(0);
+    expect(fitCount(r)).toBe(0);
     const inner = r.knots.filter((k) => k > r.knots[0]! && k < r.knots[r.knots.length - 1]!);
     const counts = new Map<number, number>();
     for (const k of inner) counts.set(k, (counts.get(k) ?? 0) + 1);

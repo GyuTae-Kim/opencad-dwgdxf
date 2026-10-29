@@ -11,11 +11,11 @@
  * - 읽기 정규화: 선종류 BYLAYER·BYBLOCK·CONTINUOUS 대소문자, SPLINE 플래그(평면·선형 판정), MTEXT 방향·회전,
  *   DXF에서 읽은 LEADER 걸이선 점.
  */
-import type { CadColor, CadDocument, Entity } from '../../src/core/model';
+import type { CadColor, CadDocument, Entity, SplineEntity } from '../../src/core/model';
 import { decodeCadEscapes } from '../../src/core/codepage';
 import { nearestAci } from '../../src/io/dwg/color';
 import { polyVertices } from '../../src/core/polyverts';
-import { leaderVertices } from '../../src/core/flat3';
+import { ctrlCount, fitCount, leaderVertices, splineCtrl, splineFit } from '../../src/core/flat3';
 import { meshEdges, meshFaces, meshVertices } from '../../src/core/meshdata';
 import { hatchEdges } from '../../src/core/hatchedges';
 
@@ -118,7 +118,7 @@ function colorPaths(o: unknown, ver: number, back = false): unknown {
 }
 
 /**
- * 평탄 좌표(POLYLINE·지시선·MESH 정점, 해치 모서리 수 배열)를 예전 객체 모양으로 풀어 견준다.
+ * 평탄 좌표(POLYLINE·지시선·MESH 정점, 해치 모서리 수 배열, 스플라인 조정점·맞춤점)를 예전 객체 모양으로 풀어 견준다.
  * 건너뛰는 키(지시선 vertices, 해치 스플라인 모서리 fitPoints 등)가 예전처럼 듣는다.
  */
 function unflat(x: Entity): Entity {
@@ -133,6 +133,11 @@ function unflat(x: Entity): Entity {
       const { verts, ...rest } = r;
       void verts;
       return { ...rest, vertices: leaderVertices(x) } as unknown as Entity;
+    }
+    case 'SPLINE': {
+      const { controlVerts, fitVerts, ...rest } = r;
+      void [controlVerts, fitVerts];
+      return { ...rest, controlPoints: splineCtrl(x), fitPoints: splineFit(x) } as unknown as Entity;
     }
     case 'MESH': {
       const { verts, faceData, edgePairs, ...rest } = r;
@@ -180,11 +185,12 @@ export function compareEntity(e0: Entity, a0: Entity, o: CompareOptions): string
     skipType.add('normal');
     // DWG에는 맞춤점·조정점 자료 중 하나만 남는다(splineflags.ts): 맞춤점만 있으면 다시 읽을 때 조정점·매듭이 채워지고,
     // 조정점만 남은 1024는 맞춤점을 되살리고, R2013 전 판의 제곱근·균일 매듭은 맞춤점이 빠진다
-    if (!e.controlPoints.length && e.fitPoints.length >= 2) {
+    const s0 = e0 as SplineEntity;
+    if (!ctrlCount(s0) && fitCount(s0) >= 2) {
       skipType.add('knots');
       skipType.add('controlPoints');
     }
-    if ((e.flags & 1024 && !e.fitPoints.length) || (ver < 1027 && e.flags & (64 | 128))) skipType.add('fitPoints');
+    if ((e.flags & 1024 && !fitCount(s0)) || (ver < 1027 && e.flags & (64 | 128))) skipType.add('fitPoints');
   }
   if (t === 'MTEXT' || (t as string) === 'ATTRIB' || (t as string) === 'ATTDEF') {
     skipType.add('direction');

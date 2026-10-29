@@ -6,6 +6,7 @@ import { addConstraints } from '../../src/edit/constraint/system';
 import type { GeoConstraint, GeoType } from '../../src/edit/constraint/types';
 import { L, apply, arc, circle, line, lwpoly, put, setup, store } from './helpers';
 import { lwVertices } from '../../src/core/lwpoly';
+import { pack3, splineCtrl } from '../../src/core/flat3';
 
 const geo = (type: GeoType, refs: [string, string][], extra: Partial<GeoConstraint> = {}): GeoConstraint => ({ id: 0, kind: 'geo', type, refs: refs.map(([h, part]) => ({ h, part })), ...extra });
 
@@ -217,13 +218,13 @@ describe('기하 구속 풀기', () => {
       flags: 8,
       degree: 3,
       knots: [0, 0, 0, 0, 1, 1, 1, 1],
-      controlPoints: [
+      controlVerts: pack3([
         { x: 102, y: 5, z: 0 },
         { x: 130, y: 30, z: 0 },
         { x: 160, y: -10, z: 0 },
         { x: 190, y: 20, z: 0 },
-      ],
-      fitPoints: [],
+      ]),
+      fitVerts: [],
       knotTolerance: 1e-10,
       controlTolerance: 1e-10,
       fitTolerance: 1e-10,
@@ -234,12 +235,12 @@ describe('기하 구속 풀기', () => {
     expect(L(doc, a.handle).end.x).toBe(100);
     const S = doc.entityIndex.get(sp.handle) as SplineEntity;
     const A = L(doc, a.handle);
-    expect(S.controlPoints[0]!.x).toBeCloseTo(A.end.x, 7);
-    expect(S.controlPoints[0]!.y).toBeCloseTo(A.end.y, 7);
+    expect(splineCtrl(S)[0]!.x).toBeCloseTo(A.end.x, 7);
+    expect(splineCtrl(S)[0]!.y).toBeCloseTo(A.end.y, 7);
     // 접선이 같은 방향, 셋째 조정점도 선 방향 위
-    const t1 = Math.atan2(S.controlPoints[1]!.y - S.controlPoints[0]!.y, S.controlPoints[1]!.x - S.controlPoints[0]!.x);
+    const t1 = Math.atan2(splineCtrl(S)[1]!.y - splineCtrl(S)[0]!.y, splineCtrl(S)[1]!.x - splineCtrl(S)[0]!.x);
     expect(t1).toBeCloseTo(ang(A), 6);
-    const t2 = Math.atan2(S.controlPoints[2]!.y - S.controlPoints[1]!.y, S.controlPoints[2]!.x - S.controlPoints[1]!.x);
+    const t2 = Math.atan2(splineCtrl(S)[2]!.y - splineCtrl(S)[1]!.y, splineCtrl(S)[2]!.x - splineCtrl(S)[1]!.x);
     expect(t2).toBeCloseTo(ang(A), 6);
   });
 

@@ -47,7 +47,7 @@ import { updateDimNumber } from './xannot';
 import { mtextDir } from './xtext';
 import { hatchEdges, packEdges } from '../../core/hatchedges';
 import { meshVertexCount, meshVertices } from '../../core/meshdata';
-import { leaderCount, leaderVertices } from '../../core/flat3';
+import { ctrlCount, fitCount, leaderCount, leaderVertices, pack3, splineCtrl, splineFit } from '../../core/flat3';
 
 export interface GripOptions {
   /** 호 중간 그립: 'stretch'(기본, 세 점 호) 또는 'radius'(반지름만) */
@@ -117,8 +117,8 @@ export function gripPoints(e: Entity, doc: CadDocument): GripPoint[] {
       return ev.map((v, i) => (e.kind === 'polyface' && v.faceIndices && !(v.flags & 64) ? null : g('v' + i, v.location, 'vertex'))).filter((x): x is GripPoint => !!x);
     }
     case 'SPLINE':
-      if (e.fitPoints.length >= 2) return e.fitPoints.map((p, i) => g('f' + i, p, 'fit'));
-      return e.controlPoints.map((p, i) => g('c' + i, p, 'ctrl'));
+      if (fitCount(e) >= 2) return splineFit(e).map((p, i) => g('f' + i, p, 'fit'));
+      return splineCtrl(e).map((p, i) => g('c' + i, p, 'ctrl'));
     case 'XLINE':
     case 'RAY':
       return [g('base', e.base, e.type === 'XLINE' ? 'mid' : 'end'), g('dir', add(e.base, e.direction), 'ctrl')];
@@ -627,18 +627,22 @@ function splineGrip(e: SplineEntity, id: string, to: Vec2): SplineEntity {
   const r = cloneEntity(e);
   const i = Number(id.slice(1));
   if (id[0] === 'f') {
-    r.fitPoints[i] = { x: to.x, y: to.y, z: e.fitPoints[i]!.z };
-    if (e.controlPoints.length >= 2) {
-      const s = interpolateFitPoints(r.fitPoints, r.startTangent, r.endTangent);
+    const fit = splineFit(r);
+    fit[i] = { x: to.x, y: to.y, z: fit[i]!.z };
+    r.fitVerts = pack3(fit);
+    if (ctrlCount(e) >= 2) {
+      const s = interpolateFitPoints(fit, r.startTangent, r.endTangent);
       r.degree = s.degree;
       r.knots = s.knots;
-      r.controlPoints = s.ctrl;
+      r.controlVerts = pack3(s.ctrl);
       r.weights = undefined;
     }
     return r;
   }
-  r.controlPoints[i] = { x: to.x, y: to.y, z: e.controlPoints[i]!.z };
-  r.fitPoints = [];
+  const ctrl = splineCtrl(r);
+  ctrl[i] = { x: to.x, y: to.y, z: ctrl[i]!.z };
+  r.controlVerts = pack3(ctrl);
+  r.fitVerts = [];
   r.startTangent = undefined;
   r.endTangent = undefined;
   return r;

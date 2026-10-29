@@ -4,6 +4,7 @@ import { transformEntity } from '../../src/edit/geom/transform';
 import { type Affine, affInv, affMirror, affMul, affRotate, affScale, affTranslate } from '../../src/edit/geom/math';
 import { NEG_Z, P, V, arc, circle, deg, ellipse, fitSpline, line, lw, mappedPath, mtext, near, newDoc, only, poly2d, renders, samePath, spline, text, xline } from './helpers';
 import { lwVertices } from '../../src/core/lwpoly';
+import { ctrlCount, fitCount } from '../../src/core/flat3';
 
 const doc = newDoc();
 
@@ -97,10 +98,10 @@ describe('transformEntity — 종류와 표현', () => {
   it('맞춤점 스플라인: 닮음은 맞춤점 유지, 비균등은 조정점 정의로', () => {
     const s = fitSpline([[0, 0], [3, 4], [7, 1], [10, 6]]) as SplineEntity;
     const a = only(transformEntity(s, affRotate(1), doc)) as SplineEntity;
-    expect(a.fitPoints.length).toBe(4);
+    expect(fitCount(a)).toBe(4);
     const b = only(transformEntity(s, NONUNI, doc)) as SplineEntity;
-    expect(b.fitPoints.length).toBe(0);
-    expect(b.controlPoints.length).toBeGreaterThan(3);
+    expect(fitCount(b)).toBe(0);
+    expect(ctrlCount(b)).toBeGreaterThan(3);
   });
   it('XLINE·RAY 방향', () => {
     const x = xline(1, 1, 1, 0);

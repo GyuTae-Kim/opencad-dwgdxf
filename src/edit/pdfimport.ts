@@ -9,6 +9,7 @@ import type { CadDocument } from '../core/model';
 import { createHatch } from './hatch';
 import { nearestAci } from '../core/color';
 import { packBulge, packLwPoints } from '../core/lwpoly';
+import { pack3 } from '../core/flat3';
 
 export type PdfSeg = { k: 'L'; x: number; y: number } | { k: 'C'; x1: number; y1: number; x2: number; y2: number; x: number; y: number };
 
@@ -199,8 +200,8 @@ export function pdfToEntities(doc: CadDocument, page: PdfPageData, opt: PdfImpor
             degree: 3,
             flags: 8,
             knots,
-            controlPoints: r.pts.map((p) => ({ x: p.x, y: p.y, z: 0 })),
-            fitPoints: [],
+            controlVerts: pack3(r.pts.map((p) => ({ x: p.x, y: p.y, z: 0 }))),
+            fitVerts: [],
             knotTolerance: 1e-10,
             controlTolerance: 1e-10,
             fitTolerance: 1e-10,

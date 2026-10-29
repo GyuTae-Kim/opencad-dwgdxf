@@ -21,6 +21,7 @@ import {
 import { V, arc, line, lw, near, newDoc, poly2d, renders } from '../edit/helpers';
 import { lwVertices } from '../../src/core/lwpoly';
 import { polyVertices, setPolyVertices } from '../../src/core/polyverts';
+import { pack3 } from '../../src/core/flat3';
 
 const doc = newDoc();
 const zig = () =>
@@ -53,14 +54,14 @@ describe('PEDIT 변환', () => {
       flags: 8,
       degree: 3,
       knots: [0, 0, 0, 0, 1, 2, 2, 2, 2],
-      controlPoints: [
+      controlVerts: pack3([
         { x: 0, y: 0, z: 0 },
         { x: 5, y: 10, z: 0 },
         { x: 10, y: -5, z: 0 },
         { x: 15, y: 5, z: 0 },
         { x: 20, y: 0, z: 0 },
-      ],
-      fitPoints: [],
+      ]),
+      fitVerts: [],
       knotTolerance: 1e-10,
       controlTolerance: 1e-10,
       fitTolerance: 1e-10,

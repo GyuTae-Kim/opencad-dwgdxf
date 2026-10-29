@@ -8,6 +8,7 @@ import { helixControlPoints, helixEntity } from '../../src/edit/helix';
 import { nurbsPoints } from '../../src/geom/curves';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { readCadFile } from '../../src/io/index';
+import { splineCtrl } from '../../src/core/flat3';
 
 const spec = { center: { x: 0, y: 0, z: 0 }, baseRadius: 10, topRadius: 10, startAngle: 0, turns: 3, height: 15, ccw: true };
 
@@ -25,7 +26,7 @@ describe('나선', () => {
 
   it('곡선 위 점의 반지름 오차가 작고, 시계 방향·테이퍼·끝수 회전을 다룬다', () => {
     const e = helixEntity({ ...spec, height: 0 }, entityDefaults());
-    const pts = nurbsPoints(e.degree, e.knots, e.controlPoints, undefined, 0.001);
+    const pts = nurbsPoints(e.degree, e.knots, splineCtrl(e), undefined, 0.001);
     for (let i = 0; i < pts.length; i += 3) expect(Math.abs(Math.hypot(pts[i]!, pts[i + 1]!) - 10)).toBeLessThan(0.003);
     expect(e.flags & 8).toBe(8);
     const cw = helixControlPoints({ ...spec, ccw: false, turns: 0.25 });
@@ -49,10 +50,10 @@ describe('나선', () => {
     const h = [...back.entityIndex.values()].find((x) => x.type === 'SPLINE') as SplineEntity;
     expect(h.helix).toMatchObject({ radius: 10, turns: 3, turnHeight: 5, ccw: true, constrain: 1 });
     expect(h.helix!.axisBase).toMatchObject({ x: 5, y: 6 });
-    expect(h.controlPoints).toHaveLength(37);
+    expect(splineCtrl(h)).toHaveLength(37);
     const old = readCadFile(writeDxf(doc, { version: 'AC1015' }).data, 'x.dxf');
     const sp = [...old.entityIndex.values()].find((x) => x.type === 'SPLINE') as SplineEntity;
     expect(sp.helix).toBeUndefined();
-    expect(sp.controlPoints).toHaveLength(37);
+    expect(splineCtrl(sp)).toHaveLength(37);
   });
 });

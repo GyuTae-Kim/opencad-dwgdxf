@@ -8,7 +8,7 @@ import type { CadDocument, Entity, Vec3 } from '../../core/model';
 import { isNaturalExt, isPlanarExt } from '../geom/ocs';
 import { transformEntity } from '../geom/transform';
 import { polyVertices, setPolyVertices } from '../../core/polyverts';
-import { leaderVertices, pack3 } from '../../core/flat3';
+import { leaderVertices, pack3, splineCtrl, splineFit } from '../../core/flat3';
 
 const z0 = (p: Vec3): Vec3 => ({ x: p.x, y: p.y, z: 0 });
 const z0opt = (p: Vec3 | undefined): Vec3 | undefined => (p ? z0(p) : undefined);
@@ -70,8 +70,8 @@ export function flattenEntity(e: Entity, doc: CadDocument): FlattenResult {
       );
       break;
     case 'SPLINE':
-      out.controlPoints = out.controlPoints.map(z0);
-      out.fitPoints = out.fitPoints.map(z0);
+      out.controlVerts = pack3(splineCtrl(out).map(z0));
+      out.fitVerts = pack3(splineFit(out).map(z0));
       if (out.startTangent) out.startTangent = z0(out.startTangent);
       if (out.endTangent) out.endTangent = z0(out.endTangent);
       if (out.normal) out.normal = { x: 0, y: 0, z: 1 };

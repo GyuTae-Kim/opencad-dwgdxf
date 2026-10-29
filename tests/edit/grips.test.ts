@@ -21,6 +21,7 @@ import { entityPath } from '../../src/edit/geom/path';
 import { pathNearest } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, arc, circle, deg, ellipse, fitSpline, line, lw, mtext, near, newDoc, poly2d, renders, spline, text, xline } from './helpers';
 import { lwVertices } from '../../src/core/lwpoly';
+import { splineCtrl } from '../../src/core/flat3';
 
 const doc = newDoc();
 const one = (r: { replace?: Entity[]; add?: Entity[] }) => (r.replace ?? r.add ?? [])[0]!;
@@ -125,7 +126,7 @@ describe('gripMove — 곡선', () => {
       [3, 5],
       [6, 0],
     ]) as SplineEntity;
-    near((one(gripMove(s, 'c1', V(3, 8), doc)) as SplineEntity).controlPoints[1]!, P(3, 8));
+    near(splineCtrl(one(gripMove(s, 'c1', V(3, 8), doc)) as SplineEntity)[1]!, P(3, 8));
     const f = { ...(fitSpline([[0, 0], [3, 4], [7, 1]]) as SplineEntity) };
     const of = one(gripMove(f, 'f1', V(3, 6), doc)) as SplineEntity;
     expect(pathNearest(entityPath(of)!, V(3, 6)).d).toBeLessThan(1e-9);

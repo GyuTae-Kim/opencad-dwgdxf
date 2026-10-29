@@ -55,6 +55,7 @@ import { xformHatch } from './xhatch';
 import { xformDimension, xformLeader, xformMLeader, xformTable } from './xannot';
 import { xformArcText } from '../textools/arctext';
 import { meshVertices, packMesh } from '../../core/meshdata';
+import { ctrlCount, fitCount, pack3, splineCtrl, splineFit } from '../../core/flat3';
 
 export function transformEntity(e: Entity, m: Affine, doc: CadDocument, opts: TransformOptions = {}): EditResult {
   return transformOne(e, m, doc, opts);
@@ -338,9 +339,9 @@ function splineIn(src: Entity, n: import('./nurbs').Nurbs, closed: boolean, ext:
     flags: (closed ? 1 : 0) | (rational ? 4 : 0) | 8,
     degree: nn.degree,
     knots: nn.knots,
-    controlPoints: nn.ctrl,
+    controlVerts: pack3(nn.ctrl),
     weights: nn.weights,
-    fitPoints: [],
+    fitVerts: [],
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,
@@ -396,21 +397,21 @@ export function xformSpline(e: SplineEntity, m: Affine, opt: TransformOptions): 
   const r = cloneEntity(e);
   const sim = affSimilarity(m);
   const P = (p: Vec3) => P3(m, p, opt);
-  if (!sim && e.fitPoints.length >= 2) {
+  if (!sim && fitCount(e) >= 2) {
     // 맞춤 곡선은 닮음이 아닌 변환에서 유지되지 않는다 → 조정점 정의로
-    if (e.controlPoints.length < 2) {
+    if (ctrlCount(e) < 2) {
       const s = fitPointsCurve(e);
       r.degree = s.degree;
       r.knots = s.knots;
-      r.controlPoints = s.ctrl;
+      r.controlVerts = pack3(s.ctrl);
       r.weights = undefined;
     }
-    r.fitPoints = [];
+    r.fitVerts = [];
     r.startTangent = undefined;
     r.endTangent = undefined;
   }
-  r.controlPoints = r.controlPoints.map(P);
-  r.fitPoints = r.fitPoints.map(P);
+  r.controlVerts = pack3(splineCtrl(r).map(P));
+  r.fitVerts = pack3(splineFit(r).map(P));
   if (r.startTangent) r.startTangent = dir3(m, r.startTangent);
   if (r.endTangent) r.endTangent = dir3(m, r.endTangent);
   if (e.normal) r.normal = xformNormal(m, e.normal);

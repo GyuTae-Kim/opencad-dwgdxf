@@ -12,6 +12,7 @@ import type { SceneMessage } from '../worker/protocol';
 import { bulgePolylinePoints, circlePoints, ellipsePoints, nurbsPoints } from '../geom/curves';
 import { lwVertices } from '../core/lwpoly';
 import { polyVertices } from '../core/polyverts';
+import { splineCtrl, splineFit } from '../core/flat3';
 
 export class SpaceScene {
   gpu: GpuScene;
@@ -234,13 +235,14 @@ export function outlineOf(e: Entity): number[] | null {
       return ellipsePoints(e.center.x, e.center.y, e.majorAxis.x, e.majorAxis.y, e.ratio, e.startParam, e.endParam, r * 1e-3);
     }
     case 'SPLINE': {
-      if (e.controlPoints.length >= 2) {
-        const pts3 = nurbsPoints(e.degree, e.knots, e.controlPoints, e.weights, 1e-3 * polySize(e.controlPoints.map((p) => [p.x, p.y])));
+      const ctrl = splineCtrl(e);
+      if (ctrl.length >= 2) {
+        const pts3 = nurbsPoints(e.degree, e.knots, ctrl, e.weights, 1e-3 * polySize(ctrl.map((p) => [p.x, p.y])));
         const out: number[] = [];
         for (let i = 0; i + 2 < pts3.length; i += 3) out.push(pts3[i]!, pts3[i + 1]!);
         return out;
       }
-      return e.fitPoints.flatMap((p) => [p.x, p.y]);
+      return splineFit(e).flatMap((p) => [p.x, p.y]);
     }
   }
   return null;

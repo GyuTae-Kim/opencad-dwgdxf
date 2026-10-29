@@ -82,13 +82,13 @@ export function addSampleEntities(doc: CadDocument): void {
     flags: 8,
     degree: 3,
     knots: [0, 0, 0, 0, 1, 1, 1, 1],
-    controlPoints: [p(0, 0), p(10, 20), p(20, -20), p(30, 0)],
-    fitPoints: [],
+    controlVerts: pack3([p(0, 0), p(10, 20), p(20, -20), p(30, 0)]),
+    fitVerts: [],
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,
   });
-  push({ ...base('SPLINE'), flags: 8, degree: 3, knots: [], controlPoints: [], fitPoints: [p(0, 0), p(5, 5), p(10, 0)], knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10 });
+  push({ ...base('SPLINE'), flags: 8, degree: 3, knots: [], controlVerts: [], fitVerts: pack3([p(0, 0), p(5, 5), p(10, 0)]), knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10 });
   push({ ...base('XLINE'), base: p(0, 0), direction: p(1, 0) });
   push({ ...base('RAY'), base: p(0, 0), direction: p(0, 1) });
   const text = { height: 2.5, rotation: 0, widthFactor: 1, oblique: 0, style: 'Standard', generation: 0 };
@@ -327,8 +327,8 @@ export function addSampleEntities(doc: CadDocument): void {
     flags: 0,
     degree: 3,
     knots: [0, 0, 0, 0, 1, 1, 1, 1],
-    controlPoints: [p(10, 0, 0), p(10, 10, 1), p(-10, 10, 2), p(-10, 0, 3)],
-    fitPoints: [],
+    controlVerts: pack3([p(10, 0, 0), p(10, 10, 1), p(-10, 10, 2), p(-10, 0, 3)]),
+    fitVerts: [],
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,

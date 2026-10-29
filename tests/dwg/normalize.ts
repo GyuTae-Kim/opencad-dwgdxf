@@ -30,6 +30,7 @@ import { decodeCadEscapes } from '../../src/core/codepage';
 import { decodeCaret } from '../../src/io/dxf/records';
 import { fitSplineAcad, knotParamOfFlags } from '../../src/geom/curves';
 import { fitOnlySplineGap } from '../oracle/spline';
+import { ctrlCount, fitCount, pack3, splineFit } from '../../src/core/flat3';
 
 type Obj = Record<string, unknown>;
 type Ent = Obj & { type: string; handle: string; color?: { aci: number; rgb?: number } };
@@ -86,10 +87,10 @@ export function isDynamicBlock(doc: CadDocument, key: string): boolean {
  * 비트를 잃는다(5번). 그 뒤 조정점 좌표·매듭 값까지 견주므로 DWG 리더가 다른 곡선을 채우면 차이로 남는다.
  */
 export function acadFitControl(E: SplineEntity, A: SplineEntity): void {
-  if (E.controlPoints.length || E.fitPoints.length < 2 || !A.controlPoints.length || A.fitPoints.length !== E.fitPoints.length) return;
-  const s = fitSplineAcad(E.fitPoints, knotParamOfFlags(A.flags), E.startTangent, E.endTangent);
+  if (ctrlCount(E) || fitCount(E) < 2 || !ctrlCount(A) || fitCount(A) !== fitCount(E)) return;
+  const s = fitSplineAcad(splineFit(E), knotParamOfFlags(A.flags), E.startTangent, E.endTangent);
   if (!s) return;
-  E.controlPoints = s.ctrl;
+  E.controlVerts = pack3(s.ctrl);
   E.knots = s.knots;
 }
 

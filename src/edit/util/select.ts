@@ -7,7 +7,7 @@ import { plainText, TYPE_NAMES } from '../../app/inquiry';
 import { hasWildcard, wcmatch } from './wildcard';
 import { lwCount, lwPoint } from '../../core/lwpoly';
 import { polyCount, polyLoc } from '../../core/polyverts';
-import { at3, leaderCount } from '../../core/flat3';
+import { at3, ctrlAt, fitAt, leaderCount } from '../../core/flat3';
 
 export type PropKind = 'name' | 'text' | 'number' | 'color' | 'lineweight' | 'transparency';
 
@@ -81,7 +81,7 @@ function anchor(e: Entity): { x: number; y: number } | null {
     case 'VIEWPORT':
       return e.center;
     case 'SPLINE':
-      return e.controlPoints[0] ?? e.fitPoints[0] ?? null;
+      return ctrlAt(e, 0) ?? fitAt(e, 0) ?? null;
     case 'XLINE':
     case 'RAY':
       return e.base;

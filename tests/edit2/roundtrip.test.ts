@@ -17,6 +17,7 @@ import { closeSpline, refit } from '../../src/edit/geom/splinedit';
 import { V, line, lw, near } from '../edit/helpers';
 import { lwVertices } from '../../src/core/lwpoly';
 import { polyVertices } from '../../src/core/polyverts';
+import { ctrlCount, fitCount, pack3 } from '../../src/core/flat3';
 
 describe('DXF 왕복', () => {
   it('새 객체를 쓰고 읽으면 같다', () => {
@@ -47,13 +48,13 @@ describe('DXF 왕복', () => {
       flags: 8,
       degree: 3,
       knots: [],
-      controlPoints: [],
-      fitPoints: [
+      controlVerts: [],
+      fitVerts: pack3([
         { x: 100, y: 0, z: 0 },
         { x: 110, y: 10, z: 0 },
         { x: 120, y: 0, z: 0 },
         { x: 130, y: 10, z: 0 },
-      ],
+      ]),
       knotTolerance: 1e-10,
       controlTolerance: 1e-10,
       fitTolerance: 1e-10,
@@ -81,8 +82,8 @@ describe('DXF 왕복', () => {
     expect(lwVertices(c2)[0]!.endWidth).toBeCloseTo(lwVertices(cloud)[0]!.endWidth, 12);
     const p2 = get<SplineEntity>(closed.handle);
     expect(p2.flags & 3).toBe(3);
-    expect(p2.controlPoints.length).toBe(closed.controlPoints.length);
-    expect(p2.fitPoints.length).toBe(4);
+    expect(ctrlCount(p2)).toBe(ctrlCount(closed));
+    expect(fitCount(p2)).toBe(4);
     const b2 = get<SplineEntity>(blend.handle);
     expect(b2.degree).toBe(5);
   });

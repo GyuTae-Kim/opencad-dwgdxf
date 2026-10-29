@@ -44,6 +44,7 @@ import type { DocState } from './docstate';
 import { type GripMenuItem, addHook } from './hooks';
 import { unlockedOnly } from './layers';
 import type { OverlayGeom, Pt } from './view';
+import { ctrlCount, fitCount } from '../core/flat3';
 
 /** 그립 하나(App.gripList의 항목) */
 export interface GripRef {
@@ -137,11 +138,11 @@ function splineOptions(e: SplineEntity, id: string): GripOption[] {
       { key: 'AD', label: '맞춤점 추가', kind: 'point', prompt: '새 맞춤점 지정:', apply: (p) => (p ? splineFitAddGrip(e, i, p) : NO_POINT) },
       { key: 'RE', label: '맞춤점 제거', kind: 'now', apply: () => splineFitDeleteGrip(e, i) },
     ];
-    if (!isSplineClosed(e) && (i === 0 || i === e.fitPoints.length - 1))
+    if (!isSplineClosed(e) && (i === 0 || i === fitCount(e) - 1))
       out.push({ key: 'TA', label: '접선 방향', kind: 'point', prompt: '접선 방향 지정:', apply: (p) => (p ? splineFitTangentGrip(e, i, p) : NO_POINT) });
     return out;
   }
-  if (id[0] === 'c' && e.controlPoints.length >= 2) {
+  if (id[0] === 'c' && ctrlCount(e) >= 2) {
     return [
       { ...STRETCH, label: '정점 신축' },
       { key: 'AD', label: '정점 추가', kind: 'point', prompt: '새 정점 지정:', apply: (p) => (p ? splineCvInsertGrip(e, i, p) : NO_POINT) },

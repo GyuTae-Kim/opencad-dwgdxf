@@ -18,7 +18,7 @@ import { entityPath } from '../edit/geom/path';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, pieceNearest } from '../edit/geom/curve';
 import { commonTangentCurves, tangentNearPick, tangentsFromPoint } from '../edit/geom/tangent';
 import { apparentSnaps } from './snap-app';
-import { leaderVertices } from '../core/flat3';
+import { ctrlCount, fitCount, leaderVertices, splineCtrl, splineFit } from '../core/flat3';
 import { entityZAt, intersectionZ } from './snapz';
 
 export interface SnapPoint {
@@ -153,8 +153,8 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
     }
     case 'SPLINE': {
       let pts: number[];
-      if (e.controlPoints.length >= 2) pts = nurbsPoints(e.degree, e.knots, e.controlPoints, e.weights, 1e9);
-      else if (e.fitPoints.length >= 2) {
+      if (ctrlCount(e) >= 2) pts = nurbsPoints(e.degree, e.knots, splineCtrl(e), e.weights, 1e9);
+      else if (fitCount(e) >= 2) {
         const s = fitPointsCurve(e);
         pts = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e9);
       } else return;
@@ -162,7 +162,7 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
         out.push({ ...apply(m, pts[0]!, pts[1]!, pts[2]!), kind: 'end' });
         out.push({ ...apply(m, pts[pts.length - 3]!, pts[pts.length - 2]!, pts[pts.length - 1]!), kind: 'end' });
       }
-      for (const f of e.fitPoints) out.push({ ...apply(m, f.x, f.y, f.z), kind: 'nod' });
+      for (const f of splineFit(e)) out.push({ ...apply(m, f.x, f.y, f.z), kind: 'nod' });
       return;
     }
     case 'POINT':

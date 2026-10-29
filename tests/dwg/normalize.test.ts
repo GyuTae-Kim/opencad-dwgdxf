@@ -10,6 +10,7 @@ import { createNewDocument } from '../../src/core/newdoc';
 import { readDwg, writeDwg } from '../../src/io/dwg';
 import { compareSummaries } from '../oracle/compare';
 import { DXF_RENAMES_DYNAMIC_BLOCKS, acadFitControl, dynamicBlockRenames, isDynamicBlock, normalizePair } from './normalize';
+import { ctrlCount, pack3, splineCtrl } from '../../src/core/flat3';
 
 const yes = () => true;
 
@@ -84,22 +85,22 @@ describe('맞춤점만 적힌 기준 스플라인(11번)', () => {
 
   it('객체: DWG 맞춤점 자료를 읽어 채운 조정점·매듭과, 맞춤점만 적힌 기준 객체에서 구한 AutoCAD 방식 값이 좌표까지 같다', () => {
     const doc = createNewDocument('metric');
-    const src: SplineEntity = { ...entityDefaults(), handle: '7C80', layer: '0', type: 'SPLINE', flags: 1024 | 128 | 8, degree: 3, knots: [], controlPoints: [], fitPoints: fit, startTangent: st, endTangent: et, knotTolerance: 1e-9, controlTolerance: 1e-10, fitTolerance: 1e-10 };
+    const src: SplineEntity = { ...entityDefaults(), handle: '7C80', layer: '0', type: 'SPLINE', flags: 1024 | 128 | 8, degree: 3, knots: [], controlVerts: [], fitVerts: pack3(fit), startTangent: st, endTangent: et, knotTolerance: 1e-9, controlTolerance: 1e-10, fitTolerance: 1e-10 };
     doc.blocks.get(MODEL_SPACE)!.entities.push(src);
     const A = readDwg(writeDwg(doc, { version: 'AC1032' }).data).entityIndex.get('7C80') as SplineEntity;
-    expect(A.controlPoints.length).toBe(fit.length + 2);
+    expect(ctrlCount(A)).toBe(fit.length + 2);
     // 기준 DXF를 읽은 것: 맞춤점·끝 접선만, 70은 매듭 매개변수 비트를 잃는다(5번)
-    const E: SplineEntity = { ...src, flags: 24, fitPoints: fit.map((p) => ({ ...p })) };
+    const E: SplineEntity = { ...src, flags: 24, fitVerts: pack3(fit) };
     acadFitControl(E, A);
-    expect(E.controlPoints.length).toBe(A.controlPoints.length);
-    E.controlPoints.forEach((p, i) => expect(Math.hypot(p.x - A.controlPoints[i]!.x, p.y - A.controlPoints[i]!.y, p.z - A.controlPoints[i]!.z)).toBeLessThan(1e-9));
+    expect(ctrlCount(E)).toBe(ctrlCount(A));
+    splineCtrl(E).forEach((p, i) => expect(Math.hypot(p.x - splineCtrl(A)[i]!.x, p.y - splineCtrl(A)[i]!.y, p.z - splineCtrl(A)[i]!.z)).toBeLessThan(1e-9));
     expect(E.knots).toEqual(A.knots);
     // 조정점이 이미 있거나 우리 쪽이 채우지 않았으면 그대로 둔다(차이는 비교에 남는다)
-    const kept: SplineEntity = { ...E, controlPoints: [P(1, 1)], knots: [0, 1] };
+    const kept: SplineEntity = { ...E, controlVerts: pack3([P(1, 1)]), knots: [0, 1] };
     acadFitControl(kept, A);
-    expect(kept.controlPoints).toEqual([P(1, 1)]);
-    const none: SplineEntity = { ...src, controlPoints: [], knots: [] };
-    acadFitControl(none, { ...A, controlPoints: [] });
-    expect(none.controlPoints).toEqual([]);
+    expect(splineCtrl(kept)).toEqual([P(1, 1)]);
+    const none: SplineEntity = { ...src, controlVerts: [], knots: [] };
+    acadFitControl(none, { ...A, controlVerts: [] });
+    expect(splineCtrl(none)).toEqual([]);
   });
 });

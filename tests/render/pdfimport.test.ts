@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Entity, SplineEntity } from '../../src/core/model';
 import { type PdfPageData, pdfToEntities } from '../../src/edit/pdfimport';
 import { newDoc } from '../hatch/helpers';
+import { splineCtrl } from '../../src/core/flat3';
 
 const opt = { scale: 25.4 / 72, insert: { x: 0, y: 0 }, rotation: 0, geometry: true, fills: true, text: true, lineweights: true, pdfLayers: true, currentLayer: '0', mmPerUnit: 1 };
 
@@ -46,7 +47,7 @@ describe('PDF 가져오기', () => {
     expect(line.color).toEqual({ aci: 7 });
     const sp = r.entities[1] as SplineEntity;
     expect(sp.degree).toBe(3);
-    expect(sp.controlPoints).toHaveLength(7);
+    expect(splineCtrl(sp)).toHaveLength(7);
     expect(sp.knots).toEqual([0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2]);
     expect(sp.color.rgb).toBe(0xff0000);
     const t = r.entities[3] as unknown as { height: number };

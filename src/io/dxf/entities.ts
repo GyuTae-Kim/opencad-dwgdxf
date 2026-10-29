@@ -377,8 +377,9 @@ function spline(c: Common): SplineEntity {
   const t = c.tags;
   const knots: number[] = [];
   const weights: number[] = [];
-  const controlPoints: Vec3[] = [];
-  const fitPoints: Vec3[] = [];
+  // 조정점·맞춤점은 평탄 좌표로(src/core/flat3.ts)
+  const controlVerts: number[] = [];
+  const fitVerts: number[] = [];
   let helix: SplineEntity['helix'];
   for (let i = 0; i < t.length; i++) {
     const code = t.codes[i]!;
@@ -386,8 +387,13 @@ function spline(c: Common): SplineEntity {
     if (sub === 'AcDbHelix') continue;
     if (code === 40) knots.push(num(t.values[i]));
     else if (code === 41) weights.push(num(t.values[i]));
-    else if (code === 10) controlPoints.push(t.pointAt(i));
-    else if (code === 11) fitPoints.push(t.pointAt(i));
+    else if (code === 10) {
+      const p = t.pointAt(i);
+      controlVerts.push(p.x, p.y, p.z);
+    } else if (code === 11) {
+      const p = t.pointAt(i);
+      fitVerts.push(p.x, p.y, p.z);
+    }
   }
   if (t.find(10, 'AcDbHelix') >= 0) {
     helix = {
@@ -408,13 +414,13 @@ function spline(c: Common): SplineEntity {
     flags,
     degree: t.int(71, 3),
     knots,
-    controlPoints,
-    fitPoints,
+    controlVerts: controlVerts.slice(),
+    fitVerts: fitVerts.slice(),
     knotTolerance: t.num(42, 1e-10),
     controlTolerance: t.num(43, 1e-10),
     fitTolerance: t.num(44, 1e-10),
   } as SplineEntity;
-  if (weights.length && weights.length === controlPoints.length && weights.some((w) => w !== 1)) e.weights = weights;
+  if (weights.length && weights.length * 3 === controlVerts.length && weights.some((w) => w !== 1)) e.weights = weights;
   // 접선은 AcDbSpline 안에서만(나선의 12는 축 벡터다)
   const sp = t.subs.includes('AcDbSpline') ? 'AcDbSpline' : undefined;
   if (t.find(12, sp) >= 0) e.startTangent = t.point(12, undefined, sp);

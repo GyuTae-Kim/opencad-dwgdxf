@@ -3,6 +3,7 @@ import type { BlockDef, CadDocument, Entity, LwVertex, Vec2, Vec3 } from '../../
 import { MODEL_SPACE, createDocument, entityDefaults } from '../../src/core/model';
 import { packLw } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
+import { pack3 } from '../../src/core/flat3';
 
 export const P = (x: number, y: number, z = 0): Vec3 => ({ x, y, z });
 export const V = (x: number, y: number): Vec2 => ({ x, y });
@@ -71,8 +72,8 @@ export function spline(ctrl: [number, number][], degree = 3, closed = false): En
     flags: (closed ? 1 : 0) | 8,
     degree,
     knots,
-    controlPoints: ctrl.map(([x, y]) => P(x, y)),
-    fitPoints: [],
+    controlVerts: pack3(ctrl.map(([x, y]) => P(x, y))),
+    fitVerts: [],
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,
@@ -86,8 +87,8 @@ export function fitSpline(fit: [number, number][]): Entity {
     flags: 8,
     degree: 3,
     knots: [],
-    controlPoints: [],
-    fitPoints: fit.map(([x, y]) => P(x, y)),
+    controlVerts: [],
+    fitVerts: pack3(fit.map(([x, y]) => P(x, y))),
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,

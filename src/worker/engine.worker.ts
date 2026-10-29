@@ -18,6 +18,7 @@ import { applyOps } from '../edit/session';
 import { sendDocument } from './doctransfer';
 import { unboxLw } from '../core/lwpoly';
 import { unboxPoly } from '../core/polyverts';
+import { unboxSpline } from '../core/flat3';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -172,6 +173,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
           const e = op.kind === 'add' ? op.entity : op.kind === 'modify' ? op.after : null;
           if (e?.type === 'LWPOLYLINE') unboxLw(e, e);
           else if (e?.type === 'POLYLINE') unboxPoly(e, e);
+          else if (e?.type === 'SPLINE') unboxSpline(e, e);
         }
         applyOps(doc, msg.ops);
         break;

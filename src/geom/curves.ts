@@ -3,6 +3,7 @@
  * tol은 현(chord)과 곡선 사이 최대 거리다.
  */
 import type { Vec2, Vec3 } from '../core/model';
+import { unpack3 } from '../core/flat3';
 
 export const TAU = Math.PI * 2;
 
@@ -457,12 +458,13 @@ export function knotParamOfFlags(flags: number): number {
  * 조정점이 없는 맞춤점 스플라인의 곡선. 열린 곡선(맞춤 공차 0)은 AutoCAD가 맞춤점 자료에서 만드는 곡선(fitSplineAcad, 70의 매듭 매개변수 비트),
  * 닫힌 곡선·근사 공차는 전역 보간(AutoCAD의 계산을 모른다).
  */
-export function fitPointsCurve(e: { fitPoints: readonly Vec3[]; flags: number; startTangent?: Vec3; endTangent?: Vec3; fitTolerance?: number }): { ctrl: Vec3[]; knots: number[]; degree: number } {
+export function fitPointsCurve(e: { fitVerts: readonly number[]; flags: number; startTangent?: Vec3; endTangent?: Vec3; fitTolerance?: number }): { ctrl: Vec3[]; knots: number[]; degree: number } {
+  const fit = unpack3(e.fitVerts);
   if (!(e.flags & 1) && !((e.fitTolerance ?? 0) > 1e-9)) {
-    const s = fitSplineAcad(e.fitPoints, knotParamOfFlags(e.flags), e.startTangent, e.endTangent);
+    const s = fitSplineAcad(fit, knotParamOfFlags(e.flags), e.startTangent, e.endTangent);
     if (s) return s;
   }
-  return interpolateFitPoints(e.fitPoints, e.startTangent, e.endTangent);
+  return interpolateFitPoints(fit, e.startTangent, e.endTangent);
 }
 
 /**
