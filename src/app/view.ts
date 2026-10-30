@@ -13,7 +13,7 @@ import type { Camera, DocState, Tile } from './docstate';
 import type { LoadPreview } from './loadpreview';
 import { type OverlayScene, type PaperInfo, type ViewportXf, layoutViewports, paperInfo, viewportXf } from './scene';
 import type { DisplayList } from '../render/displaylist';
-import { AIM_HOLD_MS, aimPoint } from './aim';
+import { AIM_HOLD_MS, aimCoverGap, aimPoint } from './aim';
 import { type Box, placeLabel, placeTip } from './overlay-place';
 import { RightDragGesture } from './rightdrag';
 import { DEFAULT_SETTINGS, RightClickTimer, type Settings, crosshairArm, gripHalf, showSnapMarker, snapMarkerRadius, timedRightClick, wheelZoom } from './settings';
@@ -1673,16 +1673,25 @@ export class CadView {
     }, AIM_HOLD_MS);
   }
 
+  /**
+   * 손가락 자리의 십자선: 손가락 위, 떠 있는 판(명령행·측정 띠·시트) 밑이면 조준창 + 표식기 반지름만큼 비킨다(aim.ts — 26차).
+   * 그래서 조준창 안에서 잡힌 스냅 점의 표식기도 판 밖에 보인다. 스냅은 그대로 이 자리에서 찾는다
+   */
+  private aimAt(p: Pt): Pt {
+    const covers = this.covers?.() ?? [];
+    return aimPoint(p, covers, { w: this.w, h: this.h }, aimCoverGap(this.prefs.aperture, snapMarkerRadius(this.prefs.markerSize)));
+  }
+
   /** 십자선을 손가락 위로 옮기고 앱에 커서 이동으로 알린다(스냅·툴팁 미리보기) */
   private aimMove(p: Pt, ev: PointerEvent): void {
-    const a = aimPoint(p);
+    const a = this.aimAt(p);
     this.events?.move(this.screenToWorld(a.x, a.y), a, ev);
     this.requestOverlay();
   }
 
-  /** 조준 중인 손가락을 떼면 십자선 자리를 누른 것으로 친다(취소면 그냥 끝낸다) */
+  /** 조준 중인 손가락을 떼면 십자선 자리(판을 비킨 자리)를 누른 것으로 친다(취소면 그냥 끝낸다) */
   private finishAim(p: Pt, ev: PointerEvent, cancel: boolean): void {
-    const a = aimPoint(p);
+    const a = this.aimAt(p);
     this.aim = null;
     this.touches.delete(ev.pointerId);
     this.leftDown = null;

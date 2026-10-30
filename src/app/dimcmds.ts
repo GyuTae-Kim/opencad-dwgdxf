@@ -25,6 +25,7 @@ import {
   generateDimensionGeometry,
   measureVars,
   nextDimBlockName,
+  ordinateChainEnd,
   placeIn,
   rawDimVars,
 } from '../edit/dim';
@@ -43,7 +44,7 @@ import { lwCount, lwVertices } from '../core/lwpoly';
 import type { ViewportXf } from './scene';
 import { circleToPaper, layoutXfs, modelToPaperVp, paperProjection } from './vpsnap';
 import { plainText } from './inquiry';
-import { ucsOrigin } from './ucs';
+import { currentUcs, ucsOrigin } from './ucs';
 
 const v3 = (p: Pt): Vec3 => ({ x: p.x, y: p.y, z: 0 });
 
@@ -666,10 +667,12 @@ export function registerDimCommands(app: App): void {
           return createAngularDimension(doc, v3(sp.c), v3(startP), v3(p), arcPt, { style: prev.dimStyle });
         }
         if (t === 6) {
-          // 세로좌표: 같은 축, 지시선 끝은 앞 치수와 같은 높이·폭. 데이텀은 DIMORDINATE처럼 지금 공간의 UCS 원점(25차 — 도면 공간은 $PUCSORG)
+          // 세로좌표: 같은 축, 지시선 끝은 앞 치수와 같은 높이·폭. 데이텀은 DIMORDINATE처럼 지금 공간의 UCS 원점(25차 — 도면 공간은 $PUCSORG),
+          // 축은 지금 UCS의 방향(26차 — 높이·폭도 그 축으로 잰다. 돌지 않은 UCS는 예전과 같다)
           const xAxis = (prev.dimType & 64) !== 0;
-          const end = xAxis ? { x: p.x, y: prev.defPoint3.y, z: 0 } : { x: prev.defPoint3.x, y: p.y, z: 0 };
-          return createOrdinateDimension(doc, v3(p), end, { xAxis, style: prev.dimStyle, datum: ucsOrigin(st) });
+          const ua = currentUcs(st).angle;
+          const end = ordinateChainEnd(v3(p), prev.defPoint3, xAxis, ua);
+          return createOrdinateDimension(doc, v3(p), end, { xAxis, style: prev.dimStyle, datum: ucsOrigin(st), ucsAngle: ua });
         }
         const rot = t === 1 ? Math.atan2(prev.defPoint3.y - prev.defPoint2.y, prev.defPoint3.x - prev.defPoint2.x) : prev.rotation;
         let line = prev.defPoint;
@@ -747,6 +750,7 @@ export function registerDimCommands(app: App): void {
       // 25차: 도면 공간의 지금 UCS는 도면 공간 UCS($PUCSORG — 도움말 UCS: 모형 공간과 도면 공간에 따로 저장)라 데이텀도 그 원점이다
       // (이전에는 어느 공간에서나 모형 공간 UCS 원점 $UCSORG). 도면 공간 UCS 원점을 모형 데이텀이 보이는 종이 자리에 두면 뷰포트 안 모형 객체의
       // 세로좌표가 모형 데이텀에서 잰 모형 단위 값이 된다(도움말 "About Creating Ordinate Dimensions" — 보통 UCS 원점을 데이텀에 맞춘 뒤 만든다)
+      // 26차: X·Y 값과 지시선 축은 지금 공간 UCS의 방향(도움말 같은 곳 — UCS의 위치와 방향이 값을 정한다. DXF 51에 −UCS 각도)
       const f = await ctx.getPoint('피쳐 위치 지정:', { viewportSnaps: true });
       if (!('point' in f)) return;
       const fr = pointRef(app, f);
@@ -755,7 +759,7 @@ export function registerDimCommands(app: App): void {
       let xAxis: boolean | undefined;
       for (;;) {
         const make = (p: Pt) => {
-          const d = withDimOpts(createOrdinateDimension(doc, v3(f.point), v3(p), { text: o.text, xAxis, datum: ucsOrigin(st) }), o);
+          const d = withDimOpts(createOrdinateDimension(doc, v3(f.point), v3(p), { text: o.text, xAxis, datum: ucsOrigin(st), ucsAngle: currentUcs(st).angle }), o);
           return vx ? viewportScaled(doc, d, vx.k) : d;
         };
         const p = await ctx.getPoint('지시선 끝점을 지정 또는 [X데이텀(X)/Y데이텀(Y)/여러 줄 문자(M)/문자(T)/각도(A)]:', {

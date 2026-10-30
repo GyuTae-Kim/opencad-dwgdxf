@@ -28,6 +28,7 @@ import {
   createRadialDimension,
   dimVars,
   generateDimensionGeometry,
+  ordinateChainEnd,
   placeIn,
 } from '../edit/dim';
 import { OSNAP, type PointRef, circlePointRef } from '../edit/dim/assoc';
@@ -45,7 +46,7 @@ import { askText, loadPref, savePref } from './util2-ui';
 import type { OverlayGeom, Pt } from './view';
 import type { ViewportXf } from './scene';
 import { circleToPaper, geometryToPaper, modelToPaperVp, paperProjection, paperToModelVp } from './vpsnap';
-import { ucsOrigin } from './ucs';
+import { currentUcs, ucsOrigin } from './ucs';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
@@ -573,9 +574,11 @@ export function registerDimSmartCommand(app: App): void {
           const make = (p: Pt): DimensionEntity => {
             const t = prev.dimType & 7;
             if (t === 6) {
+              // 세로좌표: DIMCONTINUE·DIMBASELINE과 같다(지금 UCS의 원점·방향 — 26차)
               const xAxis = (prev.dimType & 64) !== 0;
-              const end = xAxis ? { x: p.x, y: prev.defPoint3.y, z: 0 } : { x: prev.defPoint3.x, y: p.y, z: 0 };
-              return createOrdinateDimension(doc, v3(p), end, { xAxis, style: prev.dimStyle, layer: layerOpt(), datum: ucsOrigin(st) });
+              const ua = currentUcs(st).angle;
+              const end = ordinateChainEnd(v3(p), prev.defPoint3, xAxis, ua);
+              return createOrdinateDimension(doc, v3(p), end, { xAxis, style: prev.dimStyle, layer: layerOpt(), datum: ucsOrigin(st), ucsAngle: ua });
             }
             const rot = t === 1 ? Math.atan2(prev.defPoint3.y - prev.defPoint2.y, prev.defPoint3.x - prev.defPoint2.x) : prev.rotation;
             let line = prev.defPoint;
@@ -653,7 +656,7 @@ export function registerDimSmartCommand(app: App): void {
           let xAxis: boolean | undefined;
           const kws: Keyword[] = [{ key: 'X', label: 'X데이텀' }, { key: 'Y', label: 'Y데이텀' }, KW_M, KW_T, KW_N, KW_U];
           for (;;) {
-            const make = (p: Pt) => scaled(withRot(createOrdinateDimension(doc, v3(f.point), v3(p), { ...opts(o), xAxis, datum: ucsOrigin(st) }), o), vx);
+            const make = (p: Pt) => scaled(withRot(createOrdinateDimension(doc, v3(f.point), v3(p), { ...opts(o), xAxis, datum: ucsOrigin(st), ucsAngle: currentUcs(st).angle }), o), vx);
             const p = await ctx.getPoint(`지시선 끝점 지정 또는 ${tail(kws)}`, { base: f.point, keywords: kws, ghost: (q) => geom(make(q)) });
             if ('point' in p) {
               add(make(p.point), [null, fr]);
