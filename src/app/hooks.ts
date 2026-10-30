@@ -100,9 +100,9 @@ export interface SubSelection {
   grips?(): Pt[];
   /**
    * 누른 자리의 그립 번호(grips()의 차례). 없으면 -1. tol: 그립 고르기 거리(도면 단위, 터치는 두 배),
-   * pickTol: 객체 고르기 허용 거리(click의 tol과 같다 — 그 누르기가 부분 고르기 자리인지 가린다)
+   * pickTol: 객체 고르기 허용 거리(click의 tol과 같다 — 그 누르기가 부분 고르기 자리인지 가린다), touch: 손가락 누르기(30차)
    */
-  gripAt?(point: Pt, tol: number, pickTol: number): number;
+  gripAt?(point: Pt, tol: number, pickTol: number, touch?: boolean): number;
   /** 그 그립을 눌렀다(at: 누른 자리, 도면 좌표): 그립 편집을 시작한다 */
   gripPress?(i: number, at: Pt): void;
   /**

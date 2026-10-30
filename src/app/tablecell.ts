@@ -516,7 +516,7 @@ export function registerTableCellSelection(app: App): TableCellSelection {
       const q = rangeRect(cur.t, cur.range, cur.rt.style.flow);
       return CELL_SIDES.map((s) => fromTableLocal(cur.e, sideMid(q, s)));
     },
-    gripAt(w, tol, pickTol) {
+    gripAt(w, tol, pickTol, touch = false) {
       const cur = live();
       if (!cur) return -1;
       const { e, t, range } = cur;
@@ -537,12 +537,15 @@ export function registerTableCellSelection(app: App): TableCellSelection {
         const d = Math.hypot(w.x - g.x, w.y - g.y);
         if (d > tol || d >= bd) return;
         if (inCell) {
-          // 고른 범위 안은 그 변에서 그립 거리와 범위 크기의 1/4 가운데 작은 것까지만(더 안쪽은 셀 누르기 — 두 번 누르기로 셀 편집)
+          // 고른 범위 안은 그 변에서 그립 거리와 범위 크기의 1/4 가운데 작은 것까지만(더 안쪽은 셀 누르기 — 두 번 누르기로 셀 편집).
+          // 30차: 손가락의 위·아래 그립은 범위 가운데 선까지 — 작게 보이는 셀(휴대폰 375px에 맞춘 표의 8px 행)도 잡히게. 이웃 셀 안(그 셀 고르기)과
+          // 격자선(표 고르기)은 그대로라 겹치지 않고, 범위 안의 그립 밖(좌우 그립 사이)은 예전처럼 셀 누르기. 두 번 톡은 그립 자리여도
+          // 두 번째 톡이 같은 자리라 바뀌지 않고 셀 편집으로 간다
           const horiz = side === 'x0' || side === 'x1';
           const k = horiz ? kx : ky;
           const depth = (side === 'x0' ? p.x - q.x0 : side === 'x1' ? q.x1 - p.x : side === 'y0' ? p.y - q.y0 : q.y1 - p.y) * k;
           const size = (horiz ? q.x1 - q.x0 : q.y1 - q.y0) * k;
-          if (depth > Math.min(tol, size / 4)) return;
+          if (depth > Math.min(tol, size / (touch && !horiz ? 2 : 4))) return;
         }
         bd = d;
         best = i;

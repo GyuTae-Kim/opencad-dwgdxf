@@ -1871,7 +1871,7 @@ export class App {
     const pickTol = this.view.overlay.pickbox * px * (touch ? 3 : 1);
     for (const s of this.subSelections) {
       if (!s.active() || !s.gripAt) continue;
-      const i = s.gripAt(w, tol, pickTol);
+      const i = s.gripAt(w, tol, pickTol, touch);
       if (i >= 0) return { s, i };
     }
     return null;

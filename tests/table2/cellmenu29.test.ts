@@ -423,7 +423,7 @@ describe('셀 그립(진짜 App)', () => {
     expect(h.st.session.undoTop()).toBe(undo0);
   });
 
-  it('터치는 그립 고르기 거리가 두 배(12), 범위 안쪽은 범위 크기의 1/4까지만 그립 — 셀 가운데는 셀 누르기, Shift+누르기는 범위', async () => {
+  it('터치는 그립 고르기 거리가 두 배(12), 범위 안쪽은 범위 크기의 1/4까지만 그립(30차 — 손가락의 위·아래는 가운데 선까지) — 셀 가운데는 셀 누르기, Shift+누르기는 범위', async () => {
     const h = setup();
     h.click(C3MID);
     // 마우스로 그립에서 10 떨어진 표 밖: 그립이 아니라 셀 고르기가 풀린다
@@ -449,12 +449,20 @@ describe('셀 그립(진짜 App)', () => {
     expect(pending(h)).toBeNull();
     expect(h.data()).toEqual(t0);
     expect(h.st.session.undoTop()).toBe(undo0);
-    // 위 그립에서 안쪽 2(셀 높이 7.5의 1/4 = 1.875보다 깊다): 셀 누르기(같은 셀) — 그립 편집이 아니다
-    h.click(C3MID, { pointerType: 'touch' });
-    h.click({ x: C3MID.x, y: C3.y1 - 2 }, { pointerType: 'touch' });
-    await settle();
-    expect(pending(h)).toBeNull();
-    expect(h.cur()).toEqual([2, 2, 2, 2]);
+    // 위 그립에서 안쪽 2(셀 높이 7.5의 1/4 = 1.875보다 깊다): 마우스는 셀 누르기(같은 셀) — 그립 편집이 아니다.
+    // 30차: 손가락의 위·아래 그립은 범위 가운데 선까지라 이 자리는 손가락이면 그립이다(phonegrip30 시험).
+    // 시간을 멈춰 두 번 누르기(0.5초) 판정이 기계 부하에 흔들리지 않게 한다
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1e6);
+    try {
+      h.click(C3MID);
+      now.mockReturnValue(1e6 + 2000);
+      h.click({ x: C3MID.x, y: C3.y1 - 2 });
+      await settle();
+      expect(pending(h)).toBeNull();
+      expect(h.cur()).toEqual([2, 2, 2, 2]);
+    } finally {
+      now.mockRestore();
+    }
     // Shift+누르기는 그립 자리여도 범위 넓히기(표 밖이라 셀은 그대로 — 그립 편집이 아니다)
     h.click({ x: C3MID.x, y: C3.y0 }, { shiftKey: true });
     await settle();
