@@ -154,13 +154,16 @@ export function createDiameterDimension(doc: CadDocument, center: Vec3, radius: 
   return finish(doc, d);
 }
 
-/** 세로좌표: xAxis가 없으면 지시선이 세로에 가까울 때 X 좌표 */
-export function createOrdinateDimension(doc: CadDocument, featurePoint: Vec3, leaderEnd: Vec3, opt: CreateDimOptions & { xAxis?: boolean } = {}): DimensionEntity {
+/**
+ * 세로좌표: xAxis가 없으면 지시선이 세로에 가까울 때 X 좌표.
+ * datum: 데이텀(10 — 지금 UCS 원점). 없으면 모형 공간의 UCS 원점($UCSORG) — 도면 공간에서 만들면 부르는 쪽이 그 공간의 UCS 원점($PUCSORG)을 준다
+ */
+export function createOrdinateDimension(doc: CadDocument, featurePoint: Vec3, leaderEnd: Vec3, opt: CreateDimOptions & { xAxis?: boolean; datum?: Vec3 } = {}): DimensionEntity {
   const dx = Math.abs(leaderEnd.x - featurePoint.x);
   const dy = Math.abs(leaderEnd.y - featurePoint.y);
   const xType = opt.xAxis ?? dy >= dx;
   const d = base(doc, 6 | (xType ? 64 : 0), opt);
-  const org = doc.header.get('$UCSORG');
+  const org = opt.datum ?? doc.header.get('$UCSORG');
   d.defPoint = org && typeof org === 'object' ? V(org as Vec3) : { ...ZERO };
   d.defPoint2 = V(featurePoint);
   d.defPoint3 = V(leaderEnd);

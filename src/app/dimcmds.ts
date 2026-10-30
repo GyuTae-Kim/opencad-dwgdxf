@@ -43,6 +43,7 @@ import { lwCount, lwVertices } from '../core/lwpoly';
 import type { ViewportXf } from './scene';
 import { circleToPaper, layoutXfs, modelToPaperVp, paperProjection } from './vpsnap';
 import { plainText } from './inquiry';
+import { ucsOrigin } from './ucs';
 
 const v3 = (p: Pt): Vec3 => ({ x: p.x, y: p.y, z: 0 });
 
@@ -665,10 +666,10 @@ export function registerDimCommands(app: App): void {
           return createAngularDimension(doc, v3(sp.c), v3(startP), v3(p), arcPt, { style: prev.dimStyle });
         }
         if (t === 6) {
-          // 세로좌표: 같은 축, 지시선 끝은 앞 치수와 같은 높이·폭
+          // 세로좌표: 같은 축, 지시선 끝은 앞 치수와 같은 높이·폭. 데이텀은 DIMORDINATE처럼 지금 공간의 UCS 원점(25차 — 도면 공간은 $PUCSORG)
           const xAxis = (prev.dimType & 64) !== 0;
           const end = xAxis ? { x: p.x, y: prev.defPoint3.y, z: 0 } : { x: prev.defPoint3.x, y: p.y, z: 0 };
-          return createOrdinateDimension(doc, v3(p), end, { xAxis, style: prev.dimStyle });
+          return createOrdinateDimension(doc, v3(p), end, { xAxis, style: prev.dimStyle, datum: ucsOrigin(st) });
         }
         const rot = t === 1 ? Math.atan2(prev.defPoint3.y - prev.defPoint2.y, prev.defPoint3.x - prev.defPoint2.x) : prev.rotation;
         let line = prev.defPoint;
@@ -742,7 +743,10 @@ export function registerDimCommands(app: App): void {
       const st = app.active!;
       const doc = st.doc;
       // 도면 공간이면 피쳐 위치가 뷰포트에 보이는 모형 객체에도 스냅하고, 단일 뷰포트의 모형 스냅이면 그 축척으로 맞춘다
-      // (DIMLFAC는 좌표에도 곱한다. 데이텀은 도움말대로 지금 UCS 원점 — 도면 공간 좌표에서 잰 거리를 모형 단위로)
+      // (DIMLFAC는 좌표에도 곱한다. 데이텀은 도움말대로 지금 UCS 원점 — 도면 공간 좌표에서 잰 거리를 모형 단위로).
+      // 25차: 도면 공간의 지금 UCS는 도면 공간 UCS($PUCSORG — 도움말 UCS: 모형 공간과 도면 공간에 따로 저장)라 데이텀도 그 원점이다
+      // (이전에는 어느 공간에서나 모형 공간 UCS 원점 $UCSORG). 도면 공간 UCS 원점을 모형 데이텀이 보이는 종이 자리에 두면 뷰포트 안 모형 객체의
+      // 세로좌표가 모형 데이텀에서 잰 모형 단위 값이 된다(도움말 "About Creating Ordinate Dimensions" — 보통 UCS 원점을 데이텀에 맞춘 뒤 만든다)
       const f = await ctx.getPoint('피쳐 위치 지정:', { viewportSnaps: true });
       if (!('point' in f)) return;
       const fr = pointRef(app, f);
@@ -751,7 +755,7 @@ export function registerDimCommands(app: App): void {
       let xAxis: boolean | undefined;
       for (;;) {
         const make = (p: Pt) => {
-          const d = withDimOpts(createOrdinateDimension(doc, v3(f.point), v3(p), { text: o.text, xAxis }), o);
+          const d = withDimOpts(createOrdinateDimension(doc, v3(f.point), v3(p), { text: o.text, xAxis, datum: ucsOrigin(st) }), o);
           return vx ? viewportScaled(doc, d, vx.k) : d;
         };
         const p = await ctx.getPoint('지시선 끝점을 지정 또는 [X데이텀(X)/Y데이텀(Y)/여러 줄 문자(M)/문자(T)/각도(A)]:', {

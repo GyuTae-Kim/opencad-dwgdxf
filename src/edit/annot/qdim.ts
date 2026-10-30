@@ -110,6 +110,8 @@ function sortedAlong(points: readonly P[], horizontal: boolean): P[] {
 export interface QdimOptions {
   /** 기준선·세로좌표의 데이텀 점 */
   datum?: P | null;
+  /** 데이텀 점이 없을 때 세로좌표의 데이텀: 지금 공간의 UCS 원점(없으면 모형 공간 UCS 원점 $UCSORG — createOrdinateDimension) */
+  ucsOrigin?: Vec3;
   style?: string;
 }
 
@@ -154,7 +156,7 @@ export function qdimCreate(doc: CadDocument, mode: QdimMode, g: QdimGeometry, at
   } else if (mode === 'O') {
     for (const q of pts) {
       const end: Vec3 = hz ? { x: q.x, y: at.y, z: 0 } : { x: at.x, y: q.y, z: 0 };
-      const d = createOrdinateDimension(doc, v3(q), end, { xAxis: hz, style });
+      const d = createOrdinateDimension(doc, v3(q), end, { xAxis: hz, style, datum: opt.ucsOrigin });
       if (opt.datum) d.defPoint = v3(opt.datum);
       out.push(d);
     }

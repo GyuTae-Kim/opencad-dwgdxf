@@ -17,6 +17,7 @@ import { dimGhost } from './annot2-common';
 import { attachAssociation, finishNewDimension } from './dimassoc';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
+import { ucsOrigin } from './ucs';
 import { dialog, h } from './ui/dom';
 import type { OverlayGeom, Pt } from './view';
 import { lwCount, lwVertices, packLw } from '../core/lwpoly';
@@ -396,12 +397,13 @@ export function registerAnnot2Misc(app: App): void {
       ];
       const style = String(doc.header.get('$DIMSTYLE') ?? '') || undefined;
       for (;;) {
+        // 세로좌표(O)의 데이텀: 데이텀 점(P)을 정하지 않았으면 지금 공간의 UCS 원점(25차 — 도면 공간은 $PUCSORG, DIMORDINATE와 같다)
         const r = await ctx.getPoint(`치수선의 위치 지정 또는 [연속(C)/다중(S)/기준선(B)/세로좌표(O)/반지름(R)/지름(D)/데이텀 점(P)/편집(E)/설정(T)] <${QDIM_LABEL[mode]}>:`, {
           keywords: kws,
-          ghost: dimGhost(app, (p) => qdimCreate(doc, mode, g, p, { datum, style })),
+          ghost: dimGhost(app, (p) => qdimCreate(doc, mode, g, p, { datum, style, ucsOrigin: ucsOrigin(st) })),
         });
         if ('point' in r) {
-          const dims = qdimCreate(doc, mode, g, r.point, { datum, style });
+          const dims = qdimCreate(doc, mode, g, r.point, { datum, style, ucsOrigin: ucsOrigin(st) });
           if (!dims.length) {
             ctx.print(mode === 'R' || mode === 'D' ? '고른 객체에 호나 원이 없습니다.' : '치수를 만들 점이 부족합니다.', 'err');
             continue;
