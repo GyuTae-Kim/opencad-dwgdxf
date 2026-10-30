@@ -42,6 +42,8 @@ export interface OverlayState {
   pickbox: number;
   windowRect: { a: Pt; b: Pt } | null;
   selection: OverlayGeom[];
+  /** 명령 없이 고른 객체 안의 부분(표 셀 고르기 — 28차): 실선 테두리와 옅은 채움 */
+  cells: OverlayGeom[];
   hover: OverlayGeom | null;
   grips: Pt[];
   snap: { p: Pt; kind: SnapKind; deferred?: boolean } | null;
@@ -1116,6 +1118,8 @@ export class CadView {
     // 창·올가미에 걸릴 객체(선택 미리보기)
     for (const pv of o.preview ?? []) drawGeom(pv, dark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.7)', 1.8, null, 'rgba(120,170,255,0.18)');
     for (const sel of o.selection) drawGeom(sel, '#3d8dff', 1.6, [6, 4], 'rgba(61,141,255,0.25)');
+    // 고른 표 셀(28차): 객체 선택(점선)과 달리 실선 테두리
+    for (const c of o.cells ?? []) drawGeom(c, '#3d8dff', 2.5, null, 'rgba(61,141,255,0.18)');
     // 그립: 보통 파랑, 커서가 올라가면 분홍, 핫 그립 빨강(AutoCAD 기본 GRIPCOLOR·GRIPHOVER·GRIPHOT). 크기는 GRIPSIZE
     const gh = gripHalf(this.prefs.gripSize);
     g.save();
@@ -1762,6 +1766,7 @@ export function emptyOverlay(): OverlayState {
     pickbox: 5,
     windowRect: null,
     selection: [],
+    cells: [],
     hover: null,
     grips: [],
     snap: null,

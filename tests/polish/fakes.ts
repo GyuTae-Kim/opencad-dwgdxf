@@ -15,6 +15,7 @@ export function overlayState() {
     pickbox: 5,
     windowRect: null as unknown,
     selection: [] as unknown[],
+    cells: [] as unknown[],
     hover: null as unknown,
     grips: [] as Pt[],
     snap: null as unknown,

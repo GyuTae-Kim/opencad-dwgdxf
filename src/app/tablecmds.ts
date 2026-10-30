@@ -42,6 +42,7 @@ import { isEditableTable, tableFromEntity } from '../edit/table/entity';
 import { addTableOps, deleteTableStyleOps, previewSegments, restyleTablesOps, saveTableStyleOps, tablesUsingStyle, updateTableOps } from '../edit/table/ops';
 import { openTextEditor } from './textedit/editor';
 import { newGroup } from './annoscale-core';
+import { escapeMText } from '../edit/field/evaluate';
 
 
 // ---------------------------------------------------------------------------
@@ -73,7 +74,7 @@ export interface PickedTable {
 }
 
 /** 표 좌표(삽입점 원점, 회전·축척을 푼다) */
-function toTableLocal(e: TableEntity | InsertEntity, p: Pt): Pt {
+export function toTableLocal(e: TableEntity | InsertEntity, p: Pt): Pt {
   const ang = e.type === 'ACAD_TABLE' ? Math.atan2(e.direction.y, e.direction.x) : e.rotation;
   const dx = p.x - e.insert.x;
   const dy = p.y - e.insert.y;
@@ -86,7 +87,7 @@ function toTableLocal(e: TableEntity | InsertEntity, p: Pt): Pt {
 const tableAngle = (e: TableEntity | InsertEntity): number => (e.type === 'ACAD_TABLE' ? Math.atan2(e.direction.y, e.direction.x) : e.rotation);
 
 /** 표 좌표 → 도면 좌표(toTableLocal의 반대) */
-function fromTableLocal(e: TableEntity | InsertEntity, q: Pt): Pt {
+export function fromTableLocal(e: TableEntity | InsertEntity, q: Pt): Pt {
   const ang = tableAngle(e);
   const x = q.x * (e.scale.x || 1);
   const y = q.y * (e.scale.y || 1);
@@ -133,7 +134,7 @@ export function tabCell(t: TableData, r: number, c: number, back: boolean): { r:
   return k >= 0 && k < order.length ? order[k]! : null;
 }
 
-function readPicked(app: App, handle: string, point: Pt | null): PickedTable | null {
+export function readPicked(app: App, handle: string, point: Pt | null): PickedTable | null {
   const st = app.active!;
   const e = st.doc.entityIndex.get(handle);
   if (!isEditableTable(e)) return null;
@@ -316,15 +317,24 @@ export async function editTableCellAt(app: App, w: Pt): Promise<boolean> {
  * - 같은 표의 다른 셀을 누르면 그 셀로, 표 밖을 누르거나 Ctrl+Enter면 확인하고 끝, Esc는 지금 셀만 버리고 끝
  * - 고친 셀은 바로 표에 반영한다(행 높이 맞춤). 한 번의 편집(여러 셀)은 명령 취소 한 단계(group)
  * - 도구 모음의 "모든 셀"은 지금 셀을 확인한 뒤 표 전체 셀 편집 대화상자(휴대폰처럼 Tab이 없을 때)
+ * 28차:
+ * - opt.replace: 고른 셀에서 바로 친 글자로 그 셀 내용을 바꾸며 시작한다(도움말 — 셀을 고른 채 입력하면 내용을 바꾼다). 첫 셀에만 쓴다
+ * - opt.label: 고친 셀의 명령 취소 이름(TABLE 뒤 첫 셀 입력은 TABLE)
+ * - 열 때 고른 표 셀(셀 고르기 상태)은 푼다
  */
-export async function editTableInPlace(app: App, handle: string, start: { r: number; c: number }, group = newGroup()): Promise<void> {
+export async function editTableInPlace(app: App, handle: string, start: { r: number; c: number }, group = newGroup(), opt: { replace?: string; label?: string } = {}): Promise<void> {
   let cur = start;
+  let replace = opt.replace;
+  const label = opt.label ?? 'TABLEDIT';
+  app.clearSubSelections();
   for (;;) {
     const p = readPicked(app, handle, null);
     if (!p || lockedLayer(app, p.entity)) return;
     const a = anchorOf(p.data, Math.min(cur.r, p.data.rows - 1), Math.min(cur.c, p.data.cols - 1));
     const place = cellTextPlace(p.entity, p.data, p.style, a.r, a.c);
-    const text = getText(p.data, a.r, a.c);
+    const original = getText(p.data, a.r, a.c);
+    const text = replace !== undefined ? escapeMText(replace) : original;
+    replace = undefined;
     let next: { r: number; c: number } | null = null;
     let all = false;
     const res = await openTextEditor(
@@ -360,12 +370,12 @@ export async function editTableInPlace(app: App, handle: string, start: { r: num
       },
     );
     if (!res) return;
-    if (res.textChanged) commitTable(app, p, setText(p.data, a.r, a.c, res.text), 'TABLEDIT', group);
+    if (res.textChanged || res.text !== original) commitTable(app, p, setText(p.data, a.r, a.c, res.text), label, group);
     if (all) {
       const q = readPicked(app, handle, null);
       if (!q) return;
       const out = await editCellsDialog('테이블 셀 편집', q.data, a);
-      if (out) commitTable(app, q, out, 'TABLEDIT', group);
+      if (out) commitTable(app, q, out, label, group);
       return;
     }
     if (!next) return;
@@ -746,12 +756,9 @@ export function registerTableEditCommands(app: App): void {
       st.session.commit({ label: 'TABLE', ops: r.ops, group: ctx.group });
       app.lastCreated = [r.table.handle];
       ctx.print(`${data.rows}행 ${data.cols}열 표를 만들었습니다(폭 ${+tableWidth(data).toFixed(4)}, 높이 ${+tableHeight(data).toFixed(4)}).`);
-      // 첫 셀부터 문자 입력
-      const filled = await editCellsDialog('테이블 셀 문자', data, { r: 0, c: 0 });
-      if (!filled || filled.cells.every((c) => !c.text)) return;
-      const placed = st.doc.entityIndex.get(r.table.handle);
-      if (placed?.type !== 'ACAD_TABLE') return;
-      commitTable(app, { entity: placed, space: st.space, style, styleHandle: entry?.handle }, filled, 'TABLE', ctx.group);
+      // 첫 셀부터 그 자리에서 문자 입력(28차 — 도움말 "About Adding Text and Blocks to Tables": 표를 만들면 첫 셀이 강조되고 바로 입력한다).
+      // Tab으로 다음 셀, Esc는 지금 셀만 버린다. 표 넣기와 입력은 명령 취소 한 단계(이 명령의 묶음)
+      await editTableInPlace(app, r.table.handle, { r: 0, c: 0 }, ctx.group, { label: 'TABLE' });
     },
   });
 

@@ -45,6 +45,7 @@ import { registerTextToolCommands } from './app/textools';
 import { registerRefEditCommands } from './app/refedit';
 import { registerTransmitCommands } from './app/transmit';
 import { registerTableEditCommands } from './app/tablecmds';
+import { registerTableCellSelection } from './app/tablecell';
 import { fieldDisplay, onFieldDisplayChange, registerFieldCommands } from './app/fieldcmds';
 import { displayFlags } from './render/styles';
 import { registerMLineCommands } from './app/mlinecmds';
@@ -144,6 +145,7 @@ export function startEditor(root: HTMLElement): EditorActions {
   registerTransmitCommands(app);
   app.view.extraOverlay = (g, W, dark) => drawConstraintOverlay(app, g, W, dark);
   registerTableEditCommands(app);
+  registerTableCellSelection(app);
   registerFieldCommands(app);
   registerMLineCommands(app);
   registerVportCommands(app);
