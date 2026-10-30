@@ -40,8 +40,10 @@ import {
 } from '../edit/table/model';
 import { isEditableTable, tableFromEntity } from '../edit/table/entity';
 import { addTableOps, deleteTableStyleOps, previewSegments, restyleTablesOps, saveTableStyleOps, tablesUsingStyle, updateTableOps } from '../edit/table/ops';
-import { openTextEditor } from './textedit/editor';
+import { EDITOR_MIN_PX, type TextEditor, activeEditor, openTextEditor } from './textedit/editor';
 import { newGroup } from './annoscale-core';
+import type { Camera } from './docstate';
+import { PHONE_WIDTH } from './ui/layout';
 import { escapeMText } from '../edit/field/evaluate';
 
 
@@ -320,6 +322,9 @@ export async function editTableCellAt(app: App, w: Pt): Promise<boolean> {
  * 28차:
  * - opt.replace: 고른 셀에서 바로 친 글자로 그 셀 내용을 바꾸며 시작한다(도움말 — 셀을 고른 채 입력하면 내용을 바꾼다). 첫 셀에만 쓴다
  * - opt.label: 고친 셀의 명령 취소 이름(TABLE 뒤 첫 셀 입력은 TABLE)
+ * - 휴대폰(폭 480px 이하): 편집기 도구 모음을 도면 영역 위 끝에 붙이고, 셀 글자가 편집기 최소 글자보다 작게 보이면 그 크기까지 확대해
+ *   편집 셀과 바로 위 행을 도구 모음 아래로 옮긴다. 편집 상자는 좌우 안쪽 여백 없이 셀 문자 폭이라 옆 셀을 가리지 않는다. 편집이 끝나면 예전 보기로 되돌린다
+ *   (편집 중에 사용자가 보기를 바꿨으면 그대로 둔다)
  * - 열 때 고른 표 셀(셀 고르기 상태)은 푼다
  */
 export async function editTableInPlace(app: App, handle: string, start: { r: number; c: number }, group = newGroup(), opt: { replace?: string; label?: string } = {}): Promise<void> {
@@ -327,61 +332,154 @@ export async function editTableInPlace(app: App, handle: string, start: { r: num
   let replace = opt.replace;
   const label = opt.label ?? 'TABLEDIT';
   app.clearSubSelections();
-  for (;;) {
-    const p = readPicked(app, handle, null);
-    if (!p || lockedLayer(app, p.entity)) return;
-    const a = anchorOf(p.data, Math.min(cur.r, p.data.rows - 1), Math.min(cur.c, p.data.cols - 1));
-    const place = cellTextPlace(p.entity, p.data, p.style, a.r, a.c);
-    const original = getText(p.data, a.r, a.c);
-    const text = replace !== undefined ? escapeMText(replace) : original;
-    replace = undefined;
-    let next: { r: number; c: number } | null = null;
-    let all = false;
-    const res = await openTextEditor(
-      app,
-      {
-        mode: 'mtext',
-        label: `테이블 셀 편집 — ${cellName(a.r, a.c)}`,
-        text,
-        height: place.height,
-        style: place.textStyle,
-        attachment: place.attachment,
-        width: place.width,
-        rotation: place.rotation,
-        at: place.at,
-        color: p.entity.color,
-        layer: p.entity.layer,
-        noEntityProps: true,
-        extra: [{ label: '모든 셀', title: '표의 모든 셀을 대화상자에서 고칩니다', run: (ed) => ((all = true), ed.confirm()) }],
-      },
-      {
-        onTab: (back) => {
-          next = tabCell(p.data, a.r, a.c, back);
-          return true;
+  const phone = phoneLayout();
+  // 휴대폰 확대 전 보기와 마지막으로 맞춘 보기
+  let saved: Camera | null = null;
+  let last: Camera | null = null;
+  try {
+    for (;;) {
+      const p = readPicked(app, handle, null);
+      if (!p || lockedLayer(app, p.entity)) return;
+      const a = anchorOf(p.data, Math.min(cur.r, p.data.rows - 1), Math.min(cur.c, p.data.cols - 1));
+      const place = cellTextPlace(p.entity, p.data, p.style, a.r, a.c);
+      const original = getText(p.data, a.r, a.c);
+      const text = replace !== undefined ? escapeMText(replace) : original;
+      replace = undefined;
+      let next: { r: number; c: number } | null = null;
+      let all = false;
+      const pending = openTextEditor(
+        app,
+        {
+          mode: 'mtext',
+          label: `테이블 셀 편집 — ${cellName(a.r, a.c)}`,
+          text,
+          height: place.height,
+          style: place.textStyle,
+          attachment: place.attachment,
+          width: place.width,
+          rotation: place.rotation,
+          at: place.at,
+          color: p.entity.color,
+          layer: p.entity.layer,
+          noEntityProps: true,
+          extra: [{ label: '모든 셀', title: '표의 모든 셀을 대화상자에서 고칩니다', run: (ed) => ((all = true), ed.confirm()) }],
+          ...(phone ? { barDock: 'top' as const, tight: true } : {}),
         },
-        onCanvasClick: (w) => {
-          // 같은 표의 다른 셀이면 지금 셀을 확인하고 그 셀로(편집기는 닫고 다시 띄운다)
-          if (!isEditableTable(app.active?.doc.entityIndex.get(handle))) return false;
-          const q = toTableLocal(p.entity, w);
-          const at = cellAt(p.data, q.x, q.y, p.style.flow);
-          if (at) next = anchorOf(p.data, at.r, at.c);
-          return false;
+        {
+          onTab: (back) => {
+            next = tabCell(p.data, a.r, a.c, back);
+            return true;
+          },
+          onCanvasClick: (w) => {
+            // 같은 표의 다른 셀이면 지금 셀을 확인하고 그 셀로(편집기는 닫고 다시 띄운다)
+            if (!isEditableTable(app.active?.doc.entityIndex.get(handle))) return false;
+            const q = toTableLocal(p.entity, w);
+            const at = cellAt(p.data, q.x, q.y, p.style.flow);
+            if (at) next = anchorOf(p.data, at.r, at.c);
+            return false;
+          },
         },
-      },
-    );
-    if (!res) return;
-    if (res.textChanged || res.text !== original) commitTable(app, p, setText(p.data, a.r, a.c, res.text), label, group);
-    if (all) {
-      const q = readPicked(app, handle, null);
-      if (!q) return;
-      const out = await editCellsDialog('테이블 셀 편집', q.data, a);
-      if (out) commitTable(app, q, out, label, group);
-      return;
+      );
+      const ed = activeEditor();
+      if (phone && ed) {
+        const before = app.view.camera();
+        const set = fitCellOnPhone(app, ed, p, a);
+        if (set) {
+          saved ??= { ...before };
+          last = set;
+        }
+      }
+      const res = await pending;
+      if (!res) return;
+      if (res.textChanged || res.text !== original) commitTable(app, p, setText(p.data, a.r, a.c, res.text), label, group);
+      if (all) {
+        const q = readPicked(app, handle, null);
+        if (!q) return;
+        const out = await editCellsDialog('테이블 셀 편집', q.data, a);
+        if (out) commitTable(app, q, out, label, group);
+        return;
+      }
+      if (!next) return;
+      cur = next;
     }
-    if (!next) return;
-    cur = next;
+  } finally {
+    // 휴대폰 확대를 되돌린다(그 사이 사용자가 보기를 옮기거나 확대했으면 그대로)
+    if (saved && last && sameCamera(app.view.camera(), last)) app.view.setViewCamera(saved);
   }
 }
+
+/** 휴대폰 배치(폭 480px 이하 — 셸의 휴대폰 단계와 같다) */
+function phoneLayout(): boolean {
+  return typeof window !== 'undefined' && (window.innerWidth || 0) > 0 && window.innerWidth <= PHONE_WIDTH;
+}
+
+const sameCamera = (a: Camera, b: Camera): boolean => Math.abs(a.cx - b.cx) <= 1e-9 * Math.max(1, Math.abs(b.cx)) && Math.abs(a.cy - b.cy) <= 1e-9 * Math.max(1, Math.abs(b.cy)) && Math.abs(a.scale - b.scale) <= 1e-12 * b.scale;
+
+/**
+ * 휴대폰에서 셀 편집기가 이웃 셀을 가리지 않게 보기를 맞춘다(28차). 셀 문자가 편집기 최소 글자(EDITOR_MIN_PX)보다 작게 보이면
+ * 그 크기까지 확대하고(그러면 편집 상자가 셀과 같은 크기 — 그보다 작으면 상자만 커져 옆 셀을 덮었다), 편집 셀과 바로 위 행이
+ * 도면 영역 위 끝의 도구 모음 아래 위쪽(소프트 키보드가 덮지 않을 자리)에, 양옆 셀도 화면 폭에 들면 함께 보이도록 옮긴다
+ * (이미 들어 있으면 옮기지 않는다). 바꾼 카메라, 바꾸지 않았으면 null
+ */
+export function fitCellOnPhone(app: App, ed: TextEditor, p: PickedTable, a: { r: number; c: number }): Camera | null {
+  const view = app.view;
+  const cam = view.camera();
+  const place = cellTextPlace(p.entity, p.data, p.style, a.r, a.c);
+  if (!(place.height > 0)) return null;
+  const need = (EDITOR_MIN_PX * 0.7) / place.height;
+  const zoom = cam.scale < need * (1 - 1e-9);
+  if (zoom && !view.setViewCamera({ ...cam, scale: need })) return null;
+  // 편집 셀과 바로 위 행(같은 열)의 화면 상자(보기 기준). 양옆 셀까지 화면 폭에 들면 그것도 보이게
+  const t = p.data;
+  const corners = (pts: Pt[], r: number, c: number) => {
+    const q = cellRect(t, r, c, p.style.flow);
+    for (const [x, y] of [
+      [q.x0, q.y0],
+      [q.x1, q.y0],
+      [q.x1, q.y1],
+      [q.x0, q.y1],
+    ] as const)
+      pts.push(view.worldToScreen(...xy(fromTableLocal(p.entity, { x, y }))));
+  };
+  const must: Pt[] = [];
+  corners(must, a.r, a.c);
+  const m = mergeAt(t, a.r, a.c) ?? { row: a.r, col: a.c, rows: 1, cols: 1 };
+  const above = p.style.flow === 1 ? m.row + m.rows : m.row - 1;
+  if (above >= 0 && above < t.rows) {
+    const b = anchorOf(t, above, a.c);
+    corners(must, b.r, b.c);
+  }
+  const wide = [...must];
+  if (m.col > 0) corners(wide, ...rc(anchorOf(t, a.r, m.col - 1)));
+  if (m.col + m.cols < t.cols) corners(wide, ...rc(anchorOf(t, a.r, m.col + m.cols)));
+  const box = (pts: Pt[]) => ({ x0: Math.min(...pts.map((q) => q.x)), x1: Math.max(...pts.map((q) => q.x)), y0: Math.min(...pts.map((q) => q.y)), y1: Math.max(...pts.map((q) => q.y)) });
+  const nb = box(must);
+  const wb = box(wide);
+  const vr = view.el.getBoundingClientRect();
+  const br = ed.bar.getBoundingClientRect();
+  const W = vr.width || window.innerWidth;
+  const H = vr.height || window.innerHeight;
+  const left = 8;
+  const right = W - 8;
+  const top = Math.max(8, br.bottom - vr.top + 8);
+  // 아래쪽은 소프트 키보드·명령행이 덮을 수 있어 도구 모음 아래 위쪽 절반쯤에 둔다
+  const bottom = Math.min(H - 8, top + Math.max(80, 0.45 * (H - top)));
+  let dx = 0;
+  let dy = 0;
+  // 가로: 양옆 셀까지 들면 그만큼, 아니면 편집 셀(과 위 셀)만 — 넘치면 가운데로(셀이 화면보다 넓으면 왼쪽 끝을 맞춘다)
+  const hb = wb.x1 - wb.x0 <= right - left ? wb : nb;
+  if (hb.x0 < left || hb.x1 > right) dx = hb.x1 - hb.x0 <= right - left ? (left + right) / 2 - (hb.x0 + hb.x1) / 2 : left - hb.x0;
+  if (nb.y0 < top || nb.y1 > bottom) dy = top - nb.y0;
+  const c = view.camera();
+  if (!zoom && !dx && !dy) return null;
+  const next = { cx: c.cx - dx / c.scale, cy: c.cy + dy / c.scale, scale: c.scale };
+  if ((dx || dy) && !view.setViewCamera(next)) return null;
+  ed.place();
+  return view.camera();
+}
+
+const xy = (p: Pt): [number, number] => [p.x, p.y];
+const rc = (q: { r: number; c: number }): [number, number] => [q.r, q.c];
 
 // ---------------------------------------------------------------------------
 // TABLE

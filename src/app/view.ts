@@ -622,6 +622,17 @@ export class CadView {
     this.setCamera({ cx: c.cx - dx / c.scale, cy: c.cy + dy / c.scale, scale: c.scale }, false);
   }
 
+  /**
+   * 지금 공간의 카메라를 그대로 바꾼다(이전 화면 목록에 남기지 않는다 — 휴대폰 표 셀 편집의 잠깐 확대와 되돌리기, 28차).
+   * 뷰포트 안 모형 공간(MSPACE)은 뷰포트의 뷰를 바꾸게 되므로 하지 않고 false
+   */
+  setViewCamera(c: Camera): boolean {
+    const s = this.state;
+    if (!s || s.msVp) return false;
+    this.setCamera({ cx: c.cx, cy: c.cy, scale: clampScale(c.scale) }, false);
+    return true;
+  }
+
   centerOn(x: number, y: number, size?: number): void {
     const c = this.camera();
     let scale = c.scale;
