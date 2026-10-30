@@ -20,7 +20,7 @@ import { polyPreview } from './draw';
 import type { ViewportSnap } from './snap';
 import type { ViewportXf } from './scene';
 import { type PaperPick, paperProjection, projectedDelta } from './vpsnap';
-import { parseZoomFactor } from './vpzoom';
+import { type LimitsRect, parseZoomFactor } from './vpzoom';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -81,7 +81,7 @@ const VP_LOCKED_MSG = '화면표시가 잠긴 뷰포트는 축척을 바꾸지 �
 /**
  * ZOOM 축척 입력(도움말 ZOOM 축척): nX는 현재 뷰에 대해(MSPACE면 뷰포트 가운데를 두고), nXP는 도면 공간 단위에 대해 — 뷰포트 안 모형
  * 공간이면 뷰포트 축척을 n으로(화면표시가 잠긴 뷰포트는 축척을 바꾸지 않는다), 뷰포트 밖이면 이전처럼 nX.
- * 접미사 없는 n(도면 한계에 대해)은 아직 nX처럼 다룬다
+ * 접미사 없는 n은 도면 한계에 대해(23차 — 2면 도면 한계로 줌했을 때 크기의 두 배, 뷰 가운데 그대로). 한계를 쓸 수 없으면 nX처럼
  */
 function zoomByFactor(app: App, ctx: CommandContext, f: { n: number; unit: '' | 'x' | 'xp' }): void {
   if (f.unit === 'xp') {
@@ -89,7 +89,29 @@ function zoomByFactor(app: App, ctx: CommandContext, f: { n: number; unit: '' | 
     if (r === 'locked') ctx.print(VP_LOCKED_MSG, 'err');
     if (r !== 'none') return;
   }
+  if (f.unit === '') {
+    const lim = zoomLimitsOf(app);
+    if (lim && app.view.zoomLimits(f.n, lim)) return;
+  }
   app.view.zoomCenter(f.n);
+}
+
+/**
+ * ZOOM n의 기준 한계(도움말 ZOOM 축척 n — 도면 한계, LIMITS가 정한 격자 한계): 모형 공간과 뷰포트 안 모형 공간(MSPACE)은 모형 한계
+ * ($LIMMIN·$LIMMAX), 배치의 도면 공간은 그 배치의 한계(없으면 $PLIMMIN·$PLIMMAX — LIMITS·STATUS와 같다). 값이 없으면 null
+ */
+function zoomLimitsOf(app: App): LimitsRect | null {
+  const st = app.active;
+  if (!st) return null;
+  const h = st.doc.header;
+  const v2 = (k: string) => {
+    const v = h.get(k);
+    return v && typeof v === 'object' && Number.isFinite(v.x) && Number.isFinite(v.y) ? { x: v.x, y: v.y } : null;
+  };
+  const layout = st.isModel ? null : st.layoutFor(st.space);
+  const lo = st.isModel ? v2('$LIMMIN') : (layout?.limitsMin ?? v2('$PLIMMIN'));
+  const hi = st.isModel ? v2('$LIMMAX') : (layout?.limitsMax ?? v2('$PLIMMAX'));
+  return lo && hi ? { x0: lo.x, y0: lo.y, x1: hi.x, y1: hi.y } : null;
 }
 
 /** LIST가 일반 특성 가운데 보이는 것(도움말 LIST: BYLAYER가 아닐 때의 색상·선종류·선가중치·투명도, 0이 아닌 두께) */
@@ -268,6 +290,8 @@ export function registerCommands(app: App): void {
       for (;;) {
         if (mode === 'X') return;
         if (mode === 'D') {
+          // 도면 공간에서는 도면 공간 객체에만 스냅하고 도면 공간 거리(21·22차와 같다). 도움말 MEASUREGEOM에는 도면 공간의 투영 이야기가 없고
+          // "AREA·DIST·MASSPROP과 같은 계산을 많이 한다"는 한 문장뿐이라, 23차에 DIST의 투영을 붙였다가 리뷰 뒤 되돌렸다
           const r = await ctx.getPoint('첫 번째 점 지정 또는 [거리(D)/반지름(R)/각도(A)/면적(AR)/종료(X)] <거리>:', { keywords: kws, snapZ: true });
           if ('keyword' in r) {
             mode = r.keyword;

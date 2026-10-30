@@ -17,6 +17,8 @@ import { newViewport } from '../../src/edit/filecmds/layoutgeom';
 import {
   VP_PREVIOUS_MAX,
   fitScale,
+  limitsScale,
+  limitsView,
   lockedPaperCamera,
   msCamera,
   paperScaledView,
@@ -351,5 +353,73 @@ describe('진짜 CadView: 배치 뷰포트 안 모형 공간(MSPACE)의 줌', ()
     expect(h.view.zoomPrevious()).toBe(true);
     expect(h.st.cameras.get(MODEL_SPACE)).toEqual({ cx: 400, cy: 200, scale: 0.96 });
     expect(h.patches).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 23차: ZOOM n(접미사 없음) — 도움말 ZOOM 축척 "도면 한계에 대해(2면 도면 한계로 줌했을 때 크기의 두 배)"
+// ---------------------------------------------------------------------------
+
+describe('ZOOM n: 도면 한계에 대한 축척', () => {
+  const lim = { x0: 0, y0: 0, x1: 420, y1: 297 };
+  // 한계 420×297이 화면 1000×600을 꼭 채우는 배율(여백 없음)
+  const fit = Math.min(1000 / 420, 600 / 297);
+
+  it('순수 함수: 한계가 틀을 꼭 채우는 배율의 n배(구석 순서 무관), 넓이 0·이상한 값은 null', () => {
+    expect(limitsScale(lim, 1000, 600, 2)).toBeCloseTo(fit * 2, 12);
+    expect(limitsScale({ x0: 420, y0: 297, x1: 0, y1: 0 }, 1000, 600, 1)).toBeCloseTo(fit, 12);
+    expect(limitsScale({ ...lim, x1: 0 }, 1000, 600, 2)).toBeNull();
+    expect(limitsScale({ ...lim, y1: NaN }, 1000, 600, 2)).toBeNull();
+    expect(limitsScale(lim, 1000, 600, 0)).toBeNull();
+    // MSPACE: 뷰포트(종이 100×70) 가운데 그대로, 모형 한계가 뷰포트를 채우는 축척의 n배
+    const vp = vpAt('V', [10, 10, 110, 80], 0.1, P(500, 250));
+    const v = limitsView(vp, lim, 2)!;
+    expect(v.refX).toBeCloseTo(500, 9);
+    expect(v.refY).toBeCloseTo(250, 9);
+    expect(70 / v.viewHeight).toBeCloseTo(Math.min(100 / 420, 70 / 297) * 2, 12);
+    expect(limitsView(vp, { ...lim, x1: 0 }, 2)).toBeNull();
+  });
+
+  it('진짜 CadView 모형 공간: 뷰 가운데 그대로 배율만, 이전(P)으로 돌아간다', async () => {
+    const h = await viewWith();
+    h.st.msVp = null;
+    h.st.cameras.set(MODEL_SPACE, { cx: 10, cy: 20, scale: 1 });
+    expect(h.view.zoomLimits(2, lim)).toBe(true);
+    const c = h.st.cameras.get(MODEL_SPACE)!;
+    expect(c.cx).toBe(10);
+    expect(c.cy).toBe(20);
+    expect(c.scale).toBeCloseTo(fit * 2, 9);
+    // n = 1이면 한계가 화면을 꼭 채우는 배율(한계 높이 297이 화면 높이 600)
+    h.view.zoomLimits(1, lim);
+    expect(h.view.viewHeight()).toBeCloseTo(297, 9);
+    expect(h.view.zoomLimits(2, { ...lim, x1: 0 })).toBe(false);
+    expect(h.view.zoomPrevious()).toBe(true);
+    expect(h.view.zoomPrevious()).toBe(true);
+    expect(h.st.cameras.get(MODEL_SPACE)).toEqual({ cx: 10, cy: 20, scale: 1 });
+    expect(h.patches).toEqual([]);
+  });
+
+  it('진짜 CadView MSPACE: 뷰포트 가운데 그대로 모형 한계 맞춤 × n(종이 카메라 그대로), 잠긴 뷰포트는 배치 전체를 그 배율로', async () => {
+    const h = await viewWith();
+    const p0 = h.paper();
+    h.view.zoomRect(200, 100, 400, 200);
+    expect(h.view.zoomLimits(2, lim)).toBe(true);
+    expect(h.ref().refX).toBeCloseTo(300, 9);
+    expect(h.ref().refY).toBeCloseTo(150, 9);
+    expect(h.k()).toBeCloseTo(Math.min(100 / 420, 70 / 297) * 2, 12);
+    expect(h.paper()).toEqual(p0);
+    expect(h.view.zoomPrevious()).toBe(true);
+    expect(h.ref().refX).toBeCloseTo(300, 9);
+    // 잠긴 뷰포트: 뷰포트 뷰는 그대로, 화면 가운데의 모형 점을 두고 모형 한계가 화면을 채우는 배율 × n
+    const l = await viewWith({ flags: 0x4000 });
+    const m0 = l.view.screenToWorld(500, 300);
+    expect(l.view.zoomLimits(1, lim)).toBe(true);
+    expect(l.patches).toEqual([]);
+    expect(l.vp.viewHeight).toBe(700);
+    const m1 = l.view.screenToWorld(500, 300);
+    expect(m1.x).toBeCloseTo(m0.x, 6);
+    expect(m1.y).toBeCloseTo(m0.y, 6);
+    // 화면 픽셀당 모형 = 종이 배율 × 뷰포트 축척 0.1
+    expect(l.paper().scale * 0.1).toBeCloseTo(fit, 9);
   });
 });

@@ -2,7 +2,7 @@
  * 주석 편집 명령(annot2*) 공통 도우미: 치수 미리보기, 각도 입력, 바뀐 객체 적용.
  */
 import type { DimensionEntity, Entity } from '../core/model';
-import { generateDimensionGeometry } from '../edit/dim';
+import { generateDimensionGeometry, placeIn } from '../edit/dim';
 import type { App, CommandContext } from './app';
 import { commitResults } from './modify';
 import type { OverlayGeom, Pt } from './view';
@@ -19,7 +19,16 @@ export function dimGhost(app: App, make: (p: Pt) => DimensionEntity | DimensionE
       if (!d) return [];
       const list = Array.isArray(d) ? d : [d];
       const ents: Entity[] = [];
-      for (const x of list) ents.push(...generateDimensionGeometry(app.active!.doc, x).entities);
+      const st = app.active!;
+      for (const x of list) {
+        // 자리가 없는 새 치수는 지금 공간에 놓인 것처럼(모형 공간 치수의 음수 DIMLFAC는 1 — edit/dim/vars.ts)
+        let y = x;
+        if (!x.owner && x.paperSpace === undefined) {
+          y = { ...x };
+          placeIn(st.doc, st.space, y);
+        }
+        ents.push(...generateDimensionGeometry(st.doc, y).entities);
+      }
       return [pk.geometryOf(ents)];
     } catch {
       return [];

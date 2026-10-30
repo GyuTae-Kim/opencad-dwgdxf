@@ -7,7 +7,7 @@
 import type { BlockDef, DimensionEntity, Entity, LeaderEntity, MLeaderEntity, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
-import { builtinArrowBlock, dimensionText, generateDimensionGeometry, moveDimensionText, rawDimVars } from '../edit/dim';
+import { builtinArrowBlock, dimensionText, generateDimensionGeometry, measureVars, moveDimensionText, rawDimVars } from '../edit/dim';
 import { BREAKER_TYPES, type DimBreak, breakSize, breakerPieces, dimFrame, readBreaks, readJogLine, toFrame, writeBreaks, writeJogLine, defaultJogPoint } from '../edit/dim/extras';
 import { autoSpacing, dimHome, dimJustify, dimNewText, dimOblique, dimRotateText, isAngularDim, isLinearDim, linearFeetW, spaceDimensions } from '../edit/annot/dimedit';
 import { createJoggedDimension } from '../edit/annot/create';
@@ -40,7 +40,7 @@ function dimsOf(app: App, handles: string[]): DimensionEntity[] {
 function shownText(app: App, d: DimensionEntity): string {
   const st = app.active!;
   try {
-    return dimensionText(rawDimVars(st.doc, d), 'radius', d.measurement, '').measured;
+    return dimensionText(measureVars(st.doc, d), 'radius', d.measurement, '').measured;
   } catch {
     return formatLength(d.measurement, st.units);
   }

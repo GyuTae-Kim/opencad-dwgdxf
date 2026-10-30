@@ -4,6 +4,7 @@
  * "To Lock the Scale of a Layout Viewport": 화면표시가 잠긴 뷰포트는 뷰포트 축척이 그대로다.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { PAPER_SPACE } from '../../src/core/model';
 import { registerCommands } from '../../src/app/commands';
 import { browserGlobals } from '../polish/fakes';
 import { makeApp, settle } from '../polish/real-app';
@@ -21,8 +22,11 @@ beforeAll(() => {
 });
 afterAll(() => vi.unstubAllGlobals());
 
-/** 화면 줌 메서드를 받아 적는 가짜로 바꾼 App. msvp: 뷰포트 안(MSPACE)인 척 — 뷰포트 종이 높이 70, 잠금 */
-function setup(msvp: { locked: boolean } | null = null) {
+/**
+ * 화면 줌 메서드를 받아 적는 가짜로 바꾼 App. msvp: 뷰포트 안(MSPACE)인 척 — 뷰포트 종이 높이 70, 잠금.
+ * limitsOk: 화면이 한계 기준 줌(ZOOM n — 23차)을 할 수 있는지(한계를 쓸 수 없으면 false — 명령이 nX로 돈다)
+ */
+function setup(msvp: { locked: boolean } | null = null, limitsOk = true) {
   const h = makeApp();
   registerCommands(h.app);
   h.app.osnapOn = false;
@@ -38,6 +42,7 @@ function setup(msvp: { locked: boolean } | null = null) {
   Object.assign(h.view, {
     zoomCenter: rec('zoomCenter'),
     zoomPaperScale: rec('zoomPaperScale', xp),
+    zoomLimits: rec('zoomLimits', limitsOk),
     zoomCenterAt: rec('zoomCenterAt'),
     zoomPrevious: rec('zoomPrevious', false),
     zoomExtents: rec('zoomExtents'),
@@ -72,8 +77,38 @@ describe('ZOOM·PAN 명령(진짜 App)', () => {
     await h.zoom('3');
     await h.zoom('S', '0.05XP');
     await h.zoom('S', '4x');
-    expect(h.calls).toEqual([['zoomCenter', 2], ['zoomPaperScale', 0.5], ['zoomCenter', 3], ['zoomPaperScale', 0.05], ['zoomCenter', 4]]);
+    // 숫자만(23차): 도면 한계에 대해 — MSPACE·모형 공간은 모형 한계(새 미터 도면 0,0–420,297)
+    const lim = { x0: 0, y0: 0, x1: 420, y1: 297 };
+    expect(h.calls).toEqual([['zoomCenter', 2], ['zoomPaperScale', 0.5], ['zoomLimits', 3, lim], ['zoomPaperScale', 0.05], ['zoomCenter', 4]]);
     expect(h.app.busyCommand).toBeFalsy();
+  });
+
+  it('숫자만(n): 도면 한계에 대해(도움말 ZOOM 축척 — 2면 도면 한계로 줌했을 때의 두 배). 배치는 그 배치의 한계, 쓸 수 없으면 nX처럼', async () => {
+    const h = setup(null);
+    h.doc.header.set('$LIMMIN', { x: -10, y: 5 });
+    h.doc.header.set('$LIMMAX', { x: 90, y: 55 });
+    await h.zoom('2');
+    await h.zoom('S', '.5');
+    expect(h.calls).toEqual([
+      ['zoomLimits', 2, { x0: -10, y0: 5, x1: 90, y1: 55 }],
+      ['zoomLimits', 0.5, { x0: -10, y0: 5, x1: 90, y1: 55 }],
+    ]);
+    // 배치의 도면 공간: 배치 객체의 한계(모형 한계가 아니라)
+    const p = setup(null);
+    const lay = p.doc.layouts.find((l) => l.blockName.toUpperCase() === PAPER_SPACE)!;
+    lay.limitsMin = { x: 0, y: 0 };
+    lay.limitsMax = { x: 297, y: 210 };
+    p.st.space = PAPER_SPACE;
+    await p.zoom('2');
+    expect(p.calls).toEqual([['zoomLimits', 2, { x0: 0, y0: 0, x1: 297, y1: 210 }]]);
+    // 한계가 없거나 화면이 쓸 수 없다고 하면(넓이 0) nX처럼
+    const none = setup(null);
+    none.doc.header.delete('$LIMMIN');
+    await none.zoom('2');
+    expect(none.calls).toEqual([['zoomCenter', 2]]);
+    const flat = setup(null, false);
+    await flat.zoom('2');
+    expect(flat.calls).toEqual([['zoomLimits', 2, { x0: 0, y0: 0, x1: 420, y1: 297 }], ['zoomCenter', 2]]);
   });
 
   it('nXP: 뷰포트 밖이면 이전처럼 nX, 화면표시가 잠긴 뷰포트면 바꾸지 않고 알린다', async () => {

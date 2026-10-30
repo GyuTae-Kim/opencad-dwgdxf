@@ -3,7 +3,7 @@
  */
 import type { CadColor, DimensionEntity, Entity, MLeaderEntity, MTextEntity, TextEntity } from '../../core/model';
 import { tableKey } from '../../core/model';
-import { dimensionText, generateDimensionGeometry, rawDimVars } from '../../edit/dim';
+import { dimensionText, generateDimensionGeometry, measureVars } from '../../edit/dim';
 import { dimKindName } from '../../edit/dim/format';
 import { fieldTemplate } from '../../edit/field/store';
 import type { App, CommandContext } from '../app';
@@ -79,7 +79,7 @@ export function textInit(app: App, e: TextEntity, text: string, label = '문자 
 export function measuredText(app: App, d: DimensionEntity): string {
   const doc = app.active!.doc;
   try {
-    return dimensionText(rawDimVars(doc, d), dimKindName(d), d.measurement, '').measured;
+    return dimensionText(measureVars(doc, d), dimKindName(d), d.measurement, '').measured;
   } catch {
     return String(+d.measurement.toFixed(4));
   }
