@@ -32,6 +32,9 @@ const CSS = `
 .te-bar .te-lbl{color:var(--text-dim);margin:0 2px}
 .te-bar .te-more{display:none;width:100%;gap:6px;align-items:center;padding-top:3px;border-top:1px solid var(--border-soft)}
 .te-bar.te-show-more .te-more{display:flex;flex-wrap:wrap}
+.te-bar.te-compact button{min-width:32px;height:32px}
+.te-bar.te-compact select,.te-bar.te-compact input{height:32px}
+.te-bar.te-compact:not(.te-show-sec) .te-sec,.te-bar.te-compact .te-off{display:none}
 `;
 
 let installed = false;

@@ -368,6 +368,7 @@ export async function editTableCellAt(app: App, w: Pt): Promise<boolean> {
  *   편집 셀과 바로 위 행을 도구 모음 아래로 옮긴다. 편집 상자는 좌우 안쪽 여백 없이 셀 문자 폭이라 옆 셀을 가리지 않는다. 편집이 끝나면 예전 보기로 되돌린다
  *   (편집 중에 사용자가 보기를 바꿨으면 그대로 둔다)
  * - 열 때 고른 표 셀(셀 고르기 상태)은 푼다
+ * 29차: 휴대폰 도구 모음은 한 줄(굵게·기울임꼴, 명령 취소·복구, 모든 셀, 확인·취소, 도구 더 보기 — 나머지는 더 보기를 누르면 그 아래 줄)
  */
 export async function editTableInPlace(app: App, handle: string, start: { r: number; c: number }, group = newGroup(), opt: { replace?: string; label?: string } = {}): Promise<void> {
   let cur = start;
@@ -405,7 +406,8 @@ export async function editTableInPlace(app: App, handle: string, start: { r: num
           layer: p.entity.layer,
           noEntityProps: true,
           extra: [{ label: '모든 셀', title: '표의 모든 셀을 대화상자에서 고칩니다', run: (ed) => ((all = true), ed.confirm()) }],
-          ...(phone ? { barDock: 'top' as const, tight: true } : {}),
+          // 휴대폰: 도구 모음은 도면 영역 위 끝(28차), 한 줄로 줄이고 나머지는 "도구 더 보기"(29차)
+          ...(phone ? { barDock: 'top' as const, tight: true, compact: true } : {}),
         },
         {
           onTab: (back) => {
