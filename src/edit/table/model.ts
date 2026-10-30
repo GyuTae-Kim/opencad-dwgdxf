@@ -302,6 +302,27 @@ export function unmergeCells(t: TableData, r0: number, c0: number, r1 = r0, c1 =
 // 위치
 // ---------------------------------------------------------------------------
 
+/**
+ * 열 폭·행 높이를 같게(30차 — AutoCAD 도움말 "To Resize Rows or Columns in a Table": 표를 고르고 오른쪽 누르기 → 열 크기 같게·행 크기 같게,
+ * "Table Visor": 모든 열을 표의 폭으로, 모든 행을 표의 높이로 나눠 같게). 표의 폭(높이)은 그대로 — 행은 지금 높이(문자에 맞춘 값)의 합을 나눠
+ * 준 높이로 삼는다(문자가 더 필요한 행은 맞춤에서 다시 늘어난다). 이미 모두 같으면 null
+ */
+export function sizeEqually(t: TableData, what: 'cols' | 'rows'): TableData | null {
+  const list = what === 'cols' ? t.colWidths : t.rowHeights;
+  const n = list.length;
+  if (n < 1) return null;
+  const each = list.reduce((a, b) => a + b, 0) / n;
+  const same = (v: number) => Math.abs(v - each) <= 1e-9 * Math.max(1, each);
+  if (list.every(same)) return null;
+  const out = cloneTable(t);
+  if (what === 'cols') out.colWidths = out.colWidths.map(() => each);
+  else {
+    out.rowHeights = out.rowHeights.map(() => each);
+    out.baseRowHeights = out.baseRowHeights.map(() => each);
+  }
+  return out;
+}
+
 export function tableWidth(t: TableData): number {
   return t.colWidths.reduce((a, b) => a + b, 0);
 }

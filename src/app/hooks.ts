@@ -7,7 +7,7 @@
  *  - App.dragPreviewMode    끌기 미리보기 모드(DRAGMODE)와 App.dragPreviewNow() — DRAGMODE·DRAG
  *  - App.entityClickHandlers 명령 없이 Ctrl+클릭한 객체(하이퍼링크 linkClick보다 먼저) — 연관 배열 항목 고르기
  *  - App.dblClickHandlers   명령 없이 두 번 누른 객체(앱의 종류별 기본 편집보다 먼저) — 문자·다중 지시선·공차 편집기
- *  - App.subSelections      명령 없이 객체 안의 부분을 고르는 상태(누르기·키·강조·풀기, 29차 그립·바로 가기 메뉴) — 표 셀 고르기
+ *  - App.subSelections      명령 없이 객체 안의 부분을 고르는 상태(누르기·키·강조·풀기, 29차 그립·바로 가기 메뉴, 30차 끌어서 넓히기) — 표 셀 고르기
  *  - App.gripMenuProviders  다기능 그립: 커서를 올리거나 오른쪽 클릭한 그립의 메뉴 항목 — 정점 추가·제거, 호로 변환, 길이 조정
  *  - App.commandFallbacks   등록되지 않은 이름을 명령행에 쳤을 때(알 수 없는 명령 안내보다 먼저) — 시스템 변수 이름 바로 입력
  *  - App.contextMenuProviders 도면 영역 오른쪽 클릭 메뉴(기본·편집·명령 모드)에 항목 더하기
@@ -110,6 +110,13 @@ export interface SubSelection {
    * 맡지 않으면 null
    */
   menu?(point: Pt): ContextMenuItem[] | null;
+  /**
+   * 명령 없이 마우스·펜 왼쪽 버튼을 누른 자리(30차 끌어서 여러 셀 고르기). 누른 채 끌면 부분을 넓혀 고를 자리면 true —
+   * 앱은 그 끌기를 창·올가미 선택 대신 dragTo로 보낸다. 끌지 않고 떼면 예전처럼 click이다. picked·opt는 click과 같다
+   */
+  dragStart?(point: Pt, picked: string | null, opt: { readonly shift: boolean; readonly touch: boolean; readonly tol: number }): boolean;
+  /** dragStart가 맡은 끌기의 지금 자리(도면 좌표). done이면 버튼을 뗐다(끌기 끝) */
+  dragTo?(point: Pt, done: boolean): void;
 }
 
 /** 다기능 그립 메뉴 항목 */

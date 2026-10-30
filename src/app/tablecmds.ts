@@ -9,6 +9,7 @@ import { ACI_RGB } from '../core/color';
 import { tableBlockEntities } from '../edit/table/geometry';
 import type { EditOp } from '../edit/session';
 import type { App, CommandContext, Keyword } from './app';
+import { type ContextMenuItem, addHook } from './hooks';
 import type { Pt } from './view';
 import { currentProps } from './draw';
 import { dialog, form, h } from './ui/dom';
@@ -34,6 +35,7 @@ import {
   mergeCells,
   setAlign,
   setRowKind,
+  sizeEqually,
   tableHeight,
   tableWidth,
   unmergeCells,
@@ -853,6 +855,33 @@ const ALIGN_KEYS: Keyword[] = [
 ];
 
 export function registerTableEditCommands(app: App): void {
+  // ------------------------------------------------------------- 표 바로 가기 메뉴(30차)
+  // 도움말 "To Resize Rows or Columns in a Table": 표를 눌러 고르고 오른쪽 누르기 → 열 크기 같게·행 크기 같게("Table Visor" — 모든 열을 표의 폭,
+  // 모든 행을 표의 높이로 나눠 같게). 표 하나를 고른 편집 모드 메뉴에 붙인다(이미 모두 같으면 꺼짐). 확정 한 번(명령 취소 한 단계), 표는 고른 채
+  addHook(app.contextMenuProviders, {
+    name: 'table-size-equally',
+    items: (c): ContextMenuItem[] | null => {
+      if (c.mode !== 'edit' || c.selection.length !== 1 || !c.st) return null;
+      const e = c.st.doc.entityIndex.get(c.selection[0]!);
+      if (!isEditableTable(e)) return null;
+      const rt = tableFromEntity(e, c.st.doc);
+      if (!rt) return null;
+      const handle = e.handle;
+      const run = (what: 'cols' | 'rows', label: string) => () => {
+        const p = readPicked(app, handle, null);
+        if (!p || lockedLayer(app, p.entity)) return;
+        const next = sizeEqually(p.data, what);
+        if (!next) return;
+        commitTable(app, p, next, label);
+        app.cmd.print(`${label}: 표 ${next.rows}행 ${next.cols}열`);
+      };
+      return [
+        { label: '열 폭 같게', disabled: !sizeEqually(rt.data, 'cols'), run: run('cols', '열 폭 같게') },
+        { label: '행 높이 같게', disabled: !sizeEqually(rt.data, 'rows'), run: run('rows', '행 높이 같게') },
+      ];
+    },
+  });
+
   // ------------------------------------------------------------- TABLE
   app.register({
     name: 'TABLE',

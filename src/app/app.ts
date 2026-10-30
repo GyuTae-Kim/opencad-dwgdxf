@@ -368,8 +368,11 @@ export class App {
   private shiftHeld = false;
   /** 마지막 포인터 이동(Shift를 누르고 뗄 때 다시 해석) */
   private lastMove: { w: Pt; s: Pt; ev: PointerEvent } | null = null;
-  /** 왼쪽 버튼을 누른 곳의 뜻(명령이 없을 때): 그립, 끌어 옮기기, 창·올가미 */
-  private press: { kind: 'grip' | 'move' | 'window'; world: Pt; screen: Pt; ghost?: DragGhost; lasso?: Lasso; started?: boolean } | null = null;
+  /**
+   * 왼쪽 버튼을 누른 곳의 뜻(명령이 없을 때): 그립, 끌어 옮기기, 창·올가미, 부분 고르기(표 셀) 끌어 넓히기(30차 — sub가 없으면
+   * Esc로 그만둔 끌기라 떼기까지 무시)
+   */
+  private press: { kind: 'grip' | 'move' | 'window' | 'sub'; world: Pt; screen: Pt; ghost?: DragGhost; lasso?: Lasso; started?: boolean; sub?: SubSelection } | null = null;
   /** 오른쪽 버튼 끌어 놓기(고른 객체 위에서 누른 자리, 끄는 동안의 미리보기, 놓은 뒤 메뉴가 열려 있는지) */
   private rightPress: { world: Pt; ghost?: DragGhost; menu?: boolean } | null = null;
   /** 명령 없이 객체를 고른 마지막 클릭(두 번 누르기의 두 번째 클릭이 막 생긴 그립을 눌러도 그립 편집으로 가지 않게) */
@@ -669,6 +672,10 @@ export class App {
       // 오른쪽 버튼 끌기·끌어 놓기 메뉴: Esc는 끌기만 그만둔다(선택은 그대로 — 메뉴의 [취소]와 같다)
       if (this.rightPress.menu) closeMenu();
       this.endRightDrag();
+    } else if (this.press?.kind === 'sub' && this.press.sub) {
+      // 끌어서 고르던 셀 범위(30차): 끌기를 그만두고 고른 셀을 푼다(떼기까지 남은 끌기는 무시 — 창 선택으로 넘어가지 않게)
+      this.press = { ...this.press, sub: undefined };
+      this.clearSubSelections();
     } else if (this.windowStart || this.press?.lasso) {
       this.windowStart = null;
       this.press = null;
@@ -2522,13 +2529,24 @@ export class App {
     const st = this.active;
     const r = this.request;
     if (!st || ev.pointerType === 'touch' || (r && r.kind !== 'select') || this.windowStart?.viaClick) return;
-    let kind: 'grip' | 'move' | 'window' = 'window';
+    let kind: 'grip' | 'move' | 'window' | 'sub' = 'window';
+    const tol = this.view.overlay.pickbox * this.view.pixelSize();
+    let hit: string | null | undefined;
     if (!r && !this.running && st.selection.size) {
       const onGrip = !!this.gripAt(w);
-      const hit = onGrip ? null : (this.picker()?.pick(w.x, w.y, this.view.overlay.pickbox * this.view.pixelSize()) ?? null);
+      hit = onGrip ? null : (this.picker()?.pick(w.x, w.y, tol) ?? null);
       kind = pressKind({ onGrip, hit, selected: st.selection, busy: false });
     } else if (!r && !ev.shiftKey && this.subGripAt(w)) kind = 'grip';
-    this.press = { kind, world: w, screen: s };
+    // 끌어서 여러 셀 고르기(30차 — 도움말 "About Modifying Tables": 여러 셀은 누르고 끌어 고른다): 셀 안(누르면 셀을 고를 자리)에서
+    // 누른 채 끌면 창·올가미 선택 대신 지나간 범위의 셀. 끌지 않고 떼면 예전처럼 누르기(onClick)
+    let sub: SubSelection | undefined;
+    if (kind === 'window' && !r && !this.running && !this.viewOnly && this.subSelections.some((f) => f.dragStart)) {
+      const picked = hit !== undefined ? hit : (this.picker()?.pick(w.x, w.y, tol) ?? null);
+      const opt = { shift: ev.shiftKey, touch: false, tol };
+      sub = this.subSelections.find((f) => f.dragStart?.(w, picked, opt));
+      if (sub) kind = 'sub';
+    }
+    this.press = { kind, world: w, screen: s, ...(sub ? { sub } : {}) };
     this.previewAt = 0;
   }
 
@@ -2551,6 +2569,17 @@ export class App {
         this.press = null;
         if (this.request?.kind === 'point') this.onClick(this.view.screenToWorld(b.x, b.y), b, ev);
       }
+      return;
+    }
+    // 부분 고르기 끌기(30차 표 셀 범위): 지나간 자리까지 넓힌다(Esc로 그만뒀으면 떼기까지 무시)
+    if (this.press?.kind === 'sub') {
+      const pr = this.press;
+      if (!pr.started) {
+        pr.started = true;
+        this.clearHover();
+      }
+      if (!this.request && !this.running) pr.sub?.dragTo?.(this.view.screenToWorld(b.x, b.y), done);
+      if (done) this.press = null;
       return;
     }
     if (!st || (this.request && this.request.kind !== 'select')) return;

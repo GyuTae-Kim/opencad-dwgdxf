@@ -16,8 +16,8 @@
  *   (마지막 셀이면 그대로 — 새 행은 도움말에 없다)
  * - 글자(Space 빼고)를 치면 기준 셀의 제자리 편집기를 그 글자로 바꾼 내용으로 연다. 확인하면 그 편집(Tab으로 옮긴 셀까지)이 명령 취소 한 단계
  * - 명령행에 친 글이 있거나 명령이 진행 중이면 키를 보지 않는다
- * 하지 않은 것(도움말에 없거나 근거가 약하다): 끌어서 여러 셀 고르기, Shift+화살표로 넓히기, 마지막 셀 Tab의 새 행, Delete로 내용 지우기,
- * 고른 셀의 특성 팔레트
+ * 하지 않은 것(도움말에 없거나 근거가 약하다): Shift+화살표로 넓히기, 마지막 셀 Tab의 새 행, Delete로 내용 지우기,
+ * 고른 셀의 특성 팔레트(끌어서 여러 셀 고르기는 30차)
  *
  * 29차(근거 — AutoCAD 도움말, 우리말 요약):
  * - "About Modifying Tables": 셀을 고르면 셀 테두리 가운데에 그립이 보이고, 셀의 그립을 끌면 그 셀과 그 열·행이 커지거나 작아진다.
@@ -37,12 +37,21 @@
  *   셀을 고른 누르기 바로 뒤 같은 자리의 두 번째 누르기도 두 번 누르기(셀 편집)
  * - 셀 내용 지우기(Delete)는 도움말에 근거가 없어(메뉴 설명은 "그 밖의 변경"뿐) 하지 않았다
  * - 입력기(한글 등)의 첫 조합 키(Process·229)를 고른 셀에서 받으면 셀 편집기를 빈 내용으로 열고 초점을 옮긴다 — 조합은 편집기에서 이어진다(키는 막지 않는다)
+ *
+ * 30차(근거 — AutoCAD 도움말, 우리말 요약):
+ * - "About Modifying Tables": 여러 셀은 셀 위를 누르고 끌어 고른다.
+ * - "Table Cell Ribbon Contextual Tab"의 정렬: 셀 내용을 위·아래 테두리에 대해 위·가운데·아래, 왼쪽·오른쪽 테두리에 대해 왼쪽·가운데·오른쪽으로 맞춘다.
+ * 정한 것:
+ * - 끌어서 고르기: 셀 안(누르면 셀을 고를 자리 — click과 같은 판정)에서 마우스·펜으로 누른 채 끌면 창·올가미 대신 누른 셀에서 지금 셀까지의 사각 범위
+ *   (병합 셀을 덮게, 표 밖으로 나가면 그쪽 끝 행·열). Shift를 누른 채 같은 표에서 시작하면 지금 기준 셀에서 넓힌다. 격자선·표 밖·표 위의 객체·셀 그립에서
+ *   시작한 끌기는 예전 그대로. 손가락 한 개 끌기는 앱의 화면 이동이라 그대로(셀 범위는 Shift+누르기나 마우스·펜). Shift+화살표는 도움말에 없어 하지 않았다
+ * - 셀 메뉴의 정렬 ▸ 아홉 가지(TABLECELL 정렬과 같은 setAlign — 셀 재지정). 범위의 셀이 모두 그 정렬이면 ✓, 고르면 확정 한 번(이미 모두 그 정렬이면 바꾸지 않는다)
  */
 import type { Entity, InsertEntity, TableEntity } from '../core/model';
 import { tableKey } from '../core/model';
 import { isEditableTable, tableFromEntity } from '../edit/table/entity';
-import { type TableData, anchorOf, cellAt, cellName, cellRect, cloneTable, colOffset, mergeAt, rowOffset } from '../edit/table/model';
-import type { TableStyle } from '../edit/table/style';
+import { type TableData, anchorOf, cellAt, cellName, cellRect, cloneTable, colOffset, mergeAt, rowOffset, setAlign } from '../edit/table/model';
+import { ALIGN_LABEL, type TableStyle } from '../edit/table/style';
 import { previewSegments } from '../edit/table/ops';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
@@ -112,6 +121,23 @@ export function stepCell(t: TableData, a: Cell, dir: 'left' | 'right' | 'up' | '
 const ARROWS: Record<string, 'left' | 'right' | 'up' | 'down'> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
 
 type Range = { r0: number; c0: number; r1: number; c1: number };
+
+/** 셀 정렬 값(1~9 — 맨 위·중간·맨 아래 × 왼쪽·중심·오른쪽, MTEXT 부착점과 같은 번호) */
+const ALIGN_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+
+/** 범위의 셀(병합 셀은 기준 셀만)이 모두 같은 정렬(재지정이 없으면 그 행 종류의 셀 스타일 값)이면 그 값, 섞였으면 0 */
+export function rangeAlign(t: TableData, style: TableStyle, g: Range): number {
+  let out = 0;
+  for (let r = g.r0; r <= g.r1; r++)
+    for (let c = g.c0; c <= g.c1; c++) {
+      const m = mergeAt(t, r, c);
+      if (m && (m.row !== r || m.col !== c)) continue;
+      const a = t.cells[r * t.cols + c]?.align ?? style.cells[t.rowKinds[r] ?? 'data'].align;
+      if (!out) out = a;
+      else if (out !== a) return 0;
+    }
+  return out;
+}
 
 /** 셀 그립의 변(표 좌표): x0 왼쪽, x1 오른쪽, y0 아래, y1 위 */
 export type CellSide = 'x0' | 'x1' | 'y0' | 'y1';
@@ -298,6 +324,43 @@ export function registerTableCellSelection(app: App): TableCellSelection {
     return d > margin ? a : null;
   };
   /**
+   * 누른 자리가 고를 셀(click·dragStart가 같이 쓴다): 표 위에 그린 다른 객체가 잡혔거나 잡힌 표의 격자선 가까이면 null(예전처럼 그 객체·표 객체).
+   * 아무것도 잡히지 않았으면 지금 공간의 보이는 표(위에 그린 것 먼저) 가운데 그 자리를 셀 안으로 품은 것
+   */
+  const cellHit = (st: DocState, w: Pt, picked: string | null, tol: number): { e: TableEntity | InsertEntity; a: Cell } | null => {
+    const list = st.doc.blocks.get(tableKey(st.space))?.entities ?? [];
+    const pickedEnt = picked ? st.doc.entityIndex.get(picked) : undefined;
+    if (picked && !isEditableTable(pickedEnt)) return null;
+    const cands: (TableEntity | InsertEntity)[] = [];
+    if (pickedEnt && isEditableTable(pickedEnt)) cands.push(pickedEnt);
+    else
+      for (let i = list.length - 1; i >= 0; i--) {
+        const e = list[i]!;
+        if (isEditableTable(e) && shown(st, e)) cands.push(e);
+      }
+    for (const e of cands) {
+      const rt = read(e, st.doc);
+      if (!rt) continue;
+      const a = cellUnder(e, rt.data, rt.style.flow, w, tol);
+      if (!a) {
+        // 잡힌 표의 격자선 가까이: 예전처럼 표 객체를 고른다
+        if (pickedEnt === e) return null;
+        continue;
+      }
+      return { e, a };
+    }
+    return null;
+  };
+  /** 끌어 고르는 셀 범위(30차): 누른 셀(기준)과 그 문서·공간·표 */
+  let drag: { st: DocState; space: string; handle: string; anchor: Cell } | null = null;
+  /** 표 좌표로 표 안에 가둔 점이 든 셀(끌기가 표 밖으로 나가면 그쪽 끝 행·열) */
+  const cellClamped = (e: TableEntity | InsertEntity, t: TableData, flow: 0 | 1, w: Pt): Cell => {
+    const q = toTableLocal(e, w);
+    const x = Math.max(0, Math.min(colOffset(t, t.cols), q.x));
+    const d = Math.max(0, Math.min(rowOffset(t, t.rows), flow === 1 ? q.y : -q.y));
+    return cellAt(t, x, flow === 1 ? d : -d, flow) ?? { r: t.rows - 1, c: t.cols - 1 };
+  };
+  /**
    * 바로 가기 메뉴의 셀 작업(29차): TABLECELL과 같은 계산, 확정 한 번(명령 취소 한 단계). 끝나면 같은 셀을 고른 채 —
    * 앞에 넣은 행·열만큼 밀린 자리, 지운 뒤에는 그 자리(표 끝이면 마지막)의 셀, 병합·풀기는 그 범위
    */
@@ -322,38 +385,66 @@ export function registerTableCellSelection(app: App): TableCellSelection {
     else if (op === 'mergeAll' || op === 'mergeRows' || op === 'mergeCols' || op === 'unmerge') (na = { r: g.r0, c: g.c0 }), (nb = { r: g.r1, c: g.c1 });
     hook.select(handle, na, nb);
   };
+  /**
+   * 셀 메뉴의 정렬(30차): 고른 범위의 셀 정렬을 그 값으로 재지정한다(TABLECELL 정렬과 같은 setAlign — DXF·DWG 셀 재지정 170으로 남는다).
+   * 범위의 셀이 이미 모두 그 정렬이면 바꾸지 않는다(명령 취소 단계 없음). 확정 한 번, 끝나면 같은 셀을 고른 채
+   */
+  const applyAlign = (handle: string, align: number): void => {
+    const cur = live();
+    if (!cur || !state || state.handle !== handle) return;
+    const p = readPicked(app, handle, null);
+    if (!p || lockedLayer(app, p.entity)) return;
+    const g = cur.range;
+    if (rangeAlign(p.data, p.style, g) === align) return;
+    const a = state.anchor;
+    const b = state.end;
+    const next = setAlign(p.data, g.r0, g.c0, g.r1, g.c1, align);
+    commitTable(app, p, next, '셀 정렬');
+    app.cmd.print(`셀 정렬: 표 ${next.rows}행 ${next.cols}열`);
+    hook.select(handle, a, b);
+  };
 
   const hook: TableCellSelection = {
     name: 'table-cells',
     click(w, picked, opt) {
       const st = app.active;
       if (!st) return false;
-      const list = st.doc.blocks.get(tableKey(st.space))?.entities ?? [];
-      const pickedEnt = picked ? st.doc.entityIndex.get(picked) : undefined;
-      // 표 위에 그린 다른 객체가 잡혔으면 그 객체(예전처럼)
-      if (picked && !isEditableTable(pickedEnt)) return false;
-      const cands: (TableEntity | InsertEntity)[] = [];
-      if (pickedEnt && isEditableTable(pickedEnt)) cands.push(pickedEnt);
-      else
-        for (let i = list.length - 1; i >= 0; i--) {
-          const e = list[i]!;
-          if (isEditableTable(e) && shown(st, e)) cands.push(e);
-        }
-      for (const e of cands) {
-        const rt = read(e, st.doc);
-        if (!rt) continue;
-        const a = cellUnder(e, rt.data, rt.style.flow, w, opt.tol);
-        if (!a) {
-          // 잡힌 표의 격자선 가까이: 예전처럼 표 객체를 고른다
-          if (pickedEnt === e) return false;
-          continue;
-        }
-        const cur = live();
-        if (opt.shift && cur && state && state.handle === e.handle) set(st, e.handle, state.anchor, a);
-        else set(st, e.handle, a, a);
-        return true;
-      }
-      return false;
+      const hit = cellHit(st, w, picked, opt.tol);
+      if (!hit) return false;
+      const { e, a } = hit;
+      const cur = live();
+      if (opt.shift && cur && state && state.handle === e.handle) set(st, e.handle, state.anchor, a);
+      else set(st, e.handle, a, a);
+      return true;
+    },
+    dragStart(w, picked, opt) {
+      // 30차 끌어서 여러 셀 고르기(도움말 "About Modifying Tables" — 여러 셀은 셀 위를 누르고 끌어 고른다). 누른 자리는 click과 같은 판정이고
+      // Shift를 누른 채 같은 표에서 시작하면 지금 기준 셀에서 넓힌다(Shift+누르기와 같다)
+      drag = null;
+      const st = app.active;
+      if (!st || app.viewOnly) return false;
+      const hit = cellHit(st, w, picked, opt.tol);
+      if (!hit) return false;
+      const cur = live();
+      const anchor = opt.shift && cur && state && state.handle === hit.e.handle ? state.anchor : hit.a;
+      drag = { st, space: st.space, handle: hit.e.handle, anchor };
+      return true;
+    },
+    dragTo(w, done) {
+      const d = drag;
+      if (done) drag = null;
+      const st = app.active;
+      if (!d || !st || st !== d.st || st.space !== d.space || app.viewOnly) return;
+      const e = st.doc.entityIndex.get(d.handle);
+      if (!isEditableTable(e)) return;
+      const rt = read(e, st.doc);
+      if (!rt) return;
+      const t = rt.data;
+      if (d.anchor.r >= t.rows || d.anchor.c >= t.cols) return;
+      const end = cellClamped(e, t, rt.style.flow, w);
+      // 지나간 사각 범위(병합 셀을 덮게 — live가 cellRange로 넓힌다). 범위가 그대로면 다시 그리지 않는다
+      if (state && state.st === st && state.handle === d.handle && state.anchor.r === d.anchor.r && state.anchor.c === d.anchor.c && state.end.r === end.r && state.end.c === end.c) return;
+      set(st, d.handle, d.anchor, end);
     },
     key(ev) {
       const cur = live();
@@ -395,6 +486,7 @@ export function registerTableCellSelection(app: App): TableCellSelection {
     },
     clear() {
       state = null;
+      drag = null;
     },
     overlay() {
       const cur = live();
@@ -502,6 +594,12 @@ export function registerTableCellSelection(app: App): TableCellSelection {
           ],
         },
         { label: '셀 병합 해제', disabled: !merged, run: run('unmerge', '셀 병합 해제') },
+        { separator: true },
+        // 30차 정렬(도움말 "Table Cell Ribbon Contextual Tab"의 Alignment — 위·가운데·아래 × 왼쪽·가운데·오른쪽). 범위의 셀이 모두 그 정렬이면 ✓
+        {
+          label: '정렬',
+          items: ALIGN_ORDER.map((n) => ({ label: ALIGN_LABEL[n]!, ...(rangeAlign(t, cur.rt.style, g) === n ? { kbd: '✓' } : {}), run: () => applyAlign(handle, n) })),
+        },
       ];
       return items;
     },
