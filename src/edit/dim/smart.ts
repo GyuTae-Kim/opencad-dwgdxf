@@ -9,6 +9,7 @@ import type { DimensionEntity, Entity, Vec3 } from '../../core/model';
 import { bulgeArc } from '../../geom/curves';
 import { angularVertex, extDir, isAngularDim, isLinearDim, linearDir } from '../annot/dimedit';
 import { lwCount, lwVertices } from '../../core/lwpoly';
+import { toUcsAxes, ucsLinearRotation } from './create';
 
 export interface P {
   x: number;
@@ -107,8 +108,14 @@ export function autoLinearRotation(p1: P, p2: P, q: P): number {
 /**
  * 두 점 치수의 종류: 정렬이면 { aligned: true }, 선형이면 회전(0 수평, π/2 수직).
  * 수평·수직 선분은 늘 그 방향, 기울어진 선분은 커서가 수직 띠 안이면 정렬.
+ * ucsAngle(27차): 지금 UCS X축의 각도. 수평·수직을 그 UCS 축으로 견주고 회전은 치수선 각도(DXF 50 — UCS 수평이면 ucsAngle)로 돌려준다.
+ * 없거나 0이면 예전과 같다(DIMLINEAR와 같은 근거 — create.ts createLinearDimension)
  */
-export function linearChoice(p1: P, p2: P, q: P, tol = 1e-9): { aligned: true } | { aligned: false; rotation: number } {
+export function linearChoice(p1: P, p2: P, q: P, ucsAngle = 0, tol = 1e-9): { aligned: true } | { aligned: false; rotation: number } {
+  if (ucsAngle) {
+    const c = linearChoice(toUcsAxes(p1, ucsAngle), toUcsAxes(p2, ucsAngle), toUcsAxes(q, ucsAngle), 0, tol);
+    return c.aligned ? c : { aligned: false, rotation: ucsLinearRotation(c.rotation, ucsAngle) };
+  }
   const d = sub(p2, p1);
   const L = Math.hypot(d.x, d.y);
   if (!(L > 0)) return { aligned: false, rotation: 0 };

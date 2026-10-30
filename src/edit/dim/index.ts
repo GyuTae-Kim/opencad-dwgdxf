@@ -18,6 +18,9 @@ export {
   nextDimBlockName,
   ordinateChainEnd,
   ordinateHorizontalDirection,
+  toUcsAxes,
+  ucsHorizontalDirection,
+  ucsLinearRotation,
   type CreateDimOptions,
 } from './create';
 export { builtinArrowBlock } from './arrows';
