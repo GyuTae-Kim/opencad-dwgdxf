@@ -2,10 +2,12 @@
  * 22차: ZOOM·PAN 명령이 화면에 넘기는 값(진짜 App, 화면은 호출을 받아 적는 가짜). 카메라 셈은 vpzoom.test.ts.
  * 도움말 ZOOM: 중심(C)은 중심점과 배율 또는 높이, 축척은 nX(현재 뷰에 대해)·nXP(도면 공간 단위에 대해).
  * "To Lock the Scale of a Layout Viewport": 화면표시가 잠긴 뷰포트는 뷰포트 축척이 그대로다.
+ * 25차: 도움말 ZOOM 전체 — 늘 도면을 재생성하므로 투명하게 쓸 수 없다(다른 명령 안의 'ZOOM에서 전체(A)는 알리고 하지 않는다).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { PAPER_SPACE } from '../../src/core/model';
+import { MODEL_SPACE, PAPER_SPACE, type LineEntity } from '../../src/core/model';
 import { registerCommands } from '../../src/app/commands';
+import { registerDrawCommands } from '../../src/app/draw';
 import { browserGlobals } from '../polish/fakes';
 import { makeApp, settle } from '../polish/real-app';
 import type { DirectCommandLine } from '../direct/fakes';
@@ -181,5 +183,47 @@ describe('ZOOM·PAN 명령(진짜 App)', () => {
       ['zoomAll', { x0: -5, y0: 0, x1: 297, y1: 210 }],
       ['zoomAll', null],
     ]);
+  });
+});
+
+describe("투명 ZOOM('ZOOM)의 전체(A) — 25차", () => {
+  const TRANSPARENT_ALL = '전체(A)는 도면을 늘 재생성하므로 다른 명령 중에 투명하게 쓸 수 없습니다.';
+
+  it("LINE 안의 'ZOOM·ZOOM에서 전체(A)는 알리고 화면을 바꾸지 않은 채 LINE으로 돌아간다. 다른 옵션은 그대로 투명하게", async () => {
+    const h = setup(null);
+    registerDrawCommands(h.app);
+    void h.app.run('LINE');
+    await settle();
+    await h.type('0,0');
+    const linePrompt = h.cmd.prompt;
+    await h.type("'ZOOM");
+    expect(h.cmd.prompt).toContain('[전체(A)/중심(C)/범위(E)/이전(P)/윈도우(W)/객체(O)/축척(S)]');
+    expect(h.view.overlay.tip?.trim()).toBe('윈도우 구석 지정, 축척 비율(nX 또는 nXP) 입력, 또는');
+    await h.type('A');
+    expect(h.out().at(-1)).toBe(TRANSPARENT_ALL);
+    expect(h.app.busyCommand).toBe('LINE');
+    expect(h.cmd.prompt).toBe(linePrompt);
+    // 커서 옆 안내도 LINE의 것으로 돌아온다(전에는 ZOOM 프롬프트의 안내가 커서를 움직일 때까지 남았다)
+    expect(h.view.overlay.tip?.trim()).toBe('다음 점 지정 또는');
+    // 작은따옴표 없이 친 ZOOM(점 프롬프트의 투명 명령 이름)도 같다
+    await h.type('ZOOM', 'A');
+    expect(h.out().at(-1)).toBe(TRANSPARENT_ALL);
+    // 범위(E)·윈도우(W)·nX는 그대로 투명하게 돌고 LINE으로 돌아간다
+    await h.type("'Z", 'E');
+    await h.type("'ZOOM", 'W', '-100,-300', '1100,800');
+    await h.type("'Z", '2X');
+    expect(h.calls).toEqual([['zoomExtents'], ['zoomRect', -100, -300, 1100, 800], ['zoomCenter', 2]]);
+    expect(h.app.busyCommand).toBe('LINE');
+    await h.type('10,0', '');
+    const lines = h.doc.blocks.get(MODEL_SPACE)!.entities.filter((e): e is LineEntity => e.type === 'LINE');
+    expect(lines.map((l) => [l.start.x, l.start.y, l.end.x, l.end.y])).toEqual([[0, 0, 10, 0]]);
+    expect(h.app.busyCommand).toBeFalsy();
+  });
+
+  it('명령 밖에서 시작한 ZOOM의 전체(A)는 이전처럼(알림 없음)', async () => {
+    const h = setup(null);
+    await h.zoom('A');
+    expect(h.calls).toEqual([['zoomAll', { x0: 0, y0: 0, x1: 420, y1: 297 }]]);
+    expect(h.out()).not.toContain(TRANSPARENT_ALL);
   });
 });

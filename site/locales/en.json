@@ -8246,6 +8246,7 @@
   "화면표시(D)": "Display(D)",
   "화면표시가 잠긴 뷰포트 {0}개는 건너뛰었습니다.": "Skipped {0} viewport(s) with locked screen display.",
   "화면표시가 잠긴 뷰포트는 축척을 바꾸지 않습니다.": "The scale of a viewport with locked display is not changed.",
+  "전체(A)는 도면을 늘 재생성하므로 다른 명령 중에 투명하게 쓸 수 없습니다.": "All (A) always regenerates the drawing, so it cannot be used transparently during another command.",
   "화면표시대로": "As displayed",
   "화면표시대로(A)": "As Displayed(A)",
   "화살촉": "Arrowhead",

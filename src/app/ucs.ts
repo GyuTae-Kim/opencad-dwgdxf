@@ -39,6 +39,16 @@ export function currentUcs(st: DocState | null): Ucs {
   return { ox: o?.x ?? 0, oy: o?.y ?? 0, angle: Math.abs(angle) < 1e-12 ? 0 : angle };
 }
 
+/**
+ * 지금 공간의 UCS 원점(WCS, Z 포함) — 세로좌표 치수의 데이텀. 배치의 도면 공간은 $PUCSORG, 모형 공간·뷰포트 안 모형 공간(MSPACE)·블록 편집기는
+ * $UCSORG(블록 편집기는 이전처럼 모형의 UCS 원점 — currentUcs의 표준 UCS와 다르다).
+ * 근거(AutoCAD 도움말, 우리말 요약): "About the Types of Dimensions" — 세로좌표 치수의 데이텀은 지금 UCS 원점의 위치로 정해진다.
+ * UCS 명령 — UCS 설정은 모형 공간과 도면 공간에 따로 저장된다. UCSORG — 지금 공간의 지금 뷰포트에 대한 현재 UCS 원점(WCS)
+ */
+export function ucsOrigin(st: DocState): Vec3 {
+  return vec(st.doc.header.get(names(st).org)) ?? { x: 0, y: 0, z: 0 };
+}
+
 export const isWorld = (u: Ucs) => u.ox === 0 && u.oy === 0 && u.angle === 0;
 
 /** UCS 좌표 → WCS */

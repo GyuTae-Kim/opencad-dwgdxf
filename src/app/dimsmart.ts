@@ -45,6 +45,7 @@ import { askText, loadPref, savePref } from './util2-ui';
 import type { OverlayGeom, Pt } from './view';
 import type { ViewportXf } from './scene';
 import { circleToPaper, geometryToPaper, modelToPaperVp, paperProjection, paperToModelVp } from './vpsnap';
+import { ucsOrigin } from './ucs';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
@@ -574,7 +575,7 @@ export function registerDimSmartCommand(app: App): void {
             if (t === 6) {
               const xAxis = (prev.dimType & 64) !== 0;
               const end = xAxis ? { x: p.x, y: prev.defPoint3.y, z: 0 } : { x: prev.defPoint3.x, y: p.y, z: 0 };
-              return createOrdinateDimension(doc, v3(p), end, { xAxis, style: prev.dimStyle, layer: layerOpt() });
+              return createOrdinateDimension(doc, v3(p), end, { xAxis, style: prev.dimStyle, layer: layerOpt(), datum: ucsOrigin(st) });
             }
             const rot = t === 1 ? Math.atan2(prev.defPoint3.y - prev.defPoint2.y, prev.defPoint3.x - prev.defPoint2.x) : prev.rotation;
             let line = prev.defPoint;
@@ -637,7 +638,8 @@ export function registerDimSmartCommand(app: App): void {
       const ordinateFlow = async (): Promise<void> => {
         let made = 0;
         for (;;) {
-          // 도면 공간이면 피쳐 위치가 뷰포트에 보이는 모형 객체에도 스냅하고, 단일 뷰포트의 모형 스냅이면 그 축척으로(DIMORDINATE와 같다)
+          // 도면 공간이면 피쳐 위치가 뷰포트에 보이는 모형 객체에도 스냅하고, 단일 뷰포트의 모형 스냅이면 그 축척으로(DIMORDINATE와 같다).
+          // 데이텀은 지금 공간의 UCS 원점(25차 — 도면 공간은 도면 공간 UCS 원점 $PUCSORG)
           const f = await ctx.getPoint('피쳐 위치 지정 또는 [명령 취소(U)]:', { keywords: [KW_U], viewportSnaps: true });
           if ('keyword' in f) {
             if (made > 0 && undoLast()) made--;
@@ -651,7 +653,7 @@ export function registerDimSmartCommand(app: App): void {
           let xAxis: boolean | undefined;
           const kws: Keyword[] = [{ key: 'X', label: 'X데이텀' }, { key: 'Y', label: 'Y데이텀' }, KW_M, KW_T, KW_N, KW_U];
           for (;;) {
-            const make = (p: Pt) => scaled(withRot(createOrdinateDimension(doc, v3(f.point), v3(p), { ...opts(o), xAxis }), o), vx);
+            const make = (p: Pt) => scaled(withRot(createOrdinateDimension(doc, v3(f.point), v3(p), { ...opts(o), xAxis, datum: ucsOrigin(st) }), o), vx);
             const p = await ctx.getPoint(`지시선 끝점 지정 또는 ${tail(kws)}`, { base: f.point, keywords: kws, ghost: (q) => geom(make(q)) });
             if ('point' in p) {
               add(make(p.point), [null, fr]);

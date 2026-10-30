@@ -8246,6 +8246,7 @@
   "화면표시(D)": "Anzeige (D)",
   "화면표시가 잠긴 뷰포트 {0}개는 건너뛰었습니다.": "{0} Ansichtsfenster mit gesperrten Anzeigen werden übersprungen.",
   "화면표시가 잠긴 뷰포트는 축척을 바꾸지 않습니다.": "Der Maßstab eines Ansichtsfensters mit gesperrter Anzeige wird nicht geändert.",
+  "전체(A)는 도면을 늘 재생성하므로 다른 명령 중에 투명하게 쓸 수 없습니다.": "Alle (A) regeneriert die Zeichnung immer und kann daher nicht transparent während eines anderen Befehls verwendet werden.",
   "화면표시대로": "Wie angezeigt",
   "화면표시대로(A)": "Wie angezeigt (A)",
   "화살촉": "Pfeilspitze",

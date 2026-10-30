@@ -237,6 +237,8 @@ export interface CommandContext {
   getSelection(prompt?: string, opt?: { keywords?: Keyword[]; noPickfirst?: boolean }): Promise<string[]>;
   /** 명령 안의 여러 단계를 한 번의 명령 취소로 묶는 번호 */
   group: number;
+  /** 다른 명령 안에서 투명 명령으로 도는지('ZOOM 등 — 끝나면 바깥 명령으로 돌아간다) */
+  transparent?: boolean;
 }
 
 export interface Command {
@@ -583,6 +585,7 @@ export class App {
       getEntity: ((prompt: string, kws?: Keyword[], opt?: EntityOptions) => this.requestEntity(prompt, kws ?? [], ctrl.signal, opt ?? {})) as CommandContext['getEntity'],
       getSelection: (prompt, opt) => this.requestSelection(prompt ?? '객체 선택:', opt ?? {}, ctrl.signal),
       group: ++this.groupSerial,
+      transparent: nested,
     };
     try {
       await c.run(ctx, arg);
@@ -601,6 +604,9 @@ export class App {
         if (!this.request && saved && !saved.signal.aborted && this.running === outer) {
           this.request = saved;
           this.cmd.setPrompt(this.promptOf(saved));
+          // 커서 옆 안내도 바깥 명령의 것으로(25차 헤드리스에서 찾음: 투명 명령의 안내가 커서를 움직일 때까지 남았다 — 휴대폰은 다음 터치까지)
+          this.view.overlay.tip = saved.kind === 'select' ? saved.prompt.replace(/:\s*$/, '') : saved.prompt.replace(/\[.*$/, '').replace(/:\s*$/, '');
+          this.view.requestOverlay();
         }
       } else {
         if (this.running?.ctrl === ctrl) this.running = null;
