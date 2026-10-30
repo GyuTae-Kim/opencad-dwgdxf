@@ -7,7 +7,8 @@
  * 이 앱의 뷰포트는 늘 평면도(장면이 그리는 변환: 종이 = 중심 + k·R(−비틀기)·(모형 − 기준))라 화면과 나란한 평면은 모형의 XY 평면이고,
  * 투영 거리는 두 모형 점의 평면 거리다(종이 거리 ÷ 축척과 같다).
  * 도움말에 없어 이 앱이 정한 것: 증분과 XY 평면 각도는 화면(지금 도면 공간 UCS) 방향으로 잰 모형 단위 값, 점 하나만 모형 스냅이거나
- * 두 점의 뷰포트가 다르거나 그 점을 덮는 뷰포트가 둘 이상이면 도면 공간 2D 거리(전과 같다). 뷰포트 안 모형 스냅은 DIST의 점 요청에서만 잡는다.
+ * 두 점의 뷰포트가 다르거나 그 점을 덮는 뷰포트가 둘 이상이면 도면 공간 2D 거리(전과 같다).
+ * 뷰포트 안 모형 스냅은 DIST의 점 요청과 선형·정렬 치수의 치수보조선 원점(22차, dimcmds.ts)에서만 잡는다.
  */
 import type { CadDocument, Entity, Layout } from '../core/model';
 import { tableKey } from '../core/model';
@@ -83,6 +84,18 @@ export function projectionViewport<T extends VpXf>(vxs: readonly T[], pts: reado
 /** 배치의 뷰포트 변환(전체 용지 뷰포트·꺼진 것 제외) */
 export function layoutXfs(doc: CadDocument, layout: Layout | undefined): ViewportXf[] {
   return layout ? layoutViewports(doc, layout).map((v) => viewportXf(doc, v)) : [];
+}
+
+/**
+ * 배치의 도면 공간(뷰포트 안 모형 공간이 아닌)에서 점이 모두 같은 뷰포트 하나의 모형 스냅이면 그 뷰포트 변환(projectionViewport),
+ * 아니면 null. 도면 공간 DIST의 투영 거리와 도면 공간 선형·정렬 치수의 축척 맞춤이 쓴다
+ */
+export function paperProjection(
+  st: { readonly isModel: boolean; readonly msVp: unknown; readonly doc: CadDocument; readonly displaySpace: string; layoutFor(space: string): Layout | undefined },
+  pts: readonly PaperPick[],
+): ViewportXf | null {
+  if (st.isModel || st.msVp) return null;
+  return projectionViewport(layoutXfs(st.doc, st.layoutFor(st.displaySpace)), pts);
 }
 
 /** 후보를 거른 고르기(같은 색인·형상 캐시를 쓴다) */

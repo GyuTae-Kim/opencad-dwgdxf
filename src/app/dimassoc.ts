@@ -106,9 +106,11 @@ function nearby(app: App, p: Pt, radius: number, first?: string[]): Entity[] {
  * 찍은 점의 연관 참조. 객체 스냅 종류를 알면 그 종류로(그 자리에 다른 객체의 스냅 점만 있으면 그 객체로),
  * 모르면 그 자리에 정확히 있는 스냅 점(끝점·교차점·중심·중간점·사분점·노드·삽입점)으로 찾는다.
  * 근처점·직교·접점은 근처점으로 둔다. 찾지 못하거나 스냅 없이 찍었으면 null.
+ * 도면 공간에서 뷰포트 안 모형 객체에 잡은 점(snap.viewport)도 null — 공간을 넘는 연관은 아직 만들지 않는다(비연관 치수)
  */
 export function pointRef(app: App, r: PointResult): PointRef | null {
   if (!('point' in r) || !app.active) return null;
+  if (r.snap?.viewport) return null;
   const res = r as { point: Pt; snap?: SnapInfo | null };
   const p = res.point;
   const snap = snapOf(app, res);

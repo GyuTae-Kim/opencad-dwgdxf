@@ -33,6 +33,8 @@ import { headerOverrides, overridesOf } from './dimstyle';
 import { applyOverrides } from '../edit/annot/override';
 import type { OverlayGeom, Pt } from './view';
 import { lwCount, lwVertices } from '../core/lwpoly';
+import type { ViewportXf } from './scene';
+import { paperProjection } from './vpsnap';
 
 const v3 = (p: Pt): Vec3 => ({ x: p.x, y: p.y, z: 0 });
 
@@ -132,6 +134,20 @@ export function withStyleOverrides(doc: CadDocument, dim: DimensionEntity): void
   const ov = overridesOf(doc, headerOverrides(doc, cur));
   for (const k of Object.keys(dim.overrides ?? {})) delete ov[Number(k)];
   if (Object.keys(ov).length) Object.assign(dim, applyOverrides(dim, ov));
+}
+
+/**
+ * 도면 공간 치수가 뷰포트 하나(축척 k = 종이/모형)의 모형 점 둘을 재면 측정값을 모형 공간 거리로: DIMLFAC 재지정 = −|지금 DIMLFAC| ÷ k.
+ * 근거(AutoCAD 도움말, 우리말 요약): "To Set Dimension Scale for Creating Dimensions in a Layout" — 도면 공간에서 모형 공간의 점에
+ * 객체 스냅으로 잡아 모형 공간 값의 치수를 만든다. "About Setting the Scale for Dimensions" — 연관 치수는 뷰포트 축척 맞춤이
+ * 지금 DIMLFAC와 합쳐져 치수 스타일 재지정으로 남고, 비연관 치수는 DIMLFAC를 뷰포트마다 정해야 한다. DIMLFAC — 음수는 도면 공간에서만
+ * 쓰고, 뷰포트(Viewport) 옵션은 모형 → 종이 축척의 음수를 넣는다. 이 앱은 아직 공간을 넘는 연관을 만들지 않으므로 비연관 치수에 그 값을 넣는다
+ */
+export function viewportScaled(doc: CadDocument, dim: DimensionEntity, k: number): DimensionEntity {
+  if (!(k > 0) || !Number.isFinite(k)) return dim;
+  withStyleOverrides(doc, dim);
+  const cur = Number(rawDimVars(doc, dim).DIMLFAC ?? 1) || 1;
+  return applyOverrides(dim, { 144: -Math.abs(cur) / k });
 }
 
 /** 치수 문자 안내 */
@@ -265,7 +281,9 @@ export function registerDimCommands(app: App): void {
     let p1: Pt;
     let p2: Pt;
     let refs: (PointRef | null)[] = [];
-    const r1 = await ctx.getPoint('첫 번째 치수보조선 원점 지정 또는 <객체 선택>:');
+    // 배치의 도면 공간이면 원점은 뷰포트에 보이는 모형 객체에도 스냅하고, 두 점이 같은 뷰포트 하나의 모형 스냅이면 그 축척으로 맞춘다
+    let vx: ViewportXf | null = null;
+    const r1 = await ctx.getPoint('첫 번째 치수보조선 원점 지정 또는 <객체 선택>:', { viewportSnaps: true });
     if ('enter' in r1) {
       const pick = await ctx.getEntity('치수기입할 객체 선택:');
       if (!('handle' in pick)) return;
@@ -280,16 +298,21 @@ export function registerDimCommands(app: App): void {
     } else if ('point' in r1) {
       p1 = r1.point;
       const ref1 = pointRef(app, r1);
-      const r2 = await ctx.getPoint('두 번째 치수보조선 원점 지정:', { base: p1 });
+      const r2 = await ctx.getPoint('두 번째 치수보조선 원점 지정:', { base: p1, viewportSnaps: true });
       if (!('point' in r2)) return;
       p2 = r2.point;
       refs = [ref1, pointRef(app, r2)];
+      vx = paperProjection(st, [
+        { p: p1, viewport: r1.snap?.viewport },
+        { p: p2, viewport: r2.snap?.viewport },
+      ]);
     } else return;
     const o: DimOpts = {};
     let rotation: number | undefined;
+    const scaled = (d: DimensionEntity) => (vx ? viewportScaled(doc, d, vx.k) : d);
     for (;;) {
       const make = (p: Pt) =>
-        withDimOpts(aligned ? createAlignedDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text }) : createLinearDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text, rotation }), o);
+        scaled(withDimOpts(aligned ? createAlignedDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text }) : createLinearDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text, rotation }), o));
       const kws: Keyword[] = [{ key: 'M', label: '여러 줄 문자' }, { key: 'T', label: '문자' }, { key: 'A', label: '각도' }];
       if (!aligned) kws.push({ key: 'H', label: '수평' }, { key: 'V', label: '수직' }, { key: 'R', label: '회전' });
       const r = await ctx.getPoint(`치수선의 위치 지정 또는 [${kws.map((k) => `${k.label}(${k.key})`).join('/')}]:`, { keywords: kws, ghost: preview(app, make) });
