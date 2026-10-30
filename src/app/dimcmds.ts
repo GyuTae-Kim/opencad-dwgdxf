@@ -28,6 +28,7 @@ import {
   ordinateChainEnd,
   placeIn,
   rawDimVars,
+  ucsLinearRotation,
 } from '../edit/dim';
 import type { DimKindName } from '../edit/dim/format';
 import { angularSpan } from '../edit/dim/angular';
@@ -348,11 +349,17 @@ export function registerDimCommands(app: App): void {
       ]);
     } else return;
     const o: DimOpts = {};
+    /** 수평(H)·수직(V)·회전(R)의 각도 — 지금 UCS X축에서 잰다(없으면 수평·수직 자동) */
     let rotation: number | undefined;
     const scaled = (d: DimensionEntity) => (vx ? viewportScaled(doc, d, vx.k) : d);
+    // 27차: 수평·수직은 지금 공간 UCS의 X·Y축(도면 공간은 $PUCSXDIR), 회전(R) 각도도 UCS X축에서(도움말 "About the User Coordinate System" —
+    // UCS는 치수 객체의 정렬·각도와 절대 기준 각도의 방향을 정한다). 51에 −UCS 각도. 돌지 않은 UCS는 예전과 같은 치수
+    const linearAt = (p: Pt) => {
+      const ua = currentUcs(st).angle;
+      return createLinearDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text, rotation: rotation === undefined ? undefined : ucsLinearRotation(rotation, ua), ucsAngle: ua });
+    };
     for (;;) {
-      const make = (p: Pt) =>
-        scaled(withDimOpts(aligned ? createAlignedDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text }) : createLinearDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text, rotation }), o));
+      const make = (p: Pt) => scaled(withDimOpts(aligned ? createAlignedDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text }) : linearAt(p), o));
       const kws: Keyword[] = [{ key: 'M', label: '여러 줄 문자' }, { key: 'T', label: '문자' }, { key: 'A', label: '각도' }];
       if (!aligned) kws.push({ key: 'H', label: '수평' }, { key: 'V', label: '수직' }, { key: 'R', label: '회전' });
       const r = await ctx.getPoint(`치수선의 위치 지정 또는 [${kws.map((k) => `${k.label}(${k.key})`).join('/')}]:`, { keywords: kws, ghost: preview(app, make) });
@@ -685,7 +692,9 @@ export function registerDimCommands(app: App): void {
           const side = Math.sign((prev.defPoint.x - prev.defPoint2.x) * nx + (prev.defPoint.y - prev.defPoint2.y) * ny) || 1;
           line = { x: prev.defPoint.x + nx * side * step, y: prev.defPoint.y + ny * side * step, z: 0 };
         }
-        return createLinearDimension(doc, origin, v3(p), line, { rotation: rot, style: prev.dimStyle });
+        // 선형 연속·기준선은 앞 치수의 복제(DXF 참조 — 그룹 코드 12는 기준선·연속 복제의 삽입점)라 치수선 각도(50)처럼 수평 방향(51)도 잇는다
+        // (27차 — 회전한 UCS에서 만든 기준 치수면 그 UCS 방향, 51이 없는 예전 치수면 예전과 같다)
+        return createLinearDimension(doc, origin, v3(p), line, { rotation: rot, style: prev.dimStyle, ucsAngle: -(prev.horizontalDirection || 0) });
       };
       // 도면 공간이면 두 번째 원점(세로좌표는 피쳐 위치)도 뷰포트에 보이는 모형 객체에 스냅한다(24차 — 도움말 "To Set Dimension Scale for
       // Creating Dimensions in a Layout"). 값은 이전과 같다: 도움말 DIMCONTINUE·DIMCONTINUEMODE는 앞 치수의 치수 스타일·도면층을 잇는다고만

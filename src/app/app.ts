@@ -2749,7 +2749,11 @@ export class App {
     if (this.viewOnly) return;
     const pk = this.picker();
     const h = pk?.pick(w.x, w.y, this.view.overlay.pickbox * this.view.pixelSize());
-    if (!h) return;
+    if (!h) {
+      // 27차: 표의 빈 셀 안은 격자선·문자에서 멀어 잡히지 않는다 — 그 자리를 셀로 품은 표가 있으면 그 셀 제자리 편집(없으면 예전처럼 아무것도 않는다)
+      void import('./tablecmds').then((m) => m.editTableCellAt(this, w));
+      return;
+    }
     const e = st.doc.entityIndex.get(h);
     if (e && this.dblClickHandlers.some((f) => f.dblclick(h, e, w))) return;
     // 표는 셀 편집, 여러 줄은 여러 줄 편집 도구

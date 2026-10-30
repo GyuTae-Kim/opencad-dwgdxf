@@ -8,7 +8,7 @@
 import type { CircleEntity, DimensionEntity, Entity, LineEntity, Vec3 } from '../core/model';
 import { entityDefaults } from '../core/model';
 import { dimVars } from '../edit/dim/vars';
-import { createLinearDimension } from '../edit/dim';
+import { createLinearDimension, ucsLinearRotation } from '../edit/dim';
 import { OSNAP, type PointRef } from '../edit/dim/assoc';
 import { dimCenterSegments } from '../edit/editcmds2/dimcenter';
 import { csvFileText, effectiveAlign, matchCellAlign } from '../edit/editcmds2/table';
@@ -102,7 +102,11 @@ export function registerEditCmds2Dim(app: App): void {
       { key: 'T', label: '문자' },
     ];
     for (;;) {
-      const make = (p: Pt): DimensionEntity => createLinearDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text, rotation });
+      // 27차: 수평·수직은 지금 공간 UCS의 X·Y축, 51에 −UCS 각도(DIMLINEAR의 H·V와 같다)
+      const make = (p: Pt): DimensionEntity => {
+        const ua = currentUcs(st).angle;
+        return createLinearDimension(doc, v3(p1), v3(p2), v3(p), { text: o.text, rotation: ucsLinearRotation(rotation, ua), ucsAngle: ua });
+      };
       const r = await ctx.getPoint('치수선의 위치 지정 또는 [여러 줄 문자(M)/문자(T)]:', { keywords: kws, ghost: preview(app, make) });
       if ('point' in r) {
         addDimension(app, ctx, make(r.point), label, refs);

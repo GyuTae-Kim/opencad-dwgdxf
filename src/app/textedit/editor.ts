@@ -91,6 +91,8 @@ export interface EditorHooks {
   onEnter?(r: EditorResult): boolean;
   /** 편집기 밖 도면 클릭: 처리했으면 true(닫지 않는다) */
   onCanvasClick?(w: Pt, r: EditorResult): boolean;
+  /** Tab·Shift+Tab(back): 처리했으면 true — 지금 내용으로 확인하고 닫는다(표 셀의 다음·이전 셀). 없거나 false면 탭 문자 */
+  onTab?(back: boolean): boolean;
 }
 
 interface Props {
@@ -576,6 +578,7 @@ export class TextEditor {
     }
     if (key === 'Tab') {
       ev.preventDefault();
+      if (this.hooks.onTab?.(ev.shiftKey)) return this.confirm();
       if (this.init.mode === 'text') return;
       return this.insertString('\t');
     }

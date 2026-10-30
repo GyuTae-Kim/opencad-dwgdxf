@@ -40,5 +40,11 @@ for st in ['ISO']:
     # 26차: 회전한 지역 좌표계(UCS)의 세로좌표 — ezdxf는 51에 −회전을 적고 그 축으로 지시선을 그린다
     d = msp.add_ordinate_x_dim(feature_location=(1510, 5), offset=(5, 35), origin=(1500, 0), rotation=30, dimstyle=st); d.render(); cases.append(d.dimension)
     d = msp.add_ordinate_y_dim(feature_location=(1610, 5), offset=(30, 8), origin=(1600, 0), rotation=-60, dimstyle=st); d.render(); cases.append(d.dimension)
+    # 27차: 회전한 UCS의 선형 수평·수직 — ezdxf는 UCS 기준 각도를 OCS 각도로 바꿔 50에 적는다(30° UCS 수평 = 30°, 수직 = 120°)
+    from ezdxf.math import UCS
+    for k, (rot, ang) in enumerate(((30, 0), (30, 90), (-60, 90))):
+        a = math.radians(rot)
+        u = UCS(origin=(1700 + 100 * k, 0, 0), ux=(math.cos(a), math.sin(a), 0), uy=(-math.sin(a), math.cos(a), 0))
+        d = msp.add_linear_dim(base=(30, 40), p1=(10, 5), p2=(60, 25), angle=ang, dimstyle=st); d.render(ucs=u); cases.append(d.dimension)
 doc.saveas(sys.argv[1])
 print(len(cases))

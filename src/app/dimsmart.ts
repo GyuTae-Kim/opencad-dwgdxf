@@ -240,8 +240,12 @@ export function registerDimSmartCommand(app: App): void {
 
       // ---------------------------------------------------------- 선형·정렬
       const makeLinear = (p1: Pt, p2: Pt, q: Pt, o: TextOpts): DimensionEntity => {
-        const c = linearChoice(p1, p2, q);
-        const d = c.aligned ? createAlignedDimension(doc, v3(p1), v3(p2), v3(q), opts(o)) : createLinearDimension(doc, v3(p1), v3(p2), v3(q), { ...opts(o), rotation: c.rotation });
+        // 27차: 선형의 수평·수직은 지금 공간 UCS의 X·Y축으로 고르고 51에 −UCS 각도(DIMLINEAR와 같다). 돌지 않은 UCS는 예전과 같다
+        const ua = currentUcs(st).angle;
+        const c = linearChoice(p1, p2, q, ua);
+        const d = c.aligned
+          ? createAlignedDimension(doc, v3(p1), v3(p2), v3(q), opts(o))
+          : createLinearDimension(doc, v3(p1), v3(p2), v3(q), { ...opts(o), rotation: c.rotation, ucsAngle: ua });
         return withRot(d, o);
       };
 
@@ -590,7 +594,8 @@ export function registerDimSmartCommand(app: App): void {
               const k = (side * step) / ((e.x * n.x + e.y * n.y) || 1);
               line = { x: prev.defPoint.x + e.x * k, y: prev.defPoint.y + e.y * k, z: 0 };
             }
-            return createLinearDimension(doc, origin, v3(p), line, { rotation: rot, style: prev.dimStyle, layer: layerOpt() });
+            // 수평 방향(51)도 앞 치수에서 잇는다(DIMCONTINUE·DIMBASELINE과 같다 — 27차)
+            return createLinearDimension(doc, origin, v3(p), line, { rotation: rot, style: prev.dimStyle, layer: layerOpt(), ucsAngle: -(prev.horizontalDirection || 0) });
           };
           // 도면 공간이면 두 번째 원점은 뷰포트에 보이는 모형 객체에도 스냅한다. 값은 이전과 같다(앞 치수의 뷰포트 축척 재지정을
           // 잇는지는 도움말 DIMCONTINUE·DIMBASELINE·DIMCONTINUEMODE에 없다 — 스타일·도면층만 잇는다)

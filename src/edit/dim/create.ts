@@ -5,7 +5,7 @@
 import { type CadDocument, type DimensionEntity, type Vec3, entityDefaults } from '../../core/model';
 import { generateDimensionGeometry } from './generate';
 import { dimVars } from './vars';
-import { type P, add, dir, dot, intersect, madd, mul, perp, sub, unit } from './vec';
+import { type P, add, dir, dot, intersect, madd, mul, normPi, perp, sub, unit } from './vec';
 
 export interface CreateDimOptions {
   /** 치수 스타일 이름(없으면 $DIMSTYLE, 그다음 Standard) */
@@ -70,22 +70,52 @@ function autoRotation(p1: P, p2: P, q: P): number {
   return outY >= outX ? 0 : Math.PI / 2;
 }
 
+/** WCS XY 평면의 점을 X축 각도 ucsAngle인 UCS의 방향으로 돌린 좌표(원점은 그대로 — 견주기만 한다). 0이면 그대로 */
+export function toUcsAxes(q: P, ucsAngle = 0): P {
+  if (!ucsAngle) return q;
+  const c = Math.cos(ucsAngle);
+  const s = Math.sin(ucsAngle);
+  return { x: q.x * c + q.y * s, y: -q.x * s + q.y * c };
+}
+
+/**
+ * UCS 기준 각도 rotation(0 수평, π/2 수직, 그 밖은 DIMLINEAR 회전(R)의 각도)을 치수선 각도(DXF 50 — OCS X축에서 반시계)로.
+ * ucsAngle이 없거나 0이면 rotation 그대로(예전과 같다), 아니면 ucsAngle + rotation을 (−π, π]로.
+ * 근거: ObjectARX 참조 AcDbRotatedDimension — "수평" 치수는 각도가 치수 OCS X축과 수평을 정하는 UCS X축 사이 각도인 회전 치수이고
+ * "수직" 치수는 그보다 90° 크다. 회전 각도는 치수 OCS X축에서 반시계로 잰다. ezdxf도 UCS에서 만든 선형 치수의 50을 OCS 각도로 적는다
+ */
+export function ucsLinearRotation(rotation: number, ucsAngle = 0): number {
+  if (!ucsAngle) return rotation;
+  const r = normPi(ucsAngle + rotation);
+  return Math.abs(r) < 1e-15 ? 0 : r;
+}
+
 /** 치수선이 지나는 점 q, 방향 u일 때 둘째 보조선 위의 정의점(10) */
 function dimLinePoint(p2: P, q: P, u: P, extDir: P): P {
   return intersect(q, u, p2, extDir) ?? madd(p2, perp(u), dot(sub(q, p2), perp(u)));
 }
 
+/**
+ * 선형(회전·수평·수직) 치수. rotation이 있으면 그 치수선 각도(DXF 50 — OCS, 부르는 쪽이 UCS 각도를 더해 준다), 없으면 수평·수직 자동.
+ * ucsAngle(27차): 지금 UCS X축의 각도(라디안, 없거나 0이면 예전처럼 WCS 축 — 같은 객체). 수평·수직 자동을 UCS 축으로 견주고(UCS 수평이면
+ * 50 = ucsAngle, 수직이면 ucsAngle + 90°) 51(수평 방향)에 −ucsAngle을 적는다. 근거: 도움말 "About the Types of Dimensions"(회전한 보기 —
+ * 치수 구성 요소는 만들 때의 UCS 축에서 수평·수직 방향을 정한다), DXF 참조 공통 치수 그룹 코드 51(수평·수직·회전 선형 치수의 문자와
+ * 선 방향을 정하는 수평 방향 — OCS X축과 UCS X축 사이 각도의 음수). 치수 블록(builder.ts)은 51의 반대 각도를 문자의 "수평"(DIMTIH·DIMTOH)과
+ * 읽는 방향의 기준으로 쓴다
+ */
 export function createLinearDimension(
   doc: CadDocument,
   p1: Vec3,
   p2: Vec3,
   dimLinePt: Vec3,
-  opt: CreateDimOptions & { rotation?: number } = {},
+  opt: CreateDimOptions & { rotation?: number; ucsAngle?: number } = {},
 ): DimensionEntity {
   const d = base(doc, 0, opt);
-  const rot = opt.rotation ?? autoRotation(P2(p1), P2(p2), P2(dimLinePt));
+  const ua = opt.ucsAngle || 0;
+  const rot = opt.rotation ?? ucsLinearRotation(autoRotation(toUcsAxes(P2(p1), ua), toUcsAxes(P2(p2), ua), toUcsAxes(P2(dimLinePt), ua)), ua);
   const u = dir(rot);
   d.rotation = rot;
+  d.horizontalDirection = ucsHorizontalDirection(ua);
   d.defPoint2 = V(p1);
   d.defPoint3 = V(p2);
   d.defPoint = V(dimLinePoint(P2(p2), P2(dimLinePt), u, perp(u)));
@@ -155,16 +185,20 @@ export function createDiameterDimension(doc: CadDocument, center: Vec3, radius: 
 }
 
 /**
- * 세로좌표의 수평 방향(DXF 51): 지금 UCS X축의 각도 ucsAngle(WCS XY 평면, 라디안)의 음수를 (−π, π]로.
- * DXF 참조(공통 치수 그룹 코드 51): 51은 OCS X축과 UCS X축 사이 각도의 음수다. 0이면 0(예전과 같다)
+ * 치수의 수평 방향(DXF 51): 지금 UCS X축의 각도 ucsAngle(WCS XY 평면, 라디안)의 음수를 (−π, π]로.
+ * DXF 참조(공통 치수 그룹 코드 51): 51은 OCS X축과 UCS X축 사이 각도의 음수다. 0이면 0(예전과 같다).
+ * 세로좌표(26차)와 선형(27차 — 회전·수평·수직)에 쓴다
  */
-export function ordinateHorizontalDirection(ucsAngle: number | undefined): number {
+export function ucsHorizontalDirection(ucsAngle: number | undefined): number {
   if (!ucsAngle) return 0;
   let a = -ucsAngle % (2 * Math.PI);
   if (a <= -Math.PI) a += 2 * Math.PI;
   else if (a > Math.PI) a -= 2 * Math.PI;
   return Math.abs(a) < 1e-15 ? 0 : a;
 }
+
+/** 세로좌표의 수평 방향(26차 이름 — ucsHorizontalDirection과 같다) */
+export const ordinateHorizontalDirection = ucsHorizontalDirection;
 
 /**
  * 세로좌표 연속·기준선의 새 지시선 끝: 새 피쳐 위치 feature에서 지시선 축(X 데이텀이면 UCS Y축, Y 데이텀이면 UCS X축)으로 가서
@@ -190,7 +224,7 @@ export function createOrdinateDimension(
   leaderEnd: Vec3,
   opt: CreateDimOptions & { xAxis?: boolean; datum?: Vec3; ucsAngle?: number } = {},
 ): DimensionEntity {
-  const hd = ordinateHorizontalDirection(opt.ucsAngle);
+  const hd = ucsHorizontalDirection(opt.ucsAngle);
   let dx = Math.abs(leaderEnd.x - featurePoint.x);
   let dy = Math.abs(leaderEnd.y - featurePoint.y);
   if (hd) {
