@@ -63,6 +63,10 @@ export interface EditorInit {
   extra?: { label: string; title?: string; run(ed: TextEditor): void }[];
   /** 도면 밖(명령행 등)을 눌러도 닫지 않는다(DTEXT) */
   keepOnOutside?: boolean;
+  /** 도구 모음을 편집 상자 위가 아니라 도면 영역 위 끝에 붙인다(휴대폰 표 셀 편집 — 위 행을 가리지 않게, 28차) */
+  barDock?: 'top';
+  /** 편집 상자의 좌우 안쪽 여백을 없앤다(휴대폰 표 셀 편집 — 상자가 셀 문자 폭에 맞아 옆 셀 격자선을 넘지 않게, 28차) */
+  tight?: boolean;
 }
 
 export interface EditorResult {
@@ -154,6 +158,8 @@ const FONTS = ['Arial', 'Times New Roman', 'Courier New', '맑은 고딕', '굴�
 
 const MIN_PX = 12;
 const MAX_PX = 72;
+/** 편집 상자의 가장 작은 글자 크기(px) — 문자가 이보다 작게 보이면 상자를 그만큼 키운다(표 셀의 휴대폰 확대가 쓴다) */
+export const EDITOR_MIN_PX = MIN_PX;
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
 
 /** 열린 편집기(한 번에 하나) */
@@ -216,6 +222,10 @@ export class TextEditor {
       'aria-label': init.label,
       spellcheck: 'false',
     });
+    if (init.tight) {
+      this.box.style.paddingLeft = '0px';
+      this.box.style.paddingRight = '0px';
+    }
     this.wrap = h('div', { class: 'te-ui te-wrap' }, this.box);
     this.bar = h('div', { class: 'te-ui te-bar', role: 'toolbar', 'aria-label': '문자 편집기' });
     if (init.mode === 'mtext' && !init.noEntityProps) this.wrap.append(this.widthHandle());
@@ -462,7 +472,12 @@ export class TextEditor {
     let top = r.top - bh - 8;
     if (top < Math.max(4, vr.top)) top = r.bottom + 8;
     if (top + bh > H - 4) top = Math.max(4, H - bh - 4);
-    const left = Math.max(4, Math.min(W - bw - 4, r.left));
+    let left = Math.max(4, Math.min(W - bw - 4, r.left));
+    if (this.init.barDock === 'top') {
+      // 도면 영역 위 끝(휴대폰 표 셀 편집): 편집 상자와 그 위 행은 표 쪽이 도구 모음 아래로 옮긴다
+      top = Math.max(4, vr.top + 4);
+      left = Math.max(4, Math.round((W - bw) / 2));
+    }
     this.bar.style.left = `${Math.round(left)}px`;
     this.bar.style.top = `${Math.round(top)}px`;
   }

@@ -39,7 +39,7 @@ import { OverlayScene, type ViewportXf, layoutViewports, paperInfo } from './sce
 import { expandXrefBounds } from './refs';
 import type { EditOp } from '../edit/session';
 import { isEditableTable } from '../edit/table/entity';
-import { type CommandFallback, type CommitHook, type ContextMenuItem, type ContextMenuMode, type ContextMenuProvider, type DblClickHandler, type EntityClickHandler, type GripMenuProvider, type InputFilter, type PendingInput, type PointFilter, type ResolvedPoint, bindCommitHooks } from './hooks';
+import { type CommandFallback, type CommitHook, type ContextMenuItem, type ContextMenuMode, type ContextMenuProvider, type DblClickHandler, type EntityClickHandler, type GripMenuProvider, type InputFilter, type PendingInput, type PointFilter, type ResolvedPoint, type SubSelection, bindCommitHooks } from './hooks';
 import { cycleIsoPlane } from './viewtools-iso';
 import { maximized } from './viewtools-vpmax';
 import { DynInput, dynRelative } from './dyninput';
@@ -338,6 +338,8 @@ export class App {
   readonly entityClickHandlers: EntityClickHandler[] = [];
   /** 확장 지점: 명령 없이 두 번 누른 객체(종류별 기본 편집보다 먼저) */
   readonly dblClickHandlers: DblClickHandler[] = [];
+  /** 확장 지점: 명령 없이 객체 안의 부분을 고르는 상태(누르기·키·강조) — 표 셀 고르기(28차) */
+  readonly subSelections: SubSelection[] = [];
   /** 확장 지점: 다기능 그립 메뉴 항목(그립 위에 커서를 올리거나 오른쪽 클릭) */
   readonly gripMenuProviders: GripMenuProvider[] = [];
   /** 확장 지점: 등록되지 않은 이름을 쳤을 때(알 수 없는 명령 안내보다 먼저) — 시스템 변수 이름 바로 입력 */
@@ -578,6 +580,8 @@ export class App {
     this.cmd.print(`명령: ${c.name}`);
     this.clearHover();
     this.clearGripHover();
+    // 명령을 시작하면 표 셀 고르기를 푼다(ZOOM·PAN 같은 투명 명령은 그대로)
+    if (!transparent) this.clearSubSelections();
     const ctx: CommandContext = {
       app: this,
       print: (t, cls, measure) => this.cmd.print(t, cls, measure),
@@ -679,8 +683,24 @@ export class App {
       this.view.requestOverlay();
     } else if (this.active && this.active.selection.size) {
       this.clearSelection();
+    } else if (this.subSelections.some((s) => s.active())) {
+      // 고른 표 셀 풀기(도움말 "To Change the Appearance of Cell Borders" — Esc로 고른 것을 푼다)
+      this.clearSubSelections();
     }
     this.cmd.setPrompt('');
+  }
+
+  /** 부분 고르기(표 셀)를 모두 풀고 강조를 다시 그린다 */
+  clearSubSelections(): void {
+    if (!this.subSelections.some((s) => s.active())) return;
+    for (const s of this.subSelections) s.clear();
+    this.refreshSelectionOverlay();
+  }
+
+  /** 명령 없이 누른 키를 부분 고르기(표 셀)가 먼저 본다: 명령·요청이 없고 명령행 입력이 비어 있을 때. 맡았으면 true */
+  private subKey(ev: KeyboardEvent): boolean {
+    if (this.request || this.running || this.viewOnly || !this.active || this.cmd.input.value) return false;
+    return this.subSelections.some((s) => s.active() && s.key(ev));
   }
 
   /** 명령이 취소(abort)되면 그 명령의 요청을 거절한다(지금 요청이면 치운다) */
@@ -1674,6 +1694,8 @@ export class App {
       if (mode === 'remove') st.selection.delete(h);
       else st.selection.add(h);
     }
+    // 객체를 고르면 고른 표 셀은 풀린다(셀과 객체를 함께 고르지 않는다)
+    if (st.selection.size) for (const s of this.subSelections) if (s.active()) s.clear();
     this.refreshSelectionOverlay();
     this.ui.refreshPalette();
     this.ui.refreshStatus();
@@ -1793,6 +1815,7 @@ export class App {
     o.selection = [];
     o.grips = [];
     this.gripList = [];
+    o.cells = st && !this.viewOnly ? this.subSelections.flatMap((s) => (s.active() ? s.overlay() : [])) : [];
     if (st && st.selection.size) {
       const p = this.picker();
       if (p) {
@@ -2397,6 +2420,15 @@ export class App {
     const h = pk.pick(w.x, w.y, tol);
     // Ctrl+클릭: 확장 지점(연관 배열 항목 고르기 등)이 먼저, 그다음 하이퍼링크를 따라간다
     if (h && (ev.ctrlKey || ev.metaKey) && !r && (this.entityClickHandlers.some((f) => f.click(h, w)) || this.linkClick?.(h))) return;
+    // 부분 고르기(표 셀 — 28차): 셀 안(격자선에서 먼 자리)을 누르면 그 셀을 고른다. 맡지 않은 자리를 누르면 고른 셀은 풀린다
+    if (!r && !this.viewOnly && !this.running) {
+      const opt = { shift: ev.shiftKey, touch: ev.pointerType === 'touch', tol };
+      if (this.subSelections.some((f) => f.click(w, h, opt))) {
+        this.clearHover();
+        return;
+      }
+      this.clearSubSelections();
+    }
     const pickIt = (h: string) => {
       const hs = this.expandPick([h]);
       // PICKADD 1·2: 더하기(Shift로 누르면 고른 것은 빼고 아니면 더한다), 0: 바꾸기(Shift 더하기·빼기). 보기 모드는 누른 것 하나(정보 카드)
@@ -2874,6 +2906,7 @@ export class App {
    * 처리했으면 true(명령행은 기본 동작을 막고 넘어간다)
    */
   private interceptKey(ev: KeyboardEvent): boolean {
+    if (this.subKey(ev)) return true;
     if (ev.key === ' ' && this.press?.lasso) return this.cycleLasso();
     if (ev.key === 'Tab' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !this.cmd.suggesting) return this.snapTab() || this.dynTab();
     return false;

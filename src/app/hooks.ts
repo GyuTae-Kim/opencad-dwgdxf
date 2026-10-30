@@ -7,6 +7,7 @@
  *  - App.dragPreviewMode    끌기 미리보기 모드(DRAGMODE)와 App.dragPreviewNow() — DRAGMODE·DRAG
  *  - App.entityClickHandlers 명령 없이 Ctrl+클릭한 객체(하이퍼링크 linkClick보다 먼저) — 연관 배열 항목 고르기
  *  - App.dblClickHandlers   명령 없이 두 번 누른 객체(앱의 종류별 기본 편집보다 먼저) — 문자·다중 지시선·공차 편집기
+ *  - App.subSelections      명령 없이 객체 안의 부분을 고르는 상태(누르기·키·강조·풀기) — 표 셀 고르기
  *  - App.gripMenuProviders  다기능 그립: 커서를 올리거나 오른쪽 클릭한 그립의 메뉴 항목 — 정점 추가·제거, 호로 변환, 길이 조정
  *  - App.commandFallbacks   등록되지 않은 이름을 명령행에 쳤을 때(알 수 없는 명령 안내보다 먼저) — 시스템 변수 이름 바로 입력
  *  - App.contextMenuProviders 도면 영역 오른쪽 클릭 메뉴(기본·편집·명령 모드)에 항목 더하기
@@ -70,6 +71,28 @@ export interface DblClickHandler {
    * 처리했으면 true — 앱의 기본 편집(표·참조·해치·문자 편집, 그 밖은 특성 팔레트)으로 넘기지 않는다
    */
   dblclick(handle: string, entity: Entity, point: Pt): boolean;
+}
+
+/**
+ * 부분 고르기 고리(App.subSelections): 명령 없이 객체 안의 부분(표 셀)을 고르는 상태.
+ * 앱은 객체를 고르거나(고른 객체가 생기면), 명령을 시작하거나, Esc·취소하거나, 고리가 맡지 않은 자리를 누르면 clear를 부른다.
+ * 강조(overlay)는 선택 강조를 다시 그릴 때마다 묻는다 — 문서·공간이 바뀌었거나 대상이 없어졌으면 빈 목록을 돌려준다.
+ */
+export interface SubSelection {
+  readonly name: string;
+  /**
+   * 명령 없이 누른 자리(객체 고르기·창 선택보다 먼저, 그립·Ctrl+클릭 고리 다음). picked: 그 자리에서 잡힌 객체(없으면 null),
+   * tol: 고르기 허용 거리(도면 단위). 맡았으면 true(객체 고르기로 넘기지 않는다)
+   */
+  click(point: Pt, picked: string | null, opt: { readonly shift: boolean; readonly touch: boolean; readonly tol: number }): boolean;
+  /** 명령 없이 누른 키(명령행 입력이 비어 있을 때, 명령행보다 먼저). 맡았으면 true(기본 동작을 막는다) */
+  key(ev: KeyboardEvent): boolean;
+  /** 고른 것이 있는지 */
+  active(): boolean;
+  /** 고른 것을 푼다(강조는 앱이 다시 그린다) */
+  clear(): void;
+  /** 강조할 모양(도면 좌표) */
+  overlay(): { segs: number[]; tris?: number[] }[];
 }
 
 /** 다기능 그립 메뉴 항목 */
