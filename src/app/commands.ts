@@ -171,8 +171,11 @@ export function registerCommands(app: App): void {
         return;
       }
       const k = (r as { keyword: string }).keyword;
-      // 전체(A): 보이는 객체의 범위와 도면 한계(LIMITS) 가운데 큰 쪽(도움말 ZOOM 전체 — 둘을 함께 담는다), 범위(E): 객체 범위만
-      if (k === 'A') app.view.zoomAll(zoomLimitsOf(app));
+      // 전체(A): 보이는 객체의 범위와 도면 한계(LIMITS) 가운데 큰 쪽(도움말 ZOOM 전체 — 둘을 함께 담는다), 범위(E): 객체 범위만.
+      // 다른 명령 안의 투명 ZOOM('ZOOM)에서는 전체(A)를 쓰지 않고 알린다(25차 — 도움말 ZOOM 전체: 늘 도면을 재생성하므로 투명하게 쓸 수 없다).
+      // 다른 옵션은 그대로 투명하게 돈다
+      if (k === 'A' && ctx.transparent) ctx.print('전체(A)는 도면을 늘 재생성하므로 다른 명령 중에 투명하게 쓸 수 없습니다.', 'err');
+      else if (k === 'A') app.view.zoomAll(zoomLimitsOf(app));
       else if (k === 'E') app.view.zoomExtents();
       else if (k === 'P') {
         if (!app.view.zoomPrevious()) ctx.print('이전 화면이 없습니다.');
