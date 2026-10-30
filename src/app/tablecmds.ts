@@ -24,7 +24,9 @@ import {
   createTable,
   deleteCols,
   deleteRows,
+  cellRect,
   fitRowHeights,
+  getText,
   insertCols,
   insertRows,
   setText,
@@ -38,6 +40,8 @@ import {
 } from '../edit/table/model';
 import { isEditableTable, tableFromEntity } from '../edit/table/entity';
 import { addTableOps, deleteTableStyleOps, previewSegments, restyleTablesOps, saveTableStyleOps, tablesUsingStyle, updateTableOps } from '../edit/table/ops';
+import { openTextEditor } from './textedit/editor';
+import { newGroup } from './annoscale-core';
 
 
 // ---------------------------------------------------------------------------
@@ -76,6 +80,57 @@ function toTableLocal(e: TableEntity | InsertEntity, p: Pt): Pt {
   const c = Math.cos(-ang);
   const s = Math.sin(-ang);
   return { x: (dx * c - dy * s) / (e.scale.x || 1), y: (dx * s + dy * c) / (e.scale.y || 1) };
+}
+
+/** 표의 방향(라디안) */
+const tableAngle = (e: TableEntity | InsertEntity): number => (e.type === 'ACAD_TABLE' ? Math.atan2(e.direction.y, e.direction.x) : e.rotation);
+
+/** 표 좌표 → 도면 좌표(toTableLocal의 반대) */
+function fromTableLocal(e: TableEntity | InsertEntity, q: Pt): Pt {
+  const ang = tableAngle(e);
+  const x = q.x * (e.scale.x || 1);
+  const y = q.y * (e.scale.y || 1);
+  return { x: e.insert.x + x * Math.cos(ang) - y * Math.sin(ang), y: e.insert.y + x * Math.sin(ang) + y * Math.cos(ang) };
+}
+
+/** 셀 문자의 자리(도면 좌표): 표 그림(geometry.ts tableBlockEntities)의 셀 MTEXT와 같은 부착점·폭·높이·문자 스타일, 방향은 표 방향 */
+export function cellTextPlace(
+  e: TableEntity | InsertEntity,
+  t: TableData,
+  style: TableStyle,
+  r: number,
+  c: number,
+): { at: Pt; attachment: number; width: number; height: number; textStyle: string; rotation: number } {
+  const cs = style.cells[t.rowKinds[r] ?? 'data'];
+  const align = t.cells[cellIndex(t, r, c)]?.align ?? cs.align;
+  const q = cellRect(t, r, c, style.flow);
+  const col = (align - 1) % 3;
+  const row = Math.floor((align - 1) / 3);
+  const x = col === 0 ? q.x0 + style.hMargin : col === 1 ? (q.x0 + q.x1) / 2 : q.x1 - style.hMargin;
+  const y = row === 0 ? q.y1 - style.vMargin : row === 1 ? (q.y0 + q.y1) / 2 : q.y0 + style.vMargin;
+  const kx = Math.abs(e.scale.x || 1);
+  const ky = Math.abs(e.scale.y || 1);
+  return {
+    at: fromTableLocal(e, { x, y }),
+    attachment: align,
+    width: Math.max(0, q.x1 - q.x0 - 2 * style.hMargin) * kx,
+    height: cs.height * ky,
+    textStyle: cs.textStyle || 'Standard',
+    rotation: tableAngle(e),
+  };
+}
+
+/** Tab(다음)·Shift+Tab(이전) 셀: 왼쪽에서 오른쪽, 위에서 아래(병합 셀은 한 칸 — 셀 편집 대화상자의 Tab과 같은 차례). 끝이면 null */
+export function tabCell(t: TableData, r: number, c: number, back: boolean): { r: number; c: number } | null {
+  const order: { r: number; c: number }[] = [];
+  for (let i = 0; i < t.rows; i++)
+    for (let j = 0; j < t.cols; j++) {
+      const m = mergeAt(t, i, j);
+      if (!m || (m.row === i && m.col === j)) order.push({ r: i, c: j });
+    }
+  const a = anchorOf(t, r, c);
+  const k = order.findIndex((o) => o.r === a.r && o.c === a.c) + (back ? -1 : 1);
+  return k >= 0 && k < order.length ? order[k]! : null;
 }
 
 function readPicked(app: App, handle: string, point: Pt | null): PickedTable | null {
@@ -218,13 +273,104 @@ export function editCellsDialog(title: string, t: TableData, focus: { r: number;
   });
 }
 
-/** 표의 셀을 편집한다(더블클릭 연결용: 리더가 app.ts에서 부를 수 있다) */
+/**
+ * 표의 셀을 편집한다(두 번 누르기·TEXTEDIT·특성 팔레트). 누른 자리가 셀 안이면 그 셀 자리의 제자리 편집기(27차),
+ * 자리가 없거나(특성 팔레트) 셀 밖이면 표 전체 셀 편집 대화상자
+ */
 export async function editTableAt(app: App, handle: string, point: Pt | null): Promise<void> {
   const p = readPicked(app, handle, point);
   if (!p || lockedLayer(app, p.entity)) return;
+  if (p.cell) return editTableInPlace(app, handle, p.cell);
   const out = await editCellsDialog('테이블 셀 편집', p.data, p.cell);
   if (!out) return;
   commitTable(app, p, out, 'TABLEDIT');
+}
+
+/**
+ * 두 번 누른 자리에 객체가 잡히지 않았을 때(표의 빈 셀 안은 격자선·문자에서 멀어 잡히지 않는다): 지금 공간의 보이는 표 가운데
+ * 그 자리를 셀로 품은 것(위에 그린 것 먼저)의 셀 제자리 편집(27차 — 도움말: 셀 안을 두 번 눌러 고친다). 표가 없으면 아무것도 하지 않는다
+ */
+export async function editTableCellAt(app: App, w: Pt): Promise<boolean> {
+  const st = app.active;
+  if (!st) return false;
+  const list = st.doc.blocks.get(tableKey(st.space))?.entities ?? [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const e = list[i]!;
+    if (!isEditableTable(e)) continue;
+    const l = st.doc.layers.get(tableKey(e.layer));
+    if (l && (l.off || l.frozen)) continue;
+    const p = readPicked(app, e.handle, w);
+    if (!p?.cell) continue;
+    app.setSelection([e.handle], 'replace');
+    await editTableAt(app, e.handle, w);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 표 셀 제자리 편집(27차): 셀 문자 자리(부착점·폭·높이·방향)에 문자 편집기를 띄운다.
+ * 근거(AutoCAD 도움말 "About Adding Text and Blocks to Tables", 우리말 요약): 셀을 두 번 눌러 그 셀의 문자를 고치고, 다음 셀로는 Tab으로 가며
+ * 셀 안의 화살표는 커서를 옮긴다. 줄이 늘면 그 행의 높이가 늘어난다. TABLEDIT — 셀을 골라 그 자리에서 입력한다.
+ * - Tab·Shift+Tab: 지금 셀을 확인하고 다음·이전 셀(병합 셀은 한 칸, 대화상자의 Tab과 같은 차례). 마지막 셀에서 Tab이면 끝
+ * - 같은 표의 다른 셀을 누르면 그 셀로, 표 밖을 누르거나 Ctrl+Enter면 확인하고 끝, Esc는 지금 셀만 버리고 끝
+ * - 고친 셀은 바로 표에 반영한다(행 높이 맞춤). 한 번의 편집(여러 셀)은 명령 취소 한 단계(group)
+ * - 도구 모음의 "모든 셀"은 지금 셀을 확인한 뒤 표 전체 셀 편집 대화상자(휴대폰처럼 Tab이 없을 때)
+ */
+export async function editTableInPlace(app: App, handle: string, start: { r: number; c: number }, group = newGroup()): Promise<void> {
+  let cur = start;
+  for (;;) {
+    const p = readPicked(app, handle, null);
+    if (!p || lockedLayer(app, p.entity)) return;
+    const a = anchorOf(p.data, Math.min(cur.r, p.data.rows - 1), Math.min(cur.c, p.data.cols - 1));
+    const place = cellTextPlace(p.entity, p.data, p.style, a.r, a.c);
+    const text = getText(p.data, a.r, a.c);
+    let next: { r: number; c: number } | null = null;
+    let all = false;
+    const res = await openTextEditor(
+      app,
+      {
+        mode: 'mtext',
+        label: `테이블 셀 편집 — ${cellName(a.r, a.c)}`,
+        text,
+        height: place.height,
+        style: place.textStyle,
+        attachment: place.attachment,
+        width: place.width,
+        rotation: place.rotation,
+        at: place.at,
+        color: p.entity.color,
+        layer: p.entity.layer,
+        noEntityProps: true,
+        extra: [{ label: '모든 셀', title: '표의 모든 셀을 대화상자에서 고칩니다', run: (ed) => ((all = true), ed.confirm()) }],
+      },
+      {
+        onTab: (back) => {
+          next = tabCell(p.data, a.r, a.c, back);
+          return true;
+        },
+        onCanvasClick: (w) => {
+          // 같은 표의 다른 셀이면 지금 셀을 확인하고 그 셀로(편집기는 닫고 다시 띄운다)
+          if (!isEditableTable(app.active?.doc.entityIndex.get(handle))) return false;
+          const q = toTableLocal(p.entity, w);
+          const at = cellAt(p.data, q.x, q.y, p.style.flow);
+          if (at) next = anchorOf(p.data, at.r, at.c);
+          return false;
+        },
+      },
+    );
+    if (!res) return;
+    if (res.textChanged) commitTable(app, p, setText(p.data, a.r, a.c, res.text), 'TABLEDIT', group);
+    if (all) {
+      const q = readPicked(app, handle, null);
+      if (!q) return;
+      const out = await editCellsDialog('테이블 셀 편집', q.data, a);
+      if (out) commitTable(app, q, out, 'TABLEDIT', group);
+      return;
+    }
+    if (!next) return;
+    cur = next;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -617,9 +763,8 @@ export function registerTableEditCommands(app: App): void {
       const p = await pickCell(app, ctx, '테이블 셀 선택:');
       if (!p || 'keyword' in p) return;
       if (lockedLayer(app, p.entity)) return;
-      const out = await editCellsDialog(`테이블 셀 편집 — ${cellName(p.cell!.r, p.cell!.c)}`, p.data, p.cell);
-      if (!out) return;
-      commitTable(app, p, out, 'TABLEDIT');
+      // 27차: 고른 셀 자리의 제자리 편집기(도움말 TABLEDIT — 셀을 골라 그 자리에서 입력). 이 명령의 편집은 명령 취소 한 단계
+      await editTableInPlace(app, p.entity.handle, p.cell!, ctx.group);
     },
   });
 
