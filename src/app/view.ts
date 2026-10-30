@@ -1461,6 +1461,11 @@ export class CadView {
       ev.preventDefault();
       // 길게 눌러 조준하는 동안(안드로이드는 길게 누르면 메뉴를 보낸다) 메뉴를 띄우지 않는다
       if (this.aim) return;
+      // 손가락을 누른 채 온 메뉴(안드로이드 길게 누르기 — 29차): 그 손가락을 떼는 것은 누르기로 치지 않는다(떼며 누른 것이 막 띄운 메뉴를 닫았다)
+      if (this.touches.size && this.leftDown && !this.leftDown.dragging) {
+        this.leftDown = null;
+        clearTimeout(this.aimTimer);
+      }
       // 고른 객체 위에서 누른 오른쪽 버튼: 끌었는지 볼 때까지 미루고, 끌어 놓은 것이면 버린다
       if (this.rightDrag.context(performance.now(), () => this.sendContext(ev)) !== 'pass') return;
       this.sendContext(ev);

@@ -1816,6 +1816,14 @@ export function registerModifyCommands(app: App): void {
         app.refreshSelectionOverlay();
         return;
       }
+      // 고른 표 셀의 그립(29차 — 그 변 쪽 행 높이·열 폭)
+      const cell = hot.items.find((it) => it.id.startsWith('cell:'));
+      if (cell) {
+        const m = await import('./tablecell');
+        await m.cellGripEdit(app, ctx, cell.handle, cell.id);
+        app.refreshSelectionOverlay();
+        return;
+      }
       const items = hot.items
         .filter((it) => unlockedOnly(app, [it.handle]).length)
         .map((it) => ({ handle: it.handle, id: it.id, point: (it as { point?: Pt }).point ?? hot.point }));

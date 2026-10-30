@@ -1847,8 +1847,27 @@ export class App {
           o.grips = this.gripList.map((g) => g.point);
         }
       }
+    } else if (st && !this.viewOnly && gripsOn(this.settings.grips)) {
+      // 고른 부분(표 셀 — 29차)의 그립: 객체 그립과 같은 모양
+      for (const s of this.subSelections) if (s.active() && s.grips) o.grips.push(...s.grips());
     }
     this.view.requestOverlay();
+  }
+
+  /** 누른 자리의 부분 고르기 그립(표 셀 — 29차): 명령·고른 객체가 없을 때만. 그립 고르기 거리는 객체 그립과 같다(터치는 두 배) */
+  private subGripAt(w: Pt, touch = false): { s: SubSelection; i: number } | null {
+    const st = this.active;
+    if (!st || st.selection.size || this.viewOnly || this.request || this.running || !gripsOn(this.settings.grips)) return null;
+    const px = this.view.pixelSize();
+    const tol = gripPickRadius(this.settings.gripSize, touch) * px;
+    // 객체 고르기 허용 거리(onClick과 같다 — 터치는 세 배)
+    const pickTol = this.view.overlay.pickbox * px * (touch ? 3 : 1);
+    for (const s of this.subSelections) {
+      if (!s.active() || !s.gripAt) continue;
+      const i = s.gripAt(w, tol, pickTol);
+      if (i >= 0) return { s, i };
+    }
+    return null;
   }
 
   private clearHover(): void {
@@ -2417,6 +2436,18 @@ export class App {
         return;
       }
     }
+    // 고른 표 셀의 그립(29차): 누르면 그 그립 편집. Shift+누르기는 셀 범위 넓히기(아래), 방금 셀을 고른 누르기의 두 번째 누르기는 두 번 누르기(셀 편집)
+    const sg = !ev.shiftKey && !this.busyCommand ? this.subGripAt(w, ev.pointerType === 'touch') : null;
+    if (sg) {
+      const lp = this.lastPickClick;
+      if (lp && isDoubleClickFollowUp(lp, performance.now(), s)) {
+        this.lastPickClick = null;
+        return;
+      }
+      this.clearHover();
+      sg.s.gripPress?.(sg.i, w);
+      return;
+    }
     const h = pk.pick(w.x, w.y, tol);
     // Ctrl+클릭: 확장 지점(연관 배열 항목 고르기 등)이 먼저, 그다음 하이퍼링크를 따라간다
     if (h && (ev.ctrlKey || ev.metaKey) && !r && (this.entityClickHandlers.some((f) => f.click(h, w)) || this.linkClick?.(h))) return;
@@ -2425,6 +2456,8 @@ export class App {
       const opt = { shift: ev.shiftKey, touch: ev.pointerType === 'touch', tol };
       if (this.subSelections.some((f) => f.click(w, h, opt))) {
         this.clearHover();
+        // 같은 자리를 곧바로 다시 누르면(두 번 누르기) 막 생긴 셀 그립을 눌러도 그립 편집으로 가지 않게
+        this.lastPickClick = { time: performance.now(), screen: s };
         return;
       }
       this.clearSubSelections();
@@ -2494,7 +2527,7 @@ export class App {
       const onGrip = !!this.gripAt(w);
       const hit = onGrip ? null : (this.picker()?.pick(w.x, w.y, this.view.overlay.pickbox * this.view.pixelSize()) ?? null);
       kind = pressKind({ onGrip, hit, selected: st.selection, busy: false });
-    }
+    } else if (!r && !ev.shiftKey && this.subGripAt(w)) kind = 'grip';
     this.press = { kind, world: w, screen: s };
     this.previewAt = 0;
   }
@@ -2508,6 +2541,11 @@ export class App {
         pr.started = true;
         const g = this.gripAt(pr.world);
         if (g) this.clickGrip(g.point, false);
+        else {
+          // 고른 표 셀의 그립(29차)
+          const sg = this.subGripAt(pr.world);
+          sg?.s.gripPress?.(sg.i, pr.world);
+        }
       }
       if (done) {
         this.press = null;
@@ -2834,7 +2872,7 @@ export class App {
 
   /**
    * 오른쪽 클릭(SHORTCUTMENU, AutoCAD 2026 기본 11): 명령 중 옵션이 없는 프롬프트·객체 선택은 바로 Enter, 옵션이 있으면 명령 모드 메뉴,
-   * Shift·Ctrl+오른쪽 클릭(점 프롬프트)은 객체 스냅 재지정 메뉴. 명령이 없으면 그립 위는 다기능 그립 메뉴, 그 밖은 편집·기본 모드 메뉴.
+   * Shift·Ctrl+오른쪽 클릭(점 프롬프트)은 객체 스냅 재지정 메뉴. 명령이 없으면 그립 위는 다기능 그립 메뉴, 고른 표 셀이 있으면 셀 메뉴(29차), 그 밖은 편집·기본 모드 메뉴.
    * 모드 메뉴를 끄면 Enter(명령이 없으면 직전 명령 반복), 시간에 민감한 오른쪽 클릭(16)은 held(누른 시간)가 짧으면 Enter·길면 메뉴
    */
   private onContext(w: Pt, _s: Pt, ev: MouseEvent, held?: number): void {
@@ -2884,6 +2922,17 @@ export class App {
       }
     }
     const sel = st ? [...st.selection] : [];
+    // 고른 부분(표 셀 — 29차)의 바로 가기 메뉴: 고른 것이 있는 편집 모드 메뉴로 친다
+    const sub = st && !this.running && !sel.length ? this.subSelections.find((s) => s.active() && s.menu) : undefined;
+    const subItems = sub?.menu?.(w) ?? null;
+    if (subItems?.length) {
+      if (contextAction(sm, 'edit', true, held, dur) === 'enter') {
+        if (this.lastCommand && !this.running) void this.run(this.lastCommand);
+        return;
+      }
+      showContextMenu(ev.clientX, ev.clientY, subItems);
+      return;
+    }
     // 기본·편집 모드 메뉴를 껐으면(또는 짧게 눌렀으면) 직전 명령 반복
     if (contextAction(sm, sel.length ? 'edit' : 'default', true, held, dur) === 'enter') {
       if (this.lastCommand && !this.running) void this.run(this.lastCommand);

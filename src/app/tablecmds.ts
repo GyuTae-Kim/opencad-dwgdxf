@@ -181,13 +181,55 @@ export async function pickCell(app: App, ctx: CommandContext, prompt: string, ke
   }
 }
 
-/** 표 정의를 적용한다(행 높이를 문자에 맞춘 뒤) */
-export function commitTable(app: App, p: Pick<PickedTable, 'entity' | 'space' | 'style' | 'styleHandle'>, data: TableData, label: string, group?: number): TableEntity {
+/** 행 높이를 문자에 맞춘 표 정의(commitTable이 적용하는 것과 같다) */
+export function fitTable(app: App, data: TableData, style: TableStyle): TableData {
+  return fitRowHeights(data, style, measurer(app, app.active!.doc));
+}
+
+/** 표 정의를 적용한다(행 높이를 문자에 맞춘 뒤). insert를 주면 표의 삽입점도 옮긴다(셀 그립의 왼쪽·위쪽 — 29차) */
+export function commitTable(app: App, p: Pick<PickedTable, 'entity' | 'space' | 'style' | 'styleHandle'>, data: TableData, label: string, group?: number, insert?: Pt): TableEntity {
   const st = app.active!;
-  const fitted = fitRowHeights(data, p.style, measurer(app, st.doc));
+  const fitted = fitTable(app, data, p.style);
   const r = updateTableOps(st.doc, () => st.session.newHandle(), p.entity, p.space, fitted, p.style, p.styleHandle);
+  // 바뀐 표 객체(작업의 after와 같은 것)는 새로 만든 것이라 그 자리에서 고쳐도 원본은 그대로다
+  if (insert) r.table.insert = { x: insert.x, y: insert.y, z: r.table.insert.z };
   st.session.commit({ label, ops: r.ops, group });
   return r.table;
+}
+
+/**
+ * 표 셀 작업(29차): TABLECELL과 고른 셀의 바로 가기 메뉴가 함께 쓴다. 행·열의 앞뒤는 번호 차례(rowBefore = r0 앞 —
+ * 위에서 아래로 쌓는 표에서 위, 위로 쌓는 표에서 아래)
+ */
+export type CellOp = 'rowBefore' | 'rowAfter' | 'deleteRows' | 'colLeft' | 'colRight' | 'deleteCols' | 'mergeAll' | 'mergeRows' | 'mergeCols' | 'unmerge';
+
+/**
+ * 셀 범위 g(병합 셀을 덮도록 넓힌 r0..r1 × c0..c1)에 작업한 표 정의. 할 수 없으면 null
+ * (모든 행·열 지우기, 한 셀만 병합, 병합이 없는 범위의 병합 해제)
+ */
+export function cellOp(t: TableData, g: { r0: number; c0: number; r1: number; c1: number }, op: CellOp): TableData | null {
+  switch (op) {
+    case 'rowBefore':
+      return insertRows(t, g.r0, 1);
+    case 'rowAfter':
+      return insertRows(t, g.r1 + 1, 1);
+    case 'deleteRows':
+      return deleteRows(t, g.r0, g.r1);
+    case 'colLeft':
+      return insertCols(t, g.c0, 1);
+    case 'colRight':
+      return insertCols(t, g.c1 + 1, 1);
+    case 'deleteCols':
+      return deleteCols(t, g.c0, g.c1);
+    case 'mergeAll':
+      return mergeCells(t, g.r0, g.c0, g.r1, g.c1, 'all');
+    case 'mergeRows':
+      return mergeCells(t, g.r0, g.c0, g.r1, g.c1, 'rows');
+    case 'mergeCols':
+      return mergeCells(t, g.r0, g.c0, g.r1, g.c1, 'cols');
+    case 'unmerge':
+      return unmergeCells(t, g.r0, g.c0, g.r1, g.c1);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -910,30 +952,31 @@ export function registerTableEditCommands(app: App): void {
         const c1 = cell.c + (m?.cols ?? 1) - 1;
         let next: TableData | null = null;
         let label = 'TABLECELL';
+        const g = { r0: cell.r, c0: cell.c, r1, c1 };
         switch (key) {
           case 'RA':
-            next = insertRows(t, cell.r, 1);
+            next = cellOp(t, g, 'rowBefore');
             label = '위에 행 삽입';
             break;
           case 'RB':
-            next = insertRows(t, r1 + 1, 1);
+            next = cellOp(t, g, 'rowAfter');
             label = '아래에 행 삽입';
             break;
           case 'DR':
-            next = deleteRows(t, cell.r, r1);
+            next = cellOp(t, g, 'deleteRows');
             if (!next) ctx.print('표의 모든 행을 삭제할 수는 없습니다.', 'err');
             label = '행 삭제';
             break;
           case 'CL':
-            next = insertCols(t, cell.c, 1);
+            next = cellOp(t, g, 'colLeft');
             label = '왼쪽에 열 삽입';
             break;
           case 'CR':
-            next = insertCols(t, c1 + 1, 1);
+            next = cellOp(t, g, 'colRight');
             label = '오른쪽에 열 삽입';
             break;
           case 'DC':
-            next = deleteCols(t, cell.c, c1);
+            next = cellOp(t, g, 'deleteCols');
             if (!next) ctx.print('표의 모든 열을 삭제할 수는 없습니다.', 'err');
             label = '열 삭제';
             break;
@@ -952,13 +995,13 @@ export function registerTableEditCommands(app: App): void {
               ],
             });
             const mode: MergeMode = 'keyword' in how && how.keyword === 'R' ? 'rows' : 'keyword' in how && how.keyword === 'C' ? 'cols' : 'all';
-            next = mergeCells(t, cell.r, cell.c, q.cell!.r, q.cell!.c, mode);
+            next = cellOp(t, { r0: cell.r, c0: cell.c, r1: q.cell!.r, c1: q.cell!.c }, mode === 'rows' ? 'mergeRows' : mode === 'cols' ? 'mergeCols' : 'mergeAll');
             if (!next) ctx.print('셀을 두 개 이상 고르십시오.', 'err');
             label = '셀 병합';
             break;
           }
           case 'U':
-            next = unmergeCells(t, cell.r, cell.c);
+            next = cellOp(t, g, 'unmerge');
             if (!next) ctx.print('병합된 셀이 아닙니다.', 'err');
             label = '셀 병합 해제';
             break;

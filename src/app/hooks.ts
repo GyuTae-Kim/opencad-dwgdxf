@@ -7,7 +7,7 @@
  *  - App.dragPreviewMode    끌기 미리보기 모드(DRAGMODE)와 App.dragPreviewNow() — DRAGMODE·DRAG
  *  - App.entityClickHandlers 명령 없이 Ctrl+클릭한 객체(하이퍼링크 linkClick보다 먼저) — 연관 배열 항목 고르기
  *  - App.dblClickHandlers   명령 없이 두 번 누른 객체(앱의 종류별 기본 편집보다 먼저) — 문자·다중 지시선·공차 편집기
- *  - App.subSelections      명령 없이 객체 안의 부분을 고르는 상태(누르기·키·강조·풀기) — 표 셀 고르기
+ *  - App.subSelections      명령 없이 객체 안의 부분을 고르는 상태(누르기·키·강조·풀기, 29차 그립·바로 가기 메뉴) — 표 셀 고르기
  *  - App.gripMenuProviders  다기능 그립: 커서를 올리거나 오른쪽 클릭한 그립의 메뉴 항목 — 정점 추가·제거, 호로 변환, 길이 조정
  *  - App.commandFallbacks   등록되지 않은 이름을 명령행에 쳤을 때(알 수 없는 명령 안내보다 먼저) — 시스템 변수 이름 바로 입력
  *  - App.contextMenuProviders 도면 영역 오른쪽 클릭 메뉴(기본·편집·명령 모드)에 항목 더하기
@@ -93,6 +93,23 @@ export interface SubSelection {
   clear(): void;
   /** 강조할 모양(도면 좌표) */
   overlay(): { segs: number[]; tris?: number[] }[];
+  /**
+   * 고른 부분의 그립(도면 좌표 — 29차 표 셀 그립). 앱이 객체 그립과 같은 모양으로 그린다(GRIPS 0·보기 모드는 없다).
+   * 명령 없이 고른 객체가 없을 때 그립을 누르거나(마우스·터치) 누른 채 끌면 gripPress를 부른다
+   */
+  grips?(): Pt[];
+  /**
+   * 누른 자리의 그립 번호(grips()의 차례). 없으면 -1. tol: 그립 고르기 거리(도면 단위, 터치는 두 배),
+   * pickTol: 객체 고르기 허용 거리(click의 tol과 같다 — 그 누르기가 부분 고르기 자리인지 가린다)
+   */
+  gripAt?(point: Pt, tol: number, pickTol: number): number;
+  /** 그 그립을 눌렀다(at: 누른 자리, 도면 좌표): 그립 편집을 시작한다 */
+  gripPress?(i: number, at: Pt): void;
+  /**
+   * 고른 것이 있을 때 도면 영역 오른쪽 클릭(안드로이드 길게 누르기) 메뉴(29차 표 셀 바로 가기 메뉴). 항목이 있으면 앱의 편집·기본 모드 메뉴 대신 띄운다.
+   * 맡지 않으면 null
+   */
+  menu?(point: Pt): ContextMenuItem[] | null;
 }
 
 /** 다기능 그립 메뉴 항목 */
