@@ -1001,6 +1001,8 @@ export class Shell implements UiHooks {
     );
     this.root.insertBefore(this.mobile.bar, this.ribbonTabs);
     this.drawingHost.append(this.mobile.card);
+    // 도면 위 측정 결과 글·커서 툴팁이 비킬 판: 측정 띠·정보 카드, 휴대폰의 특성 시트(넓은 화면 옆 창은 보기와 겹치지 않아 빠진다)
+    app.coverEls.push(this.mobile.card, this.palette.el);
     this.mobile.apply(startInViewMode(readMobileMode(), isCoarse(), window.innerWidth, window.innerHeight));
     this.buildTitle();
     this.buildRibbon();

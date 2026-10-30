@@ -73,6 +73,7 @@ export class FakeView {
     return { x, y };
   }
   zoomExtents(): void {}
+  zoomAll(): void {}
   zoomRect(): void {}
 }
 

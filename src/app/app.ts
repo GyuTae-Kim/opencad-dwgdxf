@@ -26,6 +26,7 @@ import { Picker } from './pick';
 import { SELECT_HELP, SELECT_METHODS, SELECT_OPTIONS, runSelectMethod, selectMethodOf } from './selmethod';
 import { DEFAULT_SNAPS, SNAP_NAMES, type SnapPoint, type ViewportSnap, findSnaps, mergeSnaps } from './snap';
 import { type ViewportPick, geometryToPaper, layoutXfs, viewportPick, viewportSnaps } from './vpsnap';
+import { coverBoxes } from './overlay-place';
 import { type Acquired, type PolarTip, objectTrack, polarTrack } from './tracking';
 import { type PolarSettings, angleBase, clockwise, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire, trackAngleText } from './polar';
 import { gripPoints } from '../edit/geom';
@@ -407,6 +408,8 @@ export class App {
         if (this.lastCommand) void this.run(this.lastCommand);
       },
     });
+    // 도면 위 측정 결과 글·커서 툴팁이 비킬 떠 있는 판: 명령행과 셸이 더하는 것(휴대폰 보기 모드의 측정 띠·특성 시트)
+    this.view.covers = () => coverBoxes(this.view.el, [this.cmd.el, ...this.coverEls]);
     this.view.on({
       move: (w, s, ev) => this.onMove(w, s, ev),
       down: (w, s, ev) => this.onDown(w, s, ev),
@@ -877,6 +880,8 @@ export class App {
 
   /** 마지막으로 만든 객체(L 옵션) */
   lastCreated: string[] = [];
+  /** 명령행 말고 보기 위에 떠 있는 판(셸이 더한다 — 휴대폰 보기 모드의 측정 띠·특성 시트). 도면 위 글이 비킨다(overlay-place.ts) */
+  coverEls: Element[] = [];
   /** 파일이 연결된 래스터 이미지(열쇠 = 파일 이름 소문자) */
   readonly imageKeys = new Set<string>();
   /** 파일이 연결된 PDF 언더레이 페이지(열쇠 → 폭·높이, 인치) */
@@ -2240,8 +2245,16 @@ export class App {
    * 그 뷰포트 변환. 모형 공간·뷰포트 안 모형 공간(MSPACE)·블록 편집기에서는 null(전과 같다)
    */
   private viewportPickAt(r: EntityRequest, w: Pt, tol: number): { pick: ViewportPick; vx: ViewportXf } | null {
+    return r.viewportPick ? this.viewportObjectAt(w, tol) : null;
+  }
+
+  /**
+   * 배치의 도면 공간에서 종이 점 w(허용 거리 tol, 종이 단위)에 단일 뷰포트로 보이는 모형 객체와 그 뷰포트 변환(vpsnap.viewportPick).
+   * 객체 요청의 viewportPick과 스마트 치수 DIM의 마우스 아래 객체(24차)가 쓴다. 모형 공간·MSPACE·블록 편집기에서는 null
+   */
+  viewportObjectAt(w: Pt, tol: number): { pick: ViewportPick; vx: ViewportXf } | null {
     const st = this.active;
-    if (!r.viewportPick || !st || st.isModel || st.msVp) return null;
+    if (!st || st.isModel || st.msVp) return null;
     const model = this.pickerFor(st, MODEL_SPACE);
     if (!model) return null;
     const vxs = layoutXfs(st.doc, st.layoutFor(st.displaySpace));

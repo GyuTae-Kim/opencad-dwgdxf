@@ -47,10 +47,10 @@ import { plainText } from './inquiry';
 const v3 = (p: Pt): Vec3 => ({ x: p.x, y: p.y, z: 0 });
 
 /** 치수 명령의 객체 고르기: 도면 공간이면 단일 뷰포트에 보이는 모형 객체도(결과의 viewport) */
-const VP_PICK = { viewportPick: true } as const;
+export const VP_PICK = { viewportPick: true } as const;
 
 /** 도면 공간에서 고른 뷰포트 안 모형 객체(getEntity의 viewportPick)의 뷰포트 변환. 배치 객체를 골랐으면 null */
-function pickedViewport(app: App, r: EntityResult): ViewportXf | null {
+export function pickedViewport(app: App, r: EntityResult): ViewportXf | null {
   if (!('handle' in r) || !r.viewport) return null;
   const st = app.active!;
   const h = r.viewport.handle;
@@ -683,9 +683,13 @@ export function registerDimCommands(app: App): void {
         }
         return createLinearDimension(doc, origin, v3(p), line, { rotation: rot, style: prev.dimStyle });
       };
+      // 도면 공간이면 두 번째 원점(세로좌표는 피쳐 위치)도 뷰포트에 보이는 모형 객체에 스냅한다(24차 — 도움말 "To Set Dimension Scale for
+      // Creating Dimensions in a Layout"). 값은 이전과 같다: 도움말 DIMCONTINUE·DIMCONTINUEMODE는 앞 치수의 치수 스타일·도면층을 잇는다고만
+      // 하고, 앞 치수의 뷰포트 축척 재지정을 잇는지·앞 치수와 다른 뷰포트면 어떻게 하는지는 없다(README 남은 일)
       const r = await ctx.getPoint('두 번째 치수보조선 원점 지정 또는 [선택(S)/명령 취소(U)] <선택>:', {
         keywords: [{ key: 'S', label: '선택' }, { key: 'U', label: '명령 취소' }],
         ghost: preview(app, make),
+        viewportSnaps: true,
       });
       if ('point' in r) {
         const d = make(r.point);

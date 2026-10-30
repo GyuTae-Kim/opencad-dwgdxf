@@ -16,6 +16,7 @@ import type { SpaceScene } from '../../src/app/scene';
 import { newViewport } from '../../src/edit/filecmds/layoutgeom';
 import {
   VP_PREVIOUS_MAX,
+  allRect,
   fitScale,
   limitsScale,
   limitsView,
@@ -421,5 +422,58 @@ describe('ZOOM n: 도면 한계에 대한 축척', () => {
     expect(m1.y).toBeCloseTo(m0.y, 6);
     // 화면 픽셀당 모형 = 종이 배율 × 뷰포트 축척 0.1
     expect(l.paper().scale * 0.1).toBeCloseTo(fit, 9);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 24차: ZOOM 전체(A) — 도움말 ZOOM 전체 "보이는 모든 객체와 격자 한계 같은 시각 보조를 보이게, 범위와 한계 가운데 큰 쪽"
+// ---------------------------------------------------------------------------
+
+describe('ZOOM 전체: 범위와 도면 한계를 함께', () => {
+  const ext = { minX: 0, minY: 0, maxX: 1000, maxY: 500 };
+
+  it('순수 함수: 둘을 담는 사각형(한쪽이 담으면 큰 쪽), 한계가 없거나 넓이 0·이상하면 범위, 빈 도면은 한계', () => {
+    expect(allRect(ext, { x0: 0, y0: 0, x1: 420, y1: 297 })).toEqual(ext);
+    expect(allRect(ext, { x0: 3000, y0: 2000, x1: -2000, y1: -1000 })).toEqual({ minX: -2000, minY: -1000, maxX: 3000, maxY: 2000 });
+    expect(allRect(ext, { x0: -100, y0: 0, x1: 420, y1: 800 })).toEqual({ minX: -100, minY: 0, maxX: 1000, maxY: 800 });
+    expect(allRect(ext, null)).toBe(ext);
+    expect(allRect(ext, { x0: 0, y0: 0, x1: 0, y1: 297 })).toBe(ext);
+    expect(allRect(ext, { x0: 0, y0: 0, x1: Infinity, y1: 297 })).toBe(ext);
+    expect(allRect(null, { x0: 0, y0: 0, x1: 420, y1: 297 })).toEqual({ minX: 0, minY: 0, maxX: 420, maxY: 297 });
+    expect(allRect(null, null)).toBeNull();
+  });
+
+  it('진짜 CadView 모형 공간: 한계가 범위 안이면 범위 줌과 같고, 더 크면 한계까지(범위 줌과 같은 여백 4%)', async () => {
+    const h = await viewWith();
+    h.st.msVp = null;
+    h.st.cameras.set(MODEL_SPACE, { cx: 0, cy: 0, scale: 1 });
+    h.view.zoomExtents();
+    const e = { ...h.st.cameras.get(MODEL_SPACE)! };
+    h.view.zoomAll({ x0: 0, y0: 0, x1: 420, y1: 297 });
+    expect(h.st.cameras.get(MODEL_SPACE)).toEqual(e);
+    h.view.zoomAll({ x0: -2000, y0: -1000, x1: 3000, y1: 2000 });
+    expect(h.st.cameras.get(MODEL_SPACE)).toEqual({ cx: 500, cy: 500, scale: fitScale(5000, 3000, 1000, 600, 0.04) });
+    // 한계가 없으면 범위 줌, 이전(P)은 한 단계씩
+    h.view.zoomAll(null);
+    expect(h.st.cameras.get(MODEL_SPACE)).toEqual(e);
+    expect(h.view.zoomPrevious()).toBe(true);
+    expect(h.st.cameras.get(MODEL_SPACE)!.cx).toBe(500);
+    expect(h.st.cameras.get(MODEL_SPACE)!.cy).toBe(500);
+  });
+
+  it('진짜 CadView MSPACE: 뷰포트 뷰가 범위와 모형 한계를 함께 담고(종이 카메라 그대로), 잠긴 뷰포트는 범위 줌과 같다', async () => {
+    const h = await viewWith();
+    const p0 = h.paper();
+    h.view.zoomAll({ x0: -1000, y0: 0, x1: 1000, y1: 1500 });
+    expect(h.ref().refX).toBeCloseTo(0, 9);
+    expect(h.ref().refY).toBeCloseTo(750, 9);
+    for (const m of [P(-1000, 0), P(1000, 1500), P(1000, 0)]) expect(shows(h.vp, m, 1e-6)).toBe(true);
+    expect(h.paper()).toEqual(p0);
+    const l = await viewWith({ flags: 0x4000 });
+    const l2 = await viewWith({ flags: 0x4000 });
+    l.view.zoomAll({ x0: -1000, y0: 0, x1: 1000, y1: 1500 });
+    l2.view.zoomExtents();
+    expect(l.paper()).toEqual(l2.paper());
+    expect(l.patches).toEqual([]);
   });
 });

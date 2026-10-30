@@ -8,9 +8,14 @@
  * - 도면층(L)은 DIMLAYER(이 명령이 만드는 새 치수의 도면층 — 이 브라우저에 저장, 처음 값 `.` = 현재 도면층).
  * 치수 객체·블록·연관은 DIMLINEAR 등과 같은 생성 함수(src/edit/dim)와 addDimension(dimcmds)을 쓴다.
  * 프롬프트는 AutoCAD 2026 한국어판을 따른다. 종류 추정·정렬·분산 계산은 src/edit/dim/smart.
+ * 배치의 도면 공간(24차): DIMLINEAR·DIMRADIUS 등(22·23차)과 같게, 그 자리에 배치 객체가 없으면 단일 뷰포트에 보이는 모형 객체를
+ * 마우스 아래 객체로 고르고(그 뷰포트로 본 종이 형상에 치수를 둔다), 점은 뷰포트에 보이는 모형 객체에도 스냅한다.
+ * 근거(AutoCAD 도움말, 우리말 요약): "To Set Dimension Scale for Creating Dimensions in a Layout" — 도면 공간에서 모형 공간 점에
+ * 객체 스냅으로 잡거나 객체를 바로 골라 모형 공간 값의 치수를 만든다. 길이 값은 뷰포트 축척 재지정(dimcmds.viewportScaled), 각도는 그대로,
+ * 공간을 넘는 연관은 만들지 않는다. 기준선(B)·계속(C)은 두 번째 원점의 스냅만 — 값은 이전과 같다(DIMCONTINUE·DIMBASELINE과 같다)
  */
 import type { DimensionEntity, Entity, Vec3 } from '../core/model';
-import { tableKey } from '../core/model';
+import { MODEL_SPACE, tableKey } from '../core/model';
 import { formatLength } from '../core/units';
 import {
   createAlignedDimension,
@@ -31,15 +36,36 @@ import { extDir, linearFeetW, spaceDimensions } from '../edit/annot/dimedit';
 import { type SmartTarget, alignDimensions, distributeEqual, hoverDimLinePoint, linearChoice, parallelLines, pointOnCircle, smartTarget } from '../edit/dim/smart';
 import type { App, Keyword, PointResult } from './app';
 import { askAngle } from './annot2-common';
-import { addDimension } from './dimcmds';
+import { VP_PICK, addDimension, pickedViewport, viewportScaled } from './dimcmds';
 import { inheritedRef, objectRef, pointRef } from './dimassoc';
 import { textDialog } from './draw';
 import { commitResults } from './modify';
 import { unlockedOnly } from './layers';
 import { askText, loadPref, savePref } from './util2-ui';
 import type { OverlayGeom, Pt } from './view';
+import type { ViewportXf } from './scene';
+import { circleToPaper, geometryToPaper, modelToPaperVp, paperProjection, paperToModelVp } from './vpsnap';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
+
+/** 뷰포트 안 모형 객체의 치수 대상을 그 뷰포트로 본 종이 형상으로(선은 두 끝, 원·호는 중심·반지름·각도 — vpsnap.circleToPaper) */
+export function targetToPaper(vx: ViewportXf, t: SmartTarget): SmartTarget {
+  if (t.kind === 'line') return { ...t, a: modelToPaperVp(vx, t.a), b: modelToPaperVp(vx, t.b) };
+  return circleToPaper(vx, t);
+}
+
+/** 마우스 아래 객체: 배치 객체(vx 없음) 또는 도면 공간에서 단일 뷰포트에 보이는 모형 객체(그 뷰포트) */
+interface Hit {
+  handle: string;
+  vx: ViewportXf | null;
+}
+
+/** 고른 객체와 치수 대상(종이 좌표 — 뷰포트 안 모형 객체면 그 뷰포트로 본 형상) */
+interface Target {
+  e: Entity;
+  t: SmartTarget;
+  vx: ViewportXf | null;
+}
 const DIMLAYER_PREF = 'opencad.DIMLAYER';
 
 export const DIM_MAIN_PROMPT = '객체 선택 또는 첫 번째 치수보조선 원점 지정 또는 [각도(A)/기준선(B)/계속(C)/세로좌표(O)/정렬(G)/분산(D)/도면층(L)/명령 취소(U)]:';
@@ -130,6 +156,10 @@ export function registerDimSmartCommand(app: App): void {
       const add = (d: DimensionEntity, refs: readonly (PointRef | null)[] = []) => {
         steps.push(addDimension(app, ctx, d, 'DIM', refs));
       };
+      /** 뷰포트 하나의 모형 객체를 재는 길이 치수: 값을 모형 공간 거리로(DIMLFAC 재지정 — dimcmds.viewportScaled). 배치 객체면 그대로 */
+      const scaled = (d: DimensionEntity, vx: ViewportXf | null): DimensionEntity => (vx ? viewportScaled(doc, d, vx.k) : d);
+      /** 뷰포트 안 모형 객체를 고른 것이면 그 뷰포트에도 스냅하는 점 요청 옵션(DIMANGULAR 원·DIMARC 부분과 같다) */
+      const vpSnaps = (vx: ViewportXf | null) => (vx ? { viewportSnaps: true } : {});
       const undoLast = (): boolean => {
         const n = steps.pop();
         if (n === undefined) {
@@ -142,29 +172,48 @@ export function registerDimSmartCommand(app: App): void {
 
       // ---------------------------------------------------------- 마우스 아래 객체
       /** 마지막 미리보기 자리와 그때 커서 아래 객체(누른 점이 같으면 그 객체를 고른 것) */
-      let hover: { p: Pt; handle: string | null } | null = null;
+      let hover: { p: Pt; hit: Hit | null } | null = null;
       /** 누른 점이 마지막 미리보기 자리인지(화면 1픽셀 안 — 입력한 좌표는 보통 여기에 들지 않는다) */
       const sameSpot = (a: Pt, b: Pt) => {
         const s = Math.max(app.view.pixelSize(), 1e-12 * Math.max(1, Math.abs(b.x), Math.abs(b.y)));
         return Math.abs(a.x - b.x) <= s && Math.abs(a.y - b.y) <= s;
       };
-      const objectAt = (p: Pt): string | null => {
+      const objectAt = (p: Pt): Hit | null => {
         const snap = app.view.overlay.snap;
         if (snap && snap.kind !== 'nea') return null;
         const pk = app.picker();
-        return pk ? pk.pick(p.x, p.y, tol()) : null;
+        const h = pk ? pk.pick(p.x, p.y, tol()) : null;
+        if (h) return { handle: h, vx: null };
+        // 배치의 도면 공간: 그 자리에 배치 객체가 없으면 단일 뷰포트에 보이는 모형 객체(배치 객체가 먼저 — DIMLINEAR <객체 선택>과 같다)
+        const vp = app.viewportObjectAt(p, tol());
+        return vp ? { handle: vp.pick.handle, vx: vp.vx } : null;
       };
-      const clickedHandle = (r: PointResult): string | null => {
+      const clickedHit = (r: PointResult): Hit | null => {
         if (!('point' in r) || !hover) return null;
         if (r.snap && r.snap.kind !== 'nea') return null;
         if (!sameSpot(hover.p, r.point)) return null;
-        return hover.handle;
+        return hover.hit;
       };
-      const targetOf = (h: string | null, p: Pt): { e: Entity; t: SmartTarget } | null => {
-        if (!h) return null;
-        const e = doc.entityIndex.get(h);
-        const t = smartTarget(e, p);
-        return e && t ? { e, t } : null;
+      const targetOf = (hit: Hit | null, p: Pt): Target | null => {
+        if (!hit) return null;
+        const e = doc.entityIndex.get(hit.handle);
+        if (!e) return null;
+        if (!hit.vx) {
+          const t = smartTarget(e, p);
+          return t ? { e, t, vx: null } : null;
+        }
+        // 뷰포트 안 모형 객체: 고른 자리의 모형 좌표로 세그먼트를 고르고, 그 뷰포트로 본 종이 형상으로
+        const t = smartTarget(e, paperToModelVp(hit.vx, p));
+        return t ? { e, t: targetToPaper(hit.vx, t), vx: hit.vx } : null;
+      };
+      /** 마우스 아래 객체의 강조 형상(뷰포트 안 모형 객체는 종이 자리에) */
+      const highlight = (hit: Hit): OverlayGeom[] => {
+        if (!hit.vx) {
+          const g = app.picker()?.geometry(hit.handle);
+          return g ? [g] : [];
+        }
+        const g = app.pickerFor(app.active!, MODEL_SPACE)?.geometry(hit.handle);
+        return g ? [geometryToPaper(hit.vx, g)] : [];
       };
 
       // ---------------------------------------------------------- 문자 옵션
@@ -195,16 +244,20 @@ export function registerDimSmartCommand(app: App): void {
       };
 
       /** 두 선의 각도 치수: 호 위치 */
-      const angularTwoLines = async (e1: Entity, a: Extract<SmartTarget, { kind: 'line' }>, e2: Entity, b: Extract<SmartTarget, { kind: 'line' }>, o: TextOpts): Promise<void> => {
+      // 두 선의 각도(뷰포트 안 모형 선은 그 뷰포트로 본 종이 선 — 각도는 축척과 무관해 재지정 없이, 모형 선 쪽은 연관하지 않는다)
+      const angularTwoLines = async (l1: Target & { t: Extract<SmartTarget, { kind: 'line' }> }, l2: Target & { t: Extract<SmartTarget, { kind: 'line' }> }, o: TextOpts): Promise<void> => {
+        const a = l1.t;
+        const b = l2.t;
         if (parallelLines(a.a, a.b, b.a, b.b)) {
           ctx.print('선이 평행합니다.', 'err');
           return;
         }
         const make = (p: Pt) => withRot(createAngular2LineDimension(doc, v3(a.a), v3(a.b), v3(b.a), v3(b.b), v3(p), opts(o)), o);
+        const ends = (l: Target, s: Extract<SmartTarget, { kind: 'line' }>) => (l.vx ? [null, null] : [objectRef(app, l.e, OSNAP.END, s.a), objectRef(app, l.e, OSNAP.END, s.b)]);
         for (;;) {
           const r = await ctx.getPoint(`각도 치수 위치 지정 또는 ${tail(TEXT_KWS)}`, { keywords: TEXT_KWS, ghost: (p) => geom(make(p)) });
           if ('point' in r) {
-            add(make(r.point), [objectRef(app, e1, OSNAP.END, a.a), objectRef(app, e1, OSNAP.END, a.b), objectRef(app, e2, OSNAP.END, b.a), objectRef(app, e2, OSNAP.END, b.b)]);
+            add(make(r.point), [...ends(l1, a), ...ends(l2, b)]);
             return;
           }
           if (!('keyword' in r) || r.keyword === 'U') return;
@@ -213,13 +266,13 @@ export function registerDimSmartCommand(app: App): void {
       };
 
       /** 선(또는 폴리선 직선 세그먼트)을 고른 뒤 */
-      const lineFlow = async (e: Entity, t: Extract<SmartTarget, { kind: 'line' }>): Promise<void> => {
+      const lineFlow = async (first: Target & { t: Extract<SmartTarget, { kind: 'line' }> }): Promise<void> => {
+        const { e, t, vx } = first;
         const o: TextOpts = {};
-        let second: { p: Pt; hit: { e: Entity; t: SmartTarget } | null } | null = null;
-        const otherLine = (p: Pt) => {
-          const h = objectAt(p);
-          const hit = targetOf(h, p);
-          if (hit && hit.t.kind === 'line' && !(hit.e.handle === e.handle && hit.t.segment === t.segment)) return hit;
+        let second: { p: Pt; hit: Target | null } | null = null;
+        const otherLine = (p: Pt): Target | null => {
+          const hit = targetOf(objectAt(p), p);
+          if (hit && hit.t.kind === 'line' && !(hit.e.handle === e.handle && hit.t.segment === t.segment && hit.vx?.vp.handle === vx?.vp.handle)) return hit;
           return null;
         };
         for (;;) {
@@ -233,16 +286,18 @@ export function registerDimSmartCommand(app: App): void {
                 const mid = { x: (t.a.x + t.b.x + hit.t.a.x + hit.t.b.x) / 4, y: (t.a.y + t.b.y + hit.t.a.y + hit.t.b.y) / 4 };
                 return geom(createAngular2LineDimension(doc, v3(t.a), v3(t.b), v3(hit.t.a), v3(hit.t.b), v3(mid), opts(o)));
               }
-              return geom(makeLinear(t.a, t.b, p, o));
+              return geom(scaled(makeLinear(t.a, t.b, p, o), vx));
             },
           });
           if ('point' in r) {
-            const s = second as { p: Pt; hit: { e: Entity; t: SmartTarget } | null } | null;
-            if (s && sameSpot(s.p, r.point) && s.hit && s.hit.t.kind === 'line' && !(r.snap && r.snap.kind !== 'nea')) {
-              await angularTwoLines(e, t, s.hit.e, s.hit.t, o);
+            const s = second as { p: Pt; hit: Target | null } | null;
+            const h2 = s?.hit;
+            if (s && sameSpot(s.p, r.point) && h2 && h2.t.kind === 'line' && !(r.snap && r.snap.kind !== 'nea')) {
+              await angularTwoLines(first, { ...h2, t: h2.t }, o);
               return;
             }
-            add(makeLinear(t.a, t.b, r.point, o), [objectRef(app, e, OSNAP.END, t.a), objectRef(app, e, OSNAP.END, t.b)]);
+            // 뷰포트 안 모형 선: 원점은 그 뷰포트로 본 종이 점, 값은 뷰포트 축척으로(공간을 넘는 연관은 아직 없다)
+            add(scaled(makeLinear(t.a, t.b, r.point, o), vx), vx ? [] : [objectRef(app, e, OSNAP.END, t.a), objectRef(app, e, OSNAP.END, t.b)]);
             return;
           }
           if (!('keyword' in r) || r.keyword === 'U') return;
@@ -251,10 +306,10 @@ export function registerDimSmartCommand(app: App): void {
       };
 
       /** 두 점을 지정한 선형·정렬 */
-      const pointFlow = async (r1: PointResult & { point: Pt }): Promise<void> => {
+      const pointFlow = async (r1: Extract<PointResult, { point: Pt }>): Promise<void> => {
         const p1 = r1.point;
         const ref1 = pointRef(app, r1);
-        const r2 = await ctx.getPoint('두 번째 치수보조선 원점 지정 또는 [명령 취소(U)]:', { base: p1, keywords: [KW_U] });
+        const r2 = await ctx.getPoint('두 번째 치수보조선 원점 지정 또는 [명령 취소(U)]:', { base: p1, keywords: [KW_U], viewportSnaps: true });
         if (!('point' in r2)) return;
         const p2 = r2.point;
         if (Math.hypot(p2.x - p1.x, p2.y - p1.y) < 1e-12) {
@@ -262,11 +317,16 @@ export function registerDimSmartCommand(app: App): void {
           return;
         }
         const refs = [ref1, pointRef(app, r2)];
+        // 두 점이 같은 뷰포트 하나의 모형 스냅이면 그 축척으로(DIMLINEAR와 같은 규칙 — vpsnap.paperProjection)
+        const vx = paperProjection(st, [
+          { p: p1, viewport: r1.snap?.viewport },
+          { p: p2, viewport: r2.snap?.viewport },
+        ]);
         const o: TextOpts = {};
         for (;;) {
-          const r = await ctx.getPoint(`치수선 위치 지정 또는 ${tail(TEXT_KWS)}`, { keywords: TEXT_KWS, ghost: (p) => geom(makeLinear(p1, p2, p, o)) });
+          const r = await ctx.getPoint(`치수선 위치 지정 또는 ${tail(TEXT_KWS)}`, { keywords: TEXT_KWS, ghost: (p) => geom(scaled(makeLinear(p1, p2, p, o), vx)) });
           if ('point' in r) {
-            add(makeLinear(p1, p2, r.point, o), refs);
+            add(scaled(makeLinear(p1, p2, r.point, o), vx), refs);
             return;
           }
           if (!('keyword' in r) || r.keyword === 'U') return;
@@ -275,7 +335,9 @@ export function registerDimSmartCommand(app: App): void {
       };
 
       // ---------------------------------------------------------- 원·호
-      const radialFlow = async (e: Entity, t: Extract<SmartTarget, { kind: 'circle' | 'arc' }>, pick: Pt): Promise<void> => {
+      // 뷰포트 안 모형 원·호(vx): 그 뷰포트로 본 종이 원·호에 치수를 두고 반지름·지름·호 길이 값은 뷰포트 축척으로, 각도는 그대로, 연관 없음
+      const radialFlow = async (target: Target & { t: Extract<SmartTarget, { kind: 'circle' | 'arc' }> }, pick: Pt): Promise<void> => {
+        const { e, t, vx } = target;
         const o: TextOpts = {};
         const isArc = t.kind === 'arc';
         const realArc = e.type === 'CIRCLE' || e.type === 'ARC';
@@ -294,9 +356,9 @@ export function registerDimSmartCommand(app: App): void {
             const d = mode === 'radius' ? createRadialDimension(doc, center, t.r, on, opts(o)) : createDiameterDimension(doc, center, t.r, on, opts(o));
             d.textMid = v3(p);
             d.dimType |= 128;
-            return withRot(d, o);
+            return scaled(withRot(d, o), vx);
           }
-          if (mode === 'arclen' && t.kind === 'arc') return withRot(createArcLengthDimension(doc, center, t.r, t.a0, t.a1, v3(p), opts(o)), o);
+          if (mode === 'arclen' && t.kind === 'arc') return scaled(withRot(createArcLengthDimension(doc, center, t.r, t.a0, t.a1, v3(p), opts(o)), o), vx);
           if (mode === 'angular') {
             const { a, b } = arcEnds();
             return withRot(createAngularDimension(doc, center, v3(a), v3(b), v3(p), opts(o)), o);
@@ -304,7 +366,7 @@ export function registerDimSmartCommand(app: App): void {
           return null;
         };
         const refsFor = (d: DimensionEntity): (PointRef | null)[] => {
-          if (!realArc) return [];
+          if (!realArc || vx) return [];
           if (mode === 'radius') return [circlePointRef(e, d.defPoint4), objectRef(app, e, OSNAP.CEN, d.defPoint)];
           if (mode === 'diameter') return [circlePointRef(e, d.defPoint4), circlePointRef(e, d.defPoint)];
           if (mode === 'arclen') return [objectRef(app, e, OSNAP.END, d.defPoint2), objectRef(app, e, OSNAP.END, d.defPoint3), objectRef(app, e, OSNAP.CEN, d.defPoint4)];
@@ -328,11 +390,11 @@ export function registerDimSmartCommand(app: App): void {
           const next = modes.find((m) => RADIAL_KW[m].key === k);
           if (!next) continue;
           if (next === 'jogged') {
-            await joggedFlow(e, t, o);
+            await joggedFlow(target, o);
             return;
           }
           if (next === 'angular' && t.kind === 'circle') {
-            const b = await ctx.getPoint('각도의 두 번째 끝점 지정:', { base: t.c });
+            const b = await ctx.getPoint('각도의 두 번째 끝점 지정:', { base: t.c, ...vpSnaps(vx) });
             if (!('point' in b)) continue;
             circleSecond = b.point;
           }
@@ -341,8 +403,9 @@ export function registerDimSmartCommand(app: App): void {
       };
 
       /** 꺾기 반지름(DIMJOGGED와 같은 흐름) */
-      const joggedFlow = async (e: Entity, t: Extract<SmartTarget, { kind: 'circle' | 'arc' }>, o: TextOpts): Promise<void> => {
-        const oc = await ctx.getPoint('중심 위치 재지정 지정:');
+      const joggedFlow = async (target: Target & { t: Extract<SmartTarget, { kind: 'circle' | 'arc' }> }, o: TextOpts): Promise<void> => {
+        const { e, t, vx } = target;
+        const oc = await ctx.getPoint('중심 위치 재지정 지정:', vpSnaps(vx));
         if (!('point' in oc)) return;
         const center = v3(t.c);
         const ovr = v3(oc.point);
@@ -351,7 +414,7 @@ export function registerDimSmartCommand(app: App): void {
           const chord = { x: t.c.x + t.r * Math.cos(a), y: t.c.y + t.r * Math.sin(a) };
           const s = (ovr.x - chord.x) * Math.cos(a) + (ovr.y - chord.y) * Math.sin(a);
           const j = jog ?? { x: chord.x + (Math.cos(a) * s) / 2, y: chord.y + (Math.sin(a) * s) / 2 };
-          return withRot(createJoggedDimension(doc, center, t.r, v3(tp), ovr, v3(j), { text: o.text, layer: layerOpt() }), o);
+          return scaled(withRot(createJoggedDimension(doc, center, t.r, v3(tp), ovr, v3(j), { text: o.text, layer: layerOpt() }), o), vx);
         };
         let tp: Pt | null = null;
         const kws = [KW_M, KW_T, KW_N];
@@ -365,7 +428,7 @@ export function registerDimSmartCommand(app: App): void {
         const j = await ctx.getPoint('꺾기 위치 지정:', { ghost: (q) => geom(build(tp0, q)) });
         if (!('point' in j)) return;
         const d = build(tp0, j.point);
-        const realArc = e.type === 'CIRCLE' || e.type === 'ARC';
+        const realArc = !vx && (e.type === 'CIRCLE' || e.type === 'ARC');
         add(d, realArc ? [circlePointRef(e, d.defPoint4), objectRef(app, e, OSNAP.CEN, d.defPoint), null, null] : []);
       };
 
@@ -374,45 +437,53 @@ export function registerDimSmartCommand(app: App): void {
         const o: TextOpts = {};
         let make: ((p: Pt) => DimensionEntity) | null = null;
         let refs: (PointRef | null)[] = [];
-        const r = await ctx.getEntity('호, 원, 선을 선택하거나 <정점 지정>:');
-        if ('enter' in r) {
-          const v = await ctx.getPoint('각도 정점 지정:');
+        // 도면 공간이면 DIMANGULAR(23차)처럼 단일 뷰포트에 보이는 모형 호·원·선도 고르고, 정점·끝점은 뷰포트 안 모형 객체에도 스냅한다
+        /** 고른 객체와 치수 대상(못 쓰는 객체면 t가 null), 고른 종이 점 */
+        type Picked = { e: Entity | undefined; t: SmartTarget | null; vx: ViewportXf | null; point: Pt };
+        const picked = async (prompt: string): Promise<Picked | 'enter' | null> => {
+          const r = await ctx.getEntity(prompt, undefined, VP_PICK);
+          if ('enter' in r) return 'enter';
+          if (!('handle' in r)) return null;
+          app.clearSelection();
+          const e = doc.entityIndex.get(r.handle);
+          const vx = pickedViewport(app, r);
+          const t = smartTarget(e, vx ? paperToModelVp(vx, r.point) : r.point);
+          return { e, t: t && vx ? targetToPaper(vx, t) : t, vx, point: r.point };
+        };
+        const r = await picked('호, 원, 선을 선택하거나 <정점 지정>:');
+        if (r === 'enter') {
+          const v = await ctx.getPoint('각도 정점 지정:', { viewportSnaps: true });
           if (!('point' in v)) return;
           const rv = pointRef(app, v);
-          const a = await ctx.getPoint('첫 번째 각도 끝점 지정:', { base: v.point });
+          const a = await ctx.getPoint('첫 번째 각도 끝점 지정:', { base: v.point, viewportSnaps: true });
           if (!('point' in a)) return;
           const ra = pointRef(app, a);
-          const b = await ctx.getPoint('두 번째 각도 끝점 지정:', { base: v.point });
+          const b = await ctx.getPoint('두 번째 각도 끝점 지정:', { base: v.point, viewportSnaps: true });
           if (!('point' in b)) return;
           refs = [ra, pointRef(app, b), rv];
           make = (p) => withRot(createAngularDimension(doc, v3(v.point), v3(a.point), v3(b.point), v3(p), opts(o)), o);
-        } else if ('handle' in r) {
-          const e = doc.entityIndex.get(r.handle);
-          const t = smartTarget(e, r.point);
-          app.clearSelection();
+        } else if (r) {
+          const { e, t, vx } = r;
           if (e && t?.kind === 'line') {
-            const r2 = await ctx.getEntity('두 번째 선 선택:');
-            if (!('handle' in r2)) return;
-            const e2 = doc.entityIndex.get(r2.handle);
-            const t2 = smartTarget(e2, r2.point);
-            app.clearSelection();
-            if (!e2 || t2?.kind !== 'line') {
+            const r2 = await picked('두 번째 선 선택:');
+            if (!r2 || r2 === 'enter') return;
+            if (!r2.e || r2.t?.kind !== 'line') {
               ctx.print('선을 선택하십시오.', 'err');
               return;
             }
-            await angularTwoLines(e, t, e2, t2, o);
+            await angularTwoLines({ e, t, vx }, { e: r2.e, t: r2.t, vx: r2.vx }, o);
             return;
           }
           if (e && t?.kind === 'arc') {
             const a = { x: t.c.x + t.r * Math.cos(t.a0), y: t.c.y + t.r * Math.sin(t.a0) };
             const b = { x: t.c.x + t.r * Math.cos(t.a1), y: t.c.y + t.r * Math.sin(t.a1) };
-            if (e.type === 'ARC') refs = [objectRef(app, e, OSNAP.END, a), objectRef(app, e, OSNAP.END, b), objectRef(app, e, OSNAP.CEN, t.c)];
+            if (e.type === 'ARC' && !vx) refs = [objectRef(app, e, OSNAP.END, a), objectRef(app, e, OSNAP.END, b), objectRef(app, e, OSNAP.CEN, t.c)];
             make = (p) => withRot(createAngularDimension(doc, v3(t.c), v3(a), v3(b), v3(p), opts(o)), o);
           } else if (e && t?.kind === 'circle') {
             const first = pointOnCircle(t.c, t.r, r.point);
-            const b = await ctx.getPoint('각도의 두 번째 끝점 지정:', { base: t.c });
+            const b = await ctx.getPoint('각도의 두 번째 끝점 지정:', { base: t.c, ...vpSnaps(vx) });
             if (!('point' in b)) return;
-            refs = [circlePointRef(e, first), pointRef(app, b), objectRef(app, e, OSNAP.CEN, t.c)];
+            refs = vx ? [] : [circlePointRef(e, first), pointRef(app, b), objectRef(app, e, OSNAP.CEN, t.c)];
             make = (p) => withRot(createAngularDimension(doc, v3(t.c), v3(first), v3(b.point), v3(p), opts(o)), o);
           } else {
             ctx.print('호, 원, 선을 선택하십시오.', 'err');
@@ -517,7 +588,9 @@ export function registerDimSmartCommand(app: App): void {
             }
             return createLinearDimension(doc, origin, v3(p), line, { rotation: rot, style: prev.dimStyle, layer: layerOpt() });
           };
-          const r = await ctx.getPoint(`두 번째 치수보조선 원점 지정 또는 ${tail(kws).replace(/:$/, '')} <선택>:`, { keywords: kws, ghost: (p) => geom(make(p)) });
+          // 도면 공간이면 두 번째 원점은 뷰포트에 보이는 모형 객체에도 스냅한다. 값은 이전과 같다(앞 치수의 뷰포트 축척 재지정을
+          // 잇는지는 도움말 DIMCONTINUE·DIMBASELINE·DIMCONTINUEMODE에 없다 — 스타일·도면층만 잇는다)
+          const r = await ctx.getPoint(`두 번째 치수보조선 원점 지정 또는 ${tail(kws).replace(/:$/, '')} <선택>:`, { keywords: kws, ghost: (p) => geom(make(p)), viewportSnaps: true });
           if ('point' in r) {
             const d = make(r.point);
             const refs: (PointRef | null)[] = (prev.dimType & 7) === 6 ? [null, pointRef(app, r)] : [inheritedRef(app, baseline ? base : prev, baseline ? originKey : made.length ? 'defPoint3' : originKey), pointRef(app, r)];
@@ -564,7 +637,8 @@ export function registerDimSmartCommand(app: App): void {
       const ordinateFlow = async (): Promise<void> => {
         let made = 0;
         for (;;) {
-          const f = await ctx.getPoint('피쳐 위치 지정 또는 [명령 취소(U)]:', { keywords: [KW_U] });
+          // 도면 공간이면 피쳐 위치가 뷰포트에 보이는 모형 객체에도 스냅하고, 단일 뷰포트의 모형 스냅이면 그 축척으로(DIMORDINATE와 같다)
+          const f = await ctx.getPoint('피쳐 위치 지정 또는 [명령 취소(U)]:', { keywords: [KW_U], viewportSnaps: true });
           if ('keyword' in f) {
             if (made > 0 && undoLast()) made--;
             else ctx.print('명령 취소할 것이 없습니다.');
@@ -572,11 +646,12 @@ export function registerDimSmartCommand(app: App): void {
           }
           if (!('point' in f)) return;
           const fr = pointRef(app, f);
+          const vx = f.snap?.viewport ? paperProjection(st, [{ p: f.point, viewport: f.snap.viewport }]) : null;
           const o: TextOpts = {};
           let xAxis: boolean | undefined;
           const kws: Keyword[] = [{ key: 'X', label: 'X데이텀' }, { key: 'Y', label: 'Y데이텀' }, KW_M, KW_T, KW_N, KW_U];
           for (;;) {
-            const make = (p: Pt) => withRot(createOrdinateDimension(doc, v3(f.point), v3(p), { ...opts(o), xAxis }), o);
+            const make = (p: Pt) => scaled(withRot(createOrdinateDimension(doc, v3(f.point), v3(p), { ...opts(o), xAxis }), o), vx);
             const p = await ctx.getPoint(`지시선 끝점 지정 또는 ${tail(kws)}`, { base: f.point, keywords: kws, ghost: (q) => geom(make(q)) });
             if ('point' in p) {
               add(make(p.point), [null, fr]);
@@ -702,13 +777,14 @@ export function registerDimSmartCommand(app: App): void {
       for (;;) {
         const r = await ctx.getPoint(DIM_MAIN_PROMPT, {
           keywords: MAIN_KWS,
+          // 도면 공간이면 첫 원점(점 두 개의 선형·정렬)도 뷰포트에 보이는 모형 객체에 스냅한다(DIMLINEAR와 같다)
+          viewportSnaps: true,
           ghost: (p) => {
             const h = objectAt(p);
-            hover = { p, handle: h };
+            hover = { p, hit: h };
             const hit = targetOf(h, p);
-            if (!hit) return [];
-            const pk = app.picker();
-            const hl = pk && h ? [pk.geometry(h)] : [];
+            if (!hit || !h) return [];
+            const hl = highlight(h);
             const off = Math.max(2 * dv.txt, 2 * dv.asz, 1e-9);
             const t = hit.t;
             let d: DimensionEntity | null = null;
@@ -716,6 +792,7 @@ export function registerDimSmartCommand(app: App): void {
               if (t.kind === 'line') d = makeLinear(t.a, t.b, hoverDimLinePoint(t.a, t.b, p, off), {});
               else if (t.kind === 'circle') d = createDiameterDimension(doc, v3(t.c), t.r, v3(pointOnCircle(t.c, t.r, p)), { layer: layerOpt() });
               else d = createRadialDimension(doc, v3(t.c), t.r, v3(pointOnCircle(t.c, t.r, p)), { layer: layerOpt() });
+              d = scaled(d, hit.vx);
             } catch {
               d = null;
             }
@@ -753,12 +830,13 @@ export function registerDimSmartCommand(app: App): void {
           continue;
         }
         if (!('point' in r)) continue;
-        const hit = targetOf(clickedHandle(r), r.point);
+        const hit = targetOf(clickedHit(r), r.point);
         hover = null;
         if (hit) {
           app.clearSelection();
-          if (hit.t.kind === 'line') await lineFlow(hit.e, hit.t);
-          else await radialFlow(hit.e, hit.t, r.point);
+          const t = hit.t;
+          if (t.kind === 'line') await lineFlow({ ...hit, t });
+          else await radialFlow({ ...hit, t }, r.point);
         } else await pointFlow(r);
       }
     },
