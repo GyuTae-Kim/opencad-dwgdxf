@@ -19,7 +19,7 @@ import { entityPath } from '../../src/edit/geom/path';
 import { pathNearest } from '../../src/edit/geom/curve';
 import { NEG_Z, P, V, arc, circle, deg, fitSpline, line, lw, mtext, near, newDoc, renders, spline, text } from './helpers';
 import { bulgeVertices, lwVertices, packBulge } from '../../src/core/lwpoly';
-import { leaderVertices, pack3 } from '../../src/core/flat3';
+import { leaderVertices, pack3, splineCtrl, splineFit } from '../../src/core/flat3';
 
 const doc = newDoc();
 const win = [V(4, -1), V(20, 20)]; // x ≥ 4 쪽을 덮는 걸침 창
@@ -120,15 +120,15 @@ describe('stretch', () => {
       [6, 0],
     ]) as SplineEntity;
     const o = stretch([s], win, D, doc).replace![0] as SplineEntity;
-    near(o.controlPoints[2]!, P(9, 1));
-    near(o.controlPoints[0]!, P(0, 0));
+    near(splineCtrl(o)[2]!, P(9, 1));
+    near(splineCtrl(o)[0]!, P(0, 0));
     const f = fitSpline([
       [0, 0],
       [3, 4],
       [7, 1],
     ]) as SplineEntity;
     const of = stretch([f], win, D, doc).replace![0] as SplineEntity;
-    near(of.fitPoints[2]!, P(10, 2));
+    near(splineFit(of)[2]!, P(10, 2));
     renders(doc, [o, of]);
   });
   it('치수: 정의점을 옮기고 측정값을 다시 잰다', () => {

@@ -70,7 +70,7 @@ import { mlineDrawing } from '../edit/mline/draw';
 import { toleranceLayout } from '../edit/annot/tolerance';
 import { breakRuns } from '../edit/annot/mleader';
 import { type AnnoDisplay, annoDisplayFor } from '../edit/annoscale/view';
-import { leaderVertices } from '../core/flat3';
+import { fitCount, leaderVertices, splineCtrl } from '../core/flat3';
 
 export interface BuildOptions {
   text: TextEngine;
@@ -1456,11 +1456,12 @@ export class SceneBuilder {
   private spline(e: Extract<Entity, { type: 'SPLINE' }>, ctx: Ctx): void {
     const r = this.resolve(e, ctx);
     const tol = this.localTol(ctx.m);
-    let ctrl = e.controlPoints;
+    // 조정점은 평탄 좌표(src/core/flat3.ts) — 곡선 계산에만 잠깐 풀어 쓴다
+    let ctrl = splineCtrl(e);
     let knots = e.knots;
     let degree = e.degree;
     let weights = e.weights;
-    if (ctrl.length < 2 && e.fitPoints.length >= 2) {
+    if (ctrl.length < 2 && fitCount(e) >= 2) {
       const s = fitPointsCurve(e);
       ctrl = s.ctrl;
       knots = s.knots;

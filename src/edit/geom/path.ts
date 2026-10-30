@@ -20,6 +20,7 @@ import type {
 } from '../../core/model';
 import { lwCount, packLw, unboxLw } from '../../core/lwpoly';
 import { packPoly, polyVertices, unboxPoly } from '../../core/polyverts';
+import { ctrlCount, fitCount, pack3, splineCtrl, unboxSpline } from '../../core/flat3';
 import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { ellipseFromConjugate } from './conic';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, type Path, type Piece, pieceAt, pieceLength, pieceSize, reversePiece } from './curve';
@@ -71,6 +72,7 @@ export function cloneEntity<T extends Entity>(e: T): T {
   // 구조화 복제는 수 배열의 수를 하나씩 상자에 담는다 — 평탄 좌표는 빈칸 없는 실수 배열로 다시 담는다
   if (c.type === 'LWPOLYLINE') unboxLw(c, e as LwPolylineEntity);
   else if (c.type === 'POLYLINE') unboxPoly(c, e as PolylineEntity);
+  else if (c.type === 'SPLINE') unboxSpline(c, e as SplineEntity);
   return c;
 }
 
@@ -152,10 +154,10 @@ export function polyVerts(e: PolylineEntity): PolyVertex[] {
 }
 
 export function splineNurbs(e: SplineEntity): Nurbs | null {
-  if (e.controlPoints.length >= 2) {
-    return normalizeNurbs({ degree: e.degree, knots: e.knots, ctrl: e.controlPoints, weights: e.weights });
+  if (ctrlCount(e) >= 2) {
+    return normalizeNurbs({ degree: e.degree, knots: e.knots, ctrl: splineCtrl(e), weights: e.weights });
   }
-  if (e.fitPoints.length >= 2) {
+  if (fitCount(e) >= 2) {
     const s = fitPointsCurve(e);
     return normalizeNurbs({ degree: s.degree, knots: s.knots, ctrl: s.ctrl });
   }
@@ -307,9 +309,9 @@ export function makeSpline(src: Entity, n: Nurbs, closed = false): SplineEntity 
     flags: (closed ? 1 : 0) | (rational ? 4 : 0) | (planar ? 8 : 0),
     degree: n.degree,
     knots: [...n.knots],
-    controlPoints: n.ctrl.map((q) => ({ ...q })),
+    controlVerts: pack3(n.ctrl),
     weights: rational ? [...n.weights!] : undefined,
-    fitPoints: [],
+    fitVerts: [],
     knotTolerance: base?.knotTolerance ?? 1e-10,
     controlTolerance: base?.controlTolerance ?? 1e-10,
     fitTolerance: base?.fitTolerance ?? 1e-10,

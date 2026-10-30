@@ -22,6 +22,7 @@ import { cloneEntity, entityPath, makeArc } from './path';
 import { fitAdd, fitDelete, fitTangents, isFitSpline, isPeriodicForm, isSplineClosed, purgeFit } from './splinedit';
 import { keepIdentity, lengthenEntity } from './trim';
 import { type EditResult, MSG } from './types';
+import { ctrlCount, fitAt, fitCount, pack3, splineCtrl } from '../../core/flat3';
 
 const one = (e: Entity | null | undefined, msg: string = MSG.tooShort): EditResult => (e ? { replace: [e] } : { message: msg });
 const gid = (id: string): number => Number(id.slice(1));
@@ -350,17 +351,17 @@ export function arcRadiusKeepEnds(e: Entity, r: number): EditResult {
 // ---------------------------------------------------------------------------
 
 function cvBase(e: SplineEntity): SplineEntity {
-  return isFitSpline(e) || e.controlPoints.length < 2 ? purgeFit(e) : cloneEntity(e);
+  return isFitSpline(e) || ctrlCount(e) < 2 ? purgeFit(e) : cloneEntity(e);
 }
 
 function nurbsOf(x: SplineEntity): Nurbs {
-  return normalizeNurbs({ degree: x.degree, knots: x.knots, ctrl: x.controlPoints, weights: x.weights });
+  return normalizeNurbs({ degree: x.degree, knots: x.knots, ctrl: splineCtrl(x), weights: x.weights });
 }
 
 function writeNurbs(x: SplineEntity, m: Nurbs): SplineEntity {
   x.degree = m.degree;
   x.knots = [...m.knots];
-  x.controlPoints = m.ctrl.map((q) => ({ ...q }));
+  x.controlVerts = pack3(m.ctrl);
   if (m.weights) {
     x.weights = [...m.weights];
     x.flags |= 4;
@@ -390,9 +391,9 @@ export function splineFitDeleteGrip(e: SplineEntity, i: number): EditResult {
 
 /** 첫·마지막 맞춤점의 접선 방향: 맞춤점에서 점 to 쪽 */
 export function splineFitTangentGrip(e: SplineEntity, i: number, to: Vec2): EditResult {
-  const n = e.fitPoints.length;
+  const n = fitCount(e);
   if (!isFitSpline(e) || isSplineClosed(e) || (i !== 0 && i !== n - 1)) return { message: '접선은 열린 스플라인의 첫·마지막 맞춤점에만 있습니다.' };
-  const p = e.fitPoints[i]!;
+  const p = fitAt(e, i)!;
   const d = sub(to, p);
   if (Math.hypot(d.x, d.y) < 1e-12) return { message: MSG.tooShort };
   return one(i === 0 ? fitTangents(e, d, undefined) : fitTangents(e, undefined, d), '접선을 바꿀 수 없습니다.');
@@ -401,7 +402,7 @@ export function splineFitTangentGrip(e: SplineEntity, i: number, to: Vec2): Edit
 /** 정점 추가: 정점 i와 다음 정점 사이(마지막 정점은 앞 정점과의 사이)에 매듭을 넣고 새 정점을 to에 둔다 */
 export function splineCvInsertGrip(e: SplineEntity, i: number, to: Vec2): EditResult {
   const x = cvBase(e);
-  if (isPeriodicForm(x) || x.controlPoints.length < 2) return { message: '닫힌 스플라인에는 이 그립으로 정점을 추가할 수 없습니다.' };
+  if (isPeriodicForm(x) || ctrlCount(x) < 2) return { message: '닫힌 스플라인에는 이 그립으로 정점을 추가할 수 없습니다.' };
   const c = nurbsOf(x);
   const N = c.ctrl.length;
   if (!(i >= 0 && i < N)) return { message: '그립이 없습니다.' };
@@ -419,7 +420,7 @@ export function splineCvInsertGrip(e: SplineEntity, i: number, to: Vec2): EditRe
 /** 정점 정련: 정점 i 자리에 매듭을 넣어 정점을 늘린다(모양 유지) */
 export function splineCvRefineGrip(e: SplineEntity, i: number): EditResult {
   const x = cvBase(e);
-  if (isPeriodicForm(x) || x.controlPoints.length < 2) return { message: '닫힌 스플라인에는 이 그립으로 정점을 정련할 수 없습니다.' };
+  if (isPeriodicForm(x) || ctrlCount(x) < 2) return { message: '닫힌 스플라인에는 이 그립으로 정점을 정련할 수 없습니다.' };
   const c = nurbsOf(x);
   const N = c.ctrl.length;
   if (!(i >= 0 && i < N)) return { message: '그립이 없습니다.' };

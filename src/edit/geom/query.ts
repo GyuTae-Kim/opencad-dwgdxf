@@ -18,6 +18,7 @@ import { transformEntity } from './transform';
 import { type EditResult, MSG, type TransformOptions } from './types';
 import { metrics, mtextDir, mtextLocalBox } from './xtext';
 import { arcTextParts } from '../../text/arctext';
+import { pack3, splineCtrl, splineFit } from '../../core/flat3';
 
 // ---------------------------------------------------------------------------
 // 교점
@@ -344,14 +345,14 @@ export function reverseBulged<T extends { x: number; y: number; bulge: number; s
 
 export function reverseSpline(e: SplineEntity): SplineEntity {
   const r = cloneEntity(e);
-  r.controlPoints = [...e.controlPoints].reverse().map((q) => ({ ...q }));
+  r.controlVerts = pack3(splineCtrl(e).reverse());
   if (e.weights) r.weights = [...e.weights].reverse();
   if (e.knots.length) {
     const a = e.knots[0]!;
     const b = e.knots[e.knots.length - 1]!;
     r.knots = e.knots.map((_, i) => a + b - e.knots[e.knots.length - 1 - i]!);
   }
-  r.fitPoints = [...e.fitPoints].reverse().map((q) => ({ ...q }));
+  r.fitVerts = pack3(splineFit(e).reverse());
   r.startTangent = e.endTangent ? { x: -e.endTangent.x, y: -e.endTangent.y, z: -e.endTangent.z } : undefined;
   r.endTangent = e.startTangent ? { x: -e.startTangent.x, y: -e.startTangent.y, z: -e.startTangent.z } : undefined;
   if (e.helix) r.helix = { ...e.helix, ccw: !e.helix.ccw };

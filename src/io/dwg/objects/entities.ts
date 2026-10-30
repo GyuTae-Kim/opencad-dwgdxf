@@ -48,6 +48,7 @@ import type {
 import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../../core/hatchedges';
 import { BYLAYER, SHARED_BYLAYER_COLOR } from '../../../core/model';
 import { tidyWidths, zeros } from '../../../core/lwpoly';
+import { unpack3 } from '../../../core/flat3';
 import { decodeCadEscapes } from '../../../core/codepage';
 import { type BitReader, DwgFormatError } from '../bitstream';
 import { cmcToCad, encToCad } from '../color';
@@ -922,8 +923,8 @@ function readSpline(or: ObjectReader, b: Omit<EntityBase, 'type'>, helix: boolea
     flags: 0,
     degree,
     knots: [],
-    controlPoints: [],
-    fitPoints: [],
+    controlVerts: [],
+    fitVerts: [],
     knotTolerance: 0,
     controlTolerance: 0,
     fitTolerance: 0,
@@ -956,14 +957,23 @@ function readSpline(or: ObjectReader, b: Omit<EntityBase, 'type'>, helix: boolea
   }
   for (let i = 0; i < nknots; i++) e.knots.push(r.BD());
   const weights: number[] = [];
+  // 조정점·맞춤점은 평탄 좌표로(src/core/flat3.ts)
+  const cv: number[] = [];
   for (let i = 0; i < nctrl; i++) {
-    e.controlPoints.push(r.BD3());
+    const p = r.BD3();
+    cv.push(p.x, p.y, p.z);
     if (weighted) weights.push(r.BD());
   }
+  e.controlVerts = cv.slice();
   if (weighted) e.weights = weights;
-  for (let i = 0; i < nfit; i++) e.fitPoints.push(r.BD3());
+  const fv: number[] = [];
+  for (let i = 0; i < nfit; i++) {
+    const p = r.BD3();
+    fv.push(p.x, p.y, p.z);
+  }
+  e.fitVerts = fv.slice();
   // DWG에는 평면 여부가 없어 점들로 판단한다(DXF 70 비트 8)
-  const n = planeNormal(e.controlPoints.length ? e.controlPoints : e.fitPoints);
+  const n = planeNormal(unpack3(e.controlVerts.length ? e.controlVerts : e.fitVerts));
   if (n) {
     flags |= 8;
     e.normal = n;

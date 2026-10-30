@@ -12,6 +12,7 @@ import { apply, identity, withOcs } from '../geom/matrix';
 import { fitPointsCurve, nurbsPoints } from '../geom/curves';
 import { polyVertices } from '../core/polyverts';
 import type { Pt } from './view';
+import { fitCount, splineCtrl, splineFit } from '../core/flat3';
 
 /** 평면도에서 길이가 없는 선분으로 볼 길이의 제곱 */
 const FLAT2 = 1e-24;
@@ -77,11 +78,12 @@ function spanOf(pts: readonly Vec3[]): number {
 /** 스플라인의 3D 꺾은선(맞춤점만 있으면 맞춤 곡선). 높이를 읽을 만큼 잘게(크기의 10만분의 1 — 매듭 구간마다 64칸까지) */
 function splinePoints(e: Entity & { type: 'SPLINE' }): Vec3[] {
   let flat: number[];
-  if (e.controlPoints.length >= 2) flat = nurbsPoints(e.degree, e.knots, e.controlPoints, e.weights, Math.max(1e-9, spanOf(e.controlPoints) * 1e-5));
-  else if (e.fitPoints.length >= 2) {
+  const ctrl = splineCtrl(e);
+  if (ctrl.length >= 2) flat = nurbsPoints(e.degree, e.knots, ctrl, e.weights, Math.max(1e-9, spanOf(ctrl) * 1e-5));
+  else if (fitCount(e) >= 2) {
     const s = fitPointsCurve(e);
     flat = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, Math.max(1e-9, spanOf(s.ctrl) * 1e-5));
-  } else return e.fitPoints.slice();
+  } else return splineFit(e);
   const out: Vec3[] = [];
   for (let i = 0; i + 2 < flat.length; i += 3) out.push({ x: flat[i]!, y: flat[i + 1]!, z: flat[i + 2]! });
   return out;
@@ -132,7 +134,7 @@ export function entityZAt(e: Entity, q: Pt): number | undefined {
       const pts = splinePoints(e);
       if (!pts.length) return undefined;
       // 모든 조정점이 한 높이면 그 높이(평면 스플라인 — 꺾은선 오차 없이)
-      const zs = (e.controlPoints.length ? e.controlPoints : e.fitPoints).map((p) => p.z);
+      const zs = (e.controlVerts.length ? splineCtrl(e) : splineFit(e)).map((p) => p.z);
       if (zs.every((z) => Math.abs(z - zs[0]!) < 1e-12) && (!e.normal || (Math.abs(e.normal.x) < 1e-12 && Math.abs(e.normal.y) < 1e-12))) return zs[0];
       return polyZ(pts, (e.flags & 1) !== 0, q);
     }

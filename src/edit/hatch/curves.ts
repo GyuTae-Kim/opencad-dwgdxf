@@ -8,6 +8,7 @@ import { type Mat, identity, multiply, ocsMatrix, rotationZ, scaling, translatio
 import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { lwCount, lwVertices } from '../../core/lwpoly';
 import { polyVertices } from '../../core/polyverts';
+import { fitCount, splineCtrl } from '../../core/flat3';
 
 export const TAU = Math.PI * 2;
 
@@ -431,11 +432,11 @@ function addEntity(ctx: Ctx, e: Entity, src: string, m: Mat, depth: number, chai
       return;
     }
     case 'SPLINE': {
-      let ctrl = e.controlPoints;
+      let ctrl = splineCtrl(e);
       let knots = e.knots;
       let deg = e.degree;
       let w = e.weights && e.weights.length === ctrl.length && e.weights.some((x) => Math.abs(x - 1) > 1e-12) ? e.weights : undefined;
-      if (ctrl.length < 2 && e.fitPoints.length >= 2) {
+      if (ctrl.length < 2 && fitCount(e) >= 2) {
         const s = fitPointsCurve(e);
         ctrl = s.ctrl;
         knots = s.knots;

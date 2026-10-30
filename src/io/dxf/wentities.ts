@@ -42,7 +42,7 @@ import { parseDimOverrides } from './tagutil';
 import { acdbTableTags, tableCellsOut } from '../tablecells';
 import { hatchEdges } from '../../core/hatchedges';
 import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../core/meshdata';
-import { leaderCount, leaderVertices } from '../../core/flat3';
+import { count3, leaderCount, leaderVertices } from '../../core/flat3';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -102,6 +102,12 @@ export class TagOut {
     this.s.tag(code, fin(q.x));
     this.s.tag(code + 10, fin(q.y));
     this.s.tag(code + 20, fin(q.z));
+  }
+  /** 평탄 좌표 a의 점 i(src/core/flat3.ts) */
+  p3at(code: number, a: readonly number[], i: number): void {
+    this.s.tag(code, fin(a[i * 3]!));
+    this.s.tag(code + 10, fin(a[i * 3 + 1]!));
+    this.s.tag(code + 20, fin(a[i * 3 + 2]!));
   }
   p2(code: number, p: Vec2 | Vec3 | undefined): void {
     const q = p ?? { x: 0, y: 0 };
@@ -639,7 +645,8 @@ function seqend(w: TagOut, owner: string, layer: string, paper: boolean): void {
 function writeSpline(w: TagOut, e: SplineEntity): void {
   w.sub('AcDbSpline');
   if (e.normal) w.p3(210, e.normal);
-  const n = e.controlPoints.length;
+  const n = count3(e.controlVerts);
+  const nf = count3(e.fitVerts);
   let knots = e.knots;
   if (n > 0 && knots.length !== n + e.degree + 1) {
     knots = clampedKnots(n, e.degree);
@@ -649,16 +656,16 @@ function writeSpline(w: TagOut, e: SplineEntity): void {
   w.t(71, e.degree);
   w.t(72, knots.length);
   w.t(73, n);
-  w.t(74, e.fitPoints.length);
+  w.t(74, nf);
   w.t(42, e.knotTolerance || 1e-10);
   w.t(43, e.controlTolerance || 1e-10);
-  if (e.fitPoints.length) w.t(44, e.fitTolerance || 1e-10);
+  if (nf) w.t(44, e.fitTolerance || 1e-10);
   if (e.startTangent) w.p3(12, e.startTangent);
   if (e.endTangent) w.p3(13, e.endTangent);
   for (const k of knots) w.t(40, k);
   if (e.weights && e.weights.length === n) for (const wt of e.weights) w.t(41, wt);
-  for (const p of e.controlPoints) w.p3(10, p);
-  for (const p of e.fitPoints) w.p3(11, p);
+  for (let i = 0; i < n; i++) w.p3at(10, e.controlVerts, i);
+  for (let i = 0; i < nf; i++) w.p3at(11, e.fitVerts, i);
   if (e.helix && w.ctx.ver >= 1021) {
     const hx = e.helix;
     w.sub('AcDbHelix');

@@ -12,6 +12,7 @@ import { ccwSweep, dist, wrapPi } from './math';
 import { inherit } from './path';
 import { fitKind, frameVerts, isClosed, isPolyline } from './pedit';
 import { closeSpline } from './splinedit';
+import { pack3 } from '../../core/flat3';
 
 // ---------------------------------------------------------------------------
 // RECTANG
@@ -547,8 +548,8 @@ export function makeFitSpline(base: Omit<EntityBase, 'type' | 'handle'>, fit: re
     flags: opt.closed ? 8 : 8 | FIT_FLAGS[opt.knots ?? 'chord'],
     degree: s.degree,
     knots: s.knots,
-    controlPoints: s.ctrl,
-    fitPoints: fit.map((q) => ({ ...q })),
+    controlVerts: pack3(s.ctrl),
+    fitVerts: pack3(fit),
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: opt.tolerance && opt.tolerance > 0 ? opt.tolerance : 1e-10,
@@ -572,8 +573,8 @@ export function makeCvSpline(base: Omit<EntityBase, 'type' | 'handle'>, ctrl: re
     flags: 8,
     degree: p,
     knots: clampedKnots(ctrl.length, p),
-    controlPoints: ctrl.map((q) => ({ ...q })),
-    fitPoints: [],
+    controlVerts: pack3(ctrl),
+    fitVerts: [],
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,

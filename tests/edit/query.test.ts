@@ -6,6 +6,7 @@ import { flattenPath, pathNearest } from '../../src/edit/geom/curve';
 import { affRotate, affTranslate } from '../../src/edit/geom/math';
 import { NEG_Z, P, V, arc, circle, deg, ellipse, fitSpline, line, lw, mtext, near, newDoc, poly2d, samePath, spline, text, xline } from './helpers';
 import { lwVertices, setLwVertex } from '../../src/core/lwpoly';
+import { splineCtrl } from '../../src/core/flat3';
 
 const doc = newDoc();
 
@@ -270,7 +271,7 @@ describe('reverseEntity', () => {
       [10, 4],
     ]) as SplineEntity;
     const rs = reverseEntity(s).replace![0] as SplineEntity;
-    near(rs.controlPoints[0]!, P(10, 4));
+    near(splineCtrl(rs)[0]!, P(10, 4));
     samePath(s, rs);
     expect(reverseEntity(circle(0, 0, 1)).message).toBeTruthy();
   });

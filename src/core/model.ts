@@ -243,10 +243,15 @@ export interface SplineEntity extends EntityBase {
   flags: number;
   degree: number;
   knots: number[];
-  controlPoints: Vec3[];
+  /**
+   * 조정점 평탄 좌표 [x0, y0, z0, x1, y1, z1, …](WCS). 조정점 수 = length / 3.
+   * 큰 도면에서 점마다 객체를 두지 않으려고(문서 메모리·GC) 수만 이어 둔다. 풀어 쓰기·되담기는 src/core/flat3.ts
+   */
+  controlVerts: number[];
   /** 유리 스플라인의 가중치(없으면 모두 1) */
   weights?: number[];
-  fitPoints: Vec3[];
+  /** 맞춤점 평탄 좌표 [x0, y0, z0, …](WCS). 맞춤점 수 = length / 3 */
+  fitVerts: number[];
   startTangent?: Vec3;
   endTangent?: Vec3;
   knotTolerance: number;

@@ -11,7 +11,7 @@ import { definitionName } from '../edit/dynblock';
 import { lwVertices } from '../core/lwpoly';
 import { polyDrawnBulgeVerts, polyVertices } from '../core/polyverts';
 import { childStyleOf } from '../edit/dim/vars';
-import { leaderCount } from '../core/flat3';
+import { ctrlCount, fitCount, leaderCount, splineCtrl } from '../core/flat3';
 
 export const TYPE_NAMES: Record<string, string> = {
   LINE: '선',
@@ -211,8 +211,8 @@ export function ellipsePerimeter(a: number, b: number): number {
 
 function splineLength(e: Extract<Entity, { type: 'SPLINE' }>): number {
   let pts: number[];
-  if (e.controlPoints.length >= 2) pts = nurbsPoints(e.degree, e.knots, e.controlPoints, e.weights, 1e-6);
-  else if (e.fitPoints.length >= 2) {
+  if (ctrlCount(e) >= 2) pts = nurbsPoints(e.degree, e.knots, splineCtrl(e), e.weights, 1e-6);
+  else if (fitCount(e) >= 2) {
     const s = fitPointsCurve(e);
     pts = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e-6);
   } else return 0;
@@ -437,8 +437,8 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
     case 'SPLINE':
       geo.push(
         { k: '차수', v: String(e.degree) },
-        { k: '조정점 수', v: String(e.controlPoints.length) },
-        { k: '맞춤점 수', v: String(e.fitPoints.length) },
+        { k: '조정점 수', v: String(ctrlCount(e)) },
+        { k: '맞춤점 수', v: String(fitCount(e)) },
         { k: '닫힘', v: e.flags & 1 ? '예' : '아니요' },
         { k: '길이', v: L(splineLength(e)) },
       );

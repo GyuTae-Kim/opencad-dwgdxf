@@ -12,6 +12,7 @@
  */
 import type { SplineEntity, Vec3 } from '../../core/model';
 import { fitSplineAcad, knotParamOfFlags, nurbsPoint } from '../../geom/curves';
+import { count3, pack3, unpack3 } from '../../core/flat3';
 
 /** DXF 70: 맞춤점 방식(DWG 첫 값 1) */
 export const SPLINE_FIT_METHOD = 1024;
@@ -74,7 +75,7 @@ export interface DwgFitData {
  * 같은 도면을 AutoCAD가 DWG로 쓴 짝의 맞춤점 자료가 이 값과 같다. 되살린 자료로 다시 구한 곡선이 같을 때만 쓴다.
  */
 function fitFromControl(e: SplineEntity, knotParam: number): DwgFitData | null {
-  const P = e.controlPoints;
+  const P = unpack3(e.controlVerts);
   const U = e.knots;
   const nc = P.length;
   if (nc < 4 || U.length !== nc + 4) return null;
@@ -128,27 +129,28 @@ export type DwgSplinePlan =
  */
 export function dwgSplinePlan(e: SplineEntity, r2013: boolean): DwgSplinePlan {
   const knotParam = splineKnotParam(e.flags);
+  const fitPts = unpack3(e.fitVerts);
   const asFit = (): DwgSplinePlan => ({
     kind: 'fit',
-    fit: e.fitPoints,
+    fit: fitPts,
     ...(nonZero(e.startTangent) ? { startTangent: e.startTangent } : {}),
     ...(nonZero(e.endTangent) ? { endTangent: e.endTangent } : {}),
     knotParam,
     tolerance: e.fitTolerance,
   });
-  const asCtrl = (fitDropped?: 'version' | 'mismatch'): DwgSplinePlan => ({ kind: 'ctrl', degree: e.degree, knots: e.knots, ctrl: e.controlPoints, ...(e.weights ? { weights: e.weights } : {}), ...(fitDropped ? { fitDropped } : {}) });
-  const hasFit = e.fitPoints.length >= 2;
-  if (!e.controlPoints.length) {
+  const asCtrl = (fitDropped?: 'version' | 'mismatch'): DwgSplinePlan => ({ kind: 'ctrl', degree: e.degree, knots: e.knots, ctrl: unpack3(e.controlVerts), ...(e.weights ? { weights: e.weights } : {}), ...(fitDropped ? { fitDropped } : {}) });
+  const hasFit = fitPts.length >= 2;
+  if (!e.controlVerts.length) {
     if (!hasFit || r2013 || knotParam === 0 || !fitShapeOk(e)) return asFit();
-    const s = fitSplineAcad(e.fitPoints, knotParam, e.startTangent, e.endTangent);
+    const s = fitSplineAcad(fitPts, knotParam, e.startTangent, e.endTangent);
     return s ? { kind: 'ctrl', degree: 3, knots: s.knots, ctrl: s.ctrl, fitDropped: 'version' } : asFit();
   }
   if (e.helix) return asCtrl();
   const versionOk = r2013 || knotParam === 0;
   if (hasFit) {
     if (!fitShapeOk(e)) return asCtrl('mismatch');
-    const s = fitSplineAcad(e.fitPoints, knotParam, e.startTangent, e.endTangent);
-    if (!s || !sameNurbs(e.controlPoints, e.knots, s.ctrl, s.knots)) return asCtrl('mismatch');
+    const s = fitSplineAcad(fitPts, knotParam, e.startTangent, e.endTangent);
+    if (!s || !sameNurbs(unpack3(e.controlVerts), e.knots, s.ctrl, s.knots)) return asCtrl('mismatch');
     return versionOk ? asFit() : asCtrl('version');
   }
   if (e.flags & SPLINE_FIT_METHOD && versionOk && fitShapeOk(e)) {
@@ -163,9 +165,9 @@ export function dwgSplinePlan(e: SplineEntity, r2013: boolean): DwgSplinePlan {
  * 닫힌 곡선·근사 공차·3차가 아닌 것은 그 계산을 몰라 비워 둔다(그릴 때 맞춤점으로 보간한다).
  */
 export function fillFitControl(e: SplineEntity, knotParam: number): void {
-  if (e.controlPoints.length || e.fitPoints.length < 2 || !fitShapeOk(e)) return;
-  const s = fitSplineAcad(e.fitPoints, knotParam, e.startTangent, e.endTangent);
+  if (e.controlVerts.length || count3(e.fitVerts) < 2 || !fitShapeOk(e)) return;
+  const s = fitSplineAcad(unpack3(e.fitVerts), knotParam, e.startTangent, e.endTangent);
   if (!s) return;
-  e.controlPoints = s.ctrl;
+  e.controlVerts = pack3(s.ctrl);
   e.knots = s.knots;
 }

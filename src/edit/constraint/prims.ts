@@ -13,6 +13,7 @@ import { transformEntity } from '../geom/transform';
 import { partIndex } from './types';
 import { lwVertices, packLw } from '../../core/lwpoly';
 import { packPoly, polyBulge, polyCount, polyFlags, polyLoc, polyVertices } from '../../core/polyverts';
+import { ctrlCount, pack3, splineCtrl } from '../../core/flat3';
 
 const TAU = Math.PI * 2;
 
@@ -77,7 +78,7 @@ function polyIndices(e: PolylineEntity): number[] | null {
 
 /** 끝이 고정된(clamped) 비주기 스플라인인지 */
 function clampedSpline(e: SplineEntity): boolean {
-  const n = e.controlPoints.length;
+  const n = ctrlCount(e);
   const p = e.degree;
   if (n < 2 || p < 1 || e.flags & 2 || e.knots.length !== n + p + 1) return false;
   const k = e.knots;
@@ -181,7 +182,7 @@ export function makePrim(e: Entity, vs: Vars): Prim | null {
       return { k: 'poly', h, e, v, b, closed, idx };
     }
     case 'SPLINE':
-      return { k: 'spline', h, e, cp: e.controlPoints.map((p) => addPt(vs, p)) };
+      return { k: 'spline', h, e, cp: splineCtrl(e).map((p) => addPt(vs, p)) };
     default: {
       const p = insertionPoint(e);
       if (!p) return null;
@@ -533,10 +534,10 @@ export function writePrim(pr: Prim, x: X, doc: CadDocument): Entity {
     }
     case 'spline': {
       const e = pr.e;
-      const out: SplineEntity = { ...e, controlPoints: e.controlPoints.map((p, i) => ({ ...p, x: x[pr.cp[i]!]!, y: x[pr.cp[i]! + 1]! })) };
+      const out: SplineEntity = { ...e, controlVerts: pack3(splineCtrl(e).map((p, i) => ({ ...p, x: x[pr.cp[i]!]!, y: x[pr.cp[i]! + 1]! }))) };
       // 조정점을 직접 바꿨으므로 맞춤점 정의는 버린다(AutoCAD에서 조정점을 편집한 스플라인과 같다)
-      if (out.fitPoints.length) {
-        out.fitPoints = [];
+      if (out.fitVerts.length) {
+        out.fitVerts = [];
         delete out.startTangent;
         delete out.endTangent;
       }

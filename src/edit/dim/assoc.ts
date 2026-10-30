@@ -33,7 +33,7 @@ import { generateDimensionGeometry } from './generate';
 import { type P, add, ccw, cross, dir, dist, dot, intersect, madd, mid, perp, sub, unit } from './vec';
 import { lwCount } from '../../core/lwpoly';
 import { polyDrawnPoints } from '../../core/polyverts';
-import { leaderVertices } from '../../core/flat3';
+import { leaderVertices, splineFit } from '../../core/flat3';
 
 // ---------------------------------------------------------------------------
 // 기록
@@ -417,7 +417,7 @@ function candidates(e: Entity, osnap: number): Cand[] {
     }
     case OSNAP.NODE: {
       if (e.type === 'POINT') push('n', e.position);
-      else if (e.type === 'SPLINE') e.fitPoints.forEach((f, i) => push(`n${i}`, f));
+      else if (e.type === 'SPLINE') splineFit(e).forEach((f, i) => push(`n${i}`, f));
       return out;
     }
     case OSNAP.INS: {

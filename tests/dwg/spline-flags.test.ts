@@ -7,6 +7,7 @@ import type { CadDocument, SplineEntity, Vec3 } from '../../src/core/model';
 import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
 import { createNewDocument } from '../../src/core/newdoc';
 import { readDwg, writeDwg } from '../../src/io/dwg';
+import { ctrlCount, fitCount, pack3 } from '../../src/core/flat3';
 
 let seq = 0x7b00;
 const h = () => (seq++).toString(16).toUpperCase();
@@ -17,7 +18,7 @@ const P = (x: number, y: number, z = 0): Vec3 => ({ x, y, z });
 function spline(flags: number, ctrl: Vec3[], fit: Vec3[]): SplineEntity {
   const n = ctrl.length;
   const knots = n ? [...Array(4).fill(0), ...Array.from({ length: n - 4 }, (_, i) => i + 1), ...Array(4).fill(n - 3)] : [];
-  return { ...entityDefaults(), handle: h(), layer: '0', type: 'SPLINE', flags, degree: 3, knots, controlPoints: ctrl, fitPoints: fit, knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10 };
+  return { ...entityDefaults(), handle: h(), layer: '0', type: 'SPLINE', flags, degree: 3, knots, controlVerts: pack3(ctrl), fitVerts: pack3(fit), knotTolerance: 1e-10, controlTolerance: 1e-10, fitTolerance: 1e-10 };
 }
 
 describe('SPLINE 플래그(DWG R2013+ ↔ DXF 70)', () => {
@@ -32,7 +33,7 @@ describe('SPLINE 플래그(DWG R2013+ ↔ DXF 70)', () => {
   it('맞춤점만 있는 스플라인(DXF 70 = 0): R2018 DWG에 1024·균일 매듭 비트가 생기지 않는다(전에는 1160 — 매듭 매개변수를 균일로 써서 AutoCAD에서 모양이 달라질 수 있었다)', () => {
     const back = roundTrip(spline(0, [], fit), 'AC1032');
     expect(back.flags & ~24).toBe(0);
-    expect(back.fitPoints.length).toBe(4);
+    expect(fitCount(back)).toBe(4);
   });
 
   it('맞춤점 방식 비트(1024 + 현 길이 32 / 균일 128)는 맞춤점 스플라인으로 그대로 돈다', () => {
@@ -47,14 +48,14 @@ describe('SPLINE 플래그(DWG R2013+ ↔ DXF 70)', () => {
     for (const v of ['AC1015', 'AC1032']) {
       const back = roundTrip(spline(1 | 8, closed, []), v);
       expect(back.flags & ~24, v).toBe(1);
-      expect(back.controlPoints.length).toBe(closed.length);
+      expect(ctrlCount(back)).toBe(closed.length);
     }
   });
 
   it('조정점 스플라인은 높은 비트 없이(매듭 매개변수 사용자 지정)', () => {
     const back = roundTrip(spline(8, ctrl, []), 'AC1032');
     expect(back.flags & ~24).toBe(0);
-    expect(back.controlPoints.length).toBe(5);
+    expect(ctrlCount(back)).toBe(5);
   });
 });
 

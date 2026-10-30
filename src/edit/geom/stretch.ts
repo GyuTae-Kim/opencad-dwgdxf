@@ -22,7 +22,7 @@ import { dimMeasure, updateDimNumber } from './xannot';
 import { layoutArcText } from '../../text/arctext';
 import { hatchEdges, packEdges } from '../../core/hatchedges';
 import { meshVertices, packMesh } from '../../core/meshdata';
-import { leaderVertices, pack3 } from '../../core/flat3';
+import { ctrlCount, leaderVertices, pack3, splineCtrl, splineFit } from '../../core/flat3';
 
 /** 걸침 영역: 두 점이면 사각형 */
 function polygonOf(crossing: readonly Vec2[]): Vec2[] {
@@ -100,7 +100,7 @@ function keyPoints(e: Entity): Vec2[] {
       return ev.filter((v) => !v.faceIndices || v.flags & 64).map((v) => P(v.location));
     }
     case 'SPLINE':
-      return [...e.controlPoints, ...e.fitPoints].map((p) => P(p));
+      return [...splineCtrl(e), ...splineFit(e)].map((p) => P(p));
     case 'XLINE':
     case 'RAY':
       return [P(e.base)];
@@ -330,23 +330,25 @@ function affApply3z(_pr: Affine, z: number, ext: Vec3 | undefined): number {
 
 function stretchSpline(e: SplineEntity, In: (p: Vec3) => boolean, d: Vec2): SplineEntity {
   const r = cloneEntity(e);
-  const fitMoved = e.fitPoints.some(In);
-  r.fitPoints = e.fitPoints.map((p) => (In(p) ? mv(p, d) : { ...p }));
-  if (fitMoved && e.fitPoints.length >= 2) {
+  const fit = splineFit(e);
+  const fitMoved = fit.some(In);
+  r.fitVerts = pack3(fit.map((p) => (In(p) ? mv(p, d) : p)));
+  if (fitMoved && fit.length >= 2) {
     // 맞춤점을 옮겼으면 조정점을 맞춤점에서 다시 구한다(그리는 쪽과 같은 보간)
-    if (e.controlPoints.length >= 2) {
+    if (ctrlCount(e) >= 2) {
       const s = fitPointsCurve(r);
       r.degree = s.degree;
       r.knots = s.knots;
-      r.controlPoints = s.ctrl;
+      r.controlVerts = pack3(s.ctrl);
       r.weights = undefined;
     }
     return r;
   }
-  r.controlPoints = e.controlPoints.map((p) => (In(p) ? mv(p, d) : { ...p }));
-  if (e.controlPoints.some(In)) {
+  const ctrl = splineCtrl(e);
+  r.controlVerts = pack3(ctrl.map((p) => (In(p) ? mv(p, d) : p)));
+  if (ctrl.some(In)) {
     // 조정점을 옮기면 맞춤 데이터는 더 이상 맞지 않는다
-    r.fitPoints = [];
+    r.fitVerts = [];
     r.startTangent = undefined;
     r.endTangent = undefined;
   }

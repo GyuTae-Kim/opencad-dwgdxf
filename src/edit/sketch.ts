@@ -5,6 +5,7 @@
 import type { Entity, EntityBase, Vec3 } from '../core/model';
 import { fitSplineAcad, interpolateFitPoints } from '../geom/curves';
 import { packLwPoints } from '../core/lwpoly';
+import { pack3 } from '../core/flat3';
 
 export type SketchType = 'line' | 'polyline' | 'spline';
 
@@ -85,8 +86,8 @@ export function sketchEntities(strokes: readonly P2[][], type: SketchType, props
         flags: 8 | 1024 | 32,
         degree: sp.degree,
         knots: sp.knots,
-        controlPoints: sp.ctrl,
-        fitPoints: fit,
+        controlVerts: pack3(sp.ctrl),
+        fitVerts: pack3(fit),
         knotTolerance: 1e-10,
         controlTolerance: 1e-10,
         fitTolerance: tolerance,

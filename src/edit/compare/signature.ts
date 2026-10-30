@@ -11,7 +11,7 @@ import type { CadDocument, Entity, HatchEdge, HatchPath, Vec2, Vec3 } from '../.
 import { bulgeVertices, lwVertices } from '../../core/lwpoly';
 import { polyVertices } from '../../core/polyverts';
 import { firstEdge, hatchEdges } from '../../core/hatchedges';
-import { leaderVertices } from '../../core/flat3';
+import { leaderVertices, splineCtrl, splineFit } from '../../core/flat3';
 
 /** COMPAREPROPS 비트 */
 export const PROP_COLOR = 1;
@@ -356,13 +356,15 @@ export function entitySignature(e: Entity, opt: CompareOptions, doc?: CadDocumen
       break;
     }
     case 'SPLINE': {
-      const p0 = e.controlPoints[0] ?? e.fitPoints[0];
+      const ctrl = splineCtrl(e);
+      const fit = splineFit(e);
+      const p0 = ctrl[0] ?? fit[0];
       if (p0) s.anchor(p0.x, p0.y);
-      s.k(e.flags & 0x1f, e.degree, e.knots.length, e.controlPoints.length, e.fitPoints.length, !!e.weights, !!e.startTangent, !!e.endTangent);
-      for (const c of e.controlPoints) s.p(c);
+      s.k(e.flags & 0x1f, e.degree, e.knots.length, ctrl.length, fit.length, !!e.weights, !!e.startTangent, !!e.endTangent);
+      for (const c of ctrl) s.p(c);
       s.n(...e.knots);
       if (e.weights) s.n(...e.weights);
-      for (const f of e.fitPoints) s.p(f);
+      for (const f of fit) s.p(f);
       if (e.startTangent) s.p(e.startTangent);
       if (e.endTangent) s.p(e.endTangent);
       if (e.helix) walk(s, e.helix, 'helix', opt, 1);

@@ -5,6 +5,7 @@
 import type { CadDocument, Entity, Vec3 } from '../../src/core/model';
 import { lwVertices } from '../../src/core/lwpoly';
 import { polyLocs } from '../../src/core/polyverts';
+import { ctrlCount, fitCount } from '../../src/core/flat3';
 
 export type Summary = Record<string, unknown>;
 
@@ -72,8 +73,8 @@ export function summarizeEntity(e: Entity): Summary {
       d.degree = e.degree;
       d.flags = e.flags;
       d.knots = e.knots.length;
-      d.controlPoints = e.controlPoints.length;
-      d.fitPoints = e.fitPoints.length;
+      d.controlPoints = ctrlCount(e);
+      d.fitPoints = fitCount(e);
       break;
     case 'XLINE':
     case 'RAY':

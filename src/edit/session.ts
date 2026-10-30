@@ -4,10 +4,11 @@
  *
  * 변경 = 작업(op) 목록. 각 작업은 앞뒤 상태를 모두 담아 되돌리기가 그대로 반대 작업이다.
  */
-import type { BlockDef, BlockRecord, CadDocument, CadObject, Entity, HeaderValue, Layer, Layout, LayoutObject, Linetype, LwPolylineEntity, PolylineEntity, TableHead, TableRecordBase, TextStyle, DimStyle, UcsRecord, ViewRecord, VPortRecord } from '../core/model';
+import type { BlockDef, BlockRecord, CadDocument, CadObject, Entity, HeaderValue, Layer, Layout, LayoutObject, Linetype, LwPolylineEntity, PolylineEntity, SplineEntity, TableHead, TableRecordBase, TextStyle, DimStyle, UcsRecord, ViewRecord, VPortRecord } from '../core/model';
 import { tableKey, normalizeHandle } from '../core/model';
 import { unboxLw } from '../core/lwpoly';
 import { unboxPoly } from '../core/polyverts';
+import { unboxSpline } from '../core/flat3';
 
 export type EditOp =
   /** 블록(공간) block의 index 자리에 객체를 넣는다(index 없으면 끝) */
@@ -458,6 +459,7 @@ export function cloneEntity<T extends Entity>(e: T): T {
   // 구조화 복제는 수 배열의 수를 하나씩 상자에 담는다 — 평탄 좌표는 빈칸 없는 실수 배열로 다시 담는다
   if (c.type === 'LWPOLYLINE') unboxLw(c, e as LwPolylineEntity);
   else if (c.type === 'POLYLINE') unboxPoly(c, e as PolylineEntity);
+  else if (c.type === 'SPLINE') unboxSpline(c, e as SplineEntity);
   return c;
 }
 

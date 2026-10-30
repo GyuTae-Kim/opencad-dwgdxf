@@ -3,6 +3,7 @@ import type { BlockDef, CadDocument, Entity, HatchPath, LwVertex, Vec2, Vec3 } f
 import { MODEL_SPACE, createDocument, entityDefaults } from '../../src/core/model';
 import { pathLoop } from '../../src/render/hatch';
 import { packLw } from '../../src/core/lwpoly';
+import { pack3 } from '../../src/core/flat3';
 
 export const P = (x: number, y: number, z = 0): Vec3 => ({ x, y, z });
 export const deg = (d: number) => (d * Math.PI) / 180;
@@ -72,8 +73,8 @@ export function spline(ctrl: [number, number][], degree = 3): Entity {
     flags: 8,
     degree,
     knots,
-    controlPoints: ctrl.map(([x, y]) => P(x, y)),
-    fitPoints: [],
+    controlVerts: pack3(ctrl.map(([x, y]) => P(x, y))),
+    fitVerts: [],
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,

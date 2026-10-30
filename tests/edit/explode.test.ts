@@ -29,7 +29,7 @@ import { NEG_Z, P, V, arc, circle, deg, line, lw, mtext, near, newDoc, poly2d, r
 import { packBulge } from '../../src/core/lwpoly';
 import { packPoly } from '../../src/core/polyverts';
 import { packMesh } from '../../src/core/meshdata';
-import { pack3 } from '../../src/core/flat3';
+import { ctrlCount, pack3 } from '../../src/core/flat3';
 
 const base = (h = '') => ({ ...entityDefaults(), handle: h });
 
@@ -394,7 +394,7 @@ describe('ACIS 객체 분해', () => {
     expect(n.add!.map((e) => e.type)).toEqual(['SPLINE']);
     const sp = n.add![0] as SplineEntity;
     expect(sp.degree).toBe(2);
-    expect(sp.controlPoints.length).toBe(9);
+    expect(ctrlCount(sp)).toBe(9);
     expect(sp.flags & 1).toBe(1);
     renders(doc, [...c.add!, ...h.add!, ...n.add!]);
   });

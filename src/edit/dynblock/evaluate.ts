@@ -45,6 +45,7 @@ import {
 } from './types';
 import { lwPoints, lwVertices, setLwVertices } from '../../core/lwpoly';
 import { polyLocs, polyVertices, setPolyVertices } from '../../core/polyverts';
+import { fitCount, pack3, splineCtrl, splineFit } from '../../core/flat3';
 
 export class DynError extends Error {}
 
@@ -148,9 +149,9 @@ function stretchEntity(e: Entity, pts: readonly number[], d: Vec3, doc: CadDocum
       return r;
     }
     case 'SPLINE': {
-      if (e.fitPoints.length) return set.size >= e.fitPoints.length ? whole() : null;
+      if (e.fitVerts.length) return set.size >= fitCount(e) ? whole() : null;
       const r = structuredClone(e);
-      r.controlPoints = r.controlPoints.map((p, i) => (set.has(i) ? mv(p) : p));
+      r.controlVerts = pack3(splineCtrl(e).map((p, i) => (set.has(i) ? mv(p) : p)));
       return r;
     }
     case 'ARC':
@@ -186,7 +187,7 @@ function stretchPoints(e: Entity): { x: number; y: number }[] | null {
     case '3DFACE':
       return e.type === '3DFACE' || flat ? e.points : null;
     case 'SPLINE':
-      return e.fitPoints.length ? e.fitPoints : e.controlPoints;
+      return e.fitVerts.length ? splineFit(e) : splineCtrl(e);
     case 'ARC':
       return flat
         ? [

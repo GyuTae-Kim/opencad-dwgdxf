@@ -60,6 +60,7 @@ import { type JoinType, fuzzJoinPrep } from '../edit/geom/fuzzjoin';
 import type { DocState } from './docstate';
 import { unlockedOnly } from './layers';
 import type { Pt } from './view';
+import { splineCtrl, splineFit } from '../core/flat3';
 
 interface Step {
   /** 작업 수 */
@@ -662,10 +663,12 @@ async function splinedit(app: App, ctx: CommandContext): Promise<void> {
   }
 }
 
-const fitPts = (e: SplineEntity): Vec2[] => e.fitPoints.map((q) => ({ x: q.x, y: q.y }));
+const fitPts = (e: SplineEntity): Vec2[] => splineFit(e).map((q) => ({ x: q.x, y: q.y }));
 const cvPts = (e: SplineEntity): Vec2[] => {
   const n = cvCount(e);
-  return e.controlPoints.slice(0, n).map((q) => ({ x: q.x, y: q.y }));
+  return splineCtrl(e)
+    .slice(0, n)
+    .map((q) => ({ x: q.x, y: q.y }));
 };
 
 /** 다음·이전·점 선택으로 점을 고르며 편집하는 반복(이동·가중치) */

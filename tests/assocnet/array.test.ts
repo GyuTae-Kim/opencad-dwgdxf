@@ -21,6 +21,7 @@ import { writeDwg } from '../../src/io/dwg';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { PYTHON, hasPython } from '../oracle/ezdxf';
 import { packLw } from '../../src/core/lwpoly';
+import { pack3 } from '../../src/core/flat3';
 
 const ROOT = join(__dirname, '../..');
 const OUT = join(ROOT, '.runtime/assocnet/test-out');
@@ -216,14 +217,14 @@ describe('새 배열의 AutoCAD 연관 객체', () => {
           flags: 8,
           degree: 3,
           knots: [0, 0, 0, 0, 1, 2, 2, 2, 2],
-          controlPoints: [
+          controlVerts: pack3([
             { x: 0, y: 0, z: 0 },
             { x: 20, y: 30, z: 0 },
             { x: 50, y: -10, z: 0 },
             { x: 80, y: 20, z: 0 },
             { x: 100, y: 0, z: 0 },
-          ],
-          fitPoints: [],
+          ]),
+          fitVerts: [],
           knotTolerance: 1e-10,
           controlTolerance: 1e-10,
           fitTolerance: 1e-10,

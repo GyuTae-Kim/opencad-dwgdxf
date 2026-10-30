@@ -35,6 +35,7 @@ import { pieceAt } from '../../src/edit/geom/curve';
 import { nurbsPoint } from '../../src/edit/geom/nurbs';
 import { P, V, arc, ellipse, fitSpline, line, lw, near, newDoc, poly2d, renders, spline } from '../edit/helpers';
 import { polyVertices, setPolyVertices } from '../../src/core/polyverts';
+import { ctrlCount, fitCount, splineCtrl, splineFit } from '../../src/core/flat3';
 
 const doc = newDoc();
 const one = (r: { replace?: Entity[]; add?: Entity[]; message?: string }): Entity => {
@@ -148,8 +149,8 @@ describe('스플라인 그립', () => {
   it('맞춤점 추가·제거·끝 접선', () => {
     const s = fitSpline([[0, 0], [5, 5], [10, 0]]) as SplineEntity;
     const a = one(splineFitAddGrip(s, 0, V(2, 4))) as SplineEntity;
-    expect(a.fitPoints.map((p) => [p.x, p.y])).toEqual([[0, 0], [2, 4], [5, 5], [10, 0]]);
-    expect((one(splineFitDeleteGrip(s, 1)) as SplineEntity).fitPoints.length).toBe(2);
+    expect(splineFit(a).map((p) => [p.x, p.y])).toEqual([[0, 0], [2, 4], [5, 5], [10, 0]]);
+    expect(fitCount(one(splineFitDeleteGrip(s, 1)) as SplineEntity)).toBe(2);
     const t = one(splineFitTangentGrip(s, 0, V(0, 10))) as SplineEntity;
     near(t.startTangent!, P(0, 1));
     const e = one(splineFitTangentGrip(s, 2, V(20, 0))) as SplineEntity;
@@ -159,19 +160,19 @@ describe('스플라인 그립', () => {
   it('정점 추가(새 정점이 그 점), 정련(모양 유지), 제거', () => {
     const s = spline([[0, 0], [3, 5], [7, 5], [10, 0]]) as SplineEntity;
     const a = one(splineCvInsertGrip(s, 1, V(5, 9))) as SplineEntity;
-    expect(a.controlPoints.length).toBe(5);
-    near(a.controlPoints[2]!, P(5, 9));
+    expect(ctrlCount(a)).toBe(5);
+    near(splineCtrl(a)[2]!, P(5, 9));
     const r = one(splineCvRefineGrip(s, 1)) as SplineEntity;
-    expect(r.controlPoints.length).toBe(5);
+    expect(ctrlCount(r)).toBe(5);
     const n0 = splineNurbs(s)!;
     const n1 = splineNurbs(r)!;
     for (const u of [0.1, 0.35, 0.5, 0.8]) near(nurbsPoint(n1, u), nurbsPoint(n0, u), 1e-9);
     const d = one(splineCvDeleteGrip(a, 2)) as SplineEntity;
-    expect(d.controlPoints.length).toBe(4);
+    expect(ctrlCount(d)).toBe(4);
     expect(d.knots.length).toBe(4 + d.degree + 1);
     // 안쪽 매듭이 없으면 차수를 내린다
     const b = one(splineCvDeleteGrip(s, 1)) as SplineEntity;
-    expect(b.controlPoints.length).toBe(3);
+    expect(ctrlCount(b)).toBe(3);
     expect(b.degree).toBe(2);
     renders(doc, [a, r, d, b]);
   });
