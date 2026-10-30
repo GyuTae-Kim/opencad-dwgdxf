@@ -17,16 +17,37 @@
  * - 글자(Space 빼고)를 치면 기준 셀의 제자리 편집기를 그 글자로 바꾼 내용으로 연다. 확인하면 그 편집(Tab으로 옮긴 셀까지)이 명령 취소 한 단계
  * - 명령행에 친 글이 있거나 명령이 진행 중이면 키를 보지 않는다
  * 하지 않은 것(도움말에 없거나 근거가 약하다): 끌어서 여러 셀 고르기, Shift+화살표로 넓히기, 마지막 셀 Tab의 새 행, Delete로 내용 지우기,
- * 셀 그립(행·열 크기), 고른 셀의 특성 팔레트·바로 가기 메뉴, 한글 입력기로 바로 입력하기(조합 중인 글자는 명령행으로 간다 — 두 번 눌러 편집)
+ * 고른 셀의 특성 팔레트
+ *
+ * 29차(근거 — AutoCAD 도움말, 우리말 요약):
+ * - "About Modifying Tables": 셀을 고르면 셀 테두리 가운데에 그립이 보이고, 셀의 그립을 끌면 그 셀과 그 열·행이 커지거나 작아진다.
+ *   셀을 고른 채 오른쪽 누르기 메뉴로 열·행을 넣거나 지우고 이웃 셀을 합친다.
+ * - "To Resize Rows or Columns in a Table": 셀을 눌러 고르고 그립을 끌어 그 셀이 든 행·열 전체의 크기를 바꾼다.
+ * - "To Add Rows or Columns to a Table": 셀을 고르고 오른쪽 누르기 → 행 ▸ 위에·아래에 삽입, 열 ▸ 왼쪽에·오른쪽에 삽입.
+ * - "Table Cell Ribbon Contextual Tab": 행 삭제(고른 행), 열 삭제(고른 열), 셀 병합(모두·행별·열별 — 고른 셀을 한 셀로), 셀 병합 해제.
+ * 정한 것:
+ * - 바로 가기 메뉴(오른쪽 클릭, 휴대폰은 안드로이드 길게 누르기): 위·아래에 행 삽입(화면 위·아래 — 위로 쌓는 표는 번호가 반대), 행 삭제, 왼쪽·오른쪽에 열 삽입,
+ *   열 삭제, 셀 병합(모두·행별·열별), 셀 병합 해제. 범위가 표의 모든 행·열이면 지우기는 꺼짐, 한 셀이면 병합 꺼짐, 병합이 없으면 풀기 꺼짐.
+ *   계산은 TABLECELL과 같은 cellOp, 한 번에 명령 취소 한 단계. 끝나면 같은 셀(넣은 행·열만큼 밀린 자리, 지운 뒤에는 그 자리의 셀, 병합·풀기는 그 범위)을 고른 채
+ * - 셀 그립: 고른 범위의 네 변 가운데. 그 변을 끌어 그 변 쪽 열 폭·행 높이만 바꾸고 맞은편 변은 그대로(왼쪽·삽입점 쪽 변이면 표의 삽입점이 그만큼 옮겨진다).
+ *   다른 열·행은 그대로, 행 높이는 문자에 맞춘다(문자보다 낮게는 줄지 않는다). 객체 그립처럼 누르고 놓을 점을 누르거나(터치도) 누른 채 끈다(GRIPEDIT의 ** 신축 **).
+ *   그립 고르기 거리는 객체 그립과 같다(터치는 두 배 — GRIPSIZE 5에서 12px). 격자선 가까이(예전에 표 객체를 고르던 자리)·표 밖, 고른 범위 안은 그 변에서
+ *   그립 거리와 범위 크기의 1/4 가운데 작은 것까지 그립이고, 이웃 셀 안(셀을 누르는 자리)은 그립이 아니다 — 작게 보이는 셀도 이웃 셀 가운데를 누르면 예전처럼 그 셀.
+ *   그립 변은 누른 자리에서 옮긴 만큼 간다(손가락으로 그립 옆을 눌러도 튀지 않고 같은 자리를 다시 누르면 그대로 — 휴대폰 두 번 톡은 셀 편집).
+ *   셀을 고른 누르기 바로 뒤 같은 자리의 두 번째 누르기도 두 번 누르기(셀 편집)
+ * - 셀 내용 지우기(Delete)는 도움말에 근거가 없어(메뉴 설명은 "그 밖의 변경"뿐) 하지 않았다
+ * - 입력기(한글 등)의 첫 조합 키(Process·229)를 고른 셀에서 받으면 셀 편집기를 빈 내용으로 열고 초점을 옮긴다 — 조합은 편집기에서 이어진다(키는 막지 않는다)
  */
 import type { Entity, InsertEntity, TableEntity } from '../core/model';
 import { tableKey } from '../core/model';
 import { isEditableTable, tableFromEntity } from '../edit/table/entity';
-import { type TableData, anchorOf, cellAt, cellRect, mergeAt } from '../edit/table/model';
-import type { App } from './app';
+import { type TableData, anchorOf, cellAt, cellName, cellRect, cloneTable, colOffset, mergeAt, rowOffset } from '../edit/table/model';
+import type { TableStyle } from '../edit/table/style';
+import { previewSegments } from '../edit/table/ops';
+import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
-import { type SubSelection, addHook } from './hooks';
-import { editTableInPlace, fromTableLocal, tabCell, toTableLocal } from './tablecmds';
+import { type ContextMenuItem, type SubSelection, addHook } from './hooks';
+import { type CellOp, cellOp, commitTable, editTableInPlace, fitTable, fromTableLocal, lockedLayer, readPicked, tabCell, toTableLocal } from './tablecmds';
 import type { Pt } from './view';
 
 type Cell = { r: number; c: number };
@@ -90,6 +111,134 @@ export function stepCell(t: TableData, a: Cell, dir: 'left' | 'right' | 'up' | '
 
 const ARROWS: Record<string, 'left' | 'right' | 'up' | 'down'> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
 
+type Range = { r0: number; c0: number; r1: number; c1: number };
+
+/** 셀 그립의 변(표 좌표): x0 왼쪽, x1 오른쪽, y0 아래, y1 위 */
+export type CellSide = 'x0' | 'x1' | 'y0' | 'y1';
+/** 그립 차례(grips()·gripAt의 번호): 오른쪽, 아래, 왼쪽, 위 */
+export const CELL_SIDES: readonly CellSide[] = ['x1', 'y0', 'x0', 'y1'];
+
+/** 범위의 표 좌표 사각형 */
+export function rangeRect(t: TableData, g: Range, flow: 0 | 1): { x0: number; x1: number; y0: number; y1: number } {
+  const a = cellRect(t, g.r0, g.c0, flow);
+  const b = cellRect(t, g.r1, g.c1, flow);
+  return { x0: Math.min(a.x0, b.x0), x1: Math.max(a.x1, b.x1), y0: Math.min(a.y0, b.y0), y1: Math.max(a.y1, b.y1) };
+}
+
+/** 범위 변의 가운데(셀 그립 자리, 표 좌표) */
+export function sideMid(q: { x0: number; x1: number; y0: number; y1: number }, side: CellSide): Pt {
+  const mx = (q.x0 + q.x1) / 2;
+  const my = (q.y0 + q.y1) / 2;
+  return side === 'x0' ? { x: q.x0, y: my } : side === 'x1' ? { x: q.x1, y: my } : side === 'y0' ? { x: mx, y: q.y0 } : { x: mx, y: q.y1 };
+}
+
+/** 위쪽 변(y1)은 위에서 아래로 쌓는 표의 첫 행(r0), 위로 쌓는 표의 마지막 행(r1). 아래쪽(y0)은 그 반대 */
+const sideRow = (g: Range, side: 'y0' | 'y1', flow: 0 | 1): number => ((side === 'y1') === (flow !== 1) ? g.r0 : g.r1);
+
+/**
+ * 셀 그립을 표 좌표 q까지 끈 표 정의(문자에 맞추기 전): 그 변 쪽의 열 폭(x0 → c0, x1 → c1)이나 행 높이(준 높이와 함께)만 바꾼다.
+ * 그립 변이 q를 따라가는 만큼 늘거나 준다. 아주 좁게는 줄지 않는다(열은 좌우 여백 + 자료 문자 높이, 행은 위아래 여백 + 그 행 문자 높이 —
+ * 원래 그보다 작았으면 원래 크기까지). 바뀌지 않으면 null
+ */
+export function resizeByGrip(t: TableData, style: TableStyle, g: Range, side: CellSide, q: Pt): TableData | null {
+  const flow = style.flow;
+  const rect = rangeRect(t, g, flow);
+  const out = cloneTable(t);
+  if (side === 'x0' || side === 'x1') {
+    const c = side === 'x1' ? g.c1 : g.c0;
+    const cur = t.colWidths[c]!;
+    const grow = side === 'x1' ? q.x - rect.x1 : rect.x0 - q.x;
+    const w = Math.max(Math.min(cur, 2 * style.hMargin + style.cells.data.height), cur + grow);
+    if (!(Math.abs(w - cur) > 1e-12 * Math.max(1, cur))) return null;
+    out.colWidths[c] = w;
+    return out;
+  }
+  const r = sideRow(g, side, flow);
+  const cur = t.rowHeights[r]!;
+  const grow = side === 'y1' ? q.y - rect.y1 : rect.y0 - q.y;
+  const cs = style.cells[t.rowKinds[r] ?? 'data'];
+  const v = Math.max(Math.min(cur, 2 * style.vMargin + cs.height), cur + grow);
+  if (!(Math.abs(v - cur) > 1e-12 * Math.max(1, cur))) return null;
+  out.rowHeights[r] = v;
+  out.baseRowHeights[r] = v;
+  return out;
+}
+
+/**
+ * 삽입점 쪽 변(왼쪽 x0, 위에서 아래로 쌓는 표의 위 y1, 위로 쌓는 표의 아래 y0)을 끌었을 때 범위의 맞은편 변을 그대로 두려고
+ * 삽입점을 옮길 양(표 좌표, before → after는 문자에 맞춘 뒤). 다른 변이거나 옮길 것이 없으면 null
+ */
+export function gripInsertShift(before: TableData, after: TableData, g: Range, side: CellSide, flow: 0 | 1): Pt | null {
+  if (side === 'x0') {
+    const d = colOffset(after, g.c0 + 1) - colOffset(before, g.c0 + 1);
+    return d ? { x: -d, y: 0 } : null;
+  }
+  const near = (side === 'y1' && flow !== 1) || (side === 'y0' && flow === 1);
+  if (!near) return null;
+  const d = rowOffset(after, g.r0 + 1) - rowOffset(before, g.r0 + 1);
+  if (!d) return null;
+  return { x: 0, y: flow === 1 ? -d : d };
+}
+
+/** 셀 그립을 누른 자리와 그 그립의 어긋남(도면 단위 — gripPress가 두고 cellGripEdit가 쓴다) */
+const pressAt = new WeakMap<App, Pt>();
+
+/**
+ * 셀 그립 편집(GRIPEDIT가 'cell:'로 시작하는 그립을 누르면 부른다): id = cell:<변>:<기준 행>,<기준 열>:<끝 행>,<끝 열>.
+ * 그립 변은 누른 자리에서 옮긴 만큼 간다(그립 옆을 눌러도 튀지 않고, 같은 자리를 다시 누르면 그대로 — 휴대폰 두 번 톡)
+ */
+export async function cellGripEdit(app: App, ctx: CommandContext, handle: string, id: string): Promise<void> {
+  const m = /^cell:(x0|x1|y0|y1):(\d+),(\d+):(\d+),(\d+)$/.exec(id);
+  const off = pressAt.get(app) ?? { x: 0, y: 0 };
+  pressAt.delete(app);
+  if (!m) return;
+  const side = m[1] as CellSide;
+  const anchor = { r: Number(m[2]), c: Number(m[3]) };
+  const end = { r: Number(m[4]), c: Number(m[5]) };
+  // 명령을 시작하며 풀린 셀 고르기를 다시(편집하는 동안 강조와 그립이 보이고, 끝나면 같은 셀)
+  const reselect = () => void tableCellSelection(app)?.select(handle, anchor, end);
+  reselect();
+  try {
+    const p = readPicked(app, handle, null);
+    if (!p || lockedLayer(app, p.entity)) return;
+    const t = p.data;
+    const ok = (q: { r: number; c: number }) => q.r < t.rows && q.c < t.cols;
+    if (!ok(anchor) || !ok(end)) return;
+    const flow = p.style.flow;
+    const g = cellRange(t, anchor, end);
+    const grip = fromTableLocal(p.entity, sideMid(rangeRect(t, g, flow), side));
+    // 기준점 = 누른 자리, 그립 변이 갈 자리 = 찍은 점 − 어긋남
+    const base = { x: grip.x + off.x, y: grip.y + off.y };
+    const target = (q: Pt): Pt => ({ x: q.x - off.x, y: q.y - off.y });
+    const shifted = (s: Pt | null): TableEntity | InsertEntity => (s ? { ...p.entity, insert: { ...p.entity.insert, ...fromTableLocal(p.entity, s) } } : p.entity);
+    const ghost = (q: Pt) => {
+      const next = resizeByGrip(t, p.style, g, side, toTableLocal(p.entity, target(q)));
+      if (!next) return [];
+      const e2 = shifted(gripInsertShift(t, next, g, side, flow));
+      const segs: number[] = [];
+      for (const s of previewSegments(next, p.style)) {
+        const a = fromTableLocal(e2, { x: s[0]!, y: s[1]! });
+        const b = fromTableLocal(e2, { x: s[2]!, y: s[3]! });
+        segs.push(a.x, a.y, b.x, b.y);
+      }
+      return [{ segs }];
+    };
+    ctx.print('** 신축 **');
+    const r = await ctx.getPoint('신축점 지정 또는 [종료(X)]:', { base, keywords: [{ key: 'X', label: '종료' }], ghost });
+    if (!('point' in r)) return;
+    const cur = readPicked(app, handle, null);
+    if (!cur) return;
+    const next = resizeByGrip(cur.data, cur.style, g, side, toTableLocal(cur.entity, target(r.point)));
+    if (!next) return;
+    // 행 높이는 문자에 맞춘 뒤의 크기로 삽입점 옮김을 잰다
+    const fitted = fitTable(app, next, cur.style);
+    const s = gripInsertShift(cur.data, fitted, g, side, flow);
+    commitTable(app, cur, fitted, 'GRIPEDIT', ctx.group, s ? fromTableLocal(cur.entity, s) : undefined);
+  } finally {
+    reselect();
+  }
+}
+
 const sel = new WeakMap<App, TableCellSelection>();
 
 /** 앱에 단 표 셀 고르기(registerTableCellSelection 뒤) */
@@ -148,6 +297,31 @@ export function registerTableCellSelection(app: App): TableCellSelection {
     const d = Math.min(q.x - rc.x0, rc.x1 - q.x, q.y - rc.y0, rc.y1 - q.y);
     return d > margin ? a : null;
   };
+  /**
+   * 바로 가기 메뉴의 셀 작업(29차): TABLECELL과 같은 계산, 확정 한 번(명령 취소 한 단계). 끝나면 같은 셀을 고른 채 —
+   * 앞에 넣은 행·열만큼 밀린 자리, 지운 뒤에는 그 자리(표 끝이면 마지막)의 셀, 병합·풀기는 그 범위
+   */
+  const applyCellOp = (handle: string, op: CellOp, label: string): void => {
+    const cur = live();
+    if (!cur || !state || state.handle !== handle) return;
+    const p = readPicked(app, handle, null);
+    if (!p || lockedLayer(app, p.entity)) return;
+    const g = cur.range;
+    const next = cellOp(p.data, g, op);
+    if (!next) return;
+    commitTable(app, p, next, label);
+    app.cmd.print(`${label}: 표 ${next.rows}행 ${next.cols}열`);
+    const a = state.anchor;
+    const b = state.end;
+    let na = a;
+    let nb = b;
+    if (op === 'rowBefore') (na = { r: a.r + 1, c: a.c }), (nb = { r: b.r + 1, c: b.c });
+    else if (op === 'colLeft') (na = { r: a.r, c: a.c + 1 }), (nb = { r: b.r, c: b.c + 1 });
+    else if (op === 'deleteRows') na = nb = { r: Math.min(g.r0, next.rows - 1), c: Math.min(a.c, next.cols - 1) };
+    else if (op === 'deleteCols') na = nb = { r: Math.min(a.r, next.rows - 1), c: Math.min(g.c0, next.cols - 1) };
+    else if (op === 'mergeAll' || op === 'mergeRows' || op === 'mergeCols' || op === 'unmerge') (na = { r: g.r0, c: g.c0 }), (nb = { r: g.r1, c: g.c1 });
+    hook.select(handle, na, nb);
+  };
 
   const hook: TableCellSelection = {
     name: 'table-cells',
@@ -190,6 +364,12 @@ export function registerTableCellSelection(app: App): TableCellSelection {
       if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.isComposing) return false;
       const { st, t, anchor } = cur;
       const flow = cur.rt.style.flow;
+      if (ev.key === 'Process' || ev.keyCode === 229) {
+        // 입력기(한글 등)의 첫 조합 키(29차): 셀 편집기를 빈 내용으로 열고 초점을 옮겨 조합이 편집기에서 이어지게 한다.
+        // 키는 맡지 않은 것으로 돌려준다(기본 동작을 막으면 조합이 끊길 수 있다 — 명령행·창은 이 키로 아무것도 하지 않는다)
+        void editTableInPlace(app, state.handle, anchor, undefined, { replace: '' });
+        return false;
+      }
       if (ev.key === 'Escape') {
         app.clearSubSelections();
         return true;
@@ -237,6 +417,93 @@ export function registerTableCellSelection(app: App): TableCellSelection {
       for (let i = 0; i < 4; i++) segs.push(p[i]!.x, p[i]!.y, p[(i + 1) % 4]!.x, p[(i + 1) % 4]!.y);
       const tris = [p[0]!.x, p[0]!.y, p[1]!.x, p[1]!.y, p[2]!.x, p[2]!.y, p[0]!.x, p[0]!.y, p[2]!.x, p[2]!.y, p[3]!.x, p[3]!.y];
       return [{ segs, tris }];
+    },
+    grips() {
+      const cur = live();
+      if (!cur) return [];
+      const q = rangeRect(cur.t, cur.range, cur.rt.style.flow);
+      return CELL_SIDES.map((s) => fromTableLocal(cur.e, sideMid(q, s)));
+    },
+    gripAt(w, tol, pickTol) {
+      const cur = live();
+      if (!cur) return -1;
+      const { e, t, range } = cur;
+      const flow = cur.rt.style.flow;
+      const q = rangeRect(t, range, flow);
+      // 셀을 누르는 자리(셀 안, 그 셀 격자선에서 고르기 허용 거리·셀 크기의 1/4보다 먼 곳)인지. 고른 범위 밖의 그런 자리는 그립이 아니다 —
+      // 작게 보이는 셀(휴대폰)도 이웃 셀 가운데를 누르면 예전처럼 그 셀을 고른다
+      const inCell = !!cellUnder(e, t, flow, w, pickTol);
+      const p = toTableLocal(e, w);
+      const inRange = p.x >= q.x0 && p.x <= q.x1 && p.y >= q.y0 && p.y <= q.y1;
+      if (inCell && !inRange) return -1;
+      const kx = Math.abs(e.scale.x || 1);
+      const ky = Math.abs(e.scale.y || 1);
+      let best = -1;
+      let bd = Infinity;
+      CELL_SIDES.forEach((side, i) => {
+        const g = fromTableLocal(e, sideMid(q, side));
+        const d = Math.hypot(w.x - g.x, w.y - g.y);
+        if (d > tol || d >= bd) return;
+        if (inCell) {
+          // 고른 범위 안은 그 변에서 그립 거리와 범위 크기의 1/4 가운데 작은 것까지만(더 안쪽은 셀 누르기 — 두 번 누르기로 셀 편집)
+          const horiz = side === 'x0' || side === 'x1';
+          const k = horiz ? kx : ky;
+          const depth = (side === 'x0' ? p.x - q.x0 : side === 'x1' ? q.x1 - p.x : side === 'y0' ? p.y - q.y0 : q.y1 - p.y) * k;
+          const size = (horiz ? q.x1 - q.x0 : q.y1 - q.y0) * k;
+          if (depth > Math.min(tol, size / 4)) return;
+        }
+        bd = d;
+        best = i;
+      });
+      return best;
+    },
+    gripPress(i, at) {
+      const cur = live();
+      const side = CELL_SIDES[i];
+      if (!cur || !state || !side) return;
+      const pt = fromTableLocal(cur.e, sideMid(rangeRect(cur.t, cur.range, cur.rt.style.flow), side));
+      const id = `cell:${side}:${state.anchor.r},${state.anchor.c}:${state.end.r},${state.end.c}`;
+      // 누른 자리와 그립의 어긋남(손가락으로 그립 옆을 눌러도 그 자리에서 옮긴 만큼만 — 같은 자리를 다시 누르면 그대로)
+      pressAt.set(app, { x: at.x - pt.x, y: at.y - pt.y });
+      // 객체 그립과 같은 그립 편집(GRIPEDIT — 누른 그립은 핫 그립 빨강)
+      app.hotGrip = { point: pt, items: [{ handle: state.handle, id, point: pt }] };
+      app.view.overlay.hotGrip = pt;
+      void app.run('GRIPEDIT');
+    },
+    menu() {
+      const cur = live();
+      if (!cur || !state) return null;
+      const { t, range: g } = cur;
+      const flow = cur.rt.style.flow;
+      const handle = state.handle;
+      const m = mergeAt(t, g.r0, g.c0) ?? { row: g.r0, col: g.c0, rows: 1, cols: 1 };
+      const one = m.row === g.r0 && m.col === g.c0 && m.row + m.rows - 1 === g.r1 && m.col + m.cols - 1 === g.c1;
+      const merged = t.merges.some((x) => x.row <= g.r1 && x.row + x.rows - 1 >= g.r0 && x.col <= g.c1 && x.col + x.cols - 1 >= g.c0);
+      const name = one ? cellName(g.r0, g.c0) : `${cellName(g.r0, g.c0)}:${cellName(g.r1, g.c1)}`;
+      const run = (op: CellOp, label: string) => () => applyCellOp(handle, op, label);
+      const items: ContextMenuItem[] = [
+        { heading: `셀 ${name}` },
+        // 화면 위·아래(위로 쌓는 표는 번호 차례가 반대)
+        { label: '위에 행 삽입', run: run(flow === 1 ? 'rowAfter' : 'rowBefore', '위에 행 삽입') },
+        { label: '아래에 행 삽입', run: run(flow === 1 ? 'rowBefore' : 'rowAfter', '아래에 행 삽입') },
+        { label: '행 삭제', disabled: g.r1 - g.r0 + 1 >= t.rows, run: run('deleteRows', '행 삭제') },
+        { separator: true },
+        { label: '왼쪽에 열 삽입', run: run('colLeft', '왼쪽에 열 삽입') },
+        { label: '오른쪽에 열 삽입', run: run('colRight', '오른쪽에 열 삽입') },
+        { label: '열 삭제', disabled: g.c1 - g.c0 + 1 >= t.cols, run: run('deleteCols', '열 삭제') },
+        { separator: true },
+        {
+          label: '셀 병합',
+          disabled: one,
+          items: [
+            { label: '모두', run: run('mergeAll', '셀 병합') },
+            { label: '행별', run: run('mergeRows', '셀 병합') },
+            { label: '열별', run: run('mergeCols', '셀 병합') },
+          ],
+        },
+        { label: '셀 병합 해제', disabled: !merged, run: run('unmerge', '셀 병합 해제') },
+      ];
+      return items;
     },
     current() {
       const cur = live();

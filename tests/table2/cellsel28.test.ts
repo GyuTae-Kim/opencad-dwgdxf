@@ -89,8 +89,8 @@ describe('셀 고르기(진짜 App)', () => {
     const h = setup();
     h.click(h.center(2, 1));
     expect(h.cur()).toEqual([2, 1, 2, 1]);
-    // B3 왼쪽 격자선에서 1 안쪽(고르기 허용 거리 5, 셀 높이 7.5의 1/4보다 가깝다)
-    h.click({ x: X0 + 40 + 1, y: h.center(2, 1).y });
+    // B2 왼쪽 격자선에서 1 안쪽(고르기 허용 거리 5, 셀 높이 7.5의 1/4보다 가깝다). 29차: 고른 B3의 테두리 가운데 가까이는 셀 그립이라 그 위 행에서
+    h.click({ x: X0 + 40 + 1, y: h.center(1, 1).y });
     expect(h.cur()).toBeNull();
     expect([...h.st.selection]).toEqual([h.handle]);
     const c = h.center(3, 0);

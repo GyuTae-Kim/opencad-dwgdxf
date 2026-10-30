@@ -67,6 +67,11 @@ export interface EditorInit {
   barDock?: 'top';
   /** 편집 상자의 좌우 안쪽 여백을 없앤다(휴대폰 표 셀 편집 — 상자가 셀 문자 폭에 맞아 옆 셀 격자선을 넘지 않게, 28차) */
   tight?: boolean;
+  /**
+   * 도구 모음을 한 줄로 줄인다(휴대폰 표 셀 편집 — 29차): 굵게·기울임꼴·밑줄, 명령 취소·복구, 끝의 단추(extra), 확인·취소만 보이고
+   * 나머지(높이·글꼴·색상·정렬·기호·필드·형식 더 보기의 칸)는 "도구 더 보기"(⋯)를 누르면 그 아래 줄에 펼친다
+   */
+  compact?: boolean;
 }
 
 export interface EditorResult {
@@ -245,6 +250,18 @@ export class TextEditor {
     this.listen();
     this.place();
     this.box.focus();
+    // 톡으로 연 편집기(휴대폰 — 29차): 손가락을 뗀 뒤 브라우저가 보내는 호환 마우스 누르기가 초점을 도면 쪽(어느 요소도 아닌 곳)으로 옮기면
+    // 상자로 되돌린다(375px 헤드리스에서 연 직후 초점이 body였다). 연 뒤 0.8초 안, 편집기가 열려 있고 초점이 어디에도 없을 때만
+    const opened = performance.now();
+    this.on(this.box, 'blur', (ev) => {
+      // 다른 요소(도구 모음의 칸 등)로 옮기면 그대로
+      const to = (ev as FocusEvent).relatedTarget as Node | null;
+      if ((to && to.nodeType === 1 && to !== document.body) || performance.now() - opened > 800) return;
+      setTimeout(() => {
+        const a = document.activeElement;
+        if (!this.closed && (!a || a === document.body)) this.box.focus({ preventScroll: true });
+      });
+    });
     const len = M.docLength(this.doc);
     if (this.init.selectAll) setSel(this.box, this.doc, 0, len);
     else setSel(this.box, this.doc, len);
@@ -1482,7 +1499,33 @@ export class TextEditor {
     if (init.extra?.length) bar.append(grp(...init.extra.map((x, i) => this.btn(`extra${i}`, x.label, x.title ?? x.label, () => x.run(this)))));
     const ok = this.btn('ok', '확인', `문자 편집기 닫기 (${isMac ? '⌘' : 'Ctrl+'}Enter)`, () => this.confirm());
     ok.classList.add('te-ok');
-    bar.append(grp(ok, this.btn('cancel', '취소', '취소 (Esc)', () => this.cancel())));
+    const last = grp(ok, this.btn('cancel', '취소', '취소 (Esc)', () => this.cancel()));
+    bar.append(last);
+    if (init.compact) {
+      // 한 줄 도구 모음(휴대폰 표 셀 — 29차): 자주 쓰는 단추만, 나머지는 "도구 더 보기"로 그 아래 줄에
+      const tools = this.btn('tools', '⋯', '도구 더 보기', () => {
+        const on = bar.classList.toggle('te-show-sec');
+        // 형식 더 보기의 칸(기울기 각도·자간·폭 비율)도 함께
+        bar.classList.toggle('te-show-more', on);
+        tools.setAttribute('aria-expanded', on ? 'true' : 'false');
+        this.place();
+      });
+      tools.setAttribute('aria-expanded', 'false');
+      last.append(tools);
+      bar.classList.add('te-compact');
+      const keep = new Set<Element>([this.controls.bold, this.controls.italic, this.controls.undo, this.controls.redo, ok, this.controls.cancel, tools].filter((x): x is HTMLElement => !!x));
+      init.extra?.forEach((_, i) => this.controls[`extra${i}`] && keep.add(this.controls[`extra${i}`]!));
+      for (const g of bar.querySelectorAll('.te-grp')) {
+        let any = false;
+        for (const el of g.children) {
+          if (keep.has(el)) any = true;
+          else el.classList.add('te-sec');
+        }
+        if (!any) g.classList.add('te-sec');
+      }
+      // 따로 펼치던 형식 더 보기 단추는 "도구 더 보기"가 대신한다
+      this.controls.more?.classList.add('te-off');
+    }
     if (init.mode === 'mtext') {
       const num = (label: string, title: string, get: (f: M.Fmt) => number | undefined, set: (f: M.Fmt, v: number) => M.Fmt, lo: number, hi2: number) => {
         const i = h('input', { title, 'aria-label': title, inputmode: 'decimal' }) as HTMLInputElement;
@@ -1507,7 +1550,7 @@ export class TextEditor {
       bar.append(
         h(
           'div',
-          { class: 'te-more' },
+          { class: init.compact ? 'te-more te-sec' : 'te-more' },
           num('기울기 각도', '기울기 각도(−85~85)', (f) => f.oblique ?? 0, (f, v) => ({ ...f, oblique: v || undefined }), -85, 85),
           num('자간', '자간(0.75~4)', (f) => f.tracking ?? 1, (f, v) => ({ ...f, tracking: v === 1 ? undefined : v }), 0.75, 4),
           num('폭 비율', '폭 비율(0.1~10)', (f) => f.width ?? 1, (f, v) => ({ ...f, width: v === 1 ? undefined : v }), 0.1, 10),
