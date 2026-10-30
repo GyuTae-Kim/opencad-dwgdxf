@@ -16,6 +16,8 @@ export {
   createRadialDimension,
   moveDimensionText,
   nextDimBlockName,
+  ordinateChainEnd,
+  ordinateHorizontalDirection,
   type CreateDimOptions,
 } from './create';
 export { builtinArrowBlock } from './arrows';

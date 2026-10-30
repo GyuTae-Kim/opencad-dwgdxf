@@ -155,18 +155,58 @@ export function createDiameterDimension(doc: CadDocument, center: Vec3, radius: 
 }
 
 /**
- * 세로좌표: xAxis가 없으면 지시선이 세로에 가까울 때 X 좌표.
- * datum: 데이텀(10 — 지금 UCS 원점). 없으면 모형 공간의 UCS 원점($UCSORG) — 도면 공간에서 만들면 부르는 쪽이 그 공간의 UCS 원점($PUCSORG)을 준다
+ * 세로좌표의 수평 방향(DXF 51): 지금 UCS X축의 각도 ucsAngle(WCS XY 평면, 라디안)의 음수를 (−π, π]로.
+ * DXF 참조(공통 치수 그룹 코드 51): 51은 OCS X축과 UCS X축 사이 각도의 음수다. 0이면 0(예전과 같다)
  */
-export function createOrdinateDimension(doc: CadDocument, featurePoint: Vec3, leaderEnd: Vec3, opt: CreateDimOptions & { xAxis?: boolean; datum?: Vec3 } = {}): DimensionEntity {
-  const dx = Math.abs(leaderEnd.x - featurePoint.x);
-  const dy = Math.abs(leaderEnd.y - featurePoint.y);
+export function ordinateHorizontalDirection(ucsAngle: number | undefined): number {
+  if (!ucsAngle) return 0;
+  let a = -ucsAngle % (2 * Math.PI);
+  if (a <= -Math.PI) a += 2 * Math.PI;
+  else if (a > Math.PI) a -= 2 * Math.PI;
+  return Math.abs(a) < 1e-15 ? 0 : a;
+}
+
+/**
+ * 세로좌표 연속·기준선의 새 지시선 끝: 새 피쳐 위치 feature에서 지시선 축(X 데이텀이면 UCS Y축, Y 데이텀이면 UCS X축)으로 가서
+ * 앞 치수의 지시선 끝 ref와 같은 높이(X 데이텀)·폭(Y 데이텀). UCS가 돌지 않았으면(ucsAngle 0) 예전처럼 WCS 좌표를 그대로 옮긴다
+ */
+export function ordinateChainEnd(feature: Vec3, ref: Vec3, xAxis: boolean, ucsAngle = 0): Vec3 {
+  if (!ucsAngle) return xAxis ? { x: feature.x, y: ref.y, z: 0 } : { x: ref.x, y: feature.y, z: 0 };
+  const L = xAxis ? dir(ucsAngle + Math.PI / 2) : dir(ucsAngle);
+  const q = madd(P2(feature), L, dot(sub(P2(ref), P2(feature)), L));
+  return { x: q.x, y: q.y, z: 0 };
+}
+
+/**
+ * 세로좌표: xAxis가 없으면 지시선이 세로에 가까울 때 X 좌표(도움말 DIMORDINATE — Y 좌표 차이가 더 크면 X 좌표를 잰다).
+ * datum: 데이텀(10 — 지금 UCS 원점). 없으면 모형 공간의 UCS 원점($UCSORG) — 도면 공간에서 만들면 부르는 쪽이 그 공간의 UCS 원점($PUCSORG)을 준다.
+ * ucsAngle(26차): 지금 UCS X축의 각도(라디안, 없거나 0이면 예전처럼 WCS 축). 도움말 "About Creating Ordinate Dimensions"(지금 UCS의 위치와
+ * 방향이 세로좌표 값을 정한다)대로 X·Y 값과 지시선 축을 그 UCS 방향으로 잡고, DXF 참조대로 51(수평 방향)에 −ucsAngle을 적는다.
+ * 치수 블록(ordinate.ts)은 51의 반대 각도를 UCS X축으로 재고 지시선을 그린다 — ezdxf도 51을 같은 뜻으로 읽어 다시 그린다
+ */
+export function createOrdinateDimension(
+  doc: CadDocument,
+  featurePoint: Vec3,
+  leaderEnd: Vec3,
+  opt: CreateDimOptions & { xAxis?: boolean; datum?: Vec3; ucsAngle?: number } = {},
+): DimensionEntity {
+  const hd = ordinateHorizontalDirection(opt.ucsAngle);
+  let dx = Math.abs(leaderEnd.x - featurePoint.x);
+  let dy = Math.abs(leaderEnd.y - featurePoint.y);
+  if (hd) {
+    // 지시선 방향을 UCS 축으로 견준다
+    const v = sub(P2(leaderEnd), P2(featurePoint));
+    const ux = dir(-hd);
+    dx = Math.abs(dot(v, ux));
+    dy = Math.abs(dot(v, perp(ux)));
+  }
   const xType = opt.xAxis ?? dy >= dx;
   const d = base(doc, 6 | (xType ? 64 : 0), opt);
   const org = opt.datum ?? doc.header.get('$UCSORG');
   d.defPoint = org && typeof org === 'object' ? V(org as Vec3) : { ...ZERO };
   d.defPoint2 = V(featurePoint);
   d.defPoint3 = V(leaderEnd);
+  d.horizontalDirection = hd;
   return finish(doc, d);
 }
 

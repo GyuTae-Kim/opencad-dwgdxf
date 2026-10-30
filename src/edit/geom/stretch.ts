@@ -434,7 +434,13 @@ export function moveDimPoint(e: DimensionEntity, key: DimKey, d: Vec2): Dimensio
   if (Number.isFinite(e.measurement)) {
     if (e.subtype === 'ARC_DIMENSION' || k === 0 || k === 1 || k === 3 || k === 4) r.measurement = dimMeasure(r);
     else if (k === 2 || k === 5) r.measurement = angularMeasure(r);
-    else if (k === 6) r.measurement = Math.abs((e.dimType & 64 ? r.defPoint2.x - r.defPoint.x : r.defPoint2.y - r.defPoint.y));
+    else if (k === 6) {
+      const dx = r.defPoint2.x - r.defPoint.x;
+      const dy = r.defPoint2.y - r.defPoint.y;
+      // 51(수평 방향)이 있으면 그 반대 각도가 재는 UCS X축(치수 블록 ordinate.ts와 같다 — 26차)
+      const a = -(e.horizontalDirection || 0);
+      r.measurement = !a ? Math.abs(e.dimType & 64 ? dx : dy) : Math.abs(e.dimType & 64 ? dx * Math.cos(a) + dy * Math.sin(a) : -dx * Math.sin(a) + dy * Math.cos(a));
+    }
   }
   if (e.subtype === 'ARC_DIMENSION' && e.arc) {
     // 호 정의(중심·끝) 갱신

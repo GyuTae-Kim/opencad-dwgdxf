@@ -37,5 +37,8 @@ for st in ['ISO']:
     d = msp.add_ordinate_x_dim(feature_location=(1210, 5), offset=(5, 35), origin=(1200, 0), dimstyle=st); d.render(); cases.append(d.dimension)
     d = msp.add_ordinate_y_dim(feature_location=(1310, 5), offset=(30, 0), origin=(1300, 0), dimstyle=st); d.render(); cases.append(d.dimension)
     d = msp.add_ordinate_y_dim(feature_location=(1410, 5), offset=(30, 8), origin=(1400, 0), dimstyle=st); d.render(); cases.append(d.dimension)
+    # 26차: 회전한 지역 좌표계(UCS)의 세로좌표 — ezdxf는 51에 −회전을 적고 그 축으로 지시선을 그린다
+    d = msp.add_ordinate_x_dim(feature_location=(1510, 5), offset=(5, 35), origin=(1500, 0), rotation=30, dimstyle=st); d.render(); cases.append(d.dimension)
+    d = msp.add_ordinate_y_dim(feature_location=(1610, 5), offset=(30, 8), origin=(1600, 0), rotation=-60, dimstyle=st); d.render(); cases.append(d.dimension)
 doc.saveas(sys.argv[1])
 print(len(cases))

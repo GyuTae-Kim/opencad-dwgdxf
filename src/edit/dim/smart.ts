@@ -216,6 +216,24 @@ export function alignDimensions(base: DimensionEntity, others: readonly Dimensio
     }
     if (isOrdinateDim(base) && isOrdinateDim(d) && (base.dimType & 64) === (d.dimType & 64)) {
       const xType = (base.dimType & 64) !== 0;
+      const hb = base.horizontalDirection || 0;
+      const hd = d.horizontalDirection || 0;
+      if (hb || hd) {
+        // 회전한 UCS에서 만든 세로좌표(26차 — 51이 UCS X축): 축이 같을 때만 그 지시선 축 위 높이·폭을 맞춘다
+        if (Math.abs(Math.atan2(Math.sin(hb - hd), Math.cos(hb - hd))) > tol) {
+          skipped.push(d);
+          continue;
+        }
+        const a = -hb;
+        const L = xType ? { x: -Math.sin(a), y: Math.cos(a) } : { x: Math.cos(a), y: Math.sin(a) };
+        const k = dot(sub(base.defPoint3, d.defPoint3), L);
+        if (Math.abs(k) < 1e-12) continue;
+        const c = structuredClone(d);
+        c.defPoint3 = { ...c.defPoint3, x: c.defPoint3.x + L.x * k, y: c.defPoint3.y + L.y * k };
+        c.dimType &= ~128;
+        changed.push(c);
+        continue;
+      }
       const c = structuredClone(d);
       if (xType) {
         if (Math.abs(c.defPoint3.y - base.defPoint3.y) < 1e-12) continue;
