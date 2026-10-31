@@ -173,6 +173,48 @@ export const FILL_COLORS: readonly { aci: number; label: string }[] = [
   { aci: 7, label: '흰색' },
 ];
 
+/** 범위 행들의 실제 높이(문자에 맞춘 값 — 모두 같으면 그 값, 다르면 null) */
+export function rangeRowHeight(t: TableData, g: Range): number | null {
+  const v = t.rowHeights[g.r0];
+  if (v === undefined) return null;
+  for (let r = g.r0 + 1; r <= g.r1; r++) if (Math.abs((t.rowHeights[r] ?? NaN) - v) > 1e-9 * Math.max(1, v)) return null;
+  return v;
+}
+
+/** 범위 열들의 폭(모두 같으면 그 값, 다르면 null) */
+export function rangeColWidth(t: TableData, g: Range): number | null {
+  const v = t.colWidths[g.c0];
+  if (v === undefined) return null;
+  for (let c = g.c0 + 1; c <= g.c1; c++) if (Math.abs((t.colWidths[c] ?? NaN) - v) > 1e-9 * Math.max(1, v)) return null;
+  return v;
+}
+
+/**
+ * 범위의 행 높이를 모두 v로(31차 특성 팔레트 — TABLECELL 행 높이처럼 준 높이와 실제 높이를 함께, 문자가 더 필요하면 확정할 때 맞춤에서 다시 늘어난다).
+ * 범위의 준 높이가 이미 모두 v면 null(문자에 맞춰 늘어난 행에 같은 값을 다시 넣어도 바뀌지 않는다)
+ */
+export function setRangeRowHeight(t: TableData, g: Range, v: number): TableData | null {
+  let same = true;
+  for (let r = g.r0; r <= g.r1; r++) if (t.baseRowHeights[r] !== v) same = false;
+  if (same) return null;
+  const out = cloneTable(t);
+  for (let r = g.r0; r <= g.r1; r++) {
+    out.rowHeights[r] = v;
+    out.baseRowHeights[r] = v;
+  }
+  return out;
+}
+
+/** 범위의 열 폭을 모두 v로(31차 특성 팔레트). 이미 모두 그 값이면 null */
+export function setRangeColWidth(t: TableData, g: Range, v: number): TableData | null {
+  let same = true;
+  for (let c = g.c0; c <= g.c1; c++) if (t.colWidths[c] !== v) same = false;
+  if (same) return null;
+  const out = cloneTable(t);
+  for (let c = g.c0; c <= g.c1; c++) out.colWidths[c] = v;
+  return out;
+}
+
 /** 셀 그립의 변(표 좌표): x0 왼쪽, x1 오른쪽, y0 아래, y1 위 */
 export type CellSide = 'x0' | 'x1' | 'y0' | 'y1';
 /** 그립 차례(grips()·gripAt의 번호): 오른쪽, 아래, 왼쪽, 위 */
@@ -343,6 +385,8 @@ export function registerTableCellSelection(app: App): TableCellSelection {
     if (st.selection.size) app.clearSelection();
     state = { st, space: st.space, handle, anchor, end };
     app.refreshSelectionOverlay();
+    // 31차: 특성 팔레트가 고른 셀의 특성을 보인다
+    app.ui?.refreshPalette();
   };
   /** 셀 안의 점(격자선에서 margin보다 먼 자리)이면 그 셀(병합 셀은 기준 셀) */
   const cellUnder = (e: TableEntity | InsertEntity, t: TableData, flow: 0 | 1, w: Pt, tol: number): Cell | null => {
@@ -564,8 +608,10 @@ export function registerTableCellSelection(app: App): TableCellSelection {
       return !!state;
     },
     clear() {
+      const had = !!state;
       state = null;
       drag = null;
+      if (had) app.ui?.refreshPalette();
     },
     overlay() {
       const cur = live();
