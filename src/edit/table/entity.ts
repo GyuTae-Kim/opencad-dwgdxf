@@ -1,11 +1,12 @@
 /**
  * 표 객체(ACAD_TABLE) ↔ 표 정의.
  *
- * 모델의 ACAD_TABLE은 행·열 크기와 셀 문자만 가진다. 병합·행 종류·셀 정렬·준 행 높이·셀 배경 채우기(31차)·셀 문자 높이·문자 색(32차)은 확장 자료
- * OPENCAD_TABLE에 남긴다(DXF·DWG 모두 그대로 저장된다). AutoCAD가 쓴 표는 원본 태그의 셀 병합(173·175·176)과
- * 셀 정렬(170), 셀 배경 채우기(63·283), 셀 문자 높이(140)·문자 색(64)을 읽는다. 표를 블록 참조로 저장한 파일(DWG 쓰기)도 확장 자료가 있으면 다시 표로 읽을 수 있다.
+ * 모델의 ACAD_TABLE은 행·열 크기와 셀 문자만 가진다. 병합·행 종류·셀 정렬·준 행 높이·셀 배경 채우기(31차)·셀 문자 높이·문자 색(32차)·셀 문자 스타일(33차)은
+ * 확장 자료 OPENCAD_TABLE에 남긴다(DXF·DWG 모두 그대로 저장된다). AutoCAD가 쓴 표는 원본 태그의 셀 병합(173·175·176)과
+ * 셀 정렬(170), 셀 배경 채우기(63·283), 셀 문자 높이(140)·문자 색(64)·문자 스타일(7)을 읽는다. 표를 블록 참조로 저장한 파일(DWG 쓰기)도 확장 자료가 있으면 다시 표로 읽을 수 있다.
  */
 import type { CadColor, CadDocument, Entity, InsertEntity, RawTag, TableEntity, XData, XDataItem } from '../../core/model';
+import { tableKey } from '../../core/model';
 import type { CellKind, TableStyle } from './style';
 import { findTableStyle, isMetric, defaultTableStyle, type TableStyleEntry } from './style';
 import type { CellData, Merge, TableData } from './model';
@@ -113,6 +114,8 @@ export function encodeTableXData(t: TableData): XData {
     i32(cruns.length);
     for (const run of cruns) run.forEach(i32);
   }
+  // 33차 셀 문자 스타일 재지정: 문자 색 뒤(32차까지의 읽기는 여기서 멈춘다). 같은 이름이 이어진 셀을 한 묶음 — 시작 번호, 개수, 이름 조각 수, 이름 조각(셀 문자와 같은 조각)
+  it.push(...textStyleGroup(new Map(t.cells.flatMap((c, i): [number, string][] => (c.textStyle ? [[i, c.textStyle]] : [])))));
   return { app: TABLE_APP, items: it };
 }
 
@@ -131,6 +134,10 @@ export interface DecodedTable {
   /** 셀 문자 높이·문자 색 재지정(32차) */
   heights?: Map<number, number>;
   colors?: Map<number, CadColor>;
+  /** 셀 문자 스타일 재지정(33차 — 이름) */
+  textStyles?: Map<number, string>;
+  /** 읽은 묶음마다 확장 자료 항목 안의 자리 [시작, 끝)(33차 — 문자 스타일 이름 바꾸기가 tstyle 묶음만 바꿔 넣을 때 쓴다) */
+  spans: Map<string, [number, number]>;
 }
 
 export function decodeTableXData(x: XData | undefined): DecodedTable | null {
@@ -148,11 +155,14 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
   };
   const first = next();
   if (!first || typeof first.value !== 'string' || !first.value.startsWith('OPENCAD_TABLE')) return null;
-  const out: DecodedTable = { rows: 0, cols: 0, merges: [], aligns: new Map() };
+  const out: DecodedTable = { rows: 0, cols: 0, merges: [], aligns: new Map(), spans: new Map() };
   try {
     while (i < items.length) {
+      const at = i;
       const tag = next();
       if (!tag || tag.code !== 1000) break;
+      // 묶음을 다 읽은 뒤 자리를 적는다(다음 차례 처음에)
+      const mark = () => out.spans.set(String(tag.value), [at, i]);
       switch (tag.value) {
         case 'size':
           out.rows = int();
@@ -247,13 +257,124 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
           }
           break;
         }
+        case 'tstyle': {
+          const n = int();
+          const cells = out.rows * out.cols;
+          out.textStyles = new Map();
+          for (let k = 0; k < n && i < items.length; k++) {
+            const start = int();
+            const count = int();
+            const parts = int();
+            let name = '';
+            for (let p = 0; p < parts && i < items.length; p++) name += String(next()?.value ?? '');
+            // 빈 이름과 표 크기 밖 번호(망가진 자료)는 버린다
+            if (!name) continue;
+            for (let j = Math.max(0, start); j < Math.min(cells, start + count); j++) out.textStyles.set(j, name);
+          }
+          break;
+        }
         default:
           return out;
       }
+      mark();
     }
   } catch {
     return out;
   }
+  return out;
+}
+
+/** 셀 문자 스타일 재지정(셀 번호 → 이름)을 확장 자료 tstyle 묶음 항목으로(encodeTableXData와 같은 꼴) */
+function textStyleGroup(names: ReadonlyMap<number, string>): XDataItem[] {
+  const it: XDataItem[] = [];
+  const runs: [number, number, string][] = [];
+  for (const [i, n] of [...names].sort((a, b) => a[0] - b[0])) {
+    const last = runs[runs.length - 1];
+    if (last && last[0] + last[1] === i && last[2] === n) last[1]++;
+    else runs.push([i, 1, n]);
+  }
+  if (!runs.length) return it;
+  it.push({ code: 1000, value: 'tstyle' }, { code: 1071, value: runs.length });
+  for (const [start, count, name] of runs) {
+    const parts = chunks(name);
+    it.push({ code: 1071, value: start }, { code: 1071, value: count }, { code: 1071, value: parts.length }, ...parts.map((p) => ({ code: 1000, value: p })));
+  }
+  return it;
+}
+
+/** AcDbTable 원본 태그 안(100 AcDbTable 다음부터 다음 100 전까지)의 자리 [시작, 끝) */
+function acdbTableRange(raw: readonly RawTag[] | undefined): [number, number] | null {
+  if (!raw) return null;
+  const start = raw.findIndex((t) => t.code === 100 && String(t.value).trim() === 'AcDbTable');
+  if (start < 0) return null;
+  let end = start + 1;
+  while (end < raw.length && raw[end]!.code !== 100) end++;
+  return [start + 1, end];
+}
+
+/**
+ * 표가 가리키는 문자 스타일 이름(33차): 확장 자료의 셀 문자 스타일 재지정과 AutoCAD 원본 태그(AcDbTable)의 7(셀·표 수준 문자 스타일).
+ * 소거(PURGE)가 쓰이는 문자 스타일로 센다
+ */
+export function tableTextStyleRefs(e: Entity): string[] {
+  if (e.type !== 'ACAD_TABLE' && e.type !== 'INSERT') return [];
+  const out = new Set<string>();
+  const x = decodeTableXData(e.xdata?.find((q) => q.app.toUpperCase() === TABLE_APP));
+  for (const n of x?.textStyles?.values() ?? []) out.add(n);
+  if (e.type === 'ACAD_TABLE') {
+    const r = acdbTableRange(e.raw);
+    if (r) for (let k = r[0]; k < r[1]; k++) if (e.raw![k]!.code === 7 && String(e.raw![k]!.value ?? '').trim()) out.add(String(e.raw![k]!.value).trim());
+  }
+  return [...out];
+}
+
+/**
+ * 표가 가리키는 문자 스타일 이름을 map으로 바꾼 객체(33차 — 이름 바꾸기·다른 도면으로 복사): 확장 자료의 tstyle 묶음과 원본 태그(AcDbTable)의 7.
+ * 다른 값은 그대로. 바뀐 것이 없으면 null
+ */
+export function mapTableTextStyles<T extends Entity>(e: T, map: (name: string) => string): T | null {
+  if (e.type !== 'ACAD_TABLE' && e.type !== 'INSERT') return null;
+  let changed = false;
+  let xdata = e.xdata;
+  const xi = e.xdata?.findIndex((q) => q.app.toUpperCase() === TABLE_APP) ?? -1;
+  if (xi >= 0) {
+    const x = e.xdata![xi]!;
+    const d = decodeTableXData(x);
+    const span = d?.spans.get('tstyle');
+    if (d?.textStyles?.size && span) {
+      const names = new Map<number, string>();
+      for (const [i, n] of d.textStyles) {
+        const m = map(n);
+        if (m !== n) changed = true;
+        names.set(i, m);
+      }
+      if (changed) {
+        const items = [...x.items.slice(0, span[0]), ...textStyleGroup(names), ...x.items.slice(span[1])];
+        xdata = e.xdata!.map((q, k) => (k === xi ? { app: q.app, items } : q));
+      }
+    }
+  }
+  let raw = e.type === 'ACAD_TABLE' ? e.raw : undefined;
+  const r = e.type === 'ACAD_TABLE' ? acdbTableRange(e.raw) : null;
+  if (r && raw) {
+    let rawChanged = false;
+    const next = raw.map((t, k) => {
+      if (k < r[0] || k >= r[1] || t.code !== 7) return t;
+      const v = String(t.value ?? '').trim();
+      if (!v) return t;
+      const m = map(v);
+      if (m === v) return t;
+      rawChanged = true;
+      return { ...t, value: m };
+    });
+    if (rawChanged) {
+      raw = next;
+      changed = true;
+    }
+  }
+  if (!changed) return null;
+  const out = { ...e, xdata } as T;
+  if (raw && out.type === 'ACAD_TABLE') out.raw = raw;
   return out;
 }
 
@@ -264,6 +385,8 @@ export interface RawTableCells {
   /** 셀 문자 높이·문자 색 재지정(32차) */
   heights: Map<number, number>;
   colors: Map<number, CadColor>;
+  /** 셀 문자 스타일 재지정(33차 — 이름) */
+  textStyles: Map<number, string>;
   /** 셀 수(171 개수) */
   count: number;
 }
@@ -272,10 +395,11 @@ export interface RawTableCells {
  * AutoCAD 원본 태그(AcDbTable)의 셀 병합·셀 정렬·셀 배경 채우기(31차).
  * 채우기는 셀 재지정 플래그(R2007+ 91 / 그 전 177)의 4(배경색)이면 63 색(283이 0일 때), 2(채우기 없음 여부)와 283이 1이면 채우지 않음 —
  * io/tablecells.ts rawCellOverrides와 같은 판정(셀의 283은 표본 DXF·*T 블록에서 채울 때 0이다).
- * 32차 문자 높이·문자 색: 플래그의 0x20이면 140(셀 수준 문자 높이 재지정, 0보다 클 때), 0x08이면 64(셀 내용 색 재지정 — 색인)
+ * 32차 문자 높이·문자 색: 플래그의 0x20이면 140(셀 수준 문자 높이 재지정, 0보다 클 때), 0x08이면 64(셀 내용 색 재지정 — 색인).
+ * 33차 문자 스타일: 플래그의 0x10이면 7(셀 수준 문자 스타일 이름 재지정, 빈 이름은 버린다)
  */
 export function rawTableCells(raw: readonly RawTag[] | undefined): RawTableCells {
-  const out: RawTableCells = { merges: [], aligns: new Map(), fills: new Map(), heights: new Map(), colors: new Map(), count: 0 };
+  const out: RawTableCells = { merges: [], aligns: new Map(), fills: new Map(), heights: new Map(), colors: new Map(), textStyles: new Map(), count: 0 };
   if (!raw) return out;
   const start = raw.findIndex((t) => t.code === 100 && String(t.value).trim() === 'AcDbTable');
   if (start < 0) return out;
@@ -283,8 +407,9 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): RawTableCells
   let cell = -1;
   let seen = new Set<number>();
   let span: { w: number; h: number } = { w: 1, h: 1 };
-  // 셀 재지정 값(값 묶음 301…304 밖의 첫 값)
+  // 셀 재지정 값(값 묶음 301…304 밖의 첫 값). 문자 스타일(7)은 이름이라 따로
   let ovr = new Map<number, number>();
+  let styleName: string | undefined;
   let inValue = false;
   const flush = () => {
     if (cell >= 0 && cols > 0 && (span.w > 1 || span.h > 1)) out.merges.push({ row: Math.floor(cell / cols), col: cell % cols, rows: Math.max(1, span.h), cols: Math.max(1, span.w) });
@@ -297,6 +422,7 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): RawTableCells
     if (flags & 0x20 && th !== undefined && th > 0) out.heights.set(cell, th);
     const tc = ovr.get(64);
     if (flags & 0x08 && tc !== undefined && tc >= 0 && tc <= 257) out.colors.set(cell, { aci: tc });
+    if (flags & 0x10 && styleName) out.textStyles.set(cell, styleName);
   };
   for (let k = start + 1; k < raw.length; k++) {
     const t = raw[k]!;
@@ -308,12 +434,14 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): RawTableCells
       seen = new Set();
       span = { w: 1, h: 1 };
       ovr = new Map();
+      styleName = undefined;
       inValue = false;
       continue;
     }
     if (cell < 0) continue;
     if (t.code === 301) inValue = true;
     else if (t.code === 304) inValue = false;
+    else if (!inValue && t.code === 7 && styleName === undefined) styleName = String(t.value ?? '').trim();
     else if (!inValue && (t.code === 177 || t.code === 91 || t.code === 63 || t.code === 283 || t.code === 140 || t.code === 64) && !ovr.has(t.code)) {
       const v = Number(t.value);
       ovr.set(t.code, Number.isFinite(v) ? v : 0);
@@ -374,7 +502,7 @@ export function tableFromEntity(e: TableEntity | InsertEntity, doc: CadDocument)
   const rowHeights = pick(te?.rowHeights, xok ? x!.rowHeights : undefined, rows, 1);
   const colWidths = pick(te?.columnWidths, xok ? x!.colWidths : undefined, cols, 1);
   const baseRowHeights = xok && x!.baseRowHeights?.length === rows ? x!.baseRowHeights.map((v, i) => Math.min(v, rowHeights[i]!)) : [...rowHeights];
-  const raw: RawTableCells = te ? rawTableCells(te.raw) : { merges: [], aligns: new Map(), fills: new Map(), heights: new Map(), colors: new Map(), count: 0 };
+  const raw: RawTableCells = te ? rawTableCells(te.raw) : { merges: [], aligns: new Map(), fills: new Map(), heights: new Map(), colors: new Map(), textStyles: new Map(), count: 0 };
   // 원본 태그의 셀 재지정은 셀마다 하나씩 있을 때만(표 크기와 맞지 않으면 어느 셀인지 모른다)
   const rawOk = !xok && raw.count === rows * cols;
   const rawFills = rawOk ? raw.fills : null;
@@ -392,6 +520,10 @@ export function tableFromEntity(e: TableEntity | InsertEntity, doc: CadDocument)
     if (th !== undefined) c.height = th;
     const tc = xok ? x!.colors?.get(i) : rawOk ? raw.colors.get(i) : undefined;
     if (tc) c.color = { ...tc };
+    // 33차 셀 문자 스타일(앱 표는 확장 자료, AutoCAD 표는 셀 재지정 7). 도면에 없는 스타일(망가진 자료)은 버려 셀 스타일을 따르고, 이름은 도면의 철자로
+    const ts = xok ? x!.textStyles?.get(i) : rawOk ? raw.textStyles.get(i) : undefined;
+    const tsDef = ts ? doc.textStyles.get(tableKey(ts)) : undefined;
+    if (tsDef?.name) c.textStyle = tsDef.name;
     return c;
   });
   let rowKinds: CellKind[];

@@ -124,7 +124,8 @@ export function cellTextPlace(
     width: Math.max(0, q.x1 - q.x0 - 2 * style.hMargin) * kx,
     // 32차: 셀 문자 높이 재지정(없으면 행 종류의 셀 스타일)
     height: cellTextHeight(t, style, r, c) * ky,
-    textStyle: cs.textStyle || 'Standard',
+    // 33차: 셀 문자 스타일 재지정(없으면 행 종류의 셀 스타일)
+    textStyle: t.cells[cellIndex(t, r, c)]?.textStyle || cs.textStyle || 'Standard',
     rotation: tableAngle(e),
   };
 }

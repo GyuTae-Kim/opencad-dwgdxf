@@ -16,6 +16,8 @@ import { type FormField, form } from './ui/dom';
 import { loadPref, savePref, selectWithKeywords } from './util2-ui';
 import { emptyText, purgeNamedOps, purgeRegAppOps, purgeableNamed, purgeableRegApps, removeWhereOps, zeroLength } from '../edit/purge';
 import { lwCount, tidyWidths, zeros } from '../core/lwpoly';
+import { tableTextStyleRefs } from '../edit/table/entity';
+import { listTableStyles } from '../edit/table/style';
 import { uiText } from './i18n-text';
 
 /** MATCHPROP 설정(S): AutoCAD 특성 설정 대화상자의 항목. 끈 것은 옮기지 않는다 */
@@ -428,6 +430,8 @@ export function purgeable(app: App): { layers: string[]; linetypes: string[]; te
       const b = (a.block as string | undefined) ?? (a.blockName as string | undefined);
       if (b) usedBlocks.add(tableKey(b));
     }
+    // 33차: 표 셀의 문자 스타일 재지정(확장 자료)과 AutoCAD 표 원본 태그의 문자 스타일(7) — 문자가 빈 셀은 표 그림에 문자 객체가 없어도 쓰인다
+    for (const n of tableTextStyleRefs(e)) usedTs.add(tableKey(n));
   };
   for (const b of d.blocks.values()) for (const e of b.entities) visit(e);
   for (const l of d.layers.values()) usedLt.add(tableKey(l.linetype));
@@ -451,6 +455,8 @@ export function purgeable(app: App): { layers: string[]; linetypes: string[]; te
   }
   // 문자 무늬가 있는 선종류가 쓰는 문자 스타일
   for (const lt of d.linetypes.values()) for (const el of lt.elements ?? []) if (el.styleHandle) for (const ts of d.textStyles.values()) if (ts.handle === el.styleHandle) usedTs.add(tableKey(ts.name));
+  // 33차: 테이블 스타일의 셀 스타일(제목·머리글·데이터)이 쓰는 문자 스타일(치수 스타일의 문자 스타일처럼 쓰이는 것으로 센다)
+  for (const s of listTableStyles(d)) for (const k of ['title', 'header', 'data'] as const) if (s.style.cells[k].textStyle) usedTs.add(tableKey(s.style.cells[k].textStyle));
   // 쓰이지 않는 블록 안의 객체가 쓰는 블록·도면층은 아직 쓰이는 것으로 본다(한 번 더 PURGE하면 지워진다)
   const blocks = [...d.blocks.entries()]
     .filter(([k, b]) => !isLayoutBlock(k) && !b.name.startsWith('*') && !(b.flags & 4) && !b.name.includes('|') && !usedBlocks.has(k))

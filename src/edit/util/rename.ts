@@ -3,10 +3,11 @@
  * 종류: 블록, 치수 스타일, 도면층, 선종류, 문자 스타일, 배치.
  * (뷰·UCS는 편집 세션에 그 표를 바꾸는 작업이 없어 아직 바꿀 수 없다.)
  */
-import type { CadDocument, DictionaryObject, DimStyle, Entity, HeaderValue, Layer, Layout, MLineStyleObject } from '../../core/model';
+import type { CadDocument, DictionaryObject, DimStyle, Entity, GenericObject, HeaderValue, Layer, Layout, MLineStyleObject } from '../../core/model';
 import { MODEL_SPACE, tableKey } from '../../core/model';
 import type { EditOp } from '../session';
 import { cloneEntity, isLayoutBlock } from '../session';
+import { mapTableTextStyles } from '../table/entity';
 
 export type RenameKind = 'block' | 'dimStyle' | 'layer' | 'linetype' | 'textStyle' | 'layout';
 
@@ -259,10 +260,25 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
                 hit = true;
               }
             }
+          // 33차: 표 셀의 문자 스타일 재지정(확장 자료)과 AutoCAD 표 원본 태그의 문자 스타일(7)
+          const tm = mapTableTextStyles(c, (n) => (same(n, k) ? newName : n));
+          if (tm) {
+            c.xdata = tm.xdata;
+            if (c.type === 'ACAD_TABLE' && tm.type === 'ACAD_TABLE') c.raw = tm.raw;
+            hit = true;
+          }
           return hit;
         }),
       );
       ops.push(...dimStyleVarOps(doc, ['DIMTXSTY'], k, newName));
+      // 33차: 테이블 스타일(원본 태그의 7 — 셀 스타일마다의 문자 스타일 이름)
+      for (const o of doc.objects.values()) {
+        if (o.type !== 'TABLESTYLE') continue;
+        const g = o as GenericObject;
+        const hit7 = (t: { code: number; value: unknown }) => t.code === 7 && same(String(t.value ?? ''), k);
+        if (!g.raw?.some(hit7)) continue;
+        ops.push({ kind: 'object', key: g.handle, before: g, after: { ...g, raw: g.raw.map((t) => (hit7(t) ? { ...t, value: newName } : t)) } });
+      }
       const after = { ...structuredClone(before), name: newName };
       if (nk === k) ops.push({ kind: 'textStyle', key: k, before, after });
       else ops.push({ kind: 'textStyle', key: k, before, after: null }, { kind: 'textStyle', key: nk, before: null, after });

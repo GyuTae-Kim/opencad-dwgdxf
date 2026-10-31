@@ -30,6 +30,7 @@ import { MODEL_SPACE, normalizeHandle, tableKey } from '../../core/model';
 import type { EditOp } from '../session';
 import { isLayoutBlock } from '../session';
 import { cloneTableStyle, docVersionNumber, listTableStyles, tableStyleDictionary, tableStyleRaw } from '../table/style';
+import { mapTableTextStyles } from '../table/entity';
 
 export type DefKind = 'block' | 'layer' | 'linetype' | 'textStyle' | 'dimStyle' | 'mleaderStyle' | 'tableStyle' | 'layout';
 
@@ -613,6 +614,13 @@ export class DefinitionCopier {
         break;
       default:
         break;
+    }
+    // 33차: 표(ACAD_TABLE, 표 확장 자료가 있는 블록 참조)의 셀 문자 스타일 재지정과 원본 태그의 7은 이 도면의 문자 스타일로
+    // (없으면 함께 복사하고, 원본에도 없으면 Standard) — 문자가 빈 셀은 표 그림에 문자 객체가 없어 따로 옮긴다
+    const tm = mapTableTextStyles(c, (n) => this.textStyle(n));
+    if (tm) {
+      c.xdata = tm.xdata;
+      if (c.type === 'ACAD_TABLE' && tm.type === 'ACAD_TABLE') c.raw = tm.raw;
     }
     return c;
   }

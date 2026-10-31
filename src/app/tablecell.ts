@@ -59,6 +59,7 @@ import {
   cellRect,
   cellTextColor,
   cellTextHeight,
+  cellTextStyle,
   clearOverrides,
   cloneTable,
   colOffset,
@@ -190,6 +191,20 @@ export function rangeTextHeight(t: TableData, style: TableStyle, g: Range): numb
       const v = cellTextHeight(t, style, r, c);
       if (out === undefined) out = v;
       else if (out !== v) return null;
+    }
+  return out ?? null;
+}
+
+/** 범위의 셀(병합 셀은 기준 셀만)이 실제로 쓰는 문자 스타일 이름(33차 — 대소문자 무시). 모두 같으면 그 이름, 섞였으면 null */
+export function rangeTextStyle(t: TableData, style: TableStyle, g: Range): string | null {
+  let out: string | undefined;
+  for (let r = g.r0; r <= g.r1; r++)
+    for (let c = g.c0; c <= g.c1; c++) {
+      const m = mergeAt(t, r, c);
+      if (m && (m.row !== r || m.col !== c)) continue;
+      const v = cellTextStyle(t, style, r, c);
+      if (out === undefined) out = v;
+      else if (tableKey(out) !== tableKey(v)) return null;
     }
   return out ?? null;
 }

@@ -1,5 +1,5 @@
 /**
- * 표 그림 블록(*T)의 내용: 격자선(LINE), 셀 채우기(SOLID), 셀 문자(MTEXT — 셀 문자 높이·색 재지정은 32차).
+ * 표 그림 블록(*T)의 내용: 격자선(LINE), 셀 채우기(SOLID), 셀 문자(MTEXT — 셀 문자 높이·색 재지정은 32차, 문자 스타일 재지정은 33차).
  * 좌표는 표 좌표(삽입점 원점)다. 블록 기준점은 (0, 0)이고 객체는 도면층 0·ByBlock이라 표의 특성을 따른다.
  */
 import type { CadColor, Entity, MTextEntity, Vec3 } from '../../core/model';
@@ -103,7 +103,8 @@ export function tableBlockEntities(t: TableData, style: TableStyle, opt: TableGe
         attachment: align,
         drawingDirection: 1,
         text: cell.text,
-        style: cs.textStyle || 'Standard',
+        // 33차: 셀 문자 스타일 재지정
+        style: cell.textStyle || cs.textStyle || 'Standard',
         rotation: 0,
         lineSpacingStyle: 1,
         lineSpacingFactor: 1,
