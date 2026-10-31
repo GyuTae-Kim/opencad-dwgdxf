@@ -63,12 +63,16 @@ import {
   clearOverrides,
   cloneTable,
   colOffset,
+  LOCK_CONTENT,
+  LOCK_FORMAT,
   mergeAt,
   rangeHasOverrides,
+  rangeLock,
   rowOffset,
   sameFill,
   setAlign,
   setFill,
+  setLock,
 } from '../edit/table/model';
 import { pickColor } from './ui/colorpick';
 import { ALIGN_LABEL, type TableStyle } from '../edit/table/style';
@@ -76,7 +80,7 @@ import { previewSegments } from '../edit/table/ops';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { type ContextMenuItem, type SubSelection, addHook } from './hooks';
-import { type CellOp, cellOp, commitTable, editTableInPlace, fitTable, fromTableLocal, lockedLayer, readPicked, tabCell, toTableLocal } from './tablecmds';
+import { type CellOp, cellOp, commitTable, editTableInPlace, fitTable, formatLockedIn, fromTableLocal, lockedLayer, readPicked, tabCell, toTableLocal } from './tablecmds';
 import type { Pt } from './view';
 
 type Cell = { r: number; c: number };
@@ -98,9 +102,10 @@ export interface TableCellSelection extends SubSelection {
   select(handle: string, anchor: Cell, end?: Cell): boolean;
   /**
    * 고른 범위의 표 정의를 바꾼다(31차 — 특성 팔레트): make가 돌려준 정의로 확정 한 번(명령 취소 한 단계), 끝나면 같은 셀을 고른 채.
-   * make가 null이면(바뀌지 않음) 아무것도 하지 않는다. 잠긴 도면층은 알리고 바꾸지 않는다. 바꿨으면 true
+   * make가 null이면(바뀌지 않음) 아무것도 하지 않는다. 잠긴 도면층은 알리고 바꾸지 않는다. 바꿨으면 true.
+   * opt.format이면 서식을 바꾸는 일이라 범위에 서식이 잠긴 셀이 있으면 알리고 바꾸지 않는다(34차)
    */
-  edit(label: string, make: (t: TableData, g: { r0: number; c0: number; r1: number; c1: number }, style: TableStyle) => TableData | null): boolean;
+  edit(label: string, make: (t: TableData, g: { r0: number; c0: number; r1: number; c1: number }, style: TableStyle) => TableData | null, opt?: { format?: boolean }): boolean;
 }
 
 /** 두 셀을 품고 걸친 병합 셀을 모두 덮는 직사각형 범위 */
@@ -534,6 +539,8 @@ export function registerTableCellSelection(app: App): TableCellSelection {
     const p = readPicked(app, handle, null);
     if (!p || lockedLayer(app, p.entity)) return;
     const g = cur.range;
+    // 34차: 서식이 잠긴 셀이 있으면 알리고 바꾸지 않는다
+    if (formatLockedIn(app, p.data, g)) return;
     if (rangeAlign(p.data, p.style, g) === align) return;
     const a = state.anchor;
     const b = state.end;
@@ -544,14 +551,16 @@ export function registerTableCellSelection(app: App): TableCellSelection {
   };
   /**
    * 고른 범위의 표 정의를 바꾼다(31차 — 배경 채우기·특성 팔레트가 같이 쓴다): 확정 한 번(명령 취소 한 단계), 끝나면 같은 셀을 고른 채.
-   * 바뀌지 않으면(make가 null) 아무것도 하지 않는다. 잠긴 도면층은 알리고 바꾸지 않는다. 바꿨으면 true
+   * 바뀌지 않으면(make가 null) 아무것도 하지 않는다. 잠긴 도면층은 알리고 바꾸지 않는다. 바꿨으면 true.
+   * format이면 서식을 바꾸는 일 — 범위에 서식이 잠긴 셀이 있으면 알리고 바꾸지 않는다(34차)
    */
-  const applyRange = (label: string, make: (t: TableData, g: Range, style: TableStyle) => TableData | null): boolean => {
+  const applyRange = (label: string, make: (t: TableData, g: Range, style: TableStyle) => TableData | null, format = false): boolean => {
     const cur = live();
     if (!cur || !state) return false;
     const handle = state.handle;
     const p = readPicked(app, handle, null);
     if (!p || lockedLayer(app, p.entity)) return false;
+    if (format && formatLockedIn(app, p.data, cur.range)) return false;
     const a = state.anchor;
     const b = state.end;
     const next = make(p.data, cur.range, p.style);
@@ -566,11 +575,34 @@ export function registerTableCellSelection(app: App): TableCellSelection {
    * 재지정한다(채우지 않음도 재지정 — 셀 스타일에 채우기가 있어도 끈다). 범위의 셀이 모두 이미 그 채우기로 보이면 바꾸지 않는다(정렬과 같다)
    */
   const applyFill = (fill: CadColor | null): boolean =>
-    applyRange('셀 배경 채우기', (t, g, style) => {
-      const now = rangeFill(t, style, g);
-      if (now !== 'mixed' && sameFill(now, fill)) return null;
-      return setFill(t, g.r0, g.c0, g.r1, g.c1, fill);
-    });
+    applyRange(
+      '셀 배경 채우기',
+      (t, g, style) => {
+        const now = rangeFill(t, style, g);
+        if (now !== 'mixed' && sameFill(now, fill)) return null;
+        return setFill(t, g.r0, g.c0, g.r1, g.c1, fill);
+      },
+      true,
+    );
+  /**
+   * 셀 잠금(34차 — 도움말 "Table Cell Ribbon Contextual Tab"의 Cell Format 패널 Cell Locking: 셀 내용과/또는 서식을 편집하지 못하게 잠그거나 푼다,
+   * "To Unlock Data Extraction Table Cells for Editing": 셀을 고르고 Cell Locking ▸ Unlocked로 편집할 수 있게 푼다,
+   * ActiveX SetCellState의 AcCellState — 내용 잠김 1, 서식 잠김 4): 고른 범위(덮인 셀 포함)의 잠금을 그 값으로. 잠금 바꾸기는 서식이 잠겨도 된다(그래야 풀 수 있다)
+   */
+  const LOCK_ITEMS: readonly { label: string; lock: number }[] = [
+    { label: '잠금 해제', lock: 0 },
+    { label: '내용 잠금', lock: LOCK_CONTENT },
+    { label: '서식 잠금', lock: LOCK_FORMAT },
+    { label: '내용과 서식 잠금', lock: LOCK_CONTENT | LOCK_FORMAT },
+  ];
+  const lockMenu = (t: TableData, g: Range): ContextMenuItem[] => {
+    const now = rangeLock(t, g.r0, g.c0, g.r1, g.c1);
+    return LOCK_ITEMS.map((x) => ({
+      label: x.label,
+      ...(now === x.lock ? { kbd: '✓' } : {}),
+      run: () => void applyRange('셀 잠금', (d, r) => (rangeLock(d, r.r0, r.c0, r.r1, r.c1) === x.lock ? null : setLock(d, r.r0, r.c0, r.r1, r.c1, x.lock))),
+    }));
+  };
   const fillMenu = (t: TableData, style: TableStyle, g: Range): ContextMenuItem[] => {
     const now = rangeFill(t, style, g);
     const mark = (f: CadColor | null) => (now !== 'mixed' && sameFill(now, f) ? { kbd: '✓' } : {});
@@ -791,18 +823,20 @@ export function registerTableCellSelection(app: App): TableCellSelection {
         },
         // 31차 배경 채우기(도움말 "Table Cell Ribbon Contextual Tab"의 Table Cell Background Color — 없음·색·색 선택). 범위가 모두 그 채우기면 ✓
         { label: '배경 채우기', items: fillMenu(t, cur.rt.style, g) },
+        // 34차 잠금 ▸(잠금 해제·내용 잠금·서식 잠금·내용과 서식 잠금 — 범위가 모두 그 잠금이면 ✓)
+        { label: '잠금', items: lockMenu(t, g) },
         // 33차 특성 재지정 제거(도움말 "To Change the Properties of Cells in a Table" — 고른 셀을 오른쪽 누르기 → Remove Property Overrides로 기본값으로).
-        // 고른 범위(덮인 셀 포함)의 셀마다 재지정을 지워 셀 스타일 값으로. 지울 것이 없으면 꺼짐
+        // 고른 범위(덮인 셀 포함)의 셀마다 재지정을 지워 셀 스타일 값으로. 지울 것이 없으면 꺼짐. 34차: 서식이 잠긴 셀이 있으면 알리고 지우지 않는다
         {
           label: '특성 재지정 제거',
           disabled: !rangeHasOverrides(t, g.r0, g.c0, g.r1, g.c1),
-          run: () => void applyRange('특성 재지정 제거', (d, r) => clearOverrides(d, r.r0, r.c0, r.r1, r.c1)),
+          run: () => void applyRange('특성 재지정 제거', (d, r) => clearOverrides(d, r.r0, r.c0, r.r1, r.c1), true),
         },
       ];
       return items;
     },
-    edit(label, make) {
-      return applyRange(label, make);
+    edit(label, make, opt) {
+      return applyRange(label, make, !!opt?.format);
     },
     current() {
       const cur = live();

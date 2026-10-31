@@ -17,7 +17,7 @@ export interface DecodedTable {
   columns: number;
   rowHeights: number[];
   columnWidths: number[];
-  cells: { text: string }[];
+  cells: { text: string; lock?: number }[];
   tableStyle: string;
 }
 
@@ -48,7 +48,8 @@ export function decodeTableBody(or: ObjectReader, e: TableEntity, styleName: (h:
     columns: lay.cols,
     rowHeights: lay.rowHeights,
     columnWidths: lay.colWidths,
-    cells: lay.cells.map((c) => ({ text: c.text })),
+    // 34차: R2010+ 셀 상태의 잠금(DXF 원본 태그에는 셀 잠금 코드가 없어 객체의 셀에 둔다)
+    cells: lay.cells.map((c) => (c.lock ? { text: c.text, lock: c.lock } : { text: c.text })),
     tableStyle,
   };
 }

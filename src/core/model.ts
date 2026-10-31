@@ -765,8 +765,8 @@ export interface TableEntity extends EntityBase {
   columns: number;
   rowHeights: number[];
   columnWidths: number[];
-  /** 셀 문자(행 우선) — 읽을 수 있을 때만 */
-  cells?: { text: string }[];
+  /** 셀 문자(행 우선) — 읽을 수 있을 때만. lock은 DWG R2010+에서 읽은 셀 잠금 비트(34차 — 1 내용, 4 서식, 잠기지 않았으면 없음) */
+  cells?: { text: string; lock?: number }[];
   tableStyle?: string;
   /** DXF에서 읽은 AcDbEntity 다음 원본 태그(다시 쓰기용)와 그 파일 버전 */
   raw?: RawTag[];

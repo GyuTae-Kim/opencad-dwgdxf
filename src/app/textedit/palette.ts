@@ -3,7 +3,7 @@
  */
 import { tableKey } from '../../core/model';
 import { isEditableTable, tableFromEntity } from '../../edit/table/entity';
-import { getText, mergeAt, setText } from '../../edit/table/model';
+import { LOCK_CONTENT, cellLock, getText, mergeAt, setText } from '../../edit/table/model';
 import type { App } from '../app';
 import { zoomToHandles } from '../commands';
 import { commitTable, editTableAt } from '../tablecmds';
@@ -202,8 +202,10 @@ export function tableCellGroup(app: App, handle: string): HTMLElement | null {
   const load = () => {
     const [r, c] = sel.value.split(',').map(Number);
     ta.value = getText(data, r!, c!).replace(/\\P/g, '\n');
-    ta.disabled = ta.value.startsWith('=');
-    ta.title = ta.disabled ? '수식 셀은 표 편집(TABLEDIT)으로 고치십시오.' : '';
+    // 34차: 내용이 잠긴 셀은 고칠 수 없다
+    const locked = !!(cellLock(data, r!, c!) & LOCK_CONTENT);
+    ta.disabled = locked || ta.value.startsWith('=');
+    ta.title = locked ? '셀 내용이 잠겨 있습니다.' : ta.disabled ? '수식 셀은 표 편집(TABLEDIT)으로 고치십시오.' : '';
   };
   sel.addEventListener('change', () => {
     try {

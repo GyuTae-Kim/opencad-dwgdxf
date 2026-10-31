@@ -9,7 +9,7 @@ import { type FindOptions, type TextMode, countMatches, replaceMatches } from '.
 import { fieldTemplate } from '../../edit/field/store';
 import type { EditOp } from '../../edit/session';
 import { cloneEntity, isLayoutBlock } from '../../edit/session';
-import { getText, setText } from '../../edit/table/model';
+import { LOCK_CONTENT, cellLock, getText, setText } from '../../edit/table/model';
 import { isEditableTable, tableFromEntity } from '../../edit/table/entity';
 import { parseRich, plainText } from '../../text/mtextedit';
 import type { App, CommandContext } from '../app';
@@ -226,6 +226,8 @@ export function replaceTargets(app: App, targets: readonly FindTarget[], q: Find
     let data = t.data;
     let n = 0;
     for (const cell of cells) {
+      // 34차: 내용이 잠긴 셀은 바꾸지 않는다
+      if (cellLock(data, cell.r, cell.c) & LOCK_CONTENT) continue;
       const r = replaceMatches(getText(data, cell.r, cell.c), 'mtext', q.query, replacement, q);
       if (!r.count) continue;
       data = setText(data, cell.r, cell.c, r.text);

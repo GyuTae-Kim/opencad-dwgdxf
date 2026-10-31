@@ -23,7 +23,17 @@ export interface CellData {
   color?: CadColor;
   /** 셀 문자 스타일 재지정(33차 — 도면의 문자 스타일 이름). 없으면 행 종류의 셀 스타일 */
   textStyle?: string;
+  /**
+   * 셀 잠금(34차 — ActiveX AcCellState의 비트: 1 내용 잠김, 4 서식 잠김). 없으면 잠기지 않음.
+   * 병합 셀은 기준 셀의 값을 본다. 셀 재지정이 아니라 재지정 지우기로 지우지 않는다
+   */
+  lock?: number;
 }
+
+/** 셀 잠금 비트(34차 — ActiveX AcCellState: acCellStateContentLocked 1, acCellStateFormatLocked 4) */
+export const LOCK_CONTENT = 1;
+export const LOCK_FORMAT = 4;
+const LOCK_MASK = LOCK_CONTENT | LOCK_FORMAT;
 
 export interface Merge {
   row: number;
@@ -250,6 +260,52 @@ export function clearOverrides(t: TableData, r0: number, c0: number, r1: number,
       if (cell) for (const k of OVERRIDE_KEYS) delete cell[k];
     }
   return out;
+}
+
+/** 셀 잠금(34차 — 범위, 덮인 셀 포함): 0 잠금 해제, LOCK_CONTENT 내용 잠금, LOCK_FORMAT 서식 잠금, 둘 다 내용과 서식 잠금(다른 비트는 버린다) */
+export function setLock(t: TableData, r0: number, c0: number, r1: number, c1: number, lock: number): TableData {
+  const out = cloneTable(t);
+  const v = lock & LOCK_MASK;
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++)
+    for (let c = cc[0]; c <= cc[1]; c++) {
+      const cell = out.cells[cellIndex(out, r, c)];
+      if (!cell) continue;
+      if (v) cell.lock = v;
+      else delete cell.lock;
+    }
+  return out;
+}
+
+/** 셀(병합 셀은 기준 셀)의 잠금 비트(34차) */
+export function cellLock(t: TableData, r: number, c: number): number {
+  const a = anchorOf(t, r, c);
+  return (t.cells[cellIndex(t, a.r, a.c)]?.lock ?? 0) & LOCK_MASK;
+}
+
+/** 범위의 셀(덮인 셀은 그 병합의 기준 셀 값) 가운데 그 잠금 비트(LOCK_CONTENT·LOCK_FORMAT)가 있는 셀이 있는지(34차) */
+export function rangeLockedFor(t: TableData, r0: number, c0: number, r1: number, c1: number, bit: number): boolean {
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++) for (let c = cc[0]; c <= cc[1]; c++) if (cellLock(t, r, c) & bit) return true;
+  return false;
+}
+
+/** 범위의 셀(병합 셀은 기준 셀만)의 잠금 비트가 모두 같으면 그 값, 섞였으면 null(34차) */
+export function rangeLock(t: TableData, r0: number, c0: number, r1: number, c1: number): number | null {
+  let out: number | undefined;
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++)
+    for (let c = cc[0]; c <= cc[1]; c++) {
+      const m = mergeAt(t, r, c);
+      if (m && (m.row !== r || m.col !== c)) continue;
+      const v = cellLock(t, r, c);
+      if (out === undefined) out = v;
+      else if (out !== v) return null;
+    }
+  return out ?? 0;
 }
 
 function order(a: number, b: number): [number, number] {

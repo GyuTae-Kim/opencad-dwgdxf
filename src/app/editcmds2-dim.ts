@@ -19,7 +19,7 @@ import { objectRef, pointRef } from './dimassoc';
 import { type DimOpts, addDimension, originsFromEntity, preview, textOption } from './dimcmds';
 import { addEntities, currentProps } from './draw';
 import { baseName, download } from './export';
-import { commitTable, lockedLayer, pickCell } from './tablecmds';
+import { commitTable, formatLockedIn, lockedLayer, pickCell } from './tablecmds';
 import { currentUcs } from './ucs';
 import type { Pt } from './view';
 
@@ -159,6 +159,8 @@ export function registerEditCmds2Dim(app: App): void {
         const dst = await pickCell(app, ctx, '대상 셀 선택:');
         if (!dst || 'keyword' in dst) break;
         if (lockedLayer(app, dst.entity)) continue;
+        // 34차: 서식이 잠긴 대상 셀은 알리고 건너뛴다
+        if (formatLockedIn(app, dst.data, { r0: dst.cell!.r, c0: dst.cell!.c, r1: dst.cell!.r, c1: dst.cell!.c })) continue;
         const aligned = matchCellAlign(dst.data, dst.style, dst.cell!, align);
         const filled = matchCellFill(aligned ?? dst.data, dst.style, dst.cell!, fill) ?? aligned;
         const next = matchCellText(filled ?? dst.data, dst.style, dst.cell!, text) ?? filled;
