@@ -26,6 +26,7 @@ import {
   deleteCols,
   deleteRows,
   cellRect,
+  cellTextHeight,
   fitRowHeights,
   getText,
   insertCols,
@@ -98,7 +99,7 @@ export function fromTableLocal(e: TableEntity | InsertEntity, q: Pt): Pt {
   return { x: e.insert.x + x * Math.cos(ang) - y * Math.sin(ang), y: e.insert.y + x * Math.sin(ang) + y * Math.cos(ang) };
 }
 
-/** 셀 문자의 자리(도면 좌표): 표 그림(geometry.ts tableBlockEntities)의 셀 MTEXT와 같은 부착점·폭·높이·문자 스타일, 방향은 표 방향 */
+/** 셀 문자의 자리(도면 좌표): 표 그림(geometry.ts tableBlockEntities)의 셀 MTEXT와 같은 부착점·폭·높이(32차 — 셀 재지정 포함)·문자 스타일, 방향은 표 방향 */
 export function cellTextPlace(
   e: TableEntity | InsertEntity,
   t: TableData,
@@ -119,7 +120,8 @@ export function cellTextPlace(
     at: fromTableLocal(e, { x, y }),
     attachment: align,
     width: Math.max(0, q.x1 - q.x0 - 2 * style.hMargin) * kx,
-    height: cs.height * ky,
+    // 32차: 셀 문자 높이 재지정(없으면 행 종류의 셀 스타일)
+    height: cellTextHeight(t, style, r, c) * ky,
     textStyle: cs.textStyle || 'Standard',
     rotation: tableAngle(e),
   };
@@ -404,7 +406,11 @@ export async function editTableInPlace(app: App, handle: string, start: { r: num
           width: place.width,
           rotation: place.rotation,
           at: place.at,
-          color: p.entity.color,
+          // 32차: 셀 문자 색 재지정이 있으면 그 색(ByBlock이면 표의 색)
+          color: (() => {
+            const own = p.data.cells[cellIndex(p.data, a.r, a.c)]?.color;
+            return own && own.aci !== 0 ? { ...own } : p.entity.color;
+          })(),
           layer: p.entity.layer,
           noEntityProps: true,
           extra: [{ label: '모든 셀', title: '표의 모든 셀을 대화상자에서 고칩니다', run: (ed) => ((all = true), ed.confirm()) }],

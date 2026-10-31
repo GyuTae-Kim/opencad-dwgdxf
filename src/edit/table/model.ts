@@ -17,6 +17,10 @@ export interface CellData {
    * 없으면 행 종류의 셀 스타일 채우기
    */
   fill?: CadColor | null;
+  /** 셀 문자 높이 재지정(32차 — 표 좌표, 0보다 크다). 없으면 행 종류의 셀 스타일 */
+  height?: number;
+  /** 셀 문자 색 재지정(32차 — ByBlock 0·ByLayer 256·색인·트루컬러). 없으면 행 종류의 셀 스타일 */
+  color?: CadColor;
 }
 
 export interface Merge {
@@ -150,6 +154,47 @@ export function cellFill(t: TableData, style: TableStyle, r: number, c: number):
 export function sameFill(a: CadColor | null | undefined, b: CadColor | null | undefined): boolean {
   if (!a || !b) return !a && !b;
   return a.aci === b.aci && (a.rgb ?? -1) === (b.rgb ?? -1);
+}
+
+/** 셀 문자 높이 재지정(32차 — 범위): 0보다 큰 값이면 그 높이, undefined면 재지정을 지운다(셀 스타일을 따른다) */
+export function setTextHeight(t: TableData, r0: number, c0: number, r1: number, c1: number, height: number | undefined): TableData {
+  const out = cloneTable(t);
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++)
+    for (let c = cc[0]; c <= cc[1]; c++) {
+      const cell = out.cells[cellIndex(out, r, c)];
+      if (!cell) continue;
+      if (height !== undefined && Number.isFinite(height) && height > 0) cell.height = height;
+      else delete cell.height;
+    }
+  return out;
+}
+
+/** 셀 문자 색 재지정(32차 — 범위): 색이면 그 색, undefined면 재지정을 지운다(셀 스타일을 따른다) */
+export function setTextColor(t: TableData, r0: number, c0: number, r1: number, c1: number, color: CadColor | undefined): TableData {
+  const out = cloneTable(t);
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++)
+    for (let c = cc[0]; c <= cc[1]; c++) {
+      const cell = out.cells[cellIndex(out, r, c)];
+      if (!cell) continue;
+      if (color) cell.color = { ...color };
+      else delete cell.color;
+    }
+  return out;
+}
+
+/** 셀이 실제로 쓰는 문자 높이(32차 — 재지정, 없으면 그 행 종류의 셀 스타일) */
+export function cellTextHeight(t: TableData, style: TableStyle, r: number, c: number): number {
+  const v = t.cells[cellIndex(t, r, c)]?.height;
+  return v !== undefined && v > 0 ? v : style.cells[t.rowKinds[r] ?? 'data'].height;
+}
+
+/** 셀이 실제로 쓰는 문자 색(32차 — 재지정, 없으면 그 행 종류의 셀 스타일) */
+export function cellTextColor(t: TableData, style: TableStyle, r: number, c: number): CadColor {
+  return t.cells[cellIndex(t, r, c)]?.color ?? style.cells[t.rowKinds[r] ?? 'data'].color;
 }
 
 function order(a: number, b: number): [number, number] {
@@ -446,8 +491,10 @@ export function fitRowHeights(t: TableData, style: TableStyle, measure: (text: s
       const text = t.cells[cellIndex(t, r, c)]!.text;
       if (!text) continue;
       const cs = style.cells[t.rowKinds[r] ?? 'data'];
+      // 32차: 셀 문자 높이 재지정이 있으면 그 높이로 잰다
+      const th = cellTextHeight(t, style, r, c);
       const w = colOffset(t, c + (m?.cols ?? 1)) - colOffset(t, c) - 2 * style.hMargin;
-      const h = measure(text, cs.height, Math.max(w, cs.height), cs.textStyle) + 2 * style.vMargin;
+      const h = measure(text, th, Math.max(w, th), cs.textStyle) + 2 * style.vMargin;
       needs.push({ r0: r, r1: r + (m?.rows ?? 1) - 1, h });
     }
   needs.sort((a, b) => a.r1 - a.r0 - (b.r1 - b.r0));

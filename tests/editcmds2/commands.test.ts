@@ -5,7 +5,7 @@ import { hatchOrigin } from '../../src/edit/editcmds2/hatch';
 import { createGroupOps, listGroups } from '../../src/edit/util/groups';
 import { registerEditCmds2 } from '../../src/app/editcmds2';
 import { addTableOps } from '../../src/edit/table/ops';
-import { cellRect, createTable } from '../../src/edit/table/model';
+import { cellRect, createTable, setTextColor, setTextHeight } from '../../src/edit/table/model';
 import { defaultTableStyle } from '../../src/edit/table/style';
 import { tableFromEntity } from '../../src/edit/table/entity';
 import { entityDefaults, MODEL_SPACE, type TableEntity } from '../../src/core/model';
@@ -129,5 +129,28 @@ describe('editcmds2 명령 흐름', () => {
     expect(t.cells[3 * 2 + 0]!.align).toBe(5);
     expect(t.cells[2 * 2 + 0]!.align).toBeUndefined();
     expect(h.printed.pop()).toBe('셀 2개에 A1 셀의 특성을 적용했습니다.');
+  });
+
+  it('MATCHCELL(32차): 원본 셀의 문자 높이·문자 색도 옮긴다(대상 행 셀 스타일과 같으면 재지정 없음)', async () => {
+    const h = harness();
+    const style = defaultTableStyle(true);
+    let data = createTable({ cols: 2, colWidth: 20, dataRows: 2, rowLines: 1, first: 'title', second: 'header' }, style);
+    data = setTextColor(setTextHeight(data, 2, 0, 2, 0, 8), 2, 0, 2, 0, { aci: 1 });
+    const { ops, table } = addTableOps(h.doc, () => h.st.session.newHandle(), { space: MODEL_SPACE, data, style, insert: { x: 0, y: 0, z: 0 }, props: entityDefaults() });
+    h.st.session.commit({ label: 'TABLE', ops });
+    const at = (r: number, c: number): [number, number] => {
+      const q = cellRect(data, r, c);
+      return [(q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2];
+    };
+    // A3(8·빨강) → B4, A2(머리글)
+    await h.run('MATCHCELL', [{ pick: table.handle, at: at(2, 0) }, { pick: table.handle, at: at(3, 1) }, { pick: table.handle, at: at(1, 0) }, '']);
+    let t = tableFromEntity(h.doc.entityIndex.get(table.handle) as TableEntity, h.doc)!.data;
+    expect([t.cells[3 * 2 + 1]!.height, t.cells[3 * 2 + 1]!.color]).toEqual([8, { aci: 1 }]);
+    expect([t.cells[1 * 2 + 0]!.height, t.cells[1 * 2 + 0]!.color]).toEqual([8, { aci: 1 }]);
+    // B3(데이터 셀 스타일 값) → B4: 재지정을 지운다
+    await h.run('MATCHCELL', [{ pick: table.handle, at: at(2, 1) }, { pick: table.handle, at: at(3, 1) }, '']);
+    t = tableFromEntity(h.doc.entityIndex.get(table.handle) as TableEntity, h.doc)!.data;
+    expect([t.cells[3 * 2 + 1]!.height, t.cells[3 * 2 + 1]!.color]).toEqual([undefined, undefined]);
+    expect(h.printed.pop()).toBe('셀 1개에 B3 셀의 특성을 적용했습니다.');
   });
 });

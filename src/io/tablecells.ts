@@ -3,7 +3,7 @@
  *
  * 모델의 ACAD_TABLE은 행·열 크기와 셀 문자만 가진다. 셀마다의 병합 범위와 재지정 서식(정렬·문자 높이·문자 색·
  * 채우기·문자 스타일)은 다음에서 정한다.
- * - 앱이 만든 표: 확장 자료 OPENCAD_TABLE(병합·정렬·행 종류·셀 배경 채우기 — 31차) + 표 스타일(행 종류마다의 셀 스타일).
+ * - 앱이 만든 표: 확장 자료 OPENCAD_TABLE(병합·정렬·행 종류·셀 배경 채우기 — 31차, 셀 문자 높이·문자 색 — 32차) + 표 스타일(행 종류마다의 셀 스타일).
  * - AutoCAD가 쓴 표(DXF, 또는 DWG 리더가 만든 같은 꼴의 원본 태그): AcDbTable 셀 태그의 병합(173·175·176)과
  *   셀 재지정(플래그 R2007+ 91 / 그 전 177, 170 정렬, 63 배경색, 64 문자 색, 283 채우기 없음, 7 문자 스타일, 140 문자 높이).
  *
@@ -159,8 +159,10 @@ export function tableCellsOut(e: TableEntity, doc: CadDocument): TableOut {
         const cell = out.cells[r * cols + c]!;
         cell.kind = kind;
         cell.align ??= cs.align;
-        cell.height = cs.height;
-        cell.color = { ...cs.color };
+        // 32차 셀 문자 높이·문자 색 재지정(없으면 셀 스타일 — 셀 재지정 140·64로 쓴다)
+        const data = rt.data.cells[r * cols + c];
+        cell.height = data?.height !== undefined && data.height > 0 ? data.height : cs.height;
+        cell.color = { ...(data?.color ?? cs.color) };
         // 31차 셀 배경 채우기 재지정(없으면 셀 스타일). 재지정한 "채우지 않음"은 그대로 남긴다
         const own = rt.data.cells[r * cols + c]?.fill;
         const fill = own !== undefined ? own : cs.fill;
