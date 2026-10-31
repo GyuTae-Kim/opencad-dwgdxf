@@ -197,6 +197,39 @@ export function cellTextColor(t: TableData, style: TableStyle, r: number, c: num
   return t.cells[cellIndex(t, r, c)]?.color ?? style.cells[t.rowKinds[r] ?? 'data'].color;
 }
 
+/** 셀의 서식 재지정 자리(33차 — 셀 재지정 지우기가 지우는 것) */
+const OVERRIDE_KEYS = ['align', 'fill', 'height', 'color'] as const;
+
+/** 셀에 서식 재지정(정렬·배경 채우기·문자 높이·문자 색)이 있는지 */
+export function hasCellOverrides(c: CellData | undefined): boolean {
+  return !!c && OVERRIDE_KEYS.some((k) => c[k] !== undefined);
+}
+
+/** 범위(덮인 셀 포함)에 서식 재지정이 있는 셀이 있는지 */
+export function rangeHasOverrides(t: TableData, r0: number, c0: number, r1: number, c1: number): boolean {
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++) for (let c = cc[0]; c <= cc[1]; c++) if (hasCellOverrides(t.cells[cellIndex(t, r, c)])) return true;
+  return false;
+}
+
+/**
+ * 셀 재지정 지우기(33차 — 범위, 덮인 셀 포함): 셀마다의 정렬·배경 채우기·문자 높이·문자 색 재지정을 지워 행 종류의 셀 스타일 값으로 되돌린다.
+ * 문자·병합·행 높이·열 폭은 그대로. 지울 것이 없으면 null
+ */
+export function clearOverrides(t: TableData, r0: number, c0: number, r1: number, c1: number): TableData | null {
+  if (!rangeHasOverrides(t, r0, c0, r1, c1)) return null;
+  const out = cloneTable(t);
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++)
+    for (let c = cc[0]; c <= cc[1]; c++) {
+      const cell = out.cells[cellIndex(out, r, c)];
+      if (cell) for (const k of OVERRIDE_KEYS) delete cell[k];
+    }
+  return out;
+}
+
 function order(a: number, b: number): [number, number] {
   return a <= b ? [a, b] : [b, a];
 }

@@ -59,9 +59,11 @@ import {
   cellRect,
   cellTextColor,
   cellTextHeight,
+  clearOverrides,
   cloneTable,
   colOffset,
   mergeAt,
+  rangeHasOverrides,
   rowOffset,
   sameFill,
   setAlign,
@@ -774,6 +776,13 @@ export function registerTableCellSelection(app: App): TableCellSelection {
         },
         // 31차 배경 채우기(도움말 "Table Cell Ribbon Contextual Tab"의 Table Cell Background Color — 없음·색·색 선택). 범위가 모두 그 채우기면 ✓
         { label: '배경 채우기', items: fillMenu(t, cur.rt.style, g) },
+        // 33차 특성 재지정 제거(도움말 "To Change the Properties of Cells in a Table" — 고른 셀을 오른쪽 누르기 → Remove Property Overrides로 기본값으로).
+        // 고른 범위(덮인 셀 포함)의 셀마다 재지정을 지워 셀 스타일 값으로. 지울 것이 없으면 꺼짐
+        {
+          label: '특성 재지정 제거',
+          disabled: !rangeHasOverrides(t, g.r0, g.c0, g.r1, g.c1),
+          run: () => void applyRange('특성 재지정 제거', (d, r) => clearOverrides(d, r.r0, r.c0, r.r1, r.c1)),
+        },
       ];
       return items;
     },
