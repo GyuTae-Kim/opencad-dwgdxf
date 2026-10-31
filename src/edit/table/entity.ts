@@ -1,8 +1,8 @@
 /**
  * 표 객체(ACAD_TABLE) ↔ 표 정의.
  *
- * 모델의 ACAD_TABLE은 행·열 크기와 셀 문자만 가진다. 병합·행 종류·셀 정렬·준 행 높이·셀 배경 채우기(31차)·셀 문자 높이·문자 색(32차)·셀 문자 스타일(33차)은
- * 확장 자료 OPENCAD_TABLE에 남긴다(DXF·DWG 모두 그대로 저장된다). AutoCAD가 쓴 표는 원본 태그의 셀 병합(173·175·176)과
+ * 모델의 ACAD_TABLE은 행·열 크기와 셀 문자만 가진다. 병합·행 종류·셀 정렬·준 행 높이·셀 배경 채우기(31차)·셀 문자 높이·문자 색(32차)·셀 문자 스타일(33차)·
+ * 셀 잠금(34차)은 확장 자료 OPENCAD_TABLE에 남긴다(DXF·DWG 모두 그대로 저장된다). 셀 잠금은 DWG R2010+ 셀 상태로도 쓰고 읽는다(DXF 참조에는 코드가 없다). AutoCAD가 쓴 표는 원본 태그의 셀 병합(173·175·176)과
  * 셀 정렬(170), 셀 배경 채우기(63·283), 셀 문자 높이(140)·문자 색(64)·문자 스타일(7)을 읽는다. 표를 블록 참조로 저장한 파일(DWG 쓰기)도 확장 자료가 있으면 다시 표로 읽을 수 있다.
  */
 import type { CadColor, CadDocument, Entity, InsertEntity, RawTag, TableEntity, XData, XDataItem } from '../../core/model';
@@ -116,6 +116,20 @@ export function encodeTableXData(t: TableData): XData {
   }
   // 33차 셀 문자 스타일 재지정: 문자 색 뒤(32차까지의 읽기는 여기서 멈춘다). 같은 이름이 이어진 셀을 한 묶음 — 시작 번호, 개수, 이름 조각 수, 이름 조각(셀 문자와 같은 조각)
   it.push(...textStyleGroup(new Map(t.cells.flatMap((c, i): [number, string][] => (c.textStyle ? [[i, c.textStyle]] : [])))));
+  // 34차 셀 잠금: 문자 스타일 뒤(33차까지의 읽기는 여기서 멈춘다). 같은 잠금이 이어진 셀을 한 묶음 — 시작 번호, 개수, 잠금 비트(1 내용, 4 서식)
+  const lruns: [number, number, number][] = [];
+  t.cells.forEach((c, i) => {
+    const v = (c.lock ?? 0) & 5;
+    if (!v) return;
+    const last = lruns[lruns.length - 1];
+    if (last && last[0] + last[1] === i && last[2] === v) last[1]++;
+    else lruns.push([i, 1, v]);
+  });
+  if (lruns.length) {
+    s('lock');
+    i32(lruns.length);
+    for (const run of lruns) run.forEach(i32);
+  }
   return { app: TABLE_APP, items: it };
 }
 
@@ -136,6 +150,8 @@ export interface DecodedTable {
   colors?: Map<number, CadColor>;
   /** 셀 문자 스타일 재지정(33차 — 이름) */
   textStyles?: Map<number, string>;
+  /** 셀 잠금 비트(34차 — 1 내용, 4 서식) */
+  locks?: Map<number, number>;
   /** 읽은 묶음마다 확장 자료 항목 안의 자리 [시작, 끝)(33차 — 문자 스타일 이름 바꾸기가 tstyle 묶음만 바꿔 넣을 때 쓴다) */
   spans: Map<string, [number, number]>;
 }
@@ -270,6 +286,20 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
             // 빈 이름과 표 크기 밖 번호(망가진 자료)는 버린다
             if (!name) continue;
             for (let j = Math.max(0, start); j < Math.min(cells, start + count); j++) out.textStyles.set(j, name);
+          }
+          break;
+        }
+        case 'lock': {
+          const n = int();
+          const cells = out.rows * out.cols;
+          out.locks = new Map();
+          for (let k = 0; k < n && i < items.length; k++) {
+            const start = int();
+            const count = int();
+            const v = int() & 5;
+            // 잠금 없음과 표 크기 밖 번호(망가진 자료)는 버린다
+            if (!v) continue;
+            for (let j = Math.max(0, start); j < Math.min(cells, start + count); j++) out.locks.set(j, v);
           }
           break;
         }
@@ -524,6 +554,9 @@ export function tableFromEntity(e: TableEntity | InsertEntity, doc: CadDocument)
     const ts = xok ? x!.textStyles?.get(i) : rawOk ? raw.textStyles.get(i) : undefined;
     const tsDef = ts ? doc.textStyles.get(tableKey(ts)) : undefined;
     if (tsDef?.name) c.textStyle = tsDef.name;
+    // 34차 셀 잠금(앱 표는 확장 자료, AutoCAD 표는 DWG R2010+ 셀 상태를 읽은 객체의 셀 — DXF 참조에는 셀 잠금 코드가 없다)
+    const lk = (xok ? (x!.locks?.get(i) ?? 0) : (te?.cells?.[i]?.lock ?? 0)) & 5;
+    if (lk) c.lock = lk;
     return c;
   });
   let rowKinds: CellKind[];

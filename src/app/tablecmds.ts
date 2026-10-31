@@ -26,10 +26,14 @@ import {
   deleteCols,
   deleteRows,
   cellRect,
+  cellLock,
   cellTextHeight,
   clearOverrides,
   fitRowHeights,
+  LOCK_CONTENT,
+  LOCK_FORMAT,
   rangeHasOverrides,
+  rangeLockedFor,
   getText,
   insertCols,
   insertRows,
@@ -55,6 +59,17 @@ import { escapeMText } from '../edit/field/evaluate';
 // ---------------------------------------------------------------------------
 // 공통
 // ---------------------------------------------------------------------------
+
+/** 34차 셀 잠금 알림: 내용이 잠긴 셀의 문자 편집, 서식이 잠긴 셀의 서식 바꾸기 */
+export const CONTENT_LOCKED = '셀 내용이 잠겨 있습니다.';
+export const FORMAT_LOCKED = '셀 서식이 잠겨 있습니다.';
+
+/** 범위(병합 셀은 기준 셀)에 서식이 잠긴 셀이 있으면 알리고 true(34차) */
+export function formatLockedIn(app: App, t: TableData, g: { r0: number; c0: number; r1: number; c1: number }): boolean {
+  if (!rangeLockedFor(t, g.r0, g.c0, g.r1, g.c1, LOCK_FORMAT)) return false;
+  app.cmd.print(FORMAT_LOCKED, 'err');
+  return true;
+}
 
 /** 여러 줄 문자 높이 재기(행 높이 맞춤용) */
 function measurer(app: App, doc: CadDocument): (text: string, height: number, width: number, textStyle: string) => number {
@@ -264,7 +279,11 @@ export function editCellsDialog(title: string, t: TableData, focus: { r: number;
         if (m && (m.row !== r || m.col !== c)) continue;
         const ta = h('textarea', { rows: 1, 'aria-label': `셀 ${cellName(r, c)}`, style: INPUT_CSS + (t.rowKinds[r] !== 'data' ? ';font-weight:600' : '') });
         ta.value = (t.cells[cellIndex(t, r, c)]?.text ?? '').replace(/\\P/g, '\n');
-        inputs.set(cellIndex(t, r, c), ta);
+        // 34차: 내용이 잠긴 셀은 읽기만(확인해도 그 셀 문자는 그대로)
+        if (cellLock(t, r, c) & LOCK_CONTENT) {
+          ta.readOnly = true;
+          ta.title = CONTENT_LOCKED;
+        } else inputs.set(cellIndex(t, r, c), ta);
         tr.append(h('td', { colspan: m?.cols ?? 1, rowspan: m?.rows ?? 1, style: 'padding:2px;vertical-align:top' }, ta));
       }
       table.append(tr);
@@ -381,6 +400,12 @@ export async function editTableInPlace(app: App, handle: string, start: { r: num
   let cur = start;
   let replace = opt.replace;
   const label = opt.label ?? 'TABLEDIT';
+  // 34차: 내용이 잠긴 셀은 편집기를 열지 않고 알린다(셀 고르기는 그대로 — 도움말: Cell Locking은 셀 내용·서식을 편집하지 못하게 잠근다)
+  const first = readPicked(app, handle, null);
+  if (first && cellLock(first.data, Math.min(cur.r, first.data.rows - 1), Math.min(cur.c, first.data.cols - 1)) & LOCK_CONTENT) {
+    app.cmd.print(CONTENT_LOCKED, 'err');
+    return;
+  }
   app.clearSubSelections();
   const phone = phoneLayout();
   // 휴대폰 확대 전 보기와 마지막으로 맞춘 보기
@@ -391,6 +416,11 @@ export async function editTableInPlace(app: App, handle: string, start: { r: num
       const p = readPicked(app, handle, null);
       if (!p || lockedLayer(app, p.entity)) return;
       const a = anchorOf(p.data, Math.min(cur.r, p.data.rows - 1), Math.min(cur.c, p.data.cols - 1));
+      // Tab·다른 셀 누르기로 옮긴 셀이 잠겼으면 거기서 끝낸다(앞 셀의 편집은 이미 확정됐다)
+      if (cellLock(p.data, a.r, a.c) & LOCK_CONTENT) {
+        app.cmd.print(CONTENT_LOCKED, 'err');
+        return;
+      }
       const place = cellTextPlace(p.entity, p.data, p.style, a.r, a.c);
       const original = getText(p.data, a.r, a.c);
       const text = replace !== undefined ? escapeMText(replace) : original;
@@ -889,6 +919,8 @@ export function registerTableEditCommands(app: App): void {
       const clearAll = () => {
         const p = readPicked(app, handle, null);
         if (!p || lockedLayer(app, p.entity)) return;
+        // 34차: 서식이 잠긴 셀이 있으면 지우지 않는다(셀 메뉴의 특성 재지정 제거와 같다)
+        if (formatLockedIn(app, p.data, { r0: 0, c0: 0, r1: p.data.rows - 1, c1: p.data.cols - 1 })) return;
         const next = clearOverrides(p.data, 0, 0, p.data.rows - 1, p.data.cols - 1);
         if (!next) return;
         commitTable(app, p, next, '모든 특성 재지정 제거');
@@ -1057,6 +1089,8 @@ export function registerTableEditCommands(app: App): void {
             label = '셀 병합 해제';
             break;
           case 'A': {
+            // 34차: 서식이 잠긴 셀은 정렬을 바꾸지 않는다
+            if (formatLockedIn(app, t, g)) continue;
             const a = await ctx.getPoint('정렬 입력 [' + ALIGN_KEYS.map((k) => `${k.label}(${k.key})`).join('/') + ']:', { keywords: ALIGN_KEYS });
             if (!('keyword' in a)) continue;
             const idx = ALIGN_KEYS.findIndex((k) => k.key === a.keyword);
@@ -1065,6 +1099,8 @@ export function registerTableEditCommands(app: App): void {
             break;
           }
           case 'S': {
+            // 34차: 행의 셀 스타일은 그 행 모든 셀의 서식이다 — 서식이 잠긴 셀이 있으면 바꾸지 않는다
+            if (formatLockedIn(app, t, { r0: cell.r, c0: 0, r1, c1: t.cols - 1 })) continue;
             const a = await ctx.getPoint('행의 셀 스타일 입력 [제목(T)/머리글(H)/데이터(D)]:', {
               keywords: [
                 { key: 'T', label: '제목' },

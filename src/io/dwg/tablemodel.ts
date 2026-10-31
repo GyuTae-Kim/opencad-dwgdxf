@@ -88,6 +88,9 @@ export function layoutFromR24(t: TTableR24, styleName: (h: number) => string): T
     for (let k = 0; k < cols; k++) {
       const cell = row.cells[k];
       const co: CellOut = { text: cell ? cellText(cell) : '', covered: false, spanCols: 1, spanRows: 1 };
+      // 34차 셀 잠금: 셀 상태의 내용 잠김 1·서식 잠김 4(ActiveX AcCellState와 같은 값 — 읽기 전용·연결 같은 다른 비트는 두지 않는다)
+      const lk = (cell?.state ?? 0) & 5;
+      if (lk) co.lock = lk;
       if (cell) {
         const p: Props = {};
         for (const x of cell.contents) if (x.hasFormat && x.format) propsOf(undefined, x.format, p);
@@ -213,7 +216,8 @@ export function tableToR24(lay: TableOut, o: TableBuildOptions): TTableR24 {
       if (!c.covered && (c.spanCols > 1 || c.spanRows > 1)) merges.push([r, k, r + c.spanRows - 1, k + c.spanCols - 1]);
       const contents: TCell['contents'] = [];
       if (c.text && !c.covered) contents.push({ type: 1, value: { flags: 6, type: 4, str: c.text, strZ: 1, unit: 0, format: '', text: c.text }, attrs: [], hasFormat: 0 });
-      cells.push({ state: 0, tooltip: '', customInt: 0, custom: [], linked: 0, contents, style: cellStyleFor(c, o), styleId: 0, geomFlag: 0 });
+      // 34차: 셀 잠금은 셀 상태(내용 잠김 1·서식 잠김 4)로
+      cells.push({ state: (c.lock ?? 0) & 5, tooltip: '', customInt: 0, custom: [], linked: 0, contents, style: cellStyleFor(c, o), styleId: 0, geomFlag: 0 });
     }
     return { cells, customInt: 0, custom: [], style: emptyCellStyle(2), styleId: ids[r]!, height: lay.rowHeights[r] ?? 1 };
   });

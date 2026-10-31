@@ -30,6 +30,8 @@ export interface CellOut {
   fillNone?: boolean;
   textStyle?: string;
   kind?: CellKind;
+  /** 셀 잠금 비트(34차 — 1 내용, 4 서식). DWG R2010+ 셀 상태로만 쓴다(DXF 참조에 코드가 없다) */
+  lock?: number;
 }
 
 export interface TableOut {
@@ -114,7 +116,13 @@ export function tableCellsOut(e: TableEntity, doc: CadDocument): TableOut {
     known: false,
   };
   const n = rows * cols;
-  for (let i = 0; i < n; i++) out.cells.push({ text: e.cells?.[i]?.text ?? '', covered: false, spanCols: 1, spanRows: 1 });
+  for (let i = 0; i < n; i++) {
+    const cell: CellOut = { text: e.cells?.[i]?.text ?? '', covered: false, spanCols: 1, spanRows: 1 };
+    // 34차: DWG에서 읽은 AutoCAD 표의 셀 잠금(앱 표는 아래에서 확장 자료의 값으로)
+    const lk = (e.cells?.[i]?.lock ?? 0) & 5;
+    if (lk) cell.lock = lk;
+    out.cells.push(cell);
+  }
   if (!n) return out;
   const x = decodeTableXData(e.xdata?.find((q) => q.app.toUpperCase() === TABLE_APP));
   const xok = !!x && x.rows === rows && x.cols === cols;
@@ -170,6 +178,10 @@ export function tableCellsOut(e: TableEntity, doc: CadDocument): TableOut {
         if (own === null) cell.fillNone = true;
         // 33차 셀 문자 스타일 재지정(없으면 셀 스타일 — 셀 재지정 7로 쓴다)
         cell.textStyle = data?.textStyle || cs.textStyle || 'Standard';
+        // 34차 셀 잠금(확장 자료)
+        const lk = (data?.lock ?? 0) & 5;
+        if (lk) cell.lock = lk;
+        else delete cell.lock;
       }
     }
   } else {

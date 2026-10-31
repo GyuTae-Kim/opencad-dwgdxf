@@ -5,7 +5,7 @@ import { hatchOrigin } from '../../src/edit/editcmds2/hatch';
 import { createGroupOps, listGroups } from '../../src/edit/util/groups';
 import { registerEditCmds2 } from '../../src/app/editcmds2';
 import { addTableOps } from '../../src/edit/table/ops';
-import { cellRect, createTable, setTextColor, setTextHeight } from '../../src/edit/table/model';
+import { LOCK_CONTENT, LOCK_FORMAT, cellRect, createTable, setFill, setLock, setTextColor, setTextHeight } from '../../src/edit/table/model';
 import { defaultTableStyle } from '../../src/edit/table/style';
 import { tableFromEntity } from '../../src/edit/table/entity';
 import { entityDefaults, MODEL_SPACE, type TableEntity } from '../../src/core/model';
@@ -152,5 +152,25 @@ describe('editcmds2 명령 흐름', () => {
     t = tableFromEntity(h.doc.entityIndex.get(table.handle) as TableEntity, h.doc)!.data;
     expect([t.cells[3 * 2 + 1]!.height, t.cells[3 * 2 + 1]!.color]).toEqual([undefined, undefined]);
     expect(h.printed.pop()).toBe('셀 1개에 B3 셀의 특성을 적용했습니다.');
+  });
+
+  it('MATCHCELL(34차): 서식이 잠긴 대상 셀은 알리고 건너뛴다(내용만 잠긴 셀은 바꾼다)', async () => {
+    const h = harness();
+    const style = defaultTableStyle(true);
+    let data = createTable({ cols: 2, colWidth: 20, dataRows: 2, rowLines: 1, first: 'title', second: 'header' }, style);
+    data = setFill(data, 2, 0, 2, 0, { aci: 3 });
+    data = setLock(setLock(data, 3, 0, 3, 0, LOCK_FORMAT), 3, 1, 3, 1, LOCK_CONTENT);
+    const { ops, table } = addTableOps(h.doc, () => h.st.session.newHandle(), { space: MODEL_SPACE, data, style, insert: { x: 0, y: 0, z: 0 }, props: entityDefaults() });
+    h.st.session.commit({ label: 'TABLE', ops });
+    const at = (r: number, c: number): [number, number] => {
+      const q = cellRect(data, r, c);
+      return [(q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2];
+    };
+    // A3(초록 채우기) → A4(서식 잠금 — 건너뜀), B4(내용 잠금 — 바뀜)
+    await h.run('MATCHCELL', [{ pick: table.handle, at: at(2, 0) }, { pick: table.handle, at: at(3, 0) }, { pick: table.handle, at: at(3, 1) }, '']);
+    const t = tableFromEntity(h.doc.entityIndex.get(table.handle) as TableEntity, h.doc)!.data;
+    expect([t.cells[3 * 2 + 0]!.fill, t.cells[3 * 2 + 1]!.fill]).toEqual([undefined, { aci: 3 }]);
+    expect(h.printed).toContain('셀 서식이 잠겨 있습니다.');
+    expect(h.printed.pop()).toBe('셀 1개에 A3 셀의 특성을 적용했습니다.');
   });
 });

@@ -65,6 +65,15 @@ export function cellSelectionGroup(app: App): HTMLElement[] | null {
   const one = m.row === g.r0 && m.col === g.c0 && m.row + m.rows - 1 === g.r1 && m.col + m.cols - 1 === g.c1;
   const name = one ? cellName(g.r0, g.c0) : `${cellName(g.r0, g.c0)}:${cellName(g.r1, g.c1)}`;
   const row = (label: string, ctl: HTMLElement) => h('label', { class: 'prop-row edit' }, h('span', { class: 'k' }, label), ctl);
+  /**
+   * 서식 바꾸기(34차 — 정렬·배경 채우기·문자 스타일·높이·색): 범위에 서식이 잠긴 셀이 있으면 알리고 바꾸지 않는다.
+   * 바뀌지 않았으면 팔레트를 다시 그려 칸을 지금 값으로 돌린다
+   */
+  const fmt = (label: string, make: Parameters<typeof sel.edit>[1]): boolean => {
+    const ok = sel.edit(label, make, { format: true });
+    if (!ok) app.ui?.refreshPalette();
+    return ok;
+  };
 
   /** 길이 칸(행 높이·열 폭): 값이 다르면 비우고 "*여러 개*" */
   const lengthRow = (label: string, value: number | null, apply: (v: number) => void) => {
@@ -108,7 +117,7 @@ export function cellSelectionGroup(app: App): HTMLElement[] | null {
   align.addEventListener('change', () => {
     const n = Number(align.value);
     if (!(n >= 1 && n <= 9)) return;
-    sel.edit('셀 정렬', (d, r, s) => (rangeAlign(d, s, r) === n ? null : setAlign(d, r.r0, r.c0, r.r1, r.c1, n)));
+    fmt('셀 정렬', (d, r, s) => (rangeAlign(d, s, r) === n ? null : setAlign(d, r.r0, r.c0, r.r1, r.c1, n)));
   });
   rows.push(row('정렬', align));
 
@@ -129,7 +138,7 @@ export function cellSelectionGroup(app: App): HTMLElement[] | null {
   for (const o of opts) fillSel.append(h('option', { value: o.value }, o.label));
   fillSel.append(h('option', { value: 'pick' }, '색 선택...'));
   fillSel.value = now;
-  const applyFill = (c: CadColor | null) => sel.edit('셀 배경 채우기', (d, r, s) => {
+  const applyFill = (c: CadColor | null) => fmt('셀 배경 채우기', (d, r, s) => {
     const was = rangeFill(d, s, r);
     return was !== 'mixed' && sameFill(was, c) ? null : setFill(d, r.r0, r.c0, r.r1, r.c1, c);
   });
@@ -159,7 +168,7 @@ export function cellSelectionGroup(app: App): HTMLElement[] | null {
   styleSel.addEventListener('change', () => {
     const n = styleSel.value;
     if (!n) return;
-    sel.edit('셀 문자 스타일', (d, r, s) => {
+    fmt('셀 문자 스타일', (d, r, s) => {
       const was = rangeTextStyle(d, s, r);
       return was !== null && tableKey(was) === tableKey(n) ? null : setTextStyle(d, r.r0, r.c0, r.r1, r.c1, n);
     });
@@ -167,7 +176,7 @@ export function cellSelectionGroup(app: App): HTMLElement[] | null {
   content.push(row('문자 스타일', styleSel));
   content.push(
     lengthRow('문자 높이', rangeTextHeight(t, style, g), (v) =>
-      void sel.edit('셀 문자 높이', (d, r, s) => (rangeTextHeight(d, s, r) === v ? null : setTextHeight(d, r.r0, r.c0, r.r1, r.c1, v))),
+      void fmt('셀 문자 높이', (d, r, s) => (rangeTextHeight(d, s, r) === v ? null : setTextHeight(d, r.r0, r.c0, r.r1, r.c1, v))),
     ),
   );
   const tc = rangeTextColor(t, style, g);
@@ -190,7 +199,7 @@ export function cellSelectionGroup(app: App): HTMLElement[] | null {
   for (const o of copts) colorSel.append(h('option', { value: o.value }, o.label));
   colorSel.append(h('option', { value: 'pick' }, '색 선택...'));
   colorSel.value = cnow;
-  const applyColor = (c: CadColor) => sel.edit('셀 문자 색상', (d, r, s) => {
+  const applyColor = (c: CadColor) => fmt('셀 문자 색상', (d, r, s) => {
     const was = rangeTextColor(d, s, r);
     return was !== 'mixed' && sameFill(was, c) ? null : setTextColor(d, r.r0, r.c0, r.r1, r.c1, c);
   });
