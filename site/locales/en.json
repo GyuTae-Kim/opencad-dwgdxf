@@ -4768,6 +4768,8 @@
   "셀 {0} 옵션 입력 [{1}] <문자 편집>:": "Enter option in cell {0} [{1}] <edit character>:",
   "셀 {0}개에 {1} 셀의 특성을 적용했습니다.": "The properties of cell {1} were applied to {0} cells.",
   "셀 문자": "cell character",
+  "셀 문자 높이": "Cell text height",
+  "셀 문자 색상": "Cell text color",
   "셀 배경 채우기": "Cell background fill",
   "셀 병합": "Merge cells",
   "셀 병합 [": "Merge cells [",

@@ -4768,6 +4768,8 @@
   "셀 {0} 옵션 입력 [{1}] <문자 편집>:": "Option in Zelle {0} [{1}] eingeben <Zeichen bearbeiten>:",
   "셀 {0}개에 {1} 셀의 특성을 적용했습니다.": "Die Eigenschaften der Zelle {1} wurden auf {0} Zellen angewendet.",
   "셀 문자": "Zellzeichen",
+  "셀 문자 높이": "Texthöhe der Zelle",
+  "셀 문자 색상": "Textfarbe der Zelle",
   "셀 배경 채우기": "Zellenhintergrundfüllung",
   "셀 병합": "Zellen zusammenführen",
   "셀 병합 [": "Zellen verbinden [",
