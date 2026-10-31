@@ -3,7 +3,7 @@
  * - DIMCENTER(DCE): 고른 원·호에 DIMCEN 설정대로 중심 표식·중심선을 LINE 객체로 그린다(CENTERMARK와 달리 연관 없음).
  * - DIMHORIZONTAL·DIMVERTICAL: 수평·수직으로 고정한 선형 치수(DIMLINEAR의 H·V 옵션 바로가기).
  * - TABLEEXPORT: 표를 CSV(쉼표 구분, UTF-8)로 내려받는다.
- * - MATCHCELL: 원본 셀의 특성(정렬)을 대상 셀들에 옮긴다.
+ * - MATCHCELL: 원본 셀의 특성(정렬·배경 채우기)을 대상 셀들에 옮긴다.
  */
 import type { CircleEntity, DimensionEntity, Entity, LineEntity, Vec3 } from '../core/model';
 import { entityDefaults } from '../core/model';
@@ -11,7 +11,7 @@ import { dimVars } from '../edit/dim/vars';
 import { createLinearDimension, ucsLinearRotation } from '../edit/dim';
 import { OSNAP, type PointRef } from '../edit/dim/assoc';
 import { dimCenterSegments } from '../edit/editcmds2/dimcenter';
-import { csvFileText, effectiveAlign, matchCellAlign } from '../edit/editcmds2/table';
+import { csvFileText, effectiveAlign, effectiveFill, matchCellAlign, matchCellFill } from '../edit/editcmds2/table';
 import { isEditableTable, tableFromEntity } from '../edit/table/entity';
 import { cellName } from '../edit/table/model';
 import type { App, CommandContext, Keyword } from './app';
@@ -150,12 +150,15 @@ export function registerEditCmds2Dim(app: App): void {
       const src = await pickCell(app, ctx, '원본 셀 선택:');
       if (!src || 'keyword' in src) return;
       const align = effectiveAlign(src.data, src.style, src.cell!.r, src.cell!.c);
+      // 31차: 배경 채우기도 셀 특성이다(도움말 — 셀 종류만 빼고 모든 특성을 옮긴다)
+      const fill = effectiveFill(src.data, src.style, src.cell!.r, src.cell!.c);
       let n = 0;
       for (;;) {
         const dst = await pickCell(app, ctx, '대상 셀 선택:');
         if (!dst || 'keyword' in dst) break;
         if (lockedLayer(app, dst.entity)) continue;
-        const next = matchCellAlign(dst.data, dst.style, dst.cell!, align);
+        const aligned = matchCellAlign(dst.data, dst.style, dst.cell!, align);
+        const next = matchCellFill(aligned ?? dst.data, dst.style, dst.cell!, fill) ?? aligned;
         if (!next) continue;
         commitTable(app, dst, next, 'MATCHCELL', ctx.group);
         n++;

@@ -18,6 +18,7 @@ import { annoCurrentRow, annoPaletteGroup } from '../annoscale-palette';
 import { layerFilterPanel } from '../layerfilter-ui';
 import { isTextEditable } from '../textedit/entity';
 import { findPanel, newFindState, tableCellGroup } from '../textedit/palette';
+import { cellSelectionGroup } from '../tablecell-palette';
 
 type Tab = 'props' | 'layers' | 'dims' | 'find';
 
@@ -152,6 +153,12 @@ export class Palette {
     const st = app.active!;
     const sel = [...st.selection].map((x) => st.doc.entityIndex.get(x)).filter((e): e is Entity => !!e);
     if (!sel.length) {
+      // 31차: 고른 표 셀(객체 선택 없이 셀 안을 눌러 고른 것)의 셀 특성
+      const cells = cellSelectionGroup(app);
+      if (cells) {
+        this.body.append(...cells);
+        return;
+      }
       this.body.append(h('div', { class: 'empty' }, '선택한 객체가 없습니다. 도면에서 객체를 클릭하십시오.'));
       this.currentSettings();
       return;

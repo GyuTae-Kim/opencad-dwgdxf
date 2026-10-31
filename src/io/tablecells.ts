@@ -3,7 +3,7 @@
  *
  * 모델의 ACAD_TABLE은 행·열 크기와 셀 문자만 가진다. 셀마다의 병합 범위와 재지정 서식(정렬·문자 높이·문자 색·
  * 채우기·문자 스타일)은 다음에서 정한다.
- * - 앱이 만든 표: 확장 자료 OPENCAD_TABLE(병합·정렬·행 종류) + 표 스타일(행 종류마다의 셀 스타일).
+ * - 앱이 만든 표: 확장 자료 OPENCAD_TABLE(병합·정렬·행 종류·셀 배경 채우기 — 31차) + 표 스타일(행 종류마다의 셀 스타일).
  * - AutoCAD가 쓴 표(DXF, 또는 DWG 리더가 만든 같은 꼴의 원본 태그): AcDbTable 셀 태그의 병합(173·175·176)과
  *   셀 재지정(플래그 R2007+ 91 / 그 전 177, 170 정렬, 63 배경색, 64 문자 색, 283 채우기 없음, 7 문자 스타일, 140 문자 높이).
  *
@@ -26,6 +26,8 @@ export interface CellOut {
   color?: CadColor;
   /** 채우기 색(채우지 않음이면 null, 모르면 없음) */
   fill?: CadColor | null;
+  /** 채우지 않음을 셀에서 재지정했다(셀 스타일에 채우기가 있어도 채우지 않는다 — DXF 플래그 2와 283 1로 쓴다, 31차) */
+  fillNone?: boolean;
   textStyle?: string;
   kind?: CellKind;
 }
@@ -73,7 +75,10 @@ export function rawCellOverrides(raw: readonly RawTag[] | undefined): Partial<Ce
     if (flags & 0x08 && cur.has(64)) c.color = { aci: num(cur.get(64)) };
     if (flags & 0x10 && cur.has(7)) c.textStyle = String(cur.get(7));
     if (flags & 0x04 && cur.has(63) && !num(cur.get(283))) c.fill = { aci: num(cur.get(63)) };
-    else if (flags & 0x02 && num(cur.get(283))) c.fill = null;
+    else if (flags & 0x02 && num(cur.get(283))) {
+      c.fill = null;
+      c.fillNone = true;
+    }
     out.push(c);
   };
   for (let k = start + 1; k < raw.length; k++) {
@@ -156,7 +161,11 @@ export function tableCellsOut(e: TableEntity, doc: CadDocument): TableOut {
         cell.align ??= cs.align;
         cell.height = cs.height;
         cell.color = { ...cs.color };
-        cell.fill = cs.fill ? { ...cs.fill } : null;
+        // 31차 셀 배경 채우기 재지정(없으면 셀 스타일). 재지정한 "채우지 않음"은 그대로 남긴다
+        const own = rt.data.cells[r * cols + c]?.fill;
+        const fill = own !== undefined ? own : cs.fill;
+        cell.fill = fill ? { ...fill } : null;
+        if (own === null) cell.fillNone = true;
         cell.textStyle = cs.textStyle || 'Standard';
       }
     }
@@ -168,6 +177,7 @@ export function tableCellsOut(e: TableEntity, doc: CadDocument): TableOut {
       if (o.height !== undefined) cell.height = o.height;
       if (o.color) cell.color = o.color;
       if (o.fill !== undefined) cell.fill = o.fill;
+      if (o.fillNone) cell.fillNone = true;
       if (o.textStyle) cell.textStyle = o.textStyle;
       if (o.height !== undefined || o.color || o.fill !== undefined || o.textStyle) any = true;
     });
@@ -248,6 +258,8 @@ export function acdbTableTags(lay: TableOut, o: TableTagOptions): RawTag[] {
     let flags = 0;
     if (c.align) flags |= 0x01;
     if (c.fill) flags |= 0x02 | 0x04;
+    // 31차: 셀에서 재지정한 채우지 않음(셀 스타일의 채우기를 끈다)은 플래그 2와 283 1
+    else if (c.fill === null && c.fillNone) flags |= 0x02;
     if (c.color) flags |= 0x08;
     if (styleName) flags |= 0x10;
     if (c.height && c.height > 0) flags |= 0x20;
@@ -270,7 +282,7 @@ export function acdbTableTags(lay: TableOut, o: TableTagOptions): RawTag[] {
     if (flags & 0x01) t(170, c.align!);
     if (flags & 0x04) t(63, aci(c.fill!));
     if (flags & 0x08) t(64, aci(c.color!));
-    if (flags & 0x02) t(283, 0);
+    if (flags & 0x02) t(283, c.fill ? 0 : 1);
     if (flags & 0x10) t(7, styleName!);
     if (flags & 0x20) t(140, c.height!);
     if (ver >= 1021) {
