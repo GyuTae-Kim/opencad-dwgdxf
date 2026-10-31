@@ -27,7 +27,9 @@ import {
   deleteRows,
   cellRect,
   cellTextHeight,
+  clearOverrides,
   fitRowHeights,
+  rangeHasOverrides,
   getText,
   insertCols,
   insertRows,
@@ -122,7 +124,8 @@ export function cellTextPlace(
     width: Math.max(0, q.x1 - q.x0 - 2 * style.hMargin) * kx,
     // 32차: 셀 문자 높이 재지정(없으면 행 종류의 셀 스타일)
     height: cellTextHeight(t, style, r, c) * ky,
-    textStyle: cs.textStyle || 'Standard',
+    // 33차: 셀 문자 스타일 재지정(없으면 행 종류의 셀 스타일)
+    textStyle: t.cells[cellIndex(t, r, c)]?.textStyle || cs.textStyle || 'Standard',
     rotation: tableAngle(e),
   };
 }
@@ -881,9 +884,20 @@ export function registerTableEditCommands(app: App): void {
         commitTable(app, p, next, label);
         app.cmd.print(`${label}: 표 ${next.rows}행 ${next.cols}열`);
       };
+      // 33차 모든 특성 재지정 제거(도움말 "About Table Styles"(Mac) — 표를 고르고 Remove All Property Overrides로 표의 특성을 표 스타일로 되돌린다,
+      // ActiveX Table.ClearTableStyleOverrides — 셀 재지정을 모두 지운다): 표의 모든 셀 재지정을 지운다. 지울 것이 없으면 꺼짐
+      const clearAll = () => {
+        const p = readPicked(app, handle, null);
+        if (!p || lockedLayer(app, p.entity)) return;
+        const next = clearOverrides(p.data, 0, 0, p.data.rows - 1, p.data.cols - 1);
+        if (!next) return;
+        commitTable(app, p, next, '모든 특성 재지정 제거');
+        app.cmd.print(`모든 특성 재지정 제거: 표 ${next.rows}행 ${next.cols}열`);
+      };
       return [
         { label: '열 폭 같게', disabled: !sizeEqually(rt.data, 'cols'), run: run('cols', '열 폭 같게') },
         { label: '행 높이 같게', disabled: !sizeEqually(rt.data, 'rows'), run: run('rows', '행 높이 같게') },
+        { label: '모든 특성 재지정 제거', disabled: !rangeHasOverrides(rt.data, 0, 0, rt.data.rows - 1, rt.data.cols - 1), run: clearAll },
       ];
     },
   });

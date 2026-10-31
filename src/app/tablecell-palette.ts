@@ -18,11 +18,15 @@
  * - DXF 참조 TABLE: 140 셀 수준 문자 높이 재지정, 64 셀 내용 색 재지정.
  * 정한 것: 셀 묶음 아래 "내용" 묶음에 문자 높이(표 좌표 — 행 높이와 같은 단위)와 문자 색상(ByBlock·ByLayer·일곱 색·지금 색·색 선택...).
  * 바꾸면 고른 범위의 셀마다 재지정하고 행 높이는 문자에 맞춘다(문자가 더 필요하면 늘어나고 준 높이 밑으로는 줄지 않는다). 이미 모두 그 값이면 바꾸지 않는다
+ *
+ * 33차 내용 묶음 맨 앞에 문자 스타일(DXF 참조 TABLE 7 — 셀 수준 문자 스타일 재지정, ActiveX SetCellTextStyle, "About Table Styles"의 문자 특성 —
+ * 문자 스타일·높이·색). 목록은 도면의 문자 스타일(이름은 번역하지 않는다)
  */
 import type { CadColor } from '../core/model';
+import { tableKey } from '../core/model';
 import { formatLength, parseLength } from '../core/units';
 import { tableFromEntity } from '../edit/table/entity';
-import { cellName, mergeAt, sameFill, setAlign, setFill, setTextColor, setTextHeight } from '../edit/table/model';
+import { cellName, mergeAt, sameFill, setAlign, setFill, setTextColor, setTextHeight, setTextStyle } from '../edit/table/model';
 import { ALIGN_LABEL } from '../edit/table/style';
 import type { App } from './app';
 import { colorText } from './inquiry';
@@ -34,6 +38,7 @@ import {
   rangeRowHeight,
   rangeTextColor,
   rangeTextHeight,
+  rangeTextStyle,
   setRangeColWidth,
   setRangeRowHeight,
   tableCellSelection,
@@ -143,6 +148,23 @@ export function cellSelectionGroup(app: App): HTMLElement[] | null {
 
   // 32차 내용 묶음: 문자 높이·문자 색상(셀 재지정 140·64 — 바꾸면 고른 범위의 셀마다 재지정, 행 높이는 문자에 맞춘다)
   const content: HTMLElement[] = [];
+  // 33차 문자 스타일(셀 재지정 7): 도면의 문자 스타일 목록(엔티티 특성의 문자 스타일과 같은 목록 — 이름 있는 것, 쉐이프 파일 항목 빼고)
+  const ts = rangeTextStyle(t, style, g);
+  const styleNames = [...st.doc.textStyles.values()].filter((s) => s.name && !(s.flags & 1)).map((s) => s.name);
+  const styleSel = h('select', { 'data-field': 'pf-cell-문자 스타일', 'aria-label': '문자 스타일' }) as HTMLSelectElement;
+  const snow = ts === null ? '' : (styleNames.find((n) => tableKey(n) === tableKey(ts)) ?? '');
+  if (!snow) styleSel.append(h('option', { value: '' }, VARIES));
+  for (const n of styleNames) styleSel.append(h('option', { value: n, translate: 'no' }, n));
+  styleSel.value = snow;
+  styleSel.addEventListener('change', () => {
+    const n = styleSel.value;
+    if (!n) return;
+    sel.edit('셀 문자 스타일', (d, r, s) => {
+      const was = rangeTextStyle(d, s, r);
+      return was !== null && tableKey(was) === tableKey(n) ? null : setTextStyle(d, r.r0, r.c0, r.r1, r.c1, n);
+    });
+  });
+  content.push(row('문자 스타일', styleSel));
   content.push(
     lengthRow('문자 높이', rangeTextHeight(t, style, g), (v) =>
       void sel.edit('셀 문자 높이', (d, r, s) => (rangeTextHeight(d, s, r) === v ? null : setTextHeight(d, r.r0, r.c0, r.r1, r.c1, v))),

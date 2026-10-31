@@ -21,6 +21,8 @@ export interface CellData {
   height?: number;
   /** 셀 문자 색 재지정(32차 — ByBlock 0·ByLayer 256·색인·트루컬러). 없으면 행 종류의 셀 스타일 */
   color?: CadColor;
+  /** 셀 문자 스타일 재지정(33차 — 도면의 문자 스타일 이름). 없으면 행 종류의 셀 스타일 */
+  textStyle?: string;
 }
 
 export interface Merge {
@@ -195,6 +197,59 @@ export function cellTextHeight(t: TableData, style: TableStyle, r: number, c: nu
 /** 셀이 실제로 쓰는 문자 색(32차 — 재지정, 없으면 그 행 종류의 셀 스타일) */
 export function cellTextColor(t: TableData, style: TableStyle, r: number, c: number): CadColor {
   return t.cells[cellIndex(t, r, c)]?.color ?? style.cells[t.rowKinds[r] ?? 'data'].color;
+}
+
+/** 셀 문자 스타일 재지정(33차 — 범위): 이름이면 그 문자 스타일, undefined·빈 이름이면 재지정을 지운다(셀 스타일을 따른다) */
+export function setTextStyle(t: TableData, r0: number, c0: number, r1: number, c1: number, name: string | undefined): TableData {
+  const out = cloneTable(t);
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++)
+    for (let c = cc[0]; c <= cc[1]; c++) {
+      const cell = out.cells[cellIndex(out, r, c)];
+      if (!cell) continue;
+      if (name) cell.textStyle = name;
+      else delete cell.textStyle;
+    }
+  return out;
+}
+
+/** 셀이 실제로 쓰는 문자 스타일 이름(33차 — 재지정, 없으면 그 행 종류의 셀 스타일, 그것도 비었으면 Standard) */
+export function cellTextStyle(t: TableData, style: TableStyle, r: number, c: number): string {
+  return t.cells[cellIndex(t, r, c)]?.textStyle || style.cells[t.rowKinds[r] ?? 'data'].textStyle || 'Standard';
+}
+
+/** 셀의 서식 재지정 자리(33차 — 셀 재지정 지우기가 지우는 것) */
+const OVERRIDE_KEYS = ['align', 'fill', 'height', 'color', 'textStyle'] as const;
+
+/** 셀에 서식 재지정(정렬·배경 채우기·문자 높이·문자 색·문자 스타일)이 있는지 */
+export function hasCellOverrides(c: CellData | undefined): boolean {
+  return !!c && OVERRIDE_KEYS.some((k) => c[k] !== undefined);
+}
+
+/** 범위(덮인 셀 포함)에 서식 재지정이 있는 셀이 있는지 */
+export function rangeHasOverrides(t: TableData, r0: number, c0: number, r1: number, c1: number): boolean {
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++) for (let c = cc[0]; c <= cc[1]; c++) if (hasCellOverrides(t.cells[cellIndex(t, r, c)])) return true;
+  return false;
+}
+
+/**
+ * 셀 재지정 지우기(33차 — 범위, 덮인 셀 포함): 셀마다의 정렬·배경 채우기·문자 높이·문자 색·문자 스타일 재지정을 지워 행 종류의 셀 스타일 값으로 되돌린다.
+ * 문자·병합·행 높이·열 폭은 그대로. 지울 것이 없으면 null
+ */
+export function clearOverrides(t: TableData, r0: number, c0: number, r1: number, c1: number): TableData | null {
+  if (!rangeHasOverrides(t, r0, c0, r1, c1)) return null;
+  const out = cloneTable(t);
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++)
+    for (let c = cc[0]; c <= cc[1]; c++) {
+      const cell = out.cells[cellIndex(out, r, c)];
+      if (cell) for (const k of OVERRIDE_KEYS) delete cell[k];
+    }
+  return out;
 }
 
 function order(a: number, b: number): [number, number] {
@@ -491,10 +546,10 @@ export function fitRowHeights(t: TableData, style: TableStyle, measure: (text: s
       const text = t.cells[cellIndex(t, r, c)]!.text;
       if (!text) continue;
       const cs = style.cells[t.rowKinds[r] ?? 'data'];
-      // 32차: 셀 문자 높이 재지정이 있으면 그 높이로 잰다
+      // 32차: 셀 문자 높이 재지정이 있으면 그 높이로, 33차: 문자 스타일 재지정이 있으면 그 스타일로 잰다
       const th = cellTextHeight(t, style, r, c);
       const w = colOffset(t, c + (m?.cols ?? 1)) - colOffset(t, c) - 2 * style.hMargin;
-      const h = measure(text, th, Math.max(w, th), cs.textStyle) + 2 * style.vMargin;
+      const h = measure(text, th, Math.max(w, th), t.cells[cellIndex(t, r, c)]!.textStyle || cs.textStyle) + 2 * style.vMargin;
       needs.push({ r0: r, r1: r + (m?.rows ?? 1) - 1, h });
     }
   needs.sort((a, b) => a.r1 - a.r0 - (b.r1 - b.r0));
