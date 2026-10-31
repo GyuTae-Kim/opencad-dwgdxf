@@ -5,7 +5,7 @@
 import type { CadColor, Entity, MTextEntity, Vec3 } from '../../core/model';
 import { entityDefaults } from '../../core/model';
 import type { TableStyle } from './style';
-import { type TableData, cellIndex, cellRect, colOffset, mergeAt, rowOffset } from './model';
+import { type TableData, cellFill, cellIndex, cellRect, colOffset, mergeAt, rowOffset } from './model';
 
 const BYBLOCK_LW = -2;
 
@@ -40,15 +40,15 @@ export interface TableGeometryOptions {
 export function tableBlockEntities(t: TableData, style: TableStyle, opt: TableGeometryOptions = {}): Entity[] {
   const flow = style.flow;
   const out: Entity[] = [];
-  // 채우기(격자·문자 아래)
+  // 채우기(격자·문자 아래): 셀 재지정(31차 — 병합 셀은 기준 셀의 것), 없으면 행 종류의 셀 스타일
   for (let r = 0; r < t.rows; r++)
     for (let c = 0; c < t.cols; c++) {
       const m = mergeAt(t, r, c);
       if (m && (m.row !== r || m.col !== c)) continue;
-      const fill = style.cells[t.rowKinds[r] ?? 'data'].fill;
+      const fill = cellFill(t, style, r, c);
       if (!fill) continue;
       const q = cellRect(t, r, c, flow);
-      out.push({ ...base(fill), type: 'SOLID', points: [P(q.x0, q.y0), P(q.x1, q.y0), P(q.x0, q.y1), P(q.x1, q.y1)], invisibleEdges: 0 } as Entity);
+      out.push({ ...base({ ...fill }), type: 'SOLID', points: [P(q.x0, q.y0), P(q.x1, q.y0), P(q.x0, q.y1), P(q.x1, q.y1)], invisibleEdges: 0 } as Entity);
     }
   // 가로선: 경계마다 병합 안을 지나지 않는 구간을 이어 그린다
   const borderOf = (r: number) => style.cells[t.rowKinds[Math.min(t.rows - 1, Math.max(0, r))] ?? 'data'].borderColor;

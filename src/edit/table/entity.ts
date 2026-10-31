@@ -1,11 +1,11 @@
 /**
  * 표 객체(ACAD_TABLE) ↔ 표 정의.
  *
- * 모델의 ACAD_TABLE은 행·열 크기와 셀 문자만 가진다. 병합·행 종류·셀 정렬·준 행 높이는 확장 자료
+ * 모델의 ACAD_TABLE은 행·열 크기와 셀 문자만 가진다. 병합·행 종류·셀 정렬·준 행 높이·셀 배경 채우기(31차)는 확장 자료
  * OPENCAD_TABLE에 남긴다(DXF·DWG 모두 그대로 저장된다). AutoCAD가 쓴 표는 원본 태그의 셀 병합(173·175·176)과
- * 셀 정렬(170)을 읽는다. 표를 블록 참조로 저장한 파일(DWG 쓰기)도 확장 자료가 있으면 다시 표로 읽을 수 있다.
+ * 셀 정렬(170), 셀 배경 채우기(63·283)를 읽는다. 표를 블록 참조로 저장한 파일(DWG 쓰기)도 확장 자료가 있으면 다시 표로 읽을 수 있다.
  */
-import type { CadDocument, Entity, InsertEntity, RawTag, TableEntity, XData, XDataItem } from '../../core/model';
+import type { CadColor, CadDocument, Entity, InsertEntity, RawTag, TableEntity, XData, XDataItem } from '../../core/model';
 import type { CellKind, TableStyle } from './style';
 import { findTableStyle, isMetric, defaultTableStyle, type TableStyleEntry } from './style';
 import type { CellData, Merge, TableData } from './model';
@@ -68,6 +68,22 @@ export function encodeTableXData(t: TableData): XData {
       parts.forEach(s);
     }
   }
+  // 31차 셀 배경 채우기 재지정: 맨 끝에 둔다(이전 판의 읽기는 모르는 묶음에서 멈추므로 앞의 묶음을 그대로 읽는다).
+  // 같은 채우기가 이어진 셀(행 우선 번호)을 한 묶음으로: 시작 번호, 개수, 색인(채우지 않음 −1), 트루컬러(없으면 −1)
+  const runs: [number, number, number, number][] = [];
+  t.cells.forEach((c, i) => {
+    if (c.fill === undefined) return;
+    const aci = c.fill ? c.fill.aci : -1;
+    const rgb = c.fill && c.fill.rgb !== undefined ? c.fill.rgb & 0xffffff : -1;
+    const last = runs[runs.length - 1];
+    if (last && last[0] + last[1] === i && last[2] === aci && last[3] === rgb) last[1]++;
+    else runs.push([i, 1, aci, rgb]);
+  });
+  if (runs.length) {
+    s('fill');
+    i32(runs.length);
+    for (const run of runs) run.forEach(i32);
+  }
   return { app: TABLE_APP, items: it };
 }
 
@@ -81,6 +97,8 @@ export interface DecodedTable {
   merges: Merge[];
   aligns: Map<number, number>;
   texts?: Map<number, string>;
+  /** 셀 배경 채우기 재지정(31차, 채우지 않음은 null) */
+  fills?: Map<number, CadColor | null>;
 }
 
 export function decodeTableXData(x: XData | undefined): DecodedTable | null {
@@ -153,6 +171,21 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
           }
           break;
         }
+        case 'fill': {
+          const n = int();
+          const cells = out.rows * out.cols;
+          out.fills = new Map();
+          for (let k = 0; k < n && i < items.length; k++) {
+            const start = int();
+            const count = int();
+            const aci = int();
+            const rgb = int();
+            const f: CadColor | null = aci < 0 ? null : rgb >= 0 ? { aci, rgb: rgb & 0xffffff } : { aci };
+            // 표 크기 밖(망가진 자료)은 버린다
+            for (let j = Math.max(0, start); j < Math.min(cells, start + count); j++) out.fills.set(j, f && { ...f });
+          }
+          break;
+        }
         default:
           return out;
       }
@@ -163,9 +196,13 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
   return out;
 }
 
-/** AutoCAD 원본 태그(AcDbTable)의 셀 병합과 셀 정렬 */
-export function rawTableCells(raw: readonly RawTag[] | undefined): { merges: Merge[]; aligns: Map<number, number>; count: number } {
-  const out = { merges: [] as Merge[], aligns: new Map<number, number>(), count: 0 };
+/**
+ * AutoCAD 원본 태그(AcDbTable)의 셀 병합·셀 정렬·셀 배경 채우기(31차).
+ * 채우기는 셀 재지정 플래그(R2007+ 91 / 그 전 177)의 4(배경색)이면 63 색(283이 0일 때), 2(채우기 없음 여부)와 283이 1이면 채우지 않음 —
+ * io/tablecells.ts rawCellOverrides와 같은 판정(셀의 283은 표본 DXF·*T 블록에서 채울 때 0이다)
+ */
+export function rawTableCells(raw: readonly RawTag[] | undefined): { merges: Merge[]; aligns: Map<number, number>; fills: Map<number, CadColor | null>; count: number } {
+  const out = { merges: [] as Merge[], aligns: new Map<number, number>(), fills: new Map<number, CadColor | null>(), count: 0 };
   if (!raw) return out;
   const start = raw.findIndex((t) => t.code === 100 && String(t.value).trim() === 'AcDbTable');
   if (start < 0) return out;
@@ -173,8 +210,16 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): { merges: Mer
   let cell = -1;
   let seen = new Set<number>();
   let span: { w: number; h: number } = { w: 1, h: 1 };
+  // 셀 재지정 값(값 묶음 301…304 밖의 첫 값)
+  let ovr = new Map<number, number>();
+  let inValue = false;
   const flush = () => {
     if (cell >= 0 && cols > 0 && (span.w > 1 || span.h > 1)) out.merges.push({ row: Math.floor(cell / cols), col: cell % cols, rows: Math.max(1, span.h), cols: Math.max(1, span.w) });
+    if (cell < 0) return;
+    const flags = ovr.get(177) ?? ovr.get(91) ?? 0;
+    const none = ovr.get(283) ?? 0;
+    if (flags & 0x04 && ovr.has(63) && !none) out.fills.set(cell, { aci: ovr.get(63)! });
+    else if (flags & 0x02 && none) out.fills.set(cell, null);
   };
   for (let k = start + 1; k < raw.length; k++) {
     const t = raw[k]!;
@@ -185,9 +230,18 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): { merges: Mer
       cell++;
       seen = new Set();
       span = { w: 1, h: 1 };
+      ovr = new Map();
+      inValue = false;
       continue;
     }
-    if (cell < 0 || seen.has(t.code)) continue;
+    if (cell < 0) continue;
+    if (t.code === 301) inValue = true;
+    else if (t.code === 304) inValue = false;
+    else if (!inValue && (t.code === 177 || t.code === 91 || t.code === 63 || t.code === 283) && !ovr.has(t.code)) {
+      const v = Number(t.value);
+      ovr.set(t.code, Number.isFinite(v) ? v : 0);
+    }
+    if (seen.has(t.code)) continue;
     if (t.code === 175) span.w = Number(t.value) || 1;
     else if (t.code === 176) span.h = Number(t.value) || 1;
     else if (t.code === 170) {
@@ -243,13 +297,18 @@ export function tableFromEntity(e: TableEntity | InsertEntity, doc: CadDocument)
   const rowHeights = pick(te?.rowHeights, xok ? x!.rowHeights : undefined, rows, 1);
   const colWidths = pick(te?.columnWidths, xok ? x!.colWidths : undefined, cols, 1);
   const baseRowHeights = xok && x!.baseRowHeights?.length === rows ? x!.baseRowHeights.map((v, i) => Math.min(v, rowHeights[i]!)) : [...rowHeights];
-  const raw = te ? rawTableCells(te.raw) : { merges: [], aligns: new Map<number, number>(), count: 0 };
+  const raw = te ? rawTableCells(te.raw) : { merges: [], aligns: new Map<number, number>(), fills: new Map<number, CadColor | null>(), count: 0 };
+  // 원본 태그의 셀 재지정은 셀마다 하나씩 있을 때만(표 크기와 맞지 않으면 어느 셀인지 모른다)
+  const rawFills = !xok && raw.count === rows * cols ? raw.fills : null;
   const cells: CellData[] = Array.from({ length: rows * cols }, (_, i) => {
     // R2007 이전 DXF는 비ASCII 문자를 \U+XXXX로 쓰고 리더는 문자 내용을 그대로 둔다 → 편집할 수 있게 푼다
     const text = decodeCadEscapes(te?.cells?.[i]?.text ?? (xok ? (x!.texts?.get(i) ?? '') : ''));
     const c: CellData = { text };
     const a = xok ? x!.aligns.get(i) : raw.aligns.get(i);
     if (a) c.align = a;
+    // 31차 셀 배경 채우기(앱 표는 확장 자료, AutoCAD 표는 셀 재지정 63·283)
+    const f = xok ? x!.fills?.get(i) : rawFills?.get(i);
+    if (f !== undefined) c.fill = f ? { ...f } : null;
     return c;
   });
   let rowKinds: CellKind[];

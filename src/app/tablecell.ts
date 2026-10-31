@@ -47,10 +47,11 @@
  *   시작한 끌기는 예전 그대로. 손가락 한 개 끌기는 앱의 화면 이동이라 그대로(셀 범위는 Shift+누르기나 마우스·펜). Shift+화살표는 도움말에 없어 하지 않았다
  * - 셀 메뉴의 정렬 ▸ 아홉 가지(TABLECELL 정렬과 같은 setAlign — 셀 재지정). 범위의 셀이 모두 그 정렬이면 ✓, 고르면 확정 한 번(이미 모두 그 정렬이면 바꾸지 않는다)
  */
-import type { Entity, InsertEntity, TableEntity } from '../core/model';
+import type { CadColor, Entity, InsertEntity, TableEntity } from '../core/model';
 import { tableKey } from '../core/model';
 import { isEditableTable, tableFromEntity } from '../edit/table/entity';
-import { type TableData, anchorOf, cellAt, cellName, cellRect, cloneTable, colOffset, mergeAt, rowOffset, setAlign } from '../edit/table/model';
+import { type TableData, anchorOf, cellAt, cellFill, cellName, cellRect, cloneTable, colOffset, mergeAt, rowOffset, sameFill, setAlign, setFill } from '../edit/table/model';
+import { pickColor } from './ui/colorpick';
 import { ALIGN_LABEL, type TableStyle } from '../edit/table/style';
 import { previewSegments } from '../edit/table/ops';
 import type { App, CommandContext } from './app';
@@ -76,6 +77,11 @@ export interface TableCellSelection extends SubSelection {
   current(): CellRange | null;
   /** 셀을 고른다(end를 주면 anchor에서 end까지 범위). 표가 아니거나 셀이 표 밖이면 false */
   select(handle: string, anchor: Cell, end?: Cell): boolean;
+  /**
+   * 고른 범위의 표 정의를 바꾼다(31차 — 특성 팔레트): make가 돌려준 정의로 확정 한 번(명령 취소 한 단계), 끝나면 같은 셀을 고른 채.
+   * make가 null이면(바뀌지 않음) 아무것도 하지 않는다. 잠긴 도면층은 알리고 바꾸지 않는다. 바꿨으면 true
+   */
+  edit(label: string, make: (t: TableData, g: { r0: number; c0: number; r1: number; c1: number }, style: TableStyle) => TableData | null): boolean;
 }
 
 /** 두 셀을 품고 걸친 병합 셀을 모두 덮는 직사각형 범위 */
@@ -138,6 +144,34 @@ export function rangeAlign(t: TableData, style: TableStyle, g: Range): number {
     }
   return out;
 }
+
+/**
+ * 범위의 셀(병합 셀은 기준 셀만)이 실제로 쓰는 배경 채우기(31차 — 재지정, 없으면 그 행 종류의 셀 스타일). 모두 같으면 그 값(채우지 않음은 null),
+ * 섞였으면 'mixed'
+ */
+export function rangeFill(t: TableData, style: TableStyle, g: Range): CadColor | null | 'mixed' {
+  let out: CadColor | null | undefined;
+  for (let r = g.r0; r <= g.r1; r++)
+    for (let c = g.c0; c <= g.c1; c++) {
+      const m = mergeAt(t, r, c);
+      if (m && (m.row !== r || m.col !== c)) continue;
+      const f = cellFill(t, style, r, c);
+      if (out === undefined) out = f;
+      else if (!sameFill(out, f)) return 'mixed';
+    }
+  return out ?? null;
+}
+
+/** 셀 메뉴·특성 팔레트의 배경 채우기 색(도움말 "Table Cell Ribbon Contextual Tab"의 Table Cell Background Color — 없음, 색, 색 선택) */
+export const FILL_COLORS: readonly { aci: number; label: string }[] = [
+  { aci: 1, label: '빨간색' },
+  { aci: 2, label: '노란색' },
+  { aci: 3, label: '초록색' },
+  { aci: 4, label: '하늘색' },
+  { aci: 5, label: '파란색' },
+  { aci: 6, label: '선홍색' },
+  { aci: 7, label: '흰색' },
+];
 
 /** 셀 그립의 변(표 좌표): x0 왼쪽, x1 오른쪽, y0 아래, y1 위 */
 export type CellSide = 'x0' | 'x1' | 'y0' | 'y1';
@@ -403,6 +437,51 @@ export function registerTableCellSelection(app: App): TableCellSelection {
     app.cmd.print(`셀 정렬: 표 ${next.rows}행 ${next.cols}열`);
     hook.select(handle, a, b);
   };
+  /**
+   * 고른 범위의 표 정의를 바꾼다(31차 — 배경 채우기·특성 팔레트가 같이 쓴다): 확정 한 번(명령 취소 한 단계), 끝나면 같은 셀을 고른 채.
+   * 바뀌지 않으면(make가 null) 아무것도 하지 않는다. 잠긴 도면층은 알리고 바꾸지 않는다. 바꿨으면 true
+   */
+  const applyRange = (label: string, make: (t: TableData, g: Range, style: TableStyle) => TableData | null): boolean => {
+    const cur = live();
+    if (!cur || !state) return false;
+    const handle = state.handle;
+    const p = readPicked(app, handle, null);
+    if (!p || lockedLayer(app, p.entity)) return false;
+    const a = state.anchor;
+    const b = state.end;
+    const next = make(p.data, cur.range, p.style);
+    if (!next) return false;
+    commitTable(app, p, next, label);
+    app.cmd.print(`${label}: 표 ${next.rows}행 ${next.cols}열`);
+    hook.select(handle, a, b);
+    return true;
+  };
+  /**
+   * 셀 배경 채우기(31차 — 도움말 "Table Cell Ribbon Contextual Tab"의 Table Cell Background Color: 없음, 색, 색 선택): 고른 범위의 셀 채우기를
+   * 재지정한다(채우지 않음도 재지정 — 셀 스타일에 채우기가 있어도 끈다). 범위의 셀이 모두 이미 그 채우기로 보이면 바꾸지 않는다(정렬과 같다)
+   */
+  const applyFill = (fill: CadColor | null): boolean =>
+    applyRange('셀 배경 채우기', (t, g, style) => {
+      const now = rangeFill(t, style, g);
+      if (now !== 'mixed' && sameFill(now, fill)) return null;
+      return setFill(t, g.r0, g.c0, g.r1, g.c1, fill);
+    });
+  const fillMenu = (t: TableData, style: TableStyle, g: Range): ContextMenuItem[] => {
+    const now = rangeFill(t, style, g);
+    const mark = (f: CadColor | null) => (now !== 'mixed' && sameFill(now, f) ? { kbd: '✓' } : {});
+    return [
+      { label: '없음', ...mark(null), run: () => void applyFill(null) },
+      ...FILL_COLORS.map((x) => ({ label: x.label, ...mark({ aci: x.aci }), run: () => void applyFill({ aci: x.aci }) })),
+      {
+        label: '색 선택...',
+        run: async () => {
+          const start = now !== 'mixed' && now ? now : { aci: 7 };
+          const c = await pickColor(start, { allowBy: false });
+          if (c) applyFill(c);
+        },
+      },
+    ];
+  };
 
   const hook: TableCellSelection = {
     name: 'table-cells',
@@ -603,8 +682,13 @@ export function registerTableCellSelection(app: App): TableCellSelection {
           label: '정렬',
           items: ALIGN_ORDER.map((n) => ({ label: ALIGN_LABEL[n]!, ...(rangeAlign(t, cur.rt.style, g) === n ? { kbd: '✓' } : {}), run: () => applyAlign(handle, n) })),
         },
+        // 31차 배경 채우기(도움말 "Table Cell Ribbon Contextual Tab"의 Table Cell Background Color — 없음·색·색 선택). 범위가 모두 그 채우기면 ✓
+        { label: '배경 채우기', items: fillMenu(t, cur.rt.style, g) },
       ];
       return items;
+    },
+    edit(label, make) {
+      return applyRange(label, make);
     },
     current() {
       const cur = live();

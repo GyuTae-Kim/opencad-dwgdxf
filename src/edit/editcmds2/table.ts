@@ -2,11 +2,13 @@
  * 표 내보내기(TABLEEXPORT)와 셀 특성 일치(MATCHCELL)의 순수 계산(화면·DOM 없음).
  * - CSV: 쉼표로 나누고, 쉼표·큰따옴표·줄바꿈·앞뒤 공백이 있는 칸은 큰따옴표로 감싸며 안의 큰따옴표는 두 번 쓴다(RFC 4180).
  *   셀 문자는 여러 줄 문자 서식을 걷어 내고 문단(\P)은 칸 안의 줄바꿈으로 둔다. 병합된 셀은 기준 셀에만 문자가 있다.
- * - MATCHCELL: 원본 셀의 정렬(셀 재지정이 없으면 그 행 셀 스타일의 정렬)을 대상 셀에 옮긴다.
- *   대상 행 스타일의 정렬과 같으면 재지정을 지운다(이 표 모델의 셀 특성은 정렬 재지정뿐이다).
+ * - MATCHCELL: 원본 셀의 정렬과 배경 채우기(31차 — 셀 재지정이 없으면 그 행 셀 스타일의 값)를 대상 셀에 옮긴다.
+ *   대상 행 스타일의 값과 같으면 재지정을 지운다(이 표 모델의 셀 특성은 정렬·배경 채우기 재지정이다 — 도움말 "To Change the Properties of Table Cells":
+ *   셀 일치는 셀 종류(문자·블록)를 빼고 모든 특성을 옮긴다).
  */
+import type { CadColor } from '../../core/model';
 import { mtextPlainLines } from '../../io/dxf/wconvert';
-import { type TableData, anchorOf, cellIndex, getText, setAlign } from '../table/model';
+import { type TableData, anchorOf, cellFill, cellIndex, getText, sameFill, setAlign, setFill } from '../table/model';
 import type { TableStyle } from '../table/style';
 
 /** CSV 칸 하나 */
@@ -61,4 +63,20 @@ export function matchCellAlign(t: TableData, style: TableStyle, dst: { r: number
   const want = srcAlign === rowDefault ? undefined : srcAlign;
   if (cur === want || (!cur && want === undefined)) return null;
   return setAlign(t, a.r, a.c, a.r, a.c, want ?? 0);
+}
+
+/** 셀(병합 셀은 기준 셀)의 실제 배경 채우기(재지정 또는 행 셀 스타일, 채우지 않으면 null) */
+export function effectiveFill(t: TableData, style: TableStyle, r: number, c: number): CadColor | null {
+  const a = anchorOf(t, r, c);
+  return cellFill(t, style, a.r, a.c);
+}
+
+/** 원본 셀의 배경 채우기(31차)를 대상 셀에 옮긴 표: 대상 행 셀 스타일과 같으면 재지정을 지운다. 바뀐 것이 없으면 null */
+export function matchCellFill(t: TableData, style: TableStyle, dst: { r: number; c: number }, srcFill: CadColor | null): TableData | null {
+  const a = anchorOf(t, dst.r, dst.c);
+  const cur = t.cells[cellIndex(t, a.r, a.c)]?.fill;
+  const rowDefault = style.cells[t.rowKinds[a.r] ?? 'data'].fill;
+  const want = sameFill(srcFill, rowDefault) ? undefined : srcFill;
+  if (want === undefined ? cur === undefined : cur !== undefined && sameFill(cur, want)) return null;
+  return setFill(t, a.r, a.c, a.r, a.c, want);
 }

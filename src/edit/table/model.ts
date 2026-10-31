@@ -4,6 +4,7 @@
  * 표 좌표: 삽입점이 원점, X는 오른쪽, 행은 표 방향(아래로 = −Y, 위로 = +Y)으로 쌓인다.
  * 셀은 행 우선(행 r, 열 c → r × cols + c). 병합된 셀은 왼쪽 위 셀(기준 셀)만 문자를 가진다.
  */
+import type { CadColor } from '../../core/model';
 import type { CellKind, TableStyle } from './style';
 import { rowHeightForLines } from './style';
 
@@ -11,6 +12,11 @@ export interface CellData {
   text: string;
   /** 셀 정렬 재지정(1~9). 없으면 행 종류의 셀 스타일 */
   align?: number;
+  /**
+   * 셀 배경 채우기 재지정(31차): 색이면 그 색으로 채우고, null이면 채우지 않는다(셀 스타일에 채우기가 있어도).
+   * 없으면 행 종류의 셀 스타일 채우기
+   */
+  fill?: CadColor | null;
 }
 
 export interface Merge {
@@ -114,6 +120,36 @@ export function setAlign(t: TableData, r0: number, c0: number, r1: number, c1: n
       else delete cell.align;
     }
   return out;
+}
+
+/**
+ * 셀 배경 채우기 재지정(31차 — 범위): 색이면 그 색, null이면 채우지 않음, undefined면 재지정을 지운다(셀 스타일을 따른다)
+ */
+export function setFill(t: TableData, r0: number, c0: number, r1: number, c1: number, fill: CadColor | null | undefined): TableData {
+  const out = cloneTable(t);
+  const rr = order(r0, r1);
+  const cc = order(c0, c1);
+  for (let r = rr[0]; r <= rr[1]; r++)
+    for (let c = cc[0]; c <= cc[1]; c++) {
+      const cell = out.cells[cellIndex(out, r, c)];
+      if (!cell) continue;
+      if (fill === undefined) delete cell.fill;
+      else cell.fill = fill ? { ...fill } : null;
+    }
+  return out;
+}
+
+/** 셀이 실제로 쓰는 배경 채우기(재지정, 없으면 그 행 종류의 셀 스타일). 채우지 않으면 null */
+export function cellFill(t: TableData, style: TableStyle, r: number, c: number): CadColor | null {
+  const f = t.cells[cellIndex(t, r, c)]?.fill;
+  if (f !== undefined) return f;
+  return style.cells[t.rowKinds[r] ?? 'data'].fill;
+}
+
+/** 두 채우기가 같은지(둘 다 없음, 또는 같은 색인·트루컬러) */
+export function sameFill(a: CadColor | null | undefined, b: CadColor | null | undefined): boolean {
+  if (!a || !b) return !a && !b;
+  return a.aci === b.aci && (a.rgb ?? -1) === (b.rgb ?? -1);
 }
 
 function order(a: number, b: number): [number, number] {
