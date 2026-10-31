@@ -1,11 +1,11 @@
 /**
- * 표 그림 블록(*T)의 내용: 격자선(LINE), 셀 채우기(SOLID), 셀 문자(MTEXT).
+ * 표 그림 블록(*T)의 내용: 격자선(LINE), 셀 채우기(SOLID), 셀 문자(MTEXT — 셀 문자 높이·색 재지정은 32차).
  * 좌표는 표 좌표(삽입점 원점)다. 블록 기준점은 (0, 0)이고 객체는 도면층 0·ByBlock이라 표의 특성을 따른다.
  */
 import type { CadColor, Entity, MTextEntity, Vec3 } from '../../core/model';
 import { entityDefaults } from '../../core/model';
 import type { TableStyle } from './style';
-import { type TableData, cellFill, cellIndex, cellRect, colOffset, mergeAt, rowOffset } from './model';
+import { type TableData, cellFill, cellIndex, cellRect, cellTextHeight, colOffset, mergeAt, rowOffset } from './model';
 
 const BYBLOCK_LW = -2;
 
@@ -93,11 +93,12 @@ export function tableBlockEntities(t: TableData, style: TableStyle, opt: TableGe
       const x = col === 0 ? q.x0 + style.hMargin : col === 1 ? (q.x0 + q.x1) / 2 : q.x1 - style.hMargin;
       const y = row === 0 ? q.y1 - style.vMargin : row === 1 ? (q.y0 + q.y1) / 2 : q.y0 + style.vMargin;
       const mt: MTextEntity = {
-        ...(base(cs.color) as Omit<MTextEntity, 'type'>),
+        // 32차: 셀 문자 색·높이 재지정(없으면 행 종류의 셀 스타일)
+        ...(base(cell.color ? { ...cell.color } : cs.color) as Omit<MTextEntity, 'type'>),
         type: 'MTEXT',
         handle: '',
         insert: P(x, y),
-        height: cs.height,
+        height: cellTextHeight(t, style, r, c),
         width: Math.max(0, q.x1 - q.x0 - 2 * style.hMargin),
         attachment: align,
         drawingDirection: 1,

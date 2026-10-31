@@ -50,7 +50,23 @@
 import type { CadColor, Entity, InsertEntity, TableEntity } from '../core/model';
 import { tableKey } from '../core/model';
 import { isEditableTable, tableFromEntity } from '../edit/table/entity';
-import { type TableData, anchorOf, cellAt, cellFill, cellName, cellRect, cloneTable, colOffset, mergeAt, rowOffset, sameFill, setAlign, setFill } from '../edit/table/model';
+import {
+  type TableData,
+  anchorOf,
+  cellAt,
+  cellFill,
+  cellName,
+  cellRect,
+  cellTextColor,
+  cellTextHeight,
+  cloneTable,
+  colOffset,
+  mergeAt,
+  rowOffset,
+  sameFill,
+  setAlign,
+  setFill,
+} from '../edit/table/model';
 import { pickColor } from './ui/colorpick';
 import { ALIGN_LABEL, type TableStyle } from '../edit/table/style';
 import { previewSegments } from '../edit/table/ops';
@@ -160,6 +176,34 @@ export function rangeFill(t: TableData, style: TableStyle, g: Range): CadColor |
       else if (!sameFill(out, f)) return 'mixed';
     }
   return out ?? null;
+}
+
+/** 범위의 셀(병합 셀은 기준 셀만)이 실제로 쓰는 문자 높이(32차 — 재지정, 없으면 그 행 종류의 셀 스타일). 모두 같으면 그 값, 섞였으면 null */
+export function rangeTextHeight(t: TableData, style: TableStyle, g: Range): number | null {
+  let out: number | undefined;
+  for (let r = g.r0; r <= g.r1; r++)
+    for (let c = g.c0; c <= g.c1; c++) {
+      const m = mergeAt(t, r, c);
+      if (m && (m.row !== r || m.col !== c)) continue;
+      const v = cellTextHeight(t, style, r, c);
+      if (out === undefined) out = v;
+      else if (out !== v) return null;
+    }
+  return out ?? null;
+}
+
+/** 범위의 셀(병합 셀은 기준 셀만)이 실제로 쓰는 문자 색(32차). 모두 같으면 그 색, 섞였으면 'mixed' */
+export function rangeTextColor(t: TableData, style: TableStyle, g: Range): CadColor | 'mixed' {
+  let out: CadColor | undefined;
+  for (let r = g.r0; r <= g.r1; r++)
+    for (let c = g.c0; c <= g.c1; c++) {
+      const m = mergeAt(t, r, c);
+      if (m && (m.row !== r || m.col !== c)) continue;
+      const v = cellTextColor(t, style, r, c);
+      if (out === undefined) out = v;
+      else if (!sameFill(out, v)) return 'mixed';
+    }
+  return out ? { ...out } : { aci: 0 };
 }
 
 /** 셀 메뉴·특성 팔레트의 배경 채우기 색(도움말 "Table Cell Ribbon Contextual Tab"의 Table Cell Background Color — 없음, 색, 색 선택) */
