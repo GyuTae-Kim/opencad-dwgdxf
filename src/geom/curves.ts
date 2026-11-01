@@ -310,7 +310,7 @@ export function interpolateFitPoints(fit: readonly Vec3[], startTangent?: Vec3, 
     return { ctrl: [...fit], knots: clampedKnots(n, 1), degree: 1 };
   }
   if (work) work.n += fitSolveWork(n);
-  const p =Math.min(3, n - 1 + (startTangent ? 1 : 0) + (endTangent ? 1 : 0));
+  const p = Math.min(3, n - 1 + (startTangent ? 1 : 0) + (endTangent ? 1 : 0));
   // 현 길이 매개변수
   const d: number[] = [0];
   let total = 0;
