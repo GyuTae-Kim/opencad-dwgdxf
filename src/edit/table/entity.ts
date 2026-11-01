@@ -5,6 +5,7 @@
  * 셀 잠금(34차)은 확장 자료 OPENCAD_TABLE에 남긴다(DXF·DWG 모두 그대로 저장된다). 셀 잠금은 DWG R2010+ 셀 상태로도 쓰고 읽는다(DXF 참조에는 코드가 없다). AutoCAD가 쓴 표는 원본 태그의 셀 병합(173·175·176)과
  * 셀 정렬(170), 셀 배경 채우기(63·283), 셀 문자 높이(140)·문자 색(64)·문자 스타일(7)을 읽는다. 표를 블록 참조로 저장한 파일(DWG 쓰기)도 확장 자료가 있으면 다시 표로 읽을 수 있다.
  */
+import { TABLE_CELL_LIMIT } from '../../core/limits';
 import type { CadColor, CadDocument, Entity, InsertEntity, RawTag, TableEntity, XData, XDataItem } from '../../core/model';
 import { tableKey } from '../../core/model';
 import type { CellKind, TableStyle } from './style';
@@ -169,6 +170,14 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
     const v = next()?.value;
     return typeof v === 'number' ? v : Number(v) || 0;
   };
+  /** 묶음의 항목 수. 항목마다 확장 자료 칸을 하나 이상 쓰므로 남은 칸 수까지만 믿는다(값 하나로 수억 칸을 잡지 않게) */
+  const size = (): number => Math.min(int(), items.length - i);
+  /** 셀 묶음(시작, 개수) 하나를 표 크기 안에서 돈다. 묶음은 겹치지 않으므로 한 종류가 셀 수보다 많이 돌면 망가진 자료다 */
+  let runLeft = 0;
+  const eachCell = (start: number, count: number, f: (j: number) => void): void => {
+    const end = Math.min(out.rows * out.cols, start + count);
+    for (let j = Math.max(0, start); j < end && runLeft > 0; j++, runLeft--) f(j);
+  };
   const first = next();
   if (!first || typeof first.value !== 'string' || !first.value.startsWith('OPENCAD_TABLE')) return null;
   const out: DecodedTable = { rows: 0, cols: 0, merges: [], aligns: new Map(), spans: new Map() };
@@ -179,38 +188,41 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
       if (!tag || tag.code !== 1000) break;
       // 묶음을 다 읽은 뒤 자리를 적는다(다음 차례 처음에)
       const mark = () => out.spans.set(String(tag.value), [at, i]);
+      runLeft = out.rows * out.cols;
       switch (tag.value) {
         case 'size':
           out.rows = int();
           out.cols = int();
+          // 셀마다 객체를 만들므로 표로 다루지 않는다(블록 참조로 남는다)
+          if (Math.abs(out.rows * out.cols) > TABLE_CELL_LIMIT) return null;
           break;
         case 'rowh': {
-          const n = int();
+          const n = size();
           out.rowHeights = Array.from({ length: n }, real);
           break;
         }
         case 'baseh': {
-          const n = int();
+          const n = size();
           out.baseRowHeights = Array.from({ length: n }, real);
           break;
         }
         case 'colw': {
-          const n = int();
+          const n = size();
           out.colWidths = Array.from({ length: n }, real);
           break;
         }
         case 'kinds': {
-          const n = int();
+          const n = size();
           out.rowKinds = Array.from({ length: n }, () => CODE_KIND[int()] ?? 'data');
           break;
         }
         case 'merge': {
-          const n = int();
+          const n = size();
           for (let k = 0; k < n; k++) out.merges.push({ row: int(), col: int(), rows: int(), cols: int() });
           break;
         }
         case 'align': {
-          const n = int();
+          const n = size();
           for (let k = 0; k < n; k++) {
             const idx = int();
             out.aligns.set(idx, int());
@@ -218,21 +230,20 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
           break;
         }
         case 'text': {
-          const n = int();
+          const n = size();
           out.texts = new Map();
           for (let k = 0; k < n; k++) {
             const idx = int();
             const parts = int();
             let s = '';
-            for (let p = 0; p < parts; p++) s += String(next()?.value ?? '');
+            for (let p = 0; p < parts && i < items.length; p++) s += String(next()?.value ?? '');
             out.texts.set(idx, s);
           }
           break;
         }
         case 'fill': {
           const n = int();
-          const cells = out.rows * out.cols;
-          out.fills = new Map();
+          const fills = (out.fills = new Map<number, CadColor | null>());
           for (let k = 0; k < n && i < items.length; k++) {
             const start = int();
             const count = int();
@@ -240,28 +251,26 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
             const rgb = int();
             const f: CadColor | null = aci < 0 ? null : rgb >= 0 ? { aci, rgb: rgb & 0xffffff } : { aci };
             // 표 크기 밖(망가진 자료)은 버린다
-            for (let j = Math.max(0, start); j < Math.min(cells, start + count); j++) out.fills.set(j, f && { ...f });
+            eachCell(start, count, (j) => fills.set(j, f && { ...f }));
           }
           break;
         }
         case 'theight': {
           const n = int();
-          const cells = out.rows * out.cols;
-          out.heights = new Map();
+          const heights = (out.heights = new Map<number, number>());
           for (let k = 0; k < n && i < items.length; k++) {
             const start = int();
             const count = int();
             const v = real();
             // 0 이하·숫자가 아닌 높이와 표 크기 밖 번호(망가진 자료)는 버린다
             if (!(Number.isFinite(v) && v > 0)) continue;
-            for (let j = Math.max(0, start); j < Math.min(cells, start + count); j++) out.heights.set(j, v);
+            eachCell(start, count, (j) => heights.set(j, v));
           }
           break;
         }
         case 'tcolor': {
           const n = int();
-          const cells = out.rows * out.cols;
-          out.colors = new Map();
+          const colors = (out.colors = new Map<number, CadColor>());
           for (let k = 0; k < n && i < items.length; k++) {
             const start = int();
             const count = int();
@@ -269,14 +278,13 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
             const rgb = int();
             if (aci < 0 || aci > 257) continue;
             const c: CadColor = rgb >= 0 ? { aci, rgb: rgb & 0xffffff } : { aci };
-            for (let j = Math.max(0, start); j < Math.min(cells, start + count); j++) out.colors.set(j, { ...c });
+            eachCell(start, count, (j) => colors.set(j, { ...c }));
           }
           break;
         }
         case 'tstyle': {
           const n = int();
-          const cells = out.rows * out.cols;
-          out.textStyles = new Map();
+          const styles = (out.textStyles = new Map<number, string>());
           for (let k = 0; k < n && i < items.length; k++) {
             const start = int();
             const count = int();
@@ -285,21 +293,20 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
             for (let p = 0; p < parts && i < items.length; p++) name += String(next()?.value ?? '');
             // 빈 이름과 표 크기 밖 번호(망가진 자료)는 버린다
             if (!name) continue;
-            for (let j = Math.max(0, start); j < Math.min(cells, start + count); j++) out.textStyles.set(j, name);
+            eachCell(start, count, (j) => styles.set(j, name));
           }
           break;
         }
         case 'lock': {
           const n = int();
-          const cells = out.rows * out.cols;
-          out.locks = new Map();
+          const locks = (out.locks = new Map<number, number>());
           for (let k = 0; k < n && i < items.length; k++) {
             const start = int();
             const count = int();
             const v = int() & 5;
             // 잠금 없음과 표 크기 밖 번호(망가진 자료)는 버린다
             if (!v) continue;
-            for (let j = Math.max(0, start); j < Math.min(cells, start + count); j++) out.locks.set(j, v);
+            eachCell(start, count, (j) => locks.set(j, v));
           }
           break;
         }
@@ -433,6 +440,7 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): RawTableCells
   if (!raw) return out;
   const start = raw.findIndex((t) => t.code === 100 && String(t.value).trim() === 'AcDbTable');
   if (start < 0) return out;
+  let rows = 0;
   let cols = 0;
   let cell = -1;
   let seen = new Set<number>();
@@ -458,6 +466,7 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): RawTableCells
     const t = raw[k]!;
     if (t.code === 100) break;
     if (cell < 0 && t.code === 92 && !cols) cols = Number(t.value) || 0;
+    if (cell < 0 && t.code === 91 && !rows) rows = Number(t.value) || 0;
     if (t.code === 171) {
       flush();
       cell++;
@@ -490,6 +499,9 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): RawTableCells
   // 겹치는 병합은 앞의 것만
   const taken = new Set<number>();
   out.merges = out.merges.filter((m) => {
+    // 병합 폭·높이(175·176)는 파일 값이다. 표 밖으로 나가는 병합은 어차피 쓰지 않으니(tableFromEntity) 칸을 세지 않는다
+    if (rows > 0 && m.row + m.rows > rows) return false;
+    if (m.col + m.cols > cols) return false;
     const keys: number[] = [];
     for (let r = m.row; r < m.row + m.rows; r++) for (let c = m.col; c < m.col + m.cols; c++) keys.push(r * cols + c);
     if (keys.some((x) => taken.has(x))) return false;
