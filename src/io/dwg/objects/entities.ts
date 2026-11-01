@@ -46,7 +46,7 @@ import type {
   XLineEntity,
 } from '../../../core/model';
 import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../../core/hatchedges';
-import { TABLE_CELL_LIMIT } from '../../../core/limits';
+import { TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS } from '../../../core/limits';
 import { BYLAYER, SHARED_BYLAYER_COLOR } from '../../../core/model';
 import { tidyWidths, zeros } from '../../../core/lwpoly';
 import { unpack3 } from '../../../core/flat3';
@@ -2060,12 +2060,13 @@ function readTable(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names):
   // 표 본문 전체를 풀면(tablecodec.ts, 표본 71개가 같은 비트로 다시 써진다) DXF와 같은 원본 태그(병합·셀 재지정)도 만든다.
   const save = { d: r.pos, h: hr.pos, s: or.str.pos };
   const full = decodeTableBody(or, e, (h) => names.style(h));
-  if (full === TABLE_TOO_LARGE) {
-    // 행 × 열이 한도 안이어도 칸을 펼치지 못한다: 한도를 넘는 표와 같이 마무리가 셀 없는 표로 두고 경고한다(core/finalize.ts)
+  /** 행 × 열이 한도 안이어도 칸을 펼치지 못한다: 한도를 넘는 표와 같이 마무리가 셀 없는 표로 두고 경고한다(core/finalize.ts) */
+  const tooLarge = (): TableEntity => {
     e.rows = TABLE_CELL_LIMIT + 1;
     e.columns = 1;
     return e;
-  }
+  };
+  if (full === TABLE_TOO_LARGE) return tooLarge();
   if (full) {
     e.rows = full.rows;
     e.columns = full.columns;
@@ -2094,7 +2095,8 @@ function readTable(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names):
       e.columnWidths = [];
     }
   }
-  return e;
+  // 본문 끝을 망가뜨려 위의 검사를 피해도 셀 없이 크기만 남은 큰 표를 두지 않는다(고르거나 저장할 때 칸마다 객체를 만든다)
+  return !e.cells && e.rows * e.columns > TABLE_EMPTY_CELLS ? tooLarge() : e;
 }
 
 // ---------------------------------------------------------------------------

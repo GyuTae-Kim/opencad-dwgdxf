@@ -5,7 +5,18 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-const cfg = vi.hoisted(() => ({ m: 0, merges: 0, budget: 0 }));
+const cfg = vi.hoisted(() => ({ m: 0, merges: 0, budget: 0, failDecode: false }));
+// 본문을 끝까지 못 푼 표: 읽기만 실패시킨다
+vi.mock('../../src/io/dwg/tablecodec', async (orig) => {
+  const mod = (await orig()) as typeof import('../../src/io/dwg/tablecodec');
+  return {
+    ...mod,
+    tableR24: (...a: Parameters<typeof mod.tableR24>) => {
+      if (cfg.failDecode) throw new Error('표 본문을 풀지 못했다');
+      return mod.tableR24(...a);
+    },
+  };
+});
 // 쓰기만 바꿔 행·열 목록을 늘린 파일을 만든다(읽기는 그대로다)
 vi.mock('../../src/io/dwg/tablemodel', async (orig) => {
   const mod = (await orig()) as typeof import('../../src/io/dwg/tablemodel');
@@ -69,6 +80,36 @@ describe('R2010+ 표 읽기', () => {
       expect(doc.warnings.map((w) => w.code)).toContain('table.too_large');
     });
   }
+
+  describe('본문을 끝까지 못 풀어 크기만 읽은 표', () => {
+    const read = (data: Uint8Array) => {
+      cfg.failDecode = true;
+      try {
+        return readCadFile(data, 'x.dwg');
+      } finally {
+        cfg.failDecode = false;
+      }
+    };
+
+    it('셀이 없는 큰 표는 위의 검사를 피해도 칸을 만들 크기를 남기지 않는다', () => {
+      const doc = read(bomb(800));
+      expect([tableOf(doc).rows, tableOf(doc).columns]).toEqual([0, 0]);
+      expect(doc.warnings.map((w) => w.code)).toContain('table.too_large');
+    });
+
+    it('셀 없는 칸이 한도 안이면 크기를 살린다', () => {
+      const doc = read(bomb(32));
+      expect([tableOf(doc).rows, tableOf(doc).columns]).toEqual([32, 32]);
+      expect(doc.warnings.map((w) => w.code)).not.toContain('table.too_large');
+    });
+
+    it('셀을 읽은 표는 그대로 둔다', () => {
+      const data = writeDwg(readDxf(bytesOf(dxfText([table(2, 2)], [T1]))), { version: 'AC1032' }).data.slice();
+      const e = tableOf(read(data));
+      expect([e.rows, e.columns]).toEqual([2, 2]);
+      expect(e.cells?.length).toBe(4);
+    });
+  });
 
   it('막은 표도 다시 저장된다', () => {
     const doc = readCadFile(bomb(2200), 'x.dwg');
