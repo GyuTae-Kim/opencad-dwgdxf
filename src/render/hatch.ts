@@ -194,8 +194,8 @@ export function clipLoopsToRect(loops: number[][], r: readonly [number, number, 
 export function patternSegments(lines: readonly HatchPatternLine[], loops: number[][], limit = HATCH_LINE_LIMIT, work?: DashWork): number[] | null {
   const out: number[] = [];
   if (!loops.length) return out;
-  // 조각 한도(선 하나당 8)까지 형식 안의 무늬(요소 12개)가 밟는 수
-  const stepLimit = limit * 8 * LINETYPE_ELEMENTS;
+  // 조각 한도(선 하나당 8)까지 형식 안의 무늬(요소 12개)가 밟는 수. 구간 하나는 조각 하나에 주기 4개까지 세므로(주기 2개 길이에 대시 하나 + 2) 4배를 둔다
+  const stepLimit = limit * 8 * LINETYPE_ELEMENTS * 4;
   let steps = 0;
   // 경계 상자
   let minX = Infinity;

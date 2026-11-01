@@ -10,6 +10,7 @@ import { edgeBox } from '../../src/edit/geom/edges';
 import { explodeEntity } from '../../src/edit/geom/explode';
 import { normalizeNurbs } from '../../src/edit/geom/nurbs';
 import { splineNurbs } from '../../src/edit/geom/path';
+import { entitiesToCurves } from '../../src/edit/hatch/curves';
 import { burstInsert } from '../../src/edit/util/blockutil';
 import { type FitWork, clampedKnots, interpolateFitPoints, nurbsPoints } from '../../src/geom/curves';
 import { readDxf } from '../../src/io/dxf/reader';
@@ -512,8 +513,32 @@ describe('해치 무늬', () => {
   });
 
   it('장면에서는 실선으로 낮춘 것을 알린다', () => {
-    const s = scene(load([hatch({ size: 30_000_000, spacing: 1e9, dashes: [1, ...Array.from({ length: 10_000 }, () => -1)] })]));
+    const s = scene(load([hatch({ size: 300_000_000, spacing: 1e9, dashes: [1, ...Array.from({ length: 10_000 }, () => -1)] })]));
     expect(codes(s)).toContain('linetype.dash_limited');
+  });
+
+  it('구간마다 조각이 나는 무늬는 조각 한도 안에서 요소 예산에 닿지 않는다', () => {
+    // 구간마다 주기 1.9개 길이에 대시 하나: 구간 150만 개, 조각 약 152만 개(한도 160만). 요소 예산이 구간마다 48을 세어 2배로는 닿았다
+    const dashes = [0.1, ...Array.from({ length: 11 }, () => -1)];
+    const period = 11.1;
+    const lines = 2000;
+    const loop: number[] = [];
+    const h = lines * 0.1;
+    let x = 0;
+    for (let i = 0; i < 750; i++) {
+      x = i * 3 * period + 0.2;
+      loop.push(x, 0, x, h, x + period * 1.9, h, x + period * 1.9, 0.001);
+      x = (i + 1) * 3 * period + 0.2;
+      loop.push(x, 0.001);
+    }
+    loop.push(x, -1, 0.2, -1);
+    const work: DashWork = { n: 0 };
+    const out = patternSegments([{ angle: 0, base: { x: 0, y: 0.05 }, offset: { x: 0, y: 0.1 }, dashes }], [loop], 200_000, work)!;
+    expect(work.limited).toBeUndefined();
+    expect(out.length / 4).toBeGreaterThan(1_500_000);
+    let solid = 0;
+    for (let i = 0; i + 3 < out.length; i += 4) if (out[i + 2]! - out[i]! > 0.11) solid++;
+    expect(solid).toBe(0);
   });
 
   it('요소를 밟는 예산은 형식 안의 무늬가 조각 한도에 닿기 전에 걸리지 않는다', () => {
@@ -600,6 +625,154 @@ describe('선종류 무늬', () => {
     expect(segs(s)).toBe(100);
     // 칸 1 + 객체 방문 1 + 일 202
     expect(s.stats.blockWork).toBe(2 + 202);
+  });
+});
+
+describe('복합 선종류 문자', () => {
+  const textPat = (chars: number): DashPattern => ({ dashes: [1, -1], period: 2, texts: [{ at: 0, text: ' '.repeat(chars), scale: 1, rotation: 0, absolute: false, dx: 0, dy: 0 }] });
+  const textLtype = (text: string): string[] => ['0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'D', '70', '0', '3', 'd', '72', '65', '73', '2', '40', '2', '49', '1', '74', '2', '75', '0', '46', '1', '50', '0', '44', '0', '45', '0', '9', text, '49', '-1', '74', '0', '0', 'ENDTAB', '0', 'ENDSEC'];
+  const line = ['0', 'LINE', '8', '0', '6', 'D', '10', '0', '20', '0', '30', '0', '11', String(2 * 19999), '21', '0', '31', '0'];
+
+  it('반복 × 글자 수가 예산을 넘으면 문자를 배치하지 않고 실선으로 낮춘다', () => {
+    for (const text of [' '.repeat(20_000), 'A'.repeat(500)]) {
+      const s = scene(load([line], [], textLtype(text)), { scenePieceLimit: 1000 });
+      expect(segs(s)).toBe(1);
+      expect(s.list.glyphs.instanceCount).toBe(0);
+      expect(codes(s)).toContain('linetype.dash_limited');
+    }
+  });
+
+  it('예산과 같으면 문자를 입히고 하나 넘으면 실선이다', () => {
+    const chars = 14;
+    const repeats = DASH_STEP_LIMIT / (2 + chars);
+    const run = (len: number) => {
+      let placed = 0;
+      const work: DashWork = { n: 0 };
+      dashPolyline([0, 0, len, 0], false, textPat(chars), () => {}, () => placed++, work);
+      return { placed, work };
+    };
+    const at = run(repeats * 2);
+    expect(at.placed).toBe(repeats);
+    expect(at.work.limited).toBeUndefined();
+    const over = run(repeats * 2 + 1);
+    expect(over.placed).toBe(0);
+    expect(over.work.limited).toBe(true);
+  });
+
+  it('글자를 일에 넣는다', () => {
+    const work: DashWork = { n: 0 };
+    dashPolyline([0, 0, 2000, 0], false, textPat(100), () => {}, () => {}, work);
+    // 주기 1000번 × (요소 2 + 글자 100) / 8 + 1000 × 글자 100 / 2
+    expect(work.n).toBe(((1000 * 102) >> 3) + 50_000);
+  });
+
+  it('글자가 없는 도형 요소도 주기마다 하나로 센다', () => {
+    const pat: DashPattern = { dashes: [1, -1], period: 2, texts: [{ at: 0, text: '', scale: 1, rotation: 0, absolute: false, dx: 0, dy: 0, shape: { file: 'x', num: 1 } }] };
+    const work: DashWork = { n: 0 };
+    dashPolyline([0, 0, 800, 0], false, pat, () => {}, () => {}, work);
+    expect(work.n).toBe(((400 * 3) >> 3) + 200);
+  });
+
+  it('형식 안의 짧은 문자는 반복 한도까지 그대로다', () => {
+    let placed = 0;
+    const work: DashWork = { n: 0 };
+    dashPolyline([0, 0, 2 * 19_999, 0], false, textPat(3), () => {}, () => placed++, work);
+    expect(placed).toBe(19_999);
+    expect(work.limited).toBeUndefined();
+  });
+});
+
+describe('방문마다 도는 일', () => {
+  const OFF = { blockWorkLimit: 1e12, scenePieceLimit: 1e12 };
+  const blockOf = (name: string, body: string[]): string[] => ['0', 'BLOCK', '8', '0', '2', name, '70', '0', '10', '0', '20', '0', '30', '0', '3', name, ...body, '0', 'ENDBLK', '8', '0'];
+
+  it('유한하지 않아 버리는 자르기 경계도 칸마다 점 수를 센다', () => {
+    const doc = load([minsert(30, 30)], [BLOCK_B]);
+    const e = doc.entityIndex.get('1A') as InsertEntity;
+    const I = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
+    const boundary = Array.from({ length: 500 }, (_, i) => ({ x: i, y: i % 7 }));
+    boundary.push({ x: Infinity, y: 0 });
+    e.xdict = 'C1';
+    doc.objects.set('C1', { type: 'DICTIONARY', handle: 'C1', entries: new Map([['ACAD_FILTER', 'C2']]) } as never);
+    doc.objects.set('C2', { type: 'DICTIONARY', handle: 'C2', entries: new Map([['SPATIAL', 'C3']]) } as never);
+    doc.objects.set('C3', { type: 'SPATIAL_FILTER', handle: 'C3', boundary, normal: { x: 0, y: 0, z: 1 }, origin: { x: 0, y: 0, z: 0 }, displayBoundary: true, inverted: false, inverseBlockTransform: I, clipTransform: I } as never);
+    const s = scene(doc, OFF);
+    expect(segs(s)).toBe(900);
+    expect(s.stats.blockWork).toBeGreaterThanOrEqual(900 * 501);
+  });
+
+  it('외부 참조의 자르기 경계도 센다', () => {
+    const X = ['0', 'BLOCK', '8', '0', '2', 'X', '70', '4', '10', '0', '20', '0', '30', '0', '3', 'X', '1', 'x.dwg', '0', 'ENDBLK', '8', '0'];
+    const doc = load([minsert(2, 2, '1A', 'X')], [X]);
+    const e = doc.entityIndex.get('1A') as InsertEntity;
+    const I = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
+    e.xdict = 'C1';
+    doc.objects.set('C1', { type: 'DICTIONARY', handle: 'C1', entries: new Map([['ACAD_FILTER', 'C2']]) } as never);
+    doc.objects.set('C2', { type: 'DICTIONARY', handle: 'C2', entries: new Map([['SPATIAL', 'C3']]) } as never);
+    doc.objects.set('C3', { type: 'SPATIAL_FILTER', handle: 'C3', boundary: Array.from({ length: 100 }, (_, i) => ({ x: i, y: i % 7 })), normal: { x: 0, y: 0, z: 1 }, origin: { x: 0, y: 0, z: 0 }, displayBoundary: true, inverted: false, inverseBlockTransform: I, clipTransform: I } as never);
+    expect(scene(doc, OFF).stats.blockWork).toBe(4 * (1 + 100 + 2));
+  });
+
+  it('모서리가 하나뿐인 메시도 정점을 옮기는 일을 센다', () => {
+    const nv = 800;
+    const m = ['0', 'MESH', '8', '0', '100', 'AcDbEntity', '100', 'AcDbSubDMesh', '71', '2', '72', '0', '91', '0', '92', String(nv)];
+    for (let i = 0; i < nv; i++) m.push('10', String(i), '20', String(i % 3), '30', '0');
+    m.push('93', '0', '94', '1', '90', '0', '90', '1', '95', '0');
+    const s = scene(load([minsert(10, 10)], [blockOf('B', m)]), OFF);
+    // 칸 100개마다 칸 1 + 객체 1 + 정점 800 / 8
+    expect(s.stats.blockWork).toBe(100 * (2 + 100));
+  });
+
+  it('M × N이 망가진 폴리곤 메시도 정점을 옮기는 일을 센다', () => {
+    const nv = 800;
+    const pl = ['0', 'POLYLINE', '8', '0', '100', 'AcDbEntity', '100', 'AcDbPolygonMesh', '66', '1', '10', '0', '20', '0', '30', '0', '70', '16', '71', '100000', '72', '100000'];
+    for (let i = 0; i < nv; i++) pl.push('0', 'VERTEX', '8', '0', '100', 'AcDbEntity', '100', 'AcDbVertex', '100', 'AcDbPolygonMeshVertex', '10', String(i), '20', String(i % 3), '30', '0', '70', '64');
+    pl.push('0', 'SEQEND', '8', '0');
+    const s = scene(load([minsert(10, 10)], [blockOf('B', pl)]), OFF);
+    expect(segs(s)).toBe(0);
+    expect(s.stats.blockWork).toBe(100 * (2 + 100));
+  });
+
+  it('공백뿐인 공차 문자의 길이를 센다', () => {
+    const body = ['0', 'TOLERANCE', '8', '0', '100', 'AcDbEntity', '100', 'AcDbFcf', '3', 'Standard', '10', '0', '20', '0', '30', '0', '1', ' '.repeat(5000), '11', '1', '21', '0', '31', '0'];
+    const s = scene(load([minsert(4, 5)], [blockOf('B', body)]), OFF);
+    expect(s.stats.blockWork).toBeGreaterThanOrEqual(20 * 5000);
+  });
+
+  describe('화살촉 블록과 준비 일', () => {
+    const n = 500;
+    const v: string[] = [];
+    for (let i = 0; i < n; i++) v.push('10', String(i), '20', String((i * 7) % 5), '30', '0');
+    const leader = ['0', 'LEADER', '8', '0', '100', 'AcDbEntity', '100', 'AcDbLeader', '3', 'Standard', '71', '1', '72', '1', '73', '3', '76', String(n), ...v];
+    const arrow = blockOf('ARR', ['0', 'LINE', '8', '0', '10', '0', '20', '0', '30', '0', '11', '1', '21', '0', '31', '0']);
+
+    it('블록 안 지시선의 맞춤점 일이 화살촉 블록에 지워지지 않는다', () => {
+      const doc = load([insertOf('L', '1F'), insertOf('L', '2F'), insertOf('L', '3F')], [blockOf('L', leader), arrow]);
+      doc.header.set('$DIMLDRBLK', 'ARR');
+      expect(scene(doc, OFF).stats.blockWork).toBeGreaterThanOrEqual(3 * fitSolveWork(n));
+    });
+
+    it('한 객체가 블록을 두 번 펼쳐도 준비 일은 한 번만 센다', () => {
+      const doc = load([insertOf('L', '1F')], [blockOf('L', leader), arrow]);
+      doc.header.set('$DIMLDRBLK', 'ARR');
+      expect(scene(doc, OFF).stats.blockWork).toBeLessThan(fitSolveWork(n) + 5000);
+    });
+
+    it('최상위 지시선의 일은 블록 일이 아니다', () => {
+      const doc = load([leader, insertOf('B', '2F')], [arrow, BLOCK_B]);
+      doc.header.set('$DIMLDRBLK', 'ARR');
+      expect(scene(doc, OFF).stats.blockWork).toBeLessThan(100);
+    });
+  });
+});
+
+describe('경계 곡선', () => {
+  it('해치 경계 곡선도 차수 25로 계산한다', () => {
+    const doc = load([spline(200, 1600)]);
+    const { curves } = entitiesToCurves(doc, [doc.blocks.get(MODEL_SPACE)!.entities[0]!]);
+    expect((curves[0] as { deg?: number }).deg).toBe(SPLINE_MAX_DEGREE);
+    const low = load([spline(7, 40)]);
+    expect((entitiesToCurves(low, [low.blocks.get(MODEL_SPACE)!.entities[0]!]).curves[0] as { deg?: number }).deg).toBe(7);
   });
 });
 

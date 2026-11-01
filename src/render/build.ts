@@ -215,6 +215,8 @@ export class SceneBuilder {
   private extentSize = 100;
   /** 임시 행렬(블록 참조·여러 줄 문자의 변환을 만들 때만 잠깐 쓴다 — 재귀 호출 전에 다 쓴다) */
   private readonly scratch: Mat[] = Array.from({ length: 6 }, () => new Float64Array(12));
+  /** 지금 객체를 시작할 때의 effort(children). 객체 안에서 블록을 다시 펼칠 때 준비 일을 정산한다 */
+  private entityBase = 0;
   /** 깊이별 블록 참조 행렬(insert) */
   private readonly depthMats: Mat[] = Array.from({ length: MAX_DEPTH }, () => new Float64Array(12));
   /** 확장 사전 핸들 → 자르기 필터(없으면 null) */
@@ -1061,6 +1063,9 @@ export class SceneBuilder {
 
   /** 블록 안 객체들(그리기 순서 깊이를 나눠 준다) */
   private children(list: readonly Entity[], ctx: Ctx): void {
+    // 바깥 객체가 쌓은 준비 일을 객체마다 0으로 시작하기 전에 정산한다(화살촉 블록을 넣는 지시선 등). 최상위 객체는 세지 않는다
+    if (ctx.depth > 1) this.settleWork(this.entityBase);
+    else this.prepWork = 0;
     const n = list.length;
     const span = ctx.z1 - ctx.z0;
     // 문맥 객체 하나를 객체마다 깊이만 바꿔 쓴다(그리기 코드는 문맥을 고치거나 남기지 않는다)
@@ -1073,6 +1078,7 @@ export class SceneBuilder {
       this.out.setDepth(z1);
       const e = list[i]!;
       const before = this.out.effort;
+      this.entityBase = before;
       this.prepWork = 0;
       c.z0 = z0;
       c.z1 = z1;
@@ -1223,6 +1229,8 @@ export class SceneBuilder {
         return;
       case 'TOLERANCE': {
         const r = this.resolve(e, ctx);
+        // 글자 하나를 칸마다 배치하고 공백은 조각을 내지 않는다
+        this.prepWork += e.text.length;
         const dv = this.dimVars(e.dimStyle, undefined);
         const sc = num(dv.DIMSCALE, 1) || 1;
         const h = num(dv.DIMTXT, 2.5) * sc;
@@ -1260,6 +1268,8 @@ export class SceneBuilder {
         const r = this.resolve(e, ctx);
         // 평탄 자료를 바로 읽는다(src/core/meshdata.ts)
         const V = e.verts;
+        // 모서리가 적어도 정점은 방문마다 모두 옮긴다
+        this.prepWork += (V.length / 3) >> 3;
         const v: { x: number; y: number }[] = [];
         for (let i = 0; i + 2 < V.length; i += 3) v.push(applyXY(ctx.m, V[i]!, V[i + 1]!, V[i + 2]!));
         const E = e.edgePairs;
@@ -1523,6 +1533,8 @@ export class SceneBuilder {
     if (e.kind === 'mesh') {
       const M = e.mCount;
       const N = e.nCount;
+      // 망가진 M × N은 정점을 모두 옮긴 뒤에 그냥 돌아가므로 먼저 센다
+      this.prepWork += nAll >> 3;
       const v: { x: number; y: number }[] = [];
       for (let i = 0; i < nAll; i++) v.push(applyXY(ctx.m, V[i * 3]!, V[i * 3 + 1]!, V[i * 3 + 2]!));
       if (M * N > v.length || M < 1 || N < 1) return;
@@ -1719,11 +1731,7 @@ export class SceneBuilder {
         // 깊이마다 행렬 하나를 되쓴다: 이 칸을 다 그릴 때까지만 쓰고, 안쪽 블록은 더 깊은 자리를 쓴다
         const m = multiplyInto(this.depthMats[ctx.depth]!, om, multiplyInto(S[5]!, local, setTranslation(S[0]!, -b.basePoint.x, -b.basePoint.y, -b.basePoint.z)));
         const clip = b.flags & 4 && !b.entities.length ? null : this.xclipPolygon(e, m);
-        if (clip) {
-          // 칸마다 경계를 다시 계산한다
-          this.blockVisits += clip.poly.length >> 1;
-          this.out.pushClip(clip.poly, clip.inverted);
-        }
+        if (clip) this.out.pushClip(clip.poly, clip.inverted);
         this.blockContents(b, e, m, ctx);
         if (clip) {
           this.out.popClip();
@@ -1790,6 +1798,8 @@ export class SceneBuilder {
       pts = [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }];
     }
     if (pts.length < 3) return null;
+    // 칸마다 경계를 다시 계산한다(점이 유한하지 않아 자르기를 버리는 경계도 다 훑은 뒤에 안다)
+    this.blockVisits += pts.length;
     const apply43 = (M: number[], x: number, y: number, z: number) =>
       M.length >= 12 ? { x: M[0]! * x + M[1]! * y + M[2]! * z + M[3]!, y: M[4]! * x + M[5]! * y + M[6]! * z + M[7]!, z: M[8]! * x + M[9]! * y + M[10]! * z + M[11]! } : { x, y, z };
     const poly: number[] = [];
@@ -1839,7 +1849,6 @@ export class SceneBuilder {
     if (b.flags & 4 && !b.entities.length) {
       // 외부 참조: 참조 파일의 모형 장면을 이 변환으로 그리도록 인스턴스만 남긴다(파일을 연결했을 때 화면이 그린다)
       const clip = parent.type === 'INSERT' ? this.xclipPolygon(parent, m) : null;
-      if (clip) this.blockVisits += clip.poly.length >> 1;
       this.out.xref(tableKey(b.name), [m[0]!, m[4]!, m[1]!, m[5]!, m[3]!, m[7]!], this.resolve(parent, ctx).style, clip ?? undefined);
       this.warnInc('xref.not_loaded');
     } else {

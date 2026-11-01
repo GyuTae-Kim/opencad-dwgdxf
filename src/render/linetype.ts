@@ -34,7 +34,10 @@ export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashP
     total += Math.hypot(pts[j * 2]! - pts[i * 2]!, pts[j * 2 + 1]! - pts[i * 2 + 1]!);
   }
   const repeats = total / pat.period;
-  const steps = Math.ceil(repeats) * pat.dashes.length;
+  // 복합 선종류의 문자·도형은 주기마다 글자 수만큼 배치한다(공백은 조각도 내지 않는다)
+  let chars = 0;
+  for (const t of pat.texts ?? []) chars += Math.max(1, t.text.length);
+  const steps = Math.ceil(repeats) * (pat.dashes.length + chars);
   const tooMany = repeats <= DASH_REPEAT_LIMIT && steps > DASH_STEP_LIMIT;
   if (!(pat.period > 0) || total < pat.period || repeats > DASH_REPEAT_LIMIT || tooMany) {
     for (let i = 0; i < segCount; i++) {
@@ -44,8 +47,8 @@ export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashP
     if (tooMany && work) work.limited = true;
     return false;
   }
-  // 틈은 조각을 내지 않으므로 요소를 밟는 일을 따로 센다
-  if (work) work.n += steps >> 3;
+  // 틈은 조각을 내지 않으므로 요소를 밟는 일을 따로 센다. 문자는 글자 하나가 요소 하나보다 훨씬 비싸다(문자 객체와 같은 몫)
+  if (work) work.n += (steps >> 3) + (Math.ceil(repeats) * chars >> 1);
   const dashes = pat.dashes;
   let di = 0;
   let remain = Math.abs(dashes[0]!);

@@ -2,7 +2,7 @@
  * 경계 찾기용 2D 곡선: 선분, 원뿔 곡선(원·호·타원), NURBS.
  * 객체(블록 참조 안 객체 포함)를 월드 XY 평면 곡선으로 바꾸고, 점·미분 계산과 꺾은선 나누기, 스플라인 자르기를 둔다.
  */
-import { minsertGrid } from '../../core/limits';
+import { SPLINE_MAX_DEGREE, minsertGrid } from '../../core/limits';
 import type { CadDocument, Entity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { type Mat, identity, multiply, ocsMatrix, rotationZ, scaling, translation } from '../../geom/matrix';
@@ -445,7 +445,7 @@ function addEntity(ctx: Ctx, e: Entity, src: string, m: Mat, depth: number, chai
         w = undefined;
       }
       if (ctrl.length < 2) return;
-      deg = Math.max(1, Math.min(deg, ctrl.length - 1));
+      deg = Math.max(1, Math.min(deg, ctrl.length - 1, SPLINE_MAX_DEGREE));
       if (knots.length !== ctrl.length + deg + 1) knots = clampedKnotsLocal(ctrl.length, deg);
       const pts = ctrl.map((q) => {
         const r = apply(m, q.x, q.y, q.z);
