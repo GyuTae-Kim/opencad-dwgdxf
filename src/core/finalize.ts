@@ -6,7 +6,7 @@
  * - entityIndex(핸들 → 객체)를 만든다.
  * - 행 × 열이 한도를 넘는 표는 셀 없는 표로 둔다(표 그림 블록은 그대로 그린다 — 35차).
  */
-import { TABLE_CELL_LIMIT } from './limits';
+import { tableSizeOk } from './limits';
 import {
   type BlockDef,
   type CadDocument,
@@ -144,7 +144,7 @@ export function finalizeDocument(doc: CadDocument): CadDocument {
   for (const b of doc.blocks.values()) {
     for (const e of b.entities) {
       indexEntity(index, e);
-      if (e.type === 'ACAD_TABLE' && Math.abs(e.rows * e.columns) > TABLE_CELL_LIMIT) {
+      if (e.type === 'ACAD_TABLE' && !tableSizeOk(e.rows, e.columns)) {
         // 행·열은 파일에서 읽은 수이고 편집·저장이 셀마다 객체를 만든다
         bigTables++;
         e.rows = 0;

@@ -10,6 +10,31 @@
  */
 export const TABLE_CELL_LIMIT = 1_000_000;
 
+/** 표 크기가 한도 안인지. 곱만 보면 행이나 열이 0일 때 다른 쪽이 얼마든 지나간다(쓰기는 행 수만큼 돈다) */
+export function tableSizeOk(rows: number, cols: number): boolean {
+  const r = Math.abs(rows);
+  const c = Math.abs(cols);
+  return r <= TABLE_CELL_LIMIT && c <= TABLE_CELL_LIMIT && r * c <= TABLE_CELL_LIMIT;
+}
+
+/**
+ * DWG R2010+ 표에서 셀 자료 없이 행·열 목록만으로 만드는 칸 수. 칸마다 객체와 태그를 만들므로(칸 하나 약 1.5KB)
+ * 파일에 셀이 없는 칸이 이보다 많으면 표로 풀지 않는다. 행·열 목록은 칸 수의 제곱근만큼의 바이트라 7KB로 힙이 넘쳤다.
+ * AutoCAD 표는 행마다 열 수만큼 셀이 있어 빈 칸이 없다
+ */
+export const TABLE_EMPTY_CELLS = 1024;
+
+/** 표 병합의 넓이 합이 칸 수의 이 배수(+ 빈 칸 수)를 넘으면 망가진 표다. 병합은 겹치지 않으므로 정상 표는 1배 안쪽이다 */
+export const TABLE_MERGE_RATIO = 4;
+
+/**
+ * DWG 문서 하나에서 표로 푸는 칸 수의 합. 셀 하나는 압축된 파일에서 1바이트 안쪽일 수 있어, 표마다 한도 안이어도 표를 늘리면
+ * 힙이 넘친다. 실제 셀은 객체 구역에서 수십 바이트를 넘으므로 정상 도면은 닿지 않는다
+ */
+export function tableCellBudget(objectBytes: number): number {
+  return TABLE_CELL_LIMIT + Math.floor(objectBytes / 32);
+}
+
 /**
  * 다중 삽입(MINSERT) 하나에서 펼치는 칸 수. DXF 70·71과 DWG BS는 16비트라 형식 한도는 32767 × 32767(약 10억)이다.
  * 도면 값은 그대로 두고(다시 저장해도 같다) 그리기·분해·세기만 이 칸 수까지 펼친다

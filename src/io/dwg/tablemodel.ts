@@ -3,6 +3,7 @@
  * - 읽기: DWG 본문 → 셀 배치·스타일 값 → DXF와 같은 원본 태그(모델의 raw).
  * - 쓰기: 셀 배치·스타일 값 → DWG 본문(R2010+ 새 배치, R2007 이전 옛 배치).
  */
+import { TABLE_EMPTY_CELLS, TABLE_MERGE_RATIO, tableSizeOk } from '../../core/limits';
 import type { CadColor, Vec3 } from '../../core/model';
 import type { CellOut, TableOut } from '../tablecells';
 import type { IoRowStyle, IoTableStyle } from '../tablestyle';
@@ -75,6 +76,29 @@ function cellText(c: TCell): string {
     if (v.text) return v.text;
   }
   return '';
+}
+
+/**
+ * R2010+ 표의 칸을 펼쳐도 되는지. 행·열 목록과 셀 목록이 따로라 행 × 열은 파일에 있는 셀 수를 얼마든 넘을 수 있다.
+ * 옛 표(tableOld)는 칸마다 셀을 읽으므로 이 검사가 필요 없다.
+ */
+export function r24CellsInFile(t: TTableR24): boolean {
+  const c = t.content;
+  const rows = c.rows.length;
+  const cols = c.columns.length;
+  if (!tableSizeOk(rows, cols)) return false;
+  const cells = rows * cols;
+  let have = 0;
+  for (const r of c.rows) have += Math.min(r.cells.length, cols);
+  if (cells - have > TABLE_EMPTY_CELLS) return false;
+  // 병합 고리는 병합의 넓이만큼 돈다
+  let area = 0;
+  for (const [top, left, bottom, right] of c.merges) {
+    const h = Math.min(bottom, rows - 1) - Math.max(0, top) + 1;
+    const w = Math.min(right, cols - 1) - Math.max(0, left) + 1;
+    if (h > 0 && w > 0) area += h * w;
+  }
+  return area <= TABLE_MERGE_RATIO * cells + TABLE_EMPTY_CELLS;
 }
 
 /** R2010+ 표 → 셀 배치(문자 스타일 이름은 styleName이 푼다) */

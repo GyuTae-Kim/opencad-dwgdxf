@@ -5,7 +5,7 @@
  * 셀 잠금(34차)은 확장 자료 OPENCAD_TABLE에 남긴다(DXF·DWG 모두 그대로 저장된다). 셀 잠금은 DWG R2010+ 셀 상태로도 쓰고 읽는다(DXF 참조에는 코드가 없다). AutoCAD가 쓴 표는 원본 태그의 셀 병합(173·175·176)과
  * 셀 정렬(170), 셀 배경 채우기(63·283), 셀 문자 높이(140)·문자 색(64)·문자 스타일(7)을 읽는다. 표를 블록 참조로 저장한 파일(DWG 쓰기)도 확장 자료가 있으면 다시 표로 읽을 수 있다.
  */
-import { TABLE_CELL_LIMIT } from '../../core/limits';
+import { TABLE_EMPTY_CELLS, TABLE_MERGE_RATIO, tableSizeOk } from '../../core/limits';
 import type { CadColor, CadDocument, Entity, InsertEntity, RawTag, TableEntity, XData, XDataItem } from '../../core/model';
 import { tableKey } from '../../core/model';
 import type { CellKind, TableStyle } from './style';
@@ -172,11 +172,17 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
   };
   /** 묶음의 항목 수. 항목마다 확장 자료 칸을 하나 이상 쓰므로 남은 칸 수까지만 믿는다(값 하나로 수억 칸을 잡지 않게) */
   const size = (): number => Math.min(int(), items.length - i);
-  /** 셀 묶음(시작, 개수) 하나를 표 크기 안에서 돈다. 묶음은 겹치지 않으므로 한 종류가 셀 수보다 많이 돌면 망가진 자료다 */
-  let runLeft = 0;
+  /**
+   * 셀 묶음(시작, 개수) 하나를 표 크기 안에서 돈다. 셀 묶음은 겹치지 않으므로 한 종류가 셀 수보다 많이 돌면 망가진 자료다.
+   * 같은 종류의 묶음이 되풀이되어도 남은 수가 새로 차지 않게 종류별로 센다
+   */
+  const runLeft = new Map<unknown, number>();
+  let kind: unknown;
   const eachCell = (start: number, count: number, f: (j: number) => void): void => {
     const end = Math.min(out.rows * out.cols, start + count);
-    for (let j = Math.max(0, start); j < end && runLeft > 0; j++, runLeft--) f(j);
+    let left = runLeft.get(kind) ?? out.rows * out.cols;
+    for (let j = Math.max(0, start); j < end && left > 0; j++, left--) f(j);
+    runLeft.set(kind, left);
   };
   const first = next();
   if (!first || typeof first.value !== 'string' || !first.value.startsWith('OPENCAD_TABLE')) return null;
@@ -188,13 +194,13 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
       if (!tag || tag.code !== 1000) break;
       // 묶음을 다 읽은 뒤 자리를 적는다(다음 차례 처음에)
       const mark = () => out.spans.set(String(tag.value), [at, i]);
-      runLeft = out.rows * out.cols;
+      kind = tag.value;
       switch (tag.value) {
         case 'size':
           out.rows = int();
           out.cols = int();
           // 셀마다 객체를 만들므로 표로 다루지 않는다(블록 참조로 남는다)
-          if (Math.abs(out.rows * out.cols) > TABLE_CELL_LIMIT) return null;
+          if (!tableSizeOk(out.rows, out.cols)) return null;
           break;
         case 'rowh': {
           const n = size();
@@ -496,16 +502,18 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): RawTableCells
   }
   flush();
   out.count = cell + 1;
-  // 겹치는 병합은 앞의 것만
+  // 겹치는 병합은 앞의 것만. 첫 충돌에서 멈추고, 훑은 칸이 표 넓이의 몇 배를 넘으면 나머지 병합은 버린다(정상 표의 병합은 겹치지 않는다)
   const taken = new Set<number>();
+  let scan = TABLE_MERGE_RATIO * Math.max(rows * cols, out.count) + TABLE_EMPTY_CELLS;
   out.merges = out.merges.filter((m) => {
     // 병합 폭·높이(175·176)는 파일 값이다. 표 밖으로 나가는 병합은 어차피 쓰지 않으니(tableFromEntity) 칸을 세지 않는다
     if (rows > 0 && m.row + m.rows > rows) return false;
     if (m.col + m.cols > cols) return false;
-    const keys: number[] = [];
-    for (let r = m.row; r < m.row + m.rows; r++) for (let c = m.col; c < m.col + m.cols; c++) keys.push(r * cols + c);
-    if (keys.some((x) => taken.has(x))) return false;
-    keys.forEach((x) => taken.add(x));
+    const area = m.rows * m.cols;
+    if (area > scan) return false;
+    scan -= area;
+    for (let r = m.row; r < m.row + m.rows; r++) for (let c = m.col; c < m.col + m.cols; c++) if (taken.has(r * cols + c)) return false;
+    for (let r = m.row; r < m.row + m.rows; r++) for (let c = m.col; c < m.col + m.cols; c++) taken.add(r * cols + c);
     return true;
   });
   return out;
