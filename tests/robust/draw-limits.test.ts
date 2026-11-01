@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { MINSERT_LIMIT, SCENE_PIECE_LIMIT, blockWorkLimit, minsertGrid } from '../../src/core/limits';
 import { MODEL_SPACE, type CadDocument, type InsertEntity } from '../../src/core/model';
 import { countRows } from '../../src/edit/count';
+import { edgeBox } from '../../src/edit/geom/edges';
 import { clampedKnots, interpolateFitPoints, nurbsPoints } from '../../src/geom/curves';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
@@ -27,16 +28,35 @@ const codes = (s: ReturnType<typeof scene>) => s.warnings.map((w) => w.code);
 const segs = (s: ReturnType<typeof scene>) => s.list.chunks.reduce((a, c) => a + c.segCount, 0);
 
 describe('블록 펼침', () => {
+  // 시간은 작은 한도로 본다. 기본 한도는 정상 도면을 자르지 않으려고 커서 몇 초가 걸린다
+  const SMALL = { blockWorkLimit: 4_000_000 };
+
   it('블록 안의 블록이 곱으로 늘어도(선 10억 개) 한도에서 멈추고 경고한다', () => {
     const doc = load([insertOf('N0')], nestedBlocks(9, 10));
-    const s = within2s(() => scene(doc));
+    const s = within2s(() => scene(doc, SMALL));
     expect(codes(s)).toContain('block.expansion_limit');
     expect(segs(s)).toBeGreaterThan(100000);
   });
 
+  it('기본 한도에서도 끝나고 경고한다', () => {
+    const doc = load([insertOf('N0')], nestedBlocks(9, 10));
+    const t0 = performance.now();
+    const s = scene(doc);
+    expect(performance.now() - t0).toBeLessThan(60000);
+    expect(codes(s)).toContain('block.expansion_limit');
+  });
+
+  it('기본 한도는 객체가 적어도 흔한 큰 꼴의 일을 넘는다', () => {
+    // 다중 삽입 칸 한도 × 블록 객체 10개: 칸 1 + 객체 방문 10 + 조각 10
+    expect(blockWorkLimit(1 + 10)).toBeGreaterThan(MINSERT_LIMIT * (1 + 10 + 10));
+    // 객체 500개 블록(객체당 선분 50개)을 500번: 삽입마다 객체 방문 500 + 조각 500 × 50
+    expect(blockWorkLimit(500 + 500)).toBeGreaterThan(500 * (500 + 500 * 50));
+    expect(500 * 500 * 50).toBeLessThan(SCENE_PIECE_LIMIT);
+  });
+
   it('다중 삽입 30000 × 30000도 경고와 함께 끝나고 도면 값은 그대로 저장한다', () => {
     const doc = load([minsert(30000, 30000)], [BLOCK_B]);
-    const s = within2s(() => scene(doc));
+    const s = within2s(() => scene(doc, SMALL));
     expect(codes(s)).toContain('block.expansion_limit');
     const back = readDxf(writeDxf(doc, { version: 'AC1018' }).data);
     const ins = [...back.blocks.get(MODEL_SPACE)!.entities].find((e) => e.type === 'INSERT') as InsertEntity;
@@ -45,7 +65,7 @@ describe('블록 펼침', () => {
 
   it('다중 삽입 안의 블록 중첩도 칸 수와 곱해 센다', () => {
     const doc = load([minsert(100, 100, '1A', 'N0')], nestedBlocks(3, 100));
-    expect(codes(within2s(() => scene(doc)))).toContain('block.expansion_limit');
+    expect(codes(within2s(() => scene(doc, SMALL)))).toContain('block.expansion_limit');
   });
 
   it('한도 안의 블록·다중 삽입은 하나도 빠지지 않는다', () => {
@@ -82,6 +102,15 @@ describe('블록 펼침', () => {
     const doc = load([minsert(30000, 30000)], [BLOCK_B]);
     const rows = within2s(() => countRows(doc, doc.blocks.get(MODEL_SPACE)!.entities));
     expect(rows[0]!.handles.length).toBeLessThanOrEqual(MINSERT_LIMIT);
+  });
+
+  it('모서리 범위는 모서리 조각이 펼치는 칸과 같다', () => {
+    const big = load([minsert(30000, 30000)], [BLOCK_B]);
+    const e = big.blocks.get(MODEL_SPACE)!.entities[0]!;
+    // 1000 × 1000칸, 간격 2, 블록은 (0, 0)-(1, 0)
+    expect(within2s(() => edgeBox(e, big))).toEqual({ minX: 0, minY: 0, maxX: 1999, maxY: 1998 });
+    const small = load([minsert(3, 4)], [BLOCK_B]);
+    expect(edgeBox(small.blocks.get(MODEL_SPACE)!.entities[0]!, small)).toEqual({ minX: 0, minY: 0, maxX: 5, maxY: 6 });
   });
 });
 
