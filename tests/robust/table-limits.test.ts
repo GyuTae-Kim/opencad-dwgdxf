@@ -2,7 +2,7 @@
  * 35차: 표의 행·열·병합과 표 확장 자료의 개수 값.
  * 고치기 전에는 행 × 열 60000 × 60000인 표를 누르거나 저장하면 힙이 넘쳐 프로세스가 죽었고, 확장 자료의 값 하나도 같았다.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TABLE_CELL_LIMIT } from '../../src/core/limits';
 import { MODEL_SPACE, type InsertEntity, type TableEntity, type XData, type XDataItem } from '../../src/core/model';
 import { TABLE_APP, decodeTableXData, encodeTableXData, isEditableTable, rawTableCells, tableFromEntity } from '../../src/edit/table/entity';
@@ -14,13 +14,7 @@ import { readCadFile } from '../../src/io/index';
 import { buildSpace } from '../../src/render/build';
 import { TextEngine } from '../../src/text/layout';
 import { BLOCK_B, bytesOf, dxfText, table, tableMerge, tableXdataInsert } from './corrupt35';
-
-const within2s = <T>(f: () => T): T => {
-  const t0 = performance.now();
-  const r = f();
-  expect(performance.now() - t0).toBeLessThan(2000);
-  return r;
-};
+import { beforeHang, within2s } from './timed';
 
 const T1 = ['0', 'BLOCK', '8', '0', '2', '*T1', '70', '1', '10', '0', '20', '0', '30', '0', '3', '*T1', '0', 'LINE', '8', '0', '10', '0', '20', '0', '30', '0', '11', '5', '21', '0', '31', '0', '0', 'ENDBLK', '8', '0'];
 
@@ -113,8 +107,22 @@ describe('표 확장 자료', () => {
 
   it('겹치는 묶음을 되풀이해도 셀 수만큼만 돈다', () => {
     const runs = Array.from({ length: 20000 }, () => [0, TABLE_CELL_LIMIT, 1, -1]).flat();
-    const d = within2s(() => decodeTableXData(xdata('fill', [20000, ...runs], [1000, 1000])));
+    const d = beforeHang(() => decodeTableXData(xdata('fill', [20000, ...runs], [1000, 1000])));
     expect(d?.fills?.size).toBe(TABLE_CELL_LIMIT);
+  });
+
+  it('작은 입력: 셀 묶음이 돈 횟수는 셀 수를 넘지 않는다', () => {
+    const runs = Array.from({ length: 50 }, () => [0, 1000, 1, -1]).flat();
+    const x = xdata('fill', [50, ...runs], [100, 10]);
+    const set = vi.spyOn(Map.prototype, 'set');
+    try {
+      const d = decodeTableXData(x);
+      expect(d?.fills?.size).toBe(1000);
+      // 셀 1000번 + 묶음 이름마다의 자리 기록 두어 번
+      expect(set.mock.calls.length).toBeLessThanOrEqual(1000 + 4);
+    } finally {
+      set.mockRestore();
+    }
   });
 
   it('앱이 쓴 표 자료는 그대로 읽는다', () => {

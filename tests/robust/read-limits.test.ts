@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { CadReadError } from '../../src/core/errors';
 import { finalizeDocument } from '../../src/core/finalize';
-import { TABLE_CELL_LIMIT } from '../../src/core/limits';
+import { TABLE_CELL_LIMIT, sectionWorkLimit } from '../../src/core/limits';
 import type { CadDocument, TableEntity } from '../../src/core/model';
 import { readR2004Container } from '../../src/io/dwg/container/r2004';
 import { readR2007Container } from '../../src/io/dwg/container/r2007';
@@ -38,15 +38,16 @@ import {
   sectionsOf,
   table,
 } from './corrupt35';
+import { beforeHang, within2s } from './timed';
 
-const within2s = <T>(f: () => T): T => {
-  const t0 = performance.now();
-  const r = f();
-  expect(performance.now() - t0).toBeLessThan(2000);
-  return r;
-};
 const codes = (w: { code: string }[]) => w.map((x) => x.code);
 const allEntities = (doc: CadDocument) => [...doc.blocks.values()].flatMap((b) => b.entities);
+/** 페이지를 되풀이하다 일 한도에서 멈췄다(넘어선 페이지 하나 몫까지) */
+const pageWorkBounded = (sec: DwgSections, fileBytes: number, pageWork: number) => {
+  const w = sec.warnings.find((x) => x.code === 'dwg.page_repeat');
+  expect(w).toBeDefined();
+  expect(w!.detail!.work as number).toBeLessThanOrEqual(sectionWorkLimit(fileBytes) + pageWork);
+};
 
 describe('R2004 컨테이너', () => {
   it('페이지 크기가 망가져도 4GiB를 잡지 않고 도면을 연다', () => {
@@ -60,8 +61,13 @@ describe('R2004 컨테이너', () => {
 
   it('섹션 지도가 같은 페이지를 100만 번 가리켜도 파일 크기에 비례한 일만 한다', () => {
     const data = r2004Pages(1000000, 4 * 1048576);
-    const sec = within2s(() => readR2004Container(data, R2004));
-    expect(codes(sec.warnings)).toContain('dwg.page_repeat');
+    const sec = beforeHang(() => readR2004Container(data, R2004));
+    pageWorkBounded(sec, data.length, 4 * 1048576);
+  });
+
+  it('작은 입력: 큰 페이지를 2천 번 가리켜도 같은 일 한도에서 멈춘다', () => {
+    const data = r2004Pages(2000, 1048576);
+    pageWorkBounded(readR2004Container(data, R2004), data.length, 1048576);
   });
 
   it('정상 파일은 페이지 경고가 없다', () => {
@@ -80,8 +86,8 @@ describe('R2007 컨테이너', () => {
 
   it('섹션 지도가 큰 페이지를 수천 번 가리켜도 되풀이하지 않는다', () => {
     const data = r2007Pages(5000, 1048576);
-    const sec = within2s(() => readR2007Container(data, R2007));
-    expect(codes(sec.warnings)).toContain('dwg.page_repeat');
+    const sec = beforeHang(() => readR2007Container(data, R2007));
+    pageWorkBounded(sec, data.length, 2 * 1048576 + 512);
   });
 
   it('페이지의 푼 크기가 망가지면 그 페이지만 건너뛴다', () => {
@@ -112,8 +118,11 @@ function patched(version: 'AC1015' | 'AC1018', lines: number, make: (h: number, 
 describe('객체 안의 개수', () => {
   it('작은 객체가 반응자 10만 개라고 적어도 핸들을 읽기 전에 건너뛴다', () => {
     const sec = patched('AC1015', 2000, (handle, ver) => objectBytes(ver, { type: 19, handle, dat: (w) => entityHead(w, ver, 100000), hdl: () => {} }));
-    const doc = within2s(() => buildDocument(sec));
-    expect(doc.warnings.find((w) => w.code === 'dwg.object_skipped')?.count).toBe(2000);
+    const doc = beforeHang(() => buildDocument(sec));
+    const w = doc.warnings.find((x) => x.code === 'dwg.object_skipped');
+    // 핸들을 읽기 전에 개수 검사에서 멈춘 것이다(고치기 전에는 객체마다 10만 번 읽고 이 경고가 없었다)
+    expect(w?.count).toBe(2000);
+    expect(JSON.stringify(w?.detail)).toContain('잘못된 개수 100000');
   });
 
   it('표 제어 객체가 항목 100만 개라고 적어도 남은 비트만큼만 읽는다', () => {
