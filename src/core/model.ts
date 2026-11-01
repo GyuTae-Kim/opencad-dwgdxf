@@ -363,6 +363,8 @@ export interface InsertEntity extends EntityBase {
   columnSpacing: number;
   rowSpacing: number;
   attribs: AttribEntity[];
+  /** 표 자료의 칸이 파일에 없어 문서 예산을 넘었다. 표로 다루지 않는다(읽을 때 정하고 저장하지 않는다, core/finalize.ts) */
+  tableTooLarge?: boolean;
 }
 
 export interface DimensionEntity extends EntityBase {

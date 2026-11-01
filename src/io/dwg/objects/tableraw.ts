@@ -2,11 +2,12 @@
  * DWG 표·테이블 스타일 본문을 DXF와 같은 원본 태그로(io/tablecells.ts·io/tablestyle.ts의 태그 배치).
  * 모델의 raw로 두면 DXF 쓰기·표 편집(rawTableCells)·DWG 다른 버전 쓰기가 DXF에서 읽은 표와 같은 길을 쓴다.
  */
+import { tableCellBudget } from '../../../core/limits';
 import type { RawTag, TableEntity } from '../../../core/model';
 import { acdbTableTags } from '../../tablecells';
 import { tableStyleTags } from '../../tablestyle';
 import { type TTableOld, type TTableR24, readIO, tableOld, tableR24, tableStyleOld, tableStyleR24 } from '../tablecodec';
-import { layoutFromOld, layoutFromR24, styleFromOld, styleFromR24 } from '../tablemodel';
+import { layoutFromOld, layoutFromR24, r24CellsInFile, styleFromOld, styleFromR24 } from '../tablemodel';
 import { R2010 } from '../version';
 import { hex } from './nonentities';
 import type { ObjectReader } from './reader';
@@ -21,11 +22,14 @@ export interface DecodedTable {
   tableStyle: string;
 }
 
+/** 칸을 펼칠 수 없는 표: 읽기는 끝났고 셀 없는 표로 둔다 */
+export const TABLE_TOO_LARGE = 'too_large';
+
 /**
  * 표 본문(INSERT 자료·핸들 다음 위치)을 풀어 원본 태그와 크기·셀 문자를 돌려준다.
- * 자료 흐름을 끝까지 맞게 읽지 못하면 null.
+ * 자료 흐름을 끝까지 맞게 읽지 못하면 null, 칸을 펼칠 수 없으면 TABLE_TOO_LARGE.
  */
-export function decodeTableBody(or: ObjectReader, e: TableEntity, styleName: (h: number) => string): DecodedTable | null {
+export function decodeTableBody(or: ObjectReader, e: TableEntity, styleName: (h: number) => string): DecodedTable | typeof TABLE_TOO_LARGE | null {
   const r = or.dat;
   const ver = or.ver;
   const io = readIO(r, or.hdl, or.h.handle, ver);
@@ -37,6 +41,10 @@ export function decodeTableBody(or: ObjectReader, e: TableEntity, styleName: (h:
   }
   const end = r.end;
   if (r.overflowed() || !(r.pos === end || r.pos === end - 1)) return null;
+  // 칸마다 객체와 태그를 만들기 전에 본다
+  const cells = ver >= R2010 ? (t as TTableR24).content.rows.length * (t as TTableR24).content.columns.length : (t as TTableOld).rowHeights.length * (t as TTableOld).colWidths.length;
+  or.tableCells += cells;
+  if (or.tableCells > tableCellBudget(or.buf.length) || (ver >= R2010 && !r24CellsInFile(t as TTableR24))) return TABLE_TOO_LARGE;
   const lay = ver >= R2010 ? layoutFromR24(t as TTableR24, styleName) : layoutFromOld(t as TTableOld, styleName);
   const tableStyle = hex(ver >= R2010 ? (t as TTableR24).content.tableStyle : (t as TTableOld).tableStyle);
   const flow = ver >= R2010 ? ((t as TTableR24).bs & 0x10 ? 0 : 1) : (t as TTableOld).flags & 0x10 ? 0 : 1;

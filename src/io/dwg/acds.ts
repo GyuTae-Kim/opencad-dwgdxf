@@ -29,7 +29,7 @@ export function acdsRecords(data: Uint8Array): Map<string, Uint8Array> {
     const seg = (i: number) => (i > 0 && i < segs.length ? segs[i]! : null);
     const nameAt = (off: number) => (off + 8 <= data.length ? String.fromCharCode(...data.subarray(off + 2, off + 8)) : '');
     // 자료 색인이 가리키는 자료 구역(지금 것)을 먼저, 그다음 나머지 자료 구역(R2018은 객체마다 다른 구역에 남기기도 한다 — 색인에 없는 구역의 레코드도 읽는다)
-    const order: number[] = [];
+    const order = new Set<number>();
     const di = seg(dataIdxSeg);
     if (di && nameAt(di.off) === 'datidx') {
       const n = i32(di.off + SEG_HEADER);
@@ -37,11 +37,15 @@ export function acdsRecords(data: Uint8Array): Map<string, Uint8Array> {
         const p = di.off + SEG_HEADER + 8 + i * 12;
         if (p + 12 > data.length) break;
         const s = u32(p);
-        if (s && !order.includes(s)) order.push(s);
+        if (seg(s)) order.add(s);
       }
     }
-    for (let i = segs.length - 1; i > 0; i--) if (segs[i]!.off && !order.includes(i) && nameAt(segs[i]!.off) === '_data_') order.push(i);
+    for (let i = segs.length - 1; i > 0; i--) if (segs[i]!.off && nameAt(segs[i]!.off) === '_data_') order.add(i);
+    // 레코드 머리·자료는 저장소 안에 한 번씩 있다. 색인이 같은 자리를 되풀이해 가리켜도 저장소 크기에 비례한 일만 한다(모자라면 읽은 데까지)
+    const budget = data.length * 2;
+    let spent = 0;
     for (const si of order) {
+      if (spent > budget) break;
       const s = seg(si);
       if (!s || nameAt(s.off) !== '_data_') continue;
       // 레코드 머리(항목 크기 20, 1, 핸들 UInt64, 자료 시작 기준 위치)가 구역 머리 다음에 이어지고, 자료는 16바이트 경계(빈자리는 'b')에서 시작한다
@@ -52,9 +56,11 @@ export function acdsRecords(data: Uint8Array): Map<string, Uint8Array> {
         heads.push({ handle: u64(p + 8), rel: u32(p + 16) });
         p += 20;
       }
+      spent += heads.length * 20;
       if (!heads.length) continue;
       const marker = s.off + Math.ceil((p - s.off) / 16) * 16;
       for (const h of heads) {
+        if (spent > budget) break;
         const key = h.handle.toString(16).toUpperCase();
         if (out.has(key)) continue;
         const at = marker + h.rel;
@@ -66,15 +72,21 @@ export function acdsRecords(data: Uint8Array): Map<string, Uint8Array> {
           const total = u64(at + 4);
           const pages = u32(at + 12);
           const parts: Uint8Array[] = [];
+          let sum = 0;
           for (let k = 0; k < pages; k++) {
             const pp = at + 4 + 32 + k * 8;
             const bs = seg(u32(pp));
             if (!bs) break;
             const b0 = bs.off + SEG_HEADER;
             const len = u64(b0 + 24);
-            parts.push(data.subarray(b0 + 32, b0 + 32 + len));
+            const part = data.subarray(b0 + 32, b0 + 32 + len);
+            // 쪽들의 합은 저장소보다 클 수 없다(같은 쪽을 되풀이해 가리키면 파일의 수천 배를 잡게 된다)
+            if (sum + part.length > data.length) break;
+            parts.push(part);
+            sum += part.length;
           }
-          const all = new Uint8Array(Math.min(total, parts.reduce((a, b) => a + b.length, 0)));
+          const all = new Uint8Array(Math.min(total, sum));
+          spent += parts.length * 8 + all.length;
           let o = 0;
           for (const part of parts) {
             all.set(part.subarray(0, all.length - o), o);
@@ -82,7 +94,10 @@ export function acdsRecords(data: Uint8Array): Map<string, Uint8Array> {
             if (o >= all.length) break;
           }
           bytes = all;
-        } else if (size > 0 && at + 4 + size <= data.length) bytes = data.subarray(at + 4, at + 4 + size);
+        } else if (size > 0 && at + 4 + size <= data.length) {
+          bytes = data.subarray(at + 4, at + 4 + size);
+          spent += size;
+        }
         if (bytes) out.set(key, bytes);
       }
     }

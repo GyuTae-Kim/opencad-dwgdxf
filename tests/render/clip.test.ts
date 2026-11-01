@@ -5,10 +5,10 @@ import { DisplayListBuilder, pointInPolygon } from '../../src/render/displaylist
 const square = [0, 0, 10, 0, 10, 10, 0, 10];
 
 function segs(b: DisplayListBuilder): number[][] {
-  // 내부 임시 그림을 읽어 확인한다(시험 전용): segX = [x0, y0, x1, y1, depth]×segN
-  const { segX: x, segN } = b as unknown as { segX: ArrayLike<number>; segN: number };
+  // 내부 임시 그림을 읽어 확인한다(시험 전용): x = [x0, y0, x1, y1, depth]×n
+  const { x, n } = (b as unknown as { tempSegs: { x: ArrayLike<number>; n: number } }).tempSegs;
   const out: number[][] = [];
-  for (let i = 0; i < segN * 5; i += 5) out.push([x[i]!, x[i + 1]!, x[i + 2]!, x[i + 3]!].map((v) => +v.toFixed(6)));
+  for (let i = 0; i < n * 5; i += 5) out.push([x[i]!, x[i + 1]!, x[i + 2]!, x[i + 3]!].map((v) => +v.toFixed(6)));
   return out;
 }
 
@@ -58,7 +58,7 @@ describe('표시 목록 자르기', () => {
     const b = new DisplayListBuilder(() => false);
     b.pushClip(square);
     b.triangle(-10, 0, 10, 0, 10, 20, 1);
-    const { triX, triN } = b as unknown as { triX: Float64Array; triN: number };
+    const { x: triX, n: triN } = (b as unknown as { tempTris: { x: Float64Array; n: number } }).tempTris;
     const t = triX.subarray(0, triN * 9);
     // 빗변 y = x + 10이 경계 위로 지나가므로 경계 안은 정사각형 전체(넓이 100)
     let area = 0;
