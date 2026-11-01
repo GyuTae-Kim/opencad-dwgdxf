@@ -30,6 +30,7 @@ import type {
 } from '../core/model';
 import { BYBLOCK, BYLAYER, normalizeHandle, tableKey } from '../core/model';
 import { lwCount } from '../core/lwpoly';
+import { SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, minsertGrid } from '../core/limits';
 import { DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../core/dimvars';
 import { ACI_RGB } from '../core/color';
 import { type FrameKind, frameSetting } from '../core/framevars';
@@ -88,6 +89,10 @@ export interface BuildOptions {
   hatchLineLimit?: number;
   /** 해치 무늬를 이 영역(월드 [x0, y0, x1, y1]) 안만 그린다(확대한 세부 장면 — 촘촘한 해치를 원래 간격으로) */
   hatchRegion?: [number, number, number, number];
+  /** 블록을 펼쳐 그리는 일의 한도(시험용 — 기본은 도면 객체 수로 정한다, core/limits.ts) */
+  blockWorkLimit?: number;
+  /** 장면 조각 수 한도(시험용 — 기본 SCENE_PIECE_LIMIT) */
+  scenePieceLimit?: number;
   /** 주석 축척 이름(주석 객체를 그 축척의 표현으로 그린다). 없으면 공간에 맞게(모형 CANNOSCALE, 배치 1:1), null이면 고르지 않는다 */
   annoScale?: string | null;
   /** ANNOALLVISIBLE(0이면 그 축척을 지원하지 않는 주석 객체를 숨긴다). 없으면 그 탭의 값 */
@@ -171,6 +176,16 @@ export class SceneBuilder {
   private tol = 0.01;
   private ltscale = 1;
   private readonly warn = new Map<string, number>();
+  /**
+   * 블록 펼침 일(35차, core/limits.ts): 끝난 최상위 블록들의 조각 수, 지금 최상위 블록이 시작할 때의 조각 수, 찾아간 칸·객체 수.
+   * 최상위 객체 자체는 세지 않는다(큰 평면 도면은 줄지 않는다)
+   */
+  private blockLimit = 0;
+  private blockPieces = 0;
+  private blockBase = 0;
+  private blockVisits = 0;
+  private blockCut = false;
+  private pieceCut = false;
   private readonly sortCache = new Map<string, Entity[]>();
   /** 치수 블록이 없는 치수를 그릴 때 만든 화살촉 블록(도면에 없는 AutoCAD 기본 화살촉) */
   private readonly genBlocks = new Map<string, BlockDef>();
@@ -209,7 +224,12 @@ export class SceneBuilder {
       this.mlineStyles.set(ms.handle, ms);
       this.mlineStyles.set('NAME:' + tableKey(ms.name), ms);
     }
-    for (const b of doc.blocks.values()) if (b.recordHandle) this.blockByRecord.set(b.recordHandle, b);
+    let entities = 0;
+    for (const b of doc.blocks.values()) {
+      entities += b.entities.length;
+      if (b.recordHandle) this.blockByRecord.set(b.recordHandle, b);
+    }
+    this.blockLimit = opt.blockWorkLimit ?? blockWorkLimit(entities);
     for (const r of doc.blockRecords.values()) {
       const b = doc.blocks.get(tableKey(r.name));
       if (b && r.handle) this.blockByRecord.set(r.handle, b);
@@ -230,6 +250,30 @@ export class SceneBuilder {
 
   private warnInc(code: string, n = 1): void {
     this.warn.set(code, (this.warn.get(code) ?? 0) + n);
+  }
+
+  /** 새 표시 목록을 만들 때 한도를 다시 센다 */
+  private resetLimits(): void {
+    this.blockPieces = this.blockBase = this.blockVisits = 0;
+    this.blockCut = this.pieceCut = false;
+  }
+
+  /** 블록 펼침 일을 다 썼는지. 처음 넘을 때 한 번 경고한다 */
+  private blockSpent(): boolean {
+    if (this.blockCut) return true;
+    if (this.blockPieces + this.blockVisits + this.out.drawn - this.blockBase <= this.blockLimit) return false;
+    this.blockCut = true;
+    this.warnInc('block.expansion_limit');
+    return true;
+  }
+
+  /** 장면 조각 수가 한도를 넘었는지(넘으면 해치 무늬·대시를 더 펼치지 않는다). 처음 넘을 때 한 번 경고한다 */
+  private piecesSpent(): boolean {
+    if (this.pieceCut) return true;
+    if (this.out.drawn <= (this.opt.scenePieceLimit ?? SCENE_PIECE_LIMIT)) return false;
+    this.pieceCut = true;
+    this.warnInc('scene.piece_limit');
+    return true;
   }
 
   /** 원래 이름 → 도면층 번호(대문자로 바꾸는 일을 객체마다 하지 않게) */
@@ -487,7 +531,7 @@ export class SceneBuilder {
       return;
     }
     const pat = this.pattern(r.linetype, r.ltscale * lsScale * planarScale(ctx.m));
-    if (!pat) {
+    if (!pat || this.piecesSpent()) {
       this.out.polyline(pts, closed, r.style);
       return;
     }
@@ -879,6 +923,7 @@ export class SceneBuilder {
   /** 최상위 객체를 차례로 그린다(only가 있으면 고른 것만, 깊이는 전체 순서로) */
   private run(blockName: string, only: ((index: number, e: Entity) => boolean) | null): void {
     this.out = new DisplayListBuilder((s) => this.styles.isTransparent(s, this.layers));
+    this.resetLimits();
     const block = this.doc.blocks.get(tableKey(blockName));
     const hidden = this.opt.hidden;
     const ents = block ? this.ordered(block).filter((e) => (e.type !== 'VIEWPORT' || (e.id !== 1 && e.status !== 1)) && !hidden?.has(e.handle)) : [];
@@ -934,6 +979,7 @@ export class SceneBuilder {
    */
   buildEntities(list: readonly Entity[]): DisplayList {
     this.out = new DisplayListBuilder(() => false);
+    this.resetLimits();
     for (const e of list) {
       const ctx: Ctx = {
         m: identity(),
@@ -966,6 +1012,8 @@ export class SceneBuilder {
     const n = list.length;
     const span = ctx.z1 - ctx.z0;
     for (let i = 0; i < n; i++) {
+      this.blockVisits++;
+      if (this.blockSpent()) break;
       const z1 = ctx.z1 - (span * i) / (n + 1);
       const z0 = ctx.z1 - (span * (i + 1)) / (n + 1);
       this.out.setDepth(z1);
@@ -1468,6 +1516,7 @@ export class SceneBuilder {
       degree = s.degree;
       weights = undefined;
     }
+    if (degree > SPLINE_MAX_DEGREE) this.warnInc('spline.degree_limited');
     const pts3 = nurbsPoints(degree, knots, ctrl, weights, tol);
     this.stroke(this.xf3(ctx.m, pts3), false, r, ctx);
   }
@@ -1578,10 +1627,12 @@ export class SceneBuilder {
     const sx = e.scale.x || 1;
     const sy = e.scale.y || 1;
     const sz = e.scale.z || 1;
-    const rows = Math.max(1, e.rowCount);
-    const cols = Math.max(1, e.columnCount);
-    for (let rI = 0; rI < rows; rI++)
+    const { rows, cols, cut } = minsertGrid(e);
+    if (cut) this.warnInc('block.expansion_limit');
+    cells: for (let rI = 0; rI < rows; rI++)
       for (let cI = 0; cI < cols; cI++) {
+        this.blockVisits++;
+        if (this.blockCut) break cells;
         // 같은 계산(multiply 순서)을 임시 행렬로 한다: 블록 참조마다 형식 배열 10개를 만들지 않게. 결과 m만 새 배열
         const S = this.scratch;
         multiplyInto(S[2]!, setTranslation(S[0]!, cI * e.columnSpacing, rI * e.rowSpacing, 0), setScaling(S[1]!, sx, sy, sz));
@@ -1687,11 +1738,19 @@ export class SceneBuilder {
       this.warnInc('xref.not_loaded');
       return;
     }
+    // 최상위 블록 하나가 그린 조각을 센다(안쪽 블록은 그 안에 들어간다)
+    const top = ctx.depth === 0;
+    if (top) this.blockBase = this.out.drawn;
+    if (this.blockSpent()) return;
     const r = this.resolve(parent, ctx);
     const child = this.childCtx(parent, ctx, r, m);
     child.chain = [...ctx.chain, tableKey(b.name)];
     child.dimBlock = dimBlock;
     this.children(this.ordered(b), child);
+    if (top) {
+      this.blockPieces += this.out.drawn - this.blockBase;
+      this.blockBase = this.out.drawn;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -2029,11 +2088,14 @@ export class SceneBuilder {
         if (!fillLoops.length) return;
       }
     }
-    let segs = patternSegments(lines, fillLoops, limit);
+    // 장면이 이미 한도를 넘었으면 무늬를 펼치지 않는다(확대하면 세부 장면이 보이는 곳만 다시 그린다)
+    const spent = this.piecesSpent();
+    let segs = spent ? null : patternSegments(lines, fillLoops, limit);
     if (!segs) {
       // 너무 촘촘하면(멀리서 보거나 아주 넓은 해치) 경계와 성긴 무늬로. 확대하면 세부 장면이 원래 간격으로 다시 그린다
       this.warnInc('hatch.pattern_truncated');
       for (const l of loops) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
+      if (spent) return;
       for (let f = 2; f <= 4096 && !segs; f *= 2) segs = patternSegments(spreadPattern(lines, f), fillLoops, limit);
       if (!segs) return;
     }

@@ -27,6 +27,7 @@ import type {
   Vec3,
 } from '../../core/model';
 import { tableKey } from '../../core/model';
+import { minsertGrid } from '../../core/limits';
 import { polyLocs, polyVertices } from '../../core/polyverts';
 import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
 import { dimVars, plainText } from '../../app/inquiry';
@@ -193,8 +194,7 @@ function explodeInsert(e: InsertEntity, doc: CadDocument): EditResult {
   const sx = e.scale.x || 1;
   const sy = e.scale.y || 1;
   const sz = e.scale.z || 1;
-  const rows = Math.max(1, e.rowCount);
-  const cols = Math.max(1, e.columnCount);
+  const { rows, cols } = minsertGrid(e);
   // 동적 블록 표현(*U)에서 가시성 상태로 숨은(60) 객체는 분해 결과에 넣지 않는다(AutoCAD와 같다)
   const dynRep = /^\*U/i.test(e.block);
   const content = b.entities.filter((c) => !(c.type === 'ATTDEF' && !((c as AttribEntity).attFlags & 2)) && !(dynRep && c.invisible));

@@ -245,6 +245,9 @@ export function patternSegments(lines: readonly HatchPatternLine[], loops: numbe
     let k1 = Math.floor(dMax / spacing);
     if (k0 > k1) [k0, k1] = [k1, k0];
     if (k1 - k0 > limit) return null;
+    // 번호가 2^53을 넘으면(기준점이 아주 멀거나 간격이 아주 작은 자료) k++가 값을 바꾸지 못해 아래 고리가 끝나지 않는다.
+    // 간격을 넓히면(spreadPattern) 번호가 작아지므로 "너무 촘촘함"으로 돌려준다
+    if (Math.abs(k0) >= Number.MAX_SAFE_INTEGER || Math.abs(k1) >= Number.MAX_SAFE_INTEGER) return null;
     // 변마다 걸칠 수 있는 선 번호 범위(반올림 오차만큼 한 칸씩 넉넉히 — 실제 교차는 아래에서 예전 식 그대로 판정)
     for (let e = 0; e < edgeCount; e++) {
       const ka = ((ax[e]! - pl.base.x) * nx + (ay[e]! - pl.base.y) * ny) / spacing;
@@ -258,6 +261,7 @@ export function patternSegments(lines: readonly HatchPatternLine[], loops: numbe
     let nActive = 0;
     const dashes = pl.dashes;
     const period = dashes.reduce((a, b) => a + Math.abs(b), 0);
+    const onDashes = dashes.filter((d) => d >= 0).length;
     const ts: number[] = [];
     for (let k = k0; k <= k1; k++) {
       // 이 선에 걸칠 수 있는 변: 새로 들어온 변을 더하고 지나간 변은 뺀다
@@ -294,6 +298,8 @@ export function patternSegments(lines: readonly HatchPatternLine[], loops: numbe
         const t0 = ts[i]!;
         const t1 = ts[i + 1]!;
         if (t1 - t0 < 1e-12) continue;
+        // 한도는 구간 뒤에 보므로 대시가 아주 짧으면 구간 하나가 수십억 조각을 만든다. 펼치기 전에 세어 같은 결과(null)를 돌려준다
+        if (dashes.length && period > 0 && (t1 - t0) / period - 2 > (limit * 8 - count) / Math.max(1, onDashes)) return null;
         dashInterval(t0, t1, dashes, period, (a, b) => {
           out.push(ox + ux * a, oy + uy * a, ox + ux * b, oy + uy * b);
           count++;

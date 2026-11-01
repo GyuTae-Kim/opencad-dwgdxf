@@ -326,6 +326,14 @@ export class DisplayListBuilder {
 
   constructor(private readonly transparent: (style: number) => boolean) {}
 
+  /** 끝난 객체들이 그린 선분·삼각형 수 */
+  private drawnDone = 0;
+
+  /** 지금까지 그린 조각 수(선분 + 삼각형 + 글리프) — 장면 한도가 본다(core/limits.ts) */
+  get drawn(): number {
+    return this.drawnDone + this.segN + this.triN + this.instN;
+  }
+
   setDepth(d: number): void {
     this.depth = d;
   }
@@ -904,6 +912,7 @@ export class DisplayListBuilder {
   }
 
   private resetEntity(): void {
+    this.drawnDone += this.segN + this.triN;
     this.segN = 0;
     this.triN = 0;
     this.minX = Infinity;

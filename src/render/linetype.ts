@@ -98,6 +98,11 @@ export function dashInterval(t0: number, t1: number, dashes: readonly number[], 
     emit(t0, t1);
     return;
   }
+  // 주기 번호가 2^53을 넘으면 k++가 값을 바꾸지 못해 아래 고리가 끝나지 않는다(무늬 원점에서 아주 먼 구간): 실선으로
+  if (Math.abs(t0 / period) >= Number.MAX_SAFE_INTEGER || Math.abs(t1 / period) >= Number.MAX_SAFE_INTEGER) {
+    emit(t0, t1);
+    return;
+  }
   let k = Math.floor(t0 / period);
   let base = k * period;
   for (; base < t1; k++, base = k * period) {

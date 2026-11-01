@@ -200,6 +200,12 @@ export function warningText(code: string): string {
       return '정의가 없는 블록 참조가 있습니다.';
     case 'block.recursive':
       return '자기 자신을 참조하거나 너무 깊은 블록을 건너뛰었습니다.';
+    case 'block.expansion_limit':
+      return '블록을 펼치는 양이 너무 많아 일부 블록 참조는 그리지 않았습니다.';
+    case 'scene.piece_limit':
+      return '그릴 조각이 너무 많아 남은 해치는 경계만, 남은 선은 실선으로 그렸습니다.';
+    case 'spline.degree_limited':
+      return '차수가 너무 큰 스플라인은 차수 25로 계산해 그렸습니다.';
     case 'xref.not_loaded':
       return '외부 참조 파일은 열지 않았습니다.';
     case 'hatch.pattern_truncated':

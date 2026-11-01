@@ -2,6 +2,7 @@
  * 곡선을 꺾은선으로 나눈다. 결과는 [x0, y0, x1, y1, …] 숫자 배열(로컬 좌표)이다.
  * tol은 현(chord)과 곡선 사이 최대 거리다.
  */
+import { FIT_INTERPOLATE_LIMIT, SPLINE_MAX_DEGREE } from '../core/limits';
 import type { Vec2, Vec3 } from '../core/model';
 import { unpack3 } from '../core/flat3';
 
@@ -232,7 +233,7 @@ function deBoor(p: number, U: readonly number[], P: readonly Vec3[], W: readonly
 /** NURBS 위의 한 점(매개변수 u는 매듭 범위로 자른다) */
 export function nurbsPoint(degree: number, knots: readonly number[], ctrl: readonly Vec3[], weights: readonly number[] | undefined, u: number): Vec3 {
   const n = ctrl.length;
-  const p = Math.max(1, Math.min(degree, n - 1));
+  const p = Math.max(1, Math.min(degree, n - 1, SPLINE_MAX_DEGREE));
   const U = knots.length === n + p + 1 ? knots : clampedKnots(n, p);
   return deBoor(p, U, ctrl, weights, Math.min(Math.max(u, U[p]!), U[n]!));
 }
@@ -256,7 +257,7 @@ export function nurbsPoints(degree: number, knots: readonly number[], ctrl: read
   const n = ctrl.length;
   if (n === 0) return out;
   if (n === 1) return [ctrl[0]!.x, ctrl[0]!.y, ctrl[0]!.z];
-  const p = Math.max(1, Math.min(degree, n - 1));
+  const p = Math.max(1, Math.min(degree, n - 1, SPLINE_MAX_DEGREE));
   let U = knots;
   if (U.length !== n + p + 1) {
     U = clampedKnots(n, p);
@@ -297,6 +298,8 @@ export function interpolateFitPoints(fit: readonly Vec3[], startTangent?: Vec3, 
   const n = fit.length;
   if (n < 2) return { ctrl: [...fit], knots: [0, 0, 1, 1], degree: 1 };
   if (n === 2 && !startTangent && !endTangent) return { ctrl: [...fit], knots: [0, 0, 1, 1], degree: 1 };
+  // 아래 전역 보간은 점 수의 제곱 크기 행렬을 푼다. 점이 아주 많으면 그 점을 잇는 꺾은선으로 충분하다
+  if (n > FIT_INTERPOLATE_LIMIT) return { ctrl: [...fit], knots: clampedKnots(n, 1), degree: 1 };
   const p = Math.min(3, n - 1 + (startTangent ? 1 : 0) + (endTangent ? 1 : 0));
   // 현 길이 매개변수
   const d: number[] = [0];
