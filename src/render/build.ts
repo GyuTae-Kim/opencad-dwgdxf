@@ -131,6 +131,8 @@ export interface SpaceScene {
   layers: LayerState[];
   layerIndex: Map<string, number>;
   warnings: { code: string; count: number; detail?: Record<string, unknown> }[];
+  /** 만든 일의 양: 블록 펼침 일(core/limits.ts), 조각 수, 표시 목록을 만드는 동안 잡은 바이트의 최댓값 */
+  stats: { blockWork: number; pieces: number; peakBytes: number };
   /** 주석 객체 수(배치 뷰포트마다 다른 축척의 장면이 필요한지 가린다) */
   annotative?: number;
 }
@@ -186,6 +188,11 @@ export class SceneBuilder {
   private blockVisits = 0;
   private blockCut = false;
   private pieceCut = false;
+  /**
+   * 지금 객체가 조각 없이 시간을 쓴 일(문자 배치, 해치 고리·무늬 계산, 프록시 해석, 치수 변수 훑기 — 단위는 조각 하나 그리는 시간쯤).
+   * 낸 조각보다 많은 만큼만 일에 더한다(그림을 내는 정상 객체는 일이 늘지 않는다)
+   */
+  private prepWork = 0;
   private readonly sortCache = new Map<string, Entity[]>();
   /** 치수 블록이 없는 치수를 그릴 때 만든 화살촉 블록(도면에 없는 AutoCAD 기본 화살촉) */
   private readonly genBlocks = new Map<string, BlockDef>();
@@ -208,6 +215,8 @@ export class SceneBuilder {
   private extentSize = 100;
   /** 임시 행렬(블록 참조·여러 줄 문자의 변환을 만들 때만 잠깐 쓴다 — 재귀 호출 전에 다 쓴다) */
   private readonly scratch: Mat[] = Array.from({ length: 6 }, () => new Float64Array(12));
+  /** 깊이별 블록 참조 행렬(insert) */
+  private readonly depthMats: Mat[] = Array.from({ length: MAX_DEPTH }, () => new Float64Array(12));
 
   constructor(
     private readonly doc: CadDocument,
@@ -258,13 +267,25 @@ export class SceneBuilder {
     this.blockCut = this.pieceCut = false;
   }
 
-  /** 블록 펼침 일을 다 썼는지. 처음 넘을 때 한 번 경고한다 */
+  /** 지금까지 쓴 블록 펼침 일 */
+  private get blockWork(): number {
+    return this.blockPieces + this.blockVisits + this.out.effort - this.blockBase;
+  }
+
+  /** 블록 펼침 일을 다 썼거나 장면 조각이 한도를 넘었거나 메모리가 모자라는지. 처음 넘을 때 한 번 경고한다 */
   private blockSpent(): boolean {
     if (this.blockCut) return true;
-    if (this.blockPieces + this.blockVisits + this.out.drawn - this.blockBase <= this.blockLimit) return false;
+    if (this.blockWork <= this.blockLimit && !this.out.full && this.out.drawn <= (this.opt.scenePieceLimit ?? SCENE_PIECE_LIMIT)) return false;
     this.blockCut = true;
     this.warnInc('block.expansion_limit');
     return true;
+  }
+
+  /** 객체 하나를 마쳤다(before = 그리기 전 effort): 낸 조각보다 많이 쓴 준비 일을 더한다 */
+  private settleWork(before: number): void {
+    const rest = this.prepWork - (this.out.effort - before);
+    this.prepWork = 0;
+    if (rest > 0) this.blockVisits += rest;
   }
 
   /** 장면 조각 수가 한도를 넘었는지(넘으면 해치 무늬·대시를 더 펼치지 않는다). 처음 넘을 때 한 번 경고한다 */
@@ -579,6 +600,7 @@ export class SceneBuilder {
   /** 프록시 그림(ODA 명세 29장)으로 그리기. 그린 것이 있으면 true */
   private proxy(e: UnknownEntity, ctx: Ctx): boolean {
     const dec = decoderFor(codepageToEncoding(this.doc.codepage || 'ANSI_1252'));
+    this.prepWork += e.graphics!.length >> 8;
     const parsed = parseProxyGraphics(e.graphics!, (b) => dec.decode(b));
     if (!parsed.prims.some((p) => p.k !== 'color' && p.k !== 'rgb' && p.k !== 'lineweight' && p.k !== 'fill')) return false;
     const base = this.resolve(e, ctx);
@@ -909,7 +931,8 @@ export class SceneBuilder {
   build(blockName: string): SpaceScene {
     this.run(blockName, null);
     const warnings = [...this.warn.entries()].map(([code, count]) => ({ code, count }));
-    return { list: this.out.finish(this.opt.packBoxes), styles: this.styles, layers: this.layers, layerIndex: this.layerIndex, warnings, annotative: this.anno?.annotative ?? 0 };
+    const stats = { blockWork: this.blockWork, pieces: this.out.drawn, peakBytes: this.out.peakBytes };
+    return { stats, list: this.out.finish(this.opt.packBoxes), styles: this.styles, layers: this.layers, layerIndex: this.layerIndex, warnings, annotative: this.anno?.annotative ?? 0 };
   }
 
   /**
@@ -965,7 +988,7 @@ export class SceneBuilder {
         this.warnInc('entity.failed');
         void err;
       }
-      this.out.endEntity(e.handle);
+      this.closeEntity(e.handle);
       if (partial && (i & 255) === 255 && performance.now() >= nextPartial) {
         partial({ list: this.out.snapshot(pv.origin[0], pv.origin[1], pv), styles: this.styles.specs.slice(), layers: this.layers });
         nextPartial = performance.now() + (gap ?? 1000);
@@ -1002,15 +1025,27 @@ export class SceneBuilder {
       } catch {
         /* 그리지 못한 객체는 건너뛴다 */
       }
-      this.out.endEntity(e.handle);
+      this.closeEntity(e.handle);
     }
     return this.out.finish();
+  }
+
+  /** 최상위 객체 하나를 마감한다. 묶음을 늘릴 메모리가 없으면 이 객체만 버리고 다음 객체로 간다 */
+  private closeEntity(handle: string): void {
+    try {
+      this.out.endEntity(handle);
+    } catch {
+      this.warnInc('entity.failed');
+      this.out.dropEntity();
+    }
   }
 
   /** 블록 안 객체들(그리기 순서 깊이를 나눠 준다) */
   private children(list: readonly Entity[], ctx: Ctx): void {
     const n = list.length;
     const span = ctx.z1 - ctx.z0;
+    // 문맥 객체 하나를 객체마다 깊이만 바꿔 쓴다(그리기 코드는 문맥을 고치거나 남기지 않는다)
+    const c: Ctx = { ...ctx };
     for (let i = 0; i < n; i++) {
       this.blockVisits++;
       if (this.blockSpent()) break;
@@ -1018,11 +1053,17 @@ export class SceneBuilder {
       const z0 = ctx.z1 - (span * (i + 1)) / (n + 1);
       this.out.setDepth(z1);
       const e = list[i]!;
+      const before = this.out.effort;
+      this.prepWork = 0;
+      c.z0 = z0;
+      c.z1 = z1;
       try {
-        this.entity(e, { ...ctx, z0, z1 });
+        this.entity(e, c);
       } catch {
         this.warnInc('entity.failed');
       }
+      this.settleWork(before);
+      if (this.blockSpent()) break;
     }
     this.out.setDepth(ctx.z1);
   }
@@ -1518,6 +1559,9 @@ export class SceneBuilder {
     }
     if (degree > SPLINE_MAX_DEGREE) this.warnInc('spline.degree_limited');
     const pts3 = nurbsPoints(degree, knots, ctrl, weights, tol);
+    // 곡선 위 점 하나에 차수의 제곱만큼 계산한다(보통 차수 3은 조각 수 안쪽)
+    const p = Math.min(degree, SPLINE_MAX_DEGREE);
+    this.prepWork += (pts3.length / 3) * (p * p >> 6);
     this.stroke(this.xf3(ctx.m, pts3), false, r, ctx);
   }
 
@@ -1533,6 +1577,7 @@ export class SceneBuilder {
     const style = this.doc.textStyles.get(tableKey(e.style));
     let text = e.text;
     if (e.type === 'ATTDEF' && !ctx.inBlock) text = (e as { tag?: string }).tag ?? text;
+    this.prepWork += text.length >> 1;
     const lay = this.opt.text.layoutText({
       text,
       insert: e.insert,
@@ -1556,6 +1601,7 @@ export class SceneBuilder {
   private mtext(e: Extract<Entity, { type: 'MTEXT' }>, ctx: Ctx): void {
     const r = this.resolve(e, ctx);
     const style = this.doc.textStyles.get(tableKey(e.style));
+    this.prepWork += e.text.length >> 1;
     const lay = this.opt.text.layoutMText({
       text: e.text,
       height: e.height,
@@ -1614,12 +1660,13 @@ export class SceneBuilder {
   }
 
   private insert(e: InsertEntity, ctx: Ctx): void {
-    const b = this.doc.blocks.get(tableKey(e.block)) ?? this.genBlocks.get(tableKey(e.block));
+    const key = tableKey(e.block);
+    const b = this.doc.blocks.get(key) ?? this.genBlocks.get(key);
     if (!b) {
       this.warnInc('block.missing');
       return;
     }
-    if (ctx.depth >= MAX_DEPTH || ctx.chain.includes(tableKey(e.block))) {
+    if (ctx.depth >= MAX_DEPTH || ctx.chain.includes(key)) {
       this.warnInc('block.recursive');
       return;
     }
@@ -1638,9 +1685,14 @@ export class SceneBuilder {
         multiplyInto(S[2]!, setTranslation(S[0]!, cI * e.columnSpacing, rI * e.rowSpacing, 0), setScaling(S[1]!, sx, sy, sz));
         multiplyInto(S[3]!, setRotationZ(S[0]!, e.rotation), S[2]!);
         const local = multiplyInto(S[4]!, setTranslation(S[1]!, e.insert.x, e.insert.y, e.insert.z), S[3]!);
-        const m = multiply(om, multiplyInto(S[5]!, local, setTranslation(S[0]!, -b.basePoint.x, -b.basePoint.y, -b.basePoint.z)));
+        // 깊이마다 행렬 하나를 되쓴다: 이 칸을 다 그릴 때까지만 쓰고, 안쪽 블록은 더 깊은 자리를 쓴다
+        const m = multiplyInto(this.depthMats[ctx.depth]!, om, multiplyInto(S[5]!, local, setTranslation(S[0]!, -b.basePoint.x, -b.basePoint.y, -b.basePoint.z)));
         const clip = b.flags & 4 && !b.entities.length ? null : this.xclipPolygon(e, m);
-        if (clip) this.out.pushClip(clip.poly, clip.inverted);
+        if (clip) {
+          // 칸마다 경계를 다시 계산한다
+          this.blockVisits += clip.poly.length >> 1;
+          this.out.pushClip(clip.poly, clip.inverted);
+        }
         this.blockContents(b, e, m, ctx);
         if (clip) {
           this.out.popClip();
@@ -1656,7 +1708,18 @@ export class SceneBuilder {
     if (e.attribs.length) {
       const r = this.resolve(e, ctx);
       const child = this.childCtx(e, ctx, r, ctx.m);
-      for (const a of e.attribs) this.text(a as unknown as TextEntity, { ...child, inBlock: false });
+      // 블록 안 참조의 속성은 참조마다 다시 그리므로 객체와 같이 센다(최상위 참조의 속성은 파일 크기만큼이다)
+      const nested = ctx.depth > 0;
+      for (const a of e.attribs) {
+        if (nested) {
+          this.blockVisits++;
+          if (this.blockSpent()) break;
+        }
+        const before = this.out.effort;
+        this.prepWork = 0;
+        this.text(a as unknown as TextEntity, { ...child, inBlock: false });
+        if (nested) this.settleWork(before);
+      }
     }
   }
 
@@ -1740,7 +1803,7 @@ export class SceneBuilder {
     }
     // 최상위 블록 하나가 그린 조각을 센다(안쪽 블록은 그 안에 들어간다)
     const top = ctx.depth === 0;
-    if (top) this.blockBase = this.out.drawn;
+    if (top) this.blockBase = this.out.effort;
     if (this.blockSpent()) return;
     const r = this.resolve(parent, ctx);
     const child = this.childCtx(parent, ctx, r, m);
@@ -1748,8 +1811,8 @@ export class SceneBuilder {
     child.dimBlock = dimBlock;
     this.children(this.ordered(b), child);
     if (top) {
-      this.blockPieces += this.out.drawn - this.blockBase;
-      this.blockBase = this.out.drawn;
+      this.blockPieces += this.out.effort - this.blockBase;
+      this.blockBase = this.out.effort;
     }
   }
 
@@ -1761,7 +1824,13 @@ export class SceneBuilder {
     // 그 종류의 하위 스타일(이름$2 등)이 있으면 그것(AutoCAD와 같다)
     const ds: DimStyle | undefined = (e ? childStyleOf(this.doc, { dimStyle: styleName, ...e }) : null) ?? this.doc.dimStyles.get(tableKey(styleName)) ?? this.doc.dimStyles.get('STANDARD');
     const out: Record<string, number | string> = { ...DIM_VAR_DEFAULTS };
-    for (const [k, v] of this.doc.header) if (k.startsWith('$DIM')) out[k.slice(1)] = v as number | string;
+    let dims = 0;
+    for (const [k, v] of this.doc.header) {
+      if (!k.startsWith('$DIM')) continue;
+      out[k.slice(1)] = v as number | string;
+      dims++;
+    }
+    this.prepWork += dims >> 1;
     if (ds) Object.assign(out, ds.vars);
     if (overrides) for (const [code, v] of Object.entries(overrides)) {
       const name = DIM_VAR_CODES[Number(code)];
@@ -1782,6 +1851,8 @@ export class SceneBuilder {
       return;
     }
     this.warnInc('dimension.generated');
+    // 치수 하나를 만드는 데 조각 수백 개 그리는 시간이 든다(안쪽 블록의 객체마다 준비 일을 새로 세므로 바로 더한다)
+    if (ctx.depth > 0) this.blockVisits += 150;
     // 치수 블록이 없는 파일(다른 프로그램이 만든 DXF 등): 치수를 만들 때와 같은 생성기로 치수 스타일·재지정대로 다시 만들어 그린다
     let geo: DimensionGeometry | null = null;
     try {
@@ -2044,6 +2115,10 @@ export class SceneBuilder {
     const tol = this.localTol(m);
     const loops = hatchLoops(e, tol);
     if (!loops.length) return;
+    // 경계 고리 만들기와, 고리 사이 포함 관계(고리 수 × 정점 수)
+    let verts = 0;
+    for (const l of loops) verts += l.length >> 1;
+    this.prepWork += verts + ((loops.length - 1) * verts >> 5);
     const z = e.elevation;
     // 채우기를 끄면(FILLMODE 0) 해치·그라데이션·MPOLYGON은 경계 윤곽만
     if (!this.fill) {
@@ -2059,6 +2134,8 @@ export class SceneBuilder {
         for (const l of loops) this.out.polyline(this.xf(m, l, z), true, r.style);
         if (!e.fillColor) return;
       }
+      // 삼각분할은 정점 하나에 조각 몇 개 그리는 시간이 든다
+      this.prepWork += verts * 4;
       const tris = triangulateLoops(loops);
       const style = e.type === 'MPOLYGON' && e.fillColor ? this.styleWithColor(r, e.fillColor, ctx) : r.style;
       this.out.triangles(this.xf(m, tris, z), style);
@@ -2090,15 +2167,17 @@ export class SceneBuilder {
     }
     // 장면이 이미 한도를 넘었으면 무늬를 펼치지 않는다(확대하면 세부 장면이 보이는 곳만 다시 그린다)
     const spent = this.piecesSpent();
-    let segs = spent ? null : patternSegments(lines, fillLoops, limit);
+    const work = { n: 0 };
+    let segs = spent ? null : patternSegments(lines, fillLoops, limit, work);
     if (!segs) {
       // 너무 촘촘하면(멀리서 보거나 아주 넓은 해치) 경계와 성긴 무늬로. 확대하면 세부 장면이 원래 간격으로 다시 그린다
       this.warnInc('hatch.pattern_truncated');
       for (const l of loops) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
       if (spent) return;
-      for (let f = 2; f <= 4096 && !segs; f *= 2) segs = patternSegments(spreadPattern(lines, f), fillLoops, limit);
-      if (!segs) return;
+      for (let f = 2; f <= 4096 && !segs; f *= 2) segs = patternSegments(spreadPattern(lines, f), fillLoops, limit, work);
     }
+    this.prepWork += work.n;
+    if (!segs) return;
     const w = this.xf(m, segs, z);
     for (let i = 0; i + 3 < w.length; i += 4) this.out.segment(w[i]!, w[i + 1]!, w[i + 2]!, w[i + 3]!, r.style);
   }

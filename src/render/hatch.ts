@@ -182,8 +182,9 @@ export function clipLoopsToRect(loops: number[][], r: readonly [number, number, 
  *
  * 무늬 선 하나마다 모든 경계 변을 보면 선 수 × 변 수라, 촘촘한 해치(선 20만 개)에 변이 많으면(곡선 경계) 몇 초가 걸린다.
  * 변마다 지나는 선 번호(k) 범위를 미리 구해 k 순으로 쓸어 가며 그 선에 걸칠 수 있는 변만 본다(교차 판정·순서는 그대로).
+ * work가 있으면 들인 일을 더한다(무늬가 조각을 내지 않아도 시간이 드는 것을 블록 펼침 한도가 센다).
  */
-export function patternSegments(lines: readonly HatchPatternLine[], loops: number[][], limit = HATCH_LINE_LIMIT): number[] | null {
+export function patternSegments(lines: readonly HatchPatternLine[], loops: number[][], limit = HATCH_LINE_LIMIT, work?: { n: number }): number[] | null {
   const out: number[] = [];
   if (!loops.length) return out;
   // 경계 상자
@@ -248,6 +249,7 @@ export function patternSegments(lines: readonly HatchPatternLine[], loops: numbe
     // 번호가 2^53을 넘으면(기준점이 아주 멀거나 간격이 아주 작은 자료) k++가 값을 바꾸지 못해 아래 고리가 끝나지 않는다.
     // 간격을 넓히면(spreadPattern) 번호가 작아지므로 "너무 촘촘함"으로 돌려준다
     if (Math.abs(k0) >= Number.MAX_SAFE_INTEGER || Math.abs(k1) >= Number.MAX_SAFE_INTEGER) return null;
+    if (work) work.n += edgeCount >> 2;
     // 변마다 걸칠 수 있는 선 번호 범위(반올림 오차만큼 한 칸씩 넉넉히 — 실제 교차는 아래에서 예전 식 그대로 판정)
     for (let e = 0; e < edgeCount; e++) {
       const ka = ((ax[e]! - pl.base.x) * nx + (ay[e]! - pl.base.y) * ny) / spacing;
@@ -273,6 +275,7 @@ export function patternSegments(lines: readonly HatchPatternLine[], loops: numbe
         if (skip > k) k = skip;
         continue;
       }
+      if (work) work.n += 1 + (nActive >> 2);
       // 선 k의 원점(무늬 시작)
       const ox = pl.base.x + pl.offset.x * k;
       const oy = pl.base.y + pl.offset.y * k;
