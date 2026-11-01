@@ -12,7 +12,7 @@ import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { type BuildOptions, buildSpace } from '../../src/render/build';
 import { DisplayListBuilder } from '../../src/render/displaylist';
-import { patternSegments } from '../../src/render/hatch';
+import { hatchLoopWork, patternSegments } from '../../src/render/hatch';
 import { dashInterval } from '../../src/render/linetype';
 import { TextEngine } from '../../src/text/layout';
 import { BLOCK_B, bytesOf, dashedLine, dxfText, hatch, insertOf, ltypeTable, minsert, nestedBlocks, spline } from './corrupt35';
@@ -219,6 +219,15 @@ describe('블록 펼침이 세는 일', () => {
     const s = scene(nestedLeaf(leaf), OFF);
     // 고리 40개 × 정점 160개 / 32 + 정점 160개 × 5, 조각(삼각형 80개)을 뺀 나머지
     expect(s.stats.blockWork).toBeGreaterThanOrEqual(10 * (Math.floor((39 * 160) / 32) + 160 * 5));
+  });
+
+  it('고리 수 × 정점 수가 2^31을 넘어도 일이 줄지 않는다', () => {
+    // 곱을 32비트로 자르면 음수가 되어 이 해치의 일이 통째로 빠진다
+    expect(hatchLoopWork(50_001, 60_000)).toBe(60_000 + 93_750_000);
+    // 곱이 정확히 2^31
+    expect(hatchLoopWork(65_537, 32_768)).toBe(32_768 + 2 ** 26);
+    expect(hatchLoopWork(40, 160)).toBe(160 + 195);
+    expect(hatchLoopWork(1, 1_000)).toBe(1_000);
   });
 
   it('프록시 그림 해석을 센다', () => {

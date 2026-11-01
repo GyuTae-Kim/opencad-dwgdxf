@@ -101,6 +101,11 @@ export function hatchLoops(h: HatchEntity, tol: number): number[][] {
   return loops.map((l) => l.ring);
 }
 
+/** 경계 고리를 만들고 고리 사이 포함 관계를 따지는 일(고리 수 × 정점 수). 곱이 2^31을 넘을 수 있어 비트 연산으로 나누지 않는다 */
+export function hatchLoopWork(loops: number, verts: number): number {
+  return verts + Math.floor(((loops - 1) * verts) / 32);
+}
+
 /** 고리들을 홀짝 규칙으로 삼각분할 */
 export function triangulateLoops(loops: number[][]): number[] {
   const depth = loops.map((c, i) => {

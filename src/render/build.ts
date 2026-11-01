@@ -57,7 +57,7 @@ import { TAU, arcPoints, bulgePoints, ccwSweep, fitPointsCurve, interpolateFitPo
 import { type DashPattern, dashPolyline } from './linetype';
 import { DisplayListBuilder, type DisplayList, type SnapshotView, clipConvex } from './displaylist';
 import { ColorKind, type LayerState, type StyleSpec, STYLE_FLAG_FIELD, STYLE_FLAG_NO_PLOT, StyleTable, WidthKind, hiddenStyleSpec, layerStates, plotStyleNames } from './styles';
-import { HATCH_LINE_LIMIT, clipLoopsToRect, hatchLoops, patternSegments, spreadPattern, triangulateLoops, userPattern } from './hatch';
+import { HATCH_LINE_LIMIT, clipLoopsToRect, hatchLoopWork, hatchLoops, patternSegments, spreadPattern, triangulateLoops, userPattern } from './hatch';
 import { builtinArrow } from './arrows';
 import { boundaryEdges, contourSegments, openRing, stripOutline, textLineBoxes } from './fillmode';
 import { type Affine, type TextEngine, type TextLayout, affMul } from '../text/layout';
@@ -2115,10 +2115,9 @@ export class SceneBuilder {
     const tol = this.localTol(m);
     const loops = hatchLoops(e, tol);
     if (!loops.length) return;
-    // 경계 고리 만들기와, 고리 사이 포함 관계(고리 수 × 정점 수)
     let verts = 0;
     for (const l of loops) verts += l.length >> 1;
-    this.prepWork += verts + ((loops.length - 1) * verts >> 5);
+    this.prepWork += hatchLoopWork(loops.length, verts);
     const z = e.elevation;
     // 채우기를 끄면(FILLMODE 0) 해치·그라데이션·MPOLYGON은 경계 윤곽만
     if (!this.fill) {
