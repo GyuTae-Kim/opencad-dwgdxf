@@ -95,8 +95,10 @@ class TempPieces {
     try {
       if (n < TEMP_PAGE) {
         const cap = Math.min(n * 2, TEMP_PAGE);
+        // 좌표 버퍼는 옮기면(transfer) 되돌릴 수 없으므로 스타일 버퍼를 먼저 잡고 맨 끝에 옮긴다
+        const s = new Uint32Array(cap);
         const x = new Float64Array(resized(this.x.buffer as ArrayBuffer, cap * this.stride * 8, n * this.stride * 8));
-        const s = new Uint32Array(resized(this.s.buffer as ArrayBuffer, cap * 4, n * 4));
+        s.set(this.s);
         this.x = x;
         this.s = s;
       } else {
@@ -118,8 +120,14 @@ class TempPieces {
     this.n = 0;
     if (this.pages.length) this.pages = [];
     if (this.s.length > TEMP_KEEP) {
-      this.x = new Float64Array(this.stride * this.small);
-      this.s = new Uint32Array(this.small);
+      try {
+        const x = new Float64Array(this.stride * this.small);
+        const s = new Uint32Array(this.small);
+        this.x = x;
+        this.s = s;
+      } catch {
+        // 작은 버퍼를 못 잡으면 지금 버퍼를 계속 쓴다
+      }
     }
   }
 }
@@ -403,7 +411,7 @@ export class DisplayListBuilder {
   /** 묶음이 잡은 바이트와, 지금까지 잡은 바이트(묶음 + 임시 그림)의 최댓값 */
   private chunkBytes = 0;
   private peak = 0;
-  /** 임시 그림을 더 늘리지 못했다(메모리 부족). 이 객체의 나머지 조각은 버린다 */
+  /** 임시 그림을 더 늘리지 못했다(메모리 부족). 이 객체는 빠진다. 객체가 끝날 때까지 다시 늘리지 않는다 */
   full = false;
 
   /** 지금까지 그린 조각 수(선분 + 삼각형 + 글리프) — 장면 한도가 본다(core/limits.ts) */
@@ -442,9 +450,14 @@ export class DisplayListBuilder {
     if (style >= t.length) {
       let n = t.length * 2;
       while (n <= style) n *= 2;
-      const nt = new Uint8Array(n);
-      nt.set(t);
-      this.transp = t = nt;
+      try {
+        const nt = new Uint8Array(n);
+        nt.set(t);
+        this.transp = t = nt;
+      } catch {
+        // 값만 기억하지 못한다
+        return this.transparent(style);
+      }
     }
     let v = t[style]!;
     if (v === 0) t[style] = v = this.transparent(style) ? 2 : 1;
@@ -528,14 +541,17 @@ export class DisplayListBuilder {
     if (dx === 0 && dy === 0 && this.inside(x0, y0)) this.rawSegment(x0, y0, x1, y1, style);
   }
 
+  /** 임시 그림이 가득 찼다. 메모리가 모자라면 이 객체가 끝날 때까지 다시 늘리지 않는다 */
+  private growTemp(t: TempPieces): boolean {
+    if (!this.full && t.grow()) return true;
+    this.full = true;
+    this.idle++;
+    return false;
+  }
+
   private rawSegment(x0: number, y0: number, x1: number, y1: number, style: number): void {
     const t = this.tempSegs;
-    if (t.n === t.s.length && !t.grow()) {
-      // 메모리가 모자라다: 이 객체의 나머지 조각은 버린다
-      this.full = true;
-      this.idle++;
-      return;
-    }
+    if (t.n === t.s.length && !this.growTemp(t)) return;
     const n = t.n;
     const sx = t.x;
     const k = n * 5;
@@ -590,11 +606,7 @@ export class DisplayListBuilder {
 
   private rawTriangle(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, style: number): void {
     const t = this.tempTris;
-    if (t.n === t.s.length && !t.grow()) {
-      this.full = true;
-      this.idle++;
-      return;
-    }
+    if (t.n === t.s.length && !this.growTemp(t)) return;
     const n = t.n;
     const d = this.depth;
     const tx = t.x;
@@ -656,14 +668,7 @@ export class DisplayListBuilder {
     // 글리프 하나는 선분 하나보다 메모리를 세 배쯤 쓰고 끝까지 남는다(core/limits.ts)
     this.idle += 2;
     const n = this.instN;
-    if (n === this.instG.length) {
-      // 두 배로(옛 버퍼는 resized가 바로 놓아 준다)
-      const cap = n * 2;
-      this.instF = new Float64Array(resized(this.instF.buffer as ArrayBuffer, cap * 64, n * 64));
-      this.instG = new Int32Array(resized(this.instG.buffer as ArrayBuffer, cap * 4, n * 4));
-      this.instT = new Uint8Array(resized(this.instT.buffer as ArrayBuffer, cap, n));
-      this.instO = new Int32Array(resized(this.instO.buffer as ArrayBuffer, cap * 4, n * 4));
-    }
+    if (n === this.instG.length && !this.growInstances()) return;
     const F = this.instF;
     const o = n * 8;
     F[o] = a;
@@ -687,6 +692,31 @@ export class DisplayListBuilder {
     this.grow(a * x0 + c * y1 + e, b * x0 + d * y1 + f);
   }
 
+  /** 글리프 인스턴스 버퍼를 두 배로. 네 버퍼를 함께 바꾼다: 되돌릴 수 없는 옮기기(transfer)는 나머지를 모두 잡은 뒤 맨 끝에 한다 */
+  private growInstances(): boolean {
+    if (this.full) return false;
+    const n = this.instN;
+    const cap = n * 2;
+    try {
+      const G = new Int32Array(cap);
+      const T = new Uint8Array(cap);
+      const O = new Int32Array(cap);
+      const F = new Float64Array(resized(this.instF.buffer as ArrayBuffer, cap * 64, n * 64));
+      G.set(this.instG);
+      T.set(this.instT);
+      O.set(this.instO);
+      this.instF = F;
+      this.instG = G;
+      this.instT = T;
+      this.instO = O;
+      return true;
+    } catch (err) {
+      if (!(err instanceof RangeError)) throw err;
+      this.full = true;
+      return false;
+    }
+  }
+
   private images: ImageDraw[] = [];
   /** 선종류 무늬를 입혔는지 */
   dashed = false;
@@ -697,7 +727,14 @@ export class DisplayListBuilder {
     this.idle += 1 + (tris.length >> 2);
     const ox = tris[0]!;
     const oy = tris[1]!;
-    const v = new Float32Array(tris.length);
+    let v: Float32Array;
+    try {
+      v = new Float32Array(tris.length);
+    } catch (err) {
+      if (!(err instanceof RangeError)) throw err;
+      this.full = true;
+      return;
+    }
     for (let i = 0; i + 3 < tris.length; i += 4) {
       v[i] = tris[i]! - ox;
       v[i + 1] = tris[i + 1]! - oy;
@@ -761,8 +798,11 @@ export class DisplayListBuilder {
     }
     let ch = slot === undefined ? undefined : this.live[slot];
     if (!ch || ch.size > MAX_CHUNK) {
+      // 새 묶음을 잡은 뒤에 옛 묶음을 넘긴다(못 잡으면 아무것도 바뀌지 않는다)
+      const fresh = new ChunkBuilder(`${level}:${ix}:${iy}`, (ix + 0.5) * cell, (iy + 0.5) * cell, this.chunkCount, level);
+      this.chunkCount++;
       if (ch) this.done.push(ch);
-      ch = new ChunkBuilder(`${level}:${ix}:${iy}`, (ix + 0.5) * cell, (iy + 0.5) * cell, this.chunkCount++, level);
+      ch = fresh;
       this.chunkBytes += ch.bytes;
       if (slot === undefined) {
         slot = this.live.length;
@@ -774,24 +814,40 @@ export class DisplayListBuilder {
     return ch;
   }
 
-  /** 지금까지 모은 그림을 한 객체로 마감한다. */
-  endEntity(handle: string): void {
-    // 이미지·외부 참조만 있는 객체도 범위를 남긴다
-    const hadOther = this.pendingImages.length > 0 || this.pendingXrefs.length > 0;
-    if (this.pendingImages.length) {
-      for (const im of this.pendingImages) im.handle = handle;
-      this.pendingImages = [];
+  /** 임시 그림의 투명 조각 수 */
+  private transparentIn(t: TempPieces): number {
+    let n = this.countTransparent(t.s, t.n);
+    for (const p of t.pages) n += this.countTransparent(p.s, TEMP_PAGE);
+    return n;
+  }
+
+  /**
+   * 지금까지 모은 그림을 한 객체로 마감한다. 메모리가 모자라 넣지 못하면 이 객체만 빼고 거짓을 돌려준다.
+   * 자리(상자, 묶음, 묶음의 버퍼 네 개)를 모두 잡은 뒤에 옮기므로 객체는 전부 들어가거나 전부 빠진다.
+   */
+  endEntity(handle: string): boolean {
+    if (!this.full) {
+      try {
+        this.commitEntity(handle);
+        return true;
+      } catch (err) {
+        if (!(err instanceof RangeError)) throw err;
+      }
     }
-    if (this.pendingXrefs.length) {
-      for (const x of this.pendingXrefs) x.handle = handle;
-      this.pendingXrefs = [];
-    }
-    while (this.xlineHandles.length < this.xlines.length / 7) this.xlineHandles.push(handle);
-    const hadGlyphs = this.instN > this.instDone;
+    this.dropEntity();
+    return false;
+  }
+
+  private commitEntity(handle: string): void {
+    const boxed = !!handle && this.minX <= this.maxX;
+    if (boxed) this.reserveBox();
     const ns = this.tempSegs.count;
     const nt = this.tempTris.count;
     if (ns === 0 && nt === 0) {
-      this.ownInstances(hadGlyphs || hadOther ? this.recordEntity(handle) : -1);
+      // 이미지·외부 참조만 있는 객체도 범위를 남긴다
+      const other = this.instN > this.instDone || this.pendingImages.length > 0 || this.pendingXrefs.length > 0;
+      this.ownEntity(handle);
+      this.ownInstances(other ? this.recordEntity(handle) : -1);
       this.resetEntity();
       return;
     }
@@ -808,28 +864,30 @@ export class DisplayListBuilder {
     const tseg0 = ch.tsegs.length / SEG_STRIDE;
     const tri0 = ch.tris.length / TRI_STRIDE / 3;
     const ttri0 = ch.ttris.length / TRI_STRIDE / 3;
-    // 선분: 버퍼를 한 번에 늘린 뒤 옮긴다
+    const segsTr = ns ? this.transparentIn(this.tempSegs) : 0;
+    const trisTr = nt ? this.transparentIn(this.tempTris) : 0;
+    try {
+      if (ns > segsTr) ch.segs.reserve((ns - segsTr) * SEG_STRIDE);
+      if (segsTr) ch.tsegs.reserve(segsTr * SEG_STRIDE);
+      if (nt > trisTr) ch.tris.reserve((nt - trisTr) * TRI_STRIDE * 3);
+      if (trisTr) ch.ttris.reserve(trisTr * TRI_STRIDE * 3);
+    } finally {
+      this.chunkBytes += ch.bytes - chBytes;
+    }
+    // 임시 그림과 묶음이 함께 있는 지금이 가장 많이 잡은 때다
+    this.peak = Math.max(this.peak, this.chunkBytes + this.tempBytes);
+    // 여기부터는 메모리를 잡지 않는다
     if (ns) {
       const t = this.tempSegs;
-      let nTr = this.countTransparent(t.s, t.n);
-      for (const p of t.pages) nTr += this.countTransparent(p.s, TEMP_PAGE);
-      if (ns > nTr) ch.segs.reserve((ns - nTr) * SEG_STRIDE);
-      if (nTr) ch.tsegs.reserve(nTr * SEG_STRIDE);
-      for (const p of t.pages) this.moveSegs(p.x, p.s, TEMP_PAGE, ch, nTr > 0);
-      this.moveSegs(t.x, t.s, t.n, ch, nTr > 0);
+      for (const p of t.pages) this.moveSegs(p.x, p.s, TEMP_PAGE, ch, segsTr > 0);
+      this.moveSegs(t.x, t.s, t.n, ch, segsTr > 0);
     }
     if (nt) {
       const t = this.tempTris;
-      let nTr = this.countTransparent(t.s, t.n);
-      for (const p of t.pages) nTr += this.countTransparent(p.s, TEMP_PAGE);
-      if (nt > nTr) ch.tris.reserve((nt - nTr) * TRI_STRIDE * 3);
-      if (nTr) ch.ttris.reserve(nTr * TRI_STRIDE * 3);
-      for (const p of t.pages) this.moveTris(p.x, p.s, TEMP_PAGE, ch, nTr > 0);
-      this.moveTris(t.x, t.s, t.n, ch, nTr > 0);
+      for (const p of t.pages) this.moveTris(p.x, p.s, TEMP_PAGE, ch, trisTr > 0);
+      this.moveTris(t.x, t.s, t.n, ch, trisTr > 0);
     }
-    // 임시 그림과 묶음이 함께 있는 지금이 가장 많이 잡은 때다
-    this.chunkBytes += ch.bytes - chBytes;
-    this.peak = Math.max(this.peak, this.chunkBytes + this.tempBytes);
+    this.ownEntity(handle);
     if (this.minX < ch.minX) ch.minX = this.minX;
     if (this.minY < ch.minY) ch.minY = this.minY;
     if (this.maxX > ch.maxX) ch.maxX = this.maxX;
@@ -852,6 +910,19 @@ export class DisplayListBuilder {
     }
     this.ownInstances(box);
     this.resetEntity();
+  }
+
+  /** 지금 객체의 이미지·외부 참조·구성선에 핸들을 적는다 */
+  private ownEntity(handle: string): void {
+    if (this.pendingImages.length) {
+      for (const im of this.pendingImages) im.handle = handle;
+      this.pendingImages = [];
+    }
+    if (this.pendingXrefs.length) {
+      for (const x of this.pendingXrefs) x.handle = handle;
+      this.pendingXrefs = [];
+    }
+    while (this.xlineHandles.length < this.xlines.length / 7) this.xlineHandles.push(handle);
   }
 
   private countTransparent(s: Uint32Array, n: number): number {
@@ -901,7 +972,18 @@ export class DisplayListBuilder {
     }
   }
 
-  /** 지금 객체의 상자를 남기고 번호를 돌려준다(범위가 없거나 핸들이 없으면 -1) */
+  /** 상자 하나의 자리: 두 배로(늘린 자리는 0). 범위 버퍼는 옮기면 되돌릴 수 없으므로 번호 버퍼를 먼저 잡고 맨 끝에 옮긴다 */
+  private reserveBox(): void {
+    const i = this.boxN;
+    if ((i + 1) * 4 <= this.boxB.length) return;
+    const R = new Int32Array(this.boxR.length * 2);
+    const B = new Float64Array(resized(this.boxB.buffer as ArrayBuffer, this.boxB.byteLength * 2, i * 32));
+    R.set(this.boxR);
+    this.boxB = B;
+    this.boxR = R;
+  }
+
+  /** 지금 객체의 상자를 남기고 번호를 돌려준다(범위가 없거나 핸들이 없으면 -1). 자리는 reserveBox가 잡았다 */
   private recordEntity(handle: string): number {
     if (!(this.minX <= this.maxX)) return -1;
     if (this.minX < this.totalMinX) this.totalMinX = this.minX;
@@ -910,11 +992,6 @@ export class DisplayListBuilder {
     if (this.maxY > this.totalMaxY) this.totalMaxY = this.maxY;
     if (!handle) return -1;
     const i = this.boxN;
-    if ((i + 1) * 4 > this.boxB.length) {
-      // 두 배로(늘린 자리는 0)
-      this.boxB = new Float64Array(resized(this.boxB.buffer as ArrayBuffer, this.boxB.byteLength * 2, i * 32));
-      this.boxR = new Int32Array(resized(this.boxR.buffer as ArrayBuffer, this.boxR.byteLength * 2, i * PACK * 4));
-    }
     const B = this.boxB;
     const o = i * 4;
     B[o] = this.minX;
@@ -1057,9 +1134,15 @@ export class DisplayListBuilder {
     return { fillVerts, strokeSegs, glyphs, instances: buf, runs, instanceCount: k };
   }
 
-  /** 묶음 메모리가 모자라 지금 객체를 넣지 못했을 때: 그 객체의 그림을 버린다 */
-  dropEntity(): void {
-    this.ownInstances(-1);
+  /** 메모리가 모자라 지금 객체를 넣지 못했을 때: 그 객체가 넣은 것을 모두 뺀다(한 일은 그대로 센다) */
+  private dropEntity(): void {
+    this.images.length -= this.pendingImages.length;
+    this.pendingImages = [];
+    this.xrefs.length -= this.pendingXrefs.length;
+    this.pendingXrefs = [];
+    this.xlines.length = this.xlineHandles.length * 7;
+    this.idle += this.instN - this.instDone;
+    this.instN = this.instDone;
     this.resetEntity();
   }
 
@@ -1279,7 +1362,8 @@ export class DisplayListBuilder {
    * (워커가 그대로 옮기고 메인이 unpackBoxes로 푼다). 아니면 entities에 상자 객체를 만든다.
    */
   finish(packed = false): DisplayList {
-    const all = [...this.done, ...this.live];
+    // 객체가 빠져 비어 있는 묶음은 넘기지 않는다
+    const all = [...this.done, ...this.live].filter((c) => c.segs.length + c.tris.length + c.tsegs.length + c.ttris.length > 0);
     // 묶음 번호: 만든 순서 → 목록 순서
     const pos = new Int32Array(this.chunkCount);
     for (let i = 0; i < all.length; i++) pos[all[i]!.index] = i;

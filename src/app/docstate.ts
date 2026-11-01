@@ -196,6 +196,8 @@ export function warningText(code: string): string {
       return '형상 자료를 풀 수 없는 3D 솔리드·영역과 그림이 없는 사용자 객체는 그리지 않았습니다.';
     case 'entity.failed':
       return '일부 객체를 그리지 못했습니다.';
+    case 'entity.memory_dropped':
+      return '메모리가 모자라 일부 객체를 그리지 못했습니다.';
     case 'block.missing':
       return '정의가 없는 블록 참조가 있습니다.';
     case 'block.recursive':

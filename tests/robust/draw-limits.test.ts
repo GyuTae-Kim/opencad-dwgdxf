@@ -348,9 +348,9 @@ describe('표시 목록 메모리', () => {
     const spy = failTransfer((n) => n > 200000);
     try {
       const s = scene(doc);
-      expect(codes(s)).toContain('block.expansion_limit');
+      expect(codes(s)).toContain('entity.memory_dropped');
       expect(s.stats.pieces).toBeGreaterThan(1000);
-      expect(segs(s)).toBeLessThan(100000);
+      expect(segs(s)).toBe(0);
     } finally {
       spy.mockRestore();
     }
@@ -367,7 +367,7 @@ describe('표시 목록 메모리', () => {
     const spy = failTransfer((n) => n === 29999 * 24);
     try {
       const s = scene(doc);
-      expect(codes(s)).toContain('entity.failed');
+      expect(codes(s)).toContain('entity.memory_dropped');
       expect(segs(s)).toBe(2);
     } finally {
       spy.mockRestore();

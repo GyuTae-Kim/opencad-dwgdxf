@@ -272,13 +272,18 @@ export class SceneBuilder {
     return this.blockPieces + this.blockVisits + this.out.effort - this.blockBase;
   }
 
-  /** 블록 펼침 일을 다 썼거나 장면 조각이 한도를 넘었거나 메모리가 모자라는지. 처음 넘을 때 한 번 경고한다 */
+  /** 블록 펼침 일을 다 썼거나 장면 조각이 한도를 넘었는지. 처음 넘을 때 한 번 경고한다 */
   private blockSpent(): boolean {
     if (this.blockCut) return true;
-    if (this.blockWork <= this.blockLimit && !this.out.full && this.out.drawn <= (this.opt.scenePieceLimit ?? SCENE_PIECE_LIMIT)) return false;
+    if (this.blockWork <= this.blockLimit && this.out.drawn <= (this.opt.scenePieceLimit ?? SCENE_PIECE_LIMIT)) return false;
     this.blockCut = true;
     this.warnInc('block.expansion_limit');
     return true;
+  }
+
+  /** 블록을 더 펼치지 않는다: 한도에 닿았거나 지금 객체가 메모리 부족으로 빠진다 */
+  private get blockStop(): boolean {
+    return this.blockSpent() || this.out.full;
   }
 
   /** 객체 하나를 마쳤다(before = 그리기 전 effort): 낸 조각보다 많이 쓴 준비 일을 더한다 */
@@ -990,11 +995,11 @@ export class SceneBuilder {
       }
       this.closeEntity(e.handle);
       if (partial && (i & 255) === 255 && performance.now() >= nextPartial) {
-        partial({ list: this.out.snapshot(pv.origin[0], pv.origin[1], pv), styles: this.styles.specs.slice(), layers: this.layers });
+        this.sendPartial(partial, pv);
         nextPartial = performance.now() + (gap ?? 1000);
       }
     }
-    if (partial) partial({ list: this.out.snapshot(pv.origin[0], pv.origin[1], pv), styles: this.styles.specs.slice(), layers: this.layers });
+    if (partial) this.sendPartial(partial, pv);
   }
 
   /**
@@ -1030,14 +1035,21 @@ export class SceneBuilder {
     return this.out.finish();
   }
 
-  /** 최상위 객체 하나를 마감한다. 묶음을 늘릴 메모리가 없으면 이 객체만 버리고 다음 객체로 간다 */
+  /** 최상위 객체 하나를 마감한다. 메모리가 모자라면 이 객체만 빠지고 다음 객체로 간다 */
   private closeEntity(handle: string): void {
+    if (!this.out.endEntity(handle)) this.warnInc('entity.memory_dropped');
+  }
+
+  /** 미리 보기 조각을 보낸다. 메모리가 모자라면 이번 조각만 건너뛴다(최종 표시 목록은 그대로다) */
+  private sendPartial(partial: (p: PartialScene) => void, pv: PartialView): void {
+    let list: DisplayList;
     try {
-      this.out.endEntity(handle);
-    } catch {
-      this.warnInc('entity.failed');
-      this.out.dropEntity();
+      list = this.out.snapshot(pv.origin[0], pv.origin[1], pv);
+    } catch (err) {
+      if (err instanceof RangeError) return;
+      throw err;
     }
+    partial({ list, styles: this.styles.specs.slice(), layers: this.layers });
   }
 
   /** 블록 안 객체들(그리기 순서 깊이를 나눠 준다) */
@@ -1048,7 +1060,7 @@ export class SceneBuilder {
     const c: Ctx = { ...ctx };
     for (let i = 0; i < n; i++) {
       this.blockVisits++;
-      if (this.blockSpent()) break;
+      if (this.blockStop) break;
       const z1 = ctx.z1 - (span * i) / (n + 1);
       const z0 = ctx.z1 - (span * (i + 1)) / (n + 1);
       this.out.setDepth(z1);
@@ -1063,7 +1075,7 @@ export class SceneBuilder {
         this.warnInc('entity.failed');
       }
       this.settleWork(before);
-      if (this.blockSpent()) break;
+      if (this.blockStop) break;
     }
     this.out.setDepth(ctx.z1);
   }
@@ -1713,7 +1725,7 @@ export class SceneBuilder {
       for (const a of e.attribs) {
         if (nested) {
           this.blockVisits++;
-          if (this.blockSpent()) break;
+          if (this.blockStop) break;
         }
         const before = this.out.effort;
         this.prepWork = 0;
