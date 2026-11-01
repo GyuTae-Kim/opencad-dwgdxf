@@ -4,6 +4,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { saveLosses } from '../../src/app/saveloss';
+import { finalizeDocument } from '../../src/core/finalize';
 import { TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS, TABLE_MERGE_RATIO, tableSizeOk } from '../../src/core/limits';
 import { MODEL_SPACE, type InsertEntity, type RawTag, type TableEntity, type XData, type XDataItem } from '../../src/core/model';
 import { TABLE_APP, decodeTableXData, encodeTableXData, isEditableTable, rawTableCells, tableFromEntity } from '../../src/edit/table/entity';
@@ -77,6 +78,98 @@ describe('행 × 열이 한도를 넘는 표', () => {
     // 고치기 전: writeDxf가 행 수만큼 배열을 잡다 RangeError
     expect(writeDxf(doc, { version: 'AC1032' }).data.length).toBeGreaterThan(0);
     expect(decodeTableXData(xdata('rowh', [1, 1], [200000000, 0]))).toBeNull();
+  });
+});
+
+describe('파일에 없는 칸의 문서 예산', () => {
+  /** 셀 태그가 칸마다 있는 표 */
+  const filled = (rows: number, cols: number, h: string, cells = rows * cols): string[] => {
+    const out = ['0', 'ACAD_TABLE', '5', h, '100', 'AcDbEntity', '8', '0', '100', 'AcDbBlockReference', '2', '*T1', '10', '0', '20', '0', '30', '0', '100', 'AcDbTable', '91', String(rows), '92', String(cols)];
+    for (let i = 0; i < rows; i++) out.push('141', '5');
+    for (let i = 0; i < cols; i++) out.push('142', '10');
+    for (let i = 0; i < cells; i++) out.push('171', '1', '1', i % 2 ? '' : `c${i}`);
+    return out;
+  };
+  const tooLarge = (doc: ReturnType<typeof readDxf>) => doc.warnings.find((w) => w.code === 'table.too_large')?.count ?? 0;
+  const sizes = (doc: ReturnType<typeof readDxf>) => doc.blocks.get(MODEL_SPACE)!.entities.map((e) => (e as TableEntity).rows * (e as TableEntity).columns);
+
+  it('크기만 있는 표는 첫 표만 남고 넘긴 표부터 셀 없는 표가 된다', () => {
+    const doc = readDxf(bytesOf(dxfText([table(1000, 1000, '2A'), table(1000, 1000, '2B'), table(1000, 1000, '2C')], [T1])));
+    expect(sizes(doc)).toEqual([TABLE_CELL_LIMIT, 0, 0]);
+    expect(tooLarge(doc)).toBe(2);
+    expect(tableFromEntity(doc.entityIndex.get('2B') as TableEntity, doc)).toBeNull();
+    expect((doc.entityIndex.get('2B') as TableEntity).raw?.length).toBeGreaterThan(0);
+  });
+
+  it('합이 예산과 같으면 모두 남고 한 칸 넘으면 그 표가 빠진다', () => {
+    const fit = readDxf(bytesOf(dxfText([table(1000, 999, '2A'), table(500, 2, '2B')], [T1])));
+    expect(sizes(fit)).toEqual([999_000, 1000]);
+    expect(tooLarge(fit)).toBe(0);
+    const over = readDxf(bytesOf(dxfText([table(1000, 999, '2A'), table(500, 2, '2B'), table(1, 1, '2C')], [T1])));
+    expect(sizes(over)).toEqual([999_000, 1000, 0]);
+  });
+
+  it('파일에 셀이 있는 표는 예산에 걸리지 않는다', () => {
+    const doc = readDxf(bytesOf(dxfText([table(1000, 1000, '2A'), filled(20, 10, '2B'), filled(3, 3, '2C')], [T1])));
+    expect(sizes(doc)).toEqual([TABLE_CELL_LIMIT, 200, 9]);
+    expect(tooLarge(doc)).toBe(0);
+    expect((doc.entityIndex.get('2B') as TableEntity).cells?.length).toBe(200);
+  });
+
+  it('셀이 일부만 있는 표는 없는 칸만 센다', () => {
+    // 앞 표가 99만 9천 칸을 써서 남은 예산은 1,000칸이다
+    const fit = readDxf(bytesOf(dxfText([table(999, 1000, '2A'), filled(40, 50, '2B', 1000)], [T1])));
+    expect(sizes(fit)).toEqual([999_000, 2000]);
+    const over = readDxf(bytesOf(dxfText([table(999, 1000, '2A'), filled(40, 50, '2B', 999)], [T1])));
+    expect(sizes(over)).toEqual([999_000, 0]);
+  });
+
+  describe('앱 표 자료', () => {
+    /** 크기와 행 높이·열 폭만 있는 참조 */
+    const sizeOnly = (rows: number, cols: number, h: string): string[] => [
+      '0', 'INSERT', '5', h, '100', 'AcDbEntity', '8', '0', '100', 'AcDbBlockReference', '2', 'B', '10', '0', '20', '0', '30', '0',
+      '1001', 'OPENCAD_TABLE', '1000', 'OPENCAD_TABLE 1', '1000', 'size', '1071', String(rows), '1071', String(cols),
+      '1000', 'rowh', '1071', '1', '1040', '5', '1000', 'colw', '1071', '1', '1040', '10',
+    ];
+
+    it('크기만 있는 표 자료도 같은 예산으로 표에서 뺀다', () => {
+      const doc = readDxf(bytesOf(dxfText([sizeOnly(1000, 1000, '3A'), sizeOnly(1000, 1000, '3B'), sizeOnly(1000, 1000, '3C')], [BLOCK_B])));
+      const [a, b, c] = ['3A', '3B', '3C'].map((h) => doc.entityIndex.get(h) as InsertEntity);
+      expect(isEditableTable(a)).toBe(true);
+      expect([isEditableTable(b), isEditableTable(c)]).toEqual([false, false]);
+      expect(tableFromEntity(b!, doc)).toBeNull();
+      expect(tooLarge(doc)).toBe(2);
+      // 저장할 자료는 그대로 있고 표식은 나가지 않는다
+      expect(b!.xdata?.length).toBe(1);
+      const out = new TextDecoder().decode(writeDxf(doc, { version: 'AC1018' }).data);
+      expect(out.split('OPENCAD_TABLE 1').length - 1).toBe(3);
+      expect(out).not.toContain('tableTooLarge');
+    });
+
+    it('표와 표 자료가 예산을 함께 쓴다', () => {
+      const doc = readDxf(bytesOf(dxfText([table(1000, 1000, '2A'), sizeOnly(100, 100, '3A')], [T1, BLOCK_B])));
+      expect(isEditableTable(doc.entityIndex.get('3A'))).toBe(false);
+    });
+
+    it('앱이 만든 빈 표는 표로 남는다', () => {
+      const doc = readDxf(bytesOf(dxfText([sizeOnly(200, 30, '3A')], [BLOCK_B])));
+      const e = doc.entityIndex.get('3A') as InsertEntity;
+      expect(isEditableTable(e)).toBe(true);
+      expect(tableFromEntity(e, doc)?.data.cells.length).toBe(6000);
+      expect(tooLarge(doc)).toBe(0);
+    });
+
+    it('셀 묶음을 쓴 항목이 많은 표 자료는 그만큼 예산을 덜 쓴다', () => {
+      const text: XDataItem[] = [];
+      for (let i = 0; i < 4000; i++) text.push({ code: 1071, value: i }, { code: 1071, value: 1 }, { code: 1000, value: 'x' });
+      const doc = readDxf(bytesOf(dxfText([table(1000, 1000, '2A'), sizeOnly(100, 100, '3A')], [T1, BLOCK_B])));
+      const e = doc.entityIndex.get('3A') as InsertEntity;
+      // 읽은 뒤 자료를 채워 다시 마무리한다
+      e.tableTooLarge = undefined;
+      e.xdata![0]!.items.push({ code: 1000, value: 'text' }, { code: 1071, value: 4000 }, ...text, ...Array.from({ length: 6000 }, () => ({ code: 1071, value: 0 }) as XDataItem));
+      finalizeDocument(doc);
+      expect(e.tableTooLarge).toBeUndefined();
+    });
   });
 });
 
@@ -252,6 +345,63 @@ describe('표 확장 자료', () => {
     const d = decodeTableXData({ app: TABLE_APP, items });
     expect(d?.fills?.size).toBe(100);
     expect(d?.heights?.size).toBe(100);
+  });
+
+  it('표인지 물을 때는 셀 묶음을 펼치지 않는다', () => {
+    const x = xdata('fill', [1, 0, TABLE_CELL_LIMIT, 1, -1], [1000, 1000]);
+    x.items.splice(4, 0, { code: 1000, value: 'rowh' }, { code: 1071, value: 1 }, { code: 1040, value: 5 }, { code: 1000, value: 'colw' }, { code: 1071, value: 1 }, { code: 1040, value: 10 });
+    const e = { type: 'INSERT', xdata: [x] } as unknown as InsertEntity;
+    const set = vi.spyOn(Map.prototype, 'set');
+    try {
+      expect(isEditableTable(e)).toBe(true);
+      // 묶음마다 자리 기록뿐이다(고치기 전 100만 번)
+      expect(set.mock.calls.length).toBeLessThan(20);
+    } finally {
+      set.mockRestore();
+    }
+    expect(decodeTableXData(x)?.fills?.size).toBe(TABLE_CELL_LIMIT);
+    expect(decodeTableXData(x, true)?.fills?.size).toBe(0);
+  });
+
+  describe('병합', () => {
+    const merged = (merges: number[][], size: [number, number] = [10, 10]) => decodeTableXData(xdata('merge', [merges.length, ...merges.flat()], size))!;
+
+    it('겹치는 병합은 앞의 것만 남긴다', () => {
+      expect(merged([[0, 0, 2, 2], [1, 1, 2, 2], [5, 5, 1, 2]]).merges).toEqual([{ row: 0, col: 0, rows: 2, cols: 2 }, { row: 5, col: 5, rows: 1, cols: 2 }]);
+    });
+
+    it('표 전체를 덮는 병합을 되풀이해도 칸 수의 몇 배만 훑는다', () => {
+      const has = vi.spyOn(Set.prototype, 'has');
+      const add = vi.spyOn(Set.prototype, 'add');
+      try {
+        const d = merged(Array.from({ length: 300 }, () => [0, 0, 100, 100]), [100, 100]);
+        expect(d.merges.length).toBe(1);
+        expect(has.mock.calls.length + add.mock.calls.length).toBeLessThanOrEqual(2 * 100 * 100 + 300);
+      } finally {
+        has.mockRestore();
+        add.mockRestore();
+      }
+    });
+
+    it('표 밖이나 음수인 병합은 버린다', () => {
+      expect(merged([[9, 9, 2, 2], [-1, 0, 2, 2], [0, 0, 0, 3], [0, 0, 1, 11]]).merges).toEqual([]);
+    });
+
+    it('겹치지 않는 병합은 표를 가득 채워도 모두 남는다', () => {
+      const all: number[][] = [];
+      for (let r = 0; r < 10; r += 2) for (let c = 0; c < 10; c += 2) all.push([r, c, 2, 2]);
+      expect(merged(all).merges.length).toBe(25);
+    });
+
+    it('표인지 물을 때는 병합을 거르지 않는다', () => {
+      const has = vi.spyOn(Set.prototype, 'has');
+      try {
+        decodeTableXData(xdata('merge', [1, 0, 0, 100, 100], [100, 100]), true);
+        expect(has.mock.calls.length).toBe(0);
+      } finally {
+        has.mockRestore();
+      }
+    });
   });
 
   it('앱이 쓴 표 자료는 그대로 읽는다', () => {

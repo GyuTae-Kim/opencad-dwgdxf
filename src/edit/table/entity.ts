@@ -157,7 +157,8 @@ export interface DecodedTable {
   spans: Map<string, [number, number]>;
 }
 
-export function decodeTableXData(x: XData | undefined): DecodedTable | null {
+/** 표 자료를 푼다. head면 머리 값만 본다: 셀 묶음을 펼치지 않고 병합을 거르지 않는다(표인지 묻는 자리는 클릭마다 객체마다 부른다) */
+export function decodeTableXData(x: XData | undefined, head = false): DecodedTable | null {
   if (!x || x.app.toUpperCase() !== TABLE_APP) return null;
   const items = x.items;
   let i = 0;
@@ -179,6 +180,7 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
   const runLeft = new Map<unknown, number>();
   let kind: unknown;
   const eachCell = (start: number, count: number, f: (j: number) => void): void => {
+    if (head) return;
     const end = Math.min(out.rows * out.cols, start + count);
     let left = runLeft.get(kind) ?? out.rows * out.cols;
     for (let j = Math.max(0, start); j < end && left > 0; j++, left--) f(j);
@@ -187,6 +189,10 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
   const first = next();
   if (!first || typeof first.value !== 'string' || !first.value.startsWith('OPENCAD_TABLE')) return null;
   const out: DecodedTable = { rows: 0, cols: 0, merges: [], aligns: new Map(), spans: new Map() };
+  const done = (): DecodedTable => {
+    if (!head && out.merges.length) out.merges = keepMerges(out.merges, out.rows, out.cols, out.rows * out.cols);
+    return out;
+  };
   try {
     while (i < items.length) {
       const at = i;
@@ -317,14 +323,34 @@ export function decodeTableXData(x: XData | undefined): DecodedTable | null {
           break;
         }
         default:
-          return out;
+          return done();
       }
       mark();
     }
   } catch {
-    return out;
+    return done();
   }
-  return out;
+  return done();
+}
+
+/**
+ * 겹치는 병합은 앞의 것만 남긴다. 병합의 크기는 파일 값이다. 표 밖으로 나가는 병합은 어차피 쓰지 않으니(tableFromEntity) 칸을 세지 않는다.
+ * 첫 충돌에서 멈추고, 훑은 칸이 표 넓이의 몇 배를 넘으면 나머지 병합은 버린다(정상 표의 병합은 겹치지 않는다)
+ */
+function keepMerges(merges: readonly Merge[], rows: number, cols: number, cells: number): Merge[] {
+  const taken = new Set<number>();
+  let scan = TABLE_MERGE_RATIO * cells + TABLE_EMPTY_CELLS;
+  return merges.filter((m) => {
+    if (m.row < 0 || m.col < 0 || m.rows < 1 || m.cols < 1) return false;
+    if (rows > 0 && m.row + m.rows > rows) return false;
+    if (m.col + m.cols > cols) return false;
+    const area = m.rows * m.cols;
+    if (area > scan) return false;
+    scan -= area;
+    for (let r = m.row; r < m.row + m.rows; r++) for (let c = m.col; c < m.col + m.cols; c++) if (taken.has(r * cols + c)) return false;
+    for (let r = m.row; r < m.row + m.rows; r++) for (let c = m.col; c < m.col + m.cols; c++) taken.add(r * cols + c);
+    return true;
+  });
 }
 
 /** 셀 문자 스타일 재지정(셀 번호 → 이름)을 확장 자료 tstyle 묶음 항목으로(encodeTableXData와 같은 꼴) */
@@ -502,29 +528,16 @@ export function rawTableCells(raw: readonly RawTag[] | undefined): RawTableCells
   }
   flush();
   out.count = cell + 1;
-  // 겹치는 병합은 앞의 것만. 첫 충돌에서 멈추고, 훑은 칸이 표 넓이의 몇 배를 넘으면 나머지 병합은 버린다(정상 표의 병합은 겹치지 않는다)
-  const taken = new Set<number>();
-  let scan = TABLE_MERGE_RATIO * Math.max(rows * cols, out.count) + TABLE_EMPTY_CELLS;
-  out.merges = out.merges.filter((m) => {
-    // 병합 폭·높이(175·176)는 파일 값이다. 표 밖으로 나가는 병합은 어차피 쓰지 않으니(tableFromEntity) 칸을 세지 않는다
-    if (rows > 0 && m.row + m.rows > rows) return false;
-    if (m.col + m.cols > cols) return false;
-    const area = m.rows * m.cols;
-    if (area > scan) return false;
-    scan -= area;
-    for (let r = m.row; r < m.row + m.rows; r++) for (let c = m.col; c < m.col + m.cols; c++) if (taken.has(r * cols + c)) return false;
-    for (let r = m.row; r < m.row + m.rows; r++) for (let c = m.col; c < m.col + m.cols; c++) taken.add(r * cols + c);
-    return true;
-  });
+  out.merges = keepMerges(out.merges, rows, cols, Math.max(rows * cols, out.count));
   return out;
 }
 
-/** 표로 편집할 수 있는 객체인지(ACAD_TABLE, 또는 표 확장 자료가 있는 블록 참조) */
+/** 표로 편집할 수 있는 객체인지(ACAD_TABLE, 또는 표 확장 자료가 있는 블록 참조). 빈 곳을 누를 때마다 객체마다 부르므로 머리 값만 본다 */
 export function isEditableTable(e: Entity | undefined): e is TableEntity | InsertEntity {
   if (!e) return false;
   if (e.type === 'ACAD_TABLE') return true;
-  if (e.type !== 'INSERT') return false;
-  const d = decodeTableXData(e.xdata?.find((x) => x.app.toUpperCase() === TABLE_APP));
+  if (e.type !== 'INSERT' || e.tableTooLarge) return false;
+  const d = decodeTableXData(e.xdata?.find((x) => x.app.toUpperCase() === TABLE_APP), true);
   return !!d && d.rows > 0 && d.cols > 0 && !!d.rowHeights && !!d.colWidths;
 }
 
@@ -536,6 +549,7 @@ export interface ReadTable {
 
 /** 표 객체에서 표 정의를 읽는다 */
 export function tableFromEntity(e: TableEntity | InsertEntity, doc: CadDocument): ReadTable | null {
+  if (e.type === 'INSERT' && e.tableTooLarge) return null;
   const x = decodeTableXData(e.xdata?.find((q) => q.app.toUpperCase() === TABLE_APP));
   const te = e.type === 'ACAD_TABLE' ? e : null;
   const rows = te ? te.rows : (x?.rows ?? 0);

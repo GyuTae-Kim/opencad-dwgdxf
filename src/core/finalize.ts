@@ -4,21 +4,37 @@
  * - 빠진 기본 표 항목(도면층 0, 선종류 ByLayer·ByBlock·Continuous, 문자 스타일 Standard)을 채운다.
  * - 모형 공간 블록과 모형 배치를 보장하고, 배치를 탭 순서로 정렬한다(모형이 처음).
  * - entityIndex(핸들 → 객체)를 만든다.
- * - 행 × 열이 한도를 넘는 표는 셀 없는 표로 둔다(표 그림 블록은 그대로 그린다 — 35차).
+ * - 행 × 열이 한도를 넘거나 문서의 파일에 없는 칸 합이 한도를 넘는 표는 셀 없는 표로 둔다(표 그림 블록은 그대로 그린다 — 35차).
  */
-import { tableSizeOk } from './limits';
+import { TABLE_CELL_LIMIT, tableSizeOk } from './limits';
 import {
   type BlockDef,
   type CadDocument,
   type Entity,
   type Layout,
   type PlotSettings,
+  type XData,
   MODEL_SPACE,
   PAPER_SPACE,
   tableKey,
   v2,
   v3,
 } from './model';
+
+/** 앱 표 자료(edit/table/entity.ts TABLE_APP) */
+const tableXData = (e: Entity): XData | undefined => e.xdata?.find((q) => q.app.toUpperCase() === 'OPENCAD_TABLE');
+
+/** 표 자료가 적은 칸 수. size 묶음을 찾기만 하고 셀 묶음은 펼치지 않는다. 같은 글자가 여럿이면 가장 큰 값으로 본다 */
+function xdataTableCells(x: XData): number {
+  let cells = 0;
+  const items = x.items;
+  for (let i = 0; i + 2 < items.length; i++) {
+    if (items[i]!.code !== 1000 || items[i]!.value !== 'size') continue;
+    const n = Math.abs(Number(items[i + 1]!.value) * Number(items[i + 2]!.value));
+    if (n > cells) cells = n;
+  }
+  return cells;
+}
 
 export function defaultPlotSettings(): PlotSettings {
   return {
@@ -141,17 +157,33 @@ export function finalizeDocument(doc: CadDocument): CadDocument {
   const index = doc.entityIndex;
   index.clear();
   let bigTables = 0;
+  // 파일에 없는 칸의 합. 크기 값 몇 바이트로 표를 고르거나 저장할 때 칸마다 객체를 만들게 하므로 문서 하나로 묶는다
+  let missing = 0;
+  const overBudget = (cells: number, inFile: number): boolean => {
+    const empty = cells - inFile;
+    if (empty <= 0) return false;
+    if (missing + empty > TABLE_CELL_LIMIT) return true;
+    missing += empty;
+    return false;
+  };
   for (const b of doc.blocks.values()) {
     for (const e of b.entities) {
       indexEntity(index, e);
-      if (e.type === 'ACAD_TABLE' && !tableSizeOk(e.rows, e.columns)) {
+      if (e.type === 'ACAD_TABLE') {
         // 행·열은 파일에서 읽은 수이고 편집·저장이 셀마다 객체를 만든다
+        if (tableSizeOk(e.rows, e.columns) && !overBudget(e.rows * e.columns, Math.max(e.cells?.length ?? 0, tableXData(e)?.items.length ?? 0))) continue;
         bigTables++;
         e.rows = 0;
         e.columns = 0;
         e.rowHeights = [];
         e.columnWidths = [];
         delete e.cells;
+      } else if (e.type === 'INSERT' && e.xdata) {
+        const x = tableXData(e);
+        if (x && overBudget(xdataTableCells(x), x.items.length)) {
+          bigTables++;
+          e.tableTooLarge = true;
+        }
       }
     }
   }

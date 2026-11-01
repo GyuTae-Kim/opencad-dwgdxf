@@ -27,12 +27,15 @@ export const TABLE_EMPTY_CELLS = 1024;
 /** 표 병합의 넓이 합이 칸 수의 이 배수(+ 빈 칸 수)를 넘으면 망가진 표다. 병합은 겹치지 않으므로 정상 표는 1배 안쪽이다 */
 export const TABLE_MERGE_RATIO = 4;
 
+/** DWG 문서 하나에서 표로 푸는 칸 수 합의 상한. 칸 하나가 약 1.1KB의 힙을 쓰므로 힙이 넘치기 전에 멈춘다 */
+export const TABLE_CELLS_MAX = 3_000_000;
+
 /**
  * DWG 문서 하나에서 표로 푸는 칸 수의 합. 셀 하나는 압축된 파일에서 1바이트 안쪽일 수 있어, 표마다 한도 안이어도 표를 늘리면
- * 힙이 넘친다. 실제 셀은 객체 구역에서 수십 바이트를 넘으므로 정상 도면은 닿지 않는다
+ * 힙이 넘친다. 옛 형식(R2007까지)의 셀은 객체 구역에서 약 10바이트이므로 8바이트로 나누면 정상 도면은 상한 안에서 닿지 않는다
  */
 export function tableCellBudget(objectBytes: number): number {
-  return TABLE_CELL_LIMIT + Math.floor(objectBytes / 32);
+  return Math.min(TABLE_CELLS_MAX, TABLE_CELL_LIMIT + Math.floor(objectBytes / 8));
 }
 
 /**

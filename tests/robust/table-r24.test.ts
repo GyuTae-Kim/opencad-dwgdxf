@@ -40,15 +40,16 @@ vi.mock('../../src/core/limits', async (orig) => {
   return { ...mod, tableCellBudget: (n: number) => cfg.budget || mod.tableCellBudget(n) };
 });
 
-import { TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS, TABLE_MERGE_RATIO } from '../../src/core/limits';
-import { MODEL_SPACE, type TableEntity } from '../../src/core/model';
+import { TABLE_CELLS_MAX, TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS, TABLE_MERGE_RATIO, tableCellBudget } from '../../src/core/limits';
+import { MODEL_SPACE, entityDefaults, type TableEntity } from '../../src/core/model';
+import { createNewDocument } from '../../src/core/newdoc';
 import { writeDwg } from '../../src/io/dwg';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { readCadFile } from '../../src/io/index';
 import type { TTableR24 } from '../../src/io/dwg/tablecodec';
 import { r24CellsInFile } from '../../src/io/dwg/tablemodel';
-import { bytesOf, dxfText, table } from './corrupt35';
+import { R2004, bytesOf, dxfText, sectionsOf, table } from './corrupt35';
 
 const T1 = ['0', 'BLOCK', '8', '0', '2', '*T1', '70', '1', '10', '0', '20', '0', '30', '0', '3', '*T1', '0', 'LINE', '8', '0', '10', '0', '20', '0', '30', '0', '11', '5', '21', '0', '31', '0', '0', 'ENDBLK', '8', '0'];
 
@@ -166,6 +167,29 @@ describe('칸을 펼쳐도 되는지', () => {
   it('표 밖의 병합 범위는 표 안 넓이만 센다', () => {
     expect(r24CellsInFile(t(10, 10, 10, [[0, 0, 4000000000, 4000000000]]))).toBe(true);
     expect(r24CellsInFile(t(10, 10, 10, [[50, 50, 60, 60]]))).toBe(true);
+  });
+});
+
+describe('문서 칸 예산의 값', () => {
+  it('객체 구역 8바이트마다 한 칸, 상한 300만', () => {
+    expect(tableCellBudget(0)).toBe(TABLE_CELL_LIMIT);
+    expect(tableCellBudget(8_000_000)).toBe(TABLE_CELL_LIMIT + 1_000_000);
+    expect(tableCellBudget(16_000_000 - 8)).toBe(TABLE_CELLS_MAX - 1);
+    expect(tableCellBudget(16_000_000)).toBe(TABLE_CELLS_MAX);
+    expect(tableCellBudget(4_000_000_000)).toBe(TABLE_CELLS_MAX);
+  });
+
+  it('옛 형식의 짧은 셀이 차지하는 바이트로는 예산에 닿지 않는다', () => {
+    // 문자 한 글자 셀: 표마다 한도 안의 합법 표
+    const doc = createNewDocument('metric');
+    const rows = 60;
+    const cells = Array.from({ length: rows * rows }, () => ({ text: 'a' }));
+    doc.blocks.set('*T1', { name: '*T1', handle: '', recordHandle: '', basePoint: { x: 0, y: 0, z: 0 }, flags: 1, entities: [] } as never);
+    doc.blocks.get(MODEL_SPACE)!.entities.push({ ...entityDefaults(), type: 'ACAD_TABLE', handle: '', block: '*T1', insert: { x: 0, y: 0, z: 0 }, direction: { x: 1, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 }, rotation: 0, rows, columns: rows, rowHeights: Array(rows).fill(5), columnWidths: Array(rows).fill(10), cells } as unknown as TableEntity);
+    const before = sectionsOf(writeDwg(doc, { version: 'AC1018' }).data.slice(), R2004).sec.objects.length;
+    doc.blocks.get(MODEL_SPACE)!.entities.length = 0;
+    const empty = sectionsOf(writeDwg(doc, { version: 'AC1018' }).data.slice(), R2004).sec.objects.length;
+    expect((before - empty) / (rows * rows)).toBeGreaterThanOrEqual(8);
   });
 });
 
