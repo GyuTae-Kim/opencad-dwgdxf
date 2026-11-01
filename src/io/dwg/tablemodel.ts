@@ -110,8 +110,11 @@ export function layoutFromR24(t: TTableR24, styleName: (h: number) => string): T
     }
   }
   for (const [top, left, bottom, right] of c.merges) {
-    for (let r = top; r <= bottom; r++)
-      for (let k = left; k <= right; k++) {
+    // 병합 범위는 파일에서 읽은 32비트 값이다. 표 밖은 돌지 않는다
+    const lastRow = Math.min(bottom, rows - 1);
+    const lastCol = Math.min(right, cols - 1);
+    for (let r = Math.max(0, top); r <= lastRow; r++)
+      for (let k = Math.max(0, left); k <= lastCol; k++) {
         const cell = out.cells[r * cols + k];
         if (!cell) continue;
         if (r === top && k === left) {

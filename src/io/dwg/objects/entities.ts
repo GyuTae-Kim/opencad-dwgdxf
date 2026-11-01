@@ -2036,7 +2036,10 @@ function readTable(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names):
     if (ver < R2004) {
       hr.H(hb);
       hr.H(hb);
-    } else for (let i = 0; i < owned; i++) hr.H(hb);
+    } else {
+      hr.checkCount(owned, 8);
+      for (let i = 0; i < owned; i++) hr.H(hb);
+    }
     hr.H(hb); // SEQEND
   }
   const e: TableEntity = {

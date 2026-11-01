@@ -205,6 +205,8 @@ export class ObjectReader {
     h.owner = hr.H(h.handle);
     const n = h.numReactors;
     if (n < 0 || n > 100000) throw new DwgFormatError('반응자 수가 잘못되었습니다');
+    // 핸들 하나는 1바이트 이상이다. 자료 끝을 넘겨 읽어도 멈추지 않으므로 남은 비트로 먼저 막는다
+    hr.checkCount(n, 8);
     for (let i = 0; i < n; i++) h.reactors.push(hr.H(h.handle));
     if (!h.xdictMissing) h.xdict = hr.H(h.handle);
   }
@@ -286,6 +288,7 @@ export class ObjectReader {
     if (c.entmode === 0) h.owner = hr.H(base);
     const n = h.numReactors;
     if (n < 0 || n > 100000) throw new DwgFormatError('반응자 수가 잘못되었습니다');
+    hr.checkCount(n, 8);
     for (let i = 0; i < n; i++) h.reactors.push(hr.H(base));
     if (!h.xdictMissing) h.xdict = hr.H(base);
     if (ver <= R14) {
@@ -368,6 +371,7 @@ export class ObjectReader {
     const base = this.h.handle;
     if (c.entmode === 0) hr.H(base);
     if (nr < 0 || nr > 100000) throw new DwgFormatError('반응자 수가 잘못되었습니다');
+    hr.checkCount(nr, 8);
     for (let i = 0; i < nr; i++) hr.H(base);
     if (!xdm) hr.H(base);
     if (c.color.hasColorHandle) c.colorHandle = hr.H(base);

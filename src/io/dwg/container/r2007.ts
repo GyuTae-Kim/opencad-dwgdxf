@@ -4,6 +4,7 @@
  * 끼워 짠(interleave) 바이트를 풀어 자료 바이트만 꺼낸다(손상되지 않은 파일이면 그것으로 충분하다).
  */
 import { CadReadError } from '../../../core/errors';
+import { decompressedSizeOk, sectionWorkLimit } from '../../../core/limits';
 import { DwgFormatError } from '../bitstream';
 import { decompressR21 } from '../lz77r21';
 import { type DwgSections, warn } from './types';
@@ -27,6 +28,8 @@ function rsDecode(raw: Uint8Array, start: number, blocks: number, k: number, int
 
 /** 시스템 페이지(페이지 지도·섹션 지도) 읽기 */
 function readSystemPage(data: Uint8Array, offset: number, compSize: number, uncompSize: number, factor: number): Uint8Array {
+  // 지도의 푼 크기는 파일 머리에서 읽은 값이다. 그만큼 잡은 뒤 16바이트씩 훑으므로 먼저 막는다
+  if (!decompressedSizeOk(uncompSize, data.length)) throw new DwgFormatError('R2007 시스템 페이지 크기가 잘못되었습니다');
   const aligned = (compSize + 7) & ~7;
   const pesize = aligned * Math.max(1, factor);
   const blocks = Math.ceil(pesize / 239);
@@ -128,8 +131,10 @@ export function readR2007Container(data: Uint8Array, ver: number): DwgSections {
     const sec = sections.get(name);
     if (!sec) return null;
     if (sec.encrypted === 1) throw new CadReadError('dwg.encrypted', { section: name });
-    if (sec.dataSize > data.length * 32 + 0x100000) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
+    if (!decompressedSizeOk(sec.dataSize, data.length)) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
     const out = new Uint8Array(sec.dataSize);
+    const workLimit = sectionWorkLimit(data.length);
+    let work = 0;
     for (const pg of sec.pages) {
       const info = pages.get(Math.abs(pg.id));
       if (!info) {
@@ -141,6 +146,13 @@ export function readR2007Container(data: Uint8Array, ver: number): DwgSections {
         const blocks = Math.ceil(aligned / 251);
         const start = info.offset + 0x480;
         if (start + blocks * 255 > data.length) throw new DwgFormatError('페이지가 파일 밖에 있습니다');
+        if (!decompressedSizeOk(pg.uncomp, data.length)) throw new DwgFormatError('페이지 크기가 잘못되었습니다');
+        // 섹션 지도가 같은 페이지를 되풀이해 가리켜도 파일 크기에 비례한 일만 한다
+        work += blocks * 255 + pg.uncomp;
+        if (work > workLimit) {
+          warn(warnings, 'dwg.page_repeat', `${name} 섹션이 같은 페이지를 너무 여러 번 가리켜 나머지 페이지를 읽지 않았습니다.`);
+          break;
+        }
         const dec = rsDecode(data, start, blocks, 251, sec.encoding === 4);
         const n = Math.min(pg.uncomp, out.length - pg.offset);
         if (n <= 0) continue;
