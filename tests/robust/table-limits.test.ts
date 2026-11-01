@@ -49,8 +49,13 @@ describe('행 × 열이 한도를 넘는 표', () => {
 
   it('DXF·DWG로 다시 저장해도 터지지 않고 다시 열린다', () => {
     const doc = readDxf(bytesOf(dxfText([table(60000, 60000)], [T1])));
-    const dxf = within2s(() => writeDxf(doc, { version: 'AC1032' }));
-    expect(readCadFile(dxf.data, 'x.dxf').blocks.get(MODEL_SPACE)!.entities.length).toBe(1);
+    for (const version of ['AC1018', 'AC1032'] as const) {
+      const dxf = within2s(() => writeDxf(doc, { version }));
+      const back = readCadFile(dxf.data, 'x.dxf');
+      expect(back.blocks.get(MODEL_SPACE)!.entities.length).toBe(1);
+      const t = back.blocks.get(MODEL_SPACE)!.entities[0] as TableEntity;
+      expect(t.rows * t.columns).toBeLessThanOrEqual(TABLE_CELL_LIMIT);
+    }
     const dwg = within2s(() => writeDwg(doc, { version: 'AC1032' }));
     expect(readCadFile(dwg.data.slice(), 'x.dwg').blocks.get(MODEL_SPACE)!.entities.length).toBe(1);
   });
