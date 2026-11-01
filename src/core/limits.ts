@@ -69,6 +69,24 @@ export const SPLINE_MAX_DEGREE = 25;
 /** 맞춤점 전역 보간은 점 수의 제곱 크기 행렬을 푼다. 이보다 많으면 점을 잇는 꺾은선으로 그린다 */
 export const FIT_INTERPOLATE_LIMIT = 2048;
 
+/** 맞춤점 n개 전역 보간의 일(조각 단위). 로컬에서 잰 시간: 50개 0.13ms, 200개 1.3ms, 1000개 132ms, 2048개 856ms */
+export function fitSolveWork(n: number): number {
+  return Math.floor((n * n) / 8 + (n * n * n) / 2000);
+}
+
+/** 객체 하나에 입히는 선종류 무늬의 최대 반복 수. 넘으면 실선으로 그린다 */
+export const DASH_REPEAT_LIMIT = 20_000;
+/**
+ * 선종류 정의 하나의 요소 수. AutoCAD 선종류 파일(.lin)은 정의 하나에 대시 길이를 12개까지 쓴다.
+ * DXF 73과 DWG에는 범위가 없어 값 자체는 그대로 읽고 저장하고, 그리는 일만 이 값으로 잡는다
+ */
+export const LINETYPE_ELEMENTS = 12;
+/**
+ * 객체 하나에서 무늬 요소를 밟는 수(반복 × 요소). 틈은 조각을 내지 않아 조각 한도가 못 본다.
+ * 형식 안의 선종류는 반복 한도까지 닿아도 넘지 않는 값이고, 넘으면 실선으로 그린다
+ */
+export const DASH_STEP_LIMIT = DASH_REPEAT_LIMIT * LINETYPE_ELEMENTS;
+
 /** 압축을 푼 섹션·페이지 크기는 파일 크기의 이 배수(+ 1 MiB)를 넘지 않는다(R2004·R2007 섹션 크기 검사의 기준) */
 export const DECOMPRESS_RATIO = 32;
 

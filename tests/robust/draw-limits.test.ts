@@ -3,17 +3,21 @@
  * 고치기 전에는 블록 중첩·다중 삽입·먼 해치 무늬가 30초 안에 끝나지 않았고, 짧은 대시 선 2만 개는 12GB를 썼다.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { MINSERT_LIMIT, PEAK_BYTES_BASE, PEAK_BYTES_PER_WORK, SCENE_PIECE_LIMIT, blockWorkLimit, minsertGrid } from '../../src/core/limits';
-import { MODEL_SPACE, type CadDocument, type InsertEntity } from '../../src/core/model';
+import { DASH_STEP_LIMIT, FIT_INTERPOLATE_LIMIT, LINETYPE_ELEMENTS, MINSERT_LIMIT, PEAK_BYTES_BASE, PEAK_BYTES_PER_WORK, SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, fitSolveWork, minsertGrid } from '../../src/core/limits';
+import { MODEL_SPACE, entityDefaults, type CadDocument, type DictionaryObject, type InsertEntity, type SplineEntity } from '../../src/core/model';
 import { countRows } from '../../src/edit/count';
 import { edgeBox } from '../../src/edit/geom/edges';
-import { clampedKnots, interpolateFitPoints, nurbsPoints } from '../../src/geom/curves';
+import { explodeEntity } from '../../src/edit/geom/explode';
+import { normalizeNurbs } from '../../src/edit/geom/nurbs';
+import { splineNurbs } from '../../src/edit/geom/path';
+import { burstInsert } from '../../src/edit/util/blockutil';
+import { type FitWork, clampedKnots, interpolateFitPoints, nurbsPoints } from '../../src/geom/curves';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { type BuildOptions, buildSpace } from '../../src/render/build';
 import { DisplayListBuilder } from '../../src/render/displaylist';
 import { hatchLoopWork, patternSegments } from '../../src/render/hatch';
-import { dashInterval } from '../../src/render/linetype';
+import { type DashPattern, type DashWork, dashInterval, dashPolyline } from '../../src/render/linetype';
 import { TextEngine } from '../../src/text/layout';
 import { BLOCK_B, bytesOf, dashedLine, dxfText, hatch, insertOf, ltypeTable, minsert, nestedBlocks, spline } from './corrupt35';
 import { beforeHang, beforeHangAtDefaultLimit, within2s } from './timed';
@@ -342,7 +346,7 @@ describe('표시 목록 메모리', () => {
     expect(b.peakBytes).toBeLessThanOrEqual(n * (44 + 24) + 50 * MB);
   });
 
-  it('임시 그림을 늘릴 메모리가 없으면 그린 데까지 남기고 경고한다', () => {
+  it('임시 그림을 늘릴 메모리가 없으면 그 객체는 빠지고 경고한다', () => {
     const doc = load([insertOf('N0')], nestedBlocks(5, 10));
     // 200KB를 넘게 늘리지 못한다
     const spy = failTransfer((n) => n > 200000);
@@ -372,6 +376,90 @@ describe('표시 목록 메모리', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('다중 삽입 분해', () => {
+  const REFUSED = '칸이 너무 많은 다중 삽입은 분해하지 않았습니다(원본은 그대로입니다).';
+
+  it('칸 한도를 넘는 다중 삽입은 분해하지 않고 까닭을 알린다', () => {
+    const doc = load([minsert(1100, 1000)], [BLOCK_B]);
+    const r = explodeEntity(doc.entityIndex.get('1A')!, doc);
+    // 고치기 전: 원본을 지우고 110만 칸 가운데 998,744칸만 추가했다
+    expect(r).toEqual({ message: REFUSED });
+    const cmd = burstInsert(doc.entityIndex.get('1A') as InsertEntity, doc);
+    expect(cmd.message).toBe(REFUSED);
+    expect(cmd.remove).toBeUndefined();
+  });
+
+  it('칸 한도 안이면 그대로 분해한다', () => {
+    const doc = load([minsert(4, 5)], [BLOCK_B]);
+    const r = explodeEntity(doc.entityIndex.get('1A')!, doc);
+    expect(r.add?.length).toBe(20);
+    expect(r.remove).toEqual(['1A']);
+  });
+
+  it('도면을 바꾸지 않는 조회는 한도까지 펼친다', () => {
+    const E = ['0', 'BLOCK', '8', '0', '2', 'E', '70', '0', '10', '0', '20', '0', '30', '0', '3', 'E', '0', 'ENDBLK', '8', '0'];
+    const doc = load([minsert(1100, 1000, '1A', 'E')], [E]);
+    expect(explodeEntity(doc.entityIndex.get('1A')!, doc, true).message).not.toBe(REFUSED);
+  });
+});
+
+describe('외부 참조', () => {
+  const XREF = ['0', 'BLOCK', '8', '0', '2', 'X', '70', '4', '10', '0', '20', '0', '30', '0', '3', 'X', '1', 'x.dwg', '0', 'ENDBLK', '8', '0'];
+
+  it('내용 없는 외부 참조의 다중 삽입도 칸마다 한도를 본다', () => {
+    const doc = load([0, 1, 2].map((i) => minsert(1000, 1000, (0x100 + i).toString(16), 'X')), [XREF]);
+    const limit = 100_000;
+    const s = scene(doc, { blockWorkLimit: limit });
+    expect(codes(s)).toContain('block.expansion_limit');
+    expect(s.stats.blockWork).toBeLessThanOrEqual(limit + 6);
+    // 인스턴스 하나가 약 220바이트라 조각 3개 몫으로 센다
+    expect(s.list.xrefs!.length).toBeGreaterThanOrEqual(Math.floor(limit / 3) - 1);
+    expect(s.list.xrefs!.length).toBeLessThanOrEqual(Math.ceil(limit / 3));
+  });
+
+  it('한도 안이면 인스턴스를 모두 남긴다', () => {
+    const doc = load([minsert(10, 10, '1A', 'X')], [XREF]);
+    // 마지막 칸을 시작할 때의 일: 칸 100 + 앞 칸 99개 × 2
+    const s = scene(doc, { blockWorkLimit: 298 });
+    expect(codes(s)).not.toContain('block.expansion_limit');
+    expect(s.list.xrefs!.length).toBe(100);
+    expect(s.stats.blockWork).toBe(300);
+    const cut = scene(doc, { blockWorkLimit: 297 });
+    expect(codes(cut)).toContain('block.expansion_limit');
+    expect(cut.list.xrefs!.length).toBe(99);
+  });
+
+  it('앞선 최상위 객체의 조각은 블록 일이 아니다', () => {
+    const p = ['0', 'LWPOLYLINE', '5', '1F', '8', '0', '100', 'AcDbEntity', '100', 'AcDbPolyline', '90', '5000', '70', '0'];
+    for (let k = 0; k < 5000; k++) p.push('10', String(k), '20', String(k % 2));
+    const s = scene(load([p, minsert(10, 10)], [BLOCK_B]), { blockWorkLimit: 1000 });
+    expect(codes(s)).not.toContain('block.expansion_limit');
+    expect(segs(s)).toBe(4999 + 100);
+  });
+});
+
+describe('자르기 사전', () => {
+  it('사전 항목을 칸마다 훑지 않는다', () => {
+    const objs: string[] = ['0', 'SECTION', '2', 'OBJECTS', '0', 'DICTIONARY', '5', 'C', '100', 'AcDbDictionary', '0', 'DICTIONARY', '5', 'D1', '100', 'AcDbDictionary'];
+    for (let i = 0; i < 50; i++) objs.push('3', `K${i}`, '350', 'D2');
+    objs.push('0', 'ENDSEC');
+    const ins = ['0', 'INSERT', '5', '1A', '102', '{ACAD_XDICTIONARY', '360', 'D1', '102', '}', '100', 'AcDbEntity', '8', '0', '100', 'AcDbMInsertBlock', '2', 'B', '10', '0', '20', '0', '30', '0', '70', '30', '71', '30', '44', '2', '45', '2'];
+    const other = ['0', 'INSERT', '5', '1B', '102', '{ACAD_XDICTIONARY', '360', 'D1', '102', '}', '8', '0', '2', 'B', '10', '0', '20', '0', '30', '0'];
+    const doc = readDxf(bytesOf(dxfText([ins, other], [BLOCK_B]).replace('0\nEOF', [...objs, '0', 'EOF'].join('\n'))));
+    const d = doc.objects.get('D1') as DictionaryObject;
+    let scans = 0;
+    const iterate = d.entries[Symbol.iterator].bind(d.entries);
+    d.entries[Symbol.iterator] = () => {
+      scans++;
+      return iterate();
+    };
+    const s = scene(doc);
+    expect(segs(s)).toBe(901);
+    // 칸 901개를 지나도 사전 하나를 한 번만 찾는다(다른 쓰임 두 번 포함)
+    expect(scans).toBeLessThanOrEqual(3);
   });
 });
 
@@ -409,6 +497,109 @@ describe('해치 무늬', () => {
     expect(got).toEqual([[1e17, 1e17 + 64]]);
     const scene1 = within2s(() => scene(load([hatch({ size: 100, x: 1e17, spacing: 10, dashes: [1, -1] })])));
     expect(codes(scene1)).not.toContain('entity.failed');
+  });
+
+  it('요소가 아주 많은 무늬는 틈을 밟으며 돌지 않고 실선으로 낮춘다', () => {
+    // 대시 하나 + 틈 1만 개, 주기 30만 번: 고치기 전에는 30억 번 돌았다
+    const D = 10_000;
+    const period = D + 1;
+    const size = period * 300_000;
+    const line = { angle: 0, base: { x: 0, y: 5 }, offset: { x: 0, y: 1e12 }, dashes: [1, ...Array.from({ length: D }, () => -1)] };
+    const work: DashWork = { n: 0 };
+    const out = patternSegments([line], [[0, 0, size, 0, size, 10, 0, 10]], 200_000, work)!;
+    expect(out.length / 4).toBe(1);
+    expect(work.limited).toBe(true);
+  });
+
+  it('장면에서는 실선으로 낮춘 것을 알린다', () => {
+    const s = scene(load([hatch({ size: 30_000_000, spacing: 1e9, dashes: [1, ...Array.from({ length: 10_000 }, () => -1)] })]));
+    expect(codes(s)).toContain('linetype.dash_limited');
+  });
+
+  it('요소를 밟는 예산은 형식 안의 무늬가 조각 한도에 닿기 전에 걸리지 않는다', () => {
+    // 선 하나가 무늬 요소 12개를 주기마다 밟는다. 예산은 한도 × 8 × 12이고 조각 한도(한도 × 8) 안쪽 구간은 무늬 그대로다
+    const dashes = [1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1];
+    const line = { angle: 0, base: { x: 0, y: 5 }, offset: { x: 0, y: 1e12 }, dashes };
+    const size = 12 * 30;
+    const work: DashWork = { n: 0 };
+    const out = patternSegments([line], [[0, 0, size, 0, size, 10, 0, 10]], 30, work)!;
+    expect(out.length / 4).toBe(6 * 30);
+    expect(work.limited).toBeUndefined();
+  });
+
+  it('틈을 밟는 일을 블록 일에 센다', () => {
+    const line = { angle: 0, base: { x: 0, y: 5 }, offset: { x: 0, y: 1e12 }, dashes: [1, -1, -1, -1, -1, -1, -1, -1] };
+    const work: DashWork = { n: 0 };
+    patternSegments([line], [[0, 0, 8000, 0, 8000, 10, 0, 10]], 200_000, work);
+    // 주기 1000번 × 요소 8개 / 8
+    expect(work.n).toBeGreaterThanOrEqual(1000);
+  });
+});
+
+describe('선종류 무늬', () => {
+  /** 대시·틈 쌍 pairs개 선종류 D와 그 선종류의 선 하나 */
+  const ltype = (pairs: number): string[] => {
+    const out = ['0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'D', '70', '0', '3', 'd', '72', '65', '73', String(pairs * 2), '40', String(pairs * 2)];
+    for (let i = 0; i < pairs; i++) out.push('49', '1', '74', '0', '49', '-1', '74', '0');
+    out.push('0', 'ENDTAB', '0', 'ENDSEC');
+    return out;
+  };
+  const longLine = (len: number): string[] => ['0', 'LINE', '8', '0', '6', 'D', '10', '0', '20', '0', '30', '0', '11', String(len), '21', '0', '31', '0'];
+  const pat = (pairs: number): DashPattern => ({ dashes: Array.from({ length: pairs * 2 }, (_, i) => (i % 2 ? -1 : 1)), period: pairs * 2 });
+
+  it('요소가 많은 선종류는 조각 한도를 지나가지 않고 실선으로 낮춘다', () => {
+    const doc = load([longLine(1000 * 19999)], [], ltype(500));
+    const s = scene(doc, { scenePieceLimit: 1000 });
+    expect(segs(s)).toBe(1);
+    expect(codes(s)).toContain('linetype.dash_limited');
+  });
+
+  it('요소를 밟는 수가 예산과 같으면 무늬를 입히고 하나 넘으면 실선이다', () => {
+    const pairs = 12;
+    const repeats = DASH_STEP_LIMIT / (pairs * 2);
+    const count = (len: number) => {
+      let n = 0;
+      const work: DashWork = { n: 0 };
+      dashPolyline([0, 0, len, 0], false, pat(pairs), () => n++, undefined, work);
+      return { n, work };
+    };
+    const at = count(repeats * pairs * 2);
+    expect(at.n).toBe(repeats * pairs);
+    expect(at.work.limited).toBeUndefined();
+    const over = count(repeats * pairs * 2 + 1);
+    expect(over.n).toBe(1);
+    expect(over.work.limited).toBe(true);
+  });
+
+  it('형식 안의 선종류는 반복 한도까지 무늬 그대로다', () => {
+    let n = 0;
+    const work: DashWork = { n: 0 };
+    expect(LINETYPE_ELEMENTS).toBe(12);
+    dashPolyline([0, 0, 20_000 * 12, 0], false, pat(6), () => n++, undefined, work);
+    expect(n).toBe(20_000 * 6);
+    expect(work.limited).toBeUndefined();
+    // 반복 한도를 넘는 것은 보통 도면에도 있는 일이라 경고하지 않는다
+    const w2: DashWork = { n: 0 };
+    dashPolyline([0, 0, 20_001 * 2, 0], false, pat(1), () => n++, undefined, w2);
+    expect(w2.limited).toBeUndefined();
+  });
+
+  it('틈만 밟는 일을 블록 일에 센다', () => {
+    let n = 0;
+    const work: DashWork = { n: 0 };
+    dashPolyline([0, 0, 8000, 0], false, { dashes: [1, -1, -1, -1, -1, -1, -1, -1], period: 8 }, () => n++, undefined, work);
+    expect(n).toBe(1000);
+    // 주기 1000번 × 요소 8개 / 8
+    expect(work.n).toBe(1000);
+    // 블록 안: 주기 100번 × 요소 16개 / 8과 요소 16개 / 8이 조각 100개보다 많다
+    const gaps = ['0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'D', '70', '0', '3', 'd', '72', '65', '73', '16', '40', '16', '49', '1', '74', '0'];
+    for (let i = 0; i < 15; i++) gaps.push('49', '-1', '74', '0');
+    gaps.push('0', 'ENDTAB', '0', 'ENDSEC');
+    const blk = ['0', 'BLOCK', '8', '0', '2', 'L', '70', '0', '10', '0', '20', '0', '30', '0', '3', 'L', ...longLine(1600), '0', 'ENDBLK', '8', '0'];
+    const s = scene(load([insertOf('L')], [blk], gaps));
+    expect(segs(s)).toBe(100);
+    // 칸 1 + 객체 방문 1 + 일 202
+    expect(s.stats.blockWork).toBe(2 + 202);
   });
 });
 
@@ -448,6 +639,18 @@ describe('스플라인', () => {
     expect(nurbsPoints(40, [], ctrl, undefined, 1)).toEqual(nurbsPoints(25, [], ctrl, undefined, 1));
   });
 
+  it('편집 경로의 곡선도 차수 25로 계산한다', () => {
+    const doc = load([spline(200, 1600)]);
+    expect(splineNurbs(doc.blocks.get(MODEL_SPACE)!.entities[0] as SplineEntity)!.degree).toBe(SPLINE_MAX_DEGREE);
+    const ctrl = Array.from({ length: 60 }, (_, i) => ({ x: i, y: (i * 7) % 5, z: 0 }));
+    const n = normalizeNurbs({ degree: 200, knots: [], ctrl });
+    expect(n.degree).toBe(SPLINE_MAX_DEGREE);
+    expect(n.knots.length).toBe(60 + SPLINE_MAX_DEGREE + 1);
+    // 그리기와 같은 곡선이다
+    expect(normalizeNurbs({ degree: 25, knots: [], ctrl })).toEqual(n);
+    expect(normalizeNurbs({ degree: 7, knots: [], ctrl }).degree).toBe(7);
+  });
+
   it('차수 25까지는 파일의 매듭 그대로다', () => {
     const ctrl = Array.from({ length: 30 }, (_, i) => ({ x: i, y: (i * 7) % 5, z: 0 }));
     const knots = clampedKnots(30, 25).map((k) => k * 2);
@@ -472,5 +675,75 @@ describe('스플라인', () => {
     const leader = ['0', 'LEADER', '5', '8A', '100', 'AcDbEntity', '8', '0', '100', 'AcDbLeader', '3', 'Standard', '71', '1', '72', '1', '73', '3', '76', '6000', ...v];
     const s = within2s(() => scene(load([leader])));
     expect(segs(s)).toBeGreaterThanOrEqual(5999);
+    expect(codes(s)).toContain('spline.fit_limited');
+  });
+
+  it('조정점 수로 실제 차수가 25 안쪽이면 경고하지 않는다', () => {
+    // 차수 30 + 조정점 10개 = 실제 차수 9
+    expect(codes(scene(load([spline(30, 10)])))).not.toContain('spline.degree_limited');
+    expect(codes(scene(load([spline(26, 26)])))).not.toContain('spline.degree_limited');
+    expect(codes(scene(load([spline(26, 27)])))).toContain('spline.degree_limited');
+  });
+
+  describe('맞춤점 보간의 일', () => {
+    const n = 500;
+    const points = (): string[] => {
+      const v: string[] = [];
+      for (let i = 0; i < n; i++) v.push('10', String(i), '20', String((i * 7) % 5), '30', '0');
+      return v;
+    };
+    const nest = (leaf: string[]) => {
+      const blk = (name: string, body: string[]) => ['0', 'BLOCK', '8', '0', '2', name, '70', '0', '10', '0', '20', '0', '30', '0', '3', name, ...body, '0', 'ENDBLK', '8', '0'];
+      const body: string[] = [];
+      for (let k = 0; k < 3; k++) body.push('0', 'INSERT', '8', '0', '2', 'L', '10', String(k), '20', '0', '30', '0');
+      // 해치 스플라인의 맞춤점은 AC1024부터 읽는다
+      return readDxf(bytesOf(dxfText([insertOf('M')], [blk('M', body), blk('L', leaf)]).replace('AC1018', 'AC1024')));
+    };
+    const OFF = { blockWorkLimit: 1e12, scenePieceLimit: 1e12 };
+    const fitSpline = (flags: number, fit: string[]): string[] => {
+      const pts: string[] = [];
+      for (let i = 0; i < fit.length; i += 6) pts.push('11', fit[i + 1]!, '21', fit[i + 3]!, '31', '0');
+      return ['0', 'SPLINE', '8', '0', '100', 'AcDbEntity', '100', 'AcDbSpline', '70', String(flags), '71', '3', '72', '0', '73', '0', '74', String(fit.length / 6), ...pts];
+    };
+
+    it('블록 안 스플라인 지시선', () => {
+      const leader = ['0', 'LEADER', '8', '0', '100', 'AcDbEntity', '100', 'AcDbLeader', '3', 'Standard', '71', '1', '72', '1', '73', '3', '76', String(n), ...points()];
+      expect(scene(nest(leader), OFF).stats.blockWork).toBeGreaterThanOrEqual(3 * fitSolveWork(n));
+    });
+
+    it('블록 안 닫힌 맞춤점 스플라인', () => {
+      expect(scene(nest(fitSpline(1 | 8, points())), OFF).stats.blockWork).toBeGreaterThanOrEqual(3 * fitSolveWork(n));
+    });
+
+    it('블록 안 스플라인 다중 지시선', () => {
+      const doc = nest(['0', 'POINT', '8', '0', '10', '0', '20', '0', '30', '0']);
+      const vertices = Array.from({ length: n }, (_, i) => ({ x: i, y: (i * 7) % 5, z: 0 }));
+      const m = { ...entityDefaults(), type: 'MULTILEADER', handle: '', leaderLineColor: { aci: 0 }, leaderLineType: 2, arrowSize: 1, dogleg: false, doglegLength: 0, context: { arrowSize: 1, leaders: [{ lines: [{ vertices }] }] } };
+      doc.blocks.get('L')!.entities.push(m as never);
+      expect(scene(doc, OFF).stats.blockWork).toBeGreaterThanOrEqual(3 * fitSolveWork(n));
+    });
+
+    it('겹친 점이 있어 전역 보간으로 가는 열린 스플라인', () => {
+      const v = points();
+      v.splice(6, 6, v[0]!, v[1]!, v[2]!, v[3]!, v[4]!, v[5]!);
+      expect(scene(nest(fitSpline(8, v)), OFF).stats.blockWork).toBeGreaterThanOrEqual(3 * fitSolveWork(n));
+    });
+
+    it('블록 안 해치 경계 스플라인', () => {
+      const fitPts: string[] = [];
+      for (let i = 0; i < n; i++) fitPts.push('11', String(i), '21', String((i * 7) % 5));
+      const h = ['0', 'HATCH', '8', '0', '100', 'AcDbEntity', '100', 'AcDbHatch', '10', '0', '20', '0', '30', '0', '2', 'SOLID', '70', '1', '71', '0', '91', '1', '92', '1', '93', '1', '72', '4', '94', '3', '73', '0', '74', '0', '95', '0', '96', '0', '97', String(n), ...fitPts, '97', '0', '75', '0', '76', '1', '98', '0'];
+      expect(scene(nest(h), OFF).stats.blockWork).toBeGreaterThanOrEqual(3 * fitSolveWork(n));
+    });
+
+    it('한도까지 곡선으로 풀고 넘으면 꺾은선으로 두고 경고한다', () => {
+      const fit = (k: number) => Array.from({ length: k }, (_, i) => ({ x: i, y: (i * 7) % 5, z: 0 }));
+      const at: FitWork = { n: 0 };
+      expect(interpolateFitPoints(fit(FIT_INTERPOLATE_LIMIT), undefined, undefined, at).degree).toBe(3);
+      expect(at).toEqual({ n: fitSolveWork(FIT_INTERPOLATE_LIMIT) });
+      const over: FitWork = { n: 0 };
+      expect(interpolateFitPoints(fit(FIT_INTERPOLATE_LIMIT + 1), undefined, undefined, over).degree).toBe(1);
+      expect(over).toEqual({ n: 0, limited: true });
+    });
   });
 });

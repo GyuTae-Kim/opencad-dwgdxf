@@ -2,7 +2,7 @@
  * 곡선을 꺾은선으로 나눈다. 결과는 [x0, y0, x1, y1, …] 숫자 배열(로컬 좌표)이다.
  * tol은 현(chord)과 곡선 사이 최대 거리다.
  */
-import { FIT_INTERPOLATE_LIMIT, SPLINE_MAX_DEGREE } from '../core/limits';
+import { FIT_INTERPOLATE_LIMIT, SPLINE_MAX_DEGREE, fitSolveWork } from '../core/limits';
 import type { Vec2, Vec3 } from '../core/model';
 import { unpack3 } from '../core/flat3';
 
@@ -290,17 +290,27 @@ export function nurbsPoints(degree: number, knots: readonly number[], ctrl: read
   return out;
 }
 
+/** 맞춤점 보간에 든 일(core/limits.ts의 조각 단위)과, 점이 너무 많아 꺾은선으로 둔 곡선이 있는지. 그리는 쪽이 한도에 더한다 */
+export interface FitWork {
+  n: number;
+  limited?: boolean;
+}
+
 /**
  * 맞춤점을 지나는 3차 B 스플라인의 조정점(전역 보간, 현 길이 매개변수).
  * 끝 접선이 주어지면 그 방향으로 맞춘다.
  */
-export function interpolateFitPoints(fit: readonly Vec3[], startTangent?: Vec3, endTangent?: Vec3): { ctrl: Vec3[]; knots: number[]; degree: number } {
+export function interpolateFitPoints(fit: readonly Vec3[], startTangent?: Vec3, endTangent?: Vec3, work?: FitWork): { ctrl: Vec3[]; knots: number[]; degree: number } {
   const n = fit.length;
   if (n < 2) return { ctrl: [...fit], knots: [0, 0, 1, 1], degree: 1 };
   if (n === 2 && !startTangent && !endTangent) return { ctrl: [...fit], knots: [0, 0, 1, 1], degree: 1 };
   // 아래 전역 보간은 점 수의 제곱 크기 행렬을 푼다. 점이 아주 많으면 그 점을 잇는 꺾은선으로 충분하다
-  if (n > FIT_INTERPOLATE_LIMIT) return { ctrl: [...fit], knots: clampedKnots(n, 1), degree: 1 };
-  const p = Math.min(3, n - 1 + (startTangent ? 1 : 0) + (endTangent ? 1 : 0));
+  if (n > FIT_INTERPOLATE_LIMIT) {
+    if (work) work.limited = true;
+    return { ctrl: [...fit], knots: clampedKnots(n, 1), degree: 1 };
+  }
+  if (work) work.n += fitSolveWork(n);
+  const p =Math.min(3, n - 1 + (startTangent ? 1 : 0) + (endTangent ? 1 : 0));
   // 현 길이 매개변수
   const d: number[] = [0];
   let total = 0;
@@ -461,13 +471,13 @@ export function knotParamOfFlags(flags: number): number {
  * 조정점이 없는 맞춤점 스플라인의 곡선. 열린 곡선(맞춤 공차 0)은 AutoCAD가 맞춤점 자료에서 만드는 곡선(fitSplineAcad, 70의 매듭 매개변수 비트),
  * 닫힌 곡선·근사 공차는 전역 보간(AutoCAD의 계산을 모른다).
  */
-export function fitPointsCurve(e: { fitVerts: readonly number[]; flags: number; startTangent?: Vec3; endTangent?: Vec3; fitTolerance?: number }): { ctrl: Vec3[]; knots: number[]; degree: number } {
+export function fitPointsCurve(e: { fitVerts: readonly number[]; flags: number; startTangent?: Vec3; endTangent?: Vec3; fitTolerance?: number }, work?: FitWork): { ctrl: Vec3[]; knots: number[]; degree: number } {
   const fit = unpack3(e.fitVerts);
   if (!(e.flags & 1) && !((e.fitTolerance ?? 0) > 1e-9)) {
     const s = fitSplineAcad(fit, knotParamOfFlags(e.flags), e.startTangent, e.endTangent);
     if (s) return s;
   }
-  return interpolateFitPoints(fit, e.startTangent, e.endTangent);
+  return interpolateFitPoints(fit, e.startTangent, e.endTangent, work);
 }
 
 /**

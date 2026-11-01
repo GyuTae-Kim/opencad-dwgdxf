@@ -208,6 +208,10 @@ export function warningText(code: string): string {
       return '그릴 조각이 너무 많아 남은 해치는 경계만, 남은 선은 실선으로 그렸습니다.';
     case 'spline.degree_limited':
       return '차수가 너무 큰 스플라인은 차수 25로 계산해 그렸습니다.';
+    case 'spline.fit_limited':
+      return '맞춤점이 너무 많은 곡선은 점을 잇는 꺾은선으로 그렸습니다.';
+    case 'linetype.dash_limited':
+      return '무늬 요소가 너무 많은 선종류와 해치 무늬는 실선으로 그렸습니다.';
     case 'xref.not_loaded':
       return '외부 참조 파일은 열지 않았습니다.';
     case 'hatch.pattern_truncated':

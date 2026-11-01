@@ -3,13 +3,14 @@
  * 좌표는 해치 OCS(2D)다. 호출한 쪽이 월드로 옮긴다.
  */
 import earcut from 'earcut';
+import { LINETYPE_ELEMENTS } from '../core/limits';
 import type { HatchEntity, HatchPath, HatchPatternLine } from '../core/model';
-import { arcPoints, bulgeFlatPoints, ccwSweep, ellipsePoints, interpolateFitPoints, nurbsPoints } from '../geom/curves';
-import { dashInterval } from './linetype';
+import { type FitWork, arcPoints, bulgeFlatPoints, ccwSweep, ellipsePoints, interpolateFitPoints, nurbsPoints } from '../geom/curves';
+import { type DashWork, dashInterval } from './linetype';
 import { hatchEdges } from '../core/hatchedges';
 
-/** 경로 하나 → 닫힌 고리 [x, y, …] */
-export function pathLoop(p: HatchPath, tol: number): number[] {
+/** 경로 하나 → 닫힌 고리 [x, y, …]. fit이 있으면 맞춤점 보간의 일을 더한다 */
+export function pathLoop(p: HatchPath, tol: number, fit?: FitWork): number[] {
   if (p.polyline) return bulgeFlatPoints(p.polyline.verts, true, tol);
   const out: number[] = [];
   const push = (x: number, y: number) => {
@@ -51,6 +52,7 @@ export function pathLoop(p: HatchPath, tol: number): number[] {
             e.fitPoints.map((q) => ({ x: q.x, y: q.y, z: 0 })),
             e.startTangent ? { x: e.startTangent.x, y: e.startTangent.y, z: 0 } : undefined,
             e.endTangent ? { x: e.endTangent.x, y: e.endTangent.y, z: 0 } : undefined,
+            fit,
           );
           ctrl = s.ctrl;
           knots = s.knots;
@@ -92,8 +94,8 @@ function pointInRing(x: number, y: number, c: readonly number[]): boolean {
 }
 
 /** 해치 스타일에 따라 쓸 고리를 고른다(2 = 가장 바깥만). */
-export function hatchLoops(h: HatchEntity, tol: number): number[][] {
-  let loops = h.paths.map((p) => ({ p, ring: pathLoop(p, tol) })).filter((l) => l.ring.length >= 6);
+export function hatchLoops(h: HatchEntity, tol: number, fit?: FitWork): number[][] {
+  let loops = h.paths.map((p) => ({ p, ring: pathLoop(p, tol, fit) })).filter((l) => l.ring.length >= 6);
   if (h.hatchStyle === 2) {
     const outer = loops.filter((l) => l.p.flags & 1 || l.p.flags & 16);
     if (outer.length) loops = outer;
@@ -189,9 +191,12 @@ export function clipLoopsToRect(loops: number[][], r: readonly [number, number, 
  * 변마다 지나는 선 번호(k) 범위를 미리 구해 k 순으로 쓸어 가며 그 선에 걸칠 수 있는 변만 본다(교차 판정·순서는 그대로).
  * work가 있으면 들인 일을 더한다(무늬가 조각을 내지 않아도 시간이 드는 것을 블록 펼침 한도가 센다).
  */
-export function patternSegments(lines: readonly HatchPatternLine[], loops: number[][], limit = HATCH_LINE_LIMIT, work?: { n: number }): number[] | null {
+export function patternSegments(lines: readonly HatchPatternLine[], loops: number[][], limit = HATCH_LINE_LIMIT, work?: DashWork): number[] | null {
   const out: number[] = [];
   if (!loops.length) return out;
+  // 조각 한도(선 하나당 8)까지 형식 안의 무늬(요소 12개)가 밟는 수
+  const stepLimit = limit * 8 * LINETYPE_ELEMENTS;
+  let steps = 0;
   // 경계 상자
   let minX = Infinity;
   let minY = Infinity;
@@ -308,10 +313,22 @@ export function patternSegments(lines: readonly HatchPatternLine[], loops: numbe
         if (t1 - t0 < 1e-12) continue;
         // 한도는 구간 뒤에 보므로 대시가 아주 짧으면 구간 하나가 수십억 조각을 만든다. 펼치기 전에 세어 같은 결과(null)를 돌려준다
         if (dashes.length && period > 0 && (t1 - t0) / period - 2 > (limit * 8 - count) / Math.max(1, onDashes)) return null;
-        dashInterval(t0, t1, dashes, period, (a, b) => {
-          out.push(ox + ux * a, oy + uy * a, ox + ux * b, oy + uy * b);
-          count++;
-        });
+        // 틈은 조각을 내지 않아 위의 조각 수가 못 본다. 요소를 밟는 수가 예산을 넘으면 이 구간은 실선으로
+        const intervalSteps = dashes.length && period > 0 ? ((t1 - t0) / period + 2) * dashes.length : 0;
+        steps += intervalSteps;
+        if (steps > stepLimit) {
+          if (work) work.limited = true;
+          dashInterval(t0, t1, [], 0, (a, b) => {
+            out.push(ox + ux * a, oy + uy * a, ox + ux * b, oy + uy * b);
+            count++;
+          });
+        } else {
+          if (work) work.n += Math.floor(intervalSteps / 8);
+          dashInterval(t0, t1, dashes, period, (a, b) => {
+            out.push(ox + ux * a, oy + uy * a, ox + ux * b, oy + uy * b);
+            count++;
+          });
+        }
         if (count > limit * 8) return null;
       }
     }

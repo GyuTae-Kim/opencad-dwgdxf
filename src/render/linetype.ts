@@ -2,6 +2,8 @@
  * 선종류 무늬를 꺾은선에 입힌다(월드 좌표).
  * 무늬 길이: 양수 = 선, 음수 = 틈, 0 = 점. 길이는 이미 축척을 곱한 값이다.
  */
+import { DASH_REPEAT_LIMIT, DASH_STEP_LIMIT } from '../core/limits';
+
 export interface DashPattern {
   dashes: number[];
   period: number;
@@ -11,14 +13,18 @@ export interface DashPattern {
 
 export type SegmentSink = (x0: number, y0: number, x1: number, y1: number) => void;
 
-/** 한 객체에 그릴 수 있는 최대 무늬 반복 수. 넘으면 실선으로 그린다. */
-const MAX_REPEATS = 20000;
+/** 무늬를 입히며 든 일(조각 단위)과, 요소가 너무 많아 실선으로 낮췄는지 */
+export interface DashWork {
+  n: number;
+  limited?: boolean;
+}
 
 /**
  * pts를 따라 무늬를 그린다. 전체 길이가 무늬 한 주기보다 짧으면 실선(AutoCAD와 같다).
+ * 반복이 한도를 넘거나 요소를 밟는 수가 한도를 넘어도 실선으로 그린다.
  * 반환: 실선으로 그렸으면 false
  */
-export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashPattern, sink: SegmentSink, textSink?: (x: number, y: number, angle: number, t: NonNullable<DashPattern['texts']>[number]) => void): boolean {
+export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashPattern, sink: SegmentSink, textSink?: (x: number, y: number, angle: number, t: NonNullable<DashPattern['texts']>[number]) => void, work?: DashWork): boolean {
   const n = pts.length >> 1;
   if (n < 2) return false;
   let total = 0;
@@ -27,13 +33,19 @@ export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashP
     const j = (i + 1) % n;
     total += Math.hypot(pts[j * 2]! - pts[i * 2]!, pts[j * 2 + 1]! - pts[i * 2 + 1]!);
   }
-  if (!(pat.period > 0) || total < pat.period || total / pat.period > MAX_REPEATS) {
+  const repeats = total / pat.period;
+  const steps = Math.ceil(repeats) * pat.dashes.length;
+  const tooMany = repeats <= DASH_REPEAT_LIMIT && steps > DASH_STEP_LIMIT;
+  if (!(pat.period > 0) || total < pat.period || repeats > DASH_REPEAT_LIMIT || tooMany) {
     for (let i = 0; i < segCount; i++) {
       const j = (i + 1) % n;
       sink(pts[i * 2]!, pts[i * 2 + 1]!, pts[j * 2]!, pts[j * 2 + 1]!);
     }
+    if (tooMany && work) work.limited = true;
     return false;
   }
+  // 틈은 조각을 내지 않으므로 요소를 밟는 일을 따로 센다
+  if (work) work.n += steps >> 3;
   const dashes = pat.dashes;
   let di = 0;
   let remain = Math.abs(dashes[0]!);

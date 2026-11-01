@@ -753,7 +753,8 @@ export class DisplayListBuilder {
   /** 외부 참조 인스턴스. 범위는 참조 쪽 범위를 모르므로 삽입점만 넣는다 */
   xref(key: string, m: XrefDraw['m'], style: number, clip?: { poly: number[]; inverted: boolean }): void {
     const d: XrefDraw = { key, handle: '', m, style, clip: clip?.poly, clipInverted: clip?.inverted };
-    this.idle++;
+    // 인스턴스 하나가 객체와 행렬로 약 220바이트를 끝까지 잡는다(core/limits.ts PEAK_BYTES_PER_WORK. 칸 방문 1과 합쳐 조각 3개 몫)
+    this.idle += 2;
     this.xrefs.push(d);
     this.pendingXrefs.push(d);
     this.grow(m[4], m[5]);
