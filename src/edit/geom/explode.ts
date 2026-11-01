@@ -45,11 +45,15 @@ import { explodeArcText } from '../textools/arctext';
 import { meshFaces, meshVertices } from '../../core/meshdata';
 import { leaderVertices } from '../../core/flat3';
 
-export function explodeEntity(e: Entity, doc: CadDocument): EditResult {
+/**
+ * 객체를 한 단계 분해한다. partial은 도면을 바꾸지 않는 조회(범위, 모서리)용으로, 다중 삽입이 칸 한도를 넘어도 한도까지 펼친다.
+ * 편집은 잘린 칸을 잃으므로 거부하고 원본을 남긴다.
+ */
+export function explodeEntity(e: Entity, doc: CadDocument, partial = false): EditResult {
   const done = (add: Entity[], extra: Partial<EditResult> = {}): EditResult => (add.length ? { remove: e.handle ? [e.handle] : [], add, ...extra } : { message: MSG.cannotExplode });
   switch (e.type) {
     case 'INSERT':
-      return explodeInsert(e, doc);
+      return explodeInsert(e, doc, partial);
     case 'LWPOLYLINE':
       return done(explodeBulges(e, lwVerts(e), e.closed, e.elevation));
     case 'POLYLINE':
@@ -184,7 +188,7 @@ function line3(src: Entity, a: Vec3, b: Vec3): Entity {
 // 블록 참조
 // ---------------------------------------------------------------------------
 
-function explodeInsert(e: InsertEntity, doc: CadDocument): EditResult {
+function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean): EditResult {
   const b = doc.blocks.get(tableKey(e.block));
   if (!b) return { message: '블록 정의를 찾을 수 없습니다.' };
   if (b.flags & 4) return { message: '외부 참조는 분해할 수 없습니다.' };
@@ -194,7 +198,8 @@ function explodeInsert(e: InsertEntity, doc: CadDocument): EditResult {
   const sx = e.scale.x || 1;
   const sy = e.scale.y || 1;
   const sz = e.scale.z || 1;
-  const { rows, cols } = minsertGrid(e);
+  const { rows, cols, cut } = minsertGrid(e);
+  if (cut && !partial) return { message: '칸이 너무 많은 다중 삽입은 분해하지 않았습니다(원본은 그대로입니다).' };
   // 동적 블록 표현(*U)에서 가시성 상태로 숨은(60) 객체는 분해 결과에 넣지 않는다(AutoCAD와 같다)
   const dynRep = /^\*U/i.test(e.block);
   const content = b.entities.filter((c) => !(c.type === 'ATTDEF' && !((c as AttribEntity).attFlags & 2)) && !(dynRep && c.invisible));

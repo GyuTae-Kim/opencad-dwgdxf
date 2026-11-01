@@ -189,7 +189,7 @@ export function entityBounds(e: Entity, doc: CadDocument, depth = 0): Box | null
     case 'TOLERANCE':
     case 'MLINE': {
       if (depth > 8) break;
-      const r = explodeEntity(e, doc);
+      const r = explodeEntity(e, doc, true);
       if (r.add?.length) union(r.add);
       else if (e.type === 'DIMENSION') for (const p of [e.defPoint, e.defPoint2, e.defPoint3, e.defPoint4, e.textMid]) growBox(b, p.x, p.y);
       else if (e.type === 'INSERT') growQ(b, insertionPoint(e)!);

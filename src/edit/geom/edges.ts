@@ -34,7 +34,7 @@ export function edgePieces(e: Entity, doc?: CadDocument, depth = 0): Piece[] {
     case 'ACAD_TABLE':
     case 'MULTILEADER': {
       if (!doc || depth > 4) return [];
-      const r = explodeEntity(e, doc);
+      const r = explodeEntity(e, doc, true);
       const out: Piece[] = [];
       for (const c of r.add ?? []) if (c.type !== 'TEXT' && c.type !== 'MTEXT' && c.type !== 'ATTDEF' && c.type !== 'POINT') out.push(...edgePieces(c, doc, depth + 1));
       return out;
