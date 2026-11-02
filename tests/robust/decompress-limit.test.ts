@@ -154,6 +154,9 @@ function atLimit(build: (sizes: number[]) => Uint8Array, sizes: (limit: number) 
 }
 const r2004 = (sizes: number[], bytes = 512) => r2004Pages(1, bytes, 0x7400, 1, sizes);
 const r2007 = (sizes: number[]) => r2007Pages(1, 512, 512, sizes);
+/** 페이지가 크기를 모두 뒷받침하는 입력(같은 페이지를 되풀이해 가리킨다) */
+const backed2004 = (sizes: number[]) => r2004Pages(0, 512, 0x7400, 1, sizes, undefined, [300, 300, 0]);
+const backed2007 = (counts: number[]) => (sizes: number[]) => r2007Pages(0, 512, 0x7400, sizes, counts);
 
 describe('압축 폭탄', () => {
   it('작은 파일이 큰 섹션을 적으면 할당 전에 손상으로 알린다', () => {
@@ -178,21 +181,21 @@ describe('압축 폭탄', () => {
   });
 
   it('한도와 같은 크기는 받고 1바이트 넘으면 막는다', () => {
-    const fits = atLimit(r2004, (limit) => [limit - 32, 16, 16]);
+    const fits = atLimit(backed2004, (limit) => [limit - 16, 16, 16]);
     expect(readR2004Container(fits, R2004).warnings.map((w) => w.code)).not.toContain('dwg.page_repeat');
-    const over = atLimit(r2004, (limit) => [limit - 31, 16, 16]);
+    const over = atLimit(backed2004, (limit) => [limit - 15, 16, 16]);
     expect(reasonOf(() => readR2004Container(over, R2004))).toBe('section size');
 
-    const fits21 = atLimit(r2007, (limit) => [limit - 32, 16, 16]);
-    expect(readR2007Container(fits21, R2007).header.length).toBe(decompressLimit(fits21.length) - 32);
-    const over21 = atLimit(r2007, (limit) => [limit - 31, 16, 16]);
+    const fits21 = atLimit(backed2007([3000, 1, 0]), (limit) => [limit - 16, 16, 16]);
+    expect(readR2007Container(fits21, R2007).header.length).toBe(decompressLimit(fits21.length) - 16);
+    const over21 = atLimit(backed2007([3000, 1, 0]), (limit) => [limit - 15, 16, 16]);
     expect(reasonOf(() => readR2007Container(over21, R2007))).toBe('section size');
   });
 
   it('섹션마다 한도 안이어도 푸는 크기의 합이 한도를 넘으면 막는다', () => {
     const half = (limit: number) => [Math.ceil(limit * 0.6), Math.ceil(limit * 0.6), 16];
-    expect(reasonOf(() => readR2004Container(atLimit(r2004, half), R2004))).toBe('section size');
-    expect(reasonOf(() => readR2007Container(atLimit(r2007, half), R2007))).toBe('section size');
+    expect(reasonOf(() => readR2004Container(atLimit(backed2004, half), R2004))).toBe('section size');
+    expect(reasonOf(() => readR2007Container(atLimit(backed2007([1500, 1500, 0]), half), R2007))).toBe('section size');
   });
 
   it('섹션 크기와 페이지 크기를 함께 부풀려도 버퍼 합이 한도 안이다', () => {
@@ -268,9 +271,11 @@ describe('0만 있는 페이지', () => {
   });
 
   it('건너뛰는 합은 섹션마다가 아니라 파일 전체다', () => {
-    // 섹션마다 묶으면 네 섹션을 모두 건너뛰어 합이 2MiB, 파일은 2KB 안쪽이라 읽기 한도를 넘는다
-    const zeros = new Uint8Array(Math.floor(ZERO_PAGE_SKIP / PAGE) * PAGE);
+    // 첫 섹션만 건너뛰고 뒤 세 섹션은 쓴다. 섹션마다 묶으면 네 섹션을 모두 건너뛰어 파일이 2KB 안쪽이다
+    const pages = Math.floor(ZERO_PAGE_SKIP / PAGE);
+    const zeros = new Uint8Array(pages * PAGE);
     const data = write(zeros, [section('AcDb:Classes', zeros), section('AcDb:Template', zeros), section('AcDb:SummaryInfo', zeros)]);
+    expect(data.length).toBeGreaterThanOrEqual(3 * pages * 160);
     const sec = readR2004Container(data, R2004);
     expect([sec.objects.length, sec.classes!.length, sec.template?.length, sec.summaryInfo?.length]).toEqual(new Array(4).fill(zeros.length));
   });

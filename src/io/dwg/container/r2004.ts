@@ -1,6 +1,6 @@
 /** R2004·R2010·R2013·R2018(AC1018·AC1024·AC1027·AC1032) 파일 구조(사양 4장) */
 import { CadReadError } from '../../../core/errors';
-import { decompressLimit, decompressedSizeOk, sectionWorkLimit } from '../../../core/limits';
+import { MISSING_PAGE_BYTES, decompressLimit, decompressedSizeOk, sectionWorkLimit } from '../../../core/limits';
 import { crc32, pageChecksum } from '../crc';
 import { decompressR18 } from '../lz77';
 import { type DwgSections, warn } from './types';
@@ -122,13 +122,16 @@ export function readR2004Container(data: Uint8Array, ver: number): DwgSections {
   }
 
   let unpacked = 0;
+  let total = 0;
   const readSection = (name: string): Uint8Array | null => {
     const desc = sections.get(name);
     if (!desc) return null;
     if (desc.encrypted === 1) throw new CadReadError('dwg.encrypted', { section: name });
-    // 망가진 크기로 큰 메모리를 잡지 않게 푸는 크기의 합을 파일 크기로 묶는다(섹션마다 보면 섹션 수만큼 한도의 배수를 잡는다)
-    if (!decompressedSizeOk(unpacked + desc.size, data.length)) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
-    unpacked += desc.size;
+    // 망가진 크기로 큰 메모리를 잡지 않게 푸는 크기의 합을 묶는다(섹션마다 보면 섹션 수만큼 한도의 배수를 잡는다). 파일에 없는 0 페이지 몫은 더 받는다
+    const backed = Math.min(desc.size, desc.pages.length * desc.maxSize);
+    if (!decompressedSizeOk(unpacked + backed, data.length) || total + desc.size > decompressLimit(data.length) + MISSING_PAGE_BYTES) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
+    unpacked += backed;
+    total += desc.size;
     const out = new Uint8Array(desc.size);
     // 페이지 최대 크기도 파일에서 읽은 값이다(정상 값은 0x7400). 임시 버퍼를 페이지마다 지우므로 한도의 남은 몫까지만 잡는다
     const maxSize = Math.min(desc.maxSize, decompressLimit(data.length) - unpacked);

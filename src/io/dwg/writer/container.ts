@@ -328,6 +328,8 @@ export function writeR2004(ver: number, maint: number, codepage: number, section
   const secPages = new Map<string, { num: number; dataSize: number; start: number }[]>();
   let pageNum = 0;
   let skippedZero = 0;
+  // 0 페이지는 내용이 모두 같으므로 한 번만 압축한다(0 구역을 쓰는 시간의 90%였다)
+  const zeroPayloads = new Map<number, Uint8Array>();
   const byName = new Map(sections.map((s) => [s.name, s]));
   // 섹션 번호: "" = 0, 나머지는 지도 순서의 뒤에서부터 내려온다
   const ids = new Map<string, number>();
@@ -356,7 +358,12 @@ export function writeR2004(ver: number, maint: number, codepage: number, section
         skippedZero += ps;
         continue;
       }
-      const payload = s.compressed ? compressR18(chunk) : chunk;
+      let payload: Uint8Array = chunk;
+      if (s.compressed) {
+        const zero = allZero ? zeroPayloads.get(ps) : undefined;
+        payload = zero ?? compressR18(chunk);
+        if (allZero && !zero) zeroPayloads.set(ps, payload);
+      }
       const address = o.n;
       const num = ++pageNum;
       const total = Math.ceil((32 + payload.length) / 0x20) * 0x20;
