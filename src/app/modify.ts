@@ -4,6 +4,7 @@
  * 프롬프트와 옵션은 AutoCAD 2026 한국어판을 따른다. 기하 계산은 src/edit/geom.
  */
 import type { BlockDef, BlockRecord, CadDocument, Entity, HatchEntity } from '../core/model';
+import { pushAll } from '../core/arrays';
 import { entityDefaults, tableKey } from '../core/model';
 import { formatLength } from '../core/units';
 import type { EditOp } from '../edit/session';
@@ -302,7 +303,7 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
     if (!noRegen.has(op.before.handle)) regen(op.after, op.before);
     ops.push(op);
   }
-  ops.push(...follow.objectOps);
+  pushAll(ops, follow.objectOps);
   // 연관 해치: 경계 객체가 바뀌면 해치 영역을 다시 만들고, 영역이 깨지면 연관을 끊는다
   const touched = new Set(mod.keys());
   for (const r of results) for (const h of r.remove ?? []) touched.add(h);
@@ -695,7 +696,7 @@ export function registerModifyCommands(app: App): void {
               const dx = q.point.x - base.x;
               const dy = q.point.y - base.y;
               const res: EditResult[] = [];
-              for (let i = 1; i < n; i++) res.push(...transformAll(st, hs, translate(fit ? (dx * i) / (n - 1) : dx * i, fit ? (dy * i) / (n - 1) : dy * i), true));
+              for (let i = 1; i < n; i++) pushAll(res, transformAll(st, hs, translate(fit ? (dx * i) / (n - 1) : dx * i, fit ? (dy * i) / (n - 1) : dy * i), true));
               steps.push(commitResults(app, ctx, res, 'COPY').ops);
               first = false;
               if (!multiple) return;
@@ -1487,7 +1488,7 @@ export function registerModifyCommands(app: App): void {
           if (!r && !c) continue;
           const dx = ux.x * Number(v.dx) * c + uy.x * Number(v.dy) * r;
           const dy = ux.y * Number(v.dx) * c + uy.y * Number(v.dy) * r;
-          results.push(...transformAll(st, hs, translate(dx, dy), true));
+          pushAll(results, transformAll(st, hs, translate(dx, dy), true));
         }
       st.selection.clear();
       const res = commitResults(app, ctx, results, 'ARRAYRECT');
@@ -1538,7 +1539,7 @@ export function registerModifyCommands(app: App): void {
           const ny = q[1] * ref.x + q[3] * ref.y + q[5];
           mm = translate(nx - ref.x, ny - ref.y);
         }
-        results.push(...transformAll(st, hs, mm, true));
+        pushAll(results, transformAll(st, hs, mm, true));
       }
       st.selection.clear();
       const res = commitResults(app, ctx, results, 'ARRAYPOLAR');

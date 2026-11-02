@@ -26,6 +26,7 @@ import type {
   Vec2,
   Vec3,
 } from '../../core/model';
+import { pushAll } from '../../core/arrays';
 import { tableKey } from '../../core/model';
 import { minsertGrid } from '../../core/limits';
 import { polyLocs, polyVertices } from '../../core/polyverts';
@@ -204,7 +205,7 @@ function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean): Edi
   const dynRep = /^\*U/i.test(e.block);
   const content = b.entities.filter((c) => !(c.type === 'ATTDEF' && !((c as AttribEntity).attFlags & 2)) && !(dynRep && c.invisible));
   const out: Entity[] = [];
-  const blocks = [];
+  const blocks: NonNullable<EditResult['blocks']> = [];
   let message: string | undefined;
   for (let r = 0; r < rows; r++)
     for (let c = 0; c < cols; c++) {
@@ -221,8 +222,8 @@ function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean): Edi
         opt,
         false,
       );
-      out.push(...res.ents);
-      blocks.push(...res.blocks);
+      pushAll(out, res.ents);
+      pushAll(blocks, res.blocks);
       if (res.message && !message) message = res.message;
     }
   // 속성 → 현재 값의 문자

@@ -8,6 +8,7 @@
  * 원(닫힌 곡선)·닫힌 폴리선은 결합하지 않는다.
  */
 import type { ArcEntity, CircleEntity, EllipseEntity, Entity, LineEntity } from '../../core/model';
+import { pushAll } from '../../core/arrays';
 import { type ArcPiece, type EllPiece, type Path, type Piece, pathBox, pieceAt, pieceLength, reversePiece } from './curve';
 import { TAU, ccwFrom, ccwSweep, cross, dist, dot, len, norm, sub } from './math';
 import { cloneEntity, entityPath, inherit, make3dPolyline, makeArc, makePolyline, makeSpline, piecesNurbs } from './path';
@@ -174,7 +175,7 @@ function mergeCollinear(items: Item[], tol: number, allowGap: boolean): Item[] {
     }
     if (members !== group) {
       group.length = 0;
-      group.push(...members);
+      pushAll(group, members);
     }
     const ne = cloneEntity(it.e);
     ne.start = { x: a.x + d.x * lo, y: a.y + d.y * lo, z };
@@ -266,7 +267,7 @@ function mergeCocircular(items: Item[], tol: number, allowGap: boolean): Item[] 
     const mem = group.filter((_, i) => u.members.has(i));
     for (const g of mem) used.add(g);
     group.length = 0;
-    group.push(...mem);
+    pushAll(group, mem);
     const src = it.e as ArcEntity;
     let ne: ArcEntity | CircleEntity;
     if (u.full) ne = { type: 'CIRCLE', ...inherit(src), center: { x: A.c.x, y: A.c.y, z: it.path.z }, radius: A.r } as CircleEntity;
@@ -315,7 +316,7 @@ function mergeCoelliptic(items: Item[], tol: number, allowGap: boolean): Item[] 
     const mem = group.filter((_, i) => u.members.has(i));
     for (const g of mem) used.add(g);
     group.length = 0;
-    group.push(...mem);
+    pushAll(group, mem);
     const ne = cloneEntity(e0);
     if (u.full) {
       ne.startParam = 0;

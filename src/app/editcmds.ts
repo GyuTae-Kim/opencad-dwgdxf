@@ -3,6 +3,7 @@
  * TEXTEDIT와 문자·치수·다중 지시선·공차·지시선의 두 번 누르기는 제자리 문자 편집기(src/app/textedit)로 고친다.
  */
 import type { DimensionEntity, Entity, LwPolylineEntity } from '../core/model';
+import { maxOf, minOf, pushAll } from '../core/arrays';
 import { tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { cloneEntity, isLayoutBlock } from '../edit/session';
@@ -339,7 +340,7 @@ function moved(list: readonly Entity[], set: ReadonlySet<string>, mode: 'A' | 'U
     const refSet = new Set(ref);
     const idx = rest.map((e, i) => (refSet.has(e.handle) ? i : -1)).filter((i) => i >= 0);
     if (!idx.length) return null;
-    at = mode === 'A' ? Math.max(...idx) + 1 : Math.min(...idx);
+    at = mode === 'A' ? maxOf(idx) + 1 : minOf(idx);
   }
   return [...rest.slice(0, at), ...picked, ...rest.slice(at)];
 }
@@ -378,7 +379,7 @@ export function reorder(app: App, handles: string[], mode: 'A' | 'U' | 'F' | 'B'
       list.forEach((e, i) => {
         if (set.has(e.handle)) removes.push({ kind: 'remove', block: bk, entity: e, index: i });
       });
-      ops.push(...removes.reverse());
+      pushAll(ops, removes.reverse());
       picked.forEach((e, j) => ops.push({ kind: 'add', block: bk, entity: e, index: at + j }));
     }
     if (tableOp) ops.push(tableOp);

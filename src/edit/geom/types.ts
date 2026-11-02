@@ -1,5 +1,6 @@
 /** 편집 결과 형식 */
 import type { BlockDef, CadDocument, Entity, Vec2 } from '../../core/model';
+import { pushAll } from '../../core/arrays';
 
 export interface EditResult {
   /** 새 객체(핸들 '' — 호출한 쪽이 붙인다) */
@@ -71,10 +72,10 @@ export const MSG = {
 export function mergeResults(list: readonly EditResult[]): EditResult {
   const out: EditResult = {};
   for (const r of list) {
-    if (r.add?.length) (out.add ??= []).push(...r.add);
-    if (r.replace?.length) (out.replace ??= []).push(...r.replace);
-    if (r.remove?.length) (out.remove ??= []).push(...r.remove);
-    if (r.blocks?.length) (out.blocks ??= []).push(...r.blocks);
+    if (r.add?.length) pushAll((out.add ??= []), r.add);
+    if (r.replace?.length) pushAll((out.replace ??= []), r.replace);
+    if (r.remove?.length) pushAll((out.remove ??= []), r.remove);
+    if (r.blocks?.length) pushAll((out.blocks ??= []), r.blocks);
     if (r.message && !out.message) out.message = r.message;
   }
   return out;

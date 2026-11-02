@@ -8,6 +8,7 @@
  *    (정점마다 폭이 다른 폴리선은 건드리지 않는다).
  */
 import type { ArcEntity, CircleEntity, Entity, LineEntity, LwPolylineEntity } from '../../core/model';
+import { maxOf, minOf } from '../../core/arrays';
 import { tableKey } from '../../core/model';
 import { lwVertices, packLw } from '../../core/lwpoly';
 import type { ArcPiece } from './curve';
@@ -384,8 +385,8 @@ function collinear(group: Seg[], tol: number, combineOverlap: boolean, combineEn
   const flush = () => {
     if (cluster.length > 1) {
       const keep = cluster.reduce((p, q) => (q.s.rank < p.s.rank ? q : p));
-      const lo = Math.min(...cluster.map((c) => c.lo));
-      const h = Math.max(...cluster.map((c) => c.hi));
+      const lo = minOf(cluster.map((c) => c.lo));
+      const h = maxOf(cluster.map((c) => c.hi));
       const e = keep.s.it!.e as LineEntity;
       const t0 = dot(sub(e.start, o), d);
       const forward = t0 <= dot(sub(e.end, o), d);

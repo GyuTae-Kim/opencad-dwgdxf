@@ -11,6 +11,7 @@
  * TEXT의 %%d·%%p·%%c는 글자로, %%u·%%o는 \L·\O 서식으로 바꾼다.
  */
 import type { CadDocument, Entity, MTextEntity, TextEntity } from '../../core/model';
+import { maxOf, minOf } from '../../core/arrays';
 import { tableKey } from '../../core/model';
 import { TOGGLE_OVERLINE, TOGGLE_STRIKE, TOGGLE_UNDERLINE, parseTextString } from '../../text/mtext';
 import { textFrame } from '../geom/textjust';
@@ -104,7 +105,7 @@ function sortByPosition(lines: Line[], rot: number): Line[] {
   const uy = Math.sin(rot);
   const vx = -uy;
   const vy = ux;
-  const tol = Math.min(...lines.map((l) => l.h)) * 0.25;
+  const tol = minOf(lines.map((l) => l.h)) * 0.25;
   return [...lines].sort((a, b) => {
     const da = a.ox * vx + a.oy * vy;
     const db = b.ox * vx + b.oy * vy;
@@ -163,7 +164,7 @@ function combineLines(lines: Line[], opt: Txt2MtxtOptions): MTextEntity {
   // 맞춤: 모두 가운데면 가운데 위, 모두 오른쪽이면 오른쪽 위, 아니면 왼쪽 위
   const hj = lines.every((l) => l.hj === 1) ? 1 : lines.every((l) => l.hj === 2) ? 2 : 0;
   const widths = rows.map((r) => r.reduce((a, l) => a + l.width, 0) + (r.length - 1) * h * 0.4);
-  const maxW = Math.max(...widths);
+  const maxW = maxOf(widths);
   // 첫 줄의 왼쪽(가운데·오른쪽) 위
   const along = hj === 0 ? 0 : hj === 1 ? first.width / 2 : first.width;
   const ix = first.ox + ux * along + vx * h;

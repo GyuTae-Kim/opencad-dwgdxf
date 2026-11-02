@@ -4,6 +4,7 @@
  * 직사각형은 SNAPANG(스냅 회전 각도) 방향으로 놓는다. 항목은 각자 따로 만든다(연관 배열이 아니다).
  */
 import type { Entity } from '../core/model';
+import { pushAll } from '../core/arrays';
 import { boundsOf } from '../edit/geom/query';
 import { polarArrayAngles, polarCountFrom, rectArrayOffsets } from '../edit/script/dash';
 import type { App, CommandContext } from './app';
@@ -56,7 +57,7 @@ export function registerDashArrayCommand(app: App): void {
         lastType,
       );
       m.arrayType = type;
-      const results = [];
+      const results: ReturnType<typeof transformList> = [];
       let count: number;
       if (type === 'R') {
         const rows = await askInteger(ctx, '행 수 입력 (---) <1>:', 1, 1, 32767);
@@ -96,7 +97,7 @@ export function registerDashArrayCommand(app: App): void {
         } else if (rows > 1) dy = await askDistance(ctx, '행 사이의 거리 입력 (---):');
         else dx = await askDistance(ctx, '열 사이의 거리 지정 (|||):');
         const snapang = Number(doc.header.get('$SNAPANG') ?? 0) || 0;
-        for (const o of rectArrayOffsets(rows, cols, dy, dx, snapang)) results.push(...transformList(st, hs, translate(o.x, o.y), true));
+        for (const o of rectArrayOffsets(rows, cols, dy, dx, snapang)) pushAll(results, transformList(st, hs, translate(o.x, o.y), true));
         count = rows * cols;
       } else {
         // 회전하지 않을 때 옮기는 기준: 기준(B)으로 준 점, 없으면 선택 범위의 가운데
@@ -153,7 +154,7 @@ export function registerDashArrayCommand(app: App): void {
             const q = rotateAbout(center, a);
             mm = translate(q[0] * ref.x + q[2] * ref.y + q[4] - ref.x, q[1] * ref.x + q[3] * ref.y + q[5] - ref.y);
           }
-          results.push(...transformList(st, hs, mm, true));
+          pushAll(results, transformList(st, hs, mm, true));
         }
         count = n;
       }

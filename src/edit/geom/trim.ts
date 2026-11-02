@@ -4,6 +4,7 @@
  * 결과가 원본과 같은 종류면 replace(핸들 유지), 둘로 나뉘면 나머지는 add, 종류가 바뀌면 remove + add.
  */
 import type { CadDocument, Entity, HatchEntity, LineEntity, Vec2 } from '../../core/model';
+import { pushAll } from '../../core/arrays';
 import { type ArcPiece, type EllPiece, type LinePiece, type Path, type Piece, pathBox, pathLength, pathNearest, pathSAtLength, pathSub, pieceAt, pieceBox, pieceLength, pieceTAtLength, pieceTangent, subPiece } from './curve';
 import { boxesOverlap, edgeBox, edgeSet } from './edges';
 import { intersectPieces } from './intersect';
@@ -63,7 +64,7 @@ function cutterPieces(e: Entity, cutters: Entity[] | 'all', opts: TrimOptions, t
       const cb = edgeBox(c, opts.doc);
       if (!cb || (cb !== 'inf' && !boxesOverlap(cb, tb, pad))) continue;
     }
-    edges.push(...edgeSet(c, opts.doc, !!opts.extendEdges));
+    pushAll(edges, edgeSet(c, opts.doc, !!opts.extendEdges));
   }
   return { edges, self };
 }
@@ -298,7 +299,7 @@ export function extendEntity(e: Entity, boundaries: Entity[], pick: Vec2, opts: 
       const bb = edgeBox(b, opts.doc);
       if (!bb || (bb !== 'inf' && !reach(bb))) continue;
     }
-    edges.push(...edgeSet(b, opts.doc, !!opts.extendEdges));
+    pushAll(edges, edgeSet(b, opts.doc, !!opts.extendEdges));
   }
   let best = Infinity;
   const tolT = ext.k === 'line' ? 1e-9 / Math.max(1e-300, dist(ext.a, ext.b)) * Math.max(1, Math.abs(ext.a.x), Math.abs(ext.a.y)) : 1e-9;

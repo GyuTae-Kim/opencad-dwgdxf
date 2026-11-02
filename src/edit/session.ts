@@ -5,6 +5,7 @@
  * 변경 = 작업(op) 목록. 각 작업은 앞뒤 상태를 모두 담아 되돌리기가 그대로 반대 작업이다.
  */
 import type { BlockDef, BlockRecord, CadDocument, CadObject, Entity, HeaderValue, Layer, Layout, LayoutObject, Linetype, LwPolylineEntity, PolylineEntity, SplineEntity, TableHead, TableRecordBase, TextStyle, DimStyle, UcsRecord, ViewRecord, VPortRecord } from '../core/model';
+import { pushAll } from '../core/arrays';
 import { tableKey, normalizeHandle } from '../core/model';
 import { unboxLw } from '../core/lwpoly';
 import { unboxPoly } from '../core/polyverts';
@@ -360,7 +361,7 @@ export class EditSession {
     applyOpsAtomic(this.doc, tx.ops, summary);
     for (const op of tx.ops) if ((op.kind === 'add' || op.kind === 'modify') && this.ownerCache) this.ownerCache.set(op.kind === 'add' ? op.entity.handle : op.after.handle, op.block);
     const top = this.undoStack[this.undoStack.length - 1];
-    if (tx.group !== undefined && top && top.group === tx.group) top.ops.push(...tx.ops);
+    if (tx.group !== undefined && top && top.group === tx.group) pushAll(top.ops, tx.ops);
     else {
       this.undoStack.push({ ...tx, ops: [...tx.ops] });
       // UNDO 조정(C) 하나·없음: 마지막 명령만 남긴다(없음은 명령 안의 단계 취소만 되고 U·UNDO는 거절한다)

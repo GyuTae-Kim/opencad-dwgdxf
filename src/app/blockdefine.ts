@@ -4,6 +4,7 @@
  * 유지/블록으로 변환/삭제)·동작(주석·배치에 일치·균일하게 축척·분해 허용)·설정(블록 단위)·설명·블록 편집기에서 열기.
  */
 import type { AttribEntity, BlockDef, BlockRecord, CadDocument, Entity, InsertEntity, Vec3 } from '../core/model';
+import { pushAll } from '../core/arrays';
 import { entityDefaults, tableKey } from '../core/model';
 import { INSUNITS_NAMES } from '../core/units';
 import type { EditOp } from '../edit/session';
@@ -128,7 +129,7 @@ export function defineBlockOps(app: App, spec: DefineBlockSpec, make?: AttribMak
     ents.push(c);
   }
   // 지우기는 뒤에서부터(앞 객체를 지워도 뒤 번호가 맞게)
-  ops.push(...removeOps.reverse());
+  pushAll(ops, removeOps.reverse());
   const hasAtt = ents.some((e) => e.type === 'ATTDEF');
   const units = spec.units ?? (Number(doc.header.get('$INSUNITS') ?? 0) || 0);
   const record: BlockRecord = oldRec

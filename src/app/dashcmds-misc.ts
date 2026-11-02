@@ -6,6 +6,7 @@
  * - -IMAGE: ?·분리(D)·경로(P)·다시 로드(R)·언로드(U)(로드 표시만 바꾼다). 부착(A)은 안내한다.
  */
 import type { CadDocument, CadObject, DictionaryObject, Entity, ImageDefObject, ImageEntity } from '../core/model';
+import { pushAll } from '../core/arrays';
 import { tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { type OverkillProp, overkill } from '../edit/geom/overkill';
@@ -138,7 +139,7 @@ export function detachXrefOps(doc: CadDocument, name: string): EditOp[] {
       if (e.type === 'INSERT' && tableKey(e.block) === key) removes.push({ kind: 'remove', block: bk, entity: e, index: i });
       else if (bk !== key) usedLayers.add(tableKey(e.layer));
     });
-    ops.push(...removes.reverse());
+    pushAll(ops, removes.reverse());
   }
   const def = doc.blocks.get(key);
   if (def) ops.push({ kind: 'blockDef', key, before: def, after: null });
@@ -262,7 +263,7 @@ export function detachImageOps(doc: CadDocument, item: { name: string; def: Imag
         if ((e as ImageEntity).imageDefReactor) reactors.add((e as ImageEntity).imageDefReactor!);
       }
     });
-    ops.push(...removes.reverse());
+    pushAll(ops, removes.reverse());
   }
   for (const h of reactors) {
     const o = doc.objects.get(h);

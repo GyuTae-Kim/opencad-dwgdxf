@@ -4,6 +4,7 @@
  * 방향: 치수선 위치가 점들의 범위 위·아래면 수평(X 거리), 왼쪽·오른쪽이면 수직(Y 거리).
  */
 import type { CadDocument, DimensionEntity, Entity, Vec3 } from '../../core/model';
+import { maxOf, minOf } from '../../core/arrays';
 import { createDiameterDimension, createLinearDimension, createOrdinateDimension, createRadialDimension } from '../dim/create';
 import { dimVars } from '../dim/vars';
 import { lwVertices } from '../../core/lwpoly';
@@ -87,10 +88,10 @@ export function qdimRotation(points: readonly P[], at: P): number {
   if (!points.length) return 0;
   const xs = points.map((q) => q.x);
   const ys = points.map((q) => q.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
+  const minX = minOf(xs);
+  const maxX = maxOf(xs);
+  const minY = minOf(ys);
+  const maxY = maxOf(ys);
   const outX = Math.max(0, minX - at.x, at.x - maxX);
   const outY = Math.max(0, minY - at.y, at.y - maxY);
   if (outX === 0 && outY === 0) return maxX - minX >= maxY - minY ? 0 : Math.PI / 2;
@@ -132,7 +133,7 @@ export function qdimCreate(doc: CadDocument, mode: QdimMode, g: QdimGeometry, at
   const pts = sortedAlong(g.points, hz);
   if (!pts.length) return out;
   const ys = g.points.map((q) => (hz ? q.y : q.x));
-  const mid = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const mid = (minOf(ys) + maxOf(ys)) / 2;
   const atN = hz ? at.y : at.x;
   const away = atN >= mid ? 1 : -1;
   const probe = createLinearDimension(doc, v3(pts[0]!), v3(pts[pts.length - 1]!), v3(at), { rotation: rot, style });

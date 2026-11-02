@@ -32,6 +32,7 @@ import type {
   XData,
   XRecordObject,
 } from '../../../core/model';
+import { pushAll } from '../../../core/arrays';
 import { MODEL_SPACE, PAPER_SPACE, tableKey } from '../../../core/model';
 import { defaultLayout } from '../../../core/finalize';
 import { DIM_VAR_DEFAULTS } from '../../../core/dimvars';
@@ -855,7 +856,7 @@ export class WCtx {
         return false;
       });
       this.objects.length = 0;
-      this.objects.push(...keep);
+      pushAll(this.objects, keep);
     }
     for (const po of this.objects) {
       const c = po.o.type === 'DBCOLOR' ? (po.o as GenericObject).color : undefined;

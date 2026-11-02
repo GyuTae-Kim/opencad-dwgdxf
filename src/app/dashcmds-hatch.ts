@@ -6,6 +6,7 @@
  * -BOUNDARY: `내부 점 지정 또는 [고급 옵션(A)]:` → 폴리선 경계. 영역(REGION)은 만들 수 없어 안내한다.
  */
 import type { CadColor, Entity, HatchEntity, HatchGradient, HatchPath } from '../core/model';
+import { maxOf, minOf } from '../core/arrays';
 import { entityDefaults, tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { drawOrder, sortentsOp, sortentsTable } from '../edit/draworder';
@@ -495,7 +496,7 @@ export function registerDashHatchCommands(app: App): void {
         if (order === 'B') index = 0;
         else if ((order === 'E' || order === 'R') && sources.size) {
           const idx = block.entities.map((e, i) => (sources.has(e.handle) ? i : -1)).filter((i) => i >= 0);
-          if (idx.length) index = order === 'E' ? Math.min(...idx) : Math.max(...idx) + 1;
+          if (idx.length) index = order === 'E' ? minOf(idx) : maxOf(idx) + 1;
         }
         ops.push({ kind: 'add', block: st.space, entity: hatch, index: Math.min(index + made, block.entities.length + made) });
         // 그리기 순서 표가 있으면 화면 순서에서도 같은 자리로(경계 뒤·앞, 맨 뒤·앞)
@@ -504,7 +505,7 @@ export function registerDashHatchCommands(app: App): void {
           if (order === 'B') vi = 0;
           else if ((order === 'E' || order === 'R') && sources.size) {
             const idx = visual.map((e, i) => (sources.has(e.handle) ? i : -1)).filter((i) => i >= 0);
-            if (idx.length) vi = order === 'E' ? Math.min(...idx) : Math.max(...idx) + 1;
+            if (idx.length) vi = order === 'E' ? minOf(idx) : maxOf(idx) + 1;
           }
           visual.splice(vi, 0, hatch);
         }

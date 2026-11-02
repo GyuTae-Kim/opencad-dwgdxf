@@ -5,6 +5,7 @@
  * 기하 계산은 src/edit/geom(align, blend, measure, markup, overkill, extrim, bpoly, textjust, pedit, splinedit).
  */
 import type { Entity, InsertEntity, PointEntity } from '../core/model';
+import { pushAll } from '../core/arrays';
 import { entityDefaults, tableKey } from '../core/model';
 import { frameSetting } from '../core/framevars';
 import { frameSettingOps } from '../edit/framevars';
@@ -162,7 +163,7 @@ export function registerModify2Commands(app: App): void {
       let last: Pt | null = null;
       const place = (ds: Pt[]) => {
         const res: EditResult[] = [];
-        for (const d of ds) res.push(...transformList(st, hs, affTranslate(d.x, d.y), true));
+        for (const d of ds) pushAll(res, transformList(st, hs, affTranslate(d.x, d.y), true));
         steps.push(commitResults(app, ctx, res, 'COPYM', { quiet: true }).ops);
       };
       const at = (p: Pt) => ghost.at(affTranslate(p.x - base.x, p.y - base.y));
