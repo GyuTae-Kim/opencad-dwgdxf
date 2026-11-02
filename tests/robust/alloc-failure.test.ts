@@ -3,6 +3,7 @@
  * 실패한 객체만 통째로 빠지고 나머지는 그대로이며, 깨진 값이나 주인 없는 조각이 남지 않는지 본다.
  * 고치기 전에는 버퍼 하나만 옮긴 뒤 실패하면 좌표가 NaN이 되었고, 묶음 갈아 끼우기 실패는 finish()가 TypeError로 죽었으며,
  * 선분만 옮기고 멈춘 객체가 주인 없는 조각으로 남고, 꺾은선은 경고 없이 일부만 남으면서 조각마다 다시 할당을 시도했다.
+ * 40차: 마감(finish)의 할당 실패가 다 그린 장면을 통째로 잃던 결함. 버퍼를 못 줄이면 남는 자리째 넘기고 글리프를 못 묶으면 글자만 뺀다.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_SPACE } from '../../src/core/model';
@@ -142,8 +143,8 @@ function injectFaults(k: number, persist: boolean): Fault {
       name,
       new Proxy(Real, {
         construct(t, a, nt) {
-          // 있는 버퍼 위에 만드는 뷰는 메모리를 잡지 않는다
-          if (typeof a[0] === 'number') tick();
+          // 있는 버퍼 위에 만드는 뷰와 길이 0은 메모리를 잡지 않는다
+          if (typeof a[0] === 'number' && a[0] > 0) tick();
           return Reflect.construct(t, a, nt);
         },
       }),
@@ -255,6 +256,48 @@ describe('할당 순서마다 실패', () => {
   });
 });
 
+describe('마감에서 실패', () => {
+  /** 객체를 모두 넣은 뒤 마감하는 동안만 k번째 할당부터 실패시킨다 */
+  function finishWith(k: number, persist: boolean) {
+    const objs = objects();
+    const f = injectFaults(k, persist);
+    const b = new DisplayListBuilder(transparent);
+    for (const o of objs) {
+      o.draw(b);
+      b.endEntity(o.handle);
+    }
+    f.armed = true;
+    const dl = b.finish();
+    f.armed = false;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    const lost = b.glyphsDropped;
+    // 글리프가 빠지면 글리프 몫만 빼고 그대로여야 한다
+    const want = lost ? objs.map((o) => ({ ...o, want: { ...o.want, glyphs: 0 } })) : objs;
+    return { objs: want, dl, dropped: new Set<string>(), worst: 0, f, lost };
+  }
+  const total = finishWith(Number.MAX_SAFE_INTEGER, false).f.count;
+
+  it('어느 할당이 실패해도 장면을 잃지 않는다', () => {
+    let lost = 0;
+    for (let k = 1; k <= total; k++) {
+      const r = finishWith(k, false);
+      expect(r.f.thrown, `할당 ${k}`).toBe(1);
+      check(r);
+      if (r.lost) lost++;
+    }
+    // 버퍼 줄이기 실패는 아무것도 빼지 않고, 글리프를 묶는 할당의 실패는 글리프만 뺀다
+    expect(lost).toBeGreaterThan(0);
+    expect(lost).toBeLessThan(total);
+  });
+
+  it('마감의 모든 할당이 실패해도 글리프만 빠진다', () => {
+    const r = finishWith(1, true);
+    expect(r.lost).toBe(true);
+    check(r);
+  });
+});
+
 describe('장면', () => {
   const polyline = (n: number, h: string, y: number): string[] => {
     const p = ['0', 'LWPOLYLINE', '5', h, '8', '0', '100', 'AcDbEntity', '100', 'AcDbPolyline', '90', String(n), '70', '0'];
@@ -263,6 +306,32 @@ describe('장면', () => {
   };
   const segs = (s: ReturnType<typeof buildSpace>) => s.list.chunks.reduce((a, c) => a + c.segCount, 0);
   const codes = (s: ReturnType<typeof buildSpace>) => s.warnings.map((w) => w.code);
+
+  it('마감에서 글리프를 묶지 못하면 경고하고 글자만 빠진다', () => {
+    const text = ['0', 'TEXT', '5', '1F', '8', '0', '10', '0', '20', '0', '30', '0', '40', '1', '1', 'ABC'];
+    const line = ['0', 'LINE', '5', '2F', '8', '0', '10', '0', '20', '0', '30', '0', '11', '1', '21', '0', '31', '0'];
+    const doc = readDxf(bytesOf(dxfText([text, line])));
+    const scene = () => buildSpace(doc, MODEL_SPACE, { text: new TextEngine(null) });
+    const whole = scene();
+    expect(whole.list.glyphs.instanceCount).toBeGreaterThan(0);
+    expect(codes(whole)).not.toContain('entity.memory_dropped');
+
+    const finish = DisplayListBuilder.prototype.finish;
+    vi.spyOn(DisplayListBuilder.prototype, 'finish').mockImplementation(function (this: DisplayListBuilder, packed?: boolean) {
+      const f = injectFaults(1, true);
+      f.armed = true;
+      try {
+        return finish.call(this, packed);
+      } finally {
+        f.armed = false;
+      }
+    });
+    const s = scene();
+    expect(codes(s)).toContain('entity.memory_dropped');
+    expect(s.list.glyphs.instanceCount).toBe(0);
+    expect(segs(s)).toBe(segs(whole));
+    expect(s.list.entities.map((e) => e.handle).sort()).toEqual(whole.list.entities.map((e) => e.handle).sort());
+  });
 
   it('최상위 꺾은선을 그리다 메모리가 모자라면 경고하고 그 객체만 빠지며 조각마다 다시 잡지 않는다', () => {
     const doc = readDxf(bytesOf(dxfText([polyline(30000, '1F', 0), polyline(3, '2F', 100000)])));
