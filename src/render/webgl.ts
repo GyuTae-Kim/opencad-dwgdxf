@@ -249,6 +249,17 @@ interface GpuDraw {
   ttriBuf: WebGLBuffer | null;
 }
 
+/** 이만큼 많은 객체는 묶음을 통째로 올려 숨긴다(hideEntities) */
+const HIDE_BATCH_MIN = 64;
+
+/** 숨기기가 고치는 표시 목록의 칸: 상자의 범위, 묶음의 버퍼·개수, GPU 버퍼, 요소 크기와 스타일 자리 */
+const HIDE_KINDS = [
+  { kind: 'segs', range: 'seg', count: 'segCount', buf: 'segBuf', stride: SEG_STRIDE, style: 5, verts: 1 },
+  { kind: 'tsegs', range: 'tseg', count: 'tsegCount', buf: 'tsegBuf', stride: SEG_STRIDE, style: 5, verts: 1 },
+  { kind: 'tris', range: 'tri', count: 'triCount', buf: 'triBuf', stride: TRI_STRIDE, style: 3, verts: 3 },
+  { kind: 'ttris', range: 'ttri', count: 'ttriCount', buf: 'ttriBuf', stride: TRI_STRIDE, style: 3, verts: 3 },
+] as const;
+
 interface GpuChunk extends GpuDraw {
   /** 무리 번호(-1: 무리 없음 — 처음부터 올린다) */
   group: number;
@@ -734,6 +745,68 @@ export class GLRenderer {
         f[k * GLYPH_STRIDE + 9] = hidden;
         gl.bufferSubData(gl.ARRAY_BUFFER, (k * GLYPH_STRIDE + 9) * 4, f.subarray(k * GLYPH_STRIDE + 9, k * GLYPH_STRIDE + 10));
       }
+    }
+  }
+
+  /**
+   * 객체 여러 개의 그림을 숨긴다. 객체마다 GPU 버퍼를 고치면 선 20만 개에 5초가 들어
+   * 원본 표시 목록을 다 고친 뒤 묶음마다 한 번만 올린다. 객체가 적으면 고친 자리만 올리는 hideEntity가 싸다.
+   */
+  hideEntities(scene: GpuScene, src: DisplayList, boxes: readonly EntityBox[], hidden: number): void {
+    if (boxes.length < HIDE_BATCH_MIN) {
+      for (const b of boxes) this.hideEntity(scene, src, b, hidden);
+      return;
+    }
+    const gl = this.gl;
+    const handles = new Set(boxes.map((b) => b.handle));
+    for (const im of scene.images) if (handles.has(im.handle)) im.hidden = true;
+    for (let i = 0; i < src.xlineHandles.length; i++) if (handles.has(src.xlineHandles[i]!)) scene.xlines[i * 7 + 6] = hidden;
+    const touched = new Set<number>();
+    const inst = new Float32Array(src.glyphs.instances);
+    let glyphs = false;
+    for (const box of boxes) {
+      const c = box.chunk !== undefined ? src.chunks[box.chunk] : undefined;
+      if (c) {
+        touched.add(box.chunk!);
+        for (const h of HIDE_KINDS) {
+          const range = box[h.range];
+          if (!range || !range[1]) continue;
+          const u = new Uint32Array(c[h.kind]);
+          for (let i = range[0] * h.verts; i < (range[0] + range[1]) * h.verts; i++) u[i * h.stride + h.style] = hidden;
+        }
+      }
+      if (box.glyphs?.length) {
+        glyphs = true;
+        for (const k of box.glyphs) inst[k * GLYPH_STRIDE + 9] = hidden;
+      }
+    }
+    for (const i of touched) {
+      const c = src.chunks[i]!;
+      const g = scene.chunks[i];
+      if (!g) continue;
+      const gr = g.group >= 0 ? scene.groups[g.group] : undefined;
+      const k = gr ? gr.info.members.indexOf(i) : -1;
+      for (const h of HIDE_KINDS) {
+        const count = c[h.count];
+        if (!count) continue;
+        const own = g[h.buf];
+        if (own) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, own);
+          gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Uint8Array(c[h.kind]));
+        }
+        const groupBuf = gr?.[h.buf];
+        const at = gr?.at[h.kind];
+        if (gr && groupBuf && at && k >= 0) {
+          const part = new ArrayBuffer(count * elementBytes(h.kind));
+          rebaseInto(part, 0, c, h.kind, 0, count, gr);
+          gl.bindBuffer(gl.ARRAY_BUFFER, groupBuf);
+          gl.bufferSubData(gl.ARRAY_BUFFER, at[k]! * elementBytes(h.kind), part);
+        }
+      }
+    }
+    if (glyphs && scene.instBuf) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, scene.instBuf);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, inst);
     }
   }
 

@@ -55,14 +55,16 @@ export class EditManager {
       const ed = st.spaceEdits(space);
       const base = st.scenes.get(space);
       const dead = this.deadOf(st, space);
+      const hide: string[] = [];
       for (const h of ch.removed) {
         if (base && !ed.hidden.has(h)) {
-          base.hide(renderer, h);
+          hide.push(h);
           ed.hidden.add(h);
         }
         ed.live.delete(h);
         dead.set(h, st.gen);
       }
+      base?.hide(renderer, hide);
       for (const e of ch.changed) {
         ed.live.set(e.handle, st.gen);
         dead.delete(e.handle);
@@ -175,10 +177,9 @@ export class EditManager {
     ed.hidden = new Set();
     for (const [h, g] of [...ed.live]) if (g <= reqGen) ed.live.delete(h);
     for (const [h, g] of [...dead]) if (g <= reqGen) dead.delete(h);
-    for (const h of [...ed.live.keys(), ...dead.keys()]) {
-      base.hide(app.view.renderer, h);
-      ed.hidden.add(h);
-    }
+    const hide = [...ed.live.keys(), ...dead.keys()];
+    base.hide(app.view.renderer, hide);
+    for (const h of hide) ed.hidden.add(h);
     ed.baseGen = reqGen;
     app.resetPicker(st, key);
     this.rebuildOverlay(st, key, []);

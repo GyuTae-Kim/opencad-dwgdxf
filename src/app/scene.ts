@@ -64,9 +64,10 @@ export class SpaceScene {
     return this.boxMap.get(handle);
   }
 
-  /** 편집으로 지우거나 바꾼 객체의 옛 그림을 숨긴다 */
-  hide(renderer: GLRenderer, handle: string): void {
-    renderer.hideEntity(this.gpu, this.source, this.boxOf(handle) ?? { handle, minX: 0, minY: 0, maxX: 0, maxY: 0 }, HIDDEN_STYLE);
+  /** 편집으로 지우거나 바꾼 객체들의 옛 그림을 숨긴다 */
+  hide(renderer: GLRenderer, handles: readonly string[]): void {
+    const boxes = handles.map((handle) => this.boxOf(handle) ?? { handle, minX: 0, minY: 0, maxX: 0, maxY: 0 });
+    renderer.hideEntities(this.gpu, this.source, boxes, HIDDEN_STYLE);
   }
 
   /** 그래픽 문맥을 되찾은 뒤 다시 올린다 */
