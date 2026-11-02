@@ -57,7 +57,7 @@ export function registerDashArrayCommand(app: App): void {
         lastType,
       );
       m.arrayType = type;
-      const results = [];
+      const results: ReturnType<typeof transformList> = [];
       let count: number;
       if (type === 'R') {
         const rows = await askInteger(ctx, '행 수 입력 (---) <1>:', 1, 1, 32767);

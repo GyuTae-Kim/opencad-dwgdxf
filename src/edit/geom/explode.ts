@@ -205,7 +205,7 @@ function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean): Edi
   const dynRep = /^\*U/i.test(e.block);
   const content = b.entities.filter((c) => !(c.type === 'ATTDEF' && !((c as AttribEntity).attFlags & 2)) && !(dynRep && c.invisible));
   const out: Entity[] = [];
-  const blocks = [];
+  const blocks: NonNullable<EditResult['blocks']> = [];
   let message: string | undefined;
   for (let r = 0; r < rows; r++)
     for (let c = 0; c < cols; c++) {
