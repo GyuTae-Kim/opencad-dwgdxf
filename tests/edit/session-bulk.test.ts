@@ -70,8 +70,18 @@ describe('소유 블록', () => {
     s.ownerOf(e.handle);
     list.splice(5, 1);
     doc.blocks.set('B', { name: 'B', handle: '', recordHandle: '', basePoint: { x: 0, y: 0, z: 0 }, flags: 0, entities: [e] });
-    expect(s.ownerOf(e.handle)).toBe('B');
     expect(s.ownerIndex(e.handle)).toBe(0);
+    expect(s.ownerOf(e.handle)).toBe('B');
+  });
+
+  it('앞 객체를 지워 자리가 모두 밀려도 객체마다 훑지 않는다', () => {
+    const { s, list } = docWith(1000);
+    s.ownerOf(list[0]!.handle);
+    s.commit({ label: 'E', ops: [{ kind: 'remove', block: MODEL_SPACE, entity: list[0]!, index: 0 }] });
+    const n = scans(() => {
+      for (const e of list) s.ownerOf(e.handle);
+    });
+    expect(n).toBeLessThanOrEqual(20);
   });
 });
 

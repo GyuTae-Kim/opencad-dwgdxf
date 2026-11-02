@@ -296,6 +296,33 @@ describe('마감에서 실패', () => {
     expect(r.lost).toBe(true);
     check(r);
   });
+
+  it('글리프가 빠지면 묶은 상자 표에도 글리프가 남지 않는다', () => {
+    const objs = objects();
+    const b = new DisplayListBuilder(transparent);
+    for (const o of objs) {
+      o.draw(b);
+      b.endEntity(o.handle);
+    }
+    const glyphs = objs.reduce((n, o) => n + o.want.glyphs, 0);
+    // 글리프 수만큼의 두 번째 표(상자별 글리프 번호)는 상자가 글리프를 다 센 뒤에 잡는다
+    let seen = 0;
+    vi.stubGlobal(
+      'Int32Array',
+      new Proxy(Int32Array, {
+        construct(t, a, nt) {
+          if (a[0] === glyphs && ++seen === 2) throw new RangeError('Array buffer allocation failed');
+          return Reflect.construct(t, a, nt) as object;
+        },
+      }),
+    );
+    const dl = b.finish(true);
+    vi.unstubAllGlobals();
+    expect(seen).toBe(2);
+    expect(b.glyphsDropped).toBe(true);
+    const ranges = dl.packed!.ranges;
+    for (let i = 10; i < ranges.length; i += 11) expect(ranges[i]).toBe(0);
+  });
 });
 
 describe('장면', () => {

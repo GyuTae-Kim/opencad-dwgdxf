@@ -63,10 +63,13 @@ describe('풀어 둔 맞춤점 곡선', () => {
     const tangent = sharedFitCurve(e);
     expect(tangent).not.toBe(loose);
     expect(tangent).toEqual(fitPointsCurve(e));
-    e.startTangent = { x: 1, y: 0, z: 0 };
-    expect(sharedFitCurve(e)).toBe(tangent);
+    // 접선을 제자리에서 고쳐도 옛 곡선을 돌려주지 않는다
     e.startTangent.x = 2;
-    expect(sharedFitCurve(e)).not.toBe(tangent);
+    const moved = sharedFitCurve(e);
+    expect(moved).not.toBe(tangent);
+    // 값이 같은 새 객체면 다시 풀지 않는다
+    e.startTangent = { x: 2, y: 0, z: 0 };
+    expect(sharedFitCurve(e)).toBe(moved);
   });
 });
 

@@ -24,6 +24,7 @@ function displayList(n: number): DisplayList {
     if (i % 3 === 0) b.triangle(x, 4, x + 1, 4, x, 5, OPAQUE);
     if (i % 5 === 0) b.triangle(x, 6, x + 1, 6, x, 7, CLEAR);
     if (i % 4 === 0) b.glyph(glyphKey, 0, glyphData, UNIT, [0, 0, 1, 1], OPAQUE);
+    if (i === 5) b.xline(0, 0, 1, 0, false, OPAQUE);
     b.endEntity(`E${i}`);
   }
   return b.finish();
@@ -74,7 +75,7 @@ function sceneOf(dl: DisplayList, groups: boolean): GpuScene {
       ttriBuf: lazy || !c.ttriCount ? null : copy(c.ttris),
     };
   });
-  return { chunks, groups: groups ? [group] : [], images: [], xlines: new Float32Array(0), instBuf: copy(dl.glyphs.instances) } as unknown as GpuScene;
+  return { chunks, groups: groups ? [group] : [], images: [{ handle: 'E7', hidden: false }, { handle: 'NONE', hidden: false }], xlines: Float32Array.from(dl.xlines), instBuf: copy(dl.glyphs.instances) } as unknown as GpuScene;
 }
 
 function hideWith(batch: boolean, groups: boolean, pick: (i: number) => boolean) {
@@ -113,6 +114,14 @@ describe('일괄 숨기기', () => {
     const first = r.dl.entities[0]!;
     expect(style[first.seg![0] * SEG_STRIDE + 5]).not.toBe(HIDDEN);
     expect(r.boxes.length).toBe(299);
+  });
+
+  it('이미지와 구성선도 숨긴다', () => {
+    const r = hideWith(true, false, () => true);
+    const s = r.scene as unknown as { images: { hidden: boolean }[]; xlines: Float32Array };
+    expect(s.images.map((im) => im.hidden)).toEqual([true, false]);
+    expect(r.dl.xlineHandles).toEqual(['E5']);
+    expect(s.xlines[6]).toBe(HIDDEN);
   });
 
   it('묶음마다 한 번씩만 올린다', () => {
