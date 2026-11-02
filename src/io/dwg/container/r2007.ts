@@ -4,7 +4,7 @@
  * 끼워 짠(interleave) 바이트를 풀어 자료 바이트만 꺼낸다(손상되지 않은 파일이면 그것으로 충분하다).
  */
 import { CadReadError } from '../../../core/errors';
-import { decompressedSizeOk, sectionWorkLimit } from '../../../core/limits';
+import { MISSING_PAGE_BYTES, decompressedSizeOk, sectionWorkLimit } from '../../../core/limits';
 import { DwgFormatError } from '../bitstream';
 import { decompressR21 } from '../lz77r21';
 import { type DwgSections, warn } from './types';
@@ -128,12 +128,15 @@ export function readR2007Container(data: Uint8Array, ver: number): DwgSections {
   }
 
   let unpacked = 0;
+  let missing = 0;
   const readSection = (name: string): Uint8Array | null => {
     const sec = sections.get(name);
     if (!sec) return null;
     if (sec.encrypted === 1) throw new CadReadError('dwg.encrypted', { section: name });
-    if (!decompressedSizeOk(unpacked + sec.dataSize, data.length)) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
-    unpacked += sec.dataSize;
+    const backed = Math.min(sec.dataSize, sec.pages.length * sec.maxSize);
+    if (!decompressedSizeOk(unpacked + backed, data.length) || missing + sec.dataSize - backed > MISSING_PAGE_BYTES) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
+    unpacked += backed;
+    missing += sec.dataSize - backed;
     const out = new Uint8Array(sec.dataSize);
     const workLimit = sectionWorkLimit(data.length, sec.dataSize);
     let work = 0;
