@@ -3,6 +3,7 @@
  * EDGEMODE = 1이면 모서리를 자연스럽게 연장한다(선 → 무한선, 호 → 원, 타원호 → 타원, 열린 폴리선 → 끝 세그먼트의 연장).
  */
 import { minsertGrid } from '../../core/limits';
+import { pushAll } from '../../core/arrays';
 import type { BlockDef, CadDocument, Entity, Vec2 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { type ArcPiece, type EllPiece, type LinePiece, type Piece, pathBox, pieceAt, pieceBox, pieceTangent } from './curve';
@@ -36,7 +37,7 @@ export function edgePieces(e: Entity, doc?: CadDocument, depth = 0): Piece[] {
       if (!doc || depth > 4) return [];
       const r = explodeEntity(e, doc, true);
       const out: Piece[] = [];
-      for (const c of r.add ?? []) if (c.type !== 'TEXT' && c.type !== 'MTEXT' && c.type !== 'ATTDEF' && c.type !== 'POINT') out.push(...edgePieces(c, doc, depth + 1));
+      for (const c of r.add ?? []) if (c.type !== 'TEXT' && c.type !== 'MTEXT' && c.type !== 'ATTDEF' && c.type !== 'POINT') pushAll(out, edgePieces(c, doc, depth + 1));
       return out;
     }
     case 'LEADER':
@@ -52,7 +53,7 @@ export function edgePieces(e: Entity, doc?: CadDocument, depth = 0): Piece[] {
           const d = v.elements[k]?.params[0] ?? 0;
           return { x: v.position.x + v.miter.x * d, y: v.position.y + v.miter.y * d };
         });
-        out.push(...segs(pts, (e.flags & 2) !== 0));
+        pushAll(out, segs(pts, (e.flags & 2) !== 0));
       }
       return out;
     }
@@ -106,7 +107,7 @@ export function edgePieces(e: Entity, doc?: CadDocument, depth = 0): Piece[] {
     case '3DSOLID':
     case 'BODY': {
       const out: Piece[] = [];
-      for (const w of e.wires ?? []) out.push(...segs(w.map((p) => ({ x: p.x, y: p.y })), false));
+      for (const w of e.wires ?? []) pushAll(out, segs(w.map((p) => ({ x: p.x, y: p.y })), false));
       return out;
     }
     default:

@@ -3,6 +3,7 @@
  * 순수 계산은 src/edit/assocarray.
  */
 import type { CadDocument, InsertEntity } from '../core/model';
+import { maxOf, minOf } from '../core/arrays';
 import { entityDefaults, tableKey } from '../core/model';
 import { insertAffine } from '../edit/dynblock/build';
 import { allocBlockName } from '../edit/geom/types';
@@ -107,10 +108,10 @@ export function itemAt(doc: CadDocument, info: ArrayInfo, p: Pt, tol = 0): ItemH
       : [affApply(M, info.state.params.base)];
     const xs = corners.map((c) => c.x);
     const ys = corners.map((c) => c.y);
-    const minX = Math.min(...xs) - tol;
-    const maxX = Math.max(...xs) + tol;
-    const minY = Math.min(...ys) - tol;
-    const maxY = Math.max(...ys) + tol;
+    const minX = minOf(xs) - tol;
+    const maxX = maxOf(xs) + tol;
+    const minY = minOf(ys) - tol;
+    const maxY = maxOf(ys) + tol;
     if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) continue;
     const d = Math.hypot(p.x - (minX + maxX) / 2, p.y - (minY + maxY) / 2);
     if (d < bd) {

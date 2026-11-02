@@ -5,6 +5,7 @@
  * 짐작한 매개변수는 항목 맞추기(match.ts)로 다시 확인한다(맞지 않으면 편집할 수 없는 배열로 본다).
  */
 import type { BlockDef, CadDocument, InsertEntity, Vec2 } from '../../core/model';
+import { maxOf } from '../../core/arrays';
 import { tableKey } from '../../core/model';
 import { insertAffine } from '../dynblock/build';
 import { entityPath } from '../geom/path';
@@ -169,8 +170,8 @@ function inferPolar(refs: readonly ItemRef[]): ArrayParams | null {
   }
   const ccw = angs.map((a) => (((a - a0) % TAU) + TAU) % TAU).map((d) => (d > TAU - 1e-7 ? 0 : d));
   // 방향: 반시계로 잰 펼침과 시계로 잰 펼침 중 작은 쪽(같으면 반시계)
-  const spanCcw = Math.max(...ccw);
-  const spanCw = Math.max(...ccw.map((d) => (d > 1e-9 ? TAU - d : 0)));
+  const spanCcw = maxOf(ccw);
+  const spanCw = maxOf(ccw.map((d) => (d > 1e-9 ? TAU - d : 0)));
   const cw = spanCw < spanCcw - 1e-7;
   const rel = ccw.map((d) => (cw ? (d > 1e-9 ? TAU - d : 0) : d)).sort((a, b) => a - b);
   let mag = TAU;

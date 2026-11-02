@@ -3,6 +3,7 @@
  * 프롬프트는 AutoCAD 2026 한국어판을 따른다.
  */
 import type { Entity } from '../core/model';
+import { pushAll } from '../core/arrays';
 import { tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
 import type { App, CommandContext } from './app';
@@ -167,7 +168,7 @@ export function registerLayerToolCommands(app: App): void {
         const key = tableKey(name);
         const erase = eraseLayerOps(st, key);
         n += erase.length;
-        ops.push(...erase);
+        pushAll(ops, erase);
         const before = st.doc.layers.get(key);
         if (before) ops.push({ kind: 'layer', key, before, after: null });
       }

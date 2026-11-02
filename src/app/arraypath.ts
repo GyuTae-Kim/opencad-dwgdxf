@@ -6,6 +6,7 @@
  * 프롬프트는 AutoCAD 2026 한국어판을 따른다. 자리 계산은 src/edit/arraypath.
  */
 import type { Entity } from '../core/model';
+import { pushAll } from '../core/arrays';
 import { formatLength } from '../core/units';
 import { copyEntity, transformEntity, type EditResult } from '../edit/geom';
 import { entityPath } from '../edit/geom/path';
@@ -314,7 +315,7 @@ export async function runArrayPath(app: App, ctx: CommandContext, hs: string[]):
       }
     }
   }
-  results.push(...moveOriginal);
+  pushAll(results, moveOriginal);
   st.selection.clear();
   const res = commitResults(app, ctx, results, 'ARRAYPATH');
   app.refreshSelectionOverlay();

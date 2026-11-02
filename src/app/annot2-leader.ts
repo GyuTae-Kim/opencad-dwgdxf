@@ -3,6 +3,7 @@
  * 프롬프트는 AutoCAD 2026 한국어판을 따른다. 계산은 src/edit/annot(mleader·qleader·mlstyle).
  */
 import type { BlockDef, DictionaryObject, Entity, InsertEntity, LeaderEntity, MLeaderEntity, MLeaderStyleObject, MTextEntity, ToleranceEntity, Vec3 } from '../core/model';
+import { maxOf } from '../core/arrays';
 import { entityDefaults, tableKey } from '../core/model';
 import { builtinArrowBlock, dimVars } from '../edit/dim';
 import { addLeaderLine, alignMleaders, type AlignMode, collectLayout, landingOf, leaderPolyline, lineCount, removeLeaderLine, translateContent } from '../edit/annot/mleader';
@@ -481,7 +482,7 @@ export function registerAnnot2Leader(app: App): void {
         ctx.print('블록 정의를 찾을 수 없는 다중 지시선이 있습니다.', 'err');
         return;
       }
-      const gap = Math.max(...items.map((i) => Math.max(i.box.w, i.box.h))) * 0.1;
+      const gap = maxOf(items.map((i) => Math.max(i.box.w, i.box.h))) * 0.1;
       const pos = collectLayout(
         items.map((i) => ({ w: i.box.w, h: i.box.h })),
         layoutMode,

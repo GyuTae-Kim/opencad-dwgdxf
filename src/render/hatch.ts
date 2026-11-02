@@ -3,6 +3,7 @@
  * 좌표는 해치 OCS(2D)다. 호출한 쪽이 월드로 옮긴다.
  */
 import earcut from 'earcut';
+import { pushAll } from '../core/arrays';
 import { LINETYPE_ELEMENTS } from '../core/limits';
 import type { HatchEntity, HatchPath, HatchPatternLine } from '../core/model';
 import { type FitWork, arcPoints, bulgeFlatPoints, ccwSweep, ellipsePoints, interpolateFitPoints, nurbsPoints } from '../geom/curves';
@@ -129,7 +130,7 @@ export function triangulateLoops(loops: number[][]): number[] {
       const h = loops[j]!;
       if (!pointInRing((h[0]! + h[2]!) / 2, (h[1]! + h[3]!) / 2, outer)) continue;
       holes.push(flat.length / 2);
-      flat.push(...h);
+      pushAll(flat, h);
     }
     const idx = earcut(flat, holes, 2);
     for (const k of idx) out.push(flat[k * 2]!, flat[k * 2 + 1]!);

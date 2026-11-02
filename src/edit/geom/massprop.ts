@@ -6,6 +6,7 @@
  * 313.9350이 아니라 314.1593). 같은 면(face)의 안쪽 고리만 구멍이고, 서로 다른 면·서로 다른 REGION은 더한다(AutoCAD와 같다).
  */
 import type { AcisCurve } from '../../core/model';
+import { pushAll } from '../../core/arrays';
 
 export interface MassProps {
   area: number;
@@ -187,7 +188,7 @@ export function wiresToRings(wires: readonly { x: number; y: number }[][], tol =
       if (i < 0) break;
       const w = left.splice(i, 1)[0]!;
       const seg = near(w[0]!, end) ? w : [...w].reverse();
-      chain.push(...seg.slice(1));
+      pushAll(chain, seg.slice(1));
     }
     if (chain.length >= 4 && near(chain[0]!, chain[chain.length - 1]!)) rings.push(chain.slice(0, -1).flat());
   }

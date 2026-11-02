@@ -4,6 +4,7 @@
  * 브라우저에서는 출력 파일을 내려받기로 쓰고, 입력 파일은 고르기 상자(스크립트·FILEDIA 0이면 이 세션에 고른 파일 이름)로 읽는다.
  */
 import type { Entity, InsertEntity } from '../core/model';
+import { pushAll } from '../core/arrays';
 import { tableKey } from '../core/model';
 import { attInOps, attOutText, parseAttIn } from '../edit/blkcmds/attout';
 import { type ExtractBlock, type Template, collectBlocks, formatDxx, formatRecords, parseTemplate, templateTags } from '../edit/blkcmds/attext';
@@ -24,7 +25,7 @@ const TXT_ACCEPT = '.txt,.TXT,.tsv,.TSV,.csv,.CSV';
 function allSpaceEntities(app: App): Entity[] {
   const doc = app.active!.doc;
   const out: Entity[] = [];
-  for (const [k, b] of doc.blocks) if (/^\*(MODEL|PAPER)_SPACE/i.test(k)) out.push(...b.entities);
+  for (const [k, b] of doc.blocks) if (/^\*(MODEL|PAPER)_SPACE/i.test(k)) pushAll(out, b.entities);
   return out;
 }
 

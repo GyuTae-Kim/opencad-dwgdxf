@@ -5,6 +5,7 @@
  * - rebuildAssociative: 경계 객체가 바뀐 뒤 연관 해치 경계 다시 만들기
  */
 import type { CadDocument, Entity, HatchEdge, HatchEntity, HatchPath, Vec2, Vec3 } from '../../core/model';
+import { pushAll } from '../../core/arrays';
 import { ocsMatrix } from '../../geom/matrix';
 import { pathLoop } from '../../render/hatch';
 import { type Box, type Curve, TAU, clipXLines, derivAt, entitiesToCurves, isCircle, pointAt, reverseNurbs, roughBox, splineSub } from './curves';
@@ -96,7 +97,7 @@ function collect(doc: CadDocument, list: readonly Entity[], pick: Vec2 | undefin
     const h = box.maxY - box.minY;
     const pad = Math.max(w, h, 1) * 0.5;
     const clip = { minX: box.minX - pad, minY: box.minY - pad, maxX: box.maxX + pad, maxY: box.maxY + pad };
-    curves.push(...clipXLines(xlines, clip));
+    pushAll(curves, clipXLines(xlines, clip));
     box = unionBox(curves, pick);
   }
   const size = Math.hypot(box.maxX - box.minX, box.maxY - box.minY) || 1;
@@ -680,7 +681,7 @@ function finishRegion(prep: Prepared, outer: Loop, outerComp: number, attached: 
     const mx = p.xs[p.xs.length >> 1]!;
     const my = p.ys[p.ys.length >> 1]!;
     if (!pointInRing(mx, my, outer.xs, outer.ys)) continue;
-    loops.push(...contourOf(g, info[c]!, eps));
+    pushAll(loops, contourOf(g, info[c]!, eps));
   }
   // 깊이: 다른 섬 고리 안에 몇 겹 들어 있는가
   const depths = nestDepths(loops.map((l) => ({ xs: l.xs, ys: l.ys, area: Math.abs(l.area), box: loopBox(l) })));
@@ -1001,7 +1002,7 @@ function boundedFaces(g: Graph): Loop[] {
     if (!walk.length) continue;
     const r = g.ring(walk);
     const area = signedArea(r.xs, r.ys);
-    if (area > 0) out.push(...splitWalk(g, walk).filter((l) => l.area > 0));
+    if (area > 0) pushAll(out, splitWalk(g, walk).filter((l) => l.area > 0));
   }
   return out;
 }
@@ -1044,7 +1045,7 @@ export function rebuildAssociative(doc: CadDocument, hatch: HatchEntity, boundar
       if (island) {
         const info = compInfo(g);
         const all: Loop[] = [];
-        for (let c = 0; c < info.length; c++) if (info[c]) all.push(...contourOf(g, info[c]!, eps));
+        for (let c = 0; c < info.length; c++) if (info[c]) pushAll(all, contourOf(g, info[c]!, eps));
         pick = nearestLoop(all, oldC);
       } else {
         const q = (hatch.seedPoints.find((s) => pointInRing(s.x, s.y, old.xs, old.ys)) ?? interiorPoint(old.xs, old.ys)) as Vec2 | null;

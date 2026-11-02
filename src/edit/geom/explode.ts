@@ -26,6 +26,7 @@ import type {
   Vec2,
   Vec3,
 } from '../../core/model';
+import { pushAll } from '../../core/arrays';
 import { tableKey } from '../../core/model';
 import { minsertGrid } from '../../core/limits';
 import { polyLocs, polyVertices } from '../../core/polyverts';
@@ -221,8 +222,8 @@ function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean): Edi
         opt,
         false,
       );
-      out.push(...res.ents);
-      blocks.push(...res.blocks);
+      pushAll(out, res.ents);
+      pushAll(blocks, res.blocks);
       if (res.message && !message) message = res.message;
     }
   // 속성 → 현재 값의 문자
