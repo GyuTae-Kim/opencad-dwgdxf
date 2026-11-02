@@ -229,7 +229,7 @@ describe('압축 폭탄', () => {
 describe('0만 있는 페이지', () => {
   const PAGE = 0x7400;
   const section = (name: string, data: Uint8Array) => ({ name, data, compressed: true, pageSize: PAGE });
-  const write = (objects: Uint8Array, extra: { name: string; data: Uint8Array; compressed: boolean; pageSize: number }[] = []) => {
+  const write = (objects: Uint8Array, extra: ReturnType<typeof section>[] = []) => {
     const sections = [section('AcDb:Header', new Uint8Array(32).fill(1)), section('AcDb:Handles', new Uint8Array(32).fill(2)), section('AcDb:AcDbObjects', objects), ...extra];
     return writeR2004(1018, 0, 30, sections, sections.map((s) => s.name));
   };
@@ -251,11 +251,11 @@ describe('0만 있는 페이지', () => {
     const { data } = writeDwg(doc, { version: 'AC1032' });
     const back = readCadFile(data, 'x.dwg');
     expect(back.warnings).toEqual([]);
-    const raw = modelOf(back).find((x) => x.type === 'OLE2FRAME')!.dwgRaw!;
-    expect(raw.data.length).toBeGreaterThanOrEqual(body.length);
-    expect(raw.data.subarray(raw.data.length - 16).some((b) => b === 0x81)).toBe(true);
-    const again = writeDwg(back, { version: 'AC1032' }).data;
-    expect(modelOf(readCadFile(again, 'y.dwg')).filter((x) => x.type === 'OLE2FRAME').length).toBe(1);
+    const rawOf = (d: CadDocument) => modelOf(d).find((x) => x.type === 'OLE2FRAME')!.dwgRaw!.data;
+    expect(Buffer.compare(rawOf(back), body)).toBe(0);
+    const again = readCadFile(writeDwg(back, { version: 'AC1032' }).data, 'y.dwg');
+    expect(again.warnings).toEqual([]);
+    expect(Buffer.compare(rawOf(again), body)).toBe(0);
   });
 
   it('0 구역 앞뒤의 자료가 제자리에 남는다', () => {
