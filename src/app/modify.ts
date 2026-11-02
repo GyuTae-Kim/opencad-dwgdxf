@@ -1424,12 +1424,14 @@ export function registerModifyCommands(app: App): void {
       if (!hs.length) return;
       const results: EditResult[] = [];
       let fail = 0;
+      const reasons = new Set<string>();
       for (const h of hs) {
         const e = st.doc.entityIndex.get(h);
         if (!e) continue;
         const r = explodeEntity(e, st.doc);
         if (!r.add?.length && !r.remove?.length && !r.replace?.length) {
           fail++;
+          if (r.message) reasons.add(r.message);
           continue;
         }
         results.push({ ...r, message: undefined });
@@ -1437,6 +1439,7 @@ export function registerModifyCommands(app: App): void {
       st.selection.clear();
       const a = commitResults(app, ctx, results, 'EXPLODE');
       if (fail) ctx.print(`${fail}개는 분해할 수 없습니다.`);
+      for (const m of reasons) ctx.print(m);
       ctx.print(`${results.length}개를 분해해 객체 ${a.added.length}개를 만들었습니다.`);
       app.setSelection(a.added.slice(0, 5000));
     },

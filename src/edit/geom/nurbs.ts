@@ -3,6 +3,7 @@
  * 원호·타원호의 유리 2차 표현, 닫힌(주기) 3차 보간.
  * 조정점은 3D(Z 유지), 가중치가 없으면 모두 1이다.
  */
+import { SPLINE_MAX_DEGREE } from '../../core/limits';
 import type { Vec2, Vec3 } from '../../core/model';
 import { clampedKnots } from '../../geom/curves';
 
@@ -37,10 +38,10 @@ function fromHomog(degree: number, knots: number[], Pw: H[], rational: boolean):
   return out;
 }
 
-/** 매듭 개수가 맞지 않으면 균일 고정 매듭으로 고친다 */
+/** 매듭 개수가 맞지 않으면 균일 고정 매듭으로 고친다. 차수는 그리기와 같이 한도까지만 쓴다(계산량이 차수의 제곱에 비례한다) */
 export function normalizeNurbs(c: Nurbs): Nurbs {
   const n = c.ctrl.length;
-  const p = Math.max(1, Math.min(c.degree, n - 1));
+  const p = Math.max(1, Math.min(c.degree, n - 1, SPLINE_MAX_DEGREE));
   let knots = c.knots;
   if (knots.length !== n + p + 1) knots = clampedKnots(n, p);
   let weights = c.weights;

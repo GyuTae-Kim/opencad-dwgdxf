@@ -2,6 +2,7 @@
  * 절단·경계 모서리: 어떤 객체든 평면도 조각 목록으로(블록 참조·치수는 분해한 그림, 지시선·여러 줄·면은 선분).
  * EDGEMODE = 1이면 모서리를 자연스럽게 연장한다(선 → 무한선, 호 → 원, 타원호 → 타원, 열린 폴리선 → 끝 세그먼트의 연장).
  */
+import { minsertGrid } from '../../core/limits';
 import type { BlockDef, CadDocument, Entity, Vec2 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { type ArcPiece, type EllPiece, type LinePiece, type Piece, pathBox, pieceAt, pieceBox, pieceTangent } from './curve';
@@ -33,7 +34,7 @@ export function edgePieces(e: Entity, doc?: CadDocument, depth = 0): Piece[] {
     case 'ACAD_TABLE':
     case 'MULTILEADER': {
       if (!doc || depth > 4) return [];
-      const r = explodeEntity(e, doc);
+      const r = explodeEntity(e, doc, true);
       const out: Piece[] = [];
       for (const c of r.add ?? []) if (c.type !== 'TEXT' && c.type !== 'MTEXT' && c.type !== 'ATTDEF' && c.type !== 'POINT') out.push(...edgePieces(c, doc, depth + 1));
       return out;
@@ -224,8 +225,8 @@ export function edgeBox(e: Entity, doc?: CadDocument, depth = 0): Box | 'inf' | 
       return mapBox(bb, [A]);
     }
     const P = planProj(e.extrusion, e.insert.z);
-    const rows = Math.max(1, e.rowCount);
-    const cols = Math.max(1, e.columnCount);
+    // 모서리 조각(분해)이 펼치는 칸과 같은 범위
+    const { rows, cols } = minsertGrid(e);
     const mats: Affine[] = [];
     for (const r of rows > 1 ? [0, rows - 1] : [0])
       for (const c of cols > 1 ? [0, cols - 1] : [0])

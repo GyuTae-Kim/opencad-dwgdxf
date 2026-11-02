@@ -1365,6 +1365,8 @@ function writeTable(w: TagOut, e: TableEntity): void {
   // 원본 태그가 없거나 다른 형식 계열: 셀 배치(병합·정렬·셀 서식)로 만든다(io/tablecells.ts)
   const lay = tableCellsOut(e, ctx.doc);
   w.raw(acdbTableTags(lay, { style: style || '0', blockRec, direction: e.direction, ver, styleOk: (n) => ctx.styleH.has(tableKey(n)) }));
+  // 한도를 넘어 셀 없는 표로 둔 표: 같은 형식 계열이면 위의 원본 태그로 셀이 남지만 여기서는 빠진다
+  if (!(lay.rows * lay.cols > 0)) ctx.warn('table.cells_dropped', '행과 열이 너무 많은 표(ACAD_TABLE)는 이 버전으로 쓰지 못해 셀 내용 없이 그림만 남겼습니다.');
   // 앱 표(셀 서식을 아는 표)는 잃는 것이 없다. AutoCAD 표를 다른 형식 계열로 옮기면 테두리 재지정 등이 빠지고,
   // 셀 서식을 모르는 표는 기본 셀이 된다.
   if (!lay.style && lay.rows * lay.cols > 0)

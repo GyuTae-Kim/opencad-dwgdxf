@@ -162,6 +162,15 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
     if (opts.onProgress && (done & 511) === 0) opts.onProgress(0.05 + 0.85 * (done / total));
   };
 
+  // 객체 지도가 큰 객체 하나를 핸들 수만 개로 가리켜도 객체 구역을 몇 번씩 되읽지 않는다(정상 파일은 객체마다 한 번, 뒤로 미룬 것만 두 번)
+  const readLimit = sec.objects.length * 8 * 3;
+  let readBits = 0;
+  const overRead = (): boolean => {
+    if (readBits <= readLimit) return false;
+    warn(warnings, 'dwg.object_repeat', '객체 지도가 같은 객체를 너무 여러 번 가리켜 나머지 객체를 읽지 않았습니다.');
+    return true;
+  };
+
   const deferred: number[] = [];
   // 비도형 객체의 확장 자료(앱 이름은 APPID를 다 읽은 뒤에 푼다)와 표 제어 객체의 머리
   const objEed = new Map<number, NonNullable<typeof or.h.eed>>();
@@ -169,10 +178,12 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   const dbColors = new Map<number, CadColor>();
   for (const h of objectHandles) {
     progress();
+    if (overRead()) break;
     const off = map.get(h)!;
     let t = typeOf.get(h)!;
     try {
       const oh = or.begin(off, h);
+      readBits += oh.endBit - oh.startBit;
       if (!oh.crcOk) crcBad[t] = (crcBad[t] ?? 0) + 1;
       t = oh.typeName;
       if (oh.eed) objEed.set(h, oh.eed);
@@ -555,10 +566,12 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
       warn(warnings, 'dwg.entity_limit', `도형이 ${maxEnt}개를 넘어 나머지는 읽지 않았습니다.`);
       break;
     }
+    if (overRead()) break;
     const off = map.get(h)!;
     let t = typeOf.get(h)!;
     try {
       const oh = or.begin(off, h);
+      readBits += oh.endBit - oh.startBit;
       t = oh.typeName;
       if (!oh.crcOk) crcBad[t] = (crcBad[t] ?? 0) + 1;
       const p = readEntity(or, names);

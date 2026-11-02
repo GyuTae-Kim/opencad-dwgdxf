@@ -237,6 +237,9 @@ export function readTableCellsOld(or: ObjectReader, e: TableEntity): void {
   // 핸들 흐름: (블록 헤더·속성·SEQEND는 이미 읽음) 표 스타일, 그리고 셀마다의 핸들
   const style = hr.H(hb);
   if (style) e.tableStyle = style.toString(16).toUpperCase();
+  // 행·열은 따로 검사해도 곱은 커진다. 셀 하나는 자료 18비트(BS 2 + RC 8 + B 2 + BL 4 + BD 2)와 핸들 1바이트 이상이다
+  r.checkCount(nc * nr, 18);
+  hr.checkCount(nc * nr, 8);
   const cells: { text: string }[] = [];
   for (let i = 0; i < nc * nr; i++) {
     const type = r.BS();

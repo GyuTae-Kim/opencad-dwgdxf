@@ -35,6 +35,7 @@ const ENTITY_DROPS = new Set([
   'entity.underlay_dropped',
   'entity.table_dropped',
   'entity.dimension_dropped',
+  'table.cells_dropped',
   'r12.unsupported',
   'r12.layout_dropped',
 ]);
@@ -44,6 +45,7 @@ const CONVERSIONS = new Set([
   'entity.acis_as_wires',
   'entity.mleader_exploded',
   'entity.table_as_insert',
+  'dwg.write_table_as_insert',
   'entity.dimension_as_insert',
   'entity.mesh_as_polyface',
   'entity.proxy_as_geometry',

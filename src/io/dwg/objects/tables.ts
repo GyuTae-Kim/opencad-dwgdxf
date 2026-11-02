@@ -124,7 +124,8 @@ export function readControl(or: ObjectReader): ControlObject {
   const n = r.BL();
   const hr = or.hdl;
   const entries: number[] = [];
-  const count = n >= 0 && n < 1000000 ? n : 0;
+  // 핸들 하나는 1바이트 이상이다. 작은 객체가 100만 개라고 적어도 남은 비트로 막는다
+  const count = n >= 0 && n < 1000000 && n * 8 <= hr.remainingBits() + 64 ? n : 0;
   for (let i = 0; i < count; i++) entries.push(hr.H(h.handle));
   const extra: number[] = [];
   if (h.typeName === 'BLOCK_CONTROL' || h.typeName === 'LTYPE_CONTROL') {
