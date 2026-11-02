@@ -135,8 +135,8 @@ export const DASH_TEXT_LIMIT = DASH_REPEAT_LIMIT * 32;
  * R2007 압축은 명령 하나가 더 늘리지만 페이지마다 RS 블록 255바이트를 차지해 0x7400바이트 페이지에서 116.5배 안쪽이다.
  * 합법 파일도 이 값 가까이 간다. 같은 바이트로 찬 0x7400 페이지는 쓰기 결과가 머리까지 160바이트(185배)이고, 더 낮은 값은 그런 파일을 손상으로 거부한다.
  * 그래서 크기만 크게 적은 파일은 할당 전에 막고, 실제로 그만큼 풀리는 파일은 합법 도면과 구별되지 않으므로 받는다.
- * 예외는 0만 있는 페이지다. 파일에 쓰지 않으므로 그런 페이지가 많은 섹션은 이 상한을 넘을 수 있고(1.7KB 파일의 8MiB 구역) 크기만 적은 파일과 구별되지 않아 거부한다.
- * 같은 까닭으로 페이지 수로 더 좁히지 않는다. 섹션 크기가 페이지 합보다 클 수 있기 때문이다
+ * 예외는 파일에 없는 0 페이지다. 다른 프로그램이 그런 페이지를 많이 건너뛴 섹션은 이 상한을 넘을 수 있고, 크기만 적은 파일과 구별되지 않아 거부한다.
+ * 이 앱의 쓰기는 ZERO_PAGE_SKIP으로 넘지 않는다. 같은 까닭으로 페이지 수로 더 좁히지 않는다. 섹션 크기가 페이지 합보다 클 수 있기 때문이다
  */
 export const DECOMPRESS_RATIO = 255;
 
@@ -144,6 +144,13 @@ export const DECOMPRESS_RATIO = 255;
 export function decompressLimit(fileBytes: number): number {
   return fileBytes * DECOMPRESS_RATIO + 0x100000;
 }
+
+/**
+ * 쓰기가 건너뛰는 0 페이지의 파일 합. 0만 있는 페이지는 쓰지 않아도 0으로 읽히지만(RevHistory가 늘 그렇다) 섹션 크기에는 들어가므로 압축 비율 근거 밖이다.
+ * 이 값이 decompressLimit의 1 MiB 여유 안쪽이라 쓴 파일은 내용과 상관없이 읽기 한도에 닿지 않고, 넘는 0 페이지는 그대로 쓴다(페이지당 160바이트).
+ * 원본 본문에 0이 길게 이어지는 OLE 객체를 다시 저장하면 파일이 7.7KB, 객체 구역이 8MiB가 되어 다시 열리지 않았다
+ */
+export const ZERO_PAGE_SKIP = 0x80000;
 
 /** 압축을 푼 크기가 파일 크기에 비해 말이 되는지 */
 export function decompressedSizeOk(size: number, fileBytes: number): boolean {

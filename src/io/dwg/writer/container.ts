@@ -1,6 +1,7 @@
 /**
  * 파일 구조 쓰기: 객체 지도(사양 23장), R2000 파일(3장), R2004+ 섹션·페이지(4장).
  */
+import { ZERO_PAGE_SKIP } from '../../../core/limits';
 import { crc32, crc8, pageChecksum } from '../crc';
 import { R2018 } from '../version';
 import { compressR18 } from './lz77enc';
@@ -326,6 +327,7 @@ export function writeR2004(ver: number, maint: number, codepage: number, section
   const pages: Page[] = [];
   const secPages = new Map<string, { num: number; dataSize: number; start: number }[]>();
   let pageNum = 0;
+  let skippedZero = 0;
   const byName = new Map(sections.map((s) => [s.name, s]));
   // 섹션 번호: "" = 0, 나머지는 지도 순서의 뒤에서부터 내려온다
   const ids = new Map<string, number>();
@@ -342,7 +344,7 @@ export function writeR2004(ver: number, maint: number, codepage: number, section
     for (let start = 0; start < s.data.length; start += ps) {
       const chunk = new Uint8Array(ps);
       chunk.set(s.data.subarray(start, Math.min(s.data.length, start + ps)));
-      // 0만 있는 페이지는 쓰지 않는다
+      // 0만 있는 페이지는 쓰지 않는다. 다만 많이 건너뛰면 쓴 파일이 읽기 한도를 넘으므로 합을 묶는다
       let allZero = true;
       for (let k = 0; k < chunk.length; k++) {
         if (chunk[k]) {
@@ -350,7 +352,10 @@ export function writeR2004(ver: number, maint: number, codepage: number, section
           break;
         }
       }
-      if (allZero && s.compressed) continue;
+      if (allZero && s.compressed && skippedZero + ps <= ZERO_PAGE_SKIP) {
+        skippedZero += ps;
+        continue;
+      }
       const payload = s.compressed ? compressR18(chunk) : chunk;
       const address = o.n;
       const num = ++pageNum;
