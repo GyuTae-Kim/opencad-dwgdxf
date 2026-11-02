@@ -4,7 +4,7 @@ import { isNaturalExt, ocsToWcs } from '../edit/geom/ocs';
 import { tableKey } from '../core/model';
 import { DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../core/dimvars';
 import { type UnitSettings, formatAngle, formatLength } from '../core/units';
-import { bulgeArc, ccwSweep, fitPointsCurve, nurbsPoints, TAU } from '../geom/curves';
+import { bulgeArc, ccwSweep, nurbsPoints, sharedFitCurve, TAU } from '../geom/curves';
 import { hatchLoops } from '../render/hatch';
 import { decodePercent } from '../text/mtext';
 import { definitionName } from '../edit/dynblock';
@@ -213,7 +213,7 @@ function splineLength(e: Extract<Entity, { type: 'SPLINE' }>): number {
   let pts: number[];
   if (ctrlCount(e) >= 2) pts = nurbsPoints(e.degree, e.knots, splineCtrl(e), e.weights, 1e-6);
   else if (fitCount(e) >= 2) {
-    const s = fitPointsCurve(e);
+    const s = sharedFitCurve(e);
     pts = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e-6);
   } else return 0;
   let L = 0;

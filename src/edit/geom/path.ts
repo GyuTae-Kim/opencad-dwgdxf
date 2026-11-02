@@ -21,7 +21,7 @@ import type {
 import { lwCount, packLw, unboxLw } from '../../core/lwpoly';
 import { packPoly, polyVertices, unboxPoly } from '../../core/polyverts';
 import { ctrlCount, fitCount, pack3, splineCtrl, unboxSpline } from '../../core/flat3';
-import { bulgeArc, fitPointsCurve } from '../../geom/curves';
+import { bulgeArc, sharedFitCurve } from '../../geom/curves';
 import { ellipseFromConjugate } from './conic';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, type Path, type Piece, pieceAt, pieceLength, pieceSize, reversePiece } from './curve';
 import { type Affine, TAU, affApply, affLin, affSimilarity, dist, normAngle, sweepToBulge } from './math';
@@ -158,7 +158,7 @@ export function splineNurbs(e: SplineEntity): Nurbs | null {
     return normalizeNurbs({ degree: e.degree, knots: e.knots, ctrl: splineCtrl(e), weights: e.weights });
   }
   if (fitCount(e) >= 2) {
-    const s = fitPointsCurve(e);
+    const s = sharedFitCurve(e);
     return normalizeNurbs({ degree: s.degree, knots: s.knots, ctrl: s.ctrl });
   }
   return null;

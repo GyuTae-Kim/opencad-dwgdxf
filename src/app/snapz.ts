@@ -9,7 +9,7 @@
  */
 import type { Entity, Vec3 } from '../core/model';
 import { apply, identity, withOcs } from '../geom/matrix';
-import { fitPointsCurve, nurbsPoints } from '../geom/curves';
+import { nurbsPoints, sharedFitCurve } from '../geom/curves';
 import { polyVertices } from '../core/polyverts';
 import type { Pt } from './view';
 import { fitCount, splineCtrl, splineFit } from '../core/flat3';
@@ -81,7 +81,7 @@ function splinePoints(e: Entity & { type: 'SPLINE' }): Vec3[] {
   const ctrl = splineCtrl(e);
   if (ctrl.length >= 2) flat = nurbsPoints(e.degree, e.knots, ctrl, e.weights, Math.max(1e-9, spanOf(ctrl) * 1e-5));
   else if (fitCount(e) >= 2) {
-    const s = fitPointsCurve(e);
+    const s = sharedFitCurve(e);
     flat = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, Math.max(1e-9, spanOf(s.ctrl) * 1e-5));
   } else return splineFit(e);
   const out: Vec3[] = [];
