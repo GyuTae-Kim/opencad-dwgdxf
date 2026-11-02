@@ -19,8 +19,8 @@ import { pickColor } from './colorpick';
 import { type MenuItem, dialog, formatBytes, h, iconSpan, showMenu, toast } from './dom';
 import { icon } from './icons';
 import { MobileView, isCoarse, readMobileMode, startInViewMode } from './mobileview';
-import { RecentStore, recentTimeLabel } from '../recent';
-import { openErrorInfo, OPEN_MAX_BYTES, type OpenErrorInfo } from '../openerror';
+import { RECENT_MAX_SIZE, RecentStore, recentTimeLabel } from '../recent';
+import { openErrorInfo, type OpenErrorInfo } from '../openerror';
 import { colorTheme, setColorTheme, THEME_EVENT } from '../theme';
 import { type AnnoStatus, annoStatus } from '../annoscale-status';
 import { DEGREE_UNITS, POLAR_COMMON_ANGLES, formatPolarAngle } from '../polar';
@@ -1028,25 +1028,23 @@ export class Shell implements UiHooks {
         await loadLispFile(this.app, f);
         continue;
       }
-      if (f.size > OPEN_MAX_BYTES) {
-        beginOpen('local', f.name.split('.').pop() ?? 'other').error('size_limit');
-        this.app.reportOpenError(f.name, openErrorInfo('size_limit'));
-        continue;
-      }
-      // 아주 큰 파일은 미리 알린다(휴대폰은 메모리가 모자라면 탭째 닫힐 수 있다)
+      // 크기로 막지 않고 기기가 잡을 수 있는 만큼 연다. 아주 큰 파일은 미리 알린다(휴대폰은 메모리가 모자라면 탭째 닫힐 수 있다)
       if (f.size > BIG_FILE_BYTES) toast(`큰 파일(${formatBytes(f.size)})이라 여는 데 시간이 걸리고 메모리를 많이 씁니다. 다른 탭을 닫아 두면 좋습니다.`, 'warn', 8000);
       const attempt = beginOpen('local', f.name.split('.').pop() ?? 'other');
       let buf: ArrayBuffer;
       try {
         buf = await f.arrayBuffer();
-      } catch {
+      } catch (e) {
         attempt.error('read_error');
-        this.app.reportOpenError(f.name, openErrorInfo('read'));
+        // 큰 파일을 못 읽는 것은 대개 메모리 때문이다. 파일이 없어졌으면 크기와 상관없이 위치를 확인하게 한다
+        const gone = e instanceof DOMException && e.name === 'NotFoundError';
+        this.app.reportOpenError(f.name, openErrorInfo(f.size > BIG_FILE_BYTES && !gone ? 'memory' : 'read'));
         continue;
       }
-      const copy = buf.slice(0);
+      // 작업자로 넘기면 buf가 비므로 최근 문서에 넣을 파일만 복사한다. 큰 파일까지 복사하면 메모리를 두 배로 쓴다
+      const copy = buf.byteLength <= RECENT_MAX_SIZE ? buf.slice(0) : null;
       const st = await this.app.openFile(f.name, buf, 'local', attempt);
-      if (st) void this.recent.add(f.name, copy).then(() => this.refreshRecent());
+      if (st && copy) void this.recent.add(f.name, copy).then(() => this.refreshRecent());
     }
   }
 

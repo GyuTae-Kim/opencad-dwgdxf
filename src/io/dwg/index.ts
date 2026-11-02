@@ -46,6 +46,8 @@ export function readDwg(data: Uint8Array, options: DwgReadOptions = {}): CadDocu
     return buildDocument(sec, options);
   } catch (e) {
     if (e instanceof CadReadError) throw e;
+    // 기기가 잡지 못한 것은 파일 손상이 아니다. 그대로 보내 메모리 안내가 나오게 한다(app/openerror.ts)
+    if (e instanceof RangeError && /allocation failed|out of memory/i.test(e.message)) throw e;
     if (e instanceof DwgFormatError || e instanceof RangeError || e instanceof TypeError) {
       throw new CadReadError('dwg.corrupt', { version: v, error: String(e) });
     }

@@ -1,10 +1,10 @@
 /**
  * 36차: 압축 비율 32:1이 합법 DWG를 손상으로 거부하던 결함.
- * 한도는 이제 형식의 상한(255:1)이고 파일에서 푸는 크기의 합을 묶는다. 크기만 크게 적은 파일은 여전히 할당 전에 막힌다.
- * 넓어진 한도로 객체 구역이 512MiB를 넘는 파일이 닿으므로 비트 위치가 2^32를 넘어도 읽는지도 본다.
+ * 39차부터 섹션 크기는 묶지 않는다(도면은 사용자 기기에서만 처리한다). 형식의 상한(255:1)은 페이지 임시 버퍼를 정한다.
+ * 객체 구역이 512MiB를 넘는 파일이 닿으므로 비트 위치가 2^32를 넘어도 읽는지도 본다.
  */
 import { describe, expect, it } from 'vitest';
-import { CadReadError } from '../../src/core/errors';
+import type { CadReadError } from '../../src/core/errors';
 import { DECOMPRESS_RATIO, ZERO_PAGE_SKIP, decompressLimit, sectionWorkLimit } from '../../src/core/limits';
 import type { CadDocument, Entity, LineEntity, LwPolylineEntity, Ole2FrameEntity, TableEntity, TextEntity } from '../../src/core/model';
 import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
@@ -32,18 +32,10 @@ import { readCadFile } from '../../src/io/index';
 import { encodeObjectMap, r2004Pages, r2007Pages } from './corrupt35';
 
 const MiB = 1048576;
+const GiB = 1024 * MiB;
 /** 고치기 전의 한도: 파일 × 32 + 1MiB. 입력이 이 값을 넘어야 고친 것을 확인하는 시험이다 */
 const oldLimit = (fileBytes: number) => fileBytes * 32 + MiB;
 const modelOf = (doc: CadDocument): Entity[] => doc.blocks.get(MODEL_SPACE)!.entities;
-const reasonOf = (f: () => unknown): string | undefined => {
-  try {
-    f();
-  } catch (e) {
-    expect(e).toBeInstanceOf(CadReadError);
-    return (e as CadReadError).detail?.reason as string | undefined;
-  }
-  return undefined;
-};
 /** f가 잡은 ArrayBuffer 바이트. 거부되면 거부되기 전까지 잡은 몫이다 */
 const allocatedBy = (f: () => unknown): number => {
   const before = process.memoryUsage().arrayBuffers;
@@ -119,7 +111,7 @@ describe('합법 DWG를 다시 연다', () => {
   });
 });
 
-describe('한도의 근거: 형식의 상한', () => {
+describe('형식의 상한', () => {
   /** 글자 4개 뒤에 긴 길이의 되돌아 복사 하나(길이 바이트 0이 zeros개) */
   const longCopy = (zeros: number): Uint8Array => new Uint8Array([0x01, 1, 2, 3, 4, 0x20, ...new Array<number>(zeros).fill(0), 0xff, 0, 0, 0x11]);
   const unpackedLength = (src: Uint8Array): number => {
@@ -142,78 +134,51 @@ describe('한도의 근거: 형식의 상한', () => {
   });
 });
 
-/** 크기 칸이 파일 크기를 따라가는 입력: 크기가 바뀌면 압축된 지도의 길이도 바뀔 수 있어 맞을 때까지 다시 만든다 */
-function atLimit(build: (sizes: number[]) => Uint8Array, sizes: (limit: number) => number[]): Uint8Array {
-  let data = build([16, 16, 16]);
-  for (let i = 0; i < 4; i++) {
-    const next = build(sizes(decompressLimit(data.length)));
-    if (next.length === data.length) return next;
-    data = next;
-  }
-  throw new Error('파일 크기가 맞지 않습니다');
-}
 const r2004 = (sizes: number[], bytes = 512) => r2004Pages(1, bytes, 0x7400, 1, sizes);
 const r2007 = (sizes: number[]) => r2007Pages(1, 512, 512, sizes);
-/** 페이지가 크기를 모두 뒷받침하는 입력(같은 페이지를 되풀이해 가리킨다) */
-const backed2004 = (sizes: number[]) => r2004Pages(0, 512, 0x7400, 1, sizes, undefined, [300, 300, 0]);
-const backed2007 = (counts: number[]) => (sizes: number[]) => r2007Pages(0, 512, 0x7400, sizes, counts);
 
-describe('압축 폭탄', () => {
-  it('작은 파일이 큰 섹션을 적으면 할당 전에 손상으로 알린다', () => {
-    const tiny = r2004([4 * 1024 * MiB, 16, 16]);
+describe('크기만 크게 적은 파일', () => {
+  it('파일 크기로 섹션 크기를 막지 않는다', () => {
+    const tiny = r2004([GiB, 16, 16]);
     expect(tiny.length).toBeLessThan(2048);
-    expect(reasonOf(() => readR2004Container(tiny, R2004))).toBe('section size');
-    expect(allocatedBy(() => readR2004Container(tiny, R2004))).toBeLessThan(16 * MiB);
-
-    const small = r2004([256 * MiB, 16, 16], 100_000);
-    expect(small.length).toBeLessThan(110_000);
-    expect(reasonOf(() => readR2004Container(small, R2004))).toBe('section size');
-    expect(allocatedBy(() => readR2004Container(small, R2004))).toBeLessThan(16 * MiB);
-
-    const r21 = r2007([4 * 1024 * MiB, 16, 16]);
-    expect(reasonOf(() => readR2007Container(r21, R2007))).toBe('section size');
-    expect(allocatedBy(() => readR2007Container(r21, R2007))).toBeLessThan(16 * MiB);
+    expect(readR2004Container(tiny, R2004).header.length).toBe(GiB);
+    expect(readR2007Container(r2007([GiB, 16, 16]), R2007).header.length).toBe(GiB);
   });
 
-  it('작은 파일의 한도는 작다(100KB 파일이 26MiB 안쪽)', () => {
-    expect(decompressLimit(100_000)).toBeLessThan(26 * MiB);
-    expect(decompressLimit(7_000)).toBeLessThan(3 * MiB);
+  it('섹션 크기의 합도 막지 않는다', () => {
+    const sizes = [600 * MiB, 600 * MiB, 16];
+    const sec = readR2004Container(r2004(sizes), R2004);
+    expect([sec.header.length, sec.handles.length]).toEqual(sizes.slice(0, 2));
+    const sec21 = readR2007Container(r2007(sizes), R2007);
+    expect([sec21.header.length, sec21.handles.length]).toEqual(sizes.slice(0, 2));
   });
 
-  it('한도와 같은 크기는 받고 1바이트 넘으면 막는다', () => {
-    const fits = atLimit(backed2004, (limit) => [limit - 16, 16, 16]);
-    expect(readR2004Container(fits, R2004).warnings.map((w) => w.code)).not.toContain('dwg.page_repeat');
-    const over = atLimit(backed2004, (limit) => [limit - 15, 16, 16]);
-    expect(reasonOf(() => readR2004Container(over, R2004))).toBe('section size');
-
-    const fits21 = atLimit(backed2007([3000, 1, 0]), (limit) => [limit - 16, 16, 16]);
-    expect(readR2007Container(fits21, R2007).header.length).toBe(decompressLimit(fits21.length) - 16);
-    const over21 = atLimit(backed2007([3000, 1, 0]), (limit) => [limit - 15, 16, 16]);
-    expect(reasonOf(() => readR2007Container(over21, R2007))).toBe('section size');
+  it('배열이 될 수 없는 크기는 손상으로 알린다', () => {
+    for (const data of [r2004([2 ** 60, 16, 16]), r2007([2 ** 60, 16, 16])]) {
+      try {
+        readCadFile(data, 'x.dwg');
+        expect.unreachable();
+      } catch (e) {
+        expect((e as CadReadError).code).toBe('dwg.corrupt');
+      }
+    }
   });
 
-  it('섹션마다 한도 안이어도 푸는 크기의 합이 한도를 넘으면 막는다', () => {
-    const half = (limit: number) => [Math.ceil(limit * 0.6), Math.ceil(limit * 0.6), 16];
-    expect(reasonOf(() => readR2004Container(atLimit(backed2004, half), R2004))).toBe('section size');
-    expect(reasonOf(() => readR2007Container(atLimit(backed2007([1500, 1500, 0]), half), R2007))).toBe('section size');
-  });
-
-  it('섹션 크기와 페이지 크기를 함께 부풀려도 버퍼 합이 한도 안이다', () => {
+  it('페이지 크기를 부풀려도 임시 버퍼는 압축 자료가 풀 수 있는 만큼만 잡는다', () => {
     const bytes = 100_000;
-    const r18 = (sizes: number[]) => r2004Pages(1, bytes, 0x7fffffff, 2, sizes);
-    const data = atLimit(r18, (limit) => [limit - 64, 16, 16]);
-    expect(allocatedBy(() => readR2004Container(data, R2004))).toBeLessThan(decompressLimit(data.length) * 1.2);
-
-    // 페이지 하나만 보면 한도 안이고 섹션을 더하면 넘는다
-    const limit = decompressLimit(r2007([16, 16, 16]).length);
-    const near = r2007Pages(1, 512, limit - 1024, [Math.floor(limit / 2), 16, 16]);
-    expect(near.length).toBe(r2007([16, 16, 16]).length);
-    expect(readR2007Container(near, R2007).warnings.map((w) => w.code)).toContain('dwg.page_corrupt');
+    const data = r2004Pages(1, bytes, 0x7fffffff, 2, [16, 16, 16]);
+    expect(allocatedBy(() => readR2004Container(data, R2004))).toBeLessThan(bytes * DECOMPRESS_RATIO + 8 * MiB);
   });
 
-  it('선택 섹션 하나가 크기를 잘못 적어도 합을 쓰지 않아 뒤 섹션을 읽는다', () => {
+  it('페이지의 푼 크기를 부풀리면 잡지 않고 그 페이지를 건너뛴다', () => {
+    const data = r2007Pages(1, 512, 64 * MiB);
+    expect(allocatedBy(() => readR2007Container(data, R2007))).toBeLessThan(16 * MiB);
+    expect(readR2007Container(data, R2007).warnings.map((w) => w.code)).toContain('dwg.page_corrupt');
+  });
+
+  it('선택 섹션 하나가 크기를 잘못 적어도 뒤 섹션을 읽는다', () => {
     const names = ['AcDb:Header', 'AcDb:Handles', 'AcDb:AcDbObjects', 'AcDb:Template', 'AcDb:SummaryInfo'];
-    const sec = readR2004Container(r2004Pages(1, 512, 0x7400, 1, [16, 16, 16, 2 ** 40, 16], names), R2004);
+    const sec = readR2004Container(r2004Pages(1, 512, 0x7400, 1, [16, 16, 16, 2 ** 60, 16], names), R2004);
     expect(sec.template).toBeNull();
     expect(sec.summaryInfo?.length).toBe(16);
   });
@@ -237,7 +202,7 @@ describe('0만 있는 페이지', () => {
     return writeR2004(1018, 0, 30, sections, sections.map((s) => s.name));
   };
 
-  it('건너뛰는 합은 읽기 한도의 여유 안쪽이다', () => {
+  it('건너뛰는 합은 38차까지의 읽기 한도 여유 안쪽이다', () => {
     expect(ZERO_PAGE_SKIP).toBeLessThan(decompressLimit(0));
     expect(decompressLimit(0) - ZERO_PAGE_SKIP).toBeGreaterThanOrEqual(PAGE);
   });
