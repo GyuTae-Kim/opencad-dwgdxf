@@ -1339,6 +1339,12 @@ export class App {
     this.view.zoomExtents(false);
   }
 
+  /** 전체 보기(메뉴·단추). 장면 범위는 편집 뒤 다시 그리기 전까지 옛 값이라 다시 그리기를 먼저 끝낸다 */
+  async zoomToExtents(): Promise<void> {
+    if (this.active) await this.edits.flush(this.active);
+    this.view.zoomExtents();
+  }
+
   activate(st: DocState | null): void {
     this.cancel(true);
     this.active = st;

@@ -180,7 +180,7 @@ export function idleMenu(app: App, point: Pt, extra: ContextMenuItem[]): { mode:
     cmdItem(app, '명령 복구', 'REDO', { kbd: 'Ctrl+Y' }),
     cmdItem(app, '초점이동', 'PAN', { icon: 'pan' }),
     cmdItem(app, '줌', 'ZOOM', { icon: 'zoomWindow' }),
-    { label: '전체 보기', icon: 'extents', kbd: '휠 두 번', run: () => app.view.zoomExtents() },
+    { label: '전체 보기', icon: 'extents', kbd: '휠 두 번', run: () => void app.zoomToExtents() },
     { label: '이전 화면', icon: 'zoomPrev', run: () => app.view.zoomPrevious() },
     { separator: true },
     ...tail,

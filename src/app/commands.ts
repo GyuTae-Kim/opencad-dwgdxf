@@ -447,8 +447,9 @@ export function registerCommands(app: App): void {
     name: 'SELECTALL',
     aliases: ['AI_SELALL'],
     title: '모두 선택',
-    run: () => {
+    run: async () => {
       const st = app.active!;
+      await app.edits.flush(st);
       const scene = st.scenes.get(st.space);
       if (!scene) return;
       const visible = scene.entities.filter((b) => {

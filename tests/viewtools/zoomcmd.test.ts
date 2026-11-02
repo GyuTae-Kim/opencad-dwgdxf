@@ -181,6 +181,27 @@ describe('ZOOM·PAN 명령(진짜 App)', () => {
     expect(h.calls).toEqual([['flush'], ['zoomExtents'], ['flush'], ['zoomAll', { x0: 0, y0: 0, x1: 420, y1: 297 }], ['zoomRect', 0, 0, 10, 10]]);
   });
 
+  it('메뉴·단추의 전체 보기도 다시 그리기를 끝낸 뒤에 범위를 본다(46차)', async () => {
+    const h = setup(null);
+    h.app.edits.flush = async () => {
+      await Promise.resolve();
+      h.calls.push(['flush']);
+    };
+    await h.app.zoomToExtents();
+    expect(h.calls).toEqual([['flush'], ['zoomExtents']]);
+  });
+
+  it('모두 선택은 다시 그리기가 끝난 장면에서 고른다(46차 — 지우고 되돌린 직후 0개를 골랐다)', async () => {
+    const h = setup(null);
+    h.st.scenes.set(h.st.space, { entities: [] } as never);
+    h.app.edits.flush = async () => {
+      await Promise.resolve();
+      h.st.scenes.set(h.st.space, { entities: [{ handle: 'A1', minX: 0, minY: 0, maxX: 1, maxY: 1 }] } as never);
+    };
+    await h.app.run('SELECTALL');
+    expect(h.out().at(-1)).toBe('1개를 선택했습니다.');
+  });
+
   it('전체(A): 배치의 도면 공간은 그 배치의 한계, 한계가 없으면 null(화면이 범위 줌으로)', async () => {
     const p = setup(null);
     const lay = p.doc.layouts.find((l) => l.blockName.toUpperCase() === PAPER_SPACE)!;
