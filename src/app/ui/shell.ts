@@ -1681,7 +1681,7 @@ export class Shell implements UiHooks {
       [sep(), 0],
       [this.unitLabel, 12],
       [mk('vpmax', 'viewport', '뷰포트 최대화·복원 (VPMAX·VPMIN) · 최대화 중 Ctrl+R로 다음 뷰포트', () => void app.run(maximized(app.active) ? 'VPMIN' : 'VPMAX')), 75],
-      [mk('ext', 'extents', '전체 보기', () => app.view.zoomExtents()), 80],
+      [mk('ext', 'extents', '전체 보기', () => void app.zoomToExtents()), 80],
       [mk('props', 'props', '특성 팔레트 (Ctrl+1)', () => this.openPalette('props')), 85],
     ];
     this.statusItems = items.filter((x): x is [HTMLElement, number] => !!x[0]).map(([el, prio]) => ({ el, prio }));

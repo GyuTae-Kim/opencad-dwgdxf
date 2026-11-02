@@ -17,6 +17,8 @@ const REBUILD_DELAY = 1200;
 
 export class EditManager {
   private timers = new Map<DocState, number>();
+  /** 돌고 있는 다시 그리기(flush가 기다린다) */
+  private readonly building = new Map<DocState, Promise<unknown>>();
   /** 다음 다시 그리기 때 모든 공간을 다시 그릴 문서 */
   private readonly rebuildAll = new Set<DocState>();
   /** 공간별 지운 객체 → 지운 세대(다시 그리기 사이에 지운 것을 가리기 위해) */
@@ -152,7 +154,10 @@ export class EditManager {
         this.timers.delete(st);
         const everything = this.rebuildAll.delete(st);
         const spaces = everything ? [...st.scenes.keys()] : [...st.edits.entries()].filter(([, e]) => e.live.size || e.hidden.size).map(([k]) => k);
-        for (const sp of spaces) void this.rebuild(st, sp);
+        const job = Promise.all(spaces.map((sp) => this.rebuild(st, sp))).finally(() => {
+          if (this.building.get(st) === job) this.building.delete(st);
+        });
+        this.building.set(st, job);
       }, delay),
     );
   }
@@ -192,8 +197,12 @@ export class EditManager {
     this.schedule(st, true, 0);
   }
 
-  /** 미뤄 둔 다시 그리기를 지금 끝낸다(내보내기·출력 전에) */
+  /**
+   * 돌고 있는 다시 그리기와 미뤄 둔 다시 그리기를 끝낸다. 장면의 범위와 객체 목록은 다시 그리기 전까지 옛 값이므로
+   * 내보내기·출력, 전체 보기, 모두 선택처럼 장면을 읽는 일은 이것을 먼저 기다린다
+   */
   async flush(st: DocState): Promise<void> {
+    await this.building.get(st);
     if (!this.timers.has(st)) return;
     clearTimeout(this.timers.get(st));
     this.timers.delete(st);
