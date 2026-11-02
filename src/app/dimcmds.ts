@@ -63,13 +63,35 @@ export function pickedViewport(app: App, r: EntityResult): ViewportXf | null {
 /** 모형 점을 그 뷰포트로 본 종이 점(Z는 0 — 도면 공간 점). vx가 없으면(배치 객체) 그대로 */
 const toPaper = (vx: ViewportXf | null, p: Vec3): Vec3 => (vx ? v3(modelToPaperVp(vx, p)) : p);
 
+/**
+ * 한 편집 안의 치수 블록 표(dimensionBlockOps의 extraNames마다 하나). 작업을 확정하기 전까지 문서는 그대로이므로
+ * 치수마다 문서를 훑지 않는다. 훑으면 치수 2만 개를 옮길 때 치수 수 × 객체 수가 되어 화면이 멈춘다
+ */
+interface DimBlockIndex {
+  /** 블록 열쇠 → 그 블록을 쓰는 치수 수와 그중 한 핸들 */
+  users: Map<string, { n: number; handle: string }> | null;
+  /** 다음에 줄 *D 번호(0이면 아직 문서를 보지 않았다) */
+  nextD: number;
+}
+const dimBlockIndexes = new WeakMap<Set<string>, DimBlockIndex>();
+
 /** 블록 이름이 이 치수 하나만 쓰는 익명 블록인지 */
-function ownBlock(doc: CadDocument, dim: DimensionEntity): boolean {
+function ownBlock(doc: CadDocument, dim: DimensionEntity, ix: DimBlockIndex): boolean {
   if (!/^\*D/i.test(dim.block)) return false;
-  let n = 0;
-  for (const b of doc.blocks.values())
-    for (const e of b.entities) if (e.type === 'DIMENSION' && tableKey(e.block) === tableKey(dim.block) && e.handle !== dim.handle) n++;
-  return n === 0;
+  if (!ix.users) {
+    ix.users = new Map();
+    for (const b of doc.blocks.values()) {
+      for (const e of b.entities) {
+        if (e.type !== 'DIMENSION') continue;
+        const key = tableKey(e.block);
+        const u = ix.users.get(key);
+        if (u) u.n++;
+        else ix.users.set(key, { n: 1, handle: e.handle });
+      }
+    }
+  }
+  const u = ix.users.get(tableKey(dim.block));
+  return !u || (u.n === 1 && u.handle === dim.handle);
 }
 
 /**
@@ -104,11 +126,15 @@ export function dimensionBlockOps(st: DocState, dim: DimensionEntity, reuse: boo
     ops.push({ kind: 'layer', key: dl, before: null, after: layer });
   }
   // 치수 블록
-  const before = reuse && dim.block && ownBlock(doc, dim) ? doc.blocks.get(tableKey(dim.block)) : undefined;
+  let ix = dimBlockIndexes.get(extraNames);
+  if (!ix) dimBlockIndexes.set(extraNames, (ix = { users: null, nextD: 0 }));
+  const before = reuse && dim.block && ownBlock(doc, dim, ix) ? doc.blocks.get(tableKey(dim.block)) : undefined;
   let name = before?.name ?? '';
   if (!name) {
-    name = nextDimBlockName(doc);
-    while (extraNames.has(tableKey(name))) name = `*D${Number(name.slice(2)) + 1}`;
+    let n = ix.nextD || Number(nextDimBlockName(doc).slice(2));
+    while (extraNames.has(tableKey(`*D${n}`))) n++;
+    ix.nextD = n + 1;
+    name = `*D${n}`;
     extraNames.add(tableKey(name));
   }
   const key = tableKey(name);
