@@ -179,7 +179,7 @@ describe('도면 열기 실패 안내', () => {
     expect(openErrorInfo('dwg.unsupported_version')).toMatchObject({ message: '아직 지원하지 않는 DWG 버전입니다.', hint: expect.stringContaining('R2018') });
     expect(openErrorInfo('file.unrecognized').hint).toContain('SKP·STEP·NC');
     expect(openErrorInfo('dwg.encrypted').hint).toContain('암호');
-    expect(openErrorInfo('size_limit').message).toContain('512MB');
+    expect(openErrorInfo('memory').hint).toContain('메모리');
     expect(openErrorInfo('worker_load').hint).toContain('인터넷');
     expect(openErrorInfo('internal', 'Array buffer allocation failed').code).toBe('memory');
     expect(openErrorInfo('internal', 'bad handle').message).toBe('파일을 열지 못했습니다: bad handle');
@@ -187,8 +187,8 @@ describe('도면 열기 실패 안내', () => {
   });
 
   it('모든 안내 문구가 네 언어 사전에 있고, 이름 — 문제 / 할 일로 이어도 다른 언어에서 조각마다 옮겨진다(파일 이름은 그대로)', () => {
-    for (const code of ['file.empty', 'file.unrecognized', 'file.too_large', 'dxf.invalid', 'dwg.unsupported_version', 'dwg.corrupt', 'dwg.encrypted', 'size_limit', 'read', 'worker', 'worker_load', 'internal', 'memory']) {
-      const info = code === 'memory' ? openErrorInfo('internal', 'allocation failed') : openErrorInfo(code);
+    for (const code of ['file.empty', 'file.unrecognized', 'file.too_large', 'dxf.invalid', 'dwg.unsupported_version', 'dwg.corrupt', 'dwg.encrypted', 'read', 'worker', 'worker_load', 'internal', 'memory']) {
+      const info = openErrorInfo(code);
       for (const text of [info.message, info.hint]) expect(en[text as keyof typeof en], `${code}: ${text}`).toBeTruthy();
     }
     if (!catalogs.en) registerCatalog('en', en);

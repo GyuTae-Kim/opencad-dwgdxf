@@ -5,7 +5,6 @@
 import { createHash } from 'node:crypto';
 import { closeSync, openSync, readFileSync, readSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { OPEN_MAX_BYTES } from '../../src/app/openerror';
 
 /** 앱이 도면으로 여는 확장자(.dwt는 DWG 서식 — 내용으로 형식을 고른다) */
 export const DRAWING_EXT = /\.(dxf|dwg|dwt)$/i;
@@ -123,9 +122,9 @@ export interface CollectResult {
 
 /**
  * 경로 목록 → 중복을 뺀 표본(내용 해시 순서: 폴더가 섞인 고른 표본이 되어 --limit이 한 폴더에 몰리지 않는다).
- * 크기가 앱 한도(OPEN_MAX_BYTES)를 넘는 파일은 앱처럼 열지 않는다.
+ * 앱처럼 크기로 막지 않는다. 표본 크기를 줄이려면 maxBytes를 준다.
  */
-export function collect(paths: string[], filter: Filter = parseFilter(''), limit = Infinity, maxBytes = OPEN_MAX_BYTES): CollectResult {
+export function collect(paths: string[], filter: Filter = parseFilter(''), limit = Infinity, maxBytes = Infinity): CollectResult {
   const byKey = new Map<string, SweepFile>();
   const lower = new Map(paths.map((p) => [p.toLowerCase(), p]));
   let duplicates = 0;

@@ -1,10 +1,9 @@
 /**
  * 38차: 형식은 0만 있는 페이지를 파일에 쓰지 않는다. 다른 프로그램과 이전 판이 그렇게 쓴 파일을 손상으로 거부하던 결함.
- * 이 파일은 쓰기가 0 페이지를 모두 건너뛰게 바꿔(ZERO_PAGE_SKIP) 그런 파일을 만든다. 파일에 없는 몫은 비율 대신 절대 값으로 묶는다.
+ * 이 파일은 쓰기가 0 페이지를 모두 건너뛰게 바꿔(ZERO_PAGE_SKIP) 그런 파일을 만든다. 39차부터 파일에 없는 몫을 묶지 않는다.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { CadReadError } from '../../src/core/errors';
-import { MISSING_PAGE_BYTES, decompressLimit } from '../../src/core/limits';
+import { decompressLimit } from '../../src/core/limits';
 import type { CadDocument, Entity, Ole2FrameEntity } from '../../src/core/model';
 import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
 import { createNewDocument } from '../../src/core/newdoc';
@@ -28,22 +27,13 @@ const write = (objects: Uint8Array, extra: ReturnType<typeof section>[] = []) =>
   const sections = [section('AcDb:Header', new Uint8Array(32).fill(1)), section('AcDb:Handles', new Uint8Array(32).fill(2)), section('AcDb:AcDbObjects', objects), ...extra];
   return writeR2004(1018, 0, 30, sections, sections.map((s) => s.name));
 };
-const reasonOf = (f: () => unknown): string | undefined => {
-  try {
-    f();
-  } catch (e) {
-    expect(e).toBeInstanceOf(CadReadError);
-    return (e as CadReadError).detail?.reason as string | undefined;
-  }
-  return undefined;
-};
 
 describe('파일에 없는 0 페이지', () => {
-  it('원본 본문에 0이 8MiB 이어진 OLE 객체를 0 페이지 없이 쓴 파일을 연다', () => {
+  it.each([8, 128])('원본 본문에 0이 %dMiB 이어진 OLE 객체를 0 페이지 없이 쓴 파일을 연다', (mib) => {
     const doc = createNewDocument('metric');
     const s = new EditSession(doc, () => {});
     const e: Ole2FrameEntity = { ...entityDefaults(), type: 'OLE2FRAME', handle: s.newHandle(), upperLeft: { x: 0, y: 0, z: 0 }, lowerRight: { x: 0, y: 0, z: 0 } };
-    const body = new Uint8Array(8 * MiB);
+    const body = new Uint8Array(mib * MiB);
     body[0] = 0xff;
     body[body.length - 1] = 0x81;
     e.dwgRaw = { version: 'AC1032', typeName: 'OLE2FRAME', typeNum: 74, data: body, dataBits: body.length * 8, handles: new Uint8Array(8), handleBits: 0, fingerprint: fingerprint(e) };
@@ -66,69 +56,32 @@ describe('파일에 없는 0 페이지', () => {
     expect(Buffer.compare(sec.objects, objects)).toBe(0);
   });
 
-  it('큰 파일은 없는 몫이 64MiB를 넘어도 파일 한도 안이면 받는다', () => {
-    const objects = new Uint8Array(102 * MiB);
-    let seed = 1;
-    for (let i = 0; i < 2 * MiB; i++) {
-      seed = (Math.imul(seed, 1103515245) + 12345) | 0;
-      objects[i] = seed >>> 24;
-    }
+  it('작은 파일도 섹션 크기로 막지 않는다', () => {
+    const objects = new Uint8Array(256 * MiB);
     objects[objects.length - 1] = 7;
     const data = write(objects);
-    expect(objects.length).toBeLessThan(decompressLimit(data.length));
+    expect(data.length).toBeLessThan(MiB);
     const sec = readR2004Container(data, R2004);
     expect(sec.warnings).toEqual([]);
-    expect(Buffer.compare(sec.objects, objects)).toBe(0);
+    expect(sec.objects.length).toBe(objects.length);
+    expect(sec.objects[objects.length - 1]).toBe(7);
   });
 
-  it('더 받는 몫은 작은 파일이 잡아도 되는 값이다(시스템 페이지 상한과 같다)', () => {
-    expect(MISSING_PAGE_BYTES).toBeLessThanOrEqual(64 * MiB);
-  });
-
-  it('파일 한도에 더 받는 몫을 더한 크기는 받고 1바이트 넘으면 할당 전에 막는다', () => {
-    // 크기가 바뀌어도 압축된 지도의 길이가 같은지 보고 만든다
-    const small = write(new Uint8Array(MISSING_PAGE_BYTES));
-    const limit = decompressLimit(small.length) + MISSING_PAGE_BYTES - 64;
-    const fits = write(new Uint8Array(limit));
-    expect(fits.length).toBe(small.length);
-    expect(readR2004Container(fits, R2004).objects.length).toBe(limit);
-    const over = write(new Uint8Array(limit + 1));
-    expect(over.length).toBe(small.length);
-    const before = process.memoryUsage().arrayBuffers;
-    expect(reasonOf(() => readR2004Container(over, R2004))).toBe('section size');
-    expect(process.memoryUsage().arrayBuffers - before).toBeLessThan(MiB);
-  });
-
-  it('더 받는 몫은 섹션마다가 아니라 파일 전체다', () => {
+  it('없는 몫의 합도 막지 않는다', () => {
     const half = new Uint8Array(40 * MiB);
-    const data = write(half, [section('AcDb:Classes', half)]);
-    expect(reasonOf(() => readR2004Container(data, R2004))).toBe('section size');
+    const sec = readR2004Container(write(half, [section('AcDb:Classes', half)]), R2004);
+    expect([sec.objects.length, sec.classes?.length]).toEqual([half.length, half.length]);
   });
 
-  it('선택 섹션이 넘겨도 없는 몫을 쓰지 않아 뒤 섹션을 읽는다', () => {
-    const data = write(new Uint8Array(16), [section('AcDb:Template', new Uint8Array(2 * MISSING_PAGE_BYTES)), section('AcDb:SummaryInfo', new Uint8Array(16).fill(3))]);
+  it('큰 선택 섹션도 읽고 뒤 섹션을 이어 읽는다', () => {
+    const data = write(new Uint8Array(16), [section('AcDb:Template', new Uint8Array(128 * MiB)), section('AcDb:SummaryInfo', new Uint8Array(16).fill(3))]);
     const sec = readR2004Container(data, R2004);
-    expect(sec.template).toBeNull();
+    expect(sec.template?.length).toBe(128 * MiB);
     expect(sec.summaryInfo?.length).toBe(16);
   });
 
-  it('R2007도 같은 한도를 본다', () => {
-    const size = (n: number) => r2007Pages(1, 512, 512, [n, 16, 16]);
-    expect(readR2007Container(size(16 * MiB), R2007).header.length).toBe(16 * MiB);
-    expect(reasonOf(() => readR2007Container(size(2 * MISSING_PAGE_BYTES), R2007))).toBe('section size');
-    expect(reasonOf(() => readR2007Container(r2007Pages(1, 512, 512, [40 * MiB, 40 * MiB, 16]), R2007))).toBe('section size');
-    // 큰 파일은 없는 몫이 64MiB를 넘어도 파일 한도 안이면 받는다
-    const large = r2007Pages(1, 2 * MiB, 2 * MiB, [70 * MiB, 16, 16]);
-    expect(70 * MiB).toBeLessThan(decompressLimit(large.length));
-    expect(readR2007Container(large, R2007).header.length).toBe(70 * MiB);
-  });
-
-  it('R2007의 뒷받침은 페이지마다 푸는 크기로 센다(섹션 최대 크기 칸은 읽기에 쓰지 않는다)', () => {
-    const big = r2007Pages(3000, 300_000, PAGE, [70 * MiB, 16, 16], [3000], 0);
-    expect(70 * MiB).toBeLessThan(decompressLimit(big.length));
-    expect(readR2007Container(big, R2007).header.length).toBe(70 * MiB);
-    // 푼 크기를 부풀려도 뒷받침 몫이 커질 뿐이라 비율 한도를 피하지 못한다
-    const inflated = r2007Pages(1, 512, 64 * MiB, [8 * MiB, 16, 16]);
-    expect(reasonOf(() => readR2007Container(inflated, R2007))).toBe('section size');
+  it('R2007도 섹션 크기를 막지 않는다', () => {
+    const sec = readR2007Container(r2007Pages(1, 512, 512, [128 * MiB, 40 * MiB, 16]), R2007);
+    expect([sec.header.length, sec.handles.length]).toEqual([128 * MiB, 40 * MiB]);
   });
 });
