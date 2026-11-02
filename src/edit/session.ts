@@ -98,9 +98,10 @@ function indexEntity(doc: CadDocument, e: Entity, on: boolean): void {
  * (명령 취소·다시 실행·확정이 실패해도 명령 취소 목록과 문서가 어긋나지 않는다)
  */
 export function applyOpsAtomic(doc: CadDocument, ops: readonly EditOp[], summary?: ChangeSummary): void {
+  const finder = new EntityFinder(ops.length);
   let i = 0;
   try {
-    for (; i < ops.length; i++) applyOps(doc, [ops[i]!], summary);
+    for (; i < ops.length; i++) applyOps(doc, [ops[i]!], summary, finder);
   } catch (err) {
     try {
       applyOps(doc, inverseTransaction({ label: '', ops: ops.slice(0, i) }).ops);
@@ -111,8 +112,70 @@ export function applyOpsAtomic(doc: CadDocument, ops: readonly EditOp[], summary
   }
 }
 
+/** 이만큼 많은 변경은 자리 표를 만들어 찾는다. 적은 변경은 그냥 훑는 쪽이 싸다 */
+const FINDER_MIN_OPS = 64;
+/** 자리 표를 다시 만드는 횟수. 더하기·지우기가 찾기와 번갈아 오면 표를 만드는 값이 더 커 그냥 훑는다 */
+const FINDER_MAX_BUILDS = 4;
+/** 소유 블록을 찾다 기억한 자리가 이만큼 틀리면 표를 다시 만든다 */
+const OWNER_MISS_LIMIT = 16;
+
+/**
+ * 변경 묶음 안에서 객체의 자리를 찾는다. 변경마다 블록을 훑으면 객체 20만 개를 옮길 때 200억 번을 비교해 화면이 멈춘다.
+ * 표는 블록마다 처음 찾을 때 만들고, 맨 뒤가 아닌 자리에서 더하거나 지우면 버린다
+ */
+class EntityFinder {
+  private readonly tables = new Map<BlockDef, Map<string, number>>();
+  private builds = 0;
+
+  constructor(private readonly ops: number) {}
+
+  find(b: BlockDef, handle: string): number {
+    if (this.ops < FINDER_MIN_OPS) return b.entities.findIndex((e) => e.handle === handle);
+    let table = this.tables.get(b);
+    if (!table) {
+      if (this.builds >= FINDER_MAX_BUILDS) return b.entities.findIndex((e) => e.handle === handle);
+      this.builds++;
+      table = new Map();
+      // 핸들이 겹치면 findIndex처럼 앞의 것
+      for (let i = b.entities.length - 1; i >= 0; i--) table.set(b.entities[i]!.handle, i);
+      this.tables.set(b, table);
+    }
+    return table.get(handle) ?? -1;
+  }
+
+  /** 자리 i의 핸들이 바뀌었다 */
+  renamed(b: BlockDef, before: string, after: string, i: number): void {
+    const table = this.tables.get(b);
+    if (!table || before === after) return;
+    table.delete(before);
+    table.set(after, i);
+  }
+
+  /** 자리 i에 객체를 넣었다. 맨 뒤면 다른 객체의 자리는 그대로다 */
+  added(b: BlockDef, handle: string, i: number): void {
+    const table = this.tables.get(b);
+    if (!table) return;
+    if (i < b.entities.length - 1) this.tables.delete(b);
+    else if (!table.has(handle)) table.set(handle, i);
+  }
+
+  /** 자리 i의 객체를 지웠다. 맨 뒤였으면 다른 객체의 자리는 그대로다 */
+  removed(b: BlockDef, handle: string, i: number): void {
+    const table = this.tables.get(b);
+    if (!table) return;
+    if (i < b.entities.length || table.get(handle) !== i) this.tables.delete(b);
+    else table.delete(handle);
+  }
+}
+
+/** 핸들이 같은 객체의 자리를 뒤에서부터 찾는다. 명령을 되돌릴 때는 더한 객체를 뒤에서부터 지운다 */
+function lastIndexOfHandle(list: readonly Entity[], handle: string): number {
+  for (let i = list.length - 1; i >= 0; i--) if (list[i]!.handle === handle) return i;
+  return -1;
+}
+
 /** 변경 하나를 문서에 적용한다(되돌릴 때는 inverse를 적용한다) */
-export function applyOps(doc: CadDocument, ops: readonly EditOp[], summary?: ChangeSummary): void {
+export function applyOps(doc: CadDocument, ops: readonly EditOp[], summary?: ChangeSummary, finder = new EntityFinder(ops.length)): void {
   const space = (key: string) => {
     if (!summary) return null;
     // 블록 정의 안의 객체가 바뀌면 그 블록을 참조하는 곳을 다시 그려야 한다(블록 편집기에서는 그 블록도 공간처럼 덧그린다)
@@ -131,6 +194,7 @@ export function applyOps(doc: CadDocument, ops: readonly EditOp[], summary?: Cha
         if (!b) throw new Error(`블록이 없습니다: ${op.block}`);
         const i = op.index === undefined || op.index < 0 || op.index > b.entities.length ? b.entities.length : op.index;
         b.entities.splice(i, 0, op.entity);
+        finder.added(b, op.entity.handle, i);
         indexEntity(doc, op.entity, true);
         space(op.block)?.changed.push(op.entity);
         break;
@@ -138,9 +202,13 @@ export function applyOps(doc: CadDocument, ops: readonly EditOp[], summary?: Cha
       case 'remove': {
         const b = doc.blocks.get(op.block);
         if (!b) break;
-        let i = op.index >= 0 && b.entities[op.index]?.handle === op.entity.handle ? op.index : b.entities.findIndex((e) => e.handle === op.entity.handle);
+        const h = op.entity.handle;
+        let i = op.index >= 0 && b.entities[op.index]?.handle === h ? op.index : op.index < 0 ? lastIndexOfHandle(b.entities, h) : b.entities.findIndex((e) => e.handle === h);
         if (i < 0) i = b.entities.indexOf(op.entity);
-        if (i >= 0) b.entities.splice(i, 1);
+        if (i >= 0) {
+          b.entities.splice(i, 1);
+          finder.removed(b, op.entity.handle, i);
+        }
         indexEntity(doc, op.entity, false);
         space(op.block)?.removed.add(op.entity.handle);
         break;
@@ -148,8 +216,11 @@ export function applyOps(doc: CadDocument, ops: readonly EditOp[], summary?: Cha
       case 'modify': {
         const b = doc.blocks.get(op.block);
         if (!b) break;
-        const i = b.entities.findIndex((e) => e.handle === op.before.handle);
-        if (i >= 0) b.entities[i] = op.after;
+        const i = finder.find(b, op.before.handle);
+        if (i >= 0) {
+          b.entities[i] = op.after;
+          finder.renamed(b, op.before.handle, op.after.handle, i);
+        }
         indexEntity(doc, op.before, false);
         indexEntity(doc, op.after, true);
         const s = space(op.block);
@@ -264,6 +335,9 @@ export class EditSession {
   dirty = false;
   private savedDepth = 0;
   private ownerCache: Map<string, string> | null = null;
+  /** 핸들 → 소유 블록 안의 자리. 편집으로 밀릴 수 있어 쓸 때 확인한다 */
+  private ownerAt = new Map<string, number>();
+  private ownerMisses = 0;
 
   constructor(
     readonly doc: CadDocument,
@@ -319,15 +393,48 @@ export class EditSession {
 
   /** 블록 키(공간) */
   ownerOf(handle: string): string | null {
-    if (!this.ownerCache) {
-      this.ownerCache = new Map();
-      for (const [k, b] of this.doc.blocks) for (const e of b.entities) if (e.handle) this.ownerCache.set(e.handle, k);
+    if (!this.ownerCache) this.buildOwners();
+    const cached = this.ownerCache!.get(handle);
+    const list = cached ? this.doc.blocks.get(cached)?.entities : undefined;
+    if (cached && list) {
+      // 기억한 자리가 맞으면 블록을 훑지 않는다. 훑으면 객체 20만 개를 옮길 때 이 확인이 200억 번 비교가 된다
+      if (list[this.ownerAt.get(handle) ?? -1]?.handle === handle) return cached;
+      // 앞선 지우기로 자리가 밀렸다. 많이 밀렸으면 표를 다시 만드는 쪽이 싸다
+      if (++this.ownerMisses > OWNER_MISS_LIMIT) {
+        this.buildOwners();
+        return this.ownerOf(handle);
+      }
+      const at = list.findIndex((e) => e.handle === handle);
+      if (at >= 0) {
+        this.ownerAt.set(handle, at);
+        return cached;
+      }
     }
-    let k = this.ownerCache.get(handle);
-    if (k && this.doc.blocks.get(k)?.entities.some((e) => e.handle === handle)) return k;
-    k = ownerBlockKey(this.doc, handle) ?? undefined;
-    if (k) this.ownerCache.set(handle, k);
-    return k ?? null;
+    const k = ownerBlockKey(this.doc, handle);
+    if (k) {
+      this.ownerCache!.set(handle, k);
+      this.ownerAt.set(handle, this.doc.blocks.get(k)!.entities.findIndex((e) => e.handle === handle));
+    }
+    return k;
+  }
+
+  /** 소유 블록 안의 자리(ownerOf가 확인한 값). 블록이 없으면 -1 */
+  ownerIndex(handle: string): number {
+    return this.ownerOf(handle) ? (this.ownerAt.get(handle) ?? -1) : -1;
+  }
+
+  private buildOwners(): void {
+    const owners = new Map<string, string>();
+    this.ownerAt.clear();
+    this.ownerMisses = 0;
+    for (const [k, b] of this.doc.blocks) {
+      b.entities.forEach((e, i) => {
+        if (!e.handle) return;
+        owners.set(e.handle, k);
+        this.ownerAt.set(e.handle, i);
+      });
+    }
+    this.ownerCache = owners;
   }
 
   /** UNDO 조정(C): 전체(기본)·하나·없음 */
