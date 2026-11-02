@@ -170,10 +170,10 @@ describe('크기만 크게 적은 파일', () => {
     expect(allocatedBy(() => readR2004Container(data, R2004))).toBeLessThan(bytes * DECOMPRESS_RATIO + 8 * MiB);
   });
 
-  it('페이지의 푼 크기를 부풀리면 섹션에 비례한 일에서 멈추고 잡지 않는다', () => {
+  it('페이지의 푼 크기를 부풀리면 잡지 않고 그 페이지를 건너뛴다', () => {
     const data = r2007Pages(1, 512, 64 * MiB);
     expect(allocatedBy(() => readR2007Container(data, R2007))).toBeLessThan(16 * MiB);
-    expect(readR2007Container(data, R2007).warnings.map((w) => w.code)).toContain('dwg.page_repeat');
+    expect(readR2007Container(data, R2007).warnings.map((w) => w.code)).toContain('dwg.page_corrupt');
   });
 
   it('선택 섹션 하나가 크기를 잘못 적어도 뒤 섹션을 읽는다', () => {

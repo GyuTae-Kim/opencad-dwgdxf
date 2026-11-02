@@ -90,12 +90,13 @@ describe('R2007 컨테이너', () => {
     pageWorkBounded(sec, data.length, 2 * 1048576 + 512);
   });
 
-  it('페이지의 푼 크기가 망가지면 잡기 전에 멈춘다', () => {
+  it('페이지의 푼 크기가 망가지면 잡지 않고 그 페이지만 건너뛴다', () => {
     const data = r2007Pages(5000, 512, 0xf0000000);
     const before = process.memoryUsage().arrayBuffers;
     const sec = within2s(() => readR2007Container(data, R2007));
     expect(process.memoryUsage().arrayBuffers - before).toBeLessThan(0x10000000);
-    expect(codes(sec.warnings)).toContain('dwg.page_repeat');
+    expect(codes(sec.warnings)).toContain('dwg.page_corrupt');
+    expect(codes(sec.warnings)).not.toContain('dwg.page_repeat');
   });
 
   it('맞는 크기의 페이지는 그대로 읽는다', () => {

@@ -1034,9 +1034,11 @@ export class Shell implements UiHooks {
       let buf: ArrayBuffer;
       try {
         buf = await f.arrayBuffer();
-      } catch {
+      } catch (e) {
         attempt.error('read_error');
-        this.app.reportOpenError(f.name, openErrorInfo(f.size > BIG_FILE_BYTES ? 'memory' : 'read'));
+        // 큰 파일을 못 읽는 것은 대개 메모리 때문이다. 파일이 없어졌으면 크기와 상관없이 위치를 확인하게 한다
+        const gone = e instanceof DOMException && e.name === 'NotFoundError';
+        this.app.reportOpenError(f.name, openErrorInfo(f.size > BIG_FILE_BYTES && !gone ? 'memory' : 'read'));
         continue;
       }
       // 작업자로 넘기면 buf가 비므로 최근 문서에 넣을 파일만 복사한다. 큰 파일까지 복사하면 메모리를 두 배로 쓴다
