@@ -424,6 +424,11 @@ export class DisplayListBuilder {
     return this.drawn + this.idle;
   }
 
+  /** 조각을 내지 않고 든 일을 더한다(해치 무늬, 선종류 무늬) */
+  addWork(n: number): void {
+    this.idle += n;
+  }
+
   /** 임시 그림·글리프 버퍼가 잡은 바이트 */
   private get tempBytes(): number {
     return this.tempSegs.bytes + this.tempTris.bytes + this.instF.byteLength + this.instG.byteLength + this.instT.byteLength + this.instO.byteLength;

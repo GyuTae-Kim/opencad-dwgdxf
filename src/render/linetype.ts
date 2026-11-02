@@ -2,7 +2,7 @@
  * 선종류 무늬를 꺾은선에 입힌다(월드 좌표).
  * 무늬 길이: 양수 = 선, 음수 = 틈, 0 = 점. 길이는 이미 축척을 곱한 값이다.
  */
-import { DASH_REPEAT_LIMIT, DASH_STEP_LIMIT } from '../core/limits';
+import { DASH_REPEAT_LIMIT, DASH_STEP_LIMIT, DASH_TEXT_LIMIT } from '../core/limits';
 
 export interface DashPattern {
   dashes: number[];
@@ -37,8 +37,8 @@ export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashP
   // 복합 선종류의 문자·도형은 주기마다 글자 수만큼 배치한다(공백은 조각도 내지 않는다)
   let chars = 0;
   for (const t of pat.texts ?? []) chars += Math.max(1, t.text.length);
-  const steps = Math.ceil(repeats) * (pat.dashes.length + chars);
-  const tooMany = repeats <= DASH_REPEAT_LIMIT && steps > DASH_STEP_LIMIT;
+  const turns = Math.ceil(repeats);
+  const tooMany = repeats <= DASH_REPEAT_LIMIT && (turns * pat.dashes.length > DASH_STEP_LIMIT || turns * chars > DASH_TEXT_LIMIT);
   if (!(pat.period > 0) || total < pat.period || repeats > DASH_REPEAT_LIMIT || tooMany) {
     for (let i = 0; i < segCount; i++) {
       const j = (i + 1) % n;
@@ -48,7 +48,7 @@ export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashP
     return false;
   }
   // 틈은 조각을 내지 않으므로 요소를 밟는 일을 따로 센다. 문자는 글자 하나가 요소 하나보다 훨씬 비싸다(문자 객체와 같은 몫)
-  if (work) work.n += (steps >> 3) + (Math.ceil(repeats) * chars >> 1);
+  if (work) work.n += ((turns * (pat.dashes.length + chars)) >> 3) + ((turns * chars) >> 1);
   const dashes = pat.dashes;
   let di = 0;
   let remain = Math.abs(dashes[0]!);

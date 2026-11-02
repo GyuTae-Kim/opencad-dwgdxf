@@ -276,10 +276,15 @@ export class SceneBuilder {
     return this.blockPieces + this.blockVisits + this.out.effort - this.blockBase;
   }
 
-  /** 블록 펼침 일을 다 썼거나 장면 조각이 한도를 넘었는지. 처음 넘을 때 한 번 경고한다 */
+  /** 장면 일의 한도. 표시 목록 메모리 공식(core/limits.ts)과 같은 단위라 글리프는 조각 3개 몫이다 */
+  private get sceneLimit(): number {
+    return this.opt.scenePieceLimit ?? Math.min(SCENE_PIECE_LIMIT, this.blockLimit);
+  }
+
+  /** 블록 펼침 일을 다 썼거나 장면 일이 한도를 넘었는지. 처음 넘을 때 한 번 경고한다 */
   private blockSpent(): boolean {
     if (this.blockCut) return true;
-    if (this.blockWork <= this.blockLimit && this.out.drawn <= (this.opt.scenePieceLimit ?? SCENE_PIECE_LIMIT)) return false;
+    if (this.blockWork <= this.blockLimit && this.out.effort <= this.sceneLimit) return false;
     this.blockCut = true;
     this.warnInc('block.expansion_limit');
     return true;
@@ -297,10 +302,16 @@ export class SceneBuilder {
     if (rest > 0) this.blockVisits += rest;
   }
 
-  /** 장면 조각 수가 한도를 넘었는지(넘으면 해치 무늬·대시를 더 펼치지 않는다). 처음 넘을 때 한 번 경고한다 */
+  /** 조각을 내지 않고 든 일을 장면 일에 더한다(before = 시작할 때 effort). 낸 조각보다 많은 만큼만 더하므로 그림을 내는 정상 객체의 일은 늘지 않는다 */
+  private settleIdle(work: number, before: number): void {
+    const rest = work - (this.out.effort - before);
+    if (rest > 0) this.out.addWork(rest);
+  }
+
+  /** 장면 일이 한도를 넘었는지(넘으면 해치 무늬·대시를 더 펼치지 않는다). 처음 넘을 때 한 번 경고한다 */
   private piecesSpent(): boolean {
     if (this.pieceCut) return true;
-    if (this.out.drawn <= (this.opt.scenePieceLimit ?? SCENE_PIECE_LIMIT)) return false;
+    if (this.out.effort <= this.sceneLimit) return false;
     this.pieceCut = true;
     this.warnInc('scene.piece_limit');
     return true;
@@ -568,6 +579,7 @@ export class SceneBuilder {
     this.out.dashed = true;
     // 축척을 곱한 무늬를 객체마다 만들고(pattern), 틈은 조각을 내지 않는다
     const work: DashWork = { n: pat.dashes.length >> 3 };
+    const before = this.out.effort;
     dashPolyline(
       pts,
       closed,
@@ -607,7 +619,7 @@ export class SceneBuilder {
       },
       work,
     );
-    this.prepWork += work.n;
+    this.settleIdle(work.n, before);
     if (work.limited) this.warnInc('linetype.dash_limited');
   }
 
@@ -1530,11 +1542,11 @@ export class SceneBuilder {
       this.stroke(pts, (e.flags & 1) !== 0, r, ctx);
       return;
     }
+    // 메시·폴리페이스는 면이 적어도 정점은 방문마다 모두 옮긴다(망가진 M × N은 옮긴 뒤에 그냥 돌아간다)
+    this.prepWork += nAll >> 3;
     if (e.kind === 'mesh') {
       const M = e.mCount;
       const N = e.nCount;
-      // 망가진 M × N은 정점을 모두 옮긴 뒤에 그냥 돌아가므로 먼저 센다
-      this.prepWork += nAll >> 3;
       const v: { x: number; y: number }[] = [];
       for (let i = 0; i < nAll; i++) v.push(applyXY(ctx.m, V[i * 3]!, V[i * 3 + 1]!, V[i * 3 + 2]!));
       if (M * N > v.length || M < 1 || N < 1) return;
@@ -1590,6 +1602,8 @@ export class SceneBuilder {
       degree = s.degree;
       weights = undefined;
     }
+    // 매듭이 모두 같으면 조각 없이 조정점만 푼다
+    this.prepWork += ctrl.length >> 3;
     // 실제 차수는 조정점 수로도 줄어든다(geom/curves.ts)
     const real = Math.min(degree, ctrl.length - 1);
     if (real > SPLINE_MAX_DEGREE) this.warnInc('spline.degree_limited');
@@ -2228,13 +2242,21 @@ export class SceneBuilder {
       this.warnInc('hatch.pattern_truncated');
       for (const l of loops) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
       if (spent) return;
-      for (let f = 2; f <= 4096 && !segs; f *= 2) segs = patternSegments(spreadPattern(lines, f), fillLoops, limit, work);
+      // 실패한 패스의 일도 장면 일이다(최상위 해치도 문서 전체로 묶는다). 장면 일이 다 되면 더 넓히지 않는다
+      for (let f = 2; f <= 4096 && !segs; f *= 2) {
+        this.out.addWork(work.n);
+        work.n = 0;
+        if (this.piecesSpent()) break;
+        segs = patternSegments(spreadPattern(lines, f), fillLoops, limit, work);
+      }
     }
-    this.prepWork += work.n;
     if (work.limited) this.warnInc('linetype.dash_limited');
-    if (!segs) return;
-    const w = this.xf(m, segs, z);
-    for (let i = 0; i + 3 < w.length; i += 4) this.out.segment(w[i]!, w[i + 1]!, w[i + 2]!, w[i + 3]!, r.style);
+    const before = this.out.effort;
+    if (segs) {
+      const w = this.xf(m, segs, z);
+      for (let i = 0; i + 3 < w.length; i += 4) this.out.segment(w[i]!, w[i + 1]!, w[i + 2]!, w[i + 3]!, r.style);
+    }
+    this.settleIdle(work.n, before);
   }
 
   /** 그라데이션: 삼각형을 잘게 나눠 색을 단계로 칠한다 */

@@ -65,7 +65,7 @@ export function minsertGrid(e: { rowCount: number; columnCount: number }): { row
  */
 export const BLOCK_WORK_BASE = 24_000_000;
 export const BLOCK_WORK_PER_ENTITY = 2_000;
-/** 도면이 아무리 커도 블록 펼침은 이만큼까지. 그 안에서도 조각은 SCENE_PIECE_LIMIT에서 멈춘다 */
+/** 도면이 아무리 커도 블록 펼침은 이만큼까지. 그 안에서도 장면 일은 SCENE_PIECE_LIMIT에서 멈춘다 */
 export const BLOCK_WORK_MAX = 100_000_000;
 
 /**
@@ -83,8 +83,9 @@ export function blockWorkLimit(entities: number): number {
 }
 
 /**
- * 장면 하나의 조각 수가 이만큼을 넘으면 늘어나는 그림을 더 펼치지 않는다: 해치는 경계만, 선종류는 실선으로.
- * 객체 하나가 작은 파일 조각에서 대시 수만 개·무늬 선 수십만 개로 늘어나기 때문이다(객체 자체는 그대로 그린다)
+ * 장면 하나의 일이 이 값과 블록 일 한도(blockWorkLimit) 가운데 작은 쪽을 넘으면 늘어나는 그림을 더 펼치지 않는다: 해치는 경계만, 선종류는 실선으로.
+ * 객체 하나가 작은 파일 조각에서 대시 수만 개·무늬 선 수십만 개로 늘어나기 때문이다(객체 자체는 그대로 그린다).
+ * 일은 메모리 공식(PEAK_BYTES_PER_WORK)과 같은 단위라 글리프는 조각 3개 몫이고, 작은 파일의 표시 목록은 약 1.9GB + 객체당 160KB로 묶인다
  */
 export const SCENE_PIECE_LIMIT = 60_000_000;
 
@@ -114,6 +115,11 @@ export const LINETYPE_ELEMENTS = 12;
  * 형식 안의 선종류는 반복 한도까지 닿아도 넘지 않는 값이고, 넘으면 실선으로 그린다
  */
 export const DASH_STEP_LIMIT = DASH_REPEAT_LIMIT * LINETYPE_ELEMENTS;
+/**
+ * 객체 하나에서 복합 선종류 문자를 배치하는 글자 수(반복 × 글자). 긴 문자(HOT WATER SUPPLY 등)가 일찍 실선이 되지 않게
+ * 요소와 따로 묶는다. 반복 한도까지 32자를 넘지 않는 값이고, 넘으면 실선으로 그린다
+ */
+export const DASH_TEXT_LIMIT = DASH_REPEAT_LIMIT * 32;
 
 /** 압축을 푼 섹션·페이지 크기는 파일 크기의 이 배수(+ 1 MiB)를 넘지 않는다(R2004·R2007 섹션 크기 검사의 기준) */
 export const DECOMPRESS_RATIO = 32;

@@ -3,7 +3,7 @@
  * 고치기 전에는 블록 중첩·다중 삽입·먼 해치 무늬가 30초 안에 끝나지 않았고, 짧은 대시 선 2만 개는 12GB를 썼다.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { DASH_STEP_LIMIT, FIT_INTERPOLATE_LIMIT, LINETYPE_ELEMENTS, MINSERT_LIMIT, PEAK_BYTES_BASE, PEAK_BYTES_PER_WORK, SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, fitSolveWork, minsertGrid } from '../../src/core/limits';
+import { DASH_STEP_LIMIT, DASH_TEXT_LIMIT, FIT_INTERPOLATE_LIMIT, LINETYPE_ELEMENTS, MINSERT_LIMIT, PEAK_BYTES_BASE, PEAK_BYTES_PER_WORK, SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, fitSolveWork, minsertGrid } from '../../src/core/limits';
 import { MODEL_SPACE, entityDefaults, type CadDocument, type DictionaryObject, type InsertEntity, type SplineEntity } from '../../src/core/model';
 import { countRows } from '../../src/edit/count';
 import { edgeBox } from '../../src/edit/geom/edges';
@@ -436,7 +436,7 @@ describe('외부 참조', () => {
   it('앞선 최상위 객체의 조각은 블록 일이 아니다', () => {
     const p = ['0', 'LWPOLYLINE', '5', '1F', '8', '0', '100', 'AcDbEntity', '100', 'AcDbPolyline', '90', '5000', '70', '0'];
     for (let k = 0; k < 5000; k++) p.push('10', String(k), '20', String(k % 2));
-    const s = scene(load([p, minsert(10, 10)], [BLOCK_B]), { blockWorkLimit: 1000 });
+    const s = scene(load([p, minsert(10, 10)], [BLOCK_B]), { blockWorkLimit: 1000, scenePieceLimit: 1e12 });
     expect(codes(s)).not.toContain('block.expansion_limit');
     expect(segs(s)).toBe(4999 + 100);
   });
@@ -643,8 +643,8 @@ describe('복합 선종류 문자', () => {
   });
 
   it('예산과 같으면 문자를 입히고 하나 넘으면 실선이다', () => {
-    const chars = 14;
-    const repeats = DASH_STEP_LIMIT / (2 + chars);
+    const chars = 40;
+    const repeats = DASH_TEXT_LIMIT / chars;
     const run = (len: number) => {
       let placed = 0;
       const work: DashWork = { n: 0 };
@@ -671,6 +671,21 @@ describe('복합 선종류 문자', () => {
     const work: DashWork = { n: 0 };
     dashPolyline([0, 0, 800, 0], false, pat, () => {}, () => {}, work);
     expect(work.n).toBe(((400 * 3) >> 3) + 200);
+  });
+
+  it('글자 수는 요소 예산을 쓰지 않는다', () => {
+    // HOT WATER SUPPLY 16자 + 요소 3개: 요소 예산에 넣으면 반복 13,000번부터 실선이었다
+    let placed = 0;
+    const pat: DashPattern = { dashes: [1, -0.5, -0.5], period: 2, texts: [{ at: 1, text: 'HOT WATER SUPPLY', scale: 0.1, rotation: 0, absolute: false, dx: 0, dy: 0 }] };
+    const work: DashWork = { n: 0 };
+    dashPolyline([0, 0, 2 * 19_000, 0], false, pat, () => {}, () => placed++, work);
+    expect(placed).toBe(19_000);
+    expect(work.limited).toBeUndefined();
+    // 요소 예산은 글자와 따로 그대로다
+    const many: DashPattern = { dashes: Array.from({ length: 24 }, (_, i) => (i % 2 ? -1 : 1)), period: 24, texts: pat.texts };
+    const w2: DashWork = { n: 0 };
+    dashPolyline([0, 0, 24 * 10_001, 0], false, many, () => {}, () => {}, w2);
+    expect(w2.limited).toBe(true);
   });
 
   it('형식 안의 짧은 문자는 반복 한도까지 그대로다', () => {
@@ -720,6 +735,26 @@ describe('방문마다 도는 일', () => {
     m.push('93', '0', '94', '1', '90', '0', '90', '1', '95', '0');
     const s = scene(load([minsert(10, 10)], [blockOf('B', m)]), OFF);
     // 칸 100개마다 칸 1 + 객체 1 + 정점 800 / 8
+    expect(s.stats.blockWork).toBe(100 * (2 + 100));
+  });
+
+  it('매듭이 모두 같아 조각이 없는 스플라인도 조정점을 푸는 일을 센다', () => {
+    const nc = 800;
+    const body = ['0', 'SPLINE', '8', '0', '100', 'AcDbEntity', '100', 'AcDbSpline', '70', '8', '71', '3', '72', String(nc + 4), '73', String(nc), '74', '0'];
+    for (let i = 0; i < nc + 4; i++) body.push('40', '0');
+    for (let i = 0; i < nc; i++) body.push('10', String(i), '20', String(i % 7), '30', '0');
+    const s = scene(load([minsert(10, 10)], [blockOf('B', body)]), OFF);
+    expect(segs(s)).toBe(0);
+    expect(s.stats.blockWork).toBe(100 * (2 + 100));
+  });
+
+  it('면이 하나뿐인 폴리페이스도 정점을 옮기는 일을 센다', () => {
+    const nv = 800;
+    const pl = ['0', 'POLYLINE', '8', '0', '100', 'AcDbEntity', '100', 'AcDbPolyFaceMesh', '66', '1', '10', '0', '20', '0', '30', '0', '70', '64', '71', String(nv), '72', '1'];
+    for (let i = 0; i < nv; i++) pl.push('0', 'VERTEX', '8', '0', '10', String(i), '20', String(i % 3), '30', '0', '70', '192');
+    pl.push('0', 'VERTEX', '8', '0', '10', '0', '20', '0', '30', '0', '70', '128', '71', '1', '72', '2', '73', '3', '0', 'SEQEND', '8', '0');
+    const s = scene(load([minsert(10, 10)], [blockOf('B', pl)]), OFF);
+    // 칸 100개마다 칸 1 + 객체 1 + 정점 801 / 8(조각 3개를 뺀 것이 아니라 정점 일이 더 크다)
     expect(s.stats.blockWork).toBe(100 * (2 + 100));
   });
 
@@ -792,6 +827,109 @@ describe('장면 조각 한도', () => {
     const s = scene(doc, { scenePieceLimit: 150 });
     expect(codes(s)).toContain('scene.piece_limit');
     expect(segs(s)).toBe(200 + 1 + 1);
+  });
+
+  /** 문자 100자를 반복하는 복합 선종류: 선 하나가 글리프 2,000개 = 일 6,000 */
+  const textLtype = ['0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'D', '70', '0', '3', 'd', '72', '65', '73', '2', '40', '2', '49', '1', '74', '2', '75', '0', '46', '1', '50', '0', '44', '0', '45', '0', '9', 'A'.repeat(100), '49', '-1', '74', '0', '0', 'ENDTAB', '0', 'ENDSEC'];
+  const textLine = (y: number): string[] => ['0', 'LINE', '8', '0', '6', 'D', '10', '0', '20', String(y), '30', '0', '11', '40', '21', String(y), '31', '0'];
+
+  it('글리프는 조각 3개 몫으로 장면 일을 쓴다', () => {
+    const doc = load([textLine(0), textLine(1), textLine(2)], [], textLtype);
+    const s = scene(doc, { scenePieceLimit: 6_500 });
+    expect(codes(s)).toContain('scene.piece_limit');
+    // 첫 선이 한도 안(일 6,020), 둘째 선은 한도를 넘겨 그린 뒤, 셋째 선은 실선
+    expect(s.list.glyphs.instanceCount).toBe(4000);
+    expect(segs(s)).toBe(40 + 1);
+  });
+
+  it('기본 장면 한도는 블록 일 한도로 묶여 작은 파일의 메모리가 공식 안이다', () => {
+    const ents: string[][] = [];
+    for (let i = 0; i < 520; i++) ents.push(['0', 'LINE', '5', (0x100 + i).toString(16), '8', '0', '6', 'D', '10', '0', '20', String(i), '30', '0', '11', String(12 * 19999), '21', String(i), '31', '0']);
+    const lt = ['0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'D', '70', '0', '3', 'd', '72', '65', '73', '12', '40', '12'];
+    for (let i = 0; i < 6; i++) lt.push('49', '1', '74', '0', '49', '-1', '74', '0');
+    lt.push('0', 'ENDTAB', '0', 'ENDSEC');
+    const s = scene(load(ents, [], lt));
+    const limit = blockWorkLimit(521);
+    expect(codes(s)).toContain('scene.piece_limit');
+    expect(segs(s)).toBeLessThanOrEqual(limit + 120_000 + 520);
+    expect(s.stats.peakBytes).toBeLessThanOrEqual(PEAK_BYTES_PER_WORK * limit + PEAK_BYTES_BASE);
+    // 늘어나는 그림만 줄고 객체는 모두 그린다
+    expect(s.list.entities.length).toBe(520);
+  });
+
+  it('블록 일 한도를 줄이면 장면 일 한도도 같이 준다', () => {
+    const ents = [0, 1, 2, 3].map((i) => dashedLine(i, 100));
+    const s = scene(load(ents, [], ltypeTable(0.5)), { blockWorkLimit: 150 });
+    expect(codes(s)).toContain('scene.piece_limit');
+    expect(segs(s)).toBe(200 + 1 + 1);
+  });
+
+  it('장면 일이 다 되면 블록을 더 펼치지 않는다', () => {
+    const p = ['0', 'LWPOLYLINE', '5', '1F', '8', '0', '100', 'AcDbEntity', '100', 'AcDbPolyline', '90', '5000', '70', '0'];
+    for (let k = 0; k < 5000; k++) p.push('10', String(k), '20', String(k % 2));
+    const s = scene(load([p, minsert(10, 10)], [BLOCK_B]), { blockWorkLimit: 1e12, scenePieceLimit: 1000 });
+    expect(codes(s)).toContain('block.expansion_limit');
+    expect(segs(s)).toBe(4999);
+  });
+
+  it('글리프의 장면 일로도 블록을 더 펼치지 않는다', () => {
+    // 조각은 2,020개라 한도 5,000 안이지만 일은 6,020이다
+    const s = scene(load([textLine(0), minsert(10, 10)], [BLOCK_B], textLtype), { blockWorkLimit: 1e12, scenePieceLimit: 5_000 });
+    expect(codes(s)).toContain('block.expansion_limit');
+    expect(s.list.glyphs.instanceCount).toBe(2000);
+    expect(segs(s)).toBe(20);
+  });
+
+  describe('최상위 해치 일', () => {
+    /** 앞 무늬 선이 요소 예산을 다 쓰고 뒤 무늬 선이 간격 때문에 실패해 간격 넓히기마다 되풀이되는 해치 */
+    const bomb = (id: number): string[] => {
+      const D = 60;
+      const W = D * 1_200_000;
+      const out = ['0', 'HATCH', '5', (0x100 + id).toString(16), '8', '0', '100', 'AcDbEntity', '100', 'AcDbHatch', '10', '0', '20', '0', '30', '0', '2', 'P', '70', '0', '71', '0', '91', '1', '92', '2', '72', '0', '73', '1', '93', '4',
+        '10', '0', '20', '0', '10', String(W), '20', '0', '10', String(W), '20', '10', '10', '0', '20', '10', '97', '0', '75', '0', '76', '1', '52', '0', '41', '1', '77', '0', '78', '2',
+        '53', '0', '43', '0', '44', '5', '45', '0', '46', '1e12', '79', String(D)];
+      for (let i = 0; i < D; i++) out.push('49', '-1');
+      out.push('53', '0', '43', '0', '44', '0', '45', '0', '46', '1e-8', '79', '0', '98', '0');
+      return out;
+    };
+
+    it('실패한 패스의 일도 문서 전체로 묶어 패스가 해치 수만큼 되풀이되지 않는다', () => {
+      const doc = load(Array.from({ length: 30 }, (_, i) => bomb(i)));
+      const sort = vi.spyOn(Int32Array.prototype, 'sort');
+      try {
+        const s = scene(doc);
+        expect(codes(s)).toContain('scene.piece_limit');
+        expect(codes(s)).toContain('hatch.pattern_truncated');
+        // 경계는 모두 그린다
+        expect(segs(s)).toBe(30 * 4);
+        // 패스 하나가 일 900만이라 2,400만에서 멈춘다(고치기 전 해치마다 13번, 390번)
+        expect(sort.mock.calls.length).toBeLessThanOrEqual(5);
+      } finally {
+        sort.mockRestore();
+      }
+    });
+
+    it('블록 안 해치의 무늬 일은 조각과 이중으로 세지 않는다', () => {
+      const blk = (n: string, body: string[]) => ['0', 'BLOCK', '8', '0', '2', n, '70', '0', '10', '0', '20', '0', '30', '0', '3', n, ...body, '0', 'ENDBLK', '8', '0'];
+      const body: string[] = [];
+      for (let k = 0; k < 10; k++) body.push('0', 'INSERT', '8', '0', '2', 'L', '10', String(k), '20', '0', '30', '0');
+      const s = scene(load([insertOf('M')], [blk('M', body), blk('L', hatch({ size: 100, spacing: 1 }))]), { blockWorkLimit: 1e12, scenePieceLimit: 1e12 });
+      // 칸 1 + (객체 방문 1 + 칸 1 + 안쪽 객체 방문 1) × 10 + 조각. 무늬 일이 조각보다 많은 몫(해치마다 변과 끝 줄 몇 개)만 더한다
+      const base = 1 + 3 * 10 + segs(s);
+      expect(s.stats.blockWork).toBeGreaterThanOrEqual(base);
+      expect(s.stats.blockWork).toBeLessThanOrEqual(base + 10 * 2);
+    });
+
+    it('선종류의 틈 일도 최상위 객체에서 장면 일이다', () => {
+      // 대시 1 + 틈 15: 조각 20,000개, 일 30,000
+      const lt = ['0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'D', '70', '0', '3', 'd', '72', '65', '73', '16', '40', '16', '49', '1', '74', '0'];
+      for (let i = 0; i < 15; i++) lt.push('49', '-1', '74', '0');
+      lt.push('0', 'ENDTAB', '0', 'ENDSEC');
+      const line = (y: number): string[] => ['0', 'LINE', '8', '0', '6', 'D', '10', '0', '20', String(y), '30', '0', '11', String(16 * 15000), '21', String(y), '31', '0'];
+      const s = scene(load([line(0), line(1)], [], lt), { scenePieceLimit: 20_000 });
+      expect(codes(s)).toContain('scene.piece_limit');
+      expect(segs(s)).toBe(15000 + 1);
+    });
   });
 
   it('기본 한도는 실제 도면의 가장 큰 장면(130만 조각)보다 훨씬 크다', () => {
