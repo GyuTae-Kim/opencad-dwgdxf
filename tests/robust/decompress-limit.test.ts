@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CadReadError } from '../../src/core/errors';
-import { DECOMPRESS_RATIO, decompressLimit, sectionWorkLimit } from '../../src/core/limits';
-import type { CadDocument, Entity, LineEntity, LwPolylineEntity, TableEntity, TextEntity } from '../../src/core/model';
+import { DECOMPRESS_RATIO, ZERO_PAGE_SKIP, decompressLimit, sectionWorkLimit } from '../../src/core/limits';
+import type { CadDocument, Entity, LineEntity, LwPolylineEntity, Ole2FrameEntity, TableEntity, TextEntity } from '../../src/core/model';
 import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
 import { createNewDocument } from '../../src/core/newdoc';
 import { EditSession } from '../../src/edit/session';
@@ -22,6 +22,7 @@ import type { DwgSections } from '../../src/io/dwg/container/types';
 import { readObjectMap } from '../../src/io/dwg/handles';
 import { decompressR18 } from '../../src/io/dwg/lz77';
 import { ObjectReader } from '../../src/io/dwg/objects/reader';
+import { fingerprint } from '../../src/io/dwg/rawbody';
 import { R2004, R2007, R2018 } from '../../src/io/dwg/version';
 import { BitWriter } from '../../src/io/dwg/writer/bitwriter';
 import { encoderFor } from '../../src/io/dwg/writer/codepage';
@@ -222,6 +223,63 @@ describe('압축 폭탄', () => {
     // 파일 × 비율로 잡으면 3GiB를 돈다
     expect(w!.detail!.work as number).toBeLessThanOrEqual(sectionWorkLimit(data.length, 16) + pageWork);
     expect(w!.detail!.work as number).toBeLessThanOrEqual(24 * MiB);
+  });
+});
+
+describe('0만 있는 페이지', () => {
+  const PAGE = 0x7400;
+  const section = (name: string, data: Uint8Array) => ({ name, data, compressed: true, pageSize: PAGE });
+  const write = (objects: Uint8Array, extra: ReturnType<typeof section>[] = []) => {
+    const sections = [section('AcDb:Header', new Uint8Array(32).fill(1)), section('AcDb:Handles', new Uint8Array(32).fill(2)), section('AcDb:AcDbObjects', objects), ...extra];
+    return writeR2004(1018, 0, 30, sections, sections.map((s) => s.name));
+  };
+
+  it('건너뛰는 합은 읽기 한도의 여유 안쪽이다', () => {
+    expect(ZERO_PAGE_SKIP).toBeLessThan(decompressLimit(0));
+    expect(decompressLimit(0) - ZERO_PAGE_SKIP).toBeGreaterThanOrEqual(PAGE);
+  });
+
+  it('원본 본문에 0이 8MiB 이어진 OLE 객체를 다시 저장해도 다시 열린다', () => {
+    const doc = createNewDocument('metric');
+    const s = new EditSession(doc, () => {});
+    const e: Ole2FrameEntity = { ...entityDefaults(), type: 'OLE2FRAME', handle: s.newHandle(), upperLeft: { x: 0, y: 0, z: 0 }, lowerRight: { x: 0, y: 0, z: 0 } };
+    const body = new Uint8Array(8 * MiB);
+    body[0] = 0xff;
+    body[body.length - 1] = 0x81;
+    e.dwgRaw = { version: 'AC1032', typeName: 'OLE2FRAME', typeNum: 74, data: body, dataBits: body.length * 8, handles: new Uint8Array(8), handleBits: 0, fingerprint: fingerprint(e) };
+    modelOf(doc).push(e);
+    const { data } = writeDwg(doc, { version: 'AC1032' });
+    const back = readCadFile(data, 'x.dwg');
+    expect(back.warnings).toEqual([]);
+    const rawOf = (d: CadDocument) => modelOf(d).find((x) => x.type === 'OLE2FRAME')!.dwgRaw!.data;
+    expect(Buffer.compare(rawOf(back), body)).toBe(0);
+    const again = readCadFile(writeDwg(back, { version: 'AC1032' }).data, 'y.dwg');
+    expect(again.warnings).toEqual([]);
+    expect(Buffer.compare(rawOf(again), body)).toBe(0);
+  });
+
+  it('0 구역 앞뒤의 자료가 제자리에 남는다', () => {
+    const objects = new Uint8Array(64 * MiB);
+    for (let i = 0; i < 4096; i++) objects[i] = (i * 31) & 0xff;
+    objects.set([1, 2, 3], objects.length - 3);
+    const sec = readR2004Container(write(objects), R2004);
+    expect(sec.warnings).toEqual([]);
+    expect(Buffer.compare(sec.objects, objects)).toBe(0);
+  });
+
+  it('건너뛰는 합은 섹션마다가 아니라 파일 전체다', () => {
+    // 섹션마다 묶으면 네 섹션을 모두 건너뛰어 합이 2MiB, 파일은 2KB 안쪽이라 읽기 한도를 넘는다
+    const zeros = new Uint8Array(Math.floor(ZERO_PAGE_SKIP / PAGE) * PAGE);
+    const data = write(zeros, [section('AcDb:Classes', zeros), section('AcDb:Template', zeros), section('AcDb:SummaryInfo', zeros)]);
+    const sec = readR2004Container(data, R2004);
+    expect([sec.objects.length, sec.classes!.length, sec.template?.length, sec.summaryInfo?.length]).toEqual(new Array(4).fill(zeros.length));
+  });
+
+  it('합 안쪽의 0 페이지는 전처럼 쓰지 않아 일반 파일의 출력이 그대로다', () => {
+    const fits = Math.floor(ZERO_PAGE_SKIP / PAGE);
+    const small = write(new Uint8Array(PAGE));
+    expect(write(new Uint8Array(fits * PAGE)).length).toBe(small.length);
+    expect(write(new Uint8Array((fits + 10) * PAGE)).length).toBeGreaterThanOrEqual(small.length + 10 * 160);
   });
 });
 
