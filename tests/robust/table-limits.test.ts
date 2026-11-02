@@ -7,12 +7,13 @@ import { saveLosses } from '../../src/app/saveloss';
 import { finalizeDocument } from '../../src/core/finalize';
 import { TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS, TABLE_MERGE_RATIO, tableSizeOk } from '../../src/core/limits';
 import { MODEL_SPACE, type InsertEntity, type RawTag, type TableEntity, type XData, type XDataItem } from '../../src/core/model';
-import { TABLE_APP, decodeTableXData, encodeTableXData, isEditableTable, rawTableCells, tableFromEntity } from '../../src/edit/table/entity';
+import { TABLE_APP, decodeTableXData, encodeTableXData, isEditableTable, mapTableTextStyles, rawTableCells, tableDataOf, tableFromEntity, tableTextStyleRefs } from '../../src/edit/table/entity';
 import type { TableData } from '../../src/edit/table/model';
 import { writeDwg } from '../../src/io/dwg';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { readCadFile } from '../../src/io/index';
+import { tableCellsOut } from '../../src/io/tablecells';
 import { buildSpace } from '../../src/render/build';
 import { TextEngine } from '../../src/text/layout';
 import { BLOCK_B, bytesOf, dxfText, table, tableMerge, tableXdataInsert } from './corrupt35';
@@ -144,6 +145,53 @@ describe('파일에 없는 칸의 문서 예산', () => {
       const out = new TextDecoder().decode(writeDxf(doc, { version: 'AC1018' }).data);
       expect(out.split('OPENCAD_TABLE 1').length - 1).toBe(3);
       expect(out).not.toContain('tableTooLarge');
+    });
+
+    describe('표에 붙은 표 자료', () => {
+      /** 행 × 열 1 × 1 표에 크기 size × size 표 자료와 셀 묶음 하나 */
+      const small = (h: string, size: number): string[] => [
+        '0', 'ACAD_TABLE', '5', h, '100', 'AcDbEntity', '8', '0', '100', 'AcDbBlockReference', '2', '*T1', '10', '0', '20', '0', '30', '0', '100', 'AcDbTable', '91', '1', '92', '1', '141', '5', '142', '10', '171', '1', '1', 'x',
+        '1001', 'OPENCAD_TABLE', '1000', 'OPENCAD_TABLE 1', '1000', 'size', '1071', String(size), '1071', String(size),
+        '1000', 'fill', '1071', '1', '1071', '0', '1071', String(size * size), '1071', '1', '1071', '-1',
+        '1000', 'tstyle', '1071', '1', '1071', '0', '1071', String(size * size), '1071', '1', '1000', 'S',
+      ];
+
+      it('행 × 열과 크기가 다르면 셀 묶음을 펼치지 않는다', () => {
+        const doc = readDxf(bytesOf(dxfText([small('2A', 1000)], [T1])));
+        const e = doc.entityIndex.get('2A') as TableEntity;
+        expect([e.rows, e.columns]).toEqual([1, 1]);
+        const set = vi.spyOn(Map.prototype, 'set');
+        try {
+          expect(tableDataOf(e)?.fills?.size).toBe(0);
+          tableFromEntity(e, doc);
+          tableTextStyleRefs(e);
+          mapTableTextStyles(e, (n) => `${n}x`);
+          tableCellsOut(e, doc);
+          // 고치기 전 호출마다 200만 번
+          expect(set.mock.calls.length).toBeLessThan(200);
+        } finally {
+          set.mockRestore();
+        }
+      });
+
+      it('표 자료의 크기도 예산을 쓴다', () => {
+        const doc = readDxf(bytesOf(dxfText([small('2A', 1000), small('2B', 1000), small('2C', 1000)], [T1])));
+        expect(sizes(doc)).toEqual([1, 0, 0]);
+        expect(tooLarge(doc)).toBe(2);
+      });
+
+      it('크기가 맞는 앱 표 자료는 그대로 쓴다', () => {
+        const data: TableData = { rows: 2, cols: 2, rowHeights: [5, 6], baseRowHeights: [5, 6], colWidths: [7, 8], rowKinds: ['data', 'data'], merges: [], cells: [{ text: 'a', fill: { aci: 3 }, height: 1.5 }, { text: 'b' }, { text: 'c' }, { text: 'd' }] };
+        const doc = readDxf(bytesOf(dxfText([filled(2, 2, '2A')], [T1])));
+        const e = doc.entityIndex.get('2A') as TableEntity;
+        e.xdata = [encodeTableXData(data)];
+        finalizeDocument(doc);
+        expect([e.rows, e.columns]).toEqual([2, 2]);
+        expect(tableDataOf(e)?.fills?.get(0)).toEqual({ aci: 3 });
+        const t = tableFromEntity(e, doc)!;
+        expect(t.data.cells[0]?.fill).toEqual({ aci: 3 });
+        expect(tableCellsOut(e, doc).cells[0]?.height).toBe(1.5);
+      });
     });
 
     it('표와 표 자료가 예산을 함께 쓴다', () => {

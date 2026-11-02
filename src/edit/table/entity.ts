@@ -333,6 +333,14 @@ export function decodeTableXData(x: XData | undefined, head = false): DecodedTab
   return done();
 }
 
+/** 객체의 표 자료. ACAD_TABLE의 행 × 열과 자료 크기가 다르면 쓰지 않는 자료이므로 머리 값만 읽고 셀 묶음을 펼치지 않는다 */
+export function tableDataOf(e: Entity): DecodedTable | null {
+  const x = e.xdata?.find((q) => q.app.toUpperCase() === TABLE_APP);
+  if (e.type !== 'ACAD_TABLE') return decodeTableXData(x);
+  const head = decodeTableXData(x, true);
+  return head && head.rows === e.rows && head.cols === e.columns ? decodeTableXData(x) : head;
+}
+
 /**
  * 겹치는 병합은 앞의 것만 남긴다. 병합의 크기는 파일 값이다. 표 밖으로 나가는 병합은 어차피 쓰지 않으니(tableFromEntity) 칸을 세지 않는다.
  * 첫 충돌에서 멈추고, 훑은 칸이 표 넓이의 몇 배를 넘으면 나머지 병합은 버린다(정상 표의 병합은 겹치지 않는다)
@@ -388,7 +396,7 @@ function acdbTableRange(raw: readonly RawTag[] | undefined): [number, number] | 
 export function tableTextStyleRefs(e: Entity): string[] {
   if (e.type !== 'ACAD_TABLE' && e.type !== 'INSERT') return [];
   const out = new Set<string>();
-  const x = decodeTableXData(e.xdata?.find((q) => q.app.toUpperCase() === TABLE_APP));
+  const x = tableDataOf(e);
   for (const n of x?.textStyles?.values() ?? []) out.add(n);
   if (e.type === 'ACAD_TABLE') {
     const r = acdbTableRange(e.raw);
@@ -408,7 +416,7 @@ export function mapTableTextStyles<T extends Entity>(e: T, map: (name: string) =
   const xi = e.xdata?.findIndex((q) => q.app.toUpperCase() === TABLE_APP) ?? -1;
   if (xi >= 0) {
     const x = e.xdata![xi]!;
-    const d = decodeTableXData(x);
+    const d = tableDataOf(e);
     const span = d?.spans.get('tstyle');
     if (d?.textStyles?.size && span) {
       const names = new Map<number, string>();
@@ -550,7 +558,7 @@ export interface ReadTable {
 /** 표 객체에서 표 정의를 읽는다 */
 export function tableFromEntity(e: TableEntity | InsertEntity, doc: CadDocument): ReadTable | null {
   if (e.type === 'INSERT' && e.tableTooLarge) return null;
-  const x = decodeTableXData(e.xdata?.find((q) => q.app.toUpperCase() === TABLE_APP));
+  const x = tableDataOf(e);
   const te = e.type === 'ACAD_TABLE' ? e : null;
   const rows = te ? te.rows : (x?.rows ?? 0);
   const cols = te ? te.columns : (x?.cols ?? 0);

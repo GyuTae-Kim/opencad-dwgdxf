@@ -10,7 +10,7 @@
  * acdbTableTags()는 이 배치로 AcDbTable 태그(AutoCAD DXF 순서)를 만든다.
  */
 import type { CadColor, CadDocument, RawTag, TableEntity, Vec3 } from '../core/model';
-import { TABLE_APP, decodeTableXData, tableFromEntity } from '../edit/table/entity';
+import { tableDataOf, tableFromEntity } from '../edit/table/entity';
 import type { CellKind, TableStyle } from '../edit/table/style';
 
 export interface CellOut {
@@ -124,7 +124,7 @@ export function tableCellsOut(e: TableEntity, doc: CadDocument): TableOut {
     out.cells.push(cell);
   }
   if (!n) return out;
-  const x = decodeTableXData(e.xdata?.find((q) => q.app.toUpperCase() === TABLE_APP));
+  const x = tableDataOf(e);
   const xok = !!x && x.rows === rows && x.cols === cols;
   const rawOvr = xok ? [] : rawCellOverrides(e.raw);
   const hasRawCells = rawOvr.length === n;
