@@ -149,7 +149,7 @@ export function readR2007Container(data: Uint8Array, ver: number): DwgSections {
         const start = info.offset + 0x480;
         if (start + blocks * 255 > data.length) throw new DwgFormatError('페이지가 파일 밖에 있습니다');
         if (!decompressedSizeOk(unpacked + pg.uncomp, data.length)) throw new DwgFormatError('페이지 크기가 잘못되었습니다');
-        // 섹션 지도가 같은 페이지를 되풀이해 가리켜도 파일 크기에 비례한 일만 한다
+        // 섹션 지도가 같은 페이지를 되풀이해 가리켜도 파일과 섹션 크기에 비례한 일만 한다
         work += blocks * 255 + pg.uncomp;
         if (work > workLimit) {
           warn(warnings, 'dwg.page_repeat', `${name} 섹션이 같은 페이지를 너무 여러 번 가리켜 나머지 페이지를 읽지 않았습니다.`, { work });

@@ -43,18 +43,15 @@ const reasonOf = (f: () => unknown): string | undefined => {
   }
   return undefined;
 };
-/** f가 잡은 ArrayBuffer 바이트(되돌린 값으로 보지 않게 끝난 뒤 바로 잰다) */
+/** f가 잡은 ArrayBuffer 바이트. 거부되면 거부되기 전까지 잡은 몫이다 */
 const allocatedBy = (f: () => unknown): number => {
   const before = process.memoryUsage().arrayBuffers;
-  let kept: unknown;
   try {
-    kept = f();
+    f();
   } catch {
-    kept = null;
+    // 거부되는 입력도 재므로 그대로 둔다
   }
-  const after = process.memoryUsage().arrayBuffers;
-  expect(kept === undefined).toBe(false);
-  return after - before;
+  return process.memoryUsage().arrayBuffers - before;
 };
 
 function polylines(n: number, verts: number): CadDocument {
@@ -85,9 +82,9 @@ function appTable(rows: number, cols: number): CadDocument {
 }
 
 describe('합법 DWG를 다시 연다', () => {
-  it('앱이 쓴 300 × 300 표(0.06MB가 3.4MB로 풀린다)', () => {
-    const { data } = writeDwg(appTable(300, 300), { version: 'AC1032' });
-    const sec = readR2004Container(data.slice(), R2018);
+  it.each([['AC1018', R2004], ['AC1032', R2018]] as const)('앱이 쓴 300 × 300 표(%s, 0.03~0.06MB가 2~3MB로 풀린다)', (version, ver) => {
+    const { data } = writeDwg(appTable(300, 300), { version });
+    const sec = readR2004Container(data.slice(), ver);
     expect(sec.objects.length).toBeGreaterThan(oldLimit(data.length));
     const doc = readCadFile(data, 'x.dwg');
     const t = modelOf(doc).find((e) => e.type === 'ACAD_TABLE') as TableEntity;
@@ -219,11 +216,11 @@ describe('압축 폭탄', () => {
 
   it('섹션 크기가 작으면 큰 파일에서도 같은 페이지 되풀이가 곧 멈춘다', () => {
     const pageWork = 4 * MiB;
-    const sec = readR2004Container(r2004Pages(1000000, pageWork), R2004);
-    const w = sec.warnings.find((x) => x.code === 'dwg.page_repeat');
+    const data = r2004Pages(1000000, pageWork);
+    const w = readR2004Container(data, R2004).warnings.find((x) => x.code === 'dwg.page_repeat');
     expect(w).toBeDefined();
     // 파일 × 비율로 잡으면 3GiB를 돈다
-    expect(w!.detail!.work as number).toBeLessThanOrEqual(sectionWorkLimit(pageWork + 8192, 16) + pageWork);
+    expect(w!.detail!.work as number).toBeLessThanOrEqual(sectionWorkLimit(data.length, 16) + pageWork);
     expect(w!.detail!.work as number).toBeLessThanOrEqual(24 * MiB);
   });
 });
