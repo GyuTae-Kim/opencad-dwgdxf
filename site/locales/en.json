@@ -842,7 +842,6 @@
   "{0} 섹션 페이지 헤더가 맞지 않습니다.": "The {0} section page header is incorrect.",
   "{0} 섹션 페이지가 파일 끝을 넘습니다.": "Section page {0} extends beyond end of file.",
   "{0} 섹션 페이지를 풀지 못했습니다.": "Failed to unpack section page {0}.",
-  "{0} 섹션의 페이지 크기가 너무 커서 줄여 읽었습니다.": "The page size of section {0} was too large and was reduced when reading.",
   "{0} 섹션의 페이지가 파일 밖에 있습니다.": "Pages in section {0} are outside the file.",
   "{0} 섹션의 페이지를 찾지 못했습니다.": "No pages found in section {0}.",
   "{0} 섹션이 같은 페이지를 너무 여러 번 가리켜 나머지 페이지를 읽지 않았습니다.": "Section {0} refers to the same page too many times, so the remaining pages were not read.",

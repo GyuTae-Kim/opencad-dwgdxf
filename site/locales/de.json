@@ -842,7 +842,6 @@
   "{0} 섹션 페이지 헤더가 맞지 않습니다.": "Der Seitenkopf des Abschnitts {0} ist falsch.",
   "{0} 섹션 페이지가 파일 끝을 넘습니다.": "Abschnittsseite {0} geht über das Ende der Datei hinaus.",
   "{0} 섹션 페이지를 풀지 못했습니다.": "Abschnittsseite {0} konnte nicht entpackt werden.",
-  "{0} 섹션의 페이지 크기가 너무 커서 줄여 읽었습니다.": "Die Seitengröße des Abschnitts {0} war zu groß und wurde beim Lesen verkleinert.",
   "{0} 섹션의 페이지가 파일 밖에 있습니다.": "Seiten im Abschnitt {0} liegen außerhalb der Datei.",
   "{0} 섹션의 페이지를 찾지 못했습니다.": "Keine Seiten im Abschnitt {0} gefunden.",
   "{0} 섹션이 같은 페이지를 너무 여러 번 가리켜 나머지 페이지를 읽지 않았습니다.": "Abschnitt {0} verweist zu oft auf dieselbe Seite; die übrigen Seiten wurden nicht gelesen.",
