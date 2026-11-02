@@ -290,7 +290,7 @@ function rsInterleave(payload: Uint8Array, k: number): Uint8Array {
  * 최소 R2007(AC1021): 'AcDb:Header' 섹션이 자료 페이지 하나를 pageCount번 가리킨다(페이지마다 그 페이지의 Reed–Solomon 끼워 짬을 다시 푼다).
  * uncomp를 주면 페이지마다의 "푼 크기"를 그 값으로 적는다(압축 크기 comp보다 크면 압축을 풀려고 그만큼 잡는다). sizes = 세 섹션의 푼 크기
  */
-export function r2007Pages(pageCount: number, comp: number, uncomp = comp, sizes: readonly number[] = [16, 16, 16], counts: readonly number[] = [pageCount]): Uint8Array {
+export function r2007Pages(pageCount: number, comp: number, uncomp = comp, sizes: readonly number[] = [16, 16, 16], counts: readonly number[] = [pageCount], maxSize = 0x7400): Uint8Array {
   const u16 = (s: string): Uint8Array => {
     const b = new Uint8Array((s.length + 1) * 2);
     for (let i = 0; i < s.length; i++) b[i * 2] = s.charCodeAt(i);
@@ -302,7 +302,7 @@ export function r2007Pages(pageCount: number, comp: number, uncomp = comp, sizes
     const nb = u16(nm);
     const d = new Uint8Array(0x40 + nb.length + n * 56);
     put64(d, 0, sizes[i]!);
-    put64(d, 8, 0x7400);
+    put64(d, 8, maxSize);
     put64(d, 0x20, nb.length);
     put64(d, 0x30, 4);
     put64(d, 0x38, n);

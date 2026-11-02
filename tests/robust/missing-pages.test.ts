@@ -66,28 +66,47 @@ describe('파일에 없는 0 페이지', () => {
     expect(Buffer.compare(sec.objects, objects)).toBe(0);
   });
 
-  it('없는 몫의 한도는 작은 파일이 잡아도 되는 값이다(시스템 페이지 상한과 같다)', () => {
+  it('큰 파일은 없는 몫이 64MiB를 넘어도 파일 한도 안이면 받는다', () => {
+    const objects = new Uint8Array(102 * MiB);
+    let seed = 1;
+    for (let i = 0; i < 2 * MiB; i++) {
+      seed = (Math.imul(seed, 1103515245) + 12345) | 0;
+      objects[i] = seed >>> 24;
+    }
+    objects[objects.length - 1] = 7;
+    const data = write(objects);
+    expect(objects.length).toBeLessThan(decompressLimit(data.length));
+    const sec = readR2004Container(data, R2004);
+    expect(sec.warnings).toEqual([]);
+    expect(Buffer.compare(sec.objects, objects)).toBe(0);
+  });
+
+  it('더 받는 몫은 작은 파일이 잡아도 되는 값이다(시스템 페이지 상한과 같다)', () => {
     expect(MISSING_PAGE_BYTES).toBeLessThanOrEqual(64 * MiB);
   });
 
-  it('없는 몫은 한도와 같으면 받고 페이지 하나 넘으면 할당 전에 막는다', () => {
-    const fits = new Uint8Array(MISSING_PAGE_BYTES);
-    expect(readR2004Container(write(fits), R2004).objects.length).toBe(MISSING_PAGE_BYTES);
+  it('파일 한도에 더 받는 몫을 더한 크기는 받고 1바이트 넘으면 할당 전에 막는다', () => {
+    // 크기가 바뀌어도 압축된 지도의 길이가 같은지 보고 만든다
+    const small = write(new Uint8Array(MISSING_PAGE_BYTES));
+    const limit = decompressLimit(small.length) + MISSING_PAGE_BYTES - 64;
+    const fits = write(new Uint8Array(limit));
+    expect(fits.length).toBe(small.length);
+    expect(readR2004Container(fits, R2004).objects.length).toBe(limit);
+    const over = write(new Uint8Array(limit + 1));
+    expect(over.length).toBe(small.length);
     const before = process.memoryUsage().arrayBuffers;
-    const over = write(new Uint8Array(0)).slice();
-    expect(reasonOf(() => readR2004Container(write(new Uint8Array(MISSING_PAGE_BYTES + 1)), R2004))).toBe('section size');
-    expect(over.length).toBeLessThan(4096);
-    expect(process.memoryUsage().arrayBuffers - before).toBeLessThan(MISSING_PAGE_BYTES + 16 * MiB);
+    expect(reasonOf(() => readR2004Container(over, R2004))).toBe('section size');
+    expect(process.memoryUsage().arrayBuffers - before).toBeLessThan(MiB);
   });
 
-  it('없는 몫의 한도는 섹션마다가 아니라 파일 전체다', () => {
+  it('더 받는 몫은 섹션마다가 아니라 파일 전체다', () => {
     const half = new Uint8Array(40 * MiB);
     const data = write(half, [section('AcDb:Classes', half)]);
     expect(reasonOf(() => readR2004Container(data, R2004))).toBe('section size');
   });
 
   it('선택 섹션이 넘겨도 없는 몫을 쓰지 않아 뒤 섹션을 읽는다', () => {
-    const data = write(new Uint8Array(16), [section('AcDb:Template', new Uint8Array(MISSING_PAGE_BYTES + 1)), section('AcDb:SummaryInfo', new Uint8Array(16).fill(3))]);
+    const data = write(new Uint8Array(16), [section('AcDb:Template', new Uint8Array(2 * MISSING_PAGE_BYTES)), section('AcDb:SummaryInfo', new Uint8Array(16).fill(3))]);
     const sec = readR2004Container(data, R2004);
     expect(sec.template).toBeNull();
     expect(sec.summaryInfo?.length).toBe(16);
@@ -96,7 +115,20 @@ describe('파일에 없는 0 페이지', () => {
   it('R2007도 같은 한도를 본다', () => {
     const size = (n: number) => r2007Pages(1, 512, 512, [n, 16, 16]);
     expect(readR2007Container(size(16 * MiB), R2007).header.length).toBe(16 * MiB);
-    expect(reasonOf(() => readR2007Container(size(MISSING_PAGE_BYTES + PAGE + 1), R2007))).toBe('section size');
+    expect(reasonOf(() => readR2007Container(size(2 * MISSING_PAGE_BYTES), R2007))).toBe('section size');
     expect(reasonOf(() => readR2007Container(r2007Pages(1, 512, 512, [40 * MiB, 40 * MiB, 16]), R2007))).toBe('section size');
+    // 큰 파일은 없는 몫이 64MiB를 넘어도 파일 한도 안이면 받는다
+    const large = r2007Pages(1, 2 * MiB, 2 * MiB, [70 * MiB, 16, 16]);
+    expect(70 * MiB).toBeLessThan(decompressLimit(large.length));
+    expect(readR2007Container(large, R2007).header.length).toBe(70 * MiB);
+  });
+
+  it('R2007의 뒷받침은 페이지마다 푸는 크기로 센다(섹션 최대 크기 칸은 읽기에 쓰지 않는다)', () => {
+    const big = r2007Pages(3000, 300_000, PAGE, [70 * MiB, 16, 16], [3000], 0);
+    expect(70 * MiB).toBeLessThan(decompressLimit(big.length));
+    expect(readR2007Container(big, R2007).header.length).toBe(70 * MiB);
+    // 푼 크기를 부풀려도 뒷받침 몫이 커질 뿐이라 비율 한도를 피하지 못한다
+    const inflated = r2007Pages(1, 512, 64 * MiB, [8 * MiB, 16, 16]);
+    expect(reasonOf(() => readR2007Container(inflated, R2007))).toBe('section size');
   });
 });

@@ -156,7 +156,7 @@ const r2004 = (sizes: number[], bytes = 512) => r2004Pages(1, bytes, 0x7400, 1, 
 const r2007 = (sizes: number[]) => r2007Pages(1, 512, 512, sizes);
 /** 페이지가 크기를 모두 뒷받침하는 입력(같은 페이지를 되풀이해 가리킨다) */
 const backed2004 = (sizes: number[]) => r2004Pages(0, 512, 0x7400, 1, sizes, undefined, [300, 300, 0]);
-const backed2007 = (counts: number[]) => (sizes: number[]) => r2007Pages(0, 512, 512, sizes, counts);
+const backed2007 = (counts: number[]) => (sizes: number[]) => r2007Pages(0, 512, 0x7400, sizes, counts);
 
 describe('압축 폭탄', () => {
   it('작은 파일이 큰 섹션을 적으면 할당 전에 손상으로 알린다', () => {
