@@ -9,7 +9,7 @@
 import type { CadDocument, Entity } from '../core/model';
 import { tableKey } from '../core/model';
 import { type Mat, apply, applyXY, identity, multiply, rotationZ, scaling, translation, withOcs } from '../geom/matrix';
-import { bulgeArc, ccwSweep, fitPointsCurve, nurbsPoints } from '../geom/curves';
+import { bulgeArc, ccwSweep, nurbsPoints, sharedFitCurve } from '../geom/curves';
 import type { Picker } from './pick';
 import type { Pt, SnapKind } from './view';
 import { lwVertices } from '../core/lwpoly';
@@ -162,13 +162,16 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
       return;
     }
     case 'SPLINE': {
-      let pts: number[];
-      if (ctrlCount(e) >= 2) pts = nurbsPoints(e.degree, e.knots, splineCtrl(e), e.weights, 1e9);
-      else if (fitCount(e) >= 2) {
-        const s = fitPointsCurve(e);
-        pts = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e9);
-      } else return;
+      const hasCtrl = ctrlCount(e) >= 2;
+      if (!hasCtrl && fitCount(e) < 2) return;
+      // 곡선은 끝점을 구할 때만 푼다. 닫힌 맞춤점 스플라인은 전역 보간이라 오래 걸린다
       if (!(e.flags & 1)) {
+        let pts: number[];
+        if (hasCtrl) pts = nurbsPoints(e.degree, e.knots, splineCtrl(e), e.weights, 1e9);
+        else {
+          const s = sharedFitCurve(e);
+          pts = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, 1e9);
+        }
         out.push({ ...apply(m, pts[0]!, pts[1]!, pts[2]!), kind: 'end' });
         out.push({ ...apply(m, pts[pts.length - 3]!, pts[pts.length - 2]!, pts[pts.length - 1]!), kind: 'end' });
       }

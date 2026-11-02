@@ -480,6 +480,40 @@ export function fitPointsCurve(e: { fitVerts: readonly number[]; flags: number; 
   return interpolateFitPoints(fit, e.startTangent, e.endTangent, work);
 }
 
+type FitSource = Parameters<typeof fitPointsCurve>[0];
+type FitCurve = ReturnType<typeof fitPointsCurve>;
+interface FitMemo extends FitSource {
+  curve: FitCurve;
+}
+const fitMemos = new WeakMap<readonly number[], FitMemo>();
+
+const sameVec = (a: Vec3 | undefined, b: Vec3 | undefined): boolean => a === b || (!!a && !!b && a.x === b.x && a.y === b.y && a.z === b.z);
+const sameNumbers = (a: readonly number[], b: readonly number[]): boolean => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
+
+/**
+ * fitPointsCurve를 기억해 둔 값. 전역 보간은 점 2048개에 0.9초가 걸려 마우스가 움직일 때마다 다시 풀면 화면이 멈추고,
+ * 블록을 여러 번 넣으면 같은 스플라인을 넣은 수만큼 푼다(스냅 1회 5초). 그리기처럼 일을 세는 곳은 fitPointsCurve를 그대로 쓴다.
+ * 돌려준 값은 호출자끼리 나눠 쓰므로 고치면 안 된다. 점을 제자리에서 고쳐도 내용을 비교하므로 옛 곡선을 돌려주지 않는다
+ */
+export function sharedFitCurve(e: FitSource): FitCurve {
+  const m = fitMemos.get(e.fitVerts);
+  if (m && m.flags === e.flags && m.fitTolerance === e.fitTolerance && sameVec(m.startTangent, e.startTangent) && sameVec(m.endTangent, e.endTangent) && sameNumbers(m.fitVerts, e.fitVerts)) return m.curve;
+  const curve = fitPointsCurve(e);
+  fitMemos.set(e.fitVerts, {
+    fitVerts: e.fitVerts.slice(),
+    flags: e.flags,
+    startTangent: e.startTangent && { ...e.startTangent },
+    endTangent: e.endTangent && { ...e.endTangent },
+    fitTolerance: e.fitTolerance,
+    curve,
+  });
+  return curve;
+}
+
 /**
  * 세 줄 띠 행렬 풀기(부분 피벗 — LAPACK dgtsv와 같은 차례). dl·d·du와 오른쪽 b를 덮어쓴다(dl은 피벗으로 생긴 둘째 위 띠로 쓴다).
  * 특이하면 false.
