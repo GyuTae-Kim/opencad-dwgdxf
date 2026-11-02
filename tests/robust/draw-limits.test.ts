@@ -3,7 +3,7 @@
  * 고치기 전에는 블록 중첩·다중 삽입·먼 해치 무늬가 30초 안에 끝나지 않았고, 짧은 대시 선 2만 개는 12GB를 썼다.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { DASH_STEP_LIMIT, DASH_TEXT_LIMIT, FIT_INTERPOLATE_LIMIT, LINETYPE_ELEMENTS, MINSERT_LIMIT, PEAK_BYTES_BASE, PEAK_BYTES_PER_WORK, SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, fitSolveWork, minsertGrid } from '../../src/core/limits';
+import { DASH_STEP_LIMIT, DASH_TEXT_LIMIT, FIT_INTERPOLATE_LIMIT, LINETYPE_ELEMENTS, MINSERT_LIMIT, PEAK_BYTES_BASE, PEAK_BYTES_PER_WORK, SCENE_BLOCK_TAIL, SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, fitSolveWork, minsertGrid } from '../../src/core/limits';
 import { MODEL_SPACE, entityDefaults, type CadDocument, type DictionaryObject, type InsertEntity, type SplineEntity } from '../../src/core/model';
 import { countRows } from '../../src/edit/count';
 import { edgeBox } from '../../src/edit/geom/edges';
@@ -876,6 +876,57 @@ describe('장면 조각 한도', () => {
     expect(piecesOf('A2')).toBeGreaterThan(0);
     // 늘어나는 그림은 그대로 낮춘다
     expect(piecesOf('A3')).toBe(1);
+  });
+
+  describe('블록을 끊는 꼬리', () => {
+    /** 요소 12개 선종류: 선 하나가 대시 12만 개 */
+    const lt12 = (): string[] => {
+      const lt = ['0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'D', '70', '0', '3', 'd', '72', '65', '73', '12', '40', '12'];
+      for (let i = 0; i < 6; i++) lt.push('49', '1', '74', '0', '49', '-1', '74', '0');
+      lt.push('0', 'ENDTAB', '0', 'ENDSEC');
+      return lt;
+    };
+    const line12 = (i: number): string[] => ['0', 'LINE', '8', '0', '6', 'D', '10', '0', '20', String(i), '30', '0', '11', String(12 * 19999), '21', String(i), '31', '0'];
+    /** 선분 20개 꺾은선 블록 P */
+    const blockP = (): string[] => {
+      const p = ['0', 'BLOCK', '8', '0', '2', 'P', '70', '0', '10', '0', '20', '0', '30', '0', '3', 'P', '0', 'LWPOLYLINE', '8', '0', '100', 'AcDbEntity', '100', 'AcDbPolyline', '90', '21', '70', '0'];
+      for (let k = 0; k <= 20; k++) p.push('10', String(k), '20', String(k % 2));
+      p.push('0', 'ENDBLK', '8', '0');
+      return p;
+    };
+
+    it('대시 일을 한도 바로 아래로 맞춰 낮춤을 피해도 다중 삽입은 꼬리까지만 그린다', () => {
+      const L = 6_000_000;
+      const ents = Array.from({ length: 49 }, (_, i) => line12(i));
+      ents.push(minsert(1000, 1000, 'F1', 'P'));
+      const s = scene(load(ents, [blockP()], lt12()), { blockWorkLimit: L });
+      expect(codes(s)).toContain('block.expansion_limit');
+      expect(codes(s)).not.toContain('scene.piece_limit');
+      expect(segs(s)).toBeGreaterThan(L + SCENE_BLOCK_TAIL - 100);
+      expect(segs(s)).toBeLessThanOrEqual(L + SCENE_BLOCK_TAIL + 20);
+    });
+
+    it('낮춘 뒤의 블록도 넘친 일 위로 꼬리까지만 그린다', () => {
+      const L = 6_000_000;
+      const ents = Array.from({ length: 52 }, (_, i) => line12(i));
+      ents.push(minsert(1000, 1000, 'F1', 'P'));
+      const s = scene(load(ents, [blockP()], lt12()), { blockWorkLimit: L });
+      expect(codes(s)).toEqual(expect.arrayContaining(['scene.piece_limit', 'block.expansion_limit']));
+      // 대시 51줄(줄마다 119,994개)에서 낮추고, 남은 선 1개는 실선
+      const top = 51 * 119_994;
+      expect(segs(s)).toBeGreaterThan(top + SCENE_BLOCK_TAIL - 100);
+      expect(segs(s)).toBeLessThanOrEqual(top + SCENE_BLOCK_TAIL + 20);
+    });
+
+    it('마지막 해치가 넘친 몫은 꼬리에서 깎지 않는다', () => {
+      // 해치 6개(각 약 100만 조각)가 한도 550만을 넘기고, 7번째가 경계만 나오며 낮춤이 시작된다
+      const ents = Array.from({ length: 7 }, (_, i) => hatch({ size: 1000, x: i * 2000, spacing: 0.01, dashes: [50, -50] }, (0x100 + i).toString(16)));
+      ents.push(minsert(1000, 190, 'F1', 'P'));
+      const s = scene(load(ents, [blockP()]), { blockWorkLimit: 5_500_000 });
+      expect(codes(s)).toContain('scene.piece_limit');
+      expect(codes(s)).not.toContain('block.expansion_limit');
+      expect(s.list.entities.find((e) => e.handle === 'F1')?.seg?.[1]).toBe(190_000 * 20);
+    });
   });
 
   it('장면 일이 다 되면 블록을 더 펼치지 않는다', () => {

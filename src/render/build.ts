@@ -30,7 +30,7 @@ import type {
 } from '../core/model';
 import { BYBLOCK, BYLAYER, normalizeHandle, tableKey } from '../core/model';
 import { lwCount } from '../core/lwpoly';
-import { SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, minsertGrid } from '../core/limits';
+import { SCENE_BLOCK_TAIL, SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, minsertGrid } from '../core/limits';
 import { DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../core/dimvars';
 import { ACI_RGB } from '../core/color';
 import { type FrameKind, frameSetting } from '../core/framevars';
@@ -188,6 +188,8 @@ export class SceneBuilder {
   private blockVisits = 0;
   private blockCut = false;
   private pieceCut = false;
+  /** piecesSpent가 처음 넘긴 때의 장면 일 */
+  private pieceCutAt = 0;
   /**
    * 지금 객체가 조각 없이 시간을 쓴 일(문자 배치, 해치 고리·무늬 계산, 프록시 해석, 치수 변수 훑기 — 단위는 조각 하나 그리는 시간쯤).
    * 낸 조각보다 많은 만큼만 일에 더한다(그림을 내는 정상 객체는 일이 늘지 않는다)
@@ -282,12 +284,17 @@ export class SceneBuilder {
   }
 
   /**
-   * 블록 펼침 일을 다 썼거나 장면 일이 객체를 끊는 한도를 넘었는지. 처음 넘을 때 한 번 경고한다.
-   * 객체가 빠지는 자리라 sceneLimit보다 높다: 앞의 합법 해치가 장면 일을 써도 뒤의 블록과 치수는 그린다
+   * 블록과 치수를 끊는 장면 일 한도. 객체가 빠지는 자리라 sceneLimit보다 꼬리만큼 높다: 앞의 합법 해치가 장면 일을 써도 뒤의 블록과 치수는 그린다.
+   * 기준은 무늬를 낮추기 시작한 때의 일이라 마지막 해치가 넘친 몫을 꼬리에서 깎지 않고, 아직 낮추지 않았으면 sceneLimit이라 대시 일을 한도 바로 아래로 맞춰도 꼬리를 넘지 못한다
    */
+  private get blockSceneLimit(): number {
+    return this.opt.scenePieceLimit ?? Math.min(SCENE_PIECE_LIMIT, (this.pieceCut ? this.pieceCutAt : this.sceneLimit) + SCENE_BLOCK_TAIL);
+  }
+
+  /** 블록 펼침 일을 다 썼거나 장면 일이 블록을 끊는 한도를 넘었는지. 처음 넘을 때 한 번 경고한다 */
   private blockSpent(): boolean {
     if (this.blockCut) return true;
-    if (this.blockWork <= this.blockLimit && this.out.effort <= (this.opt.scenePieceLimit ?? SCENE_PIECE_LIMIT)) return false;
+    if (this.blockWork <= this.blockLimit && this.out.effort <= this.blockSceneLimit) return false;
     this.blockCut = true;
     this.warnInc('block.expansion_limit');
     return true;
@@ -316,6 +323,7 @@ export class SceneBuilder {
     if (this.pieceCut) return true;
     if (this.out.effort <= this.sceneLimit) return false;
     this.pieceCut = true;
+    this.pieceCutAt = this.out.effort;
     this.warnInc('scene.piece_limit');
     return true;
   }
