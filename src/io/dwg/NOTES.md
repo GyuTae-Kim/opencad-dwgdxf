@@ -228,7 +228,7 @@ R2007 이전으로 쓸 때 도면 코드 페이지로 못 쓰는 글자가 있�
 - R2000 파일: 위치 기록 6개(0 헤더, 1 클래스, 2 객체 지도, 3 없음, 4 MEASUREMENT, 5 보조 헤더), 보조 헤더 0x61, 빈 그림,
   객체 영역 앞 RL 0x0DCA. 둘째 파일 머리(사양 26장)는 쓰지 않는다.
 - R2004+ 섹션: SummaryInfo·Preview(비압축), RevHistory·AcDbObjects(RL 0x0DCA로 시작)·ObjFreeSpace·Template·Handles·
-  Classes·AuxHeader·Header(압축). AppInfo·FileDepList·Security·VBA는 쓰지 않는다. 0만 있는 페이지는 쓰지 않는다.
+  Classes·AuxHeader·Header(압축). AppInfo·FileDepList·Security·VBA는 쓰지 않는다. 0만 있는 페이지는 파일 합 512KiB(`ZERO_PAGE_SKIP`)까지 쓰지 않고, 넘는 페이지는 쓴다.
 
 ### 시험
 
