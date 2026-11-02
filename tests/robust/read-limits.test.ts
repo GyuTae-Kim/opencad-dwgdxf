@@ -46,7 +46,7 @@ const allEntities = (doc: CadDocument) => [...doc.blocks.values()].flatMap((b) =
 const pageWorkBounded = (sec: DwgSections, fileBytes: number, pageWork: number) => {
   const w = sec.warnings.find((x) => x.code === 'dwg.page_repeat');
   expect(w).toBeDefined();
-  expect(w!.detail!.work as number).toBeLessThanOrEqual(sectionWorkLimit(fileBytes) + pageWork);
+  expect(w!.detail!.work as number).toBeLessThanOrEqual(sectionWorkLimit(fileBytes, 16) + pageWork);
 };
 
 describe('R2004 컨테이너', () => {

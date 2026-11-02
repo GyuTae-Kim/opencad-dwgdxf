@@ -128,10 +128,18 @@ export const DASH_STEP_LIMIT = DASH_REPEAT_LIMIT * LINETYPE_ELEMENTS;
  */
 export const DASH_TEXT_LIMIT = DASH_REPEAT_LIMIT * 32;
 
-/** 압축을 푼 섹션·페이지 크기는 파일 크기의 이 배수(+ 1 MiB)를 넘지 않는다(R2004·R2007 섹션 크기 검사의 기준) */
-export const DECOMPRESS_RATIO = 32;
+/**
+ * 압축을 푼 크기는 파일 크기의 이 배수(+ 1 MiB)를 넘지 못한다. 어림값이 아니라 압축 형식에서 나온 상한이다.
+ * R2004 계열 압축(사양 4.7)에서 가장 많이 늘리는 명령은 긴 길이의 되돌아 복사이고 길이 바이트 하나가 0xFF만큼 늘린다.
+ * 명령 바이트와 거리 2바이트가 더 들므로 어떤 명령도 읽은 바이트의 255배를 풀지 못한다(손으로 짠 최악 스트림이 254.8배).
+ * R2007 압축은 명령 하나가 더 늘리지만 페이지마다 RS 블록 255바이트를 차지해 0x7400바이트 페이지에서 116.5배 안쪽이다.
+ * 합법 파일도 이 값 가까이 간다. 같은 바이트로 찬 0x7400 페이지는 쓰기 결과가 머리까지 160바이트(185배)이고, 더 낮은 값은 그런 파일을 손상으로 거부한다.
+ * 그래서 크기만 크게 적은 파일은 할당 전에 막고, 실제로 그만큼 풀리는 파일은 합법 도면과 구별되지 않으므로 받는다.
+ * 페이지 수로 더 좁히지 않는 까닭: 0만 있는 페이지는 파일에 쓰지 않으므로 섹션 크기가 페이지 합보다 클 수 있다
+ */
+export const DECOMPRESS_RATIO = 255;
 
-/** 파일 크기로 정해지는 압축 해제 크기 한도 */
+/** 파일 크기로 정해지는 압축 해제 크기 한도. 압축 자료는 파일을 나눠 쓰므로 섹션 하나가 아니라 파일에서 푸는 크기의 합의 한도다 */
 export function decompressLimit(fileBytes: number): number {
   return fileBytes * DECOMPRESS_RATIO + 0x100000;
 }
@@ -142,9 +150,10 @@ export function decompressedSizeOk(size: number, fileBytes: number): boolean {
 }
 
 /**
- * 섹션 하나를 읽을 때 페이지를 따라가며 하는 일(체크섬·복호·압축 풀기 바이트)의 한도.
- * 정상 파일은 페이지를 한 번씩만 읽으므로 파일 크기 + 섹션 크기 안쪽이다. 페이지 지도가 같은 페이지를 수백만 번 가리키면 여기서 멈춘다
+ * 섹션 하나를 읽을 때 페이지를 따라가며 하는 일(체크섬·복호·압축 풀기 바이트)의 한도. sectionBytes는 섹션의 푼 크기 + 페이지 임시 버퍼다.
+ * 정상 파일은 페이지를 한 번씩만 읽으므로 파일 크기 + sectionBytes 안쪽이다. 페이지 지도가 같은 페이지를 수백만 번 가리키면 여기서 멈춘다.
+ * 파일 크기의 배수로 잡으면 허용 비율이 곧 되풀이할 수 있는 일이 되므로, 할당을 치르고 적은 크기를 기준으로 삼는다
  */
-export function sectionWorkLimit(fileBytes: number): number {
-  return decompressLimit(fileBytes) * 3;
+export function sectionWorkLimit(fileBytes: number, sectionBytes: number): number {
+  return (fileBytes + sectionBytes + 0x100000) * 3;
 }

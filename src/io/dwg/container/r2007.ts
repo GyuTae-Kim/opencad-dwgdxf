@@ -127,13 +127,15 @@ export function readR2007Container(data: Uint8Array, ver: number): DwgSections {
     if (name) sections.set(name, sec);
   }
 
+  let unpacked = 0;
   const readSection = (name: string): Uint8Array | null => {
     const sec = sections.get(name);
     if (!sec) return null;
     if (sec.encrypted === 1) throw new CadReadError('dwg.encrypted', { section: name });
-    if (!decompressedSizeOk(sec.dataSize, data.length)) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
+    if (!decompressedSizeOk(unpacked + sec.dataSize, data.length)) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
+    unpacked += sec.dataSize;
     const out = new Uint8Array(sec.dataSize);
-    const workLimit = sectionWorkLimit(data.length);
+    const workLimit = sectionWorkLimit(data.length, sec.dataSize);
     let work = 0;
     for (const pg of sec.pages) {
       const info = pages.get(Math.abs(pg.id));
@@ -146,7 +148,7 @@ export function readR2007Container(data: Uint8Array, ver: number): DwgSections {
         const blocks = Math.ceil(aligned / 251);
         const start = info.offset + 0x480;
         if (start + blocks * 255 > data.length) throw new DwgFormatError('페이지가 파일 밖에 있습니다');
-        if (!decompressedSizeOk(pg.uncomp, data.length)) throw new DwgFormatError('페이지 크기가 잘못되었습니다');
+        if (!decompressedSizeOk(unpacked + pg.uncomp, data.length)) throw new DwgFormatError('페이지 크기가 잘못되었습니다');
         // 섹션 지도가 같은 페이지를 되풀이해 가리켜도 파일 크기에 비례한 일만 한다
         work += blocks * 255 + pg.uncomp;
         if (work > workLimit) {

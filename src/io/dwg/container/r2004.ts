@@ -121,19 +121,21 @@ export function readR2004Container(data: Uint8Array, ver: number): DwgSections {
     if (name) sections.set(name, desc);
   }
 
+  let unpacked = 0;
   const readSection = (name: string): Uint8Array | null => {
     const desc = sections.get(name);
     if (!desc) return null;
     if (desc.encrypted === 1) throw new CadReadError('dwg.encrypted', { section: name });
-    // 압축을 풀어도 파일 크기의 수십 배를 넘지 않는다(망가진 크기로 큰 메모리를 잡지 않게)
-    if (!decompressedSizeOk(desc.size, data.length)) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
+    // 망가진 크기로 큰 메모리를 잡지 않게 푸는 크기의 합을 파일 크기로 묶는다(섹션마다 보면 섹션 수만큼 한도의 배수를 잡는다)
+    if (!decompressedSizeOk(unpacked + desc.size, data.length)) throw new CadReadError('dwg.corrupt', { reason: 'section size', section: name });
+    unpacked += desc.size;
     const out = new Uint8Array(desc.size);
-    // 페이지 최대 크기도 파일에서 읽은 값이다(정상 값은 0x7400). 임시 버퍼를 페이지마다 지우므로 한도까지만 잡는다
-    const maxSize = Math.min(desc.maxSize, decompressLimit(data.length));
+    // 페이지 최대 크기도 파일에서 읽은 값이다(정상 값은 0x7400). 임시 버퍼를 페이지마다 지우므로 한도의 남은 몫까지만 잡는다
+    const maxSize = Math.min(desc.maxSize, decompressLimit(data.length) - unpacked);
     if (maxSize < desc.maxSize) warn(warnings, 'dwg.page_corrupt', `${name} 섹션의 페이지 크기가 너무 커서 줄여 읽었습니다.`);
     // 마지막 페이지도 압축은 페이지 전체 크기로 되어 있으므로 임시 버퍼에 풀고 앞부분만 옮긴다.
     const temp = desc.compressed === 2 ? new Uint8Array(maxSize) : null;
-    const workLimit = sectionWorkLimit(data.length);
+    const workLimit = sectionWorkLimit(data.length, desc.size + (temp ? maxSize : 0));
     let work = 0;
     for (const pg of desc.pages) {
       const info = pages.get(pg.num);
