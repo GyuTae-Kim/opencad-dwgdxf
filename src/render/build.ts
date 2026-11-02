@@ -967,9 +967,11 @@ export class SceneBuilder {
 
   build(blockName: string): SpaceScene {
     this.run(blockName, null);
-    const warnings = [...this.warn.entries()].map(([code, count]) => ({ code, count }));
     const stats = { blockWork: this.blockWork, pieces: this.out.drawn, peakBytes: this.out.peakBytes };
-    return { stats, list: this.out.finish(this.opt.packBoxes), styles: this.styles, layers: this.layers, layerIndex: this.layerIndex, warnings, annotative: this.anno?.annotative ?? 0 };
+    const list = this.out.finish(this.opt.packBoxes);
+    if (this.out.glyphsDropped) this.warnInc('entity.memory_dropped');
+    const warnings = [...this.warn.entries()].map(([code, count]) => ({ code, count }));
+    return { stats, list, styles: this.styles, layers: this.layers, layerIndex: this.layerIndex, warnings, annotative: this.anno?.annotative ?? 0 };
   }
 
   /**

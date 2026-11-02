@@ -37,8 +37,7 @@ export class GrowBuffer {
 
   /** 쓴 만큼으로 줄인 버퍼(전송용). 이 GrowBuffer는 더 쓰지 않는다 */
   take(): ArrayBuffer {
-    const n = this.length * 4;
-    return resized(this.buf, n, n);
+    return trimmed(this.buf, this.length * 4);
   }
 }
 
@@ -53,6 +52,19 @@ function resized(buf: ArrayBuffer, bytes: number, used: number): ArrayBuffer {
   const nb = new ArrayBuffer(bytes);
   new Uint8Array(nb).set(new Uint8Array(buf, 0, used));
   return nb;
+}
+
+/**
+ * 앞 bytes바이트로 줄인 버퍼. 줄일 자리를 못 잡으면 남는 자리째 그대로 돌려준다.
+ * 마감에서 메모리를 덜 쓰려는 일이라 실패해도 자료는 맞고, 버퍼를 쓰는 쪽은 길이가 아니라 개수를 본다
+ */
+function trimmed(buf: ArrayBuffer, bytes: number): ArrayBuffer {
+  try {
+    return resized(buf, bytes, bytes);
+  } catch (err) {
+    if (err instanceof RangeError) return buf;
+    throw err;
+  }
 }
 
 /** 임시 그림 쪽 하나의 요소 수 */
@@ -1010,11 +1022,35 @@ export class DisplayListBuilder {
     return i;
   }
 
+  /** 마감에서 메모리가 모자라 글리프를 묶지 못했다. 글자만 빠지고 선과 면은 그대로다 */
+  glyphsDropped = false;
+
+  /** 글리프 인스턴스를 묶고 임시 저장소를 놓아 준다. 묶을 자리를 못 잡으면 글리프만 뺀다 */
+  private finishGlyphs(): GlyphSet {
+    let set: GlyphSet;
+    try {
+      set = this.packGlyphs();
+    } catch (err) {
+      if (!(err instanceof RangeError)) throw err;
+      this.glyphsDropped = true;
+      // 상자가 세던 글리프를 지운다
+      const R = this.boxR;
+      for (let b = 0; b < this.boxN; b++) R[b * PACK + 9] = R[b * PACK + 10] = 0;
+      set = { fillVerts: new Float32Array(0), strokeSegs: new Float32Array(0), glyphs: [], instances: new ArrayBuffer(0), runs: [], instanceCount: 0 };
+    }
+    this.instF = new Float64Array(0);
+    this.instG = new Int32Array(0);
+    this.instT = new Uint8Array(0);
+    this.instO = new Int32Array(0);
+    this.instN = this.instDone = 0;
+    return set;
+  }
+
   /**
    * 글리프 인스턴스를 글리프별로 모은다(처음 나온 글리프 순서로 불투명 묶음들, 그다음 같은 순서로 투명 묶음들).
    * 들어온 순서를 지키는 셈 정렬이라 수백만 개도 JS 배열 없이 한 번에 옮긴다.
    */
-  private finishGlyphs(): GlyphSet {
+  private packGlyphs(): GlyphSet {
     let nFill = 0;
     let nStroke = 0;
     for (const g of this.glyphDefs) {
@@ -1131,12 +1167,6 @@ export class DisplayListBuilder {
       }
     }
     this.boxGlyphs = glyphOf;
-    // 임시 저장소를 놓아 준다
-    this.instF = new Float64Array(0);
-    this.instG = new Int32Array(0);
-    this.instT = new Uint8Array(0);
-    this.instO = new Int32Array(0);
-    this.instN = this.instDone = 0;
     return { fillVerts, strokeSegs, glyphs, instances: buf, runs, instanceCount: k };
   }
 
@@ -1366,12 +1396,13 @@ export class DisplayListBuilder {
   /**
    * 표시 목록으로 마감한다. packed면 객체 상자를 형식 배열(list.packed)로만 두고 entities는 비운다
    * (워커가 그대로 옮기고 메인이 unpackBoxes로 푼다). 아니면 entities에 상자 객체를 만든다.
+   * 메모리가 모자라도 장면을 잃지 않는다. 버퍼를 줄이지 못하면 남는 자리째 넘기고, 글리프를 묶지 못하면 글리프만 뺀다(glyphsDropped).
    */
   finish(packed = false): DisplayList {
     // 객체가 빠져 비어 있는 묶음은 넘기지 않는다
     const all = [...this.done, ...this.live].filter((c) => c.segs.length + c.tris.length + c.tsegs.length + c.ttris.length > 0);
     // 묶음 번호: 만든 순서 → 목록 순서
-    const pos = new Int32Array(this.chunkCount);
+    const pos = new Array<number>(this.chunkCount);
     for (let i = 0; i < all.length; i++) pos[all[i]!.index] = i;
     const R = this.boxR;
     for (let b = 0; b < this.boxN; b++) {
@@ -1391,8 +1422,8 @@ export class DisplayListBuilder {
       count: n,
       handles: newline ? '' : hs.join('\n'),
       handleList: newline ? hs.slice() : undefined,
-      bounds: new Float64Array(resized(this.boxB.buffer as ArrayBuffer, n * 32, n * 32)),
-      ranges: new Int32Array(resized(this.boxR.buffer as ArrayBuffer, n * PACK * 4, n * PACK * 4)),
+      bounds: new Float64Array(trimmed(this.boxB.buffer as ArrayBuffer, n * 32), 0, n * 4),
+      ranges: new Int32Array(trimmed(this.boxR.buffer as ArrayBuffer, n * PACK * 4), 0, n * PACK),
       glyphs: this.boxGlyphs,
     };
     this.boxB = new Float64Array(0);
