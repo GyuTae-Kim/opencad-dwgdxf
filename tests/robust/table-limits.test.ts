@@ -174,10 +174,20 @@ describe('파일에 없는 칸의 문서 예산', () => {
         }
       });
 
-      it('표 자료의 크기도 예산을 쓴다', () => {
+      it('크기가 다른 표 자료는 문서 예산을 쓰지 않는다', () => {
         const doc = readDxf(bytesOf(dxfText([small('2A', 1000), small('2B', 1000), small('2C', 1000)], [T1])));
-        expect(sizes(doc)).toEqual([1, 0, 0]);
-        expect(tooLarge(doc)).toBe(2);
+        expect(sizes(doc)).toEqual([1, 1, 1]);
+        expect(tooLarge(doc)).toBe(0);
+      });
+
+      it('낡은 표 자료가 붙은 실제 표의 셀을 지우지 않는다', () => {
+        const stale = (h: string): string[] => [...filled(2, 2, h), '1001', 'OPENCAD_TABLE', '1000', 'OPENCAD_TABLE 1', '1000', 'size', '1071', '900', '1071', '900'];
+        const doc = readDxf(bytesOf(dxfText([stale('2A'), stale('2B')], [T1])));
+        expect(sizes(doc)).toEqual([4, 4]);
+        expect(tooLarge(doc)).toBe(0);
+        const e = doc.entityIndex.get('2B') as TableEntity;
+        expect(e.cells?.length).toBe(4);
+        expect(tableFromEntity(e, doc)?.data.cells.length).toBe(4);
       });
 
       it('크기가 맞는 앱 표 자료는 그대로 쓴다', () => {

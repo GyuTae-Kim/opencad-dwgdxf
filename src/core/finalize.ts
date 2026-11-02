@@ -170,10 +170,9 @@ export function finalizeDocument(doc: CadDocument): CadDocument {
     for (const e of b.entities) {
       indexEntity(index, e);
       if (e.type === 'ACAD_TABLE') {
-        // 행·열은 파일에서 읽은 수이고 편집·저장이 셀마다 객체를 만든다. 표 자료의 크기도 같은 예산으로 본다
-        const x = tableXData(e);
-        const cells = Math.max(e.rows * e.columns, x ? xdataTableCells(x) : 0);
-        if (tableSizeOk(e.rows, e.columns) && !overBudget(cells, Math.max(e.cells?.length ?? 0, x?.items.length ?? 0))) continue;
+        // 행·열은 파일에서 읽은 수이고 편집·저장이 셀마다 객체를 만든다. 표 자료의 크기는 세지 않는다:
+        // 낡은 표 자료가 실제 셀을 지우면 안 되고, 크기가 다른 표 자료는 tableDataOf가 머리 값만 읽는다
+        if (tableSizeOk(e.rows, e.columns) && !overBudget(e.rows * e.columns, Math.max(e.cells?.length ?? 0, tableXData(e)?.items.length ?? 0))) continue;
         bigTables++;
         e.rows = 0;
         e.columns = 0;
