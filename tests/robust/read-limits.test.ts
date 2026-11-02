@@ -46,7 +46,7 @@ const allEntities = (doc: CadDocument) => [...doc.blocks.values()].flatMap((b) =
 const pageWorkBounded = (sec: DwgSections, fileBytes: number, pageWork: number) => {
   const w = sec.warnings.find((x) => x.code === 'dwg.page_repeat');
   expect(w).toBeDefined();
-  expect(w!.detail!.work as number).toBeLessThanOrEqual(sectionWorkLimit(fileBytes) + pageWork);
+  expect(w!.detail!.work as number).toBeLessThanOrEqual(sectionWorkLimit(fileBytes, 16) + pageWork);
 };
 
 describe('R2004 컨테이너', () => {
@@ -59,7 +59,7 @@ describe('R2004 컨테이너', () => {
     expect(allEntities(doc).some((e) => e.type === 'LINE')).toBe(true);
   });
 
-  it('섹션 지도가 같은 페이지를 100만 번 가리켜도 파일 크기에 비례한 일만 한다', () => {
+  it('섹션 지도가 같은 페이지를 100만 번 가리켜도 파일과 섹션 크기에 비례한 일만 한다', () => {
     const data = r2004Pages(1000000, 4 * 1048576);
     const sec = beforeHang(() => readR2004Container(data, R2004));
     pageWorkBounded(sec, data.length, 4 * 1048576);

@@ -3,7 +3,7 @@
  * 자료·문자열·핸들 흐름 세 리더를 객체마다 다시 맞춘다(새 객체를 만들지 않는다).
  */
 import type { CadClass, XDataItem } from '../../../core/model';
-import { BitReader, DwgFormatError, type DwgColor, codesToString } from '../bitstream';
+import { BitReader, DwgFormatError, type DwgColor, byteOfBit, codesToString } from '../bitstream';
 import { crc8 } from '../crc';
 import { attachStringStream } from '../streams';
 import { R14, R2000, R2004, R2007, R2010, R2013 } from '../version';
@@ -139,7 +139,7 @@ export class ObjectReader {
       handleBit = -1; // R13·R14는 뒤에서 읽는다
     }
     // CRC: MS 바이트부터 객체 끝까지
-    const crcPos = endBit >>> 3;
+    const crcPos = byteOfBit(endBit);
     const crcOk = crcPos + 2 <= this.buf.length && crc8(0xc0c1, this.buf, offset, crcPos) === (this.buf[crcPos] | (this.buf[crcPos + 1] << 8));
     const info = this.typeInfo(typeNum);
     const handle = r.H();
@@ -223,7 +223,7 @@ export class ObjectReader {
       const gsize = ver >= R2010 ? r.BLL() : r.RLu();
       if (gsize > 0 && gsize < (h.endBit - r.pos) / 8 + 1) {
         if ((r.pos & 7) === 0) {
-          const s = r.pos >>> 3;
+          const s = byteOfBit(r.pos);
           graphics = this.buf.slice(s, s + gsize);
           r.pos += gsize * 8;
         } else {

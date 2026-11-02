@@ -3,6 +3,7 @@
  * 모델이 일부만 담는 객체는 형식별 본문 비트를 남겨 두었다가 같은 버전으로 쓸 때 그대로 되쓴다.
  */
 import type { DwgRawBody } from '../../core/model';
+import { byteOfBit } from './bitstream';
 import type { ObjectReader } from './objects/reader';
 import { stringStreamRange } from './streams';
 import { R2007 } from './version';
@@ -50,7 +51,7 @@ function copyBits(buf: Uint8Array, start: number, nbits: number): Uint8Array {
   const out = new Uint8Array((nbits + 7) >>> 3);
   if (nbits <= 0) return out;
   const sh = start & 7;
-  const s = start >>> 3;
+  const s = byteOfBit(start);
   if (sh === 0) {
     out.set(buf.subarray(s, s + out.length));
   } else {

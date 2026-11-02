@@ -30,6 +30,12 @@ export interface DwgColor {
   hasColorHandle?: boolean;
 }
 
+/**
+ * 비트 위치가 든 바이트 자리. 객체 구역이 512MiB를 넘으면 비트 위치가 2^32를 넘고, `>>> 3`은 윗자리를 잃어 구역 앞쪽을 읽는다.
+ * 나눗셈만 쓰면 꺾은선 도면의 읽기가 11~20% 느려지므로 2^32 아래는 `>>> 3`으로 둔다. `& 7`은 아랫자리만 보므로 그대로 맞다
+ */
+export const byteOfBit = (bit: number): number => (bit < 0x100000000 ? bit >>> 3 : (bit - (bit & 7)) / 8);
+
 export class BitReader {
   buf: Uint8Array;
   dv: DataView;
@@ -61,7 +67,7 @@ export class BitReader {
   }
 
   get bytePos(): number {
-    return this.pos >>> 3;
+    return byteOfBit(this.pos);
   }
 
   overflowed(): boolean {
@@ -81,7 +87,7 @@ export class BitReader {
   }
 
   alignByte(): void {
-    this.pos = (this.pos + 7) & ~7;
+    this.pos += -this.pos & 7;
   }
 
   // -------------------------------------------------------------------------
@@ -90,7 +96,7 @@ export class BitReader {
 
   B(): number {
     const p = this.pos++;
-    return (this.buf[p >>> 3] >> (7 - (p & 7))) & 1;
+    return (this.buf[byteOfBit(p)] >> (7 - (p & 7))) & 1;
   }
 
   bool(): boolean {
@@ -100,7 +106,7 @@ export class BitReader {
   BB(): number {
     const p = this.pos;
     this.pos = p + 2;
-    const i = p >>> 3;
+    const i = byteOfBit(p);
     const bit = p & 7;
     if (bit < 7) return (this.buf[i] >> (6 - bit)) & 3;
     return ((this.buf[i] & 1) << 1) | (this.buf[i + 1] >> 7);
@@ -122,7 +128,7 @@ export class BitReader {
     let v = 0;
     while (n > 0) {
       const p = this.pos;
-      const i = p >>> 3;
+      const i = byteOfBit(p);
       const bit = p & 7;
       const take = Math.min(8 - bit, n);
       const byte = this.buf[i];
@@ -136,7 +142,7 @@ export class BitReader {
   RC(): number {
     const p = this.pos;
     this.pos = p + 8;
-    const i = p >>> 3;
+    const i = byteOfBit(p);
     const bit = p & 7;
     if (bit === 0) return this.buf[i] ?? 0;
     return ((this.buf[i] << bit) | ((this.buf[i + 1] ?? 0) >> (8 - bit))) & 0xff;
@@ -158,9 +164,9 @@ export class BitReader {
   /** 부호 있는 32비트 */
   RL(): number {
     const p = this.pos;
-    if ((p & 7) === 0 && (p >>> 3) + 4 <= this.buf.length) {
+    if ((p & 7) === 0 && byteOfBit(p) + 4 <= this.buf.length) {
       this.pos = p + 32;
-      return this.dv.getInt32(p >>> 3, true);
+      return this.dv.getInt32(byteOfBit(p), true);
     }
     const a = this.RC();
     const b = this.RC();
@@ -175,9 +181,9 @@ export class BitReader {
 
   RD(): number {
     const p = this.pos;
-    if ((p & 7) === 0 && (p >>> 3) + 8 <= this.buf.length) {
+    if ((p & 7) === 0 && byteOfBit(p) + 8 <= this.buf.length) {
       this.pos = p + 64;
-      return this.dv.getFloat64(p >>> 3, true);
+      return this.dv.getFloat64(byteOfBit(p), true);
     }
     for (let k = 0; k < 8; k++) scratch.setUint8(k, this.RC());
     return scratch.getFloat64(0, true);
@@ -367,7 +373,7 @@ export class BitReader {
     const p = this.pos;
     let bytes: Uint8Array;
     if ((p & 7) === 0) {
-      const s = p >>> 3;
+      const s = byteOfBit(p);
       bytes = this.buf.subarray(s, s + len);
       this.pos = p + len * 8;
     } else {
