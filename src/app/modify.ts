@@ -352,7 +352,7 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
       const e = doc.entityIndex.get(h);
       const block = st.session.ownerOf(h);
       if (!e || !block) continue;
-      rem.push({ block, entity: e, index: doc.blocks.get(block)!.entities.indexOf(e) });
+      rem.push({ block, entity: e, index: st.session.ownerIndex(h) });
     }
   rem.sort((a, b) => (a.block === b.block ? b.index - a.index : a.block < b.block ? -1 : 1));
   for (const x of rem) ops.push({ kind: 'remove', ...x });

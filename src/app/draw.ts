@@ -1724,9 +1724,10 @@ export function registerDrawCommands(app: App): void {
         const e = st.doc.entityIndex.get(hd);
         const block = st.session.ownerOf(hd);
         if (!e || !block) continue;
-        const idx = st.doc.blocks.get(block)!.entities.indexOf(e);
-        ops.push({ kind: 'remove' as const, block, entity: e, index: idx });
+        ops.push({ kind: 'remove' as const, block, entity: e, index: st.session.ownerIndex(hd) });
       }
+      // 블록마다 뒤에서부터 지운다: 자리가 밀리지 않고 큰 선택에서 배열을 지울 때마다 옮기지 않는다
+      ops.sort((a, b) => (a.block === b.block ? b.index - a.index : a.block < b.block ? -1 : 1));
       st.selection.clear();
       // 지운 형상에 연관된 치수는 연관만 끊는다
       const f = followOps(st, new Map<string, Entity | null>(ops.map((o) => [o.entity.handle, null])));
