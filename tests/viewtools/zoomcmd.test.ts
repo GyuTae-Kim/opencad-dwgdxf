@@ -169,6 +169,18 @@ describe('ZOOM·PAN 명령(진짜 App)', () => {
     expect(h.calls).toEqual([['zoomRect', -100, -300, 1100, 800], ['zoomExtents'], ['zoomAll', { x0: 0, y0: 0, x1: 420, y1: 297 }], ['zoomPrevious'], ['panWorld', 100, 50]]);
   });
 
+  it('범위(E)·전체(A)는 미뤄 둔 다시 그리기를 끝낸 뒤에 범위를 본다(45차 — 편집 직후 옛 장면 범위로 빈 화면이 나왔다)', async () => {
+    const h = setup(null);
+    h.app.edits.flush = async () => {
+      await Promise.resolve();
+      h.calls.push(['flush']);
+    };
+    await h.zoom('E');
+    await h.zoom('A');
+    await h.zoom('W', '0,0', '10,10');
+    expect(h.calls).toEqual([['flush'], ['zoomExtents'], ['flush'], ['zoomAll', { x0: 0, y0: 0, x1: 420, y1: 297 }], ['zoomRect', 0, 0, 10, 10]]);
+  });
+
   it('전체(A): 배치의 도면 공간은 그 배치의 한계, 한계가 없으면 null(화면이 범위 줌으로)', async () => {
     const p = setup(null);
     const lay = p.doc.layouts.find((l) => l.blockName.toUpperCase() === PAPER_SPACE)!;

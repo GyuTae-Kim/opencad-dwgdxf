@@ -84,6 +84,19 @@ function setup(): ScriptApp {
 
 const lines = (h: ScriptApp) => h.model('LINE').map((l) => [l.start.x, l.start.y]);
 
+describe('ERASE 순서(43차)', () => {
+  it('블록마다 뒤에서부터 지우고 되돌리면 원래 자리로 돌아온다', async () => {
+    const h = setup();
+    const before = h.model('LINE').map((l) => l.handle);
+    expect(await h.script('ERASE ALL  \n')).toBe('idle');
+    expect(h.errors()).toEqual([]);
+    expect(h.model('LINE')).toEqual([]);
+    expect(h.st.session.undoTop()!.ops.flatMap((o) => (o.kind === 'remove' ? [o.index] : []))).toEqual([2, 1, 0]);
+    h.st.session.undo();
+    expect(h.model('LINE').map((l) => l.handle)).toEqual(before);
+  });
+});
+
 describe('스크립트의 WP·CP·F 선택', () => {
   it('WP: 다각형 안의 선만 지운다(빈 줄로 점 입력을 마친다)', async () => {
     const h = setup();
