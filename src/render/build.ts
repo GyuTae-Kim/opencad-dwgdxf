@@ -276,15 +276,18 @@ export class SceneBuilder {
     return this.blockPieces + this.blockVisits + this.out.effort - this.blockBase;
   }
 
-  /** 장면 일의 한도. 표시 목록 메모리 공식(core/limits.ts)과 같은 단위라 글리프는 조각 3개 몫이다 */
+  /** 해치 무늬와 대시를 낮추는 장면 일 한도. 표시 목록 메모리 공식(core/limits.ts)과 같은 단위라 글리프는 조각 3개 몫이다 */
   private get sceneLimit(): number {
     return this.opt.scenePieceLimit ?? Math.min(SCENE_PIECE_LIMIT, this.blockLimit);
   }
 
-  /** 블록 펼침 일을 다 썼거나 장면 일이 한도를 넘었는지. 처음 넘을 때 한 번 경고한다 */
+  /**
+   * 블록 펼침 일을 다 썼거나 장면 일이 객체를 끊는 한도를 넘었는지. 처음 넘을 때 한 번 경고한다.
+   * 객체가 빠지는 자리라 sceneLimit보다 높다: 앞의 합법 해치가 장면 일을 써도 뒤의 블록과 치수는 그린다
+   */
   private blockSpent(): boolean {
     if (this.blockCut) return true;
-    if (this.blockWork <= this.blockLimit && this.out.effort <= this.sceneLimit) return false;
+    if (this.blockWork <= this.blockLimit && this.out.effort <= (this.opt.scenePieceLimit ?? SCENE_PIECE_LIMIT)) return false;
     this.blockCut = true;
     this.warnInc('block.expansion_limit');
     return true;

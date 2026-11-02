@@ -864,6 +864,20 @@ describe('장면 조각 한도', () => {
     expect(segs(s)).toBe(200 + 1 + 1);
   });
 
+  it('장면 일이 무늬를 낮추는 한도를 넘어도 뒤의 블록과 치수는 빠지지 않는다', () => {
+    const dim = ['0', 'DIMENSION', '5', 'A2', '8', '0', '100', 'AcDbEntity', '100', 'AcDbDimension', '2', '', '10', '10', '20', '5', '30', '0', '11', '5', '21', '5', '31', '0', '70', '32', '1', '', '100', 'AcDbAlignedDimension', '13', '0', '23', '0', '33', '0', '14', '10', '24', '0', '34', '0'];
+    const late = dashedLine(3, 100);
+    late.splice(2, 0, '5', 'A3');
+    const s = scene(load([dashedLine(0, 100), dashedLine(1, 100), insertOf('B', 'A1'), dim, late], [BLOCK_B], ltypeTable(0.5)), { blockWorkLimit: 150 });
+    const piecesOf = (h: string) => s.list.entities.find((e) => e.handle === h)?.seg?.[1] ?? 0;
+    expect(codes(s)).toContain('scene.piece_limit');
+    expect(codes(s)).not.toContain('block.expansion_limit');
+    expect(piecesOf('A1')).toBe(1);
+    expect(piecesOf('A2')).toBeGreaterThan(0);
+    // 늘어나는 그림은 그대로 낮춘다
+    expect(piecesOf('A3')).toBe(1);
+  });
+
   it('장면 일이 다 되면 블록을 더 펼치지 않는다', () => {
     const p = ['0', 'LWPOLYLINE', '5', '1F', '8', '0', '100', 'AcDbEntity', '100', 'AcDbPolyline', '90', '5000', '70', '0'];
     for (let k = 0; k < 5000; k++) p.push('10', String(k), '20', String(k % 2));
