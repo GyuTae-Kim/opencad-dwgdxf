@@ -20,6 +20,8 @@ import { lwCount, tidyWidths } from '../core/lwpoly';
 import { tableTextStyleRefs } from '../edit/table/entity';
 import { listTableStyles } from '../edit/table/style';
 import { uiText } from './i18n-text';
+import { dimensionBlockOps } from './dimcmds';
+import { applyOverrides } from '../edit/annot/override';
 
 /** MATCHPROP 설정(S): AutoCAD 특성 설정 대화상자의 항목. 끈 것은 옮기지 않는다 */
 export const MATCH_SETTINGS: { key: string; label: string; short: string }[] = [
@@ -75,8 +77,16 @@ export function matchProps(src: Entity, dst: Entity, on: ReadonlySet<string> = m
     }
   }
   if (on.has('dimension') && src.type === 'DIMENSION' && dst.type === 'DIMENSION') {
-    (c as unknown as DimensionEntity).dimStyle = (src as DimensionEntity).dimStyle;
-    (c as unknown as DimensionEntity).overrides = structuredClone((src as DimensionEntity).overrides);
+    const d = c as unknown as DimensionEntity;
+    d.dimStyle = (src as DimensionEntity).dimStyle;
+    // 재지정은 DSTYLE 확장 자료와 함께 바꾼다(DWG 쓰기는 확장 자료를 그대로 쓴다 — edit/annot/override.ts). 전에는 overrides만 옮겨 DWG에 옛 재지정이 남았다
+    const ov = (src as DimensionEntity).overrides;
+    const cleared = applyOverrides(d, null);
+    const set = ov && Object.keys(ov).length ? applyOverrides(cleared, ov) : cleared;
+    if (set.overrides) d.overrides = set.overrides;
+    else delete d.overrides;
+    if (set.xdata) d.xdata = set.xdata;
+    else delete d.xdata;
   }
   if (on.has('hatch') && src.type === 'HATCH' && dst.type === 'HATCH') {
     for (const k of ['patternName', 'solid', 'patternType', 'patternAngle', 'patternScale', 'patternDouble', 'patternLines', 'gradient', 'hatchStyle'] as const) c[k] = structuredClone(s[k]);
@@ -128,16 +138,26 @@ export function registerEditCommands(app: App): void {
         const hs = unlockedOnly(app, r2);
         if (!hs.length) break;
         const ops: EditOp[] = [];
+        const blockOps: EditOp[] = [];
+        const extra = new Set<string>();
         for (const h of hs) {
           if (h === src.handle) continue;
           const e = st.doc.entityIndex.get(h);
           const block = st.session.ownerOf(h);
           if (!e || !block) continue;
           const c = matchProps(src, e, on);
-          if (JSON.stringify(c) !== JSON.stringify(e)) ops.push({ kind: 'modify', block, before: e, after: c });
+          if (JSON.stringify(c) === JSON.stringify(e)) continue;
+          // 치수 스타일·재지정이 바뀐 치수는 치수 블록을 생성기로 다시 만든다(특성 팔레트와 같게 블록 작업이 먼저 — 71차, 전에는 옛 그림이 남았다)
+          if (c.type === 'DIMENSION' && e.type === 'DIMENSION' && (c.dimStyle !== e.dimStyle || JSON.stringify(c.overrides) !== JSON.stringify(e.overrides)))
+            try {
+              pushAll(blockOps, dimensionBlockOps(st, c, true, extra));
+            } catch {
+              /* 생성기가 못 다루는 치수는 정의만 바꾼다 */
+            }
+          ops.push({ kind: 'modify', block, before: e, after: c });
         }
         app.clearSelection();
-        if (ops.length) st.session.commit({ label: 'MATCHPROP', ops, group: ctx.group });
+        if (ops.length) st.session.commit({ label: 'MATCHPROP', ops: [...blockOps, ...ops], group: ctx.group });
       }
     },
   });
