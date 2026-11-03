@@ -78,6 +78,15 @@ function cellText(c: TCell): string {
   return '';
 }
 
+/** R2010+ 표에서 파일에 셀 자료가 없는 칸 수(행 × 열 − 행마다 열 수까지의 셀) */
+export function r24EmptyCells(t: TTableR24): number {
+  const c = t.content;
+  const cols = c.columns.length;
+  let have = 0;
+  for (const r of c.rows) have += Math.min(r.cells.length, cols);
+  return c.rows.length * cols - have;
+}
+
 /**
  * R2010+ 표의 칸을 펼쳐도 되는지. 행·열 목록과 셀 목록이 따로라 행 × 열은 파일에 있는 셀 수를 얼마든 넘을 수 있다.
  * 옛 표(tableOld)는 칸마다 셀을 읽으므로 이 검사가 필요 없다.
@@ -88,9 +97,7 @@ export function r24CellsInFile(t: TTableR24): boolean {
   const cols = c.columns.length;
   if (!tableSizeOk(rows, cols)) return false;
   const cells = rows * cols;
-  let have = 0;
-  for (const r of c.rows) have += Math.min(r.cells.length, cols);
-  if (cells - have > TABLE_EMPTY_CELLS) return false;
+  if (r24EmptyCells(t) > TABLE_EMPTY_CELLS) return false;
   // 병합 고리는 병합의 넓이만큼 돈다
   let area = 0;
   for (const [top, left, bottom, right] of c.merges) {

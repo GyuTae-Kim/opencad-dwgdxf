@@ -82,8 +82,10 @@ export class ObjectReader {
   h!: ObjHeader;
   /** 마지막으로 읽은 도형의 프록시 그림(원본 본문 보관용) */
   lastGraphics: Uint8Array | null = null;
-  /** 이 문서에서 지금까지 푼 표의 칸 수(core/limits.ts tableCellBudget) */
+  /** 이 문서에서 지금까지 푼 표의 칸 수(core/limits.ts tableCellBudget). 풀지 않은 표는 세지 않는다 */
   tableCells = 0;
+  /** 그 가운데 셀 자료 없이 만든 칸 수(TABLE_EMPTY_CELLS_DOC) */
+  tableEmpty = 0;
 
   constructor(buf: Uint8Array, ver: number, decoder: TextDecoder, classes: CadClass[]) {
     this.buf = buf;

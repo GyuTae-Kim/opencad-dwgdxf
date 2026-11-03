@@ -24,6 +24,12 @@ export function tableSizeOk(rows: number, cols: number): boolean {
  */
 export const TABLE_EMPTY_CELLS = 1024;
 
+/**
+ * DWG 문서 하나에서 셀 자료 없이 만드는 칸(TABLE_EMPTY_CELLS의 빈 칸) 수의 합. 표마다 한도 안이어도 표를 늘리면
+ * 표 1,000개(DWG 24KB)가 빈 칸 102만 개로 7초·힙 +881MiB였다. AutoCAD 표에는 빈 칸이 없으므로 파일 크기와 상관없이 묶는다(칸 하나 약 0.9KB라 약 56MB)
+ */
+export const TABLE_EMPTY_CELLS_DOC = 64 * TABLE_EMPTY_CELLS;
+
 /** 표 병합의 넓이 합이 칸 수의 이 배수(+ 빈 칸 수)를 넘으면 망가진 표다. 병합은 겹치지 않으므로 정상 표는 1배 안쪽이다 */
 export const TABLE_MERGE_RATIO = 4;
 
