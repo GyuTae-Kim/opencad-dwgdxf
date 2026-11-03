@@ -31,7 +31,7 @@ async function insertCountTable(app: App, ctx: CommandContext, rows: CountRow[])
   data = setText(data, 1, 1, '개수');
   rows.forEach((r, i) => {
     data = setText(data, 2 + i, 0, r.name);
-    data = setText(data, 2 + i, 1, String(r.handles.length));
+    data = setText(data, 2 + i, 1, String(r.count));
   });
   const w = tableWidth(data);
   const hgt = tableHeight(data);
@@ -60,7 +60,7 @@ export function registerCountCommands(app: App): void {
         ctx.print(`${picked ? '고른 객체' : '지금 공간'}에 셀 블록 참조가 없습니다.`);
         return;
       }
-      const total = rows.reduce((n, r) => n + r.handles.length, 0);
+      const total = rows.reduce((n, r) => n + r.count, 0);
       ctx.print(`블록 ${rows.length}종, 참조 ${total}개(${picked ? '고른 객체' : '지금 공간 전체'}).`);
       let want: 'table' | null = null;
       await new Promise<void>((resolve) => {
@@ -72,9 +72,9 @@ export function registerCountCommands(app: App): void {
             'tbody',
             {},
             ...rows.map((r) => {
-              const tr = h('tr', { style: 'cursor:pointer', title: '누르면 이 블록의 참조를 고르고 확대합니다' }, h('td', {}, r.name), h('td', { style: 'text-align:right' }, String(r.handles.length)));
+              const tr = h('tr', { style: 'cursor:pointer', title: '누르면 이 블록의 참조를 고르고 확대합니다' }, h('td', {}, r.name), h('td', { style: 'text-align:right' }, String(r.count)));
               tr.addEventListener('click', () => {
-                const hs = [...new Set(r.handles)];
+                const hs = r.handles;
                 app.setSelection(hs, 'replace');
                 // 명령 안이므로 ZOOM 명령 대신 화면만 맞춘다
                 const b = boundsOf(hs.map((x) => st.doc.entityIndex.get(x)!).filter(Boolean), st.doc);

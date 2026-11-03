@@ -40,14 +40,24 @@ export function tableCellBudget(objectBytes: number): number {
 
 /**
  * 다중 삽입(MINSERT) 하나에서 펼치는 칸 수. DXF 70·71과 DWG BS는 16비트라 형식 한도는 32767 × 32767(약 10억)이다.
- * 도면 값은 그대로 두고(다시 저장해도 같다) 그리기·분해·세기만 이 칸 수까지 펼친다
+ * 도면 값은 그대로 두고(다시 저장해도 같다) 그리기·분해·경계 찾기·모서리만 이 칸 수까지 펼친다. COUNT는 펼치지 않고 행 × 열로 센다(minsertCells)
  */
 export const MINSERT_LIMIT = 1_000_000;
 
+/** MINSERT의 행·열(0·음수·수가 아닌 값은 1) */
+function minsertSize(e: { rowCount: number; columnCount: number }): { rows: number; cols: number } {
+  return { rows: Math.max(1, Math.trunc(e.rowCount) || 1), cols: Math.max(1, Math.trunc(e.columnCount) || 1) };
+}
+
+/** MINSERT의 칸 수(행 × 열, 한도로 줄이지 않는다) */
+export function minsertCells(e: { rowCount: number; columnCount: number }): number {
+  const { rows, cols } = minsertSize(e);
+  return rows * cols;
+}
+
 /** MINSERT에서 펼칠 행·열. 한도를 넘으면 비율을 지켜 줄인다 */
 export function minsertGrid(e: { rowCount: number; columnCount: number }): { rows: number; cols: number; cut: boolean } {
-  const rows = Math.max(1, Math.trunc(e.rowCount) || 1);
-  const cols = Math.max(1, Math.trunc(e.columnCount) || 1);
+  const { rows, cols } = minsertSize(e);
   if (rows * cols <= MINSERT_LIMIT) return { rows, cols, cut: false };
   const k = Math.sqrt(MINSERT_LIMIT / (rows * cols));
   const r = Math.max(1, Math.floor(rows * k));

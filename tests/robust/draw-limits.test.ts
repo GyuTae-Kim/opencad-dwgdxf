@@ -120,10 +120,13 @@ describe('블록 펼침', () => {
     expect(line).toEqual({ rows: 1, cols: MINSERT_LIMIT, cut: true });
   });
 
-  it('COUNT도 칸 수 한도까지만 센다', () => {
-    const doc = load([minsert(30000, 30000)], [BLOCK_B]);
+  it('COUNT는 칸을 펼치지 않고 행 × 열로 센다(58차 — 큰 다중 삽입 100개가 핸들 1억 개를 쌓았다)', () => {
+    const many = Array.from({ length: 100 }, (_, i) => minsert(30000, 30000, (0x100 + i).toString(16).toUpperCase()));
+    const doc = load(many, [BLOCK_B]);
     const rows = within2s(() => countRows(doc, doc.blocks.get(MODEL_SPACE)!.entities));
-    expect(rows[0]!.handles.length).toBeLessThanOrEqual(MINSERT_LIMIT);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.count).toBe(100 * 30000 * 30000);
+    expect(rows[0]!.handles).toHaveLength(100);
   });
 
   it('모서리 범위는 모서리 조각이 펼치는 칸과 같다', () => {

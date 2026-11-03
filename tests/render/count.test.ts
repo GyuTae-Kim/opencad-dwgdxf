@@ -21,9 +21,9 @@ describe('블록 개수', () => {
     doc.blockRecords.set(tableKey('*U7'), { name: '*U7', handle: '1F0', xdata: [{ app: 'AcDbDynamicBlockTrueName', items: [{ code: 1000, value: '문' }] }] } as never);
     const ents: Entity[] = [ins('문'), ins('창'), ins('문', { rowCount: 2, columnCount: 3 }), ins('XREF1'), ins('*D5'), ins('*U7')];
     const rows = countRows(doc, ents);
-    expect(rows.map((r) => [r.name, r.handles.length])).toEqual([
-      ['문', 8],
-      ['창', 1],
+    expect(rows.map((r) => [r.name, r.count, r.handles.length])).toEqual([
+      ['문', 8, 3],
+      ['창', 1, 1],
     ]);
   });
 });
