@@ -30,7 +30,7 @@ import type {
 } from '../core/model';
 import { BYBLOCK, BYLAYER, normalizeHandle, tableKey } from '../core/model';
 import { lwCount } from '../core/lwpoly';
-import { SCENE_BLOCK_TAIL, SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, minsertGrid } from '../core/limits';
+import { SCENE_BLOCK_TAIL, SPLINE_MAX_DEGREE, blockWorkLimit, minsertGrid, sceneWorkLimit } from '../core/limits';
 import { DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../core/dimvars';
 import { ACI_RGB } from '../core/color';
 import { type FrameKind, frameSetting } from '../core/framevars';
@@ -91,7 +91,7 @@ export interface BuildOptions {
   hatchRegion?: [number, number, number, number];
   /** 블록을 펼쳐 그리는 일의 한도(시험용 — 기본은 도면 객체 수로 정한다, core/limits.ts) */
   blockWorkLimit?: number;
-  /** 장면 조각 수 한도(시험용 — 기본 SCENE_PIECE_LIMIT) */
+  /** 장면 조각 수 한도(시험용 — 기본 sceneWorkLimit(객체 수)) */
   scenePieceLimit?: number;
   /** 주석 축척 이름(주석 객체를 그 축척의 표현으로 그린다). 없으면 공간에 맞게(모형 CANNOSCALE, 배치 1:1), null이면 고르지 않는다 */
   annoScale?: string | null;
@@ -183,6 +183,8 @@ export class SceneBuilder {
    * 최상위 객체 자체는 세지 않는다(큰 평면 도면은 줄지 않는다)
    */
   private blockLimit = 0;
+  /** 도면 객체 수로 정한 장면 일 한도(sceneWorkLimit) */
+  private sceneWork = 0;
   private blockPieces = 0;
   private blockBase = 0;
   private blockVisits = 0;
@@ -245,6 +247,7 @@ export class SceneBuilder {
       if (b.recordHandle) this.blockByRecord.set(b.recordHandle, b);
     }
     this.blockLimit = opt.blockWorkLimit ?? blockWorkLimit(entities);
+    this.sceneWork = sceneWorkLimit(entities);
     for (const r of doc.blockRecords.values()) {
       const b = doc.blocks.get(tableKey(r.name));
       if (b && r.handle) this.blockByRecord.set(r.handle, b);
@@ -280,7 +283,7 @@ export class SceneBuilder {
 
   /** 해치 무늬와 대시를 낮추는 장면 일 한도. 표시 목록 메모리 공식(core/limits.ts)과 같은 단위라 글리프는 조각 3개 몫이다 */
   private get sceneLimit(): number {
-    return this.opt.scenePieceLimit ?? Math.min(SCENE_PIECE_LIMIT, this.blockLimit);
+    return this.opt.scenePieceLimit ?? Math.min(this.sceneWork, this.blockLimit);
   }
 
   /**
@@ -288,7 +291,7 @@ export class SceneBuilder {
    * 기준은 무늬를 낮추기 시작한 때의 일이라 마지막 해치가 넘친 몫을 꼬리에서 깎지 않고, 아직 낮추지 않았으면 sceneLimit이라 대시 일을 한도 바로 아래로 맞춰도 꼬리를 넘지 못한다
    */
   private get blockSceneLimit(): number {
-    return this.opt.scenePieceLimit ?? Math.min(SCENE_PIECE_LIMIT, (this.pieceCut ? this.pieceCutAt : this.sceneLimit) + SCENE_BLOCK_TAIL);
+    return this.opt.scenePieceLimit ?? Math.min(this.sceneWork, (this.pieceCut ? this.pieceCutAt : this.sceneLimit) + SCENE_BLOCK_TAIL);
   }
 
   /** 블록 펼침 일을 다 썼거나 장면 일이 블록을 끊는 한도를 넘었는지. 처음 넘을 때 한 번 경고한다 */

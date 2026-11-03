@@ -3,7 +3,7 @@
  * 고치기 전에는 블록 중첩·다중 삽입·먼 해치 무늬가 30초 안에 끝나지 않았고, 짧은 대시 선 2만 개는 12GB를 썼다.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { DASH_STEP_LIMIT, DASH_TEXT_LIMIT, FIT_INTERPOLATE_LIMIT, LINETYPE_ELEMENTS, MINSERT_LIMIT, PEAK_BYTES_BASE, PEAK_BYTES_PER_WORK, SCENE_BLOCK_TAIL, SCENE_PIECE_LIMIT, SPLINE_MAX_DEGREE, blockWorkLimit, fitSolveWork, minsertGrid } from '../../src/core/limits';
+import { BLOCK_WORK_MAX, DASH_STEP_LIMIT, DASH_TEXT_LIMIT, FIT_INTERPOLATE_LIMIT, LINETYPE_ELEMENTS, MINSERT_LIMIT, PEAK_BYTES_BASE, PEAK_BYTES_PER_WORK, SCENE_BLOCK_TAIL, SCENE_PIECE_LIMIT, SCENE_WORK_PER_ENTITY, SPLINE_MAX_DEGREE, blockWorkLimit, fitSolveWork, minsertGrid, sceneWorkLimit } from '../../src/core/limits';
 import { MODEL_SPACE, entityDefaults, type CadDocument, type DictionaryObject, type InsertEntity, type SplineEntity } from '../../src/core/model';
 import { countRows } from '../../src/edit/count';
 import { edgeBox } from '../../src/edit/geom/edges';
@@ -107,7 +107,10 @@ describe('블록 펼침', () => {
 
   it('한도는 도면 객체 수와 함께 늘어나고 칸 수는 비율을 지켜 줄인다', () => {
     expect(blockWorkLimit(0)).toBeLessThan(blockWorkLimit(100000));
-    expect(blockWorkLimit(1e9)).toBe(blockWorkLimit(2e9));
+    // 객체 200만 개까지는 윗값, 그 위로는 장면 일 한도처럼 객체당 SCENE_WORK_PER_ENTITY
+    expect(blockWorkLimit(1e6)).toBe(BLOCK_WORK_MAX);
+    expect(blockWorkLimit(2e6)).toBe(BLOCK_WORK_MAX);
+    expect(blockWorkLimit(4e6)).toBe(SCENE_WORK_PER_ENTITY * 4e6);
     expect(minsertGrid({ rowCount: 3, columnCount: 4 })).toEqual({ rows: 3, cols: 4, cut: false });
     expect(minsertGrid({ rowCount: 0, columnCount: -5 })).toEqual({ rows: 1, cols: 1, cut: false });
     const g = minsertGrid({ rowCount: 32767, columnCount: 32767 });
@@ -995,6 +998,16 @@ describe('장면 조각 한도', () => {
       expect(codes(s)).toContain('scene.piece_limit');
       expect(segs(s)).toBe(15000 + 1);
     });
+  });
+
+  it('객체가 아주 많은 도면은 장면 일 한도가 객체 수에 비례해 늘어난다', () => {
+    expect(sceneWorkLimit(0)).toBe(SCENE_PIECE_LIMIT);
+    expect(sceneWorkLimit(1_200_000)).toBe(SCENE_PIECE_LIMIT);
+    expect(sceneWorkLimit(2_400_000)).toBe(SCENE_WORK_PER_ENTITY * 2_400_000);
+    // 569MB 킬 시 지도(객체 2,898,081개)는 다 그리는 데 블록 일 3,276만, 조각 6,202만을 쓴다(51차에 한도를 풀고 잰 값)
+    const kiel = 2_898_081;
+    expect(sceneWorkLimit(kiel)).toBeGreaterThan(62_022_950 * 2);
+    expect(blockWorkLimit(kiel)).toBe(sceneWorkLimit(kiel));
   });
 
   it('기본 한도는 실제 도면의 가장 큰 장면(130만 조각)보다 훨씬 크다', () => {
