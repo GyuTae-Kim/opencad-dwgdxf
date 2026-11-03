@@ -104,7 +104,7 @@ export class TagOut {
     this.s.tag(code + 20, fin(q.z));
   }
   /** 평탄 좌표 a의 점 i(src/core/flat3.ts) */
-  p3at(code: number, a: readonly number[], i: number): void {
+  p3at(code: number, a: ArrayLike<number>, i: number): void {
     this.s.tag(code, fin(a[i * 3]!));
     this.s.tag(code + 10, fin(a[i * 3 + 1]!));
     this.s.tag(code + 20, fin(a[i * 3 + 2]!));

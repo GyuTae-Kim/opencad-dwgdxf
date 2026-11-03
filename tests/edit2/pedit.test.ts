@@ -61,7 +61,7 @@ describe('PEDIT 변환', () => {
         { x: 15, y: 5, z: 0 },
         { x: 20, y: 0, z: 0 },
       ]),
-      fitVerts: [],
+      fitVerts: new Float64Array(0),
       knotTolerance: 1e-10,
       controlTolerance: 1e-10,
       fitTolerance: 1e-10,

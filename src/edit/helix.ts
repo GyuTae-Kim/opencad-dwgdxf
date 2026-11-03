@@ -86,7 +86,7 @@ export function helixEntity(s: HelixSpec, props: Omit<SplineEntity, 'type' | 'ha
     degree: 3,
     knots,
     controlVerts: pack3(ctrl),
-    fitVerts: [],
+    fitVerts: new Float64Array(0),
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,

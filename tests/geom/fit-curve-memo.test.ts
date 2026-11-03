@@ -15,15 +15,15 @@ const ring = (n: number): number[] => {
   for (let i = 0; i < n; i++) out.push(Math.cos((i * Math.PI * 2) / n) * 10, Math.sin((i * Math.PI * 2) / n) * 10, 0);
   return out;
 };
-const spline = (flags: number, fitVerts: number[]): SplineEntity => ({
+const spline = (flags: number, fit: number[]): SplineEntity => ({
   ...entityDefaults(),
   type: 'SPLINE',
   handle: '1F',
   flags,
   degree: 3,
   knots: [],
-  controlVerts: [],
-  fitVerts,
+  controlVerts: new Float64Array(0),
+  fitVerts: Float64Array.from(fit),
   knotTolerance: 1e-9,
   controlTolerance: 1e-9,
   fitTolerance: 0,

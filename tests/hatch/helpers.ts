@@ -74,7 +74,7 @@ export function spline(ctrl: [number, number][], degree = 3): Entity {
     degree,
     knots,
     controlVerts: pack3(ctrl.map(([x, y]) => P(x, y))),
-    fitVerts: [],
+    fitVerts: new Float64Array(0),
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,

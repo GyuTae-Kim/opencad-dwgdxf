@@ -471,7 +471,7 @@ export function knotParamOfFlags(flags: number): number {
  * 조정점이 없는 맞춤점 스플라인의 곡선. 열린 곡선(맞춤 공차 0)은 AutoCAD가 맞춤점 자료에서 만드는 곡선(fitSplineAcad, 70의 매듭 매개변수 비트),
  * 닫힌 곡선·근사 공차는 전역 보간(AutoCAD의 계산을 모른다).
  */
-export function fitPointsCurve(e: { fitVerts: readonly number[]; flags: number; startTangent?: Vec3; endTangent?: Vec3; fitTolerance?: number }, work?: FitWork): { ctrl: Vec3[]; knots: number[]; degree: number } {
+export function fitPointsCurve(e: { fitVerts: ArrayLike<number>; flags: number; startTangent?: Vec3; endTangent?: Vec3; fitTolerance?: number }, work?: FitWork): { ctrl: Vec3[]; knots: number[]; degree: number } {
   const fit = unpack3(e.fitVerts);
   if (!(e.flags & 1) && !((e.fitTolerance ?? 0) > 1e-9)) {
     const s = fitSplineAcad(fit, knotParamOfFlags(e.flags), e.startTangent, e.endTangent);
@@ -485,10 +485,10 @@ type FitCurve = ReturnType<typeof fitPointsCurve>;
 interface FitMemo extends FitSource {
   curve: FitCurve;
 }
-const fitMemos = new WeakMap<readonly number[], FitMemo>();
+const fitMemos = new WeakMap<object, FitMemo>();
 
 const sameVec = (a: Vec3 | undefined, b: Vec3 | undefined): boolean => a === b || (!!a && !!b && a.x === b.x && a.y === b.y && a.z === b.z);
-const sameNumbers = (a: readonly number[], b: readonly number[]): boolean => {
+const sameNumbers = (a: ArrayLike<number>, b: ArrayLike<number>): boolean => {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
@@ -500,11 +500,11 @@ const sameNumbers = (a: readonly number[], b: readonly number[]): boolean => {
  * 돌려준 값은 호출자끼리 나눠 쓰므로 고치면 안 된다. 점을 제자리에서 고쳐도 내용을 비교하므로 옛 곡선을 돌려주지 않는다
  */
 export function sharedFitCurve(e: FitSource): FitCurve {
-  const m = fitMemos.get(e.fitVerts);
+  const m = fitMemos.get(e.fitVerts as object);
   if (m && m.flags === e.flags && m.fitTolerance === e.fitTolerance && sameVec(m.startTangent, e.startTangent) && sameVec(m.endTangent, e.endTangent) && sameNumbers(m.fitVerts, e.fitVerts)) return m.curve;
   const curve = fitPointsCurve(e);
-  fitMemos.set(e.fitVerts, {
-    fitVerts: e.fitVerts.slice(),
+  fitMemos.set(e.fitVerts as object, {
+    fitVerts: Float64Array.from(e.fitVerts),
     flags: e.flags,
     startTangent: e.startTangent && { ...e.startTangent },
     endTangent: e.endTangent && { ...e.endTangent },

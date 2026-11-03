@@ -348,7 +348,7 @@ function stretchSpline(e: SplineEntity, In: (p: Vec3) => boolean, d: Vec2): Spli
   r.controlVerts = pack3(ctrl.map((p) => (In(p) ? mv(p, d) : p)));
   if (ctrl.some(In)) {
     // 조정점을 옮기면 맞춤 데이터는 더 이상 맞지 않는다
-    r.fitVerts = [];
+    r.fitVerts = new Float64Array(0);
     r.startTangent = undefined;
     r.endTangent = undefined;
   }

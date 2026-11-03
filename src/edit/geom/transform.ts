@@ -343,7 +343,7 @@ function splineIn(src: Entity, n: import('./nurbs').Nurbs, closed: boolean, ext:
     knots: nn.knots,
     controlVerts: pack3(nn.ctrl),
     weights: nn.weights,
-    fitVerts: [],
+    fitVerts: new Float64Array(0),
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,
@@ -408,7 +408,7 @@ export function xformSpline(e: SplineEntity, m: Affine, opt: TransformOptions): 
       r.controlVerts = pack3(s.ctrl);
       r.weights = undefined;
     }
-    r.fitVerts = [];
+    r.fitVerts = new Float64Array(0);
     r.startTangent = undefined;
     r.endTangent = undefined;
   }

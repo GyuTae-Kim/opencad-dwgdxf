@@ -4,11 +4,9 @@
  *
  * 변경 = 작업(op) 목록. 각 작업은 앞뒤 상태를 모두 담아 되돌리기가 그대로 반대 작업이다.
  */
-import type { BlockDef, BlockRecord, CadDocument, CadObject, Entity, HeaderValue, Layer, Layout, LayoutObject, Linetype, PolylineEntity, SplineEntity, TableHead, TableRecordBase, TextStyle, DimStyle, UcsRecord, ViewRecord, VPortRecord } from '../core/model';
+import type { BlockDef, BlockRecord, CadDocument, CadObject, Entity, HeaderValue, Layer, Layout, LayoutObject, Linetype, TableHead, TableRecordBase, TextStyle, DimStyle, UcsRecord, ViewRecord, VPortRecord } from '../core/model';
 import { pushAll } from '../core/arrays';
 import { tableKey, normalizeHandle } from '../core/model';
-import { unboxPoly } from '../core/polyverts';
-import { unboxSpline } from '../core/flat3';
 
 export type EditOp =
   /** 블록(공간) block의 index 자리에 객체를 넣는다(index 없으면 끝) */
@@ -562,11 +560,8 @@ export class EditSession {
 
 /** 객체를 깊이 복사한다(편집 전 상태 보관용) */
 export function cloneEntity<T extends Entity>(e: T): T {
-  const c = structuredClone(e);
-  // 구조화 복제는 수 배열의 수를 하나씩 상자에 담는다 — 평탄 좌표는 빈칸 없는 실수 배열로 다시 담는다(경량 폴리선은 형식 배열이라 그대로)
-  if (c.type === 'POLYLINE') unboxPoly(c, e as PolylineEntity);
-  else if (c.type === 'SPLINE') unboxSpline(c, e as SplineEntity);
-  return c;
+  // 평탄 좌표는 형식 배열이라 구조화 복제가 그대로 옮긴다(수 배열처럼 수를 하나씩 상자에 담지 않는다)
+  return structuredClone(e);
 }
 
 export { tableKey };

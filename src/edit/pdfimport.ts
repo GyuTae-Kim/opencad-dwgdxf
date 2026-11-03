@@ -201,7 +201,7 @@ export function pdfToEntities(doc: CadDocument, page: PdfPageData, opt: PdfImpor
             flags: 8,
             knots,
             controlVerts: pack3(r.pts.map((p) => ({ x: p.x, y: p.y, z: 0 }))),
-            fitVerts: [],
+            fitVerts: new Float64Array(0),
             knotTolerance: 1e-10,
             controlTolerance: 1e-10,
             fitTolerance: 1e-10,

@@ -85,7 +85,7 @@ describe('맞춤점만 적힌 기준 스플라인(11번)', () => {
 
   it('객체: DWG 맞춤점 자료를 읽어 채운 조정점·매듭과, 맞춤점만 적힌 기준 객체에서 구한 AutoCAD 방식 값이 좌표까지 같다', () => {
     const doc = createNewDocument('metric');
-    const src: SplineEntity = { ...entityDefaults(), handle: '7C80', layer: '0', type: 'SPLINE', flags: 1024 | 128 | 8, degree: 3, knots: [], controlVerts: [], fitVerts: pack3(fit), startTangent: st, endTangent: et, knotTolerance: 1e-9, controlTolerance: 1e-10, fitTolerance: 1e-10 };
+    const src: SplineEntity = { ...entityDefaults(), handle: '7C80', layer: '0', type: 'SPLINE', flags: 1024 | 128 | 8, degree: 3, knots: [], controlVerts: new Float64Array(0), fitVerts: pack3(fit), startTangent: st, endTangent: et, knotTolerance: 1e-9, controlTolerance: 1e-10, fitTolerance: 1e-10 };
     doc.blocks.get(MODEL_SPACE)!.entities.push(src);
     const A = readDwg(writeDwg(doc, { version: 'AC1032' }).data).entityIndex.get('7C80') as SplineEntity;
     expect(ctrlCount(A)).toBe(fit.length + 2);
@@ -99,8 +99,8 @@ describe('맞춤점만 적힌 기준 스플라인(11번)', () => {
     const kept: SplineEntity = { ...E, controlVerts: pack3([P(1, 1)]), knots: [0, 1] };
     acadFitControl(kept, A);
     expect(splineCtrl(kept)).toEqual([P(1, 1)]);
-    const none: SplineEntity = { ...src, controlVerts: [], knots: [] };
-    acadFitControl(none, { ...A, controlVerts: [] });
+    const none: SplineEntity = { ...src, controlVerts: new Float64Array(0), knots: [] };
+    acadFitControl(none, { ...A, controlVerts: new Float64Array(0) });
     expect(splineCtrl(none)).toEqual([]);
   });
 });

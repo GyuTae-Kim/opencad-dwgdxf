@@ -2,6 +2,7 @@
  * POLYLINE(2D·3D·다각형 메시·폴리페이스) 정점 평탄 좌표 도우미.
  *
  * 문서는 정점을 객체 배열 대신 평탄 배열로 둔다(큰 도면의 문서 메모리·GC를 줄인다 — 경량 폴리선의 src/core/lwpoly.ts와 같은 방식).
+ * 좌표·볼록·폭은 Float64Array(내용이 JS 힙 밖에 놓인다), 정수인 플래그·면 번호는 수 배열이다.
  * - verts: [x0, y0, z0, x1, y1, z1, …] — 정점 수 = verts.length / 3
  * - bulges: [볼록0, 볼록1, …] — 모두 +0이면 없다(undefined)
  * - widths: [시작 폭0, 끝 폭0, 시작 폭1, 끝 폭1, …] — 모두 +0이면 없다
@@ -12,13 +13,14 @@
  * 객체 리터럴에는 `{ ...packPoly(vs) }`로 펼쳐 넣는다(없는 배열도 키를 남겨 앞 값을 덮는다).
  */
 import type { PolylineEntity, PolyVertex, Vec2, Vec3 } from './model';
-import { numArray, zeros } from './lwpoly';
+import { zeros } from './lwpoly';
+import { f64Of } from './f64pool';
 
 /** 평탄 정점 자료 */
 export interface PolyPacked {
-  verts: number[];
-  bulges: number[] | undefined;
-  widths: number[] | undefined;
+  verts: Float64Array;
+  bulges: Float64Array | undefined;
+  widths: Float64Array | undefined;
   vflags: number[] | undefined;
   tangents: (number | null)[] | undefined;
   faceRecs: (number[] | null)[] | undefined;
@@ -33,19 +35,21 @@ const isPlusZero = (v: number): boolean => v === 0 && 1 / v > 0;
 /** 풀어 쓴 정점들을 평탄 자료로 */
 export function packPoly(vs: readonly PolyVertex[]): PolyPacked {
   const n = vs.length;
-  const verts: number[] = [];
-  let bulges: number[] | undefined;
-  let widths: number[] | undefined;
+  const verts = new Float64Array(n * 3);
+  let bulges: Float64Array | undefined;
+  let widths: Float64Array | undefined;
   let vflags: number[] | undefined;
   let tangents: (number | null)[] | undefined;
   let faceRecs: (number[] | null)[] | undefined;
   for (let i = 0; i < n; i++) {
     const v = vs[i]!;
     const p = v.location;
-    verts.push(p.x, p.y, p.z);
-    if (!bulges && !isPlusZero(v.bulge)) bulges = zeros(n);
+    verts[i * 3] = p.x;
+    verts[i * 3 + 1] = p.y;
+    verts[i * 3 + 2] = p.z;
+    if (!bulges && !isPlusZero(v.bulge)) bulges = new Float64Array(n);
     if (bulges) bulges[i] = v.bulge;
-    if (!widths && !(isPlusZero(v.startWidth) && isPlusZero(v.endWidth))) widths = zeros(n * 2);
+    if (!widths && !(isPlusZero(v.startWidth) && isPlusZero(v.endWidth))) widths = new Float64Array(n * 2);
     if (widths) {
       widths[i * 2] = v.startWidth;
       widths[i * 2 + 1] = v.endWidth;
@@ -57,11 +61,12 @@ export function packPoly(vs: readonly PolyVertex[]): PolyPacked {
     if (!faceRecs && v.faceIndices) faceRecs = new Array<number[] | null>(n).fill(null);
     if (faceRecs) faceRecs[i] = v.faceIndices ? v.faceIndices.slice() : null;
   }
-  return { verts: verts.slice(), bulges, widths, vflags, tangents, faceRecs };
+  return { verts, bulges, widths, vflags, tangents, faceRecs };
 }
 
 /**
  * 정점을 하나씩 받아 평탄 자료를 만든다(읽기용 — 정점 객체를 만들지 않는다). packPoly와 같은 규칙으로 배열을 둔다.
+ * 끝에 좌표·볼록·폭을 형식 배열로 옮긴다(읽는 중이면 덩어리에서 — src/core/f64pool.ts).
  */
 export class PolyAccum {
   private verts: number[] = [];
@@ -89,9 +94,9 @@ export class PolyAccum {
 
   finish(): PolyPacked {
     return {
-      verts: this.verts.slice(),
-      bulges: this.bulges?.slice(),
-      widths: this.widths?.slice(),
+      verts: f64Of(this.verts),
+      bulges: this.bulges && f64Of(this.bulges),
+      widths: this.widths && f64Of(this.widths),
       vflags: this.vflags?.slice(),
       tangents: this.tangents,
       faceRecs: this.faceRecs,
@@ -188,13 +193,15 @@ export function setPolyVertex(e: PolyArrays, i: number, v: Partial<PolyVertex>):
 /** 위치만 바꾼 사본 자료(다른 배열은 복사) — 변환·신축처럼 정점 수와 다른 값이 그대로인 편집 */
 export function polyMapLocs(e: PolyArrays, f: (p: Vec3, i: number) => Vec3): PolyPacked {
   const n = polyCount(e);
-  const verts: number[] = [];
+  const verts = new Float64Array(n * 3);
   for (let i = 0; i < n; i++) {
     const q = f(polyLoc(e, i), i);
-    verts.push(q.x, q.y, q.z);
+    verts[i * 3] = q.x;
+    verts[i * 3 + 1] = q.y;
+    verts[i * 3 + 2] = q.z;
   }
   return {
-    verts: verts.slice(),
+    verts,
     bulges: e.bulges?.slice(),
     widths: e.widths?.slice(),
     vflags: e.vflags?.slice(),
@@ -203,9 +210,3 @@ export function polyMapLocs(e: PolyArrays, f: (p: Vec3, i: number) => Vec3): Pol
   };
 }
 
-/** 구조화 복제한 POLYLINE의 평탄 좌표를 원본에서 다시 복사한다(구조화 복제는 수 배열의 수를 하나씩 상자에 담는다) */
-export function unboxPoly(copy: PolyArrays, src: PolyArrays): void {
-  copy.verts = numArray(src.verts);
-  if (src.bulges) copy.bulges = numArray(src.bulges);
-  if (src.widths) copy.widths = numArray(src.widths);
-}

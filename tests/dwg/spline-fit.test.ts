@@ -81,7 +81,7 @@ describe('맞춤점 방식 스플라인 ↔ DWG', () => {
 
   it('조정점만 남은 1160 스플라인(DXF에 맞춤점 없음): 맞춤점 자료(두 점 + 끝 접선 = 3·(P1 − P0))를 되살려 쓰고 조정점은 그대로', () => {
     const ctrl = [P(10, 5), P(14, 16), P(19, 5), P(19, 15)];
-    const e: SplineEntity = { ...entityDefaults(), handle: h(), layer: '0', type: 'SPLINE', flags: 1160, degree: 3, knots: [0, 0, 0, 0, 1, 1, 1, 1], controlVerts: pack3(ctrl), fitVerts: [], knotTolerance: 1e-9, controlTolerance: 1e-10, fitTolerance: 1e-10 };
+    const e: SplineEntity = { ...entityDefaults(), handle: h(), layer: '0', type: 'SPLINE', flags: 1160, degree: 3, knots: [0, 0, 0, 0, 1, 1, 1, 1], controlVerts: pack3(ctrl), fitVerts: new Float64Array(0), knotTolerance: 1e-9, controlTolerance: 1e-10, fitTolerance: 1e-10 };
     const plan = dwgSplinePlan(e, true);
     expect(plan.kind).toBe('fit');
     const { back } = roundTrip(e, 'AC1032');
@@ -93,7 +93,7 @@ describe('맞춤점 방식 스플라인 ↔ DWG', () => {
     expect(back.knots).toEqual([0, 0, 0, 0, 1, 1, 1, 1]);
     // 자연 끝(2차 도함수 0)이면 접선을 쓰지 않는다
     const nat = fitSpline(fit, 0);
-    const bare: SplineEntity = { ...nat, handle: h(), fitVerts: [] };
+    const bare: SplineEntity = { ...nat, handle: h(), fitVerts: new Float64Array(0) };
     const p2 = dwgSplinePlan(bare, true);
     expect(p2.kind === 'fit' && !p2.startTangent && !p2.endTangent && close(p2.fit, fit, 1e-9)).toBe(true);
     // 1024가 없거나, 되살린 맞춤점으로 다시 구한 곡선이 다르면 조정점 그대로(알리지 않는다 — 빠지는 맞춤점이 없다)
@@ -130,7 +130,7 @@ describe('맞춤점 방식 스플라인 ↔ DWG', () => {
   });
 
   it('맞춤점 자료만 있는 DWG를 읽으면 AutoCAD처럼 조정점·매듭을 채운다(닫힌 곡선·근사 공차는 비워 둔다)', () => {
-    const only: SplineEntity = { ...entityDefaults(), handle: h(), layer: '0', type: 'SPLINE', flags: 1064, degree: 3, knots: [], controlVerts: [], fitVerts: pack3(fit), knotTolerance: 0, controlTolerance: 0, fitTolerance: 1e-10 };
+    const only: SplineEntity = { ...entityDefaults(), handle: h(), layer: '0', type: 'SPLINE', flags: 1064, degree: 3, knots: [], controlVerts: new Float64Array(0), fitVerts: pack3(fit), knotTolerance: 0, controlTolerance: 0, fitTolerance: 1e-10 };
     const ref = fitSplineAcad(fit, 0)!;
     for (const v of ['AC1032', 'AC1015']) {
       const { back } = roundTrip(only, v);

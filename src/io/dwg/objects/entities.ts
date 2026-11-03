@@ -49,7 +49,7 @@ import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../../core/hatch
 import { TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS } from '../../../core/limits';
 import { BYLAYER, SHARED_BYLAYER_COLOR } from '../../../core/model';
 import { tidyWidths } from '../../../core/lwpoly';
-import { newF64 } from '../../../core/f64pool';
+import { f64Of, newF64 } from '../../../core/f64pool';
 import { unpack3 } from '../../../core/flat3';
 import { decodeCadEscapes } from '../../../core/codepage';
 import { type BitReader, DwgFormatError } from '../bitstream';
@@ -787,7 +787,7 @@ function readPolyline(or: ObjectReader, b: Omit<EntityBase, 'type'>, out: Parsed
     type: 'POLYLINE',
     kind: '2d',
     flags: 0,
-    verts: [],
+    verts: new Float64Array(0),
     bulges: undefined,
     widths: undefined,
     vflags: undefined,
@@ -927,8 +927,8 @@ function readSpline(or: ObjectReader, b: Omit<EntityBase, 'type'>, helix: boolea
     flags: 0,
     degree,
     knots: [],
-    controlVerts: [],
-    fitVerts: [],
+    controlVerts: new Float64Array(0),
+    fitVerts: new Float64Array(0),
     knotTolerance: 0,
     controlTolerance: 0,
     fitTolerance: 0,
@@ -968,14 +968,14 @@ function readSpline(or: ObjectReader, b: Omit<EntityBase, 'type'>, helix: boolea
     cv.push(p.x, p.y, p.z);
     if (weighted) weights.push(r.BD());
   }
-  e.controlVerts = cv.slice();
+  e.controlVerts = f64Of(cv);
   if (weighted) e.weights = weights;
   const fv: number[] = [];
   for (let i = 0; i < nfit; i++) {
     const p = r.BD3();
     fv.push(p.x, p.y, p.z);
   }
-  e.fitVerts = fv.slice();
+  e.fitVerts = f64Of(fv);
   // DWG에는 평면 여부가 없어 점들로 판단한다(DXF 70 비트 8)
   const n = planeNormal(unpack3(e.controlVerts.length ? e.controlVerts : e.fitVerts));
   if (n) {
@@ -1346,7 +1346,7 @@ function readLeader(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names)
     ...b,
     type: 'LEADER',
     dimStyle,
-    verts: verts.slice(),
+    verts: f64Of(verts),
     arrowHead,
     pathType,
     creation,
@@ -2076,7 +2076,7 @@ function readMesh(or: ObjectReader, b: Omit<EntityBase, 'type'>): MeshEntity {
     const a = r.BL();
     edgePairs.push(a, r.BL());
   }
-  return { ...b, type: 'MESH', verts: verts.slice(), faceData: faceData.slice(), edgePairs: edgePairs.slice(), subdivision };
+  return { ...b, type: 'MESH', verts: f64Of(verts), faceData: faceData.slice(), edgePairs: edgePairs.slice(), subdivision };
 }
 
 function readUnderlay(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: UnderlayEntity['type']): UnderlayEntity {

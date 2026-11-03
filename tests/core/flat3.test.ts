@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_SPACE, entityDefaults, type LeaderEntity, type SplineEntity, type Vec3 } from '../../src/core/model';
-import { at3, count3, ctrlAt, ctrlCount, fitAt, fitCount, leaderCount, leaderVertices, pack3, splineCtrl, splineFit, unboxSpline, unpack3 } from '../../src/core/flat3';
+import { at3, count3, ctrlAt, ctrlCount, fitAt, fitCount, leaderCount, leaderVertices, pack3, splineCtrl, splineFit, unpack3 } from '../../src/core/flat3';
 import { cloneEntity } from '../../src/edit/session';
 import { gripMove } from '../../src/edit/geom/grips';
 import { reverseSpline } from '../../src/edit/geom/query';
@@ -16,7 +16,8 @@ describe('3D 점 평탄 좌표(지시선 정점)', () => {
       { x: 2.5, y: 3, z: -4 },
     ];
     const a = pack3(pts);
-    expect(a).toEqual([0, -0, 1, 2.5, 3, -4]);
+    expect(a).toBeInstanceOf(Float64Array);
+    expect([...a]).toEqual([0, -0, 1, 2.5, 3, -4]);
     expect(unpack3(a)).toEqual(pts);
     expect(Object.is(unpack3(a)[0]!.y, -0)).toBe(true);
     expect(count3(a)).toBe(2);
@@ -59,7 +60,7 @@ describe('3D 점 평탄 좌표(지시선 정점)', () => {
 });
 
 const P = (x: number, y: number, z = 0): Vec3 => ({ x, y, z });
-const isFlat = (a: unknown): boolean => Array.isArray(a) && a.length % 3 === 0 && a.every((v) => typeof v === 'number');
+const isFlat = (a: unknown): boolean => a instanceof Float64Array && a.length % 3 === 0;
 
 function spline(handle: string, owner: string, ctrl: Vec3[], fit: Vec3[], weights?: number[]): SplineEntity {
   const n = ctrl.length;
@@ -89,7 +90,7 @@ describe('스플라인 조정점·맞춤점 평탄 좌표', () => {
 
   it('도우미: 수·i번째 점·풀어 쓰기가 맞고, 풀어 쓴 점을 고쳐도 문서는 그대로', () => {
     const e = spline('1', '', ctrl, fit);
-    expect(e.controlVerts).toEqual([0, 0, 0, 10, 20, 1, 20, -20, 2, 30, 0, 3, 40, 10, 4]);
+    expect([...e.controlVerts]).toEqual([0, 0, 0, 10, 20, 1, 20, -20, 2, 30, 0, 3, 40, 10, 4]);
     expect(ctrlCount(e)).toBe(5);
     expect(fitCount(e)).toBe(4);
     expect(ctrlAt(e, 2)).toEqual(P(20, -20, 2));
@@ -102,10 +103,10 @@ describe('스플라인 조정점·맞춤점 평탄 좌표', () => {
     expect(splineFit(e)).toEqual(fit);
   });
 
-  it('구조화 복제 사본을 다시 담고(cloneEntity), 사본을 고쳐도 원본은 그대로', () => {
+  it('구조화 복제 사본(cloneEntity)은 형식 배열 그대로이고, 사본을 고쳐도 원본은 그대로', () => {
     const e = spline('1', '', ctrl, fit);
     const c = structuredClone(e);
-    unboxSpline(c, e);
+    expect(c.controlVerts).toBeInstanceOf(Float64Array);
     expect(c.controlVerts).toEqual(e.controlVerts);
     expect(c.controlVerts).not.toBe(e.controlVerts);
     expect(c.fitVerts).toEqual(e.fitVerts);
@@ -123,7 +124,7 @@ describe('스플라인 조정점·맞춤점 평탄 좌표', () => {
     const moved = gripMove(e, 'c1', { x: 3, y: 8 }, doc).replace![0] as SplineEntity;
     expect(isFlat(moved.controlVerts)).toBe(true);
     expect(ctrlAt(moved, 1)).toEqual(P(3, 8, 1));
-    expect(e.controlVerts.slice(3, 6)).toEqual([10, 20, 1]);
+    expect([...e.controlVerts.slice(3, 6)]).toEqual([10, 20, 1]);
     const r = reverseSpline(e);
     expect(isFlat(r.controlVerts)).toBe(true);
     expect(splineCtrl(r)).toEqual([...ctrl].reverse());

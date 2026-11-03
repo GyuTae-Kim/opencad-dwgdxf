@@ -78,7 +78,7 @@ export function purgeFit(e: SplineEntity): SplineEntity {
       if (n.weights) out.weights = n.weights;
     }
   }
-  out.fitVerts = [];
+  out.fitVerts = new Float64Array(0);
   delete out.startTangent;
   delete out.endTangent;
   return out;
@@ -119,7 +119,7 @@ export function closeSpline(e: SplineEntity): SplineEntity | null {
   if (n0.weights) out.weights = [...n0.weights.slice(0, P.length), ...n0.weights.slice(0, p)];
   else delete out.weights;
   out.flags |= 1 | 2;
-  out.fitVerts = [];
+  out.fitVerts = new Float64Array(0);
   return out;
 }
 
@@ -369,7 +369,7 @@ export function fitKink(e: SplineEntity, q: Vec2): SplineEntity | null {
   out.controlVerts = pack3(j.ctrl);
   delete out.weights;
   out.flags &= ~(1 | 2 | 4);
-  out.fitVerts = [];
+  out.fitVerts = new Float64Array(0);
   delete out.startTangent;
   delete out.endTangent;
   return out;
