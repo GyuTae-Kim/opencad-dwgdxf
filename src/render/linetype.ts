@@ -1,6 +1,6 @@
 /**
  * 선종류 무늬를 꺾은선에 입힌다(월드 좌표).
- * 무늬 길이: 양수 = 선, 음수 = 틈, 0 = 점. 길이는 이미 축척을 곱한 값이다.
+ * 무늬 길이: 양수 = 선, 음수 = 틈, 0 = 점. 축척은 무늬를 복사하지 않고 그리면서 곱한다(dashPolyline의 scale).
  */
 import { DASH_REPEAT_LIMIT, DASH_STEP_LIMIT, DASH_TEXT_LIMIT } from '../core/limits';
 
@@ -9,6 +9,16 @@ export interface DashPattern {
   period: number;
   /** 문자가 든 복합 선종류 요소(위치는 무늬 안 거리) */
   texts?: { at: number; text: string; style?: string; scale: number; rotation: number; absolute: boolean; dx: number; dy: number; shape?: { file: string; num: number } }[];
+  /** 주기마다 배치하는 글자 수(문자 요소의 글자 수 합, 도형은 1). 무늬를 만들 때 한 번 세 두면 객체마다 세지 않는다 */
+  chars?: number;
+}
+
+/** 주기마다 배치하는 글자 수(공백도 센다, 글자 없는 도형 요소는 1) */
+export function patternChars(pat: DashPattern): number {
+  if (pat.chars !== undefined) return pat.chars;
+  let chars = 0;
+  for (const t of pat.texts ?? []) chars += Math.max(1, t.text.length);
+  return chars;
 }
 
 export type SegmentSink = (x0: number, y0: number, x1: number, y1: number) => void;
@@ -22,9 +32,18 @@ export interface DashWork {
 /**
  * pts를 따라 무늬를 그린다. 전체 길이가 무늬 한 주기보다 짧으면 실선(AutoCAD와 같다).
  * 반복이 한도를 넘거나 요소를 밟는 수가 한도를 넘어도 실선으로 그린다.
+ * scale은 무늬 길이·문자 위치·크기에 곱하는 축척이다(객체마다 무늬를 복사하지 않는다 — 요소 10만 개 선종류의 선 2만 개가 22초였다).
  * 반환: 실선으로 그렸으면 false
  */
-export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashPattern, sink: SegmentSink, textSink?: (x: number, y: number, angle: number, t: NonNullable<DashPattern['texts']>[number]) => void, work?: DashWork): boolean {
+export function dashPolyline(
+  pts: ArrayLike<number>,
+  closed: boolean,
+  pat: DashPattern,
+  sink: SegmentSink,
+  textSink?: (x: number, y: number, angle: number, t: NonNullable<DashPattern['texts']>[number]) => void,
+  work?: DashWork,
+  scale = 1,
+): boolean {
   const n = pts.length >> 1;
   if (n < 2) return false;
   let total = 0;
@@ -33,13 +52,13 @@ export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashP
     const j = (i + 1) % n;
     total += Math.hypot(pts[j * 2]! - pts[i * 2]!, pts[j * 2 + 1]! - pts[i * 2 + 1]!);
   }
-  const repeats = total / pat.period;
+  const period = pat.period * scale;
+  const repeats = total / period;
   // 복합 선종류의 문자·도형은 주기마다 글자 수만큼 배치한다(공백은 조각도 내지 않는다)
-  let chars = 0;
-  for (const t of pat.texts ?? []) chars += Math.max(1, t.text.length);
+  const chars = patternChars(pat);
   const turns = Math.ceil(repeats);
   const tooMany = repeats <= DASH_REPEAT_LIMIT && (turns * pat.dashes.length > DASH_STEP_LIMIT || turns * chars > DASH_TEXT_LIMIT);
-  if (!(pat.period > 0) || total < pat.period || repeats > DASH_REPEAT_LIMIT || tooMany) {
+  if (!(period > 0) || total < period || repeats > DASH_REPEAT_LIMIT || tooMany) {
     for (let i = 0; i < segCount; i++) {
       const j = (i + 1) % n;
       sink(pts[i * 2]!, pts[i * 2 + 1]!, pts[j * 2]!, pts[j * 2 + 1]!);
@@ -51,11 +70,13 @@ export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashP
   if (work) work.n += ((turns * (pat.dashes.length + chars)) >> 3) + ((turns * chars) >> 1);
   const dashes = pat.dashes;
   let di = 0;
-  let remain = Math.abs(dashes[0]!);
-  let on = dashes[0]! >= 0;
-  let dot = dashes[0] === 0;
+  const d0 = dashes[0]! * scale;
+  let remain = Math.abs(d0);
+  let on = d0 >= 0;
+  let dot = d0 === 0;
   let dist = 0; // 무늬 시작부터 거리
-  const texts = pat.texts;
+  // 여기까지 오면 문자 요소 수는 글자 예산 안이다
+  const texts = scale === 1 ? pat.texts : pat.texts?.map((t) => ({ ...t, at: t.at * scale, scale: t.scale * scale, dx: t.dx * scale, dy: t.dy * scale }));
   let nextText = 0;
   let periodStart = 0;
   for (let i = 0; i < segCount; i++) {
@@ -97,7 +118,7 @@ export function dashPolyline(pts: ArrayLike<number>, closed: boolean, pat: DashP
           periodStart = dist;
           nextText = 0;
         }
-        const d = dashes[di]!;
+        const d = dashes[di]! * scale;
         remain = Math.abs(d);
         on = d >= 0;
         dot = d === 0;
