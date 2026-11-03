@@ -448,6 +448,8 @@ export class App {
     // 동적 입력 칸의 Tab, 올가미 중 스페이스바(명령행 입력란에 초점이 있어도)
     this.cmd.intercept = (ev) => this.interceptKey(ev);
     this.cmd.onContext = (ev) => showContextMenu(ev.clientX, ev.clientY, commandLineMenu(this, () => this.cmd.historyText(), this.cmd.selectedText()));
+    // 가운데 버튼 두 번 누르기도 메뉴의 전체 보기처럼 다시 그리기를 끝낸 뒤에 범위를 본다
+    this.view.onZoomExtents = () => void this.zoomToExtents();
     this.view.onRestore = () => {
       for (const d of this.docs) {
         for (const sc of d.scenes.values()) sc.reupload(this.view.renderer);
