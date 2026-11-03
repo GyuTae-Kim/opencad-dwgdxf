@@ -508,7 +508,7 @@ export function spreadPattern(lines: readonly HatchPatternLine[], f: number): Ha
   return lines.map((l) => ({ ...l, offset: { x: l.offset.x * f, y: l.offset.y * f } }));
 }
 
-/** 고리(평평한 [x, y, …])들을 사각형으로 자른다(서덜랜드-호지먼 — 홀짝 채우기에 그대로 쓸 수 있다) */
+/** 고리(평평한 [x, y, …])들을 사각형으로 자른다(서덜랜드-호지먼 — 홀짝 채우기에 그대로 쓸 수 있다). 무한대 경계는 자르지 않는다 */
 export function clipLoopsToRect(loops: number[][], r: readonly [number, number, number, number]): number[][] {
   const out: number[][] = [];
   for (const loop of loops) {
@@ -531,8 +531,10 @@ export function clipLoopsToRect(loops: number[][], r: readonly [number, number, 
         const ia = ((axis ? ay : ax) - v) * sign >= 0;
         const ib = ((axis ? by : bx) - v) * sign >= 0;
         if (ia !== ib) {
+          // 자르는 축 좌표는 경계값 그대로: 보간하면 경계에서 조금 벗어나(179.5 → 179.50000000000003) 오목한 고리를 자른 폭 0 통로가 꼬인다
           const t = (v - (axis ? ay : ax)) / ((axis ? by : bx) - (axis ? ay : ax));
-          next.push(ax + (bx - ax) * t, ay + (by - ay) * t);
+          if (axis) next.push(ax + (bx - ax) * t, v);
+          else next.push(v, ay + (by - ay) * t);
         }
         if (ib) next.push(bx, by);
       }

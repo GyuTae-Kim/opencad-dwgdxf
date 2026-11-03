@@ -216,6 +216,8 @@ export function warningText(code: string): string {
       return '외부 참조 파일은 열지 않았습니다.';
     case 'hatch.pattern_truncated':
       return '무늬가 아주 촘촘한 해치는 멀리서 볼 때 경계와 성긴 무늬로 그리고, 확대하면 보이는 곳을 원래 간격으로 그립니다.';
+    case 'hatch.fill_limited':
+      return '경계 고리가 너무 많이 겹쳐 든 채우기 해치는 채우지 않고 경계만 그렸습니다.';
     case 'shape.unsupported':
       return '도형 파일(SHX)이 없어 쉐이프 객체를 그리지 못했습니다. SHXFONTS로 도형 파일을 불러올 수 있습니다.';
     case 'dimension.generated':
