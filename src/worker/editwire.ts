@@ -2,8 +2,9 @@
  * 메인 → 워커 편집 전송 형식(protocol.ts의 edit). 워커는 지우는 객체와 바꾸기 전 객체에서 핸들(자리 찾기)과
  * 블록 참조 속성의 핸들(색인에서 빼기)만 쓴다(edit/session.ts applyOps). 그래서 지우기는 이어진 것끼리 핸들·자리 배열 하나로,
  * 바꾸기 전 객체는 핸들만 보낸다. 객체 본문을 통째로 보내면 선 20만 개를 지울 때 구조화 복제만 0.19초였다.
+ * 블록 정의의 바꾸기 전 값은 객체 핸들만(색인에서 빼기), 사전 같은 객체의 바꾸기 전 값은 워커가 쓰지 않아 보내지 않는다(66차 — 연관 치수의 블록·DIMASSOC)
  */
-import type { Entity } from '../core/model';
+import type { BlockDef, Entity } from '../core/model';
 import type { EditOp } from '../edit/session';
 
 /** 같은 블록에서 이어진 지우기(속성이 있는 블록 참조는 빼고) */
@@ -37,6 +38,8 @@ export function packOps(ops: readonly EditOp[]): WireOp[] {
         last.index.push(op.index);
       } else out.push({ kind: 'removeRun', block: op.block, handles: [op.entity.handle], index: [op.index] });
     } else if (op.kind === 'modify') out.push({ ...op, before: stub(op.before) });
+    else if (op.kind === 'blockDef' && op.before) out.push({ ...op, before: { entities: op.before.entities.map(stub) } as unknown as BlockDef });
+    else if (op.kind === 'object') out.push({ ...op, before: null });
     else out.push(op);
   }
   return out;

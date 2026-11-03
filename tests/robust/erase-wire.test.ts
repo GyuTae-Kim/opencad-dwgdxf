@@ -76,12 +76,15 @@ describe('워커에 보내는 편집', () => {
     add(MODEL_SPACE, insertWith('I1', [attrib('A1', 'x'), attrib('A2', 'y')]));
     add(MODEL_SPACE, insertWith('I2', [attrib('A3', 'z')]));
     for (let i = 0; i < 5; i++) add('B', lineAt(i, `BL${i}`));
+    add('B', insertWith('BJ', [attrib('BK', 'p')]));
+    doc.objects.set('D0', { type: 'DICTIONARY', handle: 'D0', owner: '0', entries: new Map([['A', 'L2']]) } as never);
     void ms;
     return doc;
   }
   const state = (doc: CadDocument) => ({
-    blocks: [...doc.blocks].map(([k, b]) => [k, b.entities.map((e) => JSON.stringify(e))]),
+    blocks: [...doc.blocks].map(([k, b]) => [k, b.name, b.entities.map((e) => JSON.stringify(e))]),
     index: [...doc.entityIndex.keys()].sort(),
+    objects: [...doc.objects].map(([k, o]) => [k, JSON.stringify(o)]).sort(),
   });
 
   /** ERASE처럼 뒤에서부터 지우기, 속성 블록 참조 지우기, 다른 블록의 지우기, 속성이 바뀌는 바꾸기, 더하기를 섞은 변경 */
@@ -99,6 +102,12 @@ describe('워커에 보내는 편집', () => {
     ops.push({ kind: 'remove', block: 'B', entity: b[4]!, index: 4 }, { kind: 'remove', block: 'B', entity: b[0]!, index: 0 });
     ops.push({ kind: 'add', block: MODEL_SPACE, entity: lineAt(99, 'N1') });
     ops.push({ kind: 'modify', block: MODEL_SPACE, before: ms[0]!, after: { ...lineAt(0, 'L0'), layer: 'X' } as Entity });
+    // 블록 정의를 통째로 바꾸고(치수 블록을 다시 만들 때처럼) 사전을 만들고 바꾼다. 바꾸기 전 값은 그때의 블록(앞에서 BL0·BL4를 지웠다)
+    const blk = doc.blocks.get('B')!;
+    const cur = { ...blk, entities: blk.entities.filter((e) => e.handle !== 'BL0' && e.handle !== 'BL4') };
+    ops.push({ kind: 'blockDef', key: 'B', before: cur, after: { ...blk, entities: [lineAt(7, 'BN1'), insertWith('BI', [attrib('BA', 'q')])] } });
+    ops.push({ kind: 'object', key: 'D1', before: null, after: { type: 'DICTIONARY', handle: 'D1', owner: '0', entries: new Map([['K', 'L1']]) } as never });
+    ops.push({ kind: 'object', key: 'D0', before: doc.objects.get('D0')!, after: { ...doc.objects.get('D0')!, entries: new Map() } as never });
     return ops;
   }
 
@@ -121,7 +130,11 @@ describe('워커에 보내는 편집', () => {
   it('이어진 지우기는 핸들·자리 배열 하나로 보낸다(속성 블록 참조와 다른 블록은 끊는다)', () => {
     const doc = base();
     const wire = packOps(edits(doc));
-    expect(wire.map((o) => (o.kind === 'removeRun' ? `run ${o.block === MODEL_SPACE ? 'M' : o.block} ${o.handles.length}` : o.kind))).toEqual(['run M 21', 'modify', 'remove', 'run M 1', 'run B 2', 'add', 'modify']);
+    expect(wire.map((o) => (o.kind === 'removeRun' ? `run ${o.block === MODEL_SPACE ? 'M' : o.block} ${o.handles.length}` : o.kind))).toEqual(['run M 21', 'modify', 'remove', 'run M 1', 'run B 2', 'add', 'modify', 'blockDef', 'object', 'object']);
+    // 블록 정의의 바꾸기 전 값은 객체 핸들만, 객체의 바꾸기 전 값은 보내지 않는다
+    const bd = wire[7] as Extract<EditOp, { kind: 'blockDef' }>;
+    expect(bd.before).toEqual({ entities: [...['BL1', 'BL2', 'BL3'].map((handle) => ({ type: 'LINE', handle })), { type: 'INSERT', handle: 'BJ', attribs: [{ handle: 'BK' }] }] });
+    expect((wire[9] as Extract<EditOp, { kind: 'object' }>).before).toBeNull();
     // 지우는 객체 본문을 보내지 않는다
     const remove = wire[2] as Extract<EditOp, { kind: 'remove' }>;
     expect(remove.entity).toEqual({ type: 'INSERT', handle: 'I1', attribs: [{ handle: 'A1' }, { handle: 'A2' }] });

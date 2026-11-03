@@ -1079,16 +1079,39 @@ function setReactor(out: AssocChanges, env: AssocEnv, h: string, assoc: string, 
   out.entities.set(h, after);
 }
 
+/** 객체 변경 목록마다 키 → 처음 나온 자리. 연관 치수 1만 개를 함께 옮기면 키마다 목록을 훑어 1만 × 1만이었다(MOVE 0.4초) */
+const objectSlots = new WeakMap<ObjectChange[], { at: Map<string, number>; seen: number; last: ObjectChange | undefined }>();
+
+/**
+ * findIndex(o.key === key)와 같은 자리. 목록은 upsertObject가 뒤에 붙이기만 하므로 새로 붙은 변경만 더 훑는다.
+ * 앞쪽을 지우거나 끼웠으면(마지막으로 본 자리의 변경이 다르면) 표를 다시 만든다
+ */
+function slotOf(objects: ObjectChange[], key: string): number {
+  let s = objectSlots.get(objects);
+  if (s && (objects.length < s.seen || (s.seen > 0 && objects[s.seen - 1] !== s.last))) s = undefined;
+  if (!s) objectSlots.set(objects, (s = { at: new Map(), seen: 0, last: undefined }));
+  for (; s.seen < objects.length; s.seen++) {
+    const k = objects[s.seen]!.key;
+    if (!s.at.has(k)) s.at.set(k, s.seen);
+  }
+  s.last = objects[s.seen - 1];
+  const i = s.at.get(key);
+  if (i === undefined) return -1;
+  if (objects[i]!.key === key) return i;
+  objectSlots.delete(objects);
+  return objects.findIndex((o) => o.key === key);
+}
+
 function upsertObject(out: AssocChanges, doc: CadDocument, key: string, after: CadObject | null): void {
-  const i = out.objects.findIndex((o) => o.key === key);
+  const i = slotOf(out.objects, key);
   if (i >= 0) out.objects[i]!.after = after;
   else out.objects.push({ key, before: doc.objects.get(key) ?? null, after });
 }
 
 /** 지금(같은 편집 안에서 바뀐 것 포함) 객체 */
 function objectNow(out: AssocChanges, doc: CadDocument, key: string): CadObject | undefined {
-  const o = out.objects.find((x) => x.key === key);
-  if (o) return o.after ?? undefined;
+  const i = slotOf(out.objects, key);
+  if (i >= 0) return out.objects[i]!.after ?? undefined;
   return doc.objects.get(key);
 }
 
