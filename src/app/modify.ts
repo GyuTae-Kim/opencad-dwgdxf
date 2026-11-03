@@ -21,6 +21,7 @@ import {
   copyEntity,
   explodeEntity,
   extendEntity,
+  fillDeferredBlock,
   fillet,
   filletPolyline,
   gripMove,
@@ -250,11 +251,13 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
   // 복사본은 생성기가 같은 이름의 블록을 또 넣어 앞 블록의 객체가 핸들 색인에 남았다)
   const renamed = new Map<string, string>();
   const made = new Map<string, BlockDef>();
+  const given = new Map<BlockDef, BlockDef>();
   for (const r of results)
     for (const b of r.blocks ?? []) {
       const def = namedBlock(st, b, made);
       if (def.name !== b.name) renamed.set(b.name, def.name);
       made.set(tableKey(def.name), def);
+      given.set(def, b);
     }
   const fixBlock = (e: Entity) => {
     if (e.type === 'DIMENSION' && renamed.has(e.block ?? '')) e.block = renamed.get(e.block ?? '')!;
@@ -394,7 +397,16 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
   let all = ops;
   if (made.size) {
     all = [];
-    for (const def of made.values()) pushAll(all, blockOps(st, def));
+    for (const def of made.values()) {
+      // 다시 만들지 못한 치수의 블록: 미룬 내용을 지금 옮긴다
+      const b = given.get(def)!;
+      const filled = fillDeferredBlock(b);
+      if (filled) {
+        def.entities = b.entities;
+        if (filled.message && !opt.quiet) ctx.print(filled.message);
+      }
+      pushAll(all, blockOps(st, def));
+    }
     pushAll(all, ops);
   }
   if (all.length) st.session.commit({ label, ops: all, group: ctx.group });
@@ -530,11 +542,13 @@ function transformAll(st: DocState, hs: readonly string[], m: Affine, copy: bool
   const doc = st.doc;
   const mirrorText = Number(doc.header.get('$MIRRTEXT') ?? 0) === 1;
   const mirrorHatch = Number(doc.header.get('$MIRRHATCH') ?? 0) === 1;
+  // 치수 블록 내용은 commitResults가 블록을 다시 만들지 못할 때만 옮긴다
+  const opts = { mirrorText, mirrorHatch, deferDimBlocks: true };
   const out: EditResult[] = [];
   for (const h of hs) {
     const e = doc.entityIndex.get(h);
     if (!e) continue;
-    out.push(copy ? copyEntity(e, m, doc, { mirrorText, mirrorHatch }) : transformEntity(e, m, doc, { mirrorText, mirrorHatch }));
+    out.push(copy ? copyEntity(e, m, doc, opts) : transformEntity(e, m, doc, opts));
   }
   return out;
 }

@@ -9,6 +9,8 @@ import { MODEL_SPACE, tableKey, type CadDocument, type DimensionEntity, type Ent
 import { dimensionBlockOps } from '../../src/app/dimcmds';
 import { registerModifyCommands } from '../../src/app/modify';
 import { createLinearDimension } from '../../src/edit/dim';
+import { fillDeferredBlock, transformEntity } from '../../src/edit/geom';
+import { affTranslate } from '../../src/edit/geom/math';
 import { makeHarness } from '../cmds2/harness';
 import { runWith } from '../drawmod/ctx';
 import { perCommandGroups } from '../drawmod/groups';
@@ -129,5 +131,20 @@ describe('치수를 옮기거나 복사할 때의 치수 블록', () => {
     // 옮기기 전 블록은 쓰이지 않게 남는다(생성기가 못 다룰 때만 — 블록을 지우는 작업은 하지 않는다)
     const a = audit(h.doc);
     expect([a.stale, new Set(dimsOf(h.doc).map((d: Entity & { block: string }) => d.block)).size]).toEqual([0, 4]);
+  });
+
+  it('commitResults로 가는 변환은 치수 블록 내용을 옮기지 않고(70차), 다시 만들지 못해 채우면 바로 옮긴 것과 같다', () => {
+    const h = harness(1);
+    const d = dimsOf(h.doc)[0]!;
+    const eager = transformEntity(d, affTranslate(0, 30), h.doc);
+    const lazy = transformEntity(d, affTranslate(0, 30), h.doc, { deferDimBlocks: true });
+    const nb = lazy.blocks![0]!;
+    expect([lazy.blocks!.length, nb.entities.length]).toEqual([1, 0]);
+    expect(fillDeferredBlock(nb)).toEqual({});
+    expect(nb.entities).toEqual(eager.blocks![0]!.entities);
+    expect(nb.entities.length).toBeGreaterThan(0);
+    // 한 번만 채운다, 미루지 않은 블록은 그대로
+    expect(fillDeferredBlock(nb)).toBeNull();
+    expect(fillDeferredBlock(eager.blocks![0]!)).toBeNull();
   });
 });
