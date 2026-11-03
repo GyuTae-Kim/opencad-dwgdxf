@@ -48,7 +48,7 @@ import type {
 import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../../core/hatchedges';
 import { TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS } from '../../../core/limits';
 import { BYLAYER, SHARED_BYLAYER_COLOR } from '../../../core/model';
-import { tidyWidths, zeros } from '../../../core/lwpoly';
+import { tidyWidths } from '../../../core/lwpoly';
 import { unpack3 } from '../../../core/flat3';
 import { decodeCadEscapes } from '../../../core/codepage';
 import { type BitReader, DwgFormatError } from '../bitstream';
@@ -861,20 +861,22 @@ function readLwPolyline(or: ObjectReader, b: Omit<EntityBase, 'type'>): LwPolyli
   if (ver >= R2010 && flag & 1024) nid = r.checkCount(r.BL(), 2);
   if (flag & 32) nw = r.checkCount(r.BL(), 4);
   // 정점 평탄 좌표 [x, y, 볼록, …]와 정점별 폭 [시작, 끝, …](모두 +0이면 없음)
-  const verts: number[] = [];
+  const verts = new Float64Array(np * 3);
   if (ver <= R14) {
     for (let i = 0; i < np; i++) {
-      const x = r.RD();
-      verts.push(x, r.RD(), 0);
+      verts[i * 3] = r.RD();
+      verts[i * 3 + 1] = r.RD();
     }
   } else if (np > 0) {
     let x = r.RD();
     let y = r.RD();
-    verts.push(x, y, 0);
+    verts[0] = x;
+    verts[1] = y;
     for (let i = 1; i < np; i++) {
       x = r.DD(x);
       y = r.DD(y);
-      verts.push(x, y, 0);
+      verts[i * 3] = x;
+      verts[i * 3 + 1] = y;
     }
   }
   for (let i = 0; i < nb; i++) {
@@ -882,18 +884,17 @@ function readLwPolyline(or: ObjectReader, b: Omit<EntityBase, 'type'>): LwPolyli
     if (i < np) verts[i * 3 + 2] = v;
   }
   for (let i = 0; i < nid; i++) r.BL();
-  let widths: number[] | undefined;
+  let widths: Float64Array | undefined;
   for (let i = 0; i < nw; i++) {
     const s = r.BD();
     const w = r.BD();
     if (i < np) {
-      widths ??= zeros(np * 2);
+      widths ??= new Float64Array(np * 2);
       widths[i * 2] = s;
       widths[i * 2 + 1] = w;
     }
   }
-  // push로 키운 배열은 남는 칸이 있다 — 꼭 맞는 사본으로 둔다
-  const e: LwPolylineEntity = { ...b, type: 'LWPOLYLINE', verts: verts.slice(), widths: tidyWidths(widths), closed: (flag & 512) !== 0, plinegen: (flag & 256) !== 0, constantWidth, elevation };
+  const e: LwPolylineEntity = { ...b, type: 'LWPOLYLINE', verts, widths: tidyWidths(widths), closed: (flag & 512) !== 0, plinegen: (flag & 256) !== 0, constantWidth, elevation };
   setExtrusion(e, normal);
   setThickness(e, thickness);
   return e;
@@ -1638,12 +1639,14 @@ function readHatch(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: 'HATCH')
       const closed = r.B() === 1;
       const nv = r.checkCount(r.BL(), 128);
       // 정점 평탄 좌표 [x, y, 볼록, …]
-      const verts: number[] = [];
+      const verts = new Float64Array(nv * 3);
       for (let i = 0; i < nv; i++) {
         const p = r.RD2();
-        verts.push(p.x, p.y, bulges ? r.BD() : 0);
+        verts[i * 3] = p.x;
+        verts[i * 3 + 1] = p.y;
+        if (bulges) verts[i * 3 + 2] = r.BD();
       }
-      path.polyline = { closed, verts: verts.slice() };
+      path.polyline = { closed, verts };
     }
     boundaryCounts.push(r.BL());
     e.paths.push(path);

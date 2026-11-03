@@ -16,7 +16,6 @@ import { collectTextUsage } from '../text/collect';
 import type { FromWorker, PreviewView, SceneMessage, ToWorker } from './protocol';
 import { applyOps } from '../edit/session';
 import { sendDocument } from './doctransfer';
-import { unboxLw } from '../core/lwpoly';
 import { unboxPoly } from '../core/polyverts';
 import { unboxSpline } from '../core/flat3';
 
@@ -171,8 +170,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
         // postMessage(구조화 복제)는 수 배열의 수를 하나씩 상자에 담는다 — 넣는 폴리선의 평탄 좌표를 다시 담는다
         for (const op of msg.ops) {
           const e = op.kind === 'add' ? op.entity : op.kind === 'modify' ? op.after : null;
-          if (e?.type === 'LWPOLYLINE') unboxLw(e, e);
-          else if (e?.type === 'POLYLINE') unboxPoly(e, e);
+          if (e?.type === 'POLYLINE') unboxPoly(e, e);
           else if (e?.type === 'SPLINE') unboxSpline(e, e);
         }
         applyOps(doc, msg.ops);

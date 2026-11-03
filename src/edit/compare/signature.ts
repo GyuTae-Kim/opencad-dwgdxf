@@ -268,7 +268,8 @@ function walk(s: Builder, v: unknown, key: string, opt: CompareOptions, depth: n
     s.k(hashBytes(v));
     return;
   }
-  if (Array.isArray(v)) {
+  // 평탄 좌표(Float64Array)는 수 배열과 같게
+  if (Array.isArray(v) || v instanceof Float64Array) {
     s.k(`[${v.length}`);
     for (const x of v) walk(s, x, key, opt, depth + 1);
     return;

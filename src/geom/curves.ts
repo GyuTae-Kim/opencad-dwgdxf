@@ -146,7 +146,7 @@ export function bulgePolylinePoints(vs: readonly BulgeVertex[], closed: boolean,
 }
 
 /** bulgePolylinePoints와 같다. 정점은 평탄 좌표 [x, y, 볼록, …] */
-export function bulgeFlatPoints(vs: readonly number[], closed: boolean, tol: number): number[] {
+export function bulgeFlatPoints(vs: ArrayLike<number>, closed: boolean, tol: number): number[] {
   const out: number[] = [];
   const n = (vs.length / 3) | 0;
   if (!n) return out;

@@ -38,7 +38,7 @@ export interface CreateHatchOptions {
 
 function clonePath(p: HatchPath, keepSources: boolean): HatchPath {
   const out: HatchPath = { flags: p.flags };
-  if (p.polyline) out.polyline = { closed: p.polyline.closed, verts: numArray(p.polyline.verts) };
+  if (p.polyline) out.polyline = { closed: p.polyline.closed, verts: p.polyline.verts.slice() };
   if (p.edgeData) out.edgeData = numArray(p.edgeData);
   if (keepSources && p.sources?.length) out.sources = [...p.sources];
   return out;

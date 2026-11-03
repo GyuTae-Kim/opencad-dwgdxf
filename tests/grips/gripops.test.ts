@@ -72,7 +72,7 @@ describe('폴리선 정점 추가·제거', () => {
   });
   it('폭: 나뉜 세그먼트는 길이 비율로, 제거하면 앞 시작 폭에서 뒤 끝 폭으로', () => {
     const pl = lw([[0, 0], [10, 0], [20, 0]]) as LwPolylineEntity;
-    pl.widths = [0, 2, 4, 6, 0, 0];
+    pl.widths = Float64Array.of(0, 2, 4, 6, 0, 0);
     const a = verts(one(polyAddVertex(pl, 'm0', V(2.5, 0))));
     expect(a.map((v) => [v.startWidth, v.endWidth])).toEqual([[0, 0.5], [0.5, 2], [4, 6], [0, 0]]);
     const b = verts(one(polyRemoveVertex(pl, 'v1')));

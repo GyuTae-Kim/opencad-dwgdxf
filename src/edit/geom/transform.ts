@@ -314,13 +314,15 @@ function xformLw(e: LwPolylineEntity, m: Affine, opt: TransformOptions): EditRes
   const s = sim ? sim.s : affScaleOf(pm.A);
   const flip = affDet(pm.A) < 0 ? -1 : 1;
   // 정점은 아래에서 새로 만들므로 복제하지 않는다
-  const r = cloneEntity<LwPolylineEntity>({ ...e, verts: [] });
+  const r = cloneEntity<LwPolylineEntity>({ ...e, verts: new Float64Array(0), widths: undefined });
   const A = pm.A;
-  const out: number[] = [];
+  const out = new Float64Array(nv * 3);
   for (let i = 0; i < nv; i++) {
     const x = vs[i * 3]!;
     const y = vs[i * 3 + 1]!;
-    out.push(A[0] * x + A[2] * y + A[4], A[1] * x + A[3] * y + A[5], vs[i * 3 + 2]! * flip);
+    out[i * 3] = A[0] * x + A[2] * y + A[4];
+    out[i * 3 + 1] = A[1] * x + A[3] * y + A[5];
+    out[i * 3 + 2] = vs[i * 3 + 2]! * flip;
   }
   r.verts = out;
   r.widths = e.widths ? tidyWidths(e.widths.map((w) => w * s)) : undefined;
