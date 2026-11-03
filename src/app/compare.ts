@@ -21,7 +21,7 @@ import { type EditResult, copyEntity } from '../edit/geom';
 import { addEntities, currentProps } from './draw';
 import { baseName } from './export';
 import type { Pt } from './view';
-import type { EntityBox } from '../render/displaylist';
+import { BoxList, type EntityBox } from '../render/displaylist';
 import type { Box } from '../edit/compare';
 
 let session: CompareSession | null = null;
@@ -35,7 +35,7 @@ export function activeCompare(): CompareSession | null {
 
 const nextFrame = () => new Promise<void>((r) => setTimeout(r, 30));
 
-function boxMap(list: readonly EntityBox[]): Map<string, Box> {
+function boxMap(list: Iterable<EntityBox>): Map<string, Box> {
   const m = new Map<string, Box>();
   for (const b of list) m.set(b.handle, b);
   return m;
@@ -56,7 +56,8 @@ async function sourceFromFile(app: App, ctx: CommandContext, file: File): Promis
     // 워커 문서는 비교가 끝날 때까지 둔다("비교 도면에서만" 객체를 워커가 그린다)
     const l = res.model.list;
     const bounds = Number.isFinite(l.minX) && l.minX <= l.maxX ? { minX: l.minX, minY: l.minY, maxX: l.maxX, maxY: l.maxY } : null;
-    return { name: file.name, doc: res.doc, bounds, boxes: boxMap(l.entities), size: file.size, workerDocId: res.docId };
+    // 객체 상자는 워커가 묶어 보낸 그대로 온다
+    return { name: file.name, doc: res.doc, bounds, boxes: boxMap(res.model.boxes ? new BoxList(res.model.boxes) : l.entities), size: file.size, workerDocId: res.docId };
   } catch (e) {
     ctx.print(`${file.name}: 도면을 읽지 못했습니다(${e instanceof Error ? e.message : String(e)}).`, 'err');
     return null;

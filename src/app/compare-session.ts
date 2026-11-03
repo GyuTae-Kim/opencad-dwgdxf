@@ -53,7 +53,8 @@ const LIVE_LIMIT = 5000;
 type Extra = { gpu: GpuScene; styles: (dark: boolean, bg: number, lwDisplay: boolean) => Float32Array };
 /** "비교 도면에서만" 장면(워커가 그린 것 또는 메인 스레드에서 만든 것) */
 interface CmpScene extends Extra {
-  entities: EntityBox[];
+  /** 워커 장면은 묶은 상자(BoxList), 메인 덧그림은 배열 */
+  entities: { filter(f: (b: EntityBox) => boolean): EntityBox[] };
   dispose(): void;
 }
 type Override = (s: DocState) => ((data: Float32Array) => Float32Array) | null;

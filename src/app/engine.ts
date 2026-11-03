@@ -3,7 +3,6 @@ import type { CadDocument } from '../core/model';
 import type { FromWorker, PreviewView, SaveFormat, SceneMessage, ToWorker } from '../worker/protocol';
 import type { PartialScene } from '../render/build';
 import type { EditOp } from '../edit/session';
-import { unpackBoxes } from '../render/displaylist';
 import { DocAssembler } from '../worker/doctransfer';
 
 export interface OpenResult {
@@ -105,11 +104,7 @@ export class EngineClient {
         this.settle(m.id, p);
         break;
       case 'scene':
-        // 워커가 묶어 보낸 객체 상자를 푼다(구조화 복제보다 훨씬 빠르다)
-        if (m.scene.boxes) {
-          m.scene.list.entities = unpackBoxes(m.scene.boxes);
-          m.scene.boxes = undefined;
-        }
+        // 워커가 묶어 보낸 객체 상자는 묶은 그대로 둔다(SpaceScene이 BoxList로 감싼다). 상자마다 객체를 만들면 메인 힙이 객체당 수백 바이트 는다
         if (p.wantsDoc) {
           p.scene = m.scene;
           p.onProgress?.('scene', 1);

@@ -1,7 +1,7 @@
 /** 메인 스레드가 가진 공간 장면(GPU 자원 + 스타일 해석 정보) */
 import type { CadDocument, Entity, Layout, ViewportEntity } from '../core/model';
 import { tableKey } from '../core/model';
-import type { DisplayList, EntityBox } from '../render/displaylist';
+import { BoxList, type DisplayList, type EntityBox } from '../render/displaylist';
 import { SceneBuilder } from '../render/build';
 import type { TextEngine } from '../text/layout';
 import type { LayerState, PlotStyle, StyleSpec } from '../render/styles';
@@ -19,7 +19,8 @@ export class SpaceScene {
   /** 원본 표시 목록(내보내기·문맥 복구용) */
   readonly source: DisplayList;
   readonly styles: StyleTable;
-  readonly entities: EntityBox[];
+  /** 객체 상자(워커가 묶어 보낸 형식 그대로 — 필요한 상자만 꺼낸다) */
+  readonly entities: BoxList;
   bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
   /** 주석 객체 수(배치 뷰포트마다 다른 주석 축척의 장면이 필요한지) */
   readonly annotative: number;
@@ -34,7 +35,7 @@ export class SpaceScene {
     this.source = msg.list;
     this.styles = new StyleTable();
     for (const s of msg.styles) this.styles.intern(s as StyleSpec);
-    this.entities = msg.list.entities;
+    this.entities = msg.boxes ? new BoxList(msg.boxes) : BoxList.from(msg.list.entities);
     this.annotative = msg.annotative ?? 0;
     const l: DisplayList = msg.list;
     this.bounds = Number.isFinite(l.minX) && l.minX <= l.maxX ? { minX: l.minX, minY: l.minY, maxX: l.maxX, maxY: l.maxY } : null;
@@ -57,11 +58,9 @@ export class SpaceScene {
     this.styleCache.clear();
   }
 
-  private boxMap: Map<string, EntityBox> | null = null;
-
   boxOf(handle: string): EntityBox | undefined {
-    if (!this.boxMap) this.boxMap = new Map(this.entities.map((b) => [b.handle, b]));
-    return this.boxMap.get(handle);
+    const i = this.entities.indexOf(handle);
+    return i < 0 ? undefined : this.entities.at(i);
   }
 
   /** 편집으로 지우거나 바꾼 객체들의 옛 그림을 숨긴다 */

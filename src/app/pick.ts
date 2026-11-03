@@ -5,7 +5,7 @@
 import type { CadDocument, Entity } from '../core/model';
 import { SceneBuilder } from '../render/build';
 import type { DisplayList, EntityBox } from '../render/displaylist';
-import { GLYPH_STRIDE, SEG_STRIDE, TRI_STRIDE } from '../render/displaylist';
+import { BoxList, GLYPH_STRIDE, SEG_STRIDE, TRI_STRIDE } from '../render/displaylist';
 import type { TextEngine } from '../text/layout';
 import type { OverlayGeom, Pt } from './view';
 import { fenceHits, polygonHits } from '../edit/geom/selpoly';
@@ -96,6 +96,18 @@ function inTri(px: number, py: number, t: number[], i: number): boolean {
   return !(neg && pos);
 }
 
+/** 점들의 범위 상자 [minX, minY, maxX, maxY] */
+function ptsBox(pts: readonly Pt[]): [number, number, number, number] {
+  const r: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const p of pts) {
+    if (p.x < r[0]) r[0] = p.x;
+    if (p.y < r[1]) r[1] = p.y;
+    if (p.x > r[2]) r[2] = p.x;
+    if (p.y > r[3]) r[3] = p.y;
+  }
+  return r;
+}
+
 function segRect(x0: number, y0: number, x1: number, y1: number, r: [number, number, number, number]): boolean {
   // 리앙-바스키 자르기
   let t0 = 0;
@@ -118,66 +130,137 @@ function segRect(x0: number, y0: number, x1: number, y1: number, r: [number, num
 }
 
 export class Picker {
-  private grid = new Map<string, number[]>();
+  /** 장면의 객체 상자(묶은 형식 — 범위는 형식 배열로 보고, 걸린 상자만 객체로 꺼낸다). 상자 번호가 곧 그리기 순서다 */
+  readonly boxes: BoxList;
   /** 편집으로 지우거나 바뀐 기존 객체(고르지 않는다) */
   readonly exclude = new Set<string>();
   /** 편집으로 새로 생기거나 바뀐 객체의 범위 */
   extra: EntityBox[] = [];
   private cell = 1;
+  /** 범위 격자: 칸 (gx0 + cx, gy0 + cy)의 번호 k = cy·gw + cx, 그 칸의 상자 번호는 items[start[k] .. start[k + 1]) */
+  private gx0 = 0;
+  private gy0 = 0;
+  private gw = 0;
+  private gh = 0;
+  private start = new Int32Array(1);
+  private items = new Int32Array(0);
+  /** 칸을 아주 많이 차지하는 큰 상자와 범위가 수가 아닌 상자 */
+  private big = new Int32Array(0);
   private readonly cache = new Map<string, OverlayGeom>();
   private builder: SceneBuilder;
-  /** 핸들 → 그리기 순서 */
-  private readonly order = new Map<string, number>();
 
   constructor(
     private readonly doc: CadDocument,
-    readonly boxes: EntityBox[],
+    boxes: BoxList | readonly EntityBox[],
     text: TextEngine,
     space: string,
   ) {
     this.builder = new SceneBuilder(doc, { text });
     this.builder.prepare(space);
-    boxes.forEach((b, i) => this.order.set(b.handle, i));
+    this.boxes = boxes instanceof BoxList ? boxes : BoxList.from(boxes);
+    this.buildGrid();
+  }
+
+  private buildGrid(): void {
+    const n = this.boxes.length;
+    const bb = this.boxes.bounds;
+    const finite = (i: number) => Number.isFinite(bb[i * 4]! + bb[i * 4 + 1]! + bb[i * 4 + 2]! + bb[i * 4 + 3]!);
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    for (const b of boxes) {
-      minX = Math.min(minX, b.minX);
-      minY = Math.min(minY, b.minY);
-      maxX = Math.max(maxX, b.maxX);
-      maxY = Math.max(maxY, b.maxY);
+    for (let i = 0; i < n; i++) {
+      if (!finite(i)) continue;
+      const o = i * 4;
+      if (bb[o]! < minX) minX = bb[o]!;
+      if (bb[o + 1]! < minY) minY = bb[o + 1]!;
+      if (bb[o + 2]! > maxX) maxX = bb[o + 2]!;
+      if (bb[o + 3]! > maxY) maxY = bb[o + 3]!;
     }
     const span = Math.max(maxX - minX, maxY - minY, 1e-9);
-    this.cell = span / Math.max(8, Math.min(256, Math.sqrt(boxes.length) * 2));
-    boxes.forEach((b, i) => {
-      const x0 = Math.floor(b.minX / this.cell);
-      const x1 = Math.floor(b.maxX / this.cell);
-      const y0 = Math.floor(b.minY / this.cell);
-      const y1 = Math.floor(b.maxY / this.cell);
-      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096) {
-        // 아주 큰 객체는 따로
-        this.push('big', i);
-        return;
+    const cell = (this.cell = Number.isFinite(span) ? span / Math.max(8, Math.min(256, Math.sqrt(n) * 2)) : 1);
+    if (Number.isFinite(minX)) {
+      this.gx0 = Math.floor(minX / cell);
+      this.gy0 = Math.floor(minY / cell);
+      this.gw = Math.floor(maxX / cell) - this.gx0 + 1;
+      this.gh = Math.floor(maxY / cell) - this.gy0 + 1;
+    }
+    const { gx0, gy0, gw, gh } = this;
+    // 상자가 덮는 칸 범위. 아주 큰 객체와 범위가 수가 아닌 객체는 따로(big)
+    const span4 = (i: number): [number, number, number, number] | null => {
+      if (!finite(i)) return null;
+      const o = i * 4;
+      const x0 = Math.max(0, Math.floor(bb[o]! / cell) - gx0);
+      const x1 = Math.min(gw - 1, Math.floor(bb[o + 2]! / cell) - gx0);
+      const y0 = Math.max(0, Math.floor(bb[o + 1]! / cell) - gy0);
+      const y1 = Math.min(gh - 1, Math.floor(bb[o + 3]! / cell) - gy0);
+      return (x1 - x0 + 1) * (y1 - y0 + 1) > 4096 ? null : [x0, x1, y0, y1];
+    };
+    const start = new Int32Array(gw * gh + 1);
+    let nbig = 0;
+    for (let i = 0; i < n; i++) {
+      const s = span4(i);
+      if (!s) {
+        nbig++;
+        continue;
       }
-      for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) this.push(`${x},${y}`, i);
-    });
+      for (let y = s[2]; y <= s[3]; y++) for (let x = s[0]; x <= s[1]; x++) start[y * gw + x + 1]!++;
+    }
+    for (let k = 0; k < gw * gh; k++) start[k + 1]! += start[k]!;
+    const items = new Int32Array(start[gw * gh]!);
+    const fill = start.slice(0, gw * gh);
+    const big = new Int32Array(nbig);
+    nbig = 0;
+    for (let i = 0; i < n; i++) {
+      const s = span4(i);
+      if (!s) {
+        big[nbig++] = i;
+        continue;
+      }
+      for (let y = s[2]; y <= s[3]; y++) for (let x = s[0]; x <= s[1]; x++) items[fill[y * gw + x]!++] = i;
+    }
+    this.start = start;
+    this.items = items;
+    this.big = big;
   }
 
-  private push(k: string, i: number): void {
-    let l = this.grid.get(k);
-    if (!l) {
-      l = [];
-      this.grid.set(k, l);
+  /** 상자 i가 점 (x, y)에서 tol 안인지 */
+  private near(i: number, x: number, y: number, tol: number): boolean {
+    const bb = this.boxes.bounds;
+    const o = i * 4;
+    return bb[o]! - tol <= x && bb[o + 2]! + tol >= x && bb[o + 1]! - tol <= y && bb[o + 3]! + tol >= y;
+  }
+
+  /** 상자 i가 사각형과 겹치는지 */
+  private overlaps(i: number, r: readonly [number, number, number, number]): boolean {
+    const bb = this.boxes.bounds;
+    const o = i * 4;
+    return !(bb[o + 2]! < r[0] || bb[o]! > r[2] || bb[o + 3]! < r[1] || bb[o + 1]! > r[3]);
+  }
+
+  /** 점 근처(tol 안)의 후보와 그리기 순서(편집으로 생긴 객체는 맨 위) */
+  private hits(x: number, y: number, tol: number): { b: EntityBox; ord: number }[] {
+    const out: { b: EntityBox; ord: number }[] = [];
+    for (const i of this.baseCandidates(x, y, tol)) {
+      if (!this.exclude.has(this.boxes.handle(i))) out.push({ b: this.boxes.at(i), ord: i });
     }
-    l.push(i);
+    for (const b of this.extra) if (b.minX - tol <= x && b.maxX + tol >= x && b.minY - tol <= y && b.maxY + tol >= y) out.push({ b, ord: Number.MAX_SAFE_INTEGER });
+    return out;
   }
 
   /** 점 근처(tol 안)의 후보 */
   candidates(x: number, y: number, tol: number): EntityBox[] {
-    const base = this.baseCandidates(x, y, tol).filter((b) => !this.exclude.has(b.handle));
-    for (const b of this.extra) if (b.minX - tol <= x && b.maxX + tol >= x && b.minY - tol <= y && b.maxY + tol >= y) base.push(b);
-    return base;
+    return this.hits(x, y, tol).map((h) => h.b);
+  }
+
+  /** 사각형과 겹치는 고를 수 있는 상자(편집으로 생긴 객체 포함) */
+  private inRect(r: readonly [number, number, number, number]): EntityBox[] {
+    const out: EntityBox[] = [];
+    for (let i = 0; i < this.boxes.length; i++) {
+      if (this.overlaps(i, r) && !this.exclude.has(this.boxes.handle(i))) out.push(this.boxes.at(i));
+    }
+    for (const b of this.extra) if (!(b.maxX < r[0] || b.minX > r[2] || b.maxY < r[1] || b.minY > r[3])) out.push(b);
+    return out;
   }
 
   /** 편집 결과 반영: 바뀐 핸들의 형상 캐시를 지운다 */
@@ -185,29 +268,28 @@ export class Picker {
     for (const h of handles) this.cache.delete(h);
   }
 
-  private baseCandidates(x: number, y: number, tol: number): EntityBox[] {
+  /** 점 근처 상자 번호(찾은 차례, 겹치지 않게) */
+  private baseCandidates(x: number, y: number, tol: number): number[] {
     const out = new Set<number>();
     const x0 = Math.floor((x - tol) / this.cell);
     const x1 = Math.floor((x + tol) / this.cell);
     const y0 = Math.floor((y - tol) / this.cell);
     const y1 = Math.floor((y + tol) / this.cell);
     if ((x1 - x0 + 1) * (y1 - y0 + 1) > 64) {
-      this.boxes.forEach((b, i) => {
-        if (b.minX - tol <= x && b.maxX + tol >= x && b.minY - tol <= y && b.maxY + tol >= y) out.add(i);
-      });
+      for (let i = 0; i < this.boxes.length; i++) if (this.near(i, x, y, tol)) out.add(i);
     } else {
-      for (let gx = x0; gx <= x1; gx++)
-        for (let gy = y0; gy <= y1; gy++)
-          for (const i of this.grid.get(`${gx},${gy}`) ?? []) {
-            const b = this.boxes[i]!;
-            if (b.minX - tol <= x && b.maxX + tol >= x && b.minY - tol <= y && b.maxY + tol >= y) out.add(i);
+      const { gx0, gy0, gw, gh, start, items } = this;
+      for (let gx = Math.max(x0, gx0); gx <= Math.min(x1, gx0 + gw - 1); gx++)
+        for (let gy = Math.max(y0, gy0); gy <= Math.min(y1, gy0 + gh - 1); gy++) {
+          const k = (gy - gy0) * gw + (gx - gx0);
+          for (let j = start[k]!; j < start[k + 1]!; j++) {
+            const i = items[j]!;
+            if (this.near(i, x, y, tol)) out.add(i);
           }
-      for (const i of this.grid.get('big') ?? []) {
-        const b = this.boxes[i]!;
-        if (b.minX - tol <= x && b.maxX + tol >= x && b.minY - tol <= y && b.maxY + tol >= y) out.add(i);
-      }
+        }
+      for (const i of this.big) if (this.near(i, x, y, tol)) out.add(i);
     }
-    return [...out].map((i) => this.boxes[i]!);
+    return [...out];
   }
 
   geometry(handle: string): OverlayGeom {
@@ -232,12 +314,7 @@ export class Picker {
 
   /** 범위 상자가 사각형과 겹치는 객체(자르기·연장 경계 후보) */
   overlapping(r: [number, number, number, number]): string[] {
-    const out: string[] = [];
-    for (const b of [...this.boxes.filter((x) => !this.exclude.has(x.handle)), ...this.extra]) {
-      if (b.maxX < r[0] || b.minX > r[2] || b.maxY < r[1] || b.minY > r[3]) continue;
-      out.push(b.handle);
-    }
-    return out;
+    return this.inRect(r).map((b) => b.handle);
   }
 
   distance(handle: string, x: number, y: number): number {
@@ -263,10 +340,9 @@ export class Picker {
     let best: string | null = null;
     let bestD = Infinity;
     let bestOrder = -1;
-    for (const b of this.candidates(x, y, tol)) {
+    for (const { b, ord } of this.hits(x, y, tol)) {
       const d = this.distance(b.handle, x, y);
       if (d > tol) continue;
-      const ord = this.extra.includes(b) ? Number.MAX_SAFE_INTEGER : (this.order.get(b.handle) ?? 0);
       if (d < bestD - tol * 0.05 || (Math.abs(d - bestD) <= tol * 0.05 && ord > bestOrder)) {
         best = b.handle;
         bestD = d;
@@ -280,12 +356,12 @@ export class Picker {
   pickAll(x: number, y: number, tol: number): string[] {
     const hits: { h: string; d: number; ord: number }[] = [];
     const seen = new Set<string>();
-    for (const b of this.candidates(x, y, tol)) {
+    for (const { b, ord } of this.hits(x, y, tol)) {
       if (seen.has(b.handle)) continue;
       const d = this.distance(b.handle, x, y);
       if (d > tol) continue;
       seen.add(b.handle);
-      hits.push({ h: b.handle, d, ord: this.extra.includes(b) ? Number.MAX_SAFE_INTEGER : (this.order.get(b.handle) ?? 0) });
+      hits.push({ h: b.handle, d, ord });
     }
     hits.sort((a, b) => (Math.abs(a.d - b.d) > tol * 0.05 ? a.d - b.d : b.ord - a.ord));
     return hits.map((x) => x.h);
@@ -294,8 +370,7 @@ export class Picker {
   /** 창 선택(window = 완전히 안, 아니면 걸침) */
   select(r: [number, number, number, number], crossing: boolean): string[] {
     const out: string[] = [];
-    for (const b of [...this.boxes.filter((x) => !this.exclude.has(x.handle)), ...this.extra]) {
-      if (b.maxX < r[0] || b.minX > r[2] || b.maxY < r[1] || b.minY > r[3]) continue;
+    for (const b of this.inRect(r)) {
       const inside = b.minX >= r[0] && b.maxX <= r[2] && b.minY >= r[1] && b.maxY <= r[3];
       if (inside) {
         out.push(b.handle);
@@ -322,12 +397,13 @@ export class Picker {
 
   /** 다각형 선택(crossing이면 걸침 폴리곤 CP, 아니면 윈도우 폴리곤 WP). 다각형은 저절로 닫는다 */
   selectPolygon(poly: Pt[], crossing: boolean): string[] {
-    return polygonHits([...this.boxes.filter((x) => !this.exclude.has(x.handle)), ...this.extra], (h) => this.geometry(h), poly, crossing);
+    // 다각형 안이거나 다각형과 만나는 상자는 다각형의 범위 상자와 겹친다
+    return polygonHits(this.inRect(ptsBox(poly)), (h) => this.geometry(h), poly, crossing);
   }
 
   /** 울타리 선택(F): 꺾은선과 만나는 객체 */
   selectFence(pts: Pt[]): string[] {
-    return fenceHits([...this.boxes.filter((x) => !this.exclude.has(x.handle)), ...this.extra], (h) => this.geometry(h), pts);
+    return fenceHits(this.inRect(ptsBox(pts)), (h) => this.geometry(h), pts);
   }
 
   entity(handle: string): Entity | undefined {
@@ -338,8 +414,8 @@ export class Picker {
     const x = this.extra.find((b) => b.handle === handle);
     if (x) return x;
     if (this.exclude.has(handle)) return undefined;
-    const i = this.order.get(handle);
-    return i === undefined ? undefined : this.boxes[i];
+    const i = this.boxes.indexOf(handle);
+    return i < 0 ? undefined : this.boxes.at(i);
   }
 
   /** 점 근처 선분들(스냅 교차점·근처점용). owners를 주면 선분마다 그 객체의 핸들을 같은 차례로 담는다(스냅 점의 Z) */
