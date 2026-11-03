@@ -26,6 +26,7 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
 | `ctxcodec.ts` | 주석 축척 컨텍스트 데이터 14종 본문 ↔ DXF 원본 태그(읽기·쓰기, 아래 "주석 축척 컨텍스트 데이터") |
 | `build.ts` | 문서 조립(표 → 도형 → 블록 순서·속성·정점·배치·헤더 이름 풀기) |
 | `rawbody.ts` | 모델이 일부만 담는 객체의 원본 본문 보관(`dwgRaw`)과 지문 |
+| `r12.ts` | R12(AC1009) 읽기: 바이트 단위 고정 배치(머리 변수·표·객체·블록 구역)를 R12 DXF 태그로 바꾼다 |
 | `writer/*` | DWG 쓰기(아래 "쓰기" 절) |
 
 ## 버전별 상태
@@ -40,6 +41,7 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
 | AC1024 (R2010) | sample_AC1024 | 일치 |
 | AC1027 (R2013) | sample_AC1027 | 일치 |
 | AC1032 (R2018) | sample_AC1032, 예제·서식 20종 | 일치 |
+| AC1009 (R11·R12) | AutoCAD R11 짝(DWG·DXF) 2개, 공개 도면 39개 | `r12.ts`: R12 DXF 태그로 바꿔 DXF 리더로 읽는다. 짝 DXF와 셰이프 이름만 다르다(이름은 셰이프 파일에 있다) |
 | AC1009 이전 | — | `dwg.unsupported_version` |
 
 시험:
@@ -99,7 +101,10 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
   맞춤점이 (0, 0)일 때만 0x02를 쓰고, 왼쪽 맞춤이 아닌데 맞춤점이 없으면 삽입점을 맞춤점으로 쓴다(그리기가 삽입점을 쓰는 것과 같게).
 - 2D 폴리선 정점 Z는 폴리선 고도로 채운다. 폴리페이스 면 번호는 끝의 0을 뺀다(DXF와 같게).
 - 배치 블록 도형(속성 포함)은 `paperSpace = true`. VIEWPORT `id`는 배치마다 1부터, `status`도 같은 값.
-- R13·R14 VIEWPORT 보기 정보는 ACAD "MVIEW" 확장 자료에서 읽는다.
+- R13·R14 VIEWPORT 보기 정보는 ACAD "MVIEW" 확장 자료에서 읽는다(`io/mview.ts`, R12 DXF·R12 DWG와 같은 해석).
+- R12(`r12.ts`)가 형식 설명(`dwg_ac1009.ksy`)과 다른 곳(실제 파일로 확인): 정점도 추가 플래그가 색·고도보다 먼저다.
+  구역 크기와 블록 주소는 맨 위 두 비트만 표시(0x40)이고 나머지가 값이다(16MB가 넘는 블록 구역이 있다). 헤더 변수 위치는 설명의 순서대로 세면 맞고
+  주석의 오프셋 몇 개가 틀렸다. 익명 블록 이름은 표 이름 + 표 번호(AutoCAD DXF와 같다), 치수 문자 공백 한 칸은 빈 글이다.
 - 트루컬러의 ACI: AutoCAD 팔레트(명도 255·204·153·127·76)로 가장 가까운 색. 색상표 색은 DBCOLOR의 RGB·이름.
   해치 그라데이션 색은 색마다 저장된 ACI(BS)를 쓴다.
 - 하이퍼링크(PE_URL), 도면층 설명(AcAecLayerStandard), 도면층 투명도(AcCmTransparency), 문자 스타일 글꼴(ACAD 1000·1071)은 확장 자료에서 꺼낸다.

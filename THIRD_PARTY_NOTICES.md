@@ -12,5 +12,7 @@
 
 DWG 리더는 Open Design Alliance가 공개한 "Open Design Specification for .dwg files"(5.4.1)를 읽고
 이 저장소에서 새로 작성했다. 다른 DWG 구현의 소스 코드는 쓰지 않았다.
+R12(AC1009) 리더(`src/io/dwg/r12.ts`)는 Michal Josef Špaček이 공개한 형식 설명
+(CAD-Format-DWG-AC1009의 `dwg_ac1009.ksy`, CC0 1.0)을 참고해 새로 작성했다. 그 저장소의 코드나 자료는 앱에 넣지 않았다.
 
 ezdxf(MIT)는 개발 중 비교 기준(`scripts/oracle/`)으로만 쓰며 앱에는 들어가지 않는다.

@@ -83,7 +83,7 @@ export function docSaveFormat(doc: CadDocument): { format: 'dwg' | 'dxf'; versio
     const t = SAVE_TYPES.find((x) => x.format === 'dxf' && x.version === doc.version);
     return { format: 'dxf', version: t ? t.version : 'AC1032', binary: !!doc.binary };
   }
-  const v = doc.version === 'AC1021' ? 'AC1018' : doc.version === 'AC1012' || doc.version === 'AC1014' ? 'AC1015' : doc.version;
+  const v = doc.version === 'AC1021' ? 'AC1018' : doc.version === 'AC1009' || doc.version === 'AC1012' || doc.version === 'AC1014' ? 'AC1015' : doc.version;
   const t = SAVE_TYPES.find((x) => x.format === 'dwg' && x.version === v);
   return { format: 'dwg', version: t ? t.version : 'AC1032', binary: false };
 }

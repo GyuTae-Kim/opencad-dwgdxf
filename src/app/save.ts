@@ -62,8 +62,8 @@ export const savedListeners = new Set<(st: DocState, data: Blob, name: string) =
 export function sameFormat(st: DocState): SaveTarget | null {
   const d = st.doc;
   if (d.format === 'dwg') {
-    // R2007은 쓸 수 없어 R2004로, R13·R14는 R2000으로
-    const v = d.version === 'AC1021' ? 'AC1018' : d.version === 'AC1012' || d.version === 'AC1014' ? 'AC1015' : d.version;
+    // R2007은 쓸 수 없어 R2004로, R12·R13·R14는 R2000으로
+    const v = d.version === 'AC1021' ? 'AC1018' : d.version === 'AC1009' || d.version === 'AC1012' || d.version === 'AC1014' ? 'AC1015' : d.version;
     const t = SAVE_TYPES.find((x) => x.format === 'dwg' && x.version === v);
     return { format: 'dwg', version: t ? t.version : 'AC1032', binary: false };
   }
