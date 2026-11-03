@@ -92,16 +92,26 @@ export function classify(r: FileRecord): FileClass {
 
 /**
  * 품질 지표(파일마다 참·거짓) — 5차 훑기의 고치기 전·후 표와 같은 정의.
- * 이름이 바뀜: 왕복에서 도면층·블록 이름이 사라짐(DWG ↔ DXF의 \U+ 바꿈 등)
+ * 이름이 바뀜: 왕복에서 도면층·블록 이름이 사라짐(DWG ↔ DXF의 \U+ 바꿈 등). 익명 블록(*U·*D·*X·*T…)은 번호를 다시 매기므로 세지 않는다
+ * (AutoCAD도 불러올 때 다시 매긴다 — 번호 없는 *U가 DWG 왕복에서 *U0이 된다).
+ * 치수 종류·측정값·글 값: 다른 종류로 바뀐 객체(그 버전에 없는 호 길이 치수를 블록 참조로, 그림이 있는 프록시를 선으로 쓰는 등)의 필드 차이는 세지 않는다.
+ * 종류가 바뀐 것은 왕복 차이(field:<종류>.type)로 따로 센다
  */
+const ANON_BLOCK = /^\*[A-Z]\d*$/i;
+/** 필드 차이 가운데 정규식에 맞고 다른 종류로 바뀐 객체 수보다 많은 것이 있는지(차이는 필드마다 객체 수로 센다) */
+function valueDiff(w: WriteRecord, re: RegExp): boolean {
+  const diffs = w.reread?.fieldDiffs ?? {};
+  return Object.entries(diffs).some(([f, n]) => re.test(f) && n > (diffs[`${f.slice(0, f.indexOf('.'))}.type`] ?? 0));
+}
+
 export const QUALITY: Record<string, (r: FileRecord) => boolean> = {
   'scene-nan': (r) => (r.scene?.spaces ?? []).some((s) => !!s.nan),
   mutated: (r) => !!r.mutated?.length,
-  'name-changed': (r) => writes(r).some(([, w]) => !!(w.reread?.layersLost?.length || w.reread?.blocksLost?.length)),
+  'name-changed': (r) => writes(r).some(([, w]) => !!(w.reread?.layersLost?.length || w.reread?.blocksLost?.some((n) => !ANON_BLOCK.test(n)))),
   'align-point': (r) => writes(r).some(([, w]) => Object.keys(w.reread?.fieldDiffs ?? {}).some((f) => /alignPoint/.test(f))),
-  'dim-type': (r) => writes(r).some(([, w]) => Object.keys(w.reread?.fieldDiffs ?? {}).some((f) => /DIMENSION\.dimType/.test(f))),
-  'dim-measurement': (r) => writes(r).some(([, w]) => Object.keys(w.reread?.fieldDiffs ?? {}).some((f) => /DIMENSION\.measurement/.test(f))),
-  'text-value': (r) => writes(r).some(([, w]) => Object.keys(w.reread?.fieldDiffs ?? {}).some((f) => /\.(text|attvals\[\])$/.test(f))),
+  'dim-type': (r) => writes(r).some(([, w]) => valueDiff(w, /DIMENSION\.dimType/)),
+  'dim-measurement': (r) => writes(r).some(([, w]) => valueDiff(w, /DIMENSION\.measurement/)),
+  'text-value': (r) => writes(r).some(([, w]) => valueDiff(w, /\.(text|attvals\[\])$/)),
   'shape-dropped': (r) => writes(r).some(([, w]) => !!w.warn?.['entity.shape_dropped']),
   'empty-block-handle': (r) => writes(r).some(([, w]) => !!w.warn?.['dwg.write_missing_block']),
   'acis-dropped': (r) =>
