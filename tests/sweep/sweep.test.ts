@@ -218,6 +218,22 @@ describe('요약', () => {
   });
 });
 
+describe('품질 지표가 설계대로인 변화는 세지 않는다', () => {
+  it('익명 블록 번호가 바뀐 것과, 다른 종류로 바꿔 쓴 객체의 필드 차이는 이름·치수·글 값 지표에 넣지 않는다(56차 실제 도면)', () => {
+    const q = (extra: Partial<FileRecord>) => buildSummary({ records: [rec('a', extra)], wallMs: 1 }).quality as Record<string, number>;
+    // 번호 없는 *U가 DWG 왕복에서 *U0이 된다(example_r14.dxf)
+    expect(q({ writes: { 'dwg-AC1032': { ok: true, ms: 1, reread: { ok: true, ms: 1, blocksLost: ['*U', '*D12'] } } } })['name-changed']).toBe(0);
+    expect(q({ writes: { 'dwg-AC1032': { ok: true, ms: 1, reread: { ok: true, ms: 1, blocksLost: ['*U', 'DOOR'] } } } })['name-changed']).toBe(1);
+    // R2000 DXF에는 호 길이 치수가 없어 블록 참조로 쓰고(example_2000.dxf), 그림이 있는 프록시는 선으로 쓴다(gh109_1.dxf)
+    const dim = { 'DIMENSION.dimType': 1, 'DIMENSION.measurement': 1, 'DIMENSION.text': 1 };
+    const conv = { ...dim, 'DIMENSION.type': 1, 'ACAD_PROXY_ENTITY.type': 1, 'ACAD_PROXY_ENTITY.text': 1 };
+    expect(q({ writes: { 'dxf-AC1015': { ok: true, ms: 1, warn: { 'entity.dimension_as_insert': 1 }, reread: { ok: true, ms: 1, fieldDiffs: conv } } } })).toMatchObject({ 'dim-type': 0, 'dim-measurement': 0, 'text-value': 0 });
+    expect(q({ writes: { 'dxf-AC1015': { ok: true, ms: 1, reread: { ok: true, ms: 1, fieldDiffs: dim } } } })).toMatchObject({ 'dim-type': 1, 'dim-measurement': 1, 'text-value': 1 });
+    // 바뀐 객체보다 글 차이가 많으면(다른 치수의 글도 바뀜) 센다
+    expect(q({ writes: { 'dxf-AC1015': { ok: true, ms: 1, reread: { ok: true, ms: 1, fieldDiffs: { ...conv, 'DIMENSION.text': 2 } } } } })['text-value']).toBe(1);
+  });
+});
+
 describe('설계대로 빠지는 비그래픽 객체', () => {
   it('쓰기 경고가 알린 종류·그 버전에 없는 종류(DXF)·DWG 표 보조 자료는 dropped:, 알리지 않고 빠진 것은 object:', () => {
     const none = new Set<string>();
