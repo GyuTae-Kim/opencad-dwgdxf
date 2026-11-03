@@ -19,8 +19,8 @@ import type {
   XLineEntity,
 } from '../../core/model';
 import { lwCount, packLw } from '../../core/lwpoly';
-import { packPoly, polyVertices, unboxPoly } from '../../core/polyverts';
-import { ctrlCount, fitCount, pack3, splineCtrl, unboxSpline } from '../../core/flat3';
+import { packPoly, polyVertices } from '../../core/polyverts';
+import { ctrlCount, fitCount, pack3, splineCtrl } from '../../core/flat3';
 import { bulgeArc, sharedFitCurve } from '../../geom/curves';
 import { ellipseFromConjugate } from './conic';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, type Path, type Piece, pieceAt, pieceLength, pieceSize, reversePiece } from './curve';
@@ -68,11 +68,8 @@ export function freshEntity<T extends Entity>(x: T, keepOwner = true): T {
 
 /** 객체 깊은 복사 */
 export function cloneEntity<T extends Entity>(e: T): T {
-  const c = structuredClone(e);
-  // 구조화 복제는 수 배열의 수를 하나씩 상자에 담는다 — 평탄 좌표는 빈칸 없는 실수 배열로 다시 담는다(경량 폴리선은 형식 배열이라 그대로)
-  if (c.type === 'POLYLINE') unboxPoly(c, e as PolylineEntity);
-  else if (c.type === 'SPLINE') unboxSpline(c, e as SplineEntity);
-  return c;
+  // 평탄 좌표는 형식 배열이라 구조화 복제가 그대로 옮긴다(수 배열처럼 수를 하나씩 상자에 담지 않는다)
+  return structuredClone(e);
 }
 
 // ---------------------------------------------------------------------------
@@ -310,7 +307,7 @@ export function makeSpline(src: Entity, n: Nurbs, closed = false): SplineEntity 
     knots: [...n.knots],
     controlVerts: pack3(n.ctrl),
     weights: rational ? [...n.weights!] : undefined,
-    fitVerts: [],
+    fitVerts: new Float64Array(0),
     knotTolerance: base?.knotTolerance ?? 1e-10,
     controlTolerance: base?.controlTolerance ?? 1e-10,
     fitTolerance: base?.fitTolerance ?? 1e-10,

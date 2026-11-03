@@ -537,7 +537,7 @@ export function writePrim(pr: Prim, x: X, doc: CadDocument): Entity {
       const out: SplineEntity = { ...e, controlVerts: pack3(splineCtrl(e).map((p, i) => ({ ...p, x: x[pr.cp[i]!]!, y: x[pr.cp[i]! + 1]! }))) };
       // 조정점을 직접 바꿨으므로 맞춤점 정의는 버린다(AutoCAD에서 조정점을 편집한 스플라인과 같다)
       if (out.fitVerts.length) {
-        out.fitVerts = [];
+        out.fitVerts = new Float64Array(0);
         delete out.startTangent;
         delete out.endTangent;
       }

@@ -50,12 +50,15 @@ export function ownF64(v: Float64Array): Float64Array {
   return v.byteOffset === 0 && v.byteLength === v.buffer.byteLength ? v : v.slice();
 }
 
-/** 객체의 평탄 좌표를 제 버퍼로 바꾼다(구조화 복제로 워커 밖에 보내기 전에) */
+/**
+ * 객체의 평탄 좌표를 제 버퍼로 바꾼다(구조화 복제로 워커 밖에 보내기 전에): 객체 바로 아래의 Float64Array 속성
+ * (경량 폴리선·POLYLINE 정점·볼록·폭, 스플라인 조정점·맞춤점, 지시선·메시 정점)과 해치 폴리선 경계 정점
+ */
 export function ownEntityArrays(e: Entity): void {
-  if (e.type === 'LWPOLYLINE') {
-    e.verts = ownF64(e.verts);
-    if (e.widths) e.widths = ownF64(e.widths);
-  } else if (e.type === 'HATCH' || e.type === 'MPOLYGON') {
-    for (const p of e.paths) if (p.polyline) p.polyline.verts = ownF64(p.polyline.verts);
+  const o = e as unknown as Record<string, unknown>;
+  for (const k in o) {
+    const v = o[k];
+    if (v instanceof Float64Array) o[k] = ownF64(v);
   }
+  if (e.type === 'HATCH' || e.type === 'MPOLYGON') for (const p of e.paths) if (p.polyline) p.polyline.verts = ownF64(p.polyline.verts);
 }

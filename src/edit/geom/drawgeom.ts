@@ -574,7 +574,7 @@ export function makeCvSpline(base: Omit<EntityBase, 'type' | 'handle'>, ctrl: re
     degree: p,
     knots: clampedKnots(ctrl.length, p),
     controlVerts: pack3(ctrl),
-    fitVerts: [],
+    fitVerts: new Float64Array(0),
     knotTolerance: 1e-10,
     controlTolerance: 1e-10,
     fitTolerance: 1e-10,

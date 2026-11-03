@@ -48,7 +48,7 @@ describe('DXF 왕복', () => {
       flags: 8,
       degree: 3,
       knots: [],
-      controlVerts: [],
+      controlVerts: new Float64Array(0),
       fitVerts: pack3([
         { x: 100, y: 0, z: 0 },
         { x: 110, y: 10, z: 0 },

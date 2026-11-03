@@ -224,7 +224,7 @@ describe('기하 구속 풀기', () => {
         { x: 160, y: -10, z: 0 },
         { x: 190, y: 20, z: 0 },
       ]),
-      fitVerts: [],
+      fitVerts: new Float64Array(0),
       knotTolerance: 1e-10,
       controlTolerance: 1e-10,
       fitTolerance: 1e-10,

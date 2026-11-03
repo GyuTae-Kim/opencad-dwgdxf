@@ -224,7 +224,7 @@ describe('새 배열의 AutoCAD 연관 객체', () => {
             { x: 80, y: 20, z: 0 },
             { x: 100, y: 0, z: 0 },
           ]),
-          fitVerts: [],
+          fitVerts: new Float64Array(0),
           knotTolerance: 1e-10,
           controlTolerance: 1e-10,
           fitTolerance: 1e-10,

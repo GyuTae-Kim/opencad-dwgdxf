@@ -1,23 +1,29 @@
 /**
  * MESH(세분 메시) 평탄 자료: 정점·면·모서리를 객체·배열 목록 대신 수 배열로 둔다(큰 도면의 문서 메모리·GC를 줄인다).
- * - verts: [x0, y0, z0, x1, y1, z1, …](WCS) — 정점 수 = verts.length / 3
+ * - verts: [x0, y0, z0, x1, y1, z1, …](WCS, Float64Array) — 정점 수 = verts.length / 3
  * - faceData: [면0의 정점 수, 번호…, 면1의 정점 수, 번호…, …]
  * - edgePairs: [a0, b0, a1, b1, …]
  * 쓰기·그리기·편집은 meshVertices·meshFaces·meshEdges로 풀어 쓰고, 고친 뒤 packMesh로 되돌린다.
  */
 import type { MeshEntity, Vec3 } from './model';
+import { newF64 } from './f64pool';
 
 export interface MeshPacked {
-  verts: number[];
+  verts: Float64Array;
   faceData: number[];
   edgePairs: number[];
 }
 
 /** 풀어 쓴 정점·면·모서리 → 평탄 자료 */
 export function packMesh(vertices: readonly Vec3[], faces: readonly (readonly number[])[], edges: readonly (readonly [number, number])[]): MeshPacked {
-  const verts: number[] = [];
-  for (const p of vertices) verts.push(p.x, p.y, p.z);
-  return { verts: verts.slice(), faceData: packFaces(faces), edgePairs: packPairs(edges) };
+  const verts = newF64(vertices.length * 3);
+  for (let i = 0; i < vertices.length; i++) {
+    const p = vertices[i]!;
+    verts[i * 3] = p.x;
+    verts[i * 3 + 1] = p.y;
+    verts[i * 3 + 2] = p.z;
+  }
+  return { verts, faceData: packFaces(faces), edgePairs: packPairs(edges) };
 }
 
 export function packFaces(faces: readonly (readonly number[])[]): number[] {

@@ -2073,7 +2073,7 @@ export class SceneBuilder {
       const s = interpolateFitPoints(leaderVertices(e), undefined, undefined, fit);
       this.countFit(fit);
       pts3 = nurbsPoints(s.degree, s.knots, s.ctrl, undefined, this.localTol(ctx.m));
-    } else pts3 = e.verts.slice(0, nv * 3);
+    } else pts3 = Array.from(e.verts.subarray(0, nv * 3));
     const pts = this.xf3(ctx.m, pts3);
     let color = e.color;
     if (e.overrides && e.overrides[176] !== undefined) color = { aci: Number(e.overrides[176]) };

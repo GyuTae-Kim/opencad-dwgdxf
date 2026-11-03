@@ -271,10 +271,10 @@ describe('R12 DWG 읽기', () => {
     );
     const [p2, p3] = ms(doc) as PolylineEntity[];
     expect(p2.flags & 1).toBe(1);
-    expect(p2.verts).toEqual([0, 0, 0, 10, 0, 0, 10, 10, 0]);
-    expect(p2.bulges).toEqual([0, 1, 0]);
+    expect([...p2.verts]).toEqual([0, 0, 0, 10, 0, 0, 10, 10, 0]);
+    expect([...p2.bulges!]).toEqual([0, 1, 0]);
     expect(p3.flags & 8).toBe(8);
-    expect(p3.verts).toEqual([0, 0, 5, 1, 1, 6]);
+    expect([...p3.verts]).toEqual([0, 0, 5, 1, 1, 6]);
   });
 
   it('블록·삽입·속성: 익명 블록 이름은 표 번호를 붙이고, 블록 번호로 이름을 찾는다', () => {
@@ -371,7 +371,7 @@ describe('R12 DWG 읽기', () => {
       }),
     );
     const pl = doc.blocks.get('B')!.entities[0] as PolylineEntity;
-    expect(pl.verts).toEqual([-22.8, 35.1, 8.9, 1, 2, 9]);
+    expect([...pl.verts]).toEqual([-22.8, 35.1, 8.9, 1, 2, 9]);
   });
 
   it('16MB가 넘는 블록 구역: 크기의 맨 위 바이트(0x41)까지 읽는다(오스트라바 공개 도면)', () => {

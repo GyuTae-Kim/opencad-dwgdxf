@@ -211,13 +211,13 @@ export interface PolylineEntity extends EntityBase {
   flags: number;
   /**
    * 정점 평탄 좌표 [x0, y0, z0, x1, y1, z1, …](2D는 OCS, 3D·메시는 WCS, 폴리페이스 면 레코드도 한 칸). 정점 수 = length / 3.
-   * 큰 도면에서 정점마다 객체를 두지 않으려고(문서 메모리·GC) 수만 이어 둔다. 풀어 쓰기·되담기는 src/core/polyverts.ts
+   * 큰 도면에서 정점마다 객체를 두지 않으려고(문서 메모리·GC) 수만 이어 두고, 형식 배열이라 내용이 JS 힙 밖에 놓인다. 풀어 쓰기·되담기는 src/core/polyverts.ts
    */
-  verts: number[];
+  verts: Float64Array;
   /** 정점별 볼록 [b0, b1, …]. 모두 +0이면 없다 */
-  bulges?: number[];
+  bulges?: Float64Array;
   /** 정점별 폭 [시작0, 끝0, 시작1, 끝1, …]. 모두 +0이면 없다 */
-  widths?: number[];
+  widths?: Float64Array;
   /** 정점 플래그(VERTEX 70) [f0, f1, …]. 모두 0이면 없다 */
   vflags?: number[];
   /** 곡선 맞춤 접선 방향(라디안) [t0, t1, …], 접선이 없는 정점은 null. 하나도 없으면 없다 */
@@ -245,13 +245,13 @@ export interface SplineEntity extends EntityBase {
   knots: number[];
   /**
    * 조정점 평탄 좌표 [x0, y0, z0, x1, y1, z1, …](WCS). 조정점 수 = length / 3.
-   * 큰 도면에서 점마다 객체를 두지 않으려고(문서 메모리·GC) 수만 이어 둔다. 풀어 쓰기·되담기는 src/core/flat3.ts
+   * 큰 도면에서 점마다 객체를 두지 않으려고(문서 메모리·GC) 수만 이어 두고, 형식 배열이라 내용이 JS 힙 밖에 놓인다. 풀어 쓰기·되담기는 src/core/flat3.ts
    */
-  controlVerts: number[];
+  controlVerts: Float64Array;
   /** 유리 스플라인의 가중치(없으면 모두 1) */
   weights?: number[];
   /** 맞춤점 평탄 좌표 [x0, y0, z0, …](WCS). 맞춤점 수 = length / 3 */
-  fitVerts: number[];
+  fitVerts: Float64Array;
   startTangent?: Vec3;
   endTangent?: Vec3;
   knotTolerance: number;
@@ -414,8 +414,8 @@ export interface DimensionEntity extends EntityBase {
 export interface LeaderEntity extends EntityBase {
   type: 'LEADER';
   dimStyle: string;
-  /** 정점 평탄 좌표 [x0, y0, z0, …](WCS). 큰 도면의 문서 메모리를 줄이려고 수만 이어 둔다(풀어 쓰기는 src/core/flat3.ts) */
-  verts: number[];
+  /** 정점 평탄 좌표 [x0, y0, z0, …](WCS). 큰 도면의 문서 메모리를 줄이려고 수만 이어 두고 형식 배열로 JS 힙 밖에 둔다(풀어 쓰기는 src/core/flat3.ts) */
+  verts: Float64Array;
   /** 71: 화살표 사용 */
   arrowHead: boolean;
   /** 72: 0 직선, 1 스플라인 */
@@ -777,8 +777,8 @@ export interface TableEntity extends EntityBase {
 
 export interface MeshEntity extends EntityBase {
   type: 'MESH';
-  /** 정점 평탄 좌표 [x0, y0, z0, …](WCS). 큰 도면의 문서 메모리를 줄이려고 수만 이어 둔다(풀어 쓰기는 src/core/meshdata.ts) */
-  verts: number[];
+  /** 정점 평탄 좌표 [x0, y0, z0, …](WCS). 큰 도면의 문서 메모리를 줄이려고 수만 이어 두고 형식 배열로 JS 힙 밖에 둔다(풀어 쓰기는 src/core/meshdata.ts) */
+  verts: Float64Array;
   /** 면들 [면0의 정점 수, 번호…, 면1의 정점 수, 번호…, …] */
   faceData: number[];
   /** 모서리 [a0, b0, a1, b1, …] */

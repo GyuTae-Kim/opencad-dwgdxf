@@ -29,7 +29,7 @@ import type {
   Vec3,
 } from '../../core/model';
 import { tableKey } from '../../core/model';
-import { bulgeVertices, lwVertices, numArray, setLwVertices, vertCount } from '../../core/lwpoly';
+import { bulgeVertices, lwVertices, setLwVertices, vertCount } from '../../core/lwpoly';
 import { polyVertices, setPolyVertices } from '../../core/polyverts';
 import { bulgeArc, fitPointsCurve } from '../../geom/curves';
 import { moveDimensionText } from '../dim/create';
@@ -352,7 +352,7 @@ export function gripMove(e: Entity, id: string, to: Vec2, doc: CadDocument, opts
       const i = Number(id.slice(1));
       const r = cloneEntity(e);
       if (Number.isInteger(i) && i >= 0 && i < leaderCount(e)) {
-        const vs = numArray(r.verts);
+        const vs = r.verts.slice();
         vs[i * 3] = to.x;
         vs[i * 3 + 1] = to.y;
         r.verts = vs;
@@ -409,7 +409,7 @@ export function gripMove(e: Entity, id: string, to: Vec2, doc: CadDocument, opts
       const i = Number(id.slice(1));
       const r = cloneEntity(e);
       if (Number.isInteger(i) && i >= 0 && i < meshVertexCount(e)) {
-        const vs = numArray(r.verts);
+        const vs = r.verts.slice();
         vs[i * 3] = to.x;
         vs[i * 3 + 1] = to.y;
         r.verts = vs;
@@ -643,7 +643,7 @@ function splineGrip(e: SplineEntity, id: string, to: Vec2): SplineEntity {
   const ctrl = splineCtrl(r);
   ctrl[i] = { x: to.x, y: to.y, z: ctrl[i]!.z };
   r.controlVerts = pack3(ctrl);
-  r.fitVerts = [];
+  r.fitVerts = new Float64Array(0);
   r.startTangent = undefined;
   r.endTangent = undefined;
   return r;

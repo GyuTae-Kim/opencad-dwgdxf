@@ -338,7 +338,7 @@ function polylineHead(c: Common): PolylineEntity {
     type: 'POLYLINE',
     kind,
     flags,
-    verts: [],
+    verts: new Float64Array(0),
     bulges: undefined,
     widths: undefined,
     vflags: undefined,
@@ -415,8 +415,8 @@ function spline(c: Common): SplineEntity {
     flags,
     degree: t.int(71, 3),
     knots,
-    controlVerts: controlVerts.slice(),
-    fitVerts: fitVerts.slice(),
+    controlVerts: f64Of(controlVerts),
+    fitVerts: f64Of(fitVerts),
     knotTolerance: t.num(42, 1e-10),
     controlTolerance: t.num(43, 1e-10),
     fitTolerance: t.num(44, 1e-10),
@@ -709,7 +709,7 @@ function leader(c: Common): LeaderEntity {
     ...c.base,
     type: 'LEADER',
     dimStyle: name(t.str(3, 'Standard')),
-    verts: verts.slice(),
+    verts: f64Of(verts),
     arrowHead: t.int(71, 1) === 1,
     pathType: t.int(72),
     creation: t.int(73, 3),
@@ -1681,7 +1681,7 @@ function mesh(c: Common): MeshEntity {
       i--;
     }
   }
-  return { ...c.base, type: 'MESH', verts: verts.slice(), faceData: faceData.slice(), edgePairs: edgePairs.slice(), subdivision } as MeshEntity;
+  return { ...c.base, type: 'MESH', verts: f64Of(verts), faceData: faceData.slice(), edgePairs: edgePairs.slice(), subdivision } as MeshEntity;
 }
 
 function underlay(c: Common, type: UnderlayEntity['type']): UnderlayEntity {

@@ -25,7 +25,7 @@ describe('OVERKILL 옵션', () => {
     const p = lw([[0, 0], [5, 0], [10, 0]]);
     expect(overkill([p]).result.replace?.length).toBe(1);
     expect(overkill([p], { noBreakPolylines: true }).result.replace).toBeUndefined();
-    const w: Entity = { ...lw([[0, 0], [5, 0], [10, 0]]), widths: [1, 2, 2, 3, 0, 0] } as Entity;
+    const w: Entity = { ...lw([[0, 0], [5, 0], [10, 0]]), widths: Float64Array.of(1, 2, 2, 3, 0, 0) } as Entity;
     expect(overkill([w]).result.replace).toBeUndefined();
     expect(overkill([w], { ignoreWidths: true }).result.replace?.length).toBe(1);
   });
