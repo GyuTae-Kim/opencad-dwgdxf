@@ -34,6 +34,8 @@ const isNum = (v: unknown) => typeof v === 'number';
 /** 객체 안의 수가 모두 유한한지(dwgRaw·xdata·raw 태그는 보지 않는다) */
 function allFinite(o: unknown, depth = 0): boolean {
   if (depth > 6 || o === null || typeof o !== 'object') return isNum(o) ? Number.isFinite(o as number) : true;
+  // 평탄 좌표(Float64Array)는 수 배열처럼 본다. 바이트 배열 등 다른 형식 배열은 보지 않는다
+  if (o instanceof Float64Array) return o.every(Number.isFinite);
   if (ArrayBuffer.isView(o)) return true;
   if (Array.isArray(o)) return o.every((x) => allFinite(x, depth + 1));
   for (const [k, v] of Object.entries(o)) {

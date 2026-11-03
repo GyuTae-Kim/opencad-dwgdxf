@@ -11,7 +11,7 @@ import type { App } from './app';
 import { colorText, lineweightText } from './inquiry';
 import { followOps } from './dimassoc';
 import { afterEditSolve } from './constraints-hook';
-import { lwCount, lwVertices, tidyWidths, zeros } from '../core/lwpoly';
+import { lwCount, lwVertices, tidyWidths } from '../core/lwpoly';
 import { rawDimVars } from '../edit/dim';
 import { DIM_VAR_BY_NAME, applyOverrides } from '../edit/annot/override';
 import { dimensionBlockOps } from './dimcmds';
@@ -264,7 +264,7 @@ export function geometryFields(type: string): Field[] {
             const p = e as LwPolylineEntity;
             p.constantWidth = Math.max(0, num(v));
             // 정점 폭도 모두 전역 폭으로(0이면 정점 폭 없음)
-            p.widths = tidyWidths(zeros(lwCount(p) * 2).fill(p.constantWidth));
+            p.widths = tidyWidths(new Float64Array(lwCount(p) * 2).fill(p.constantWidth));
           },
         },
         scalar('고도', 'elevation'),

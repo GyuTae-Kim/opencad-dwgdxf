@@ -1428,7 +1428,7 @@ export class SceneBuilder {
    * 2D 폴리선 공통(경량 폴리선·POLYLINE 2D): xyb = 정점 평탄 좌표 [x, y, 볼록, …](앞 n개),
    * ws = 정점별 [시작 폭, 끝 폭, …](폭 있게 그릴 때만, 아니면 null).
    */
-  private polyCommon(xyb: readonly number[], n: number, ws: readonly number[] | null, closed: boolean, plinegen: boolean, m: Mat, z: number, r: Resolved, ctx: Ctx): void {
+  private polyCommon(xyb: ArrayLike<number>, n: number, ws: readonly number[] | null, closed: boolean, plinegen: boolean, m: Mat, z: number, r: Resolved, ctx: Ctx): void {
     const tol = this.localTol(m);
     if (n === 1) {
       const p = applyXY(m, xyb[0]!, xyb[1]!, z);

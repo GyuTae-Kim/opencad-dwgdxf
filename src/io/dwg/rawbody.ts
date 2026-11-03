@@ -34,7 +34,8 @@ const COMMON = new Set([
 export function fingerprint(o: object): string {
   const s = JSON.stringify(o, function (this: unknown, k: string, v: unknown) {
     if (this === o && COMMON.has(k)) return undefined;
-    if (v instanceof Uint8Array) return Array.from(v);
+    // 바이트 배열과 평탄 좌표(Float64Array)는 수 배열로(형식 배열은 JSON에서 {"0": …} 객체가 된다)
+    if (v instanceof Uint8Array || v instanceof Float64Array) return Array.from(v);
     if (v instanceof Map) return [...v];
     return v;
   });

@@ -93,7 +93,8 @@ function flatten(v: unknown, out: Tok[], top: boolean): void {
     out.push(`b${v.length}`);
     return;
   }
-  if (Array.isArray(v)) {
+  // 평탄 좌표(Float64Array)는 수 배열과 같게
+  if (Array.isArray(v) || v instanceof Float64Array) {
     out.push(`[${v.length}`);
     for (const x of v) flatten(x, out, false);
     return;

@@ -657,7 +657,7 @@ function hatchGrip(e: HatchEntity, id: string, d: Vec2): HatchEntity {
   const P = planProj(e.extrusion, e.elevation);
   const dl = affLin(affInv(P)!, d);
   if (p.polyline) {
-    const vs = numArray(p.polyline.verts);
+    const vs = p.polyline.verts.slice();
     if (Number.isInteger(i) && i >= 0 && i < vertCount(vs)) {
       vs[i * 3] = vs[i * 3]! + dl.x;
       vs[i * 3 + 1] = vs[i * 3 + 1]! + dl.y;

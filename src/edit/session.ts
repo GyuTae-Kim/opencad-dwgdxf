@@ -4,10 +4,9 @@
  *
  * 변경 = 작업(op) 목록. 각 작업은 앞뒤 상태를 모두 담아 되돌리기가 그대로 반대 작업이다.
  */
-import type { BlockDef, BlockRecord, CadDocument, CadObject, Entity, HeaderValue, Layer, Layout, LayoutObject, Linetype, LwPolylineEntity, PolylineEntity, SplineEntity, TableHead, TableRecordBase, TextStyle, DimStyle, UcsRecord, ViewRecord, VPortRecord } from '../core/model';
+import type { BlockDef, BlockRecord, CadDocument, CadObject, Entity, HeaderValue, Layer, Layout, LayoutObject, Linetype, PolylineEntity, SplineEntity, TableHead, TableRecordBase, TextStyle, DimStyle, UcsRecord, ViewRecord, VPortRecord } from '../core/model';
 import { pushAll } from '../core/arrays';
 import { tableKey, normalizeHandle } from '../core/model';
-import { unboxLw } from '../core/lwpoly';
 import { unboxPoly } from '../core/polyverts';
 import { unboxSpline } from '../core/flat3';
 
@@ -564,9 +563,8 @@ export class EditSession {
 /** 객체를 깊이 복사한다(편집 전 상태 보관용) */
 export function cloneEntity<T extends Entity>(e: T): T {
   const c = structuredClone(e);
-  // 구조화 복제는 수 배열의 수를 하나씩 상자에 담는다 — 평탄 좌표는 빈칸 없는 실수 배열로 다시 담는다
-  if (c.type === 'LWPOLYLINE') unboxLw(c, e as LwPolylineEntity);
-  else if (c.type === 'POLYLINE') unboxPoly(c, e as PolylineEntity);
+  // 구조화 복제는 수 배열의 수를 하나씩 상자에 담는다 — 평탄 좌표는 빈칸 없는 실수 배열로 다시 담는다(경량 폴리선은 형식 배열이라 그대로)
+  if (c.type === 'POLYLINE') unboxPoly(c, e as PolylineEntity);
   else if (c.type === 'SPLINE') unboxSpline(c, e as SplineEntity);
   return c;
 }

@@ -317,9 +317,8 @@ function lwpolyline(c: Common): LwPolylineEntity {
   const e = {
     ...c.base,
     type: 'LWPOLYLINE',
-    // push로 키운 배열은 남는 칸이 있다 — 꼭 맞는 사본으로 둔다
-    verts: verts.slice(),
-    widths: widths?.slice(),
+    verts: new Float64Array(verts),
+    widths: widths ? new Float64Array(widths) : undefined,
     closed: (flags & 1) !== 0,
     plinegen: (flags & 128) !== 0,
     constantWidth,
@@ -1205,7 +1204,7 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
           }
           vs.push(q.x, q.y, bulge);
         }
-        path.polyline = { closed, verts: vs.slice() };
+        path.polyline = { closed, verts: new Float64Array(vs) };
       } else {
         let ne = 0;
         if (codes[i] === 93) {

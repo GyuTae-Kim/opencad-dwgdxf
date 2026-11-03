@@ -767,7 +767,7 @@ function blank(d: LispDrawing, type: string): Entity | null {
     case 'ELLIPSE':
       return { ...base, type, center: { ...o }, majorAxis: { x: 1, y: 0, z: 0 }, ratio: 1, startParam: 0, endParam: Math.PI * 2 };
     case 'LWPOLYLINE':
-      return { ...base, type, verts: [], widths: undefined, closed: false, plinegen: false, constantWidth: 0, elevation: 0 };
+      return { ...base, type, verts: new Float64Array(0), widths: undefined, closed: false, plinegen: false, constantWidth: 0, elevation: 0 };
     case 'TEXT':
       return { ...base, type, insert: { ...o }, height: textH, text: '', rotation: 0, widthFactor: 1, oblique: 0, style, generation: 0, halign: 0, valign: 0 };
     case 'ATTRIB':

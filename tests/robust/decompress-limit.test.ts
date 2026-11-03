@@ -54,7 +54,7 @@ function polylines(n: number, verts: number): CadDocument {
   for (let i = 0; i < verts; i++) flat.push(i, i % 2, 0);
   const es = modelOf(doc);
   for (let k = 0; k < n; k++) {
-    const e: LwPolylineEntity = { ...entityDefaults(), type: 'LWPOLYLINE', handle: s.newHandle(), verts: flat, closed: false, plinegen: false, constantWidth: 0, elevation: 0 };
+    const e: LwPolylineEntity = { ...entityDefaults(), type: 'LWPOLYLINE', handle: s.newHandle(), verts: new Float64Array(flat), closed: false, plinegen: false, constantWidth: 0, elevation: 0 };
     es.push(e);
   }
   return doc;
@@ -94,7 +94,7 @@ describe('합법 DWG를 다시 연다', () => {
     const es = modelOf(doc) as LwPolylineEntity[];
     expect(es.length).toBe(60000);
     expect(es.every((e) => e.type === 'LWPOLYLINE' && e.verts.length === 900)).toBe(true);
-    expect(es[59999]!.verts.slice(-3)).toEqual([299, 1, 0]);
+    expect([...es[59999]!.verts.slice(-3)]).toEqual([299, 1, 0]);
     expect(doc.warnings).toEqual([]);
   });
 

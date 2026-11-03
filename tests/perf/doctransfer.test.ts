@@ -173,6 +173,21 @@ describe('doctransfer', () => {
     expect(lines[1]!.color).toBe(lines[0]!.color);
   });
 
+  it('경량 폴리선·해치 폴리선 경계의 정점은 제 버퍼를 가진 Float64Array로 온다', () => {
+    const doc = readCadFile(dxf, 'syn.dxf');
+    const ents = transfer(doc, { minEntities: 1000, batch: 700 }).doc.blocks.get('*MODEL_SPACE')!.entities;
+    const lws = ents.flatMap((e) => (e.type === 'LWPOLYLINE' ? [e.verts] : []));
+    const hs = ents.flatMap((e) => (e.type === 'HATCH' ? e.paths.flatMap((p) => (p.polyline ? [p.polyline.verts] : [])) : []));
+    expect(lws.length).toBeGreaterThan(10);
+    expect(hs.length).toBeGreaterThan(10);
+    for (const v of [...lws, ...hs]) {
+      expect(v).toBeInstanceOf(Float64Array);
+      // 묶음 버퍼를 함께 쓰지 않는다(편집으로 워커에 보낼 때 묶음 전체가 복제되지 않게)
+      expect(v.byteOffset).toBe(0);
+      expect(v.buffer.byteLength).toBe(v.byteLength);
+    }
+  });
+
   it('DWG(원본 본문 바이트 포함)도 같다', () => {
     const src = readCadFile(dxf, 'syn.dxf');
     const dwg = writeDwg(src, { version: 'AC1032' as never }).data;

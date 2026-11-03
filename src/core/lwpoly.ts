@@ -1,7 +1,7 @@
 /**
  * 정점 평탄 좌표 도우미: 경량 폴리선(LWPOLYLINE)과 해치 폴리선 경계(HatchPolyline).
  *
- * 문서는 정점을 객체 배열 대신 수 배열 두 개로 둔다(큰 도면의 문서 메모리·GC를 줄인다).
+ * 문서는 정점을 객체 배열 대신 Float64Array 두 개로 둔다(큰 도면의 문서 메모리·GC를 줄이고, 형식 배열의 내용은 JS 힙 한계 밖에 놓인다).
  * - verts: [x0, y0, 볼록0, x1, y1, 볼록1, …] — 정점 수 = verts.length / 3
  * - widths: [시작 폭0, 끝 폭0, 시작 폭1, 끝 폭1, …] — 모두 +0이면 없다(undefined)
  * 해치 폴리선 경계는 verts만 둔다(폭 없음).
@@ -18,8 +18,8 @@ export interface BulgeVertex {
 
 /** 평탄 정점 자료(객체 리터럴에 펼쳐 넣는다: `{ ...packLw(vs) }` — widths가 없어도 키를 남겨 앞 값을 덮는다) */
 export interface LwPacked {
-  verts: number[];
-  widths: number[] | undefined;
+  verts: Float64Array;
+  widths: Float64Array | undefined;
 }
 
 /** 0으로 채운 수 배열(push로 만들어 빈칸 없는 빠른 배열이 되게) */
@@ -40,14 +40,8 @@ export function numArray(a: readonly number[]): number[] {
   return out.slice();
 }
 
-/** 구조화 복제한 경량 폴리선의 평탄 좌표를 원본에서 다시 복사한다(키 순서는 그대로) */
-export function unboxLw(copy: LwPolylineEntity, src: LwPolylineEntity): void {
-  copy.verts = numArray(src.verts);
-  if (src.widths) copy.widths = numArray(src.widths);
-}
-
 /** 폭 배열이 필요한지(+0이 아닌 값이 하나라도 있으면) */
-function needWidths(w: readonly number[]): boolean {
+function needWidths(w: ArrayLike<number>): boolean {
   for (let i = 0; i < w.length; i++) {
     const v = w[i]!;
     if (v !== 0 || 1 / v < 0) return true;
@@ -56,34 +50,39 @@ function needWidths(w: readonly number[]): boolean {
 }
 
 /** 폭 배열을 정리한다: 모두 +0이면 undefined */
-export function tidyWidths(w: number[] | undefined): number[] | undefined {
+export function tidyWidths(w: Float64Array | undefined): Float64Array | undefined {
   return w && needWidths(w) ? w : undefined;
 }
 
 /** 풀어 쓴 정점들을 평탄 자료로 */
 export function packLw(vs: readonly LwVertex[]): LwPacked {
   const n = vs.length;
-  const verts: number[] = [];
-  let widths: number[] | undefined;
+  const verts = new Float64Array(n * 3);
+  let widths: Float64Array | undefined;
   for (let i = 0; i < n; i++) {
     const v = vs[i]!;
-    verts.push(v.x, v.y, v.bulge);
+    verts[i * 3] = v.x;
+    verts[i * 3 + 1] = v.y;
+    verts[i * 3 + 2] = v.bulge;
     const s = v.startWidth;
     const e = v.endWidth;
-    if (!widths && (s !== 0 || e !== 0 || 1 / s < 0 || 1 / e < 0)) widths = zeros(n * 2);
+    if (!widths && (s !== 0 || e !== 0 || 1 / s < 0 || 1 / e < 0)) widths = new Float64Array(n * 2);
     if (widths) {
       widths[i * 2] = s;
       widths[i * 2 + 1] = e;
     }
   }
-  return { verts: verts.slice(), widths };
+  return { verts, widths };
 }
 
 /** 점들(볼록·폭 0)을 평탄 자료로 */
 export function packLwPoints(pts: readonly Vec2[]): LwPacked {
-  const verts: number[] = [];
-  for (const p of pts) verts.push(p.x, p.y, 0);
-  return { verts: verts.slice(), widths: undefined };
+  const verts = new Float64Array(pts.length * 3);
+  for (let i = 0; i < pts.length; i++) {
+    verts[i * 3] = pts[i]!.x;
+    verts[i * 3 + 1] = pts[i]!.y;
+  }
+  return { verts, widths: undefined };
 }
 
 /** 정점 수 */
@@ -157,7 +156,7 @@ export function setLwVertex(e: LwPolylineEntity, i: number, v: Partial<LwVertex>
     const w = v.endWidth ?? lwEndWidth(e, i);
     if (!e.widths) {
       if (s === 0 && w === 0 && 1 / s > 0 && 1 / w > 0) return;
-      e.widths = zeros(lwCount(e) * 2);
+      e.widths = new Float64Array(lwCount(e) * 2);
     }
     e.widths[i * 2] = s;
     e.widths[i * 2 + 1] = w;
@@ -175,14 +174,19 @@ export function cloneLwArrays<T extends Pick<LwPolylineEntity, 'verts' | 'widths
 // ---------------------------------------------------------------------------
 
 /** 볼록 정점들을 평탄 좌표로(bulge가 없으면 0) */
-export function packBulge(vs: readonly { x: number; y: number; bulge?: number }[]): number[] {
-  const out: number[] = [];
-  for (const v of vs) out.push(v.x, v.y, v.bulge ?? 0);
-  return out.slice();
+export function packBulge(vs: readonly { x: number; y: number; bulge?: number }[]): Float64Array {
+  const out = new Float64Array(vs.length * 3);
+  for (let i = 0; i < vs.length; i++) {
+    const v = vs[i]!;
+    out[i * 3] = v.x;
+    out[i * 3 + 1] = v.y;
+    out[i * 3 + 2] = v.bulge ?? 0;
+  }
+  return out;
 }
 
 /** 평탄 좌표를 볼록 정점들로 풀어 쓴다(새 객체) */
-export function bulgeVertices(verts: readonly number[]): BulgeVertex[] {
+export function bulgeVertices(verts: ArrayLike<number>): BulgeVertex[] {
   const n = (verts.length / 3) | 0;
   const out = new Array<BulgeVertex>(n);
   for (let i = 0; i < n; i++) out[i] = { x: verts[i * 3]!, y: verts[i * 3 + 1]!, bulge: verts[i * 3 + 2]! };
@@ -190,4 +194,4 @@ export function bulgeVertices(verts: readonly number[]): BulgeVertex[] {
 }
 
 /** 평탄 좌표의 정점 수 */
-export const vertCount = (verts: readonly number[]): number => (verts.length / 3) | 0;
+export const vertCount = (verts: ArrayLike<number>): number => (verts.length / 3) | 0;

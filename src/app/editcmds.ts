@@ -16,7 +16,7 @@ import { editEntityText, isTextEditable } from './textedit/entity';
 import { type FormField, form } from './ui/dom';
 import { loadPref, savePref, selectWithKeywords } from './util2-ui';
 import { emptyText, purgeNamedOps, purgeRegAppOps, purgeableNamed, purgeableRegApps, removeWhereOps, zeroLength } from '../edit/purge';
-import { lwCount, tidyWidths, zeros } from '../core/lwpoly';
+import { lwCount, tidyWidths } from '../core/lwpoly';
 import { tableTextStyleRefs } from '../edit/table/entity';
 import { listTableStyles } from '../edit/table/style';
 import { uiText } from './i18n-text';
@@ -85,7 +85,7 @@ export function matchProps(src: Entity, dst: Entity, on: ReadonlySet<string> = m
     c.constantWidth = s.constantWidth;
     // 정점 폭도 모두 전역 폭으로(0이면 정점 폭 없음)
     const w = s.constantWidth as number;
-    c.widths = tidyWidths(zeros(lwCount(dst as LwPolylineEntity) * 2).fill(w));
+    c.widths = tidyWidths(new Float64Array(lwCount(dst as LwPolylineEntity) * 2).fill(w));
   }
   if (on.has('table') && src.type === 'ACAD_TABLE' && dst.type === 'ACAD_TABLE' && s.tableStyle !== undefined) c.tableStyle = s.tableStyle;
   if (on.has('mleader') && src.type === 'MULTILEADER' && dst.type === 'MULTILEADER' && s.styleHandle !== undefined) c.styleHandle = s.styleHandle;

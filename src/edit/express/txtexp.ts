@@ -103,18 +103,22 @@ export function explodeTextGeometry(e: Entity, doc: CadDocument, engine: Engine)
     const q = dedupe(pts, closed, tol);
     if (q.length < 4) return;
     if (closed && q.length < 6) closed = false;
+    const verts = new Float64Array((q.length >> 1) * 3);
+    for (let i = 0; i + 1 < q.length; i += 2) {
+      verts[(i >> 1) * 3] = q[i]!;
+      verts[(i >> 1) * 3 + 1] = q[i + 1]!;
+    }
     const lw: LwPolylineEntity = {
       ...props,
       handle: '',
       type: 'LWPOLYLINE',
-      verts: [],
+      verts,
       widths: undefined,
       closed,
       plinegen: false,
       constantWidth: 0,
       elevation: z,
     };
-    for (let i = 0; i + 1 < q.length; i += 2) lw.verts.push(q[i]!, q[i + 1]!, 0);
     out.push(lw);
   };
   for (const g of lay.glyphs) {

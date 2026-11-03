@@ -174,11 +174,11 @@ export interface LwPolylineEntity extends EntityBase {
   type: 'LWPOLYLINE';
   /**
    * 정점 평탄 좌표 [x0, y0, 볼록0, x1, y1, 볼록1, …](OCS). 정점 수 = length / 3.
-   * 큰 도면에서 정점마다 객체를 두지 않으려고(문서 메모리·GC) 수만 이어 둔다.
+   * 큰 도면에서 정점마다 객체를 두지 않으려고(문서 메모리·GC) 수만 이어 두고, 형식 배열이라 내용이 JS 힙(한계 약 4GB) 밖에 놓인다.
    */
-  verts: number[];
+  verts: Float64Array;
   /** 정점별 폭 [시작0, 끝0, 시작1, 끝1, …]. 모두 +0이면 없다(undefined) */
-  widths?: number[];
+  widths?: Float64Array;
   closed: boolean;
   /** 선종류 생성(PLINEGEN, 70 비트 128) */
   plinegen: boolean;
@@ -574,10 +574,10 @@ export interface HatchSplineEdge {
 
 export type HatchEdge = HatchLineEdge | HatchArcEdge | HatchEllipseEdge | HatchSplineEdge;
 
-/** 해치 폴리선 경계. verts = 정점 평탄 좌표 [x0, y0, 볼록0, x1, y1, 볼록1, …](OCS, 큰 도면의 문서 메모리를 줄이려고 수만 이어 둔다) */
+/** 해치 폴리선 경계. verts = 정점 평탄 좌표 [x0, y0, 볼록0, x1, y1, 볼록1, …](OCS, 큰 도면의 문서 메모리를 줄이려고 수만 이어 두고 형식 배열로 JS 힙 밖에 둔다) */
 export interface HatchPolyline {
   closed: boolean;
-  verts: number[];
+  verts: Float64Array;
 }
 
 export interface HatchPath {
