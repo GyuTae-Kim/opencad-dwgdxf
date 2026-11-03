@@ -1235,8 +1235,6 @@ export class App {
 
   async openFile(name: string, data: ArrayBuffer, input: InputKind = 'local', attempt = beginOpen(input, name.split('.').pop() ?? 'other')): Promise<DocState | null> {
     const size = data.byteLength;
-    // 여는 동안 탭이 꺼지면 다음 시작 때 알린다(openmarker.ts)
-    const opened = markOpening(name, size);
     this.ui.setBusy(`${name} 여는 중…`, 0);
     // 점진 빌드: 장면을 만드는 동안 오는 조각을 먼저 그린다(문서·장면이 다 오면 탭을 연다)
     const preview = new LoadPreview(this.view.renderer);
@@ -1245,6 +1243,8 @@ export class App {
       this.ui.setBusySeeThrough?.(true);
       this.view.setLoadPreview(preview);
     };
+    // 여는 동안 탭이 꺼지면 다음 시작 때 알린다(openmarker.ts). 지우는 것은 아래 finally
+    const opened = markOpening(name, size);
     try {
       const res = await this.engine.open(
         name,
