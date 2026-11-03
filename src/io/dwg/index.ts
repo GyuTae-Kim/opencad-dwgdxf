@@ -1,6 +1,6 @@
 /**
  * DWG 리더·쓰기(ODA 공개 사양 기반의 독자 구현). 브라우저 작업자와 Node에서 모두 돈다.
- * 읽기: AC1012(R13)·AC1014(R14)·AC1015(R2000)·AC1018(R2004)·AC1021(R2007)·AC1024(R2010)·AC1027(R2013)·AC1032(R2018)
+ * 읽기: AC1009(R11·R12, r12.ts)·AC1012(R13)·AC1014(R14)·AC1015(R2000)·AC1018(R2004)·AC1021(R2007)·AC1024(R2010)·AC1027(R2013)·AC1032(R2018)
  * 쓰기: AC1015·AC1018·AC1024·AC1027·AC1032(`writeDwg`, writer/index.ts)
  */
 import type { CadDocument } from '../../core/model';
@@ -11,6 +11,7 @@ import { readR2000Container } from './container/r2000';
 import { readR2004Container } from './container/r2004';
 import { readR2007Container } from './container/r2007';
 import type { DwgSections } from './container/types';
+import { readR12Dwg } from './r12';
 import { R2000, R2007, SUPPORTED_VERSIONS, versionNumber } from './version';
 
 export interface DwgReadOptions {
@@ -36,9 +37,12 @@ export function readDwg(data: Uint8Array, options: DwgReadOptions = {}): CadDocu
   const v = dwgVersion(data);
   if (!v) throw new CadReadError('file.unrecognized');
   const ver = versionNumber(v);
-  if (!SUPPORTED_VERSIONS.includes(ver)) throw new CadReadError('dwg.unsupported_version', { version: v });
+  const r12 = v === 'AC1009';
+  if (!r12 && !SUPPORTED_VERSIONS.includes(ver)) throw new CadReadError('dwg.unsupported_version', { version: v });
   let sec: DwgSections;
   try {
+    // R12(R11과 같은 AC1009)는 바이트 단위 고정 배치라 따로 읽는다
+    if (r12) return readR12Dwg(data, options);
     if (ver <= R2000) sec = readR2000Container(data, ver);
     else if (ver === R2007) sec = readR2007Container(data, ver);
     else sec = readR2004Container(data, ver);

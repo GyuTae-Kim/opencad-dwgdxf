@@ -15,7 +15,8 @@ export interface DxfRecord {
   values: TagValue[];
 }
 
-interface TagReader {
+/** 태그를 하나씩 내는 읽개. DXF 파일 말고도(R12 DWG) 같은 레코드 흐름을 만들 수 있다 */
+export interface TagReader {
   code: number;
   value: TagValue;
   next(): boolean;

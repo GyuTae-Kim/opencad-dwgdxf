@@ -18,7 +18,7 @@ import { CadReadError } from '../../core/errors';
 import { codepageToEncoding } from '../../core/codepage';
 import { finalizeDocument } from '../../core/finalize';
 import { PolyAccum } from '../../core/polyverts';
-import { type DxfRecord, type RecordStream, isStringCode, openDxf } from './records';
+import { type DxfRecord, type DxfSource, type RecordStream, isStringCode, openDxf } from './records';
 import { type EntityContext, parseEntity, parseVertex } from './entities';
 import { createTableHandles, readTableEntry, resolveDimStyleHandles } from './tables';
 import { parseObject } from './objects';
@@ -150,7 +150,11 @@ function takeEntity(rec: DxfRecord, stream: RecordStream, ctx: EntityContext): E
 
 export function readDxf(data: Uint8Array, options: DxfReadOptions = {}): CadDocument {
   if (data.length === 0) throw new CadReadError('file.empty');
-  const src = openDxf(data, codepageToEncoding, { legacyText: options.legacyText });
+  return readDxfSource(openDxf(data, codepageToEncoding, { legacyText: options.legacyText }), options);
+}
+
+/** 레코드 흐름에서 문서를 만든다(DXF 파일, 또는 R12 DWG를 같은 태그로 바꾼 흐름) */
+export function readDxfSource(src: Pick<DxfSource, 'stream' | 'version' | 'codepage' | 'binary'>, options: DxfReadOptions = {}): CadDocument {
   const stream = src.stream;
   const doc = createDocument('dxf');
   doc.version = src.version;

@@ -52,6 +52,7 @@ import { rawColorToCad } from '../../core/color';
 import type { DxfRecord, TagValue } from './records';
 import { DEG, Tags, handle, hexToBytes, int, name, num, parseColor, parseDimOverrides, parseXData, str } from './tagutil';
 import { parseArcAlignedText } from './arctext';
+import { applyMviewXData } from '../mview';
 
 export interface EntityContext {
   version: string;
@@ -1515,6 +1516,8 @@ function viewport(c: Common): ViewportEntity {
     e.ucsXAxis = t.point(111);
     e.ucsYAxis = t.point(112);
   }
+  // R12는 보기 정보(12·45 등)를 쓰지 않고 ACAD 확장 자료 "MVIEW"에 둔다. 동결 도면층은 이름이다
+  if (!t.has(12) && !t.has(45)) applyMviewXData(e, (v) => v);
   return e;
 }
 

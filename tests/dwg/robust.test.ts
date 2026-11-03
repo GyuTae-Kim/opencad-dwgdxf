@@ -24,7 +24,11 @@ describe('DWG 입력 판별', () => {
     r12.set(new TextEncoder().encode('AC1009'));
     expect(isDwg(r12)).toBe(true);
     expect(dwgVersion(r12)).toBe('AC1009');
-    expect(code(() => readDwg(r12))).toBe('dwg.unsupported_version');
+    // R12는 읽는다. 머리가 짧으면 손상이다
+    expect(code(() => readDwg(r12))).toBe('dwg.corrupt');
+    const r10 = new Uint8Array(256);
+    r10.set(new TextEncoder().encode('AC1006'));
+    expect(code(() => readDwg(r10))).toBe('dwg.unsupported_version');
   });
 
   it('머리만 있는 파일은 손상으로 끝난다', () => {
