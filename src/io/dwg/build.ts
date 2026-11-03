@@ -662,9 +662,13 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
     const e = p.entity;
     if (!e) return;
     if (e.type === 'INSERT') {
+      // 같은 속성을 되풀이해 가리켜도 한 번만(한 객체가 속성 목록에 두 번 들면 고치기·저장이 같은 핸들을 두 번 다룬다)
+      const seen = new Set<number>();
       for (const ch of childList(p)) {
         const c = parsed.get(ch);
         used.add(ch);
+        if (seen.has(ch)) continue;
+        seen.add(ch);
         if (c && c.entity && c.kind === 'attrib') e.attribs.push(c.entity as AttribEntity);
       }
     } else if (e.type === 'POLYLINE') {
@@ -683,6 +687,10 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
 
   const blockOrder = live(refs.blockControl, blockHeaders);
   let vpCounter = 0;
+  // 블록에 넣은 도형. 블록 목록이 같은 도형을 되풀이해 가리키면(같은 블록이든 다른 블록이든) 처음 한 번만 넣는다:
+  // 되풀이마다 폴리선 정점을 다시 모으고 같은 객체를 다시 그려 되풀이 수 × 정점 수였다(DWG 36KB가 선분 400만 개)
+  const placed = new Set<number>();
+  let repeated = 0;
   for (const bh of blockOrder) {
     const rec = blockHeaders.get(bh)!;
     const blk = parsed.get(rec.blockEntity);
@@ -726,6 +734,11 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
       if (!p) continue;
       used.add(h);
       if (p.kind !== 'entity' || !p.entity) continue;
+      if (placed.has(h)) {
+        repeated++;
+        continue;
+      }
+      placed.add(h);
       attach(p);
       if (p.entity.type === 'VIEWPORT') {
         // 배치마다 1부터(1 = 용지 전체 뷰포트). 상태(68)도 같은 쌓임 순서로 둔다
@@ -748,6 +761,8 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
     applyRecordExtras(br, rec, names);
     doc.blockRecords.set(tableKey(rec.name), br);
   }
+
+  if (repeated) warn(warnings, 'dwg.repeated_entities', `블록 목록이 이미 넣은 도형을 다시 가리킨 ${repeated}곳은 건너뛰었습니다.`, { count: repeated });
 
   // 블록 목록에 들지 않은 도형: 소유자 블록이 있으면 뒤에 붙인다
   let orphans = 0;
