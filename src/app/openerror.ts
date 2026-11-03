@@ -1,6 +1,6 @@
 /**
  * 도면을 열지 못했을 때의 안내(순수 함수): 무엇이 문제인지(message)와 무엇을 하면 되는지(hint).
- * code는 해석 엔진의 오류 코드(core/errors.ts의 CadErrorCode)나 앱이 붙인 코드(memory·read·worker·worker_load·internal)다.
+ * code는 해석 엔진의 오류 코드(core/errors.ts의 CadErrorCode)나 앱이 붙인 코드(memory·read·worker·worker_load·interrupted·internal)다.
  * 문구는 사전(site/locales)에 그대로 있는 문장이어야 다른 언어에서도 옮겨진다 — 그래서 이름·문제·할 일을 " — "와 줄바꿈으로 나눠 잇는다.
  */
 import { errorMessage, type CadErrorCode } from '../core/errors';
@@ -24,6 +24,7 @@ const HINTS: Record<string, string> = {
   worker: '파일이 너무 크거나 기기 메모리가 모자랄 수 있습니다. 다른 탭을 닫고 다시 열거나 컴퓨터에서 여십시오.',
   memory: '파일이 너무 크거나 기기 메모리가 모자랄 수 있습니다. 다른 탭을 닫고 다시 열거나 컴퓨터에서 여십시오.',
   worker_load: '인터넷 연결을 확인한 뒤 페이지를 새로 고치십시오.',
+  interrupted: '메모리가 모자라 탭이 꺼졌을 수 있습니다. 다른 탭과 프로그램을 닫고 다시 열거나, 메모리가 더 많은 컴퓨터에서 여십시오.',
   read: '파일을 다른 곳으로 옮기거나 지우지 않았는지 확인한 뒤 다시 고르십시오.',
   internal: '원래 프로그램에서 DXF로 다시 저장해 여십시오. 그래도 열리지 않으면 GitHub 이슈로 알려 주십시오.',
 };
@@ -34,6 +35,8 @@ export function openErrorInfo(code: string, detail = ''): OpenErrorInfo {
   if (code === 'worker') return { code, message: '도면을 읽던 작업이 멈췄습니다.', hint: HINTS.worker! };
   if (code === 'read') return { code, message: '파일을 읽지 못했습니다.', hint: HINTS.read! };
   if (code === 'worker_load') return { code, message: '도면 처리 모듈을 불러오지 못했습니다.', hint: HINTS.worker_load! };
+  // 여는 동안 페이지가 닫혔다(openmarker.ts — 탭이 메모리 부족으로 꺼졌거나 사용자가 닫았다)
+  if (code === 'interrupted') return { code, message: '지난번에 이 도면을 여는 동안 페이지가 닫혔습니다.', hint: HINTS.interrupted! };
   // 메모리 할당 실패(아주 큰 파일)는 엔진 안에서 잡혀 일반 오류로 온다
   if (code === 'memory' || /allocation failed|out of memory|invalid array length|maximum call stack/i.test(detail)) return { code: 'memory', message: '메모리가 모자라 도면을 열지 못했습니다.', hint: HINTS.memory! };
   return { code: 'internal', message: detail ? `파일을 열지 못했습니다: ${detail}` : '파일을 열지 못했습니다.', hint: HINTS.internal! };

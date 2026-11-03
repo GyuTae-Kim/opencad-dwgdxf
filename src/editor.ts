@@ -72,7 +72,9 @@ import { registerLispCommands } from './app/lisp';
 import { registerManageCommands } from './app/manage';
 import { handleLaunchQuery, installPwa } from './app/pwa-app';
 import { Shell } from './app/ui/shell';
-import { dialog, h, toast } from './app/ui/dom';
+import { dialog, formatBytes, h, toast } from './app/ui/dom';
+import { openErrorInfo } from './app/openerror';
+import { takeInterruptedOpens } from './app/openmarker';
 import { installViewLinks } from './app/viewlink-app';
 import { baseName, download, exportRaster, exportSvg } from './app/export';
 
@@ -299,6 +301,13 @@ export function startEditor(root: HTMLElement): EditorActions {
   });
 
   app.activate(null);
+
+  // 지난번 열기가 끝나지 못했으면(여는 동안 탭이 꺼졌거나 닫혔다) 시작 화면에 알린다. 첫 화면을 그린 뒤에 띄워야 안내 상자로 스크롤하는 위치가 맞는다
+  const interrupted = takeInterruptedOpens();
+  if (interrupted.length)
+    setTimeout(() => {
+      for (const m of interrupted) app.reportOpenError(`${m.name} (${formatBytes(m.size)})`, openErrorInfo('interrupted'));
+    }, 0);
 
   // 홈 화면 앱: 오프라인(서비스 워커)과 새 판 알림, 데스크톱에서 연결 프로그램으로 연 파일, 공유 받은 도면(?recent=)
   installPwa(app, shell);
