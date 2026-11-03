@@ -2,15 +2,15 @@
  * 절단·경계 모서리: 어떤 객체든 평면도 조각 목록으로(블록 참조·치수는 분해한 그림, 지시선·여러 줄·면은 선분).
  * EDGEMODE = 1이면 모서리를 자연스럽게 연장한다(선 → 무한선, 호 → 원, 타원호 → 타원, 열린 폴리선 → 끝 세그먼트의 연장).
  */
-import { minsertGrid } from '../../core/limits';
+import { type ExpandBudget, expandBudget, minsertGrid, spendExpand } from '../../core/limits';
 import { pushAll } from '../../core/arrays';
-import type { BlockDef, CadDocument, Entity, Vec2 } from '../../core/model';
+import type { BlockDef, CadDocument, Entity, InsertEntity, Vec2 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { type ArcPiece, type EllPiece, type LinePiece, type Piece, pathBox, pieceAt, pieceBox, pieceTangent } from './curve';
 import { type Affine, type Box, TAU, add, affApply, affMul, affRotate, affScale, affTranslate, boxValid, emptyBox, growBox, sub } from './math';
 import { entityPath } from './path';
 import { planProj } from './ocs';
-import { explodeEntity } from './explode';
+import { explodeCost, explodeEntity } from './explode';
 import { textOutline } from './textjust';
 import { leaderVertices } from '../../core/flat3';
 
@@ -25,8 +25,11 @@ function segs(points: Vec2[], closed: boolean): LinePiece[] {
   return out;
 }
 
-/** 객체의 모서리 조각(평면도 WCS) */
-export function edgePieces(e: Entity, doc?: CadDocument, depth = 0): Piece[] {
+/**
+ * 객체의 모서리 조각(평면도 WCS). 블록 참조·치수는 펼침 몫(budget — 부를 때마다 새로, 기본 + 도면 객체 수) 안에서만 분해하고,
+ * 몫을 넘는 참조는 모서리를 내지 않는다(budget.cut)
+ */
+export function edgePieces(e: Entity, doc?: CadDocument, depth = 0, budget?: ExpandBudget): Piece[] {
   const path = entityPath(e);
   if (path) return path.pieces.map((p) => ({ ...p }));
   switch (e.type) {
@@ -35,9 +38,11 @@ export function edgePieces(e: Entity, doc?: CadDocument, depth = 0): Piece[] {
     case 'ACAD_TABLE':
     case 'MULTILEADER': {
       if (!doc || depth > 4) return [];
+      const bud = budget ?? expandBudget(doc.entityIndex.size);
+      if (!spendExpand(bud, explodeCost(e, doc))) return [];
       const r = explodeEntity(e, doc, true);
       const out: Piece[] = [];
-      for (const c of r.add ?? []) if (c.type !== 'TEXT' && c.type !== 'MTEXT' && c.type !== 'ATTDEF' && c.type !== 'POINT') pushAll(out, edgePieces(c, doc, depth + 1));
+      for (const c of r.add ?? []) if (c.type !== 'TEXT' && c.type !== 'MTEXT' && c.type !== 'ATTDEF' && c.type !== 'POINT') pushAll(out, edgePieces(c, doc, depth + 1, bud));
       return out;
     }
     case 'LEADER':
@@ -192,7 +197,27 @@ function blockEdgeBox(b: BlockDef, doc: CadDocument, depth: number): Box | null 
   return out;
 }
 
-function mapBox(b: Box, mats: Affine[]): Box {
+/** 블록 좌표 → 평면도 변환: 다중 삽입은 분해가 펼치는 칸(minsertGrid)의 네 모서리 칸. 블록 상자를 옮겨 참조 범위를 구할 때 쓴다 */
+export function insertCornerMats(e: InsertEntity, b: BlockDef): Affine[] {
+  const P = planProj(e.extrusion, e.insert.z);
+  const { rows, cols } = minsertGrid(e);
+  const mats: Affine[] = [];
+  for (const r of rows > 1 ? [0, rows - 1] : [0])
+    for (const c of cols > 1 ? [0, cols - 1] : [0])
+      mats.push(
+        affMul(
+          P,
+          affMul(
+            affTranslate(e.insert.x, e.insert.y),
+            affMul(affRotate(e.rotation), affMul(affTranslate(c * e.columnSpacing, r * e.rowSpacing), affMul(affScale(e.scale.x || 1, e.scale.y || 1), affTranslate(-b.basePoint.x, -b.basePoint.y)))),
+          ),
+        ),
+      );
+  return mats;
+}
+
+/** 상자를 변환들로 옮긴 범위 */
+export function mapBox(b: Box, mats: Affine[]): Box {
   const out = emptyBox();
   for (const m of mats)
     for (const [x, y] of [
@@ -225,22 +250,7 @@ export function edgeBox(e: Entity, doc?: CadDocument, depth = 0): Box | 'inf' | 
       if (ip && (ip.x || ip.y)) A = affMul(affTranslate(ip.x, ip.y), A);
       return mapBox(bb, [A]);
     }
-    const P = planProj(e.extrusion, e.insert.z);
-    // 모서리 조각(분해)이 펼치는 칸과 같은 범위
-    const { rows, cols } = minsertGrid(e);
-    const mats: Affine[] = [];
-    for (const r of rows > 1 ? [0, rows - 1] : [0])
-      for (const c of cols > 1 ? [0, cols - 1] : [0])
-        mats.push(
-          affMul(
-            P,
-            affMul(
-              affTranslate(e.insert.x, e.insert.y),
-              affMul(affRotate(e.rotation), affMul(affTranslate(c * e.columnSpacing, r * e.rowSpacing), affMul(affScale(e.scale.x || 1, e.scale.y || 1), affTranslate(-b.basePoint.x, -b.basePoint.y)))),
-            ),
-          ),
-        );
-    return mapBox(bb, mats);
+    return mapBox(bb, insertCornerMats(e, b));
   }
   // 문자: 글자를 배치하지 않고 넉넉한 범위로 거른다(정확한 상자는 edgeSet이 만든다)
   if (e.type === 'TEXT' || e.type === 'ATTRIB' || e.type === 'ATTDEF' || e.type === 'MTEXT') {

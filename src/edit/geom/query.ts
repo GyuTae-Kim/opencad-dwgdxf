@@ -2,14 +2,15 @@
  * 조회 도우미: 교점, 가장 가까운 점, 범위, 방향 바꾸기, 복사본 만들기.
  * 모두 WCS 평면도(XY) 기준이다.
  */
-import type { CadDocument, Entity, PolyVertex, SplineEntity, Vec2, Vec3 } from '../../core/model';
+import type { AttribEntity, BlockDef, CadDocument, Entity, InsertEntity, PolyVertex, SplineEntity, Vec2, Vec3 } from '../../core/model';
+import { type ExpandBudget, expandBudget, spendExpand } from '../../core/limits';
 import { tableKey } from '../../core/model';
 import { lwVertices, setLwVertices } from '../../core/lwpoly';
 import { polyCount, polyVertices, polyX, polyY, setPolyVertices } from '../../core/polyverts';
 import { pathLoop } from '../../render/hatch';
 import { type Piece, pathBox, pieceBox, pieceNearest } from './curve';
-import { edgePieces } from './edges';
-import { explodeEntity } from './explode';
+import { edgePieces, insertCornerMats, mapBox } from './edges';
+import { explodeCost, explodeEntity } from './explode';
 import { intersectAll, intersectPieces } from './intersect';
 import { type Affine, type Box, affApply, boxValid, dist, emptyBox, growBox } from './math';
 import { cloneEntity, entityPath, freshEntity } from './path';
@@ -113,8 +114,12 @@ export function insertionPoint(e: Entity): Vec2 | null {
 // 범위
 // ---------------------------------------------------------------------------
 
-/** 평면도 범위(WCS). 무한선은 기준점, 계산할 수 없으면 null */
-export function entityBounds(e: Entity, doc: CadDocument, depth = 0): Box | null {
+/**
+ * 평면도 범위(WCS). 무한선은 기준점, 계산할 수 없으면 null.
+ * 블록 참조·치수 등은 펼침 몫(budget — 부를 때마다 새로, 기본 + 도면 객체 수) 안에서 분해한 그림으로 정확히 구하고,
+ * 몫을 넘는 블록 참조는 블록 내용의 상자를 참조 변환으로 옮긴 범위로 구한다(회전하면 넓어질 뿐 빠지는 객체는 없다)
+ */
+export function entityBounds(e: Entity, doc: CadDocument, depth = 0, budget: ExpandBudget = expandBudget(doc.entityIndex.size)): Box | null {
   const b = emptyBox();
   const path = entityPath(e);
   if (path) {
@@ -128,7 +133,7 @@ export function entityBounds(e: Entity, doc: CadDocument, depth = 0): Box | null
   }
   const union = (list: readonly Entity[]) => {
     for (const c of list) {
-      const cb = entityBounds(c, doc, depth + 1);
+      const cb = entityBounds(c, doc, depth + 1, budget);
       if (cb) {
         growBox(b, cb.minX, cb.minY);
         growBox(b, cb.maxX, cb.maxY);
@@ -188,11 +193,18 @@ export function entityBounds(e: Entity, doc: CadDocument, depth = 0): Box | null
     case 'LEADER':
     case 'TOLERANCE':
     case 'MLINE': {
-      if (depth > 8) break;
+      // 깊이 한도나 펼침 몫을 넘으면 분해하지 않는다(블록 참조는 블록 상자로)
+      if (depth > 8 || !spendExpand(budget, explodeCost(e, doc))) {
+        if (e.type === 'INSERT') insertBoxBounds(b, e, doc, depth, budget);
+        else if (e.type === 'DIMENSION') for (const p of [e.defPoint, e.defPoint2, e.defPoint3, e.defPoint4, e.textMid]) growBox(b, p.x, p.y);
+        else pieces(edgePieces(e, doc));
+        break;
+      }
       const r = explodeEntity(e, doc, true);
       if (r.add?.length) union(r.add);
       else if (e.type === 'DIMENSION') for (const p of [e.defPoint, e.defPoint2, e.defPoint3, e.defPoint4, e.textMid]) growBox(b, p.x, p.y);
-      else if (e.type === 'INSERT') growQ(b, insertionPoint(e)!);
+      // 분해를 거부하는 참조(분해 허용 안 함·외부 참조)도 블록 상자로(전에는 삽입점뿐이었다)
+      else if (e.type === 'INSERT') insertBoxBounds(b, e, doc, depth, budget);
       else pieces(edgePieces(e, doc));
       break;
     }
@@ -246,6 +258,54 @@ export function entityBounds(e: Entity, doc: CadDocument, depth = 0): Box | null
   return boxValid(b) ? b : null;
 }
 
+/** 펼침 몫마다 기억하는 블록 내용의 상자(블록 좌표) — 같은 부름 안에서 블록마다 한 번만 구한다 */
+const blockBoxes = new WeakMap<ExpandBudget, Map<BlockDef, Box | null>>();
+
+/** 블록 내용의 상자(블록 좌표): 안의 블록 참조는 그 블록의 상자를 옮겨 넣으므로 블록 수만큼만 돈다. 분해처럼 상수가 아닌 속성 정의와 동적 블록에서 숨은 객체는 뺀다 */
+function blockBox(blk: BlockDef, doc: CadDocument, depth: number, budget: ExpandBudget): Box | null {
+  let memo = blockBoxes.get(budget);
+  if (!memo) blockBoxes.set(budget, (memo = new Map()));
+  if (memo.has(blk)) return memo.get(blk)!;
+  // 자기를 넣은 블록은 빈 상자로 끊는다
+  memo.set(blk, null);
+  const b = emptyBox();
+  const dynRep = /^\*U/i.test(blk.name);
+  for (const c of blk.entities) {
+    if ((c.type === 'ATTDEF' && !((c as AttribEntity).attFlags & 2)) || (dynRep && c.invisible)) continue;
+    let cb: Box | null;
+    if (c.type === 'INSERT') {
+      cb = emptyBox();
+      insertBoxBounds(cb, c, doc, depth + 1, budget);
+    } else cb = entityBounds(c, doc, depth + 1, budget);
+    if (cb && boxValid(cb)) {
+      growBox(b, cb.minX, cb.minY);
+      growBox(b, cb.maxX, cb.maxY);
+    }
+  }
+  const out = boxValid(b) ? b : null;
+  memo.set(blk, out);
+  return out;
+}
+
+/** 펼침 몫을 넘는 블록 참조의 범위: 블록 상자를 참조 변환(다중 삽입은 모서리 칸들)으로 옮긴 것과 보이는 속성 */
+function insertBoxBounds(out: Box, e: InsertEntity, doc: CadDocument, depth: number, budget: ExpandBudget): void {
+  const blk = doc.blocks.get(tableKey(e.block));
+  const bb = blk && depth < 64 ? blockBox(blk, doc, depth, budget) : null;
+  if (blk && bb) {
+    const m = mapBox(bb, insertCornerMats(e, blk));
+    growBox(out, m.minX, m.minY);
+    growBox(out, m.maxX, m.maxY);
+  } else growQ(out, insertionPoint(e)!);
+  for (const a of e.attribs) {
+    if (a.attFlags & 1) continue;
+    const ab = entityBounds(a, doc, depth + 1, budget);
+    if (ab) {
+      growBox(out, ab.minX, ab.minY);
+      growBox(out, ab.maxX, ab.maxY);
+    }
+  }
+}
+
 function corners(l: { minX: number; minY: number; maxX: number; maxY: number }): [number, number][] {
   return [
     [l.minX, l.minY],
@@ -262,8 +322,10 @@ function growQ(b: Box, q: Vec2): void {
 /** 여러 객체의 범위 */
 export function boundsOf(list: readonly Entity[], doc: CadDocument): Box | null {
   const b = emptyBox();
+  // 목록 전체가 펼침 몫 하나를 함께 쓴다(몫을 넘은 뒤의 블록 참조는 블록 상자로)
+  const budget = expandBudget(doc.entityIndex.size);
   for (const e of list) {
-    const r = entityBounds(e, doc);
+    const r = entityBounds(e, doc, 0, budget);
     if (r) {
       growBox(b, r.minX, r.minY);
       growBox(b, r.maxX, r.maxY);

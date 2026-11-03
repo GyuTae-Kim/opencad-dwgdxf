@@ -2,7 +2,7 @@
  * 경계 찾기용 2D 곡선: 선분, 원뿔 곡선(원·호·타원), NURBS.
  * 객체(블록 참조 안 객체 포함)를 월드 XY 평면 곡선으로 바꾸고, 점·미분 계산과 꺾은선 나누기, 스플라인 자르기를 둔다.
  */
-import { SPLINE_MAX_DEGREE, minsertGrid } from '../../core/limits';
+import { type ExpandBudget, SPLINE_MAX_DEGREE, expandBudget, minsertGrid, spendExpand } from '../../core/limits';
 import type { CadDocument, Entity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { type Mat, identity, multiply, ocsMatrix, rotationZ, scaling, translation } from '../../geom/matrix';
@@ -299,6 +299,8 @@ interface Ctx {
   doc: CadDocument;
   out: Curve[];
   xlines: XLineSpec[];
+  /** 블록 펼침 몫(부를 때마다 새로, 기본 + 도면 객체 수) */
+  budget: ExpandBudget;
 }
 
 const MAX_DEPTH = 16;
@@ -487,6 +489,7 @@ function addEntity(ctx: Ctx, e: Entity, src: string, m: Mat, depth: number, chai
       if (!blk) return;
       const om = withExt(m, e.extrusion);
       const { rows, cols } = minsertGrid(e);
+      if (!spendExpand(ctx.budget, rows * cols * blk.entities.length)) return;
       const sx = e.scale.x || 1;
       const sy = e.scale.y || 1;
       const sz = e.scale.z || 1;
@@ -517,15 +520,15 @@ function clampedKnotsLocal(n: number, p: number): number[] {
   return U;
 }
 
-/** 후보 객체들 → 곡선(무한선은 따로) */
-export function entitiesToCurves(doc: CadDocument, list: readonly Entity[]): { curves: Curve[]; xlines: XLineSpec[] } {
-  const ctx: Ctx = { doc, out: [], xlines: [] };
+/** 후보 객체들 → 곡선(무한선은 따로). 블록 참조는 펼침 몫 안에서만 펼치고, 몫을 넘어 펼치지 않은 참조가 있으면 cut */
+export function entitiesToCurves(doc: CadDocument, list: readonly Entity[]): { curves: Curve[]; xlines: XLineSpec[]; cut: boolean } {
+  const ctx: Ctx = { doc, out: [], xlines: [], budget: expandBudget(doc.entityIndex.size) };
   const m = identity();
   for (const e of list) {
     if (e.type === 'HATCH' || e.type === 'MPOLYGON') continue;
     addEntity(ctx, e, e.handle, m, 0, []);
   }
-  return { curves: ctx.out, xlines: ctx.xlines };
+  return { curves: ctx.out, xlines: ctx.xlines, cut: ctx.budget.cut };
 }
 
 /** 무한선·반직선을 상자에 맞춰 선분으로 */

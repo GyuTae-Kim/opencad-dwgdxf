@@ -7,6 +7,7 @@
  * 원을 그리는 명령(CIRCLE 3P·Ttr·TTT)은 선·폴리선 직선 구간·구성선·광선에도 받는다(SnapContext.deferTanLines).
  */
 import type { CadDocument, Entity } from '../core/model';
+import { type ExpandBudget, SNAP_EXPAND_LIMIT, expandBudget, spendExpand } from '../core/limits';
 import { tableKey } from '../core/model';
 import { type Mat, apply, applyXY, identity, multiply, rotationZ, scaling, translation, withOcs } from '../geom/matrix';
 import { bulgeArc, ccwSweep, nurbsPoints, sharedFitCurve } from '../geom/curves';
@@ -122,8 +123,8 @@ function polySnaps(m: Mat, vs: { x: number; y: number; bulge: number }[], closed
   }
 }
 
-/** 객체의 정의 스냅점(월드 좌표). 블록 참조는 안쪽 객체까지(깊이 제한) */
-export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[], depth = 0): void {
+/** 객체의 정의 스냅점(월드 좌표). 블록 참조는 안쪽 객체까지(깊이 제한, 펼친 객체 수는 펼침 몫 안 — 몫을 넘는 참조는 삽입점만) */
+export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[], depth = 0, budget: ExpandBudget = expandBudget(0, SNAP_EXPAND_LIMIT)): void {
   switch (e.type) {
     case 'LINE': {
       const a = apply(m, e.start.x, e.start.y, e.start.z);
@@ -194,13 +195,13 @@ export function entitySnaps(doc: CadDocument, e: Entity, m: Mat, out: SnapPoint[
     case 'INSERT': {
       const om = withOcs(m, e.extrusion);
       out.push({ ...apply(om, e.insert.x, e.insert.y, e.insert.z), kind: 'ins' });
-      for (const a of e.attribs) entitySnaps(doc, a, m, out, depth + 1);
+      for (const a of e.attribs) entitySnaps(doc, a, m, out, depth + 1, budget);
       if (depth >= 3) return;
       const b = doc.blocks.get(tableKey(e.block));
-      if (!b || b.entities.length > 400) return;
+      if (!b || b.entities.length > 400 || !spendExpand(budget, b.entities.length)) return;
       const local = multiply(translation(e.insert.x, e.insert.y, e.insert.z), multiply(rotationZ(e.rotation), scaling(e.scale.x || 1, e.scale.y || 1, e.scale.z || 1)));
       const bm = multiply(om, multiply(local, translation(-b.basePoint.x, -b.basePoint.y, -b.basePoint.z)));
-      for (const c of b.entities) if (c.type !== 'ATTDEF') entitySnaps(doc, c, bm, out, depth + 1);
+      for (const c of b.entities) if (c.type !== 'ATTDEF') entitySnaps(doc, c, bm, out, depth + 1, budget);
       return;
     }
     case 'DIMENSION':
@@ -703,11 +704,13 @@ export function findSnaps(doc: CadDocument, picker: Picker, p: Pt, aperture: num
     return s;
   };
   const m = identity();
+  // 후보들이 펼침 몫 하나를 함께 쓴다(커서를 움직일 때마다 돈다)
+  const budget = expandBudget(0, SNAP_EXPAND_LIMIT);
   for (const c of cands.slice(0, 200)) {
     const e = picker.entity(c.handle);
     if (!e) continue;
     const pts: SnapPoint[] = [];
-    entitySnaps(doc, e, m, pts);
+    entitySnaps(doc, e, m, pts, 0, budget);
     for (const s of pts) consider({ ...s, handle: c.handle });
     // 테두리 위에 커서가 있으면 중심·기하학적 중심(AutoCAD와 같다)
     const round = e.type === 'CIRCLE' || e.type === 'ARC' || e.type === 'ELLIPSE';
