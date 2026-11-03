@@ -124,6 +124,15 @@ describe('무늬 자르기(변을 선 번호 순으로 쓸기)', () => {
         expect(got).toEqual(naiveSegments(lines, loops));
       }
   });
+  it('변이 적고 선이 많아도(선 번호 칸이 변보다 훨씬 많아 형식 배열로 정렬) 예전 결과와 같다', () => {
+    for (const lines of PATTERNS) {
+      const dense = lines.map((l) => ({ ...l, offset: { x: l.offset.x / 200, y: l.offset.y / 200 } }));
+      const loops = [[0, 0, 50, 0, 50, 40, 0, 40]];
+      const got = patternSegments(dense, loops)!;
+      expect(got.length).toBeGreaterThan(1000);
+      expect(got).toEqual(naiveSegments(dense, loops));
+    }
+  });
   it('곡선 경계(4,000변)의 촘촘한 해치도 빠르다(예전 3초 남짓)', () => {
     const doc = createNewDocument('metric');
     const h = createHatch(doc, [{ flags: 1, polyline: { closed: true, verts: circle(5000, 5000, 5000, 4000).flatMap((v, i) => (i % 2 ? [v, 0] : [v])) } } as never], { pattern: 'ANSI31', scale: 0.02 });

@@ -30,7 +30,7 @@ import type {
 } from '../core/model';
 import { BYBLOCK, BYLAYER, normalizeHandle, tableKey } from '../core/model';
 import { lwCount } from '../core/lwpoly';
-import { SCENE_BLOCK_TAIL, SPLINE_MAX_DEGREE, blockWorkLimit, minsertGrid, sceneWorkLimit } from '../core/limits';
+import { SCENE_BLOCK_TAIL, SPLINE_MAX_DEGREE, blockWorkLimit, hatchFillWorkLimit, minsertGrid, sceneWorkLimit } from '../core/limits';
 import { DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../core/dimvars';
 import { ACI_RGB } from '../core/color';
 import { type FrameKind, frameSetting } from '../core/framevars';
@@ -57,7 +57,7 @@ import { type FitWork, TAU, arcPoints, bulgePoints, ccwSweep, fitPointsCurve, in
 import { type DashPattern, type DashWork, dashPolyline, patternChars } from './linetype';
 import { DisplayListBuilder, type DisplayList, type SnapshotView, clipConvex } from './displaylist';
 import { ColorKind, type LayerState, type StyleSpec, STYLE_FLAG_FIELD, STYLE_FLAG_NO_PLOT, StyleTable, WidthKind, hiddenStyleSpec, layerStates, plotStyleNames } from './styles';
-import { HATCH_LINE_LIMIT, clipLoopsToRect, hatchLoopWork, hatchLoops, patternSegments, spreadPattern, triangulateLoops, userPattern } from './hatch';
+import { HATCH_LINE_LIMIT, type LoopWork, clipLoopsToRect, hatchLoops, patternSegments, spreadPattern, triangulateLoops, userPattern } from './hatch';
 import { builtinArrow } from './arrows';
 import { boundaryEdges, contourSegments, openRing, stripOutline, textLineBoxes } from './fillmode';
 import { type Affine, type TextEngine, type TextLayout, affMul } from '../text/layout';
@@ -2093,13 +2093,25 @@ export class SceneBuilder {
     }
   }
 
+  private ltNames?: Map<string, string>;
+
+  /** 선종류 핸들 → 이름. 다중 지시선마다 선종류 표를 훑으면 다중 지시선 수 × 선종류 수다(같은 핸들이 여럿이면 예전처럼 표의 뒤쪽) */
+  private linetypeNames(): Map<string, string> {
+    if (!this.ltNames) {
+      this.ltNames = new Map();
+      for (const lt of this.doc.linetypes.values()) this.ltNames.set(lt.handle, lt.name);
+    }
+    return this.ltNames;
+  }
+
   private mleader(e: MLeaderEntity, ctx: Ctx): void {
     const r = this.resolve(e, ctx);
     const c = e.context;
     const lineStyle = this.styleWithColor(r, e.leaderLineColor.aci === 0 && e.leaderLineColor.rgb === undefined ? null : e.leaderLineColor, ctx);
     const rl: Resolved = { ...r, style: lineStyle };
     if (e.leaderLineTypeHandle) {
-      for (const lt of this.doc.linetypes.values()) if (lt.handle === e.leaderLineTypeHandle) rl.linetype = lt.name;
+      const name = this.linetypeNames().get(e.leaderLineTypeHandle);
+      if (name !== undefined) rl.linetype = name;
     }
     const arrowSize = (c.arrowSize || e.arrowSize) * 1;
     const arrowName = e.arrowHeadHandle ? (this.blockByRecord.get(e.arrowHeadHandle)?.name ?? '') : '';
@@ -2206,7 +2218,7 @@ export class SceneBuilder {
     if (!loops.length) return;
     let verts = 0;
     for (const l of loops) verts += l.length >> 1;
-    this.prepWork += hatchLoopWork(loops.length, verts);
+    this.prepWork += verts;
     const z = e.elevation;
     // 채우기를 끄면(FILLMODE 0) 해치·그라데이션·MPOLYGON은 경계 윤곽만
     if (!this.fill) {
@@ -2214,17 +2226,19 @@ export class SceneBuilder {
       return;
     }
     if (e.gradient) {
-      this.gradient(e, loops, m, z, r, ctx);
+      this.gradient(e, loops, m, z, r, ctx, verts);
       return;
     }
     if (e.solid || e.type === 'MPOLYGON') {
-      if (e.type === 'MPOLYGON' && !e.solid) {
+      const outlined = e.type === 'MPOLYGON' && !e.solid;
+      if (outlined) {
         for (const l of loops) this.out.polyline(this.xf(m, l, z), true, r.style);
         if (!e.fillColor) return;
       }
       // 삼각분할은 정점 하나에 조각 몇 개 그리는 시간이 든다
       this.prepWork += verts * 4;
-      const tris = triangulateLoops(loops);
+      const tris = this.fillTriangles(loops, verts, m, z, r, outlined);
+      if (!tris) return;
       const style = e.type === 'MPOLYGON' && e.fillColor ? this.styleWithColor(r, e.fillColor, ctx) : r.style;
       this.out.triangles(this.xf(m, tris, z), style);
       return;
@@ -2256,7 +2270,9 @@ export class SceneBuilder {
     // 장면이 이미 한도를 넘었으면 무늬를 펼치지 않는다(확대하면 세부 장면이 보이는 곳만 다시 그린다)
     const spent = this.piecesSpent();
     const work: DashWork = { n: 0 };
-    let segs = spent ? null : patternSegments(lines, fillLoops, limit, work);
+    // 해치 하나가 장면에 남은 일과 꼬리를 넘으면 멈춘다: 한도 근처의 해치는 예전처럼 마저 그리고, 무늬 선 수 × 변 수가 아주 큰 해치가 몇 초씩 돌지 않게
+    const budget = () => this.sceneLimit - this.out.effort + SCENE_BLOCK_TAIL;
+    let segs = spent ? null : patternSegments(lines, fillLoops, limit, work, budget());
     if (!segs) {
       // 너무 촘촘하면(멀리서 보거나 아주 넓은 해치) 경계와 성긴 무늬로. 확대하면 세부 장면이 원래 간격으로 다시 그린다
       this.warnInc('hatch.pattern_truncated');
@@ -2267,7 +2283,7 @@ export class SceneBuilder {
         this.out.addWork(work.n);
         work.n = 0;
         if (this.piecesSpent()) break;
-        segs = patternSegments(spreadPattern(lines, f), fillLoops, limit, work);
+        segs = patternSegments(spreadPattern(lines, f), fillLoops, limit, work, budget());
       }
     }
     if (work.limited) this.warnInc('linetype.dash_limited');
@@ -2279,10 +2295,25 @@ export class SceneBuilder {
     this.settleIdle(work.n, before);
   }
 
+  /**
+   * 해치 채우기 삼각형. 고리 포함 관계와 삼각분할에 든 일을 세고(포함 판정에서 본 변 32개가 조각 하나 몫),
+   * 일이 한도(hatchFillWorkLimit)를 넘으면 경계만 그리고 null — 고리가 겹겹이 든 해치는 고리 수의 제곱만큼 걸린다
+   */
+  private fillTriangles(loops: number[][], verts: number, m: Mat, z: number, r: Resolved, outlined = false): number[] | null {
+    const work: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
+    const tris = triangulateLoops(loops, work);
+    this.prepWork += Math.floor(work.n / 32);
+    if (!work.limited) return tris;
+    this.warnInc('hatch.fill_limited');
+    if (!outlined) for (const l of loops) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
+    return null;
+  }
+
   /** 그라데이션: 삼각형을 잘게 나눠 색을 단계로 칠한다 */
-  private gradient(e: HatchEntity, loops: number[][], m: Mat, z: number, r: Resolved, ctx: Ctx): void {
+  private gradient(e: HatchEntity, loops: number[][], m: Mat, z: number, r: Resolved, ctx: Ctx, verts: number): void {
     const g = e.gradient!;
-    const tris = triangulateLoops(loops);
+    const tris = this.fillTriangles(loops, verts, m, z, r);
+    if (!tris) return;
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
