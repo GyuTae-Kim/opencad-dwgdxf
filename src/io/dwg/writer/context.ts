@@ -744,7 +744,7 @@ export class WCtx {
     const sat = !raw && this.ver === R2000 ? satForR2000(e) : null;
     if (raw) pe.raw = raw;
     else if (sat) pe.acisSat = sat;
-    else if (RAW_ONLY_ENTITIES.has(e.type)) {
+    else if (RAW_ONLY_ENTITIES.has(e.type) && !(e.type === 'OLE2FRAME' && e.ole)) {
       const t = e.type === 'UNKNOWN' ? e.originalType : e.type;
       dropped[t] = (dropped[t] ?? 0) + 1;
       return null;

@@ -19,6 +19,7 @@ import type {
   MLeaderEntity,
   MLineEntity,
   MTextEntity,
+  Ole2FrameEntity,
   PolylineEntity,
   RawTag,
   SplineEntity,
@@ -43,6 +44,7 @@ import { acdbTableTags, tableCellsOut } from '../tablecells';
 import { hatchEdges } from '../../core/hatchedges';
 import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../core/meshdata';
 import { count3, leaderCount, leaderVertices } from '../../core/flat3';
+import { oleDataAt } from '../oledata';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -1588,6 +1590,7 @@ export function writeEntity(s: TagSink, e: Entity, ctx: WriteContext, owner: str
     case 'OLEFRAME':
       // 원본 태그의 모서리(10·11)는 옮기거나 늘인 지금 자리로 바꿔 쓴다
       if (e.raw) w.raw(oleRaw(e.raw, e.upperLeft, e.lowerRight));
+      else if (e.ole) w.raw(oleTags(e, e.ole));
       break;
     default: {
       const a = e as AcisEntity;
@@ -1616,6 +1619,33 @@ export function entityTags(e: Entity, ctx: WriteContext, owner?: string, paper?:
     writeEntity(sink, x, ctx, own, ps);
   }
   return sink.tags;
+}
+
+/**
+ * DWG에서 읽은 OLE2FRAME → DXF 태그(73차). 같은 도면을 AutoCAD가 쓴 DWG·DXF 짝(TS1)에서 자료(310)는 DWG 자료와 같은 바이트이고,
+ * DWG의 mode·끝 RC가 72·73, 70·71은 둘 다 2(DWG flags도 2 — 표본 OLE 11개 모두)였다. 모서리는 지금 자리(옮겼으면 옮긴 자리 — 자료 머리도)
+ */
+function oleTags(e: Ole2FrameEntity, o: NonNullable<Ole2FrameEntity['ole']>): RawTag[] {
+  const p = (c: number, v: Vec3): RawTag[] => [
+    { code: c, value: v.x },
+    { code: c + 10, value: v.y },
+    { code: c + 20, value: v.z },
+  ];
+  const tags: RawTag[] = [
+    { code: 100, value: 'AcDbOle2Frame' },
+    { code: 70, value: 2 },
+    { code: 3, value: 'OLE' },
+    ...p(10, e.upperLeft),
+    ...p(11, e.lowerRight),
+    { code: 71, value: o.flags },
+    { code: 72, value: o.mode },
+    { code: 73, value: o.tail },
+    { code: 90, value: o.data.length },
+  ];
+  // 자료 머리의 모서리도 지금 자리로(DWG에는 위치가 자료 안에만 있다)
+  for (const c of hexChunks(oleDataAt(o.data, e.upperLeft, e.lowerRight))) tags.push({ code: 310, value: c });
+  tags.push({ code: 1, value: 'OLE' });
+  return tags;
 }
 
 /** OLE2FRAME 원본 태그에서 첫 10/20/30·11/21/31(왼쪽 위·오른쪽 아래 모서리)을 지금 값으로 */

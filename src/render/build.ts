@@ -1318,7 +1318,7 @@ export class SceneBuilder {
       case 'OLEFRAME': {
         const a = e.upperLeft;
         const b = e.lowerRight;
-        // DWG의 OLE는 위치가 OLE 자료 안에 있어 읽지 못한다(원점의 점으로 그리지 않는다)
+        // 위치를 모르는 OLE(R2000 이전 DWG·OLEFRAME — R2000+ DWG는 자료 머리에서 읽는다)는 원점의 점으로 그리지 않는다
         if (a.x === b.x && a.y === b.y) {
           this.warnInc('ole.no_position');
           return;

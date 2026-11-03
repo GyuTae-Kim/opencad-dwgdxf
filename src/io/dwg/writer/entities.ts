@@ -37,6 +37,7 @@ import { tableToOld, tableToR24 } from '../tablemodel';
 import { hatchEdges } from '../../../core/hatchedges';
 import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../../core/meshdata';
 import { leaderVertices } from '../../../core/flat3';
+import { oleDataAt } from '../../oledata';
 
 const Z: Vec3 = { x: 0, y: 0, z: 1 };
 const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
@@ -541,6 +542,20 @@ export class EntityWriter {
         d.BL(e.clipBoundary.length);
         for (const p of e.clipBoundary) d.RD2(p);
         this.ow.hdl.H(HARD_PTR, this.ctx.ref(e.definition));
+        break;
+      }
+      case 'OLE2FRAME': {
+        // DWG에서 읽은 OLE 자료로(73차 — 읽기와 같은 배치: flags BS, mode BS, 길이 BL, 자료, 끝 RC). 옮겼으면 자료 머리의 모서리도
+        const o = e.ole!;
+        const data = oleDataAt(o.data, e.upperLeft, e.lowerRight);
+        this.begin(T.OLE2FRAME, h, e);
+        this.common(e, l);
+        const d = this.ow.dat;
+        d.BS(o.flags);
+        d.BS(o.mode);
+        d.BL(data.length);
+        d.rawBytes(data);
+        d.RC(o.tail);
         break;
       }
       case 'MESH': {

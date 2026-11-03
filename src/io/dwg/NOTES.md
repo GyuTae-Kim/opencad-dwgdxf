@@ -119,7 +119,7 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
 HELIX(SPLINE + `helix`), XLINE, RAY, TEXT, ATTRIB, ATTDEF(R2018 여러 줄 포함), MTEXT(R2018 단 포함), INSERT, MINSERT,
 DIMENSION 7종 + ARC_DIMENSION + LARGE_RADIAL_DIMENSION(`overrides` = ACAD DSTYLE), LEADER, MULTILEADER(문맥 자료 전체),
 HATCH(다각형·선·호·타원·스플라인 경계, 무늬 선, 그라데이션), SOLID, TRACE, 3DFACE, IMAGE, WIPEOUT, VIEWPORT(동결 도면층),
-MLINE, TOLERANCE, SHAPE, ACAD_TABLE(블록·삽입·R2007까지 행·열 크기), OLE2FRAME·OLEFRAME(위치 없음), MESH,
+MLINE, TOLERANCE, SHAPE, ACAD_TABLE(블록·삽입·R2007까지 행·열 크기), OLE2FRAME(R2000+ 자료·위치 — `src/io/oledata.ts`)·OLEFRAME(위치 없음), MESH,
 PDF/DWF/DGN UNDERLAY, REGION·3DSOLID·BODY·SURFACE 계열(`AcisEntity`, ACIS 자료는 건너뜀), 프록시·모르는 클래스(`UnknownEntity`, 프록시 그림 바이트).
 
 비도형: 표 제어 객체, LAYER, LTYPE(문자·쉐이프 요소), STYLE, DIMSTYLE(변수 이름·블록/스타일/선종류 이름), VPORT, VIEW, UCS,
@@ -145,7 +145,8 @@ DXF와 같은 원본 태그(`GenericObject.raw`, ACAD_TABLE은 `TableEntity.raw`
   모르는 비트를 만나면 셀 문자를 버린다). 그림은 익명 *T 블록으로 그린다.
 - MPOLYGON은 사양에 없어 `UnknownEntity`로 둔다(프록시 그림이 있으면 그것으로 그린다).
 - SHAPE 이름은 SHX 파일이 있어야 알 수 있어 번호(`shapeNumber`)와 스타일 핸들만 담는다.
-- OLE2FRAME의 위치(10·11)는 OLE 이진 자료 안에 있어 읽지 않는다.
+- OLE2FRAME(R2000+): flags BS, mode BS(DXF 72), 길이 BL, 자료(DXF 310과 같은 바이트), 끝 RC(DXF 73). 위치는 자료 머리(2바이트 뒤 네 모서리)에서 읽고,
+  DXF·다른 판 DWG로 쓸 때 자료로 다시 만든다(옮겼으면 머리의 모서리도). R2000 이전 OLE2FRAME과 OLEFRAME은 표본이 없어 위치를 읽지 않는다(73차, AutoCAD가 쓴 DWG·DXF 짝 TS1).
 - R2007 Reed–Solomon 오류 정정은 하지 않는다(손상된 페이지는 경고 후 건너뜀).
 - 암호가 걸린 파일(보안 플래그 1, 암호화 섹션)은 `dwg.encrypted`.
 - AcDb:SummaryInfo(R2004+)는 모두 읽어 DXF처럼 이름 있는 객체 사전의 `DWGPROPS` XRECORD로 옮기고(내용이 있을 때만, 새 핸들 = `$HANDSEED`),

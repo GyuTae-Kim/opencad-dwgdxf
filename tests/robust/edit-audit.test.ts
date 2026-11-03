@@ -16,8 +16,11 @@ import { registerAnnot2Commands } from '../../src/app/annot2';
 import { registerDrawCommands } from '../../src/app/draw';
 import { registerEditCommands } from '../../src/app/editcmds';
 import { registerModifyCommands } from '../../src/app/modify';
+import { registerUtil2BlockCommands } from '../../src/app/util2-blocks';
 import { registerUtil2MiscCommands } from '../../src/app/util2-misc';
 import { readDxf } from '../../src/io/dxf/reader';
+import { writeDxf } from '../../src/io/dxf/writer';
+import { readDwg, writeDwg } from '../../src/io/dwg';
 import { makeHarness } from '../cmds2/harness';
 import { runWith, type Input2 } from '../drawmod/ctx';
 import { perCommandGroups } from '../drawmod/groups';
@@ -36,6 +39,7 @@ function harness() {
   registerEditCommands(h.app);
   (h.app as unknown as { findCommand: (n: string) => unknown }).findCommand ??= (name: string) => h.app.commands.get(name.toUpperCase());
   registerUtil2MiscCommands(h.app);
+  registerUtil2BlockCommands(h.app);
   return h;
 }
 
@@ -86,6 +90,7 @@ const CASES: [string, [string, (doc: CadDocument) => Input2[]][]][] = [
   ['DIMTEDIT 왼쪽', [['DIMTEDIT', (d) => [pickDim(dims(d)[0]!), 'L']]]],
   ['DIMSPACE', [['DIMSPACE', (d) => [pickDim(dims(d)[0]!), { sel: ofType(d, 'DIMENSION') }, '']]]],
   ['MATCHPROP 치수', [['MATCHPROP', (d) => [pickDim(dims(d)[0]!), { sel: ofType(d, 'DIMENSION') }, '']]]],
+  ['ATTSYNC', [['ATTSYNC', (d) => ['', { pick: ofType(d, 'INSERT')[0]!, at: [0, 0] }, '']]]],
 ];
 
 describe('편집 명령 뒤 문서 불변식(견본 도면 전체 선택)', () => {
@@ -102,6 +107,14 @@ describe('편집 명령 뒤 문서 불변식(견본 도면 전체 선택)', () =
       const gone = new Set([...before.dims].filter(([x]) => !after.dims.has(x)).map(([, b]) => b));
       expect(after.unused.filter((k) => !before.unused.includes(k) && !gone.has(k))).toEqual([]);
       expect(after.stale).toEqual([]);
+      // 명령 뒤 문서를 DXF·DWG로 쓰고 다시 읽어도 모형 공간의 종류별 수와 블록 수가 같다
+      const kinds = (doc: CadDocument) => {
+        const m: Record<string, number> = {};
+        for (const e of doc.blocks.get(MODEL_SPACE)!.entities) m[e.type] = (m[e.type] ?? 0) + 1;
+        return { m, blocks: doc.blocks.size };
+      };
+      expect(kinds(readDxf(writeDxf(h.doc, { version: 'AC1032' }).data))).toEqual(kinds(h.doc));
+      expect(kinds(readDwg(writeDwg(h.doc, { version: 'AC1032' }).data))).toEqual(kinds(h.doc));
       while (s.undoTop() !== mark) s.undo();
       expect(audit(h.doc)).toEqual(before);
       while (s.canRedo()) s.redo();

@@ -368,6 +368,19 @@ export class BitReader {
     return this.bytesToString(len);
   }
 
+  /** n바이트 그대로(새 배열 — 파일 버퍼를 붙잡지 않는다) */
+  rawBytes(len: number): Uint8Array {
+    const p = this.pos;
+    if ((p & 7) === 0) {
+      const s = byteOfBit(p);
+      this.pos = p + len * 8;
+      return this.buf.slice(s, s + len);
+    }
+    const out = new Uint8Array(len);
+    for (let i = 0; i < len; i++) out[i] = this.RC();
+    return out;
+  }
+
   /** n바이트를 코드 페이지로 해석 */
   bytesToString(len: number): string {
     const p = this.pos;

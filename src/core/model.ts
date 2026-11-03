@@ -802,9 +802,14 @@ export interface Ole2FrameEntity extends EntityBase {
   type: 'OLE2FRAME' | 'OLEFRAME';
   upperLeft: Vec3;
   lowerRight: Vec3;
-  /** DXF에서 읽은 AcDbEntity 다음 원본 태그(OLE 자료 310 포함)와 그 파일 버전. DWG에서 읽은 OLE는 위치를 모른다(원본 본문만) */
+  /** DXF에서 읽은 AcDbEntity 다음 원본 태그(OLE 자료 310 포함)와 그 파일 버전 */
   raw?: RawTag[];
   rawVersion?: string;
+  /**
+   * DWG(R2000+)에서 읽은 OLE2FRAME 자료: 앞의 BS 둘(flags, mode — DXF 72), 자료(DXF 310과 같은 바이트, 머리 2바이트 뒤에
+   * 네 모서리 x·y·z), 끝 RC(DXF 73). DXF로 옮겨 쓸 때 쓴다(73차 — 같은 도면의 DWG·DXF 짝으로 확인)
+   */
+  ole?: { flags: number; mode: number; tail: number; data: Uint8Array };
 }
 
 /** ACIS 기반 객체 — 2D 캐드는 형상을 풀지 않고 프록시 그림이 있으면 그것을 그린다. */

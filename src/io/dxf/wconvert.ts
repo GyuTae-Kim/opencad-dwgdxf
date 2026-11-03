@@ -299,8 +299,9 @@ function convertOnce(e: Entity, ctx: WriteContext): Entity[] | null {
     }
     case 'OLE2FRAME':
     case 'OLEFRAME':
-      // DXF에서 읽은 OLE 자료(원본 태그)가 있으면 R2000+에 그대로 쓴다. DWG에서 읽은 OLE는 위치·자료를 DXF로 바꾸지 못한다
+      // DXF에서 읽은 OLE 자료(원본 태그)가 있으면 R2000+에 그대로 쓴다. DWG(R2000+)에서 읽은 OLE2FRAME은 그 자료로 태그를 만든다(73차)
       if (!r12 && e.raw && rawTagsValid(e.raw)) return null;
+      if (!r12 && e.type === 'OLE2FRAME' && e.ole) return null;
       ctx.warn('entity.ole_dropped', 'OLE 자료가 없어 OLE 객체를 쓰지 않았습니다.');
       return [];
     case 'SHAPE':
