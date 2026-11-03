@@ -9,6 +9,7 @@
  * 워커 문서의 색인이 그 순서·그 객체와 꼭 같을 때만 이렇게 하고, 아니면 예전처럼 문서 전체를 구조화 복제한다.
  */
 import type { CadDocument, Entity } from '../core/model';
+import { ownEntityArrays } from '../core/f64pool';
 import { Decoder, Encoder, type Encoded, encodedTransfer, encoderScratch } from './codec';
 
 /** 이보다 객체가 많은 블록만 따로 보낸다 */
@@ -42,6 +43,18 @@ function indexDerivable(doc: CadDocument): boolean {
 }
 
 /**
+ * 구조화 복제로 보낼 블록의 평탄 좌표를 제 버퍼로 바꾼다. 읽을 때 덩어리에서 떼어 준 뷰를 그대로 보내면 덩어리 전체가 복사된다(core/f64pool.ts).
+ * 묶음으로 보내는 큰 블록은 codec이 뷰의 바이트만 옮긴다
+ */
+function ownArrays(blocks: Iterable<{ entities: Entity[] }>): void {
+  for (const b of blocks)
+    for (const e of b.entities) {
+      ownEntityArrays(e);
+      if (e.type === 'INSERT') for (const a of e.attribs) ownEntityArrays(a);
+    }
+}
+
+/**
  * 문서를 메인으로 보낸다: post(껍데기 또는 문서 전체, 따로 보내는 블록과 객체 수)를 먼저 부르고, 이어서 묶음마다 part를 부른다.
  * minEntities·batch는 시험용.
  */
@@ -56,9 +69,11 @@ export function sendDocument(
   const size = opt.batch ?? BATCH;
   const big = [...doc.blocks].filter(([, b]) => b.entities.length >= min);
   if (!big.length || !indexDerivable(doc)) {
+    ownArrays(doc.blocks.values());
     post(doc, []);
     return;
   }
+  ownArrays([...doc.blocks.values()].filter((b) => b.entities.length < min));
   const shell: CadDocument = {
     ...doc,
     blocks: new Map([...doc.blocks].map(([k, b]) => [k, b.entities.length >= min ? { ...b, entities: [] } : b])),
@@ -81,7 +96,12 @@ export function sendDocument(
       if (ok) {
         const e = enc.finish();
         part({ block: key, enc: e }, encodedTransfer(e));
-      } else part({ block: key, entities: list.slice(i, end) }, []);
+      } else {
+        // 부호화하지 못한 묶음은 구조화 복제로 보낸다(덩어리 뷰를 제 버퍼로 바꾼 뒤)
+        const raw = list.slice(i, end);
+        ownArrays([{ entities: raw }]);
+        part({ block: key, entities: raw }, []);
+      }
       done += end - i;
       onProgress?.(done / total);
     }

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { HatchEntity, LwPolylineEntity } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
 import { cloneLwArrays, lwVertices, packBulge, packLw, packLwPoints, setLwVertex, tidyWidths } from '../../src/core/lwpoly';
+import { f64Of, newF64, ownEntityArrays, ownF64, withF64Pool } from '../../src/core/f64pool';
 import { cloneEntity } from '../../src/edit/session';
 import { auditDocument } from '../../src/edit/util/audit';
 import { lw } from '../edit/make';
@@ -48,6 +49,31 @@ describe('경량 폴리선 평탄 좌표(Float64Array)', () => {
     const hc = cloneEntity<HatchEntity>(h);
     expect(hc.paths[0]!.polyline!.verts).toBeInstanceOf(Float64Array);
     expect(hc.paths[0]!.polyline!.verts.buffer).not.toBe(h.paths[0]!.polyline!.verts.buffer);
+  });
+
+  it('읽는 동안에는 덩어리에서 0으로 채운 뷰를 떼어 주고, 보내기 전에 제 버퍼로 바꾼다', () => {
+    const [a, b, big] = withF64Pool(() => [newF64(6), f64Of([1, 2, 3]), newF64(1 << 17)]);
+    // 같은 덩어리의 이웃 자리
+    expect(a.buffer).toBe(b.buffer);
+    expect(b.byteOffset).toBe(a.byteOffset + a.byteLength);
+    expect([...a]).toEqual([0, 0, 0, 0, 0, 0]);
+    expect([...b]).toEqual([1, 2, 3]);
+    // 덩어리보다 큰 요청은 새 덩어리
+    expect(big.buffer).not.toBe(a.buffer);
+    expect(big.length).toBe(1 << 17);
+    // 밖에서는 늘 제 버퍼
+    const own = newF64(4);
+    expect(own.buffer.byteLength).toBe(own.byteLength);
+    expect(ownF64(own)).toBe(own);
+    const e = withF64Pool(() => ({ ...(lw([[0, 0], [5, 0]]) as LwPolylineEntity), verts: f64Of([0, 0, 0, 5, 0, 0]), widths: f64Of([1, 1, 2, 2]) }));
+    const h = hatch(0, 0, 1, 1);
+    h.paths = [{ flags: 2, polyline: { closed: true, verts: withF64Pool(() => (newF64(3), f64Of([0, 0, 0, 1, 0, 0, 1, 1, 0]))) } }];
+    expect(e.verts.buffer).toBe(e.widths!.buffer);
+    ownEntityArrays(e);
+    ownEntityArrays(h);
+    for (const v of [e.verts, e.widths!, h.paths[0]!.polyline!.verts]) expect(v.buffer.byteLength).toBe(v.byteLength);
+    expect([...e.verts]).toEqual([0, 0, 0, 5, 0, 0]);
+    expect([...h.paths[0]!.polyline!.verts]).toEqual([0, 0, 0, 1, 0, 0, 1, 1, 0]);
   });
 
   it('감사(AUDIT)는 형식 배열 속 수가 아닌 값도 찾는다', () => {
