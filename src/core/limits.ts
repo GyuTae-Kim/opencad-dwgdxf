@@ -149,6 +149,19 @@ export function sceneWorkLimit(entities: number): number {
 export const SCENE_BLOCK_TAIL = 4_000_000;
 
 /**
+ * 해치 하나의 채우기 일 한도(render/hatch.ts LoopWork — 견준 고리 상자 + 포함 판정에서 본 변 + earcut의 정점 수와 구멍 수의 제곱): 기본 + 경계 정점당.
+ * 고리를 상자 격자로 거르고 구멍이 많으면 띠로 잘라 나란한 섬 수만 개는 정점 수에 비례하므로, 고리가 겹겹이 든 해치(동심 고리 수천 개)만 닿는다.
+ * 넘으면 채우지 않고 경계만 그린다(hatch.fill_limited)
+ */
+export const HATCH_FILL_WORK_BASE = 1 << 25;
+export const HATCH_FILL_WORK_PER_VERT = 64;
+
+/** 경계 정점이 verts개인 해치의 채우기 일 한도 */
+export function hatchFillWorkLimit(verts: number): number {
+  return HATCH_FILL_WORK_BASE + HATCH_FILL_WORK_PER_VERT * verts;
+}
+
+/**
  * NURBS 스플라인 차수. AutoCAD SPLINEDIT의 "차수 올리기"(Elevate Order) 최댓값 26이 계수(order)라 차수로는 25다.
  * DXF 71에는 범위가 없고 계산량이 차수의 제곱에 비례하므로 더 큰 차수는 이 값으로 계산한다
  */
