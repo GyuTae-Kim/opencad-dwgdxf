@@ -6,6 +6,7 @@
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { deserialize, serialize } from 'node:v8';
 import { readCadFile } from '../../src/io/index';
 import { buildSpace } from '../../src/render/build';
 import { OutlineLibrary } from '../../src/text/fonts';
@@ -65,14 +66,14 @@ const warnTally = (ws: readonly { code: string; count?: number }[]): Tally | und
 const tname = (e: Entity) => (e.type === 'UNKNOWN' ? `UNKNOWN:${(e as { originalType?: string }).originalType}` : e.type);
 
 /** 원본 요약 + 왕복에서 더 볼 값(치수 측정값·속성 값) */
-function summarize(e: Entity): Record<string, unknown> {
+export function summarize(e: Entity): Record<string, unknown> {
   const d = summarizeEntity(e) as Record<string, unknown>;
   if (e.type === 'DIMENSION') d.measurement = Number.isFinite(e.measurement) ? Math.round(e.measurement * 1e6) / 1e6 : null;
   if (e.type === 'INSERT') d.attvals = e.attribs.map((a) => `${a.tag}=${a.text}`);
   return d;
 }
 
-interface Digest {
+export interface Digest {
   counts: Tally;
   objCounts: Tally;
   layers: string[];
@@ -82,22 +83,86 @@ interface Digest {
   nEnt: number;
 }
 
-function digest(doc: CadDocument): Digest {
+/**
+ * 요약 보관소: 요약을 V8 직렬화(구조화 복제와 같은 형식이라 NaN·-0·undefined까지 그대로 돌아온다)로 큰 덩어리에 이어 두고 꺼낼 때 푼다.
+ * 객체 290만 개 킬 지도에서 요약을 객체로 들면 힙이 1.3 → 6.5GiB(객체 하나 약 1.9KB)라, 장면을 만들다 작업자(힙 8GiB)가 멈췄다
+ */
+class SummaryArena {
+  private static readonly CHUNK = 64 * 2 ** 20;
+  private readonly chunks: Uint8Array[] = [];
+  private cur = new Uint8Array(0);
+  private pos = 0;
+  /** 항목마다 덩어리 번호, 시작, 길이 */
+  private readonly at: number[] = [];
+
+  add(x: Record<string, unknown>): number {
+    const b = serialize(x);
+    if (this.pos + b.length > this.cur.length) {
+      this.cur = new Uint8Array(Math.max(SummaryArena.CHUNK, b.length));
+      this.chunks.push(this.cur);
+      this.pos = 0;
+    }
+    this.cur.set(b, this.pos);
+    this.at.push(this.chunks.length - 1, this.pos, b.length);
+    this.pos += b.length;
+    return this.at.length / 3 - 1;
+  }
+
+  get(id: number): Record<string, unknown> {
+    const s = this.at[id * 3 + 1]!;
+    return deserialize(this.chunks[this.at[id * 3]!]!.subarray(s, s + this.at[id * 3 + 2]!)) as Record<string, unknown>;
+  }
+}
+
+/** 블록 하나의 핸들 → 요약(꺼낼 때 보관소에서 푼다). compareDigest가 쓰는 Map 기능(get·has·keys·size·차례 돌기)만 */
+class SummaryView {
+  constructor(
+    private readonly ids: Map<string, number>,
+    private readonly arena: SummaryArena,
+  ) {}
+
+  get size(): number {
+    return this.ids.size;
+  }
+
+  has(h: string): boolean {
+    return this.ids.has(h);
+  }
+
+  get(h: string): Record<string, unknown> | undefined {
+    const i = this.ids.get(h);
+    return i === undefined ? undefined : this.arena.get(i);
+  }
+
+  keys(): IterableIterator<string> {
+    return this.ids.keys();
+  }
+
+  *[Symbol.iterator](): IterableIterator<[string, Record<string, unknown>]> {
+    for (const [h, i] of this.ids) yield [h, this.arena.get(i)];
+  }
+}
+
+export function digest(doc: CadDocument): Digest {
   const counts: Tally = {};
   const ents = new Map<string, Map<string, Record<string, unknown>>>();
+  const arena = new SummaryArena();
   let nEnt = 0;
   for (const [k, b] of doc.blocks) {
-    const m = new Map<string, Record<string, unknown>>();
+    // 같은 핸들이면 뒤의 것(Map.set처럼 자리는 처음 것)
+    const m = new Map<string, number>();
     for (const e of b.entities) {
       inc(counts, tname(e));
       nEnt++;
+      let sum: Record<string, unknown>;
       try {
-        m.set(e.handle, summarize(e));
+        sum = summarize(e);
       } catch (err) {
-        m.set(e.handle, { type: tname(e), summarizeError: stepError(err).err });
+        sum = { type: tname(e), summarizeError: stepError(err).err };
       }
+      m.set(e.handle, arena.add(sum));
     }
-    ents.set(k, m);
+    ents.set(k, new SummaryView(m, arena) as unknown as Map<string, Record<string, unknown>>);
   }
   const objCounts: Tally = {};
   for (const o of doc.objects.values()) inc(objCounts, (o as { type: string }).type);
@@ -160,7 +225,7 @@ export function normalizeSplinePair(src: Record<string, unknown>, a: Record<stri
 }
 
 /** 원본 → 다시 읽은 것: 종류별 수 차이, 핸들로 맞춘 값 차이(종류.속성별 수), 사라진 도면층·블록 이름 */
-function compareDigest(src: Digest, out: Digest, target: Pick<WriteTarget, 'fmt' | 'version'>): Partial<RereadRecord> {
+export function compareDigest(src: Digest, out: Digest, target: Pick<WriteTarget, 'fmt' | 'version'>): Partial<RereadRecord> {
   const fieldDiffs: Tally = {};
   const samples: Record<string, unknown> = {};
   let missing = 0;
@@ -201,6 +266,49 @@ function compareDigest(src: Digest, out: Digest, target: Pick<WriteTarget, 'fmt'
     layersLost: src.layers.filter((l) => !ol.has(l)).slice(0, 10),
     blocksLost: src.blocks.filter((b) => !ob.has(b)).slice(0, 10),
   });
+}
+
+/**
+ * compareDigest(src, digest(back), target)와 같은 결과를, 다시 읽은 문서의 요약을 쌓지 않고 낸다.
+ * 다시 읽은 쪽은 블록마다 핸들 → 객체 표만 두고(digest처럼 같은 핸들이면 뒤의 것) 원본 요약 차례대로 그때그때 요약한다.
+ * 객체 290만 개 킬 지도에서 원본 요약을 든 채 쓰기 형식마다 요약 290만 개를 또 만들어 작업자(힙 8GB)의 메모리가 모자랐다(56차)
+ */
+export function compareDoc(src: Digest, back: CadDocument, target: Pick<WriteTarget, 'fmt' | 'version'>): Partial<RereadRecord> {
+  const counts: Tally = {};
+  const ents = new Map<string, Map<string, Entity>>();
+  for (const [k, b] of back.blocks) {
+    const m = new Map<string, Entity>();
+    for (const e of b.entities) {
+      inc(counts, tname(e));
+      m.set(e.handle, e);
+    }
+    ents.set(k, m);
+  }
+  const objCounts: Tally = {};
+  for (const o of back.objects.values()) inc(objCounts, (o as { type: string }).type);
+  const one = (k: string, h: string): Record<string, unknown> => {
+    const e = ents.get(k)!.get(h)!;
+    try {
+      return summarize(e);
+    } catch (err) {
+      return { type: tname(e), summarizeError: stepError(err).err };
+    }
+  };
+  // 요약 표 대신 그때그때 요약하는 표(compareDigest가 쓰는 get·has·keys·size만)
+  const lazy = new Map<string, Map<string, Record<string, unknown>>>();
+  for (const [k, m] of ents) {
+    const view = {
+      get: (h: string) => (m.has(h) ? one(k, h) : undefined),
+      has: (h: string) => m.has(h),
+      keys: () => m.keys(),
+      get size() {
+        return m.size;
+      },
+    };
+    lazy.set(k, view as unknown as Map<string, Record<string, unknown>>);
+  }
+  const out: Digest = { counts, objCounts, layers: [...back.layers.values()].map((l) => l.name).sort(), blocks: [...back.blocks.keys()].sort(), ents: lazy, nEnt: 0 };
+  return compareDigest(src, out, target);
 }
 
 /** 쓰기·장면이 문서를 바꾸는지 보는 지문(요약 기준) */
@@ -357,11 +465,12 @@ export async function checkFile(f: SweepFile, ctx: CheckContext): Promise<FileRe
       continue;
     }
     writes[t.key] = w;
-    if (t.key === 'dxf-AC1032') dxfOut = out;
+    // ezdxf 대조(C)에만 쓰므로 대조하지 않으면 들고 있지 않는다(큰 도면의 메모리)
+    if (ctx.oracle && t.key === 'dxf-AC1032') dxfOut = out;
     const tr = performance.now();
     try {
       const back = readCadFile(out, `x.${t.fmt}`);
-      w.reread = prune({ ok: true, ms: Math.round(performance.now() - tr), version: back.version, warn: warnTally(back.warnings), ...compareDigest(src, digest(back), t) });
+      w.reread = prune({ ok: true, ms: Math.round(performance.now() - tr), version: back.version, warn: warnTally(back.warnings), ...compareDoc(src, back, t) });
     } catch (e) {
       w.reread = { ok: false, ms: Math.round(performance.now() - tr), error: stepError(e) };
     }

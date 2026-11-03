@@ -13,7 +13,7 @@ import { writeDxf } from '../../src/io/dxf/writer';
 import { writeDwg } from '../../src/io/dwg/index';
 import { readCadFile } from '../../src/io/index';
 import { collect, parseFilter, sniffVersion, walk } from '../../scripts/sweep/files';
-import { checkFile, createContext, normalizeForRoundtrip, normalizeForTarget, normalizeSplinePair, writeTargets } from '../../scripts/sweep/check';
+import { checkFile, compareDigest, compareDoc, createContext, digest, normalizeForRoundtrip, normalizeForTarget, normalizeSplinePair, summarize, writeTargets } from '../../scripts/sweep/check';
 import { buildSummary, classify, errorSignature, expectedObjectDrop, qualityFlags, rereadKinds } from '../../scripts/sweep/summary';
 import { compareMain, compareRuns } from '../../scripts/sweep/compare';
 import { compareOracle, EzdxfOracle } from '../../scripts/sweep/oracle';
@@ -121,6 +121,39 @@ describe('파일 하나 확인', () => {
     expect(classify(r)).toBe('read-fail');
     expect(r.read?.error?.code).toBe('file.unrecognized');
     expect(errorSignature('read', r.read!.error!)).toMatch(/^read: \[file\.unrecognized\] /);
+  });
+
+  it('다시 읽은 문서는 요약을 쌓지 않고 견주어도 같은 결과다(빠짐·더함·같은 핸들·바뀐 값·새 블록, 67차)', () => {
+    const doc = sampleDoc();
+    const ms = doc.blocks.get(MODEL_SPACE)!;
+    const base = { ...entityDefaults(), owner: ms.recordHandle };
+    for (let i = 0; i < 30; i++) {
+      const e = { ...base, type: 'LINE', handle: (0x100 + i).toString(16).toUpperCase(), start: { x: i, y: 0, z: 0 }, end: { x: i, y: 3, z: 0 } } as Entity;
+      ms.entities.push(e);
+      doc.entityIndex.set(e.handle, e);
+    }
+    const src = digest(doc);
+    // 원본 요약은 직렬화 덩어리에서 꺼내도 요약 그대로다(같은 핸들이면 뒤의 것, 차례는 처음 것)
+    expect([...src.ents.get(MODEL_SPACE)!].map(([h]) => h)).toEqual(ms.entities.map((e) => e.handle));
+    for (const e of ms.entities) expect(src.ents.get(MODEL_SPACE)!.get(e.handle)).toEqual(summarize(e));
+    for (const t of writeTargets(doc)) {
+      const out = t.fmt === 'dxf' ? writeDxf(doc, { version: t.version as never, binary: t.binary }).data : writeDwg(doc, { version: t.version as never }).data;
+      const back = readCadFile(out, `x.${t.fmt}`);
+      expect(compareDoc(src, back, t)).toEqual(compareDigest(src, digest(back), t));
+      // 일부러 어긋나게: 지움, 같은 핸들 둘(뒤의 것이 이긴다), 값 바꿈, 더함, 새 블록
+      const bm = back.blocks.get(MODEL_SPACE)!;
+      const lines = bm.entities.filter((e) => e.type === 'LINE') as (Entity & { start: { x: number } })[];
+      bm.entities.splice(bm.entities.indexOf(lines[3]!), 1);
+      bm.entities.push({ ...lines[5]!, start: { ...lines[5]!.start, x: 99 } } as Entity);
+      lines[7]!.start = { ...lines[7]!.start, x: -5 };
+      bm.entities.push({ ...lines[8]!, handle: 'FFF0' } as Entity);
+      back.blocks.set('*U9', { name: '*U9', handle: 'FFF1', recordHandle: 'FFF2', basePoint: { x: 0, y: 0, z: 0 }, flags: 1, entities: [{ ...lines[9]!, handle: 'FFF3' } as Entity] });
+      const a = compareDoc(src, back, t);
+      expect(a).toEqual(compareDigest(src, digest(back), t));
+      expect(a.missing).toBe(1);
+      expect(a.extra).toBe(2);
+      expect(Object.keys(a.fieldDiffs ?? {}).length).toBeGreaterThan(0);
+    }
   });
 
   it('쓰기 대상은 앱의 "같은 형식 저장" 규칙을 따른다', () => {
