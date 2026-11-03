@@ -28,6 +28,8 @@ export interface DetectOptions {
    * 문자 크기는 글꼴을 알아야 하므로 호출한 쪽이 문자 엔진으로 구해 넘긴다.
    */
   textBoxes?: { handle: string; points: Vec2[] }[];
+  /** 블록 참조를 펼치는 몫(59차)을 넘어 일부 블록 안 객체를 경계로 쓰지 않았을 때 부른다(명령이 안내한다) */
+  onCut?: () => void;
 }
 
 export interface DetectResult {
@@ -82,8 +84,9 @@ interface Collected {
 }
 
 /** 후보 객체 → 곡선(무한선은 범위에 맞춰 자른다), 허용 오차 */
-function collect(doc: CadDocument, list: readonly Entity[], pick: Vec2 | undefined): Collected | null {
-  const { curves, xlines } = entitiesToCurves(doc, list);
+function collect(doc: CadDocument, list: readonly Entity[], pick: Vec2 | undefined, onCut?: () => void): Collected | null {
+  const { curves, xlines, cut } = entitiesToCurves(doc, list);
+  if (cut) onCut?.();
   if (!curves.length && !xlines.length) return null;
   let box = unionBox(curves, pick);
   if (xlines.length) {
@@ -519,7 +522,7 @@ function collectHandles(paths: readonly HatchPath[]): string[] {
  * (창 밖 곡선은 창 안의 면에 닿지 않으므로 결과는 전체로 찾은 것과 같다.)
  */
 export function detectBoundary(doc: CadDocument, candidates: Entity[], pick: Vec2, opt: DetectOptions = {}): DetectResult | null {
-  const col = collect(doc, candidates, pick);
+  const col = collect(doc, candidates, pick, opt.onCut);
   if (!col) return null;
   const gap = Math.max(0, opt.gapTolerance ?? 0);
   const style = opt.islands ?? 'normal';

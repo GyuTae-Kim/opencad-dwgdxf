@@ -16,6 +16,7 @@ import type { DocState } from './docstate';
 import { currentProps } from './draw';
 import { form } from './ui/dom';
 import type { OverlayGeom } from './view';
+import { MSG } from '../edit/geom/types';
 
 export interface HatchSettings {
   pattern: string;
@@ -275,7 +276,7 @@ async function runHatch(app: App, ctx: CommandContext, gradient: boolean): Promi
     if ('enter' in r) break;
     if ('point' in r) {
       ctx.print('모든 것 선택 중... 경계 분석 중...');
-      const res = detectBoundary(doc, candidates(st), r.point, { islands: s.islands, gapTolerance: s.gap });
+      const res = detectBoundary(doc, candidates(st), r.point, { islands: s.islands, gapTolerance: s.gap, onCut: () => ctx.print(MSG.blockEdgesCut) });
       if (!res || !res.paths.length) {
         ctx.print('유효한 해치 경계를 찾을 수 없습니다. 닫힌 영역 안을 선택하거나 틈 허용을 늘리십시오.', 'err');
         continue;

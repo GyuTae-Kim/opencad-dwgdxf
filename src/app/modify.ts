@@ -58,6 +58,8 @@ import { gripCtrlCycle } from './settings';
 import { browserSysvar } from './sysvars';
 import { stretchSelection } from './editcmds2-stretch';
 import { pasteDependencies } from './pastedeps';
+import { expandBudget } from '../core/limits';
+import { MSG } from '../edit/geom/types';
 
 // ---------------------------------------------------------------------------
 // 변환 행렬(x' = a·x + c·y + e, y' = b·x + d·y + f)
@@ -1048,6 +1050,8 @@ export function registerModifyCommands(app: App): void {
     const zOf = (x: Entity) => entityPath(x)?.z ?? 0;
     /** Shift를 누른 채 고르면 반대 작업(자르기 ↔ 연장) */
     const opFor = (shift: boolean | undefined): 'trim' | 'extend' => (shift ? (mode === 'trim' ? 'extend' : 'trim') : mode);
+    /** 블록이 커서 모서리를 다 펼치지 못했다고 이 명령에서 알렸는지 */
+    let cutNoted = false;
     /** 객체 하나를 고른 점에서 자르기·연장(op). 바뀌었으면 true */
     const applyAt = (handle: string, point: Pt, quiet = false, op: 'trim' | 'extend' = mode): boolean => {
       const e = st.doc.entityIndex.get(handle);
@@ -1074,10 +1078,16 @@ export function registerModifyCommands(app: App): void {
         const z = zOf(e);
         cutters = cutters.filter((c) => Math.abs(zOf(c) - z) <= 1e-9 * Math.max(1, Math.abs(z)));
       }
+      // 블록 참조 모서리를 펼치는 몫은 대상 하나에 모든 모서리가 함께 쓴다(빠른 작업은 겹치는 객체 모두가 모서리다)
+      const budget = expandBudget(st.doc.entityIndex.size);
       const res =
         op === 'trim'
-          ? trimEntity(e, cutters, point, { doc: st.doc, quick, extendEdges: edgeMode })
-          : extendEntity(e, cutters, point, { doc: st.doc, extendEdges: edgeMode });
+          ? trimEntity(e, cutters, point, { doc: st.doc, quick, extendEdges: edgeMode, budget })
+          : extendEntity(e, cutters, point, { doc: st.doc, extendEdges: edgeMode, budget });
+      if (budget.cut && !cutNoted) {
+        cutNoted = true;
+        ctx.print(MSG.blockEdgesCut);
+      }
       if (!res.add?.length && !res.replace?.length && !res.remove?.length) {
         if (!quiet) ctx.print(res.message ?? '객체가 모서리와 교차하지 않습니다.');
         return false;

@@ -32,6 +32,7 @@ import { registerPeditCommands } from './modify2-pedit';
 import { unlockedOnly } from './layers';
 import { form } from './ui/dom';
 import type { OverlayGeom, Pt } from './view';
+import { MSG } from '../edit/geom/types';
 
 const sub = (a: Pt, b: Pt): Pt => ({ x: a.x - b.x, y: a.y - b.y });
 
@@ -510,7 +511,7 @@ export function registerModify2Commands(app: App): void {
         }
         if (!('point' in r)) return;
         ctx.print('모든 것 선택 중... 경계 분석 중...');
-        const res = detectBoundary(doc, visibleEntities(st), r.point, { islands: islands ? 'normal' : 'ignore' });
+        const res = detectBoundary(doc, visibleEntities(st), r.point, { islands: islands ? 'normal' : 'ignore', onCut: () => ctx.print(MSG.blockEdgesCut) });
         if (!res || !res.paths.length) {
           ctx.print('유효한 경계를 찾을 수 없습니다. 닫힌 영역 안을 선택하십시오.', 'err');
           continue;
