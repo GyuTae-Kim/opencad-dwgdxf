@@ -96,10 +96,10 @@ function ownBlock(doc: CadDocument, dim: DimensionEntity, ix: DimBlockIndex): bo
 
 /**
  * 치수 객체의 그림을 (다시) 만들어 블록 작업과 함께 돌려준다.
- * reuse가 참이면 이 치수만 쓰는 블록을 그대로 바꾸고, 아니면 새 *D 블록을 만든다.
+ * reuse가 참이면 이 치수만 쓰는 블록을 그대로 바꾸고, 아니면 새 *D 블록을 만든다(fresh를 주면 그 이름 — 같은 편집이 넣으려던 블록 자리를 물려받는다).
  * 치수 객체의 block·textMid·measurement는 여기서 채운다(객체 자체를 넣는 작업은 부르는 쪽이 만든다).
  */
-export function dimensionBlockOps(st: DocState, dim: DimensionEntity, reuse: boolean, extraNames: Set<string> = new Set()): EditOp[] {
+export function dimensionBlockOps(st: DocState, dim: DimensionEntity, reuse: boolean, extraNames: Set<string> = new Set(), fresh?: string): EditOp[] {
   const doc = st.doc;
   const s = st.session;
   const g = generateDimensionGeometry(doc, dim);
@@ -129,7 +129,7 @@ export function dimensionBlockOps(st: DocState, dim: DimensionEntity, reuse: boo
   let ix = dimBlockIndexes.get(extraNames);
   if (!ix) dimBlockIndexes.set(extraNames, (ix = { users: null, nextD: 0 }));
   const before = reuse && dim.block && ownBlock(doc, dim, ix) ? doc.blocks.get(tableKey(dim.block)) : undefined;
-  let name = before?.name ?? '';
+  let name = before?.name ?? fresh ?? '';
   if (!name) {
     let n = ix.nextD || Number(nextDimBlockName(doc).slice(2));
     while (extraNames.has(tableKey(`*D${n}`))) n++;

@@ -185,15 +185,20 @@ function prepareNew(st: DocState, e: Entity, ownerHandle: string | undefined): v
     }
 }
 
-/** 블록 정의를 넣거나 바꾸는 작업(익명 블록은 이름에 번호를 붙인다) */
-function blockOps(st: DocState, b: BlockDef): EditOp[] {
-  const doc = st.doc;
+/** 결과의 블록 정의에 이 편집에서 쓸 이름을 정한다(번호 없는 익명 블록 이름이면 문서와 이 편집에 없는 번호를 붙인다) */
+function namedBlock(st: DocState, b: BlockDef, made: ReadonlyMap<string, BlockDef>): BlockDef {
   const def: BlockDef = { ...b, entities: b.entities };
   if (/^\*[A-Z]$/i.test(def.name)) {
     let n = 1;
-    while (doc.blocks.has(tableKey(`${def.name}${n}`))) n++;
+    while (st.doc.blocks.has(tableKey(`${def.name}${n}`)) || made.has(tableKey(`${def.name}${n}`))) n++;
     def.name = `${def.name}${n}`;
   }
+  return def;
+}
+
+/** 블록 정의를 넣거나 바꾸는 작업 */
+function blockOps(st: DocState, def: BlockDef): EditOp[] {
+  const doc = st.doc;
   const key = tableKey(def.name);
   const before = doc.blocks.get(key) ?? null;
   const ops: EditOp[] = [];
@@ -240,27 +245,34 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
   results = cons.results;
   const ops: EditOp[] = [];
   const out: Applied = { added: [], changed: [], removed: 0, ops: 0 };
-  // 블록 정의(치수 블록 등)가 먼저 있어야 참조가 그려진다
+  // 블록 정의(치수 블록 등)가 먼저 있어야 참조가 그려진다: 이름은 여기서 정하고, 작업은 다 모은 뒤 맨 앞에 둔다.
+  // 변환이 만든 치수 블록은 아래에서 치수 생성기로 다시 만들면 넣지 않는다(69차 — 전에는 옮긴 치수마다 쓰이지 않는 *D 블록이 남고,
+  // 복사본은 생성기가 같은 이름의 블록을 또 넣어 앞 블록의 객체가 핸들 색인에 남았다)
   const renamed = new Map<string, string>();
+  const made = new Map<string, BlockDef>();
   for (const r of results)
     for (const b of r.blocks ?? []) {
-      const bo = blockOps(st, b);
-      const def = (bo[bo.length - 1] as { after: BlockDef }).after;
+      const def = namedBlock(st, b, made);
       if (def.name !== b.name) renamed.set(b.name, def.name);
-      ops.push(...bo);
+      made.set(tableKey(def.name), def);
     }
   const fixBlock = (e: Entity) => {
     if (e.type === 'DIMENSION' && renamed.has(e.block ?? '')) e.block = renamed.get(e.block ?? '')!;
   };
-  // 바뀌거나 새로 생긴 치수는 치수 생성기로 블록을 다시 만든다(AutoCAD처럼 치수 스타일대로)
-  const extra = new Set<string>();
+  // 바뀌거나 새로 생긴 치수는 치수 생성기로 블록을 다시 만든다(AutoCAD처럼 치수 스타일대로).
+  // 이 편집이 만들 블록 이름은 생성기가 다른 치수에 주지 않고, 변환이 만든 블록 자리는 그 치수가 물려받는다
+  const extra = new Set<string>(made.keys());
   const regen = (e: Entity, before: Entity | undefined) => {
     if (e.type !== 'DIMENSION') return;
+    const own = e.block;
+    const mine = !!own && made.has(tableKey(own));
     if (before?.type === 'DIMENSION') e.block = before.block;
     try {
-      ops.push(...dimensionBlockOps(st, e, !!before, extra));
+      ops.push(...dimensionBlockOps(st, e, !!before, extra, mine ? own : undefined));
+      if (mine) made.delete(tableKey(own));
     } catch {
-      /* 생성기가 못 다루면 커널이 만든 블록을 쓴다 */
+      /* 생성기가 못 다루면 커널이 만든 블록을 쓴다(바꾸기 전 블록이 아니라) */
+      e.block = own;
     }
   };
   // 바꾸기(같은 핸들을 여러 번 바꾸면 마지막 것)
@@ -379,8 +391,14 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
   }
   ops.push(...cons.ops);
   if (cons.message && !opt.quiet) ctx.print(cons.message);
-  if (ops.length) st.session.commit({ label, ops, group: ctx.group });
-  out.ops = ops.length;
+  let all = ops;
+  if (made.size) {
+    all = [];
+    for (const def of made.values()) pushAll(all, blockOps(st, def));
+    pushAll(all, ops);
+  }
+  if (all.length) st.session.commit({ label, ops: all, group: ctx.group });
+  out.ops = all.length;
   return out;
 }
 
