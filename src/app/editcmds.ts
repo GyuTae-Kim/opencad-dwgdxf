@@ -17,11 +17,12 @@ import { type FormField, form } from './ui/dom';
 import { loadPref, savePref, selectWithKeywords } from './util2-ui';
 import { emptyText, purgeNamedOps, purgeRegAppOps, purgeableNamed, purgeableRegApps, removeWhereOps, zeroLength } from '../edit/purge';
 import { lwCount, tidyWidths } from '../core/lwpoly';
-import { tableTextStyleRefs } from '../edit/table/entity';
-import { listTableStyles } from '../edit/table/style';
+import { tableFromEntity, tableTextStyleRefs } from '../edit/table/entity';
+import { findTableStyle, listTableStyles } from '../edit/table/style';
 import { uiText } from './i18n-text';
 import { dimensionBlockOps } from './dimcmds';
 import { applyOverrides } from '../edit/annot/override';
+import { updateTableOps } from '../edit/table/ops';
 
 /** MATCHPROP 설정(S): AutoCAD 특성 설정 대화상자의 항목. 끈 것은 옮기지 않는다 */
 export const MATCH_SETTINGS: { key: string; label: string; short: string }[] = [
@@ -55,11 +56,14 @@ export function setMatchSettings(on: ReadonlySet<string>): void {
   );
 }
 
+/** 종류와 관계없이 옮기는 공통 특성 */
+const COMMON_PROPS = ['color', 'layer', 'linetype', 'ltscale', 'lineweight', 'transparency', 'thickness', 'plotStyle'] as const;
+
 /** 원본 특성을 대상에 옮긴 사본(켠 설정만) */
 export function matchProps(src: Entity, dst: Entity, on: ReadonlySet<string> = matchSettings()): Entity {
   const c = cloneEntity(dst) as unknown as Record<string, unknown>;
   const s = src as unknown as Record<string, unknown>;
-  for (const k of ['color', 'layer', 'linetype', 'ltscale', 'lineweight', 'transparency', 'thickness', 'plotStyle'] as const) {
+  for (const k of COMMON_PROPS) {
     if (!on.has(k)) continue;
     if (s[k] === undefined) delete c[k];
     else c[k] = structuredClone(s[k]);
@@ -140,13 +144,31 @@ export function registerEditCommands(app: App): void {
         const ops: EditOp[] = [];
         const blockOps: EditOp[] = [];
         const extra = new Set<string>();
+        const taken = new Set<string>();
         for (const h of hs) {
           if (h === src.handle) continue;
           const e = st.doc.entityIndex.get(h);
           const block = st.session.ownerOf(h);
           if (!e || !block) continue;
-          const c = matchProps(src, e, on);
+          let c = matchProps(src, e, on);
           if (JSON.stringify(c) === JSON.stringify(e)) continue;
+          // 표 스타일이 바뀐 표는 표 그림 블록을 새 스타일로 다시 만든다(스타일을 고쳤을 때 restyleTablesOps와 같게 — 72차, 전에는 옛 그림이 남았다)
+          if (c.type === 'ACAD_TABLE' && e.type === 'ACAD_TABLE' && c.tableStyle !== e.tableStyle) {
+            const entry = findTableStyle(st.doc, c.tableStyle);
+            const rt = entry ? tableFromEntity(e, st.doc) : null;
+            if (entry && rt) {
+              const up = updateTableOps(st.doc, () => st.session.newHandle(), e, block, rt.data, entry.style, entry.handle, taken);
+              pushAll(blockOps, up.ops.filter((o) => o.kind !== 'modify'));
+              // 표 정의는 다시 만든 것, 공통 특성(도면층·색 …)은 맞춘 것
+              const t = { ...up.table } as unknown as Record<string, unknown>;
+              const m = c as unknown as Record<string, unknown>;
+              for (const k of COMMON_PROPS) {
+                if (m[k] === undefined) delete t[k];
+                else t[k] = m[k];
+              }
+              c = t as unknown as Entity;
+            }
+          }
           // 치수 스타일·재지정이 바뀐 치수는 치수 블록을 생성기로 다시 만든다(특성 팔레트와 같게 블록 작업이 먼저 — 71차, 전에는 옛 그림이 남았다)
           if (c.type === 'DIMENSION' && e.type === 'DIMENSION' && (c.dimStyle !== e.dimStyle || JSON.stringify(c.overrides) !== JSON.stringify(e.overrides)))
             try {
