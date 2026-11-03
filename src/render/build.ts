@@ -54,7 +54,7 @@ import {
   withOcs,
 } from '../geom/matrix';
 import { type FitWork, TAU, arcPoints, bulgePoints, ccwSweep, fitPointsCurve, interpolateFitPoints, nurbsPoints } from '../geom/curves';
-import { type DashPattern, type DashWork, dashPolyline } from './linetype';
+import { type DashPattern, type DashWork, dashPolyline, patternChars } from './linetype';
 import { DisplayListBuilder, type DisplayList, type SnapshotView, clipConvex } from './displaylist';
 import { ColorKind, type LayerState, type StyleSpec, STYLE_FLAG_FIELD, STYLE_FLAG_NO_PLOT, StyleTable, WidthKind, hiddenStyleSpec, layerStates, plotStyleNames } from './styles';
 import { HATCH_LINE_LIMIT, clipLoopsToRect, hatchLoopWork, hatchLoops, patternSegments, spreadPattern, triangulateLoops, userPattern } from './hatch';
@@ -225,6 +225,8 @@ export class SceneBuilder {
   private readonly depthMats: Mat[] = Array.from({ length: MAX_DEPTH }, () => new Float64Array(12));
   /** 확장 사전 핸들 → 자르기 필터(없으면 null) */
   private readonly xclipFilters = new Map<string, SpatialFilterObject | null>();
+  /** 필터 사전(ACAD_FILTER) → SPATIAL 항목 핸들 */
+  private readonly filterSpatial = new Map<string, string | undefined>();
 
   constructor(
     private readonly doc: CadDocument,
@@ -538,7 +540,8 @@ export class SceneBuilder {
 
   private patternCache = new Map<string, DashPattern | null>();
 
-  private pattern(lt: string, scale: number): DashPattern | null {
+  /** 선종류 무늬(축척 1, 선종류마다 한 번). 축척은 그릴 때 곱한다 */
+  private pattern(lt: string): DashPattern | null {
     if (lt === 'Continuous') return null;
     const key = lt.toUpperCase();
     if (key === 'CONTINUOUS' || key === 'BYLAYER' || key === 'BYBLOCK' || !key) return null;
@@ -561,16 +564,11 @@ export class SceneBuilder {
           at += Math.abs(el.length);
         }
         base = { dashes: def.elements.map((e) => e.length), period: def.elements.reduce((a, e) => a + Math.abs(e.length), 0), texts: texts.length ? texts : undefined };
+        base.chars = patternChars(base);
       }
       this.patternCache.set(key, base);
     }
-    if (!base) return null;
-    if (scale === 1) return base;
-    return {
-      dashes: base.dashes.map((d) => d * scale),
-      period: base.period * scale,
-      texts: base.texts?.map((t) => ({ ...t, at: t.at * scale, scale: t.scale * scale, dx: t.dx * scale, dy: t.dy * scale })),
-    };
+    return base;
   }
 
   // -------------------------------------------------------------------------
@@ -585,14 +583,14 @@ export class SceneBuilder {
       this.out.segment(pts[0]!, pts[1]!, pts[0]!, pts[1]!, r.style);
       return;
     }
-    const pat = this.pattern(r.linetype, r.ltscale * lsScale * planarScale(ctx.m));
+    const pat = this.pattern(r.linetype);
     if (!pat || this.piecesSpent()) {
       this.out.polyline(pts, closed, r.style);
       return;
     }
     this.out.dashed = true;
-    // 축척을 곱한 무늬를 객체마다 만들고(pattern), 틈은 조각을 내지 않는다
-    const work: DashWork = { n: pat.dashes.length >> 3 };
+    // 틈은 조각을 내지 않으므로 요소를 밟는 일을 따로 센다(dashPolyline)
+    const work: DashWork = { n: 0 };
     const before = this.out.effort;
     dashPolyline(
       pts,
@@ -632,6 +630,7 @@ export class SceneBuilder {
         this.emitText(lay, [ca, sa, -sa, ca, px, py], r, ctx);
       },
       work,
+      r.ltscale * lsScale * planarScale(ctx.m),
     );
     this.settleIdle(work.n, before);
     if (work.limited) this.warnInc('linetype.dash_limited');
@@ -1455,7 +1454,7 @@ export class SceneBuilder {
       }
       return;
     }
-    if (plinegen || !this.pattern(r.linetype, 1)) {
+    if (plinegen || !this.pattern(r.linetype)) {
       const pts: number[] = [xyb[0]!, xyb[1]!];
       for (let i = 0; i < segCount; i++) {
         const a = i * 3;
@@ -1805,8 +1804,13 @@ export class SceneBuilder {
       for (const [n, h] of d.entries) if (n.toUpperCase() === k) return h;
       return undefined;
     };
-    const fd = dict(entry(dict(xdict), 'ACAD_FILTER'));
-    const sh = entry(fd, 'SPATIAL');
+    const fh = entry(dict(xdict), 'ACAD_FILTER');
+    // 필터 사전은 여러 확장 사전이 함께 가리킬 수 있어(항목 10만 개 사전 하나를 참조 2,000개가 가리키면 3.4초였다) 사전마다 한 번만 훑는다
+    let sh: string | undefined;
+    if (fh !== undefined) {
+      if (this.filterSpatial.has(fh)) sh = this.filterSpatial.get(fh);
+      else this.filterSpatial.set(fh, (sh = entry(dict(fh), 'SPATIAL')));
+    }
     const sf = sh ? this.doc.objects.get(sh) : undefined;
     const f = sf && sf.type === 'SPATIAL_FILTER' ? (sf as SpatialFilterObject) : null;
     this.xclipFilters.set(xdict, f);

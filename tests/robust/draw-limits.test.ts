@@ -622,15 +622,40 @@ describe('선종류 무늬', () => {
     expect(n).toBe(1000);
     // 주기 1000번 × 요소 8개 / 8
     expect(work.n).toBe(1000);
-    // 블록 안: 주기 100번 × 요소 16개 / 8과 요소 16개 / 8이 조각 100개보다 많다
+    // 블록 안: 주기 100번 × 요소 16개 / 8이 조각 100개보다 많다(60차부터 무늬를 객체마다 복사하지 않아 요소 16개 / 8 몫은 없다)
     const gaps = ['0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'D', '70', '0', '3', 'd', '72', '65', '73', '16', '40', '16', '49', '1', '74', '0'];
     for (let i = 0; i < 15; i++) gaps.push('49', '-1', '74', '0');
     gaps.push('0', 'ENDTAB', '0', 'ENDSEC');
     const blk = ['0', 'BLOCK', '8', '0', '2', 'L', '70', '0', '10', '0', '20', '0', '30', '0', '3', 'L', ...longLine(1600), '0', 'ENDBLK', '8', '0'];
     const s = scene(load([insertOf('L')], [blk], gaps));
     expect(segs(s)).toBe(100);
-    // 칸 1 + 객체 방문 1 + 일 202
-    expect(s.stats.blockWork).toBe(2 + 202);
+    // 칸 1 + 객체 방문 1 + 일 200
+    expect(s.stats.blockWork).toBe(2 + 200);
+  });
+
+  it('축척을 곱한 무늬를 객체마다 복사하지 않는다(60차 — 요소 10만 개 선종류의 선 2만 개가 22초였다)', () => {
+    // 선마다 축척이 다르다. 고치기 전에는 선마다 무늬를 복사하고 그 일(요소 / 8 = 12,500)을 세어 첫 선에서 조각 한도에 닿았다
+    const lines = Array.from({ length: 200 }, (_, i) => ['0', 'LINE', '8', '0', '6', 'D', '48', String(1 + i / 100), '10', '0', '20', String(i), '30', '0', '11', '10', '21', String(i), '31', '0']);
+    const doc = load(lines, [], ltype(50_000));
+    const s = within2s(() => scene(doc, { scenePieceLimit: 1000 }));
+    expect(codes(s)).not.toContain('scene.piece_limit');
+    // 선이 무늬 한 주기보다 짧아 실선
+    expect(segs(s)).toBe(200);
+  });
+
+  it('축척은 미리 곱한 무늬와 똑같이 그린다(대시·점·문자 위치와 크기)', () => {
+    const base: DashPattern = { dashes: [2, -1, 0, -1], period: 4, texts: [{ at: 2, text: 'AB', scale: 0.5, rotation: 0.3, absolute: false, dx: 0.1, dy: 0.2 }] };
+    const k = 2.5;
+    const scaled: DashPattern = { dashes: base.dashes.map((d) => d * k), period: base.period * k, texts: base.texts!.map((t) => ({ ...t, at: t.at * k, scale: t.scale * k, dx: t.dx * k, dy: t.dy * k })) };
+    const draw = (pat: DashPattern, scale?: number) => {
+      const out: unknown[] = [];
+      const work: DashWork = { n: 0 };
+      dashPolyline([0, 0, 30, 0, 30, 17], false, pat, (...a) => out.push(a), (x, y, ang, t) => out.push([x, y, ang, t]), work, scale);
+      return { out, n: work.n };
+    };
+    const a = draw(scaled);
+    expect(a.out.length).toBeGreaterThan(10);
+    expect(draw(base, k)).toEqual(a);
   });
 });
 
@@ -720,6 +745,23 @@ describe('방문마다 도는 일', () => {
     const s = scene(doc, OFF);
     expect(segs(s)).toBe(900);
     expect(s.stats.blockWork).toBeGreaterThanOrEqual(900 * 501);
+  });
+
+  it('여러 확장 사전이 함께 가리키는 큰 필터 사전은 한 번만 훑는다(60차 — 항목 10만 개 × 참조 2,000개가 3.4초였다)', () => {
+    const ins = Array.from({ length: 2000 }, (_, i) => ['0', 'INSERT', '5', (0x1000 + i).toString(16).toUpperCase(), '8', '0', '2', 'B', '10', String(i * 2), '20', '0', '30', '0']);
+    const doc = load(ins, [BLOCK_B]);
+    const I = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
+    const big = new Map<string, string>();
+    for (let j = 0; j < 100_000; j++) big.set(`K${j}`, 'F0');
+    big.set('SPATIAL', 'SF');
+    doc.objects.set('FD', { type: 'DICTIONARY', handle: 'FD', entries: big } as never);
+    // 경계가 모든 참조를 덮는다
+    doc.objects.set('SF', { type: 'SPATIAL_FILTER', handle: 'SF', boundary: [{ x: -1, y: -1 }, { x: 1e6, y: 1e6 }], normal: { x: 0, y: 0, z: 1 }, origin: { x: 0, y: 0, z: 0 }, displayBoundary: false, inverted: false, inverseBlockTransform: I, clipTransform: I } as never);
+    doc.blocks.get(MODEL_SPACE)!.entities.forEach((e, i) => {
+      (e as InsertEntity).xdict = `X${i}`;
+      doc.objects.set(`X${i}`, { type: 'DICTIONARY', handle: `X${i}`, entries: new Map([['ACAD_FILTER', 'FD']]) } as never);
+    });
+    expect(segs(within2s(() => scene(doc, OFF)))).toBe(2000);
   });
 
   it('외부 참조의 자르기 경계도 센다', () => {
