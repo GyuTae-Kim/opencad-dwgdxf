@@ -65,7 +65,7 @@ export function minsertGrid(e: { rowCount: number; columnCount: number }): { row
  */
 export const BLOCK_WORK_BASE = 24_000_000;
 export const BLOCK_WORK_PER_ENTITY = 2_000;
-/** 도면이 아무리 커도 블록 펼침은 이만큼까지. 그 안에서도 장면 일은 SCENE_PIECE_LIMIT에서 멈춘다 */
+/** 블록 펼침 한도의 윗값. 객체가 200만 개를 넘는 도면은 장면 일 한도처럼 객체당 SCENE_WORK_PER_ENTITY로 늘어난다(sceneWorkLimit) */
 export const BLOCK_WORK_MAX = 100_000_000;
 
 /**
@@ -79,7 +79,7 @@ export const PEAK_BYTES_BASE = 64 * 1048576;
 
 /** 객체 수가 entities인 도면의 블록 펼침 한도 */
 export function blockWorkLimit(entities: number): number {
-  return Math.min(BLOCK_WORK_MAX, BLOCK_WORK_BASE + BLOCK_WORK_PER_ENTITY * entities);
+  return Math.min(Math.max(BLOCK_WORK_MAX, SCENE_WORK_PER_ENTITY * entities), BLOCK_WORK_BASE + BLOCK_WORK_PER_ENTITY * entities);
 }
 
 /**
@@ -87,9 +87,21 @@ export function blockWorkLimit(entities: number): number {
  * 늘어나는 그림은 이 값과 블록 일 한도(blockWorkLimit) 가운데 작은 쪽에서 낮춘다: 남은 해치는 경계만, 남은 선종류는 실선으로.
  * 객체 하나가 작은 파일 조각에서 대시 수만 개·무늬 선 수십만 개로 늘어나기 때문이다. 낮출 때 그 객체는 빠지지 않고 경고가 나오며, 해치는 확대하면 보이는 곳의 세부로 돌아온다.
  * 블록과 치수는 그 뒤로 SCENE_BLOCK_TAIL까지만 그리고, 넘으면 경고와 함께 빠진다. 블록을 끊는 일도 이 값을 넘지 않는다.
- * 객체 수가 적고 조각이 2,400만을 넘는 도면만 닿는다. 작은 파일의 일은 2,800만 + 객체당 2,000 안쪽이고, 낮춤을 일부러 늦추면 꼬리를 한 번 더 써 3,200만 + 객체당 2,000 안쪽이다
+ * 객체 수가 적고 조각이 2,400만을 넘는 도면만 닿는다. 작은 파일의 일은 2,800만 + 객체당 2,000 안쪽이고, 낮춤을 일부러 늦추면 꼬리를 한 번 더 써 3,200만 + 객체당 2,000 안쪽이다.
+ * 객체가 120만 개를 넘는 도면은 객체당 SCENE_WORK_PER_ENTITY로 늘어난다(sceneWorkLimit)
  */
 export const SCENE_PIECE_LIMIT = 60_000_000;
+/**
+ * 객체가 아주 많은 도면의 장면 일: 객체 하나당 이만큼. 정상 도면은 객체 수에 비례해 커지는데 고정 한도 하나로는 큰 실제 도면이 잘린다.
+ * 569MB 킬 시 지도(객체 290만 개)는 다 그리는 데 객체당 약 21(블록 일 3,300만, 조각 6,200만, 표시 목록 최대 2.7GiB)을 쓴다
+ */
+export const SCENE_WORK_PER_ENTITY = 50;
+
+/** 객체 수가 entities인 도면의 장면 일 한도 */
+export function sceneWorkLimit(entities: number): number {
+  return Math.max(SCENE_PIECE_LIMIT, SCENE_WORK_PER_ENTITY * entities);
+}
+
 /**
  * 무늬를 낮춘 뒤에도 블록과 치수를 그리는 꼬리(장면 일). 합법 해치 뒤의 참조와 치수가 통째로 빠지지 않을 만큼만 남긴다.
  * 낮춘 때의 일 위로 세므로 마지막 해치가 넘친 몫을 깎지 않고, 아직 낮추지 않았으면 낮춤 한도 위로 세므로 대시 일을 한도 바로 아래로 맞춰도 묶인다
