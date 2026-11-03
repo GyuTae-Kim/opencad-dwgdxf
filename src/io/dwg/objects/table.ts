@@ -204,7 +204,7 @@ export function readTableContentR24(or: ObjectReader, e: TableEntity): void {
   e.rowHeights = heights;
   if (cells.length === nc * nr) e.cells = cells;
   // 필드 참조, AcDbFormattedTableData(셀 스타일·병합 범위), 표 스타일 핸들
-  const nf = r.checkCount(r.BL(), 2);
+  const nf = or.hdl.checkCount(r.BL(), 8);
   for (let i = 0; i < nf; i++) or.hdl.H(hb);
   readCellStyle(or);
   const nm = r.checkCount(r.BL(), 8);

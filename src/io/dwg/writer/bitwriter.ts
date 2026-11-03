@@ -70,12 +70,9 @@ export class BitWriter {
     this.pos = save;
   }
 
-  /** 이미 쓴 자리의 RL을 바꾼다 */
+  /** 이미 쓴 자리의 RL을 바꾼다. RC는 바이트 경계가 아니면 다음 바이트의 남은 비트를 지우므로 비트 단위로 쓴다 */
   patchRL(at: number, v: number): void {
-    const save = this.pos;
-    this.pos = at;
-    this.RL(v);
-    this.pos = save;
+    for (let k = 0; k < 4; k++) this.patchBits(at + k * 8, 8, (v >>> (k * 8)) & 0xff);
   }
 
   byteLength(): number {

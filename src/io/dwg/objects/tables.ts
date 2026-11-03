@@ -549,8 +549,9 @@ export function readDimStyle(or: ObjectReader): DimStyleRec {
       BD('DIMMZF');
       v.DIMMZS = r.TV();
     }
-    v.DIMLWD = lwDim(r.BS());
-    v.DIMLWE = lwDim(r.BS());
+    // 1/100 mm 값 그대로다(-1 ByLayer, -2 ByBlock). 30은 0.30 mm다
+    v.DIMLWD = r.BS();
+    v.DIMLWE = r.BS();
   }
   if (r.B()) rc.flags |= 1;
   const hr = or.hdl;
@@ -570,11 +571,4 @@ export function readDimStyle(or: ObjectReader): DimStyleRec {
     handleVars.DIMLTEX2 = hr.H(base);
   }
   return { ...rc, vars: v, handleVars };
-}
-
-function lwDim(v: number): number {
-  if (v === 29) return -1;
-  if (v === 30) return -2;
-  if (v === 31) return -3;
-  return v;
 }

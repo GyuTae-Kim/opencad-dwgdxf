@@ -66,12 +66,12 @@ function dimAssoc(or: ObjectReader): RawTag[] {
   for (let i = 0; i < n; i++) {
     out.push({ code: 1, value: r.TV() });
     out.push({ code: 72, value: r.RC() });
-    const nm = r.checkCount(r.BL(), 1);
+    const nm = hr.checkCount(r.BL(), 8);
     for (let k = 0; k < nm; k++) out.push({ code: 331, value: hex(hr.H(hb)) || '0' });
     out.push({ code: 73, value: r.BS() }, { code: 91, value: r.BL() });
     // 교차 객체 경로는 DWG에서 매개변수·점보다 앞이고 DXF에서는 뒤다
     const inter: RawTag[] = [];
-    const ni = r.checkCount(r.BL(), 1);
+    const ni = hr.checkCount(r.BL(), 8);
     for (let k = 0; k < ni; k++) inter.push({ code: 332, value: hex(hr.H(hb)) || '0' });
     if (ni > 0) inter.push({ code: 74, value: r.BS() }, { code: 92, value: r.BL() });
     out.push({ code: 40, value: r.BD() });

@@ -8,11 +8,3 @@ export function lineweightFromIndex(i: number): number {
   if (i === 31) return -3;
   return -3;
 }
-
-/** 이미 1/100 mm 값으로 저장된 선가중치(레이어 등)를 정리한다. */
-export function normalizeLineweight(v: number): number {
-  if (v === 29 || v === -1) return -1;
-  if (v === 30 || v === -2) return -2;
-  if (v === 31 || v === -3) return -3;
-  return v;
-}
