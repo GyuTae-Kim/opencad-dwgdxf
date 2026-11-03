@@ -40,6 +40,8 @@ export function proxyEntities(e: UnknownEntity, decode?: (b: Uint8Array) => stri
   const base = (): Omit<Entity, 'type'> => {
     const b = { ...entityDefaults(), layer: e.layer, color: { ...color }, linetype: e.linetype, lineweight: lineweight, ltscale: e.ltscale, handle: '' } as Entity;
     if (e.transparency !== undefined) (b as { transparency?: number }).transparency = e.transparency;
+    // 숨긴 객체(60)의 그림은 숨긴 채로: 빠뜨리면 다른 프로그램에서 보인다(실제 도면의 숨긴 RTEXT, 68차 ezdxf 대조)
+    if (e.invisible) b.invisible = true;
     if (e.paperSpace) b.paperSpace = true;
     if (e.owner) b.owner = e.owner;
     return b;
