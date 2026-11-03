@@ -1,6 +1,7 @@
 /** 파일 형식 판별과 읽기 진입점 */
 import type { CadDocument } from '../core/model';
 import { CadReadError } from '../core/errors';
+import { withF64Pool } from '../core/f64pool';
 import { readDxf } from './dxf/reader';
 import { isBinaryDxf } from './dxf/records';
 import { isDwg, readDwg } from './dwg/index';
@@ -28,7 +29,8 @@ export function readCadFile(data: Uint8Array, fileName = '', options: ReadOption
   if (data.length === 0) throw new CadReadError('file.empty');
   const fmt = detectFormat(data);
   if (!fmt) throw new CadReadError('file.unrecognized');
-  const doc = fmt === 'dwg' ? readDwg(data, { onProgress: options.onProgress }) : readDxf(data, { onProgress: options.onProgress });
+  // 평탄 좌표는 덩어리에서 떼어 쓴다(객체마다 버퍼를 만들면 큰 도면에서 큰 GC가 잦다 — core/f64pool.ts)
+  const doc = withF64Pool(() => (fmt === 'dwg' ? readDwg(data, { onProgress: options.onProgress }) : readDxf(data, { onProgress: options.onProgress })));
   restoreArcTexts(doc);
   restoreAnnoDimScales(doc);
   const ext = fileName.toLowerCase().split('.').pop();

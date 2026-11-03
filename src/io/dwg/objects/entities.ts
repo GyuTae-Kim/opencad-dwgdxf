@@ -49,6 +49,7 @@ import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../../core/hatch
 import { TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS } from '../../../core/limits';
 import { BYLAYER, SHARED_BYLAYER_COLOR } from '../../../core/model';
 import { tidyWidths } from '../../../core/lwpoly';
+import { newF64 } from '../../../core/f64pool';
 import { unpack3 } from '../../../core/flat3';
 import { decodeCadEscapes } from '../../../core/codepage';
 import { type BitReader, DwgFormatError } from '../bitstream';
@@ -861,7 +862,7 @@ function readLwPolyline(or: ObjectReader, b: Omit<EntityBase, 'type'>): LwPolyli
   if (ver >= R2010 && flag & 1024) nid = r.checkCount(r.BL(), 2);
   if (flag & 32) nw = r.checkCount(r.BL(), 4);
   // 정점 평탄 좌표 [x, y, 볼록, …]와 정점별 폭 [시작, 끝, …](모두 +0이면 없음)
-  const verts = new Float64Array(np * 3);
+  const verts = newF64(np * 3);
   if (ver <= R14) {
     for (let i = 0; i < np; i++) {
       verts[i * 3] = r.RD();
@@ -889,7 +890,7 @@ function readLwPolyline(or: ObjectReader, b: Omit<EntityBase, 'type'>): LwPolyli
     const s = r.BD();
     const w = r.BD();
     if (i < np) {
-      widths ??= new Float64Array(np * 2);
+      widths ??= newF64(np * 2);
       widths[i * 2] = s;
       widths[i * 2 + 1] = w;
     }
@@ -1639,7 +1640,7 @@ function readHatch(or: ObjectReader, b: Omit<EntityBase, 'type'>, type: 'HATCH')
       const closed = r.B() === 1;
       const nv = r.checkCount(r.BL(), 128);
       // 정점 평탄 좌표 [x, y, 볼록, …]
-      const verts = new Float64Array(nv * 3);
+      const verts = newF64(nv * 3);
       for (let i = 0; i < nv; i++) {
         const p = r.RD2();
         verts[i * 3] = p.x;

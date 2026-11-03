@@ -188,6 +188,38 @@ describe('doctransfer', () => {
     }
   });
 
+  it('읽을 때 덩어리에서 뗀 정점은 구조화 복제로 보내기 전에 제 버퍼가 된다(덩어리 전체가 복사되지 않게)', () => {
+    const owned = (v: Float64Array) => v.byteOffset === 0 && v.buffer.byteLength === v.byteLength;
+    const arrays = (d: CadDocument, blocks: (b: { entities: Entity[] }) => boolean) =>
+      [...d.blocks.values()].filter(blocks).flatMap((b) => b.entities.flatMap((e) => (e.type === 'LWPOLYLINE' ? [e.verts] : e.type === 'HATCH' ? e.paths.flatMap((p) => (p.polyline ? [p.polyline.verts] : [])) : [])));
+    // 큰 블록을 묶음으로 보낼 때: 그대로 보내는 작은 블록만
+    const doc = readCadFile(dxf, 'syn.dxf');
+    expect(arrays(doc, () => true).some((v) => !owned(v))).toBe(true);
+    // 작은 블록에 덩어리의 뷰를 가진 폴리선을 넣는다(핸들이 없어 색인 순서에는 끼지 않는다)
+    const lw = doc.blocks.get('*MODEL_SPACE')!.entities.find((e) => e.type === 'LWPOLYLINE' && !owned(e.verts))!;
+    [...doc.blocks.values()].find((b) => b.entities.length > 0 && b.entities.length < 1000)!.entities.push({ ...lw, handle: '' });
+    let shell: CadDocument | null = null;
+    sendDocument(doc, (d) => (shell = d), () => {}, undefined, { minEntities: 1000, batch: 700 });
+    const small = arrays(shell!, (b) => b.entities.length > 0);
+    expect(small.length).toBeGreaterThan(0);
+    expect(small.every(owned)).toBe(true);
+    // 문서 전체를 보낼 때: 모든 블록
+    const whole = readCadFile(syntheticDxf(800), 'small.dxf');
+    let sent: CadDocument | null = null;
+    sendDocument(whole, (d) => (sent = d), () => {});
+    const all = arrays(sent!, () => true);
+    expect(all.length).toBeGreaterThan(10);
+    expect(all.every(owned)).toBe(true);
+    // 부호화하지 못해 구조화 복제로 보내는 묶음의 객체도
+    const odd = readCadFile(dxf, 'syn.dxf');
+    (odd.blocks.get('*MODEL_SPACE')!.entities[10] as Entity & { odd?: unknown }).odd = new Date(5);
+    const raws: Entity[] = [];
+    sendDocument(odd, () => {}, (p) => void (p.entities && raws.push(...p.entities)), undefined, { minEntities: 1000, batch: 2000 });
+    const rawArrays = arrays({ blocks: new Map([['X', { entities: raws }]]) } as unknown as CadDocument, () => true);
+    expect(rawArrays.length).toBeGreaterThan(0);
+    expect(rawArrays.every(owned)).toBe(true);
+  });
+
   it('DWG(원본 본문 바이트 포함)도 같다', () => {
     const src = readCadFile(dxf, 'syn.dxf');
     const dwg = writeDwg(src, { version: 'AC1032' as never }).data;

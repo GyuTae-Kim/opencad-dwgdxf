@@ -48,6 +48,7 @@ import type {
 import { BYLAYER, SHARED_BYLAYER_COLOR, entityDefaults } from '../../core/model';
 import type { PolyAccum } from '../../core/polyverts';
 import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../core/hatchedges';
+import { f64Of } from '../../core/f64pool';
 import { rawColorToCad } from '../../core/color';
 import type { DxfRecord, TagValue } from './records';
 import { DEG, Tags, handle, hexToBytes, int, name, num, parseColor, parseDimOverrides, parseXData, str } from './tagutil';
@@ -317,8 +318,8 @@ function lwpolyline(c: Common): LwPolylineEntity {
   const e = {
     ...c.base,
     type: 'LWPOLYLINE',
-    verts: new Float64Array(verts),
-    widths: widths ? new Float64Array(widths) : undefined,
+    verts: f64Of(verts),
+    widths: widths ? f64Of(widths) : undefined,
     closed: (flags & 1) !== 0,
     plinegen: (flags & 128) !== 0,
     constantWidth,
@@ -1204,7 +1205,7 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
           }
           vs.push(q.x, q.y, bulge);
         }
-        path.polyline = { closed, verts: new Float64Array(vs) };
+        path.polyline = { closed, verts: f64Of(vs) };
       } else {
         let ne = 0;
         if (codes[i] === 93) {
