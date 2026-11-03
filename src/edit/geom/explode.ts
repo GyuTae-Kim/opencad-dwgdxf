@@ -47,6 +47,18 @@ import { meshFaces, meshVertices } from '../../core/meshdata';
 import { leaderVertices } from '../../core/flat3';
 
 /**
+ * 한 단계 분해가 만드는 객체 수의 어림(펼침 몫을 미리 셀 때): 블록 참조는 블록 내용 × 칸 + 속성, 치수·표는 블록 내용.
+ * 블록을 펼치지 않는 객체는 1이다(자기 자료만큼만 만든다)
+ */
+export function explodeCost(e: Entity, doc: CadDocument): number {
+  if (e.type !== 'INSERT' && e.type !== 'DIMENSION' && e.type !== 'ACAD_TABLE') return 1;
+  const n = (e.block ? doc.blocks.get(tableKey(e.block))?.entities.length : 0) ?? 0;
+  if (e.type !== 'INSERT') return Math.max(1, n);
+  const { rows, cols } = minsertGrid(e);
+  return Math.max(1, rows * cols * n + e.attribs.length);
+}
+
+/**
  * 객체를 한 단계 분해한다. partial은 도면을 바꾸지 않는 조회(범위, 모서리)용으로, 다중 삽입이 칸 한도를 넘어도 한도까지 펼친다.
  * 편집은 잘린 칸을 잃으므로 거부하고 원본을 남긴다.
  */

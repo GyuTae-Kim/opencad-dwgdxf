@@ -93,6 +93,36 @@ export function blockWorkLimit(entities: number): number {
 }
 
 /**
+ * 명령이 블록을 펼치는 일의 몫(59차): 펼쳐 만들거나 찾아가는 블록 안 객체 수. 객체 범위·모서리·곡선 묶기가 한 번 부를 때마다
+ * 기본 + 도면 객체 수만큼 쓴다. 깊이 한도만 있으면 블록 안에 블록을 넣은 작은 파일(깊이 6에 10개씩, DXF 2KB)로 객체 범위가 8초 걸리고
+ * 깊이 한도 8까지는 몇 시간이 걸렸다. 정상 도면의 블록 참조 하나는 대개 도면 객체 수보다 적게 펼친다
+ */
+export const COMMAND_EXPAND_BASE = 250_000;
+/** 객체 스냅은 커서를 움직일 때마다 후보 객체들을 펼치므로 한 번에 이만큼만 쓴다(블록 객체 200개씩 세 겹이면 800만 점에 1.5초였다) */
+export const SNAP_EXPAND_LIMIT = 200_000;
+
+export interface ExpandBudget {
+  left: number;
+  /** 몫이 모자라 펼치지 않은 것이 있다 */
+  cut: boolean;
+}
+
+/** 객체 수가 entities인 도면에서 명령 한 번이 쓰는 펼침 몫 */
+export function expandBudget(entities: number, base = COMMAND_EXPAND_BASE): ExpandBudget {
+  return { left: base + entities, cut: false };
+}
+
+/** n개를 펼칠 몫이 있으면 쓰고 true, 없으면 잘렸다고 적고 false */
+export function spendExpand(b: ExpandBudget, n: number): boolean {
+  if (n > b.left) {
+    b.cut = true;
+    return false;
+  }
+  b.left -= n;
+  return true;
+}
+
+/**
  * 장면 하나의 일 한도. 일은 메모리 공식(PEAK_BYTES_PER_WORK)과 같은 단위라 글리프는 조각 3개 몫이다.
  * 늘어나는 그림은 이 값과 블록 일 한도(blockWorkLimit) 가운데 작은 쪽에서 낮춘다: 남은 해치는 경계만, 남은 선종류는 실선으로.
  * 객체 하나가 작은 파일 조각에서 대시 수만 개·무늬 선 수십만 개로 늘어나기 때문이다. 낮출 때 그 객체는 빠지지 않고 경고가 나오며, 해치는 확대하면 보이는 곳의 세부로 돌아온다.
