@@ -6,11 +6,15 @@
  *  - 핸들 색인에 어느 블록에도 없는 객체가 없으며,
  *  - 명령 취소하면 처음 문서, 다시 하면 명령 뒤 문서와 같은지.
  * STRETCH는 시험 하네스의 고르기가 걸침 윈도우를 흉내 내지 않아 빼었다(같은 commitResults 경로는 dim-xform-blocks.test.ts가 본다).
+ * 71차에 치수·주석 명령(DIMEDIT·DIMTEDIT·DIMSPACE·MATCHPROP)을 더했다. DIMBREAK는 하네스의 고르기에 겹침 찾기가 없고,
+ * 견본 치수는 연관이 아니어서 DIMDISASSOCIATE는 할 일이 없다. MATCHPROP이 치수 그림을 다시 그리는지는 matchprop-dim.test.ts가 본다.
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { MODEL_SPACE, tableKey, type CadDocument } from '../../src/core/model';
+import { MODEL_SPACE, tableKey, type CadDocument, type DimensionEntity } from '../../src/core/model';
+import { registerAnnot2Commands } from '../../src/app/annot2';
 import { registerDrawCommands } from '../../src/app/draw';
+import { registerEditCommands } from '../../src/app/editcmds';
 import { registerModifyCommands } from '../../src/app/modify';
 import { registerUtil2MiscCommands } from '../../src/app/util2-misc';
 import { readDxf } from '../../src/io/dxf/reader';
@@ -28,6 +32,8 @@ function harness() {
   );
   registerDrawCommands(h.app);
   registerModifyCommands(h.app);
+  registerAnnot2Commands(h.app);
+  registerEditCommands(h.app);
   (h.app as unknown as { findCommand: (n: string) => unknown }).findCommand ??= (name: string) => h.app.commands.get(name.toUpperCase());
   registerUtil2MiscCommands(h.app);
   return h;
@@ -57,19 +63,29 @@ function audit(doc: CadDocument) {
 }
 
 const all = (doc: CadDocument) => doc.blocks.get(MODEL_SPACE)!.entities.map((e) => e.handle);
+const dims = (doc: CadDocument) => doc.blocks.get(MODEL_SPACE)!.entities.filter((e): e is DimensionEntity => e.type === 'DIMENSION');
+/** 치수 하나를 문자 자리에서 고른 입력 */
+const pickDim = (d: DimensionEntity): Input2 => ({ pick: d.handle, at: [d.textMid.x, d.textMid.y] });
+const ofType = (doc: CadDocument, ...ts: string[]) => doc.blocks.get(MODEL_SPACE)!.entities.filter((e) => ts.includes(e.type)).map((e) => e.handle);
 
 /** 이름, 명령 차례(이름과 입력) */
-const CASES: [string, [string, (hs: string[]) => Input2[]][]][] = [
-  ['MOVE', [['MOVE', (hs) => [{ sel: hs }, '0,0', '10,10']]]],
-  ['COPY', [['COPY', (hs) => [{ sel: hs }, '0,0', '10,10', '']]]],
-  ['ROTATE', [['ROTATE', (hs) => [{ sel: hs }, '0,0', '30']]]],
-  ['SCALE', [['SCALE', (hs) => [{ sel: hs }, '0,0', '2']]]],
-  ['MIRROR', [['MIRROR', (hs) => [{ sel: hs }, '0,0', '0,10', '']]]],
-  ['MIRROR 원본 지우기', [['MIRROR', (hs) => [{ sel: hs }, '0,0', '0,10', 'Y']]]],
-  ['EXPLODE', [['EXPLODE', (hs) => [{ sel: hs }]]]],
-  ['ERASE', [['ERASE', (hs) => [{ sel: hs }]]]],
-  ['ERASE 뒤 OOPS', [['ERASE', (hs) => [{ sel: hs }]], ['OOPS', () => []]]],
-  ['COPYCLIP 뒤 PASTECLIP', [['COPYCLIP', (hs) => [{ sel: hs }]], ['PASTECLIP', () => ['50,50']]]],
+const CASES: [string, [string, (doc: CadDocument) => Input2[]][]][] = [
+  ['MOVE', [['MOVE', (d) => [{ sel: all(d) }, '0,0', '10,10']]]],
+  ['COPY', [['COPY', (d) => [{ sel: all(d) }, '0,0', '10,10', '']]]],
+  ['ROTATE', [['ROTATE', (d) => [{ sel: all(d) }, '0,0', '30']]]],
+  ['SCALE', [['SCALE', (d) => [{ sel: all(d) }, '0,0', '2']]]],
+  ['MIRROR', [['MIRROR', (d) => [{ sel: all(d) }, '0,0', '0,10', '']]]],
+  ['MIRROR 원본 지우기', [['MIRROR', (d) => [{ sel: all(d) }, '0,0', '0,10', 'Y']]]],
+  ['EXPLODE', [['EXPLODE', (d) => [{ sel: all(d) }]]]],
+  ['ERASE', [['ERASE', (d) => [{ sel: all(d) }]]]],
+  ['ERASE 뒤 OOPS', [['ERASE', (d) => [{ sel: all(d) }]], ['OOPS', () => []]]],
+  ['COPYCLIP 뒤 PASTECLIP', [['COPYCLIP', (d) => [{ sel: all(d) }]], ['PASTECLIP', () => ['50,50']]]],
+  // 치수·주석 명령(71차)
+  ['DIMEDIT 회전', [['DIMEDIT', (d) => ['R', '30', { sel: ofType(d, 'DIMENSION') }]]]],
+  ['DIMEDIT 기울기', [['DIMEDIT', (d) => ['O', { sel: ofType(d, 'DIMENSION') }, '15']]]],
+  ['DIMTEDIT 왼쪽', [['DIMTEDIT', (d) => [pickDim(dims(d)[0]!), 'L']]]],
+  ['DIMSPACE', [['DIMSPACE', (d) => [pickDim(dims(d)[0]!), { sel: ofType(d, 'DIMENSION') }, '']]]],
+  ['MATCHPROP 치수', [['MATCHPROP', (d) => [pickDim(dims(d)[0]!), { sel: ofType(d, 'DIMENSION') }, '']]]],
 ];
 
 describe('편집 명령 뒤 문서 불변식(견본 도면 전체 선택)', () => {
@@ -80,7 +96,7 @@ describe('편집 명령 뒤 문서 불변식(견본 도면 전체 선택)', () =
       const before = audit(h.doc);
       expect(before.stale).toEqual([]);
       const mark = s.undoTop();
-      for (const [cmd, inputs] of steps) await runWith(h, cmd, inputs(all(h.doc)));
+      for (const [cmd, inputs] of steps) await runWith(h, cmd, inputs(h.doc));
       expect(s.undoTop()).not.toBe(mark);
       const after = audit(h.doc);
       const gone = new Set([...before.dims].filter(([x]) => !after.dims.has(x)).map(([, b]) => b));
