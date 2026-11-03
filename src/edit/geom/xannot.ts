@@ -197,13 +197,37 @@ export function xformDimension(e: DimensionEntity, m: Affine, opt: TransformOpti
   const b = e.block ? doc.blocks.get(tableKey(e.block)) : undefined;
   if (!b || !b.entities.length) return { replace: [r] };
   const stripOcs = !isNaturalExt(e.extrusion);
-  const mapped = mapBlockContents(b.entities, contentMap, doc, { mirrorText: false }, stripOcs);
-  updateDimNumber(doc, e, r, mapped.ents);
+  const map = () => {
+    const mapped = mapBlockContents(b.entities, contentMap, doc, { mirrorText: false }, stripOcs);
+    updateDimNumber(doc, e, r, mapped.ents);
+    return mapped;
+  };
+  // 블록을 다시 만들 부르는 쪽에는 이름만 정한 빈 블록(안에 블록을 만드는 객체가 있으면 지금 옮긴다)
+  if (opt.deferDimBlocks && !b.entities.some((c) => c.type === 'DIMENSION' || c.type === 'ACAD_TABLE')) {
+    const nb = newBlock(doc, '*D', b, []);
+    deferredBlocks.set(nb, map);
+    r.block = nb.name;
+    return { replace: [r], blocks: [nb] };
+  }
+  const mapped = map();
   const nb = newBlock(doc, '*D', b, mapped.ents);
   r.block = nb.name;
   const res: EditResult = { replace: [r], blocks: [nb, ...mapped.blocks] };
   if (mapped.message) res.message = mapped.message;
   return res;
+}
+
+/** deferDimBlocks로 내용을 미룬 치수 블록 → 그 내용을 옮기는 일 */
+const deferredBlocks = new WeakMap<BlockDef, () => { ents: Entity[]; message?: string }>();
+
+/** 내용을 미룬 치수 블록이면 지금 옮겨 채운다(70차 — 다시 만든 치수는 옮긴 내용을 버리므로 옮기지 않는다) */
+export function fillDeferredBlock(b: BlockDef): { message?: string } | null {
+  const f = deferredBlocks.get(b);
+  if (!f) return null;
+  deferredBlocks.delete(b);
+  const mapped = f();
+  b.entities = mapped.ents;
+  return mapped.message ? { message: mapped.message } : {};
 }
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ export type { Affine, Box } from './math';
 export { affApply, affIdentity, affInv, affMirror, affMul, affRotate, affScale, affTranslate } from './math';
 
 export { transformEntity } from './transform';
+export { fillDeferredBlock } from './xannot';
 export { boundsOf, copyEntity, entityBounds, insertionPoint, intersections, nearestPointOn, reverseEntity } from './query';
 export { offsetEntity } from './offset';
 export { breakEntity, extendEntity, lengthenEntity, trimEntity } from './trim';

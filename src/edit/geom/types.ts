@@ -32,6 +32,11 @@ export interface TransformOptions {
   dz?: number;
   /** 내부용: MTEXT까지 정확한 거울상(분해) */
   exact?: boolean;
+  /**
+   * 내부용(commitResults로 가는 변환): 치수 블록 내용 옮기기를 미룬다. commitResults가 치수 생성기로 블록을 다시 만들므로
+   * 다시 만들지 못한 치수의 블록만 fillDeferredBlock으로 채운다
+   */
+  deferDimBlocks?: boolean;
 }
 
 export const MSG = {
