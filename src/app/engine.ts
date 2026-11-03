@@ -4,6 +4,7 @@ import type { FromWorker, PreviewView, SaveFormat, SceneMessage, ToWorker } from
 import type { PartialScene } from '../render/build';
 import type { EditOp } from '../edit/session';
 import { DocAssembler } from '../worker/doctransfer';
+import { packOps } from '../worker/editwire';
 
 export interface OpenResult {
   docId: number;
@@ -168,9 +169,9 @@ export class EngineClient {
     this.post({ type: 'shx', clear, files: files.map((f) => ({ name: f.name, data: f.data.slice().buffer as ArrayBuffer })) });
   }
 
-  /** 편집을 워커 문서에도 적용한다 */
+  /** 편집을 워커 문서에도 적용한다(지우는 객체는 핸들만 보낸다 — editwire.ts) */
   edit(docId: number, ops: EditOp[]): void {
-    this.post({ type: 'edit', docId, ops });
+    this.post({ type: 'edit', docId, ops: packOps(ops) });
   }
 
   closeDoc(docId: number): void {

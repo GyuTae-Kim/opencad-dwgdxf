@@ -36,7 +36,8 @@ function wrapErase(app: App): void {
             for (const x of hs) {
               const e = st.doc.entityIndex.get(x);
               const block = st.session.ownerOf(x);
-              if (e && block) snap.push({ block, entity: e, index: st.doc.blocks.get(block)!.entities.indexOf(e) });
+              // 자리는 세션이 기억한 값(ERASE와 같다). 객체마다 블록을 훑으면(indexOf) 선 20만 개를 지울 때 2초가 넘었다
+              if (e && block) snap.push({ block, entity: e, index: st.session.ownerIndex(x) });
             }
           }
           return hs;

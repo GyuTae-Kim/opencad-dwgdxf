@@ -15,6 +15,7 @@ import { ShxLibrary } from '../text/shx';
 import { collectTextUsage } from '../text/collect';
 import type { FromWorker, PreviewView, SceneMessage, ToWorker } from './protocol';
 import { applyOps } from '../edit/session';
+import { unpackOps } from './editwire';
 import { sendDocument } from './doctransfer';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -165,7 +166,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
       case 'edit': {
         const doc = docs.get(msg.docId);
         if (!doc) break;
-        applyOps(doc, msg.ops);
+        applyOps(doc, unpackOps(msg.ops));
         break;
       }
       case 'close':
