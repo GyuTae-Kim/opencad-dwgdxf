@@ -1504,6 +1504,128 @@ export function packBoxes(boxes: readonly EntityBox[]): PackedBoxes {
   return { count: n, handles, handleList: newline ? boxes.map((b) => b.handle) : undefined, bounds, ranges, glyphs };
 }
 
+/** 문자열 일부(a ≤ k < b)의 FNV-1a 해시 */
+function hashRange(s: string, a: number, b: number): number {
+  let h = 0x811c9dc5;
+  for (let k = a; k < b; k++) h = Math.imul(h ^ s.charCodeAt(k), 0x01000193);
+  return h >>> 0;
+}
+
+/**
+ * 메인의 객체 상자 목록. 묶은 형식(PackedBoxes) 그대로 두고 필요한 상자만 객체로 꺼낸다.
+ * 상자마다 객체·배열을 만들면 객체 하나에 수백 바이트가 들어, 290만 객체 도면(킬 시 지도)에서 메인 힙이 한계를 넘었다.
+ * 핸들은 이은 문자열과 시작 위치로 두고, 핸들로 찾는 표는 처음 찾을 때 형식 배열로 만든다(같은 핸들은 뒤 상자가 이긴다).
+ */
+export class BoxList implements Iterable<EntityBox> {
+  readonly length: number;
+  /** [minX, minY, maxX, maxY]×n */
+  readonly bounds: Float64Array;
+  private readonly ranges: Int32Array;
+  private readonly glyphIds: Int32Array;
+  private readonly text: string;
+  private readonly list: string[] | undefined;
+  /** 핸들 i는 text[starts[i], starts[i + 1] - 1) */
+  private readonly starts: Int32Array;
+  private table: Int32Array | null = null;
+
+  constructor(p: PackedBoxes) {
+    const n = p.count;
+    this.length = n;
+    this.bounds = p.bounds;
+    this.ranges = p.ranges;
+    this.glyphIds = p.glyphs;
+    this.list = p.handleList;
+    this.text = p.handleList ? '' : p.handles;
+    this.starts = new Int32Array(this.list ? 0 : n + 1);
+    if (!this.list) {
+      let k = 0;
+      for (let i = 1; i <= n; i++) {
+        const nl = this.text.indexOf('\n', k);
+        k = nl < 0 ? this.text.length + 1 : nl + 1;
+        this.starts[i] = k;
+      }
+    }
+  }
+
+  static from(boxes: readonly EntityBox[]): BoxList {
+    return new BoxList(packBoxes(boxes));
+  }
+
+  handle(i: number): string {
+    return this.list ? this.list[i]! : this.text.slice(this.starts[i]!, this.starts[i + 1]! - 1);
+  }
+
+  /** 상자 하나를 객체로(unpackBoxes와 같은 모양) */
+  at(i: number): EntityBox {
+    const o = i * 4;
+    const { bounds, ranges } = this;
+    const b: EntityBox = { handle: this.handle(i), minX: bounds[o]!, minY: bounds[o + 1]!, maxX: bounds[o + 2]!, maxY: bounds[o + 3]! };
+    const r = i * PACK;
+    if (ranges[r + 2]) b.seg = [ranges[r + 1]!, ranges[r + 2]!];
+    if (ranges[r + 4]) b.tseg = [ranges[r + 3]!, ranges[r + 4]!];
+    if (ranges[r + 6]) b.tri = [ranges[r + 5]!, ranges[r + 6]!];
+    if (ranges[r + 8]) b.ttri = [ranges[r + 7]!, ranges[r + 8]!];
+    if (ranges[r]! >= 0) b.chunk = ranges[r]!;
+    const gc = ranges[r + 10]!;
+    if (gc) b.glyphs = Array.from(this.glyphIds.subarray(ranges[r + 9]!, ranges[r + 9]! + gc));
+    return b;
+  }
+
+  /** 핸들의 상자 번호(없으면 -1) */
+  indexOf(handle: string): number {
+    const t = (this.table ??= this.buildTable());
+    const mask = t.length - 1;
+    for (let s = hashRange(handle, 0, handle.length) & mask; ; s = (s + 1) & mask) {
+      const v = t[s]!;
+      if (v === 0) return -1;
+      if (this.handleIs(v - 1, handle)) return v - 1;
+    }
+  }
+
+  private handleIs(i: number, h: string): boolean {
+    if (this.list) return this.list[i] === h;
+    const a = this.starts[i]!;
+    if (this.starts[i + 1]! - 1 - a !== h.length) return false;
+    for (let k = 0; k < h.length; k++) if (this.text.charCodeAt(a + k) !== h.charCodeAt(k)) return false;
+    return true;
+  }
+
+  private buildTable(): Int32Array {
+    let size = 2;
+    while (size < this.length * 2) size *= 2;
+    const t = new Int32Array(size);
+    const mask = size - 1;
+    // 뒤 상자부터 넣어 같은 핸들이면 뒤 것을 먼저 찾게 한다(예전 Map과 같다)
+    for (let i = this.length - 1; i >= 0; i--) {
+      const h = this.list ? hashRange(this.list[i]!, 0, this.list[i]!.length) : hashRange(this.text, this.starts[i]!, this.starts[i + 1]! - 1);
+      let s = h & mask;
+      while (t[s]) s = (s + 1) & mask;
+      t[s] = i + 1;
+    }
+    return t;
+  }
+
+  *[Symbol.iterator](): Iterator<EntityBox> {
+    for (let i = 0; i < this.length; i++) yield this.at(i);
+  }
+
+  /** 가끔 쓰는 명령(모두 선택, 도면층으로 선택)용: 상자를 하나씩 꺼내 고른다 */
+  filter(f: (b: EntityBox) => boolean): EntityBox[] {
+    const out: EntityBox[] = [];
+    for (let i = 0; i < this.length; i++) {
+      const b = this.at(i);
+      if (f(b)) out.push(b);
+    }
+    return out;
+  }
+
+  map<T>(f: (b: EntityBox) => T): T[] {
+    const out = new Array<T>(this.length);
+    for (let i = 0; i < this.length; i++) out[i] = f(this.at(i));
+    return out;
+  }
+}
+
 /** packBoxes를 되돌린다(빈 범위·없는 묶음·글리프는 두지 않는다) */
 export function unpackBoxes(p: PackedBoxes): EntityBox[] {
   const n = p.count;

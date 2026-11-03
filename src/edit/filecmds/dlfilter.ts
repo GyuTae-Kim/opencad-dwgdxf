@@ -21,7 +21,7 @@ function copyRanges(buf: ArrayBuffer, stride: number, ranges: Range[]): { buf: A
 }
 
 /** handles에 든 객체의 그림만 남긴 표시 목록(무한선·이미지·외부 참조는 뺀다) */
-export function filterDisplayList(dl: DisplayList, boxes: readonly EntityBox[], handles: ReadonlySet<string>): DisplayList {
+export function filterDisplayList(dl: DisplayList, boxes: Iterable<EntityBox>, handles: ReadonlySet<string>): DisplayList {
   const per = new Map<number, { seg: Range[]; tseg: Range[]; tri: Range[]; ttri: Range[] }>();
   const inst = new Set<number>();
   const kept: EntityBox[] = [];
