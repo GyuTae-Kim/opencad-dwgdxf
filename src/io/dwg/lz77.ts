@@ -83,17 +83,14 @@ export function decompressR18(
       const b = src[i++];
       compOffset = (a >> 2) | (b << 6);
       lit = a & 3;
-    } else if (op1 >= 0x12) {
-      compBytes = (op1 & 0x0f) + 2;
+    } else if (op1 >= 0x10) {
+      // 0x10~0x1F(0x11은 끝): 길이는 아래 세 비트(0이면 긴 길이), 비트 3은 거리에 0x4000을 더한다.
+      // 거리가 0x7FFF를 넘는 것은 32KiB보다 큰 페이지 지도·섹션 지도뿐이다(실제 107MB DWG의 페이지 지도로 확인)
+      compBytes = (op1 & 7) + 2;
+      if (compBytes === 2) compBytes = longOffset() + 9;
       const a = src[i++];
       const b = src[i++];
-      compOffset = ((a >> 2) | (b << 6)) + 0x3fff;
-      lit = a & 3;
-    } else if (op1 === 0x10) {
-      compBytes = longOffset() + 9;
-      const a = src[i++];
-      const b = src[i++];
-      compOffset = ((a >> 2) | (b << 6)) + 0x3fff;
+      compOffset = ((a >> 2) | (b << 6)) + 0x3fff + ((op1 & 8) << 11);
       lit = a & 3;
     } else {
       throw new DwgFormatError(`압축 자료의 잘못된 명령 0x${op1.toString(16)}`);

@@ -1954,7 +1954,8 @@ function readMLeader(or: ObjectReader, b: Omit<EntityBase, 'type'>): MLeaderEnti
   props[293] = r.B();
   // 화살촉 목록은 R2007까지만 있다(사양의 "-R2007")
   if (ver <= R2007) {
-    const na = r.checkCount(r.BL(), 2);
+    // 항목마다 자료 흐름에 1비트, 핸들 흐름에 핸들 하나
+    const na = hr.checkCount(r.checkCount(r.BL(), 1), 8);
     for (let i = 0; i < na; i++) {
       r.B();
       H();
@@ -1984,7 +1985,8 @@ function readMLeader(or: ObjectReader, b: Omit<EntityBase, 'type'>): MLeaderEnti
     type: 'MULTILEADER',
     leaderLineType,
     leaderLineColor,
-    leaderLineWeight: lwRaw(leaderLineWeight),
+    // 1/100 mm 값 그대로다(-2 ByBlock). 30은 0.30 mm다
+    leaderLineWeight,
     landing,
     dogleg,
     doglegLength,
@@ -2007,13 +2009,6 @@ function readMLeader(or: ObjectReader, b: Omit<EntityBase, 'type'>): MLeaderEnti
   if (blockAttributes.length) e.blockAttributes = blockAttributes;
   e.props = props;
   return e;
-}
-
-function lwRaw(v: number): number {
-  if (v === 29 || v === -1) return -1;
-  if (v === 30 || v === -2) return -2;
-  if (v === 31 || v === -3) return -3;
-  return v;
 }
 
 // ---------------------------------------------------------------------------

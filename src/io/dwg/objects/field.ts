@@ -85,9 +85,10 @@ export function readField(or: ObjectReader): FieldObject {
   const f: FieldObject = { evaluator: '', code: '', children: [], objects: [], evalOptions: 0, filingOptions: 0, state: 0, evalStatus: 0, errorCode: 0, errorMessage: '' };
   f.evaluator = r.TV();
   f.code = r.TV();
-  const nc = r.checkCount(r.BL(), 1);
+  // 자식·객체 핸들은 핸들 흐름에 있다
+  const nc = hr.checkCount(r.BL(), 8);
   for (let i = 0; i < nc; i++) f.children.push(hex(hr.H(hb)));
-  const no = r.checkCount(r.BL(), 1);
+  const no = hr.checkCount(r.BL(), 8);
   for (let i = 0; i < no; i++) f.objects.push(hex(hr.H(hb)));
   if (ver <= R2004) f.format = r.TV();
   f.evalOptions = r.BL();
@@ -113,7 +114,7 @@ export function readField(or: ObjectReader): FieldObject {
 /** FIELDLIST 본문: 필드 핸들과 알 수 없는 비트(DXF 90) */
 export function readFieldList(or: ObjectReader): { handles: string[]; flags: number } {
   const r = or.dat;
-  const n = r.checkCount(r.BL(), 1);
+  const n = or.hdl.checkCount(r.BL(), 8);
   const flags = r.B();
   const handles: string[] = [];
   for (let i = 0; i < n; i++) handles.push(hex(or.hdl.H(or.h.handle)) || '0');

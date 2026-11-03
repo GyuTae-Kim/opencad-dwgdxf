@@ -372,8 +372,9 @@ export function readHeader(sec: DwgSections, decoder: TextDecoder): DwgHeader {
     H('$DIMLTEX2');
   }
   if (ver >= R2000) {
-    vars.set('$DIMLWD', lwValue(dat.BS()));
-    vars.set('$DIMLWE', lwValue(dat.BS()));
+    // 1/100 mm 값 그대로다(-1 ByLayer, -2 ByBlock). 30은 0.30 mm다(AutoCAD가 같이 저장한 DXF 짝으로 확인)
+    vars.set('$DIMLWD', dat.BS());
+    vars.set('$DIMLWE', dat.BS());
   }
   refs.blockControl = hdl.H();
   refs.layerControl = hdl.H();
@@ -478,12 +479,4 @@ export function readHeader(sec: DwgSections, decoder: TextDecoder): DwgHeader {
     warn(sec.warnings, 'dwg.header_overflow', '헤더 변수를 읽다가 자료 끝을 넘었습니다.');
   }
   return out;
-}
-
-function lwValue(v: number): number {
-  if (v === -1 || v === -2 || v === -3) return v;
-  if (v === 29) return -1;
-  if (v === 30) return -2;
-  if (v === 31) return -3;
-  return v;
 }

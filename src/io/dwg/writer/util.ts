@@ -3,11 +3,11 @@ import type { ReadWarning } from '../../../core/model';
 
 const LW_TABLE = [0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211];
 
-/** 1/100 mm 선가중치 → DWG 번호(표에 없으면 가장 가까운 아래 값) */
+/** 1/100 mm 선가중치 → DWG 번호(표에 없으면 가장 가까운 아래 값). 30은 0.30 mm다(번호 30인 ByBlock은 -2) */
 export function lwIndex(v: number): number {
-  if (v === -1 || v === 29) return 29;
-  if (v === -2 || v === 30) return 30;
-  if (v === -3 || v === 31 || !Number.isFinite(v) || v < 0) return 31;
+  if (v === -1) return 29;
+  if (v === -2) return 30;
+  if (v === -3 || !Number.isFinite(v) || v < 0) return 31;
   let best = 0;
   for (let i = 0; i < LW_TABLE.length; i++) if (LW_TABLE[i] <= v) best = i;
   return best;

@@ -66,7 +66,8 @@ export function readDictionary(or: ObjectReader, withDefault: boolean): Dictiona
   or.commonObject();
   const r = or.dat;
   const ver = or.ver;
-  const n = r.checkCount(r.BL(), 2);
+  // 항목마다 핸들 하나가 핸들 흐름에 있다. 이름은 R2007+에서 문자열 흐름에 있어 자료 흐름으로 세면 큰 사전을 버린다
+  const n = or.hdl.checkCount(r.BL(), 8);
   let cloning = 0;
   let hardOwner = false;
   if (ver === 1014) r.RC();
@@ -311,7 +312,8 @@ export function readMLeaderStyle(or: ObjectReader, isNewFormat: boolean): MLeade
   const leaderLineType = r.BS();
   const leaderLineColor = cmcToCad(r.CMC());
   hr.H(hb); // 선종류
-  const leaderLineWeight = lwRaw(r.BL());
+  // 1/100 mm 값 그대로다(-2 ByBlock). 30은 0.30 mm다
+  const leaderLineWeight = r.BL();
   const landing = r.B() === 1;
   const landingGap = r.BD();
   r.B();
@@ -357,13 +359,6 @@ export function readMLeaderStyle(or: ObjectReader, isNewFormat: boolean): MLeade
   if (textStyle) o.textStyleHandle = hex(textStyle);
   if (block) o.blockHandle = hex(block);
   return o;
-}
-
-function lwRaw(v: number): number {
-  if (v === 29 || v === -1) return -1;
-  if (v === 30 || v === -2) return -2;
-  if (v === 31 || v === -3) return -3;
-  return v;
 }
 
 /** XRECORD 자료: (RS 그룹 코드, 값) 쌍 */
