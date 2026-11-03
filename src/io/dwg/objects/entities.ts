@@ -63,6 +63,7 @@ import { type AcisShape, decodeSatBytes, sabShape, satShape, setAcisShape } from
 import { readTableCellsOld, readTableContentR24 } from './table';
 import { TABLE_TOO_LARGE, decodeTableBody } from './tableraw';
 import type { EntCommon, ObjectReader, RawEed } from './reader';
+import { oleCorners } from '../../oledata';
 
 /** 핸들 → 이름 */
 export interface Names {
@@ -660,9 +661,17 @@ export function readEntity(or: ObjectReader, names: Names): ParsedEntity {
       break;
     case 'OLE2FRAME':
     case 'OLEFRAME': {
-      r.BS();
-      if (ver >= R2000) r.BS();
+      const flags = r.BS();
+      const mode = ver >= R2000 ? r.BS() : 0;
       const e: Ole2FrameEntity = { ...b, type, upperLeft: { x: 0, y: 0, z: 0 }, lowerRight: { x: 0, y: 0, z: 0 } };
+      // R2000+ OLE2FRAME: 자료 길이(BL)·자료·끝 RC. 자료는 DXF 310과 같은 바이트이고 머리에 모서리가 있다(R2000 이전·OLEFRAME은 표본이 없어 그대로)
+      if (type === 'OLE2FRAME' && ver >= R2000) {
+        const data = r.rawBytes(r.checkCount(r.BL(), 8));
+        const tail = r.RC();
+        const c = oleCorners(data);
+        if (c) [e.upperLeft, e.lowerRight] = c;
+        e.ole = { flags, mode, tail, data };
+      }
       out.entity = e;
       break;
     }

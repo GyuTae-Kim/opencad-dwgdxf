@@ -223,7 +223,7 @@ export function warningText(code: string): string {
     case 'dimension.generated':
       return '치수 블록이 없는 치수는 치수 스타일대로 다시 만들어 그렸습니다(저장한 파일에는 블록을 넣지 않습니다).';
     case 'ole.no_position':
-      return 'DWG에서 읽은 OLE 객체(붙여 넣은 표·그림)는 위치를 알 수 없어 그리지 않았습니다. 같은 버전 DWG로 저장하면 그대로 남습니다.';
+      return 'R2000 이전 DWG에서 읽은 OLE 객체(붙여 넣은 표·그림)는 위치를 알 수 없어 그리지 않았습니다. 같은 버전 DWG로 저장하면 그대로 남습니다.';
     case 'ole.frame_only':
       return 'OLE 객체(붙여 넣은 표·그림)는 내용 없이 틀만 그립니다.';
     case 'font.unavailable':
