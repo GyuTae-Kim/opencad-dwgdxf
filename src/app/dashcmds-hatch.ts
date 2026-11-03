@@ -23,6 +23,7 @@ import { candidates, settingsOf } from './hatchcmd';
 import { memOf, previewOf, visibleEntities } from './modify2-util';
 import type { OverlayGeom, Pt } from './view';
 import { lwPoints, packBulge } from '../core/lwpoly';
+import { MSG } from '../edit/geom/types';
 
 /** -HATCH 그라데이션 이름 ↔ 해치 객체의 그라데이션 이름 */
 export const GRADIENT_NAMES: [string, string][] = [
@@ -172,7 +173,7 @@ export function registerDashHatchCommands(app: App): void {
         if ('enter' in r) break;
         if ('point' in r) {
           ctx.print('모든 것 선택 중... 경계 분석 중...');
-          const res = detectBoundary(doc, cands(), r.point, { islands: s.islands, gapTolerance: s.gap });
+          const res = detectBoundary(doc, cands(), r.point, { islands: s.islands, gapTolerance: s.gap, onCut: () => ctx.print(MSG.blockEdgesCut) });
           if (!res || !res.paths.length) {
             ctx.print('유효한 해치 경계를 찾을 수 없습니다. 닫힌 영역 안을 선택하거나 틈 허용(고급 옵션 G)을 늘리십시오.', 'err');
             continue;
@@ -592,7 +593,7 @@ export function registerDashHatchCommands(app: App): void {
         if (!('point' in r)) continue;
         ctx.print('모든 것 선택 중... 경계 분석 중...');
         const list = set ? set.map((h) => doc.entityIndex.get(h)).filter((e): e is Entity => !!e) : visibleEntities(st);
-        const res = detectBoundary(doc, list, r.point, { islands: islands ? 'normal' : 'ignore' });
+        const res = detectBoundary(doc, list, r.point, { islands: islands ? 'normal' : 'ignore', onCut: () => ctx.print(MSG.blockEdgesCut) });
         if (!res || !res.paths.length) {
           ctx.print('유효한 경계를 찾을 수 없습니다. 닫힌 영역 안을 선택하십시오.', 'err');
           continue;

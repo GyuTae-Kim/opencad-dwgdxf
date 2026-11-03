@@ -3,6 +3,7 @@
  * 고른 점(pick)이 어느 부분을 지우거나 어느 끝을 늘일지 정한다(AutoCAD와 같다).
  * 결과가 원본과 같은 종류면 replace(핸들 유지), 둘로 나뉘면 나머지는 add, 종류가 바뀌면 remove + add.
  */
+import type { ExpandBudget } from '../../core/limits';
 import type { CadDocument, Entity, HatchEntity, LineEntity, Vec2 } from '../../core/model';
 import { pushAll } from '../../core/arrays';
 import { type ArcPiece, type EllPiece, type LinePiece, type Path, type Piece, pathBox, pathLength, pathNearest, pathSAtLength, pathSub, pieceAt, pieceBox, pieceLength, pieceTAtLength, pieceTangent, subPiece } from './curve';
@@ -25,6 +26,8 @@ export interface TrimOptions {
   doc?: CadDocument;
   /** 빠른 모드: 교차가 없으면 객체를 지운다(AutoCAD 2021+ TRIM 빠른 작업) */
   quick?: boolean;
+  /** 블록 참조·치수 모서리를 펼치는 몫(모든 모서리가 함께 쓴다). 없으면 모서리마다 새로. 넘긴 쪽은 budget.cut으로 잘렸는지 안다 */
+  budget?: ExpandBudget;
 }
 
 /** 결과 객체들을 원본 교체·추가로 */
@@ -64,7 +67,7 @@ function cutterPieces(e: Entity, cutters: Entity[] | 'all', opts: TrimOptions, t
       const cb = edgeBox(c, opts.doc);
       if (!cb || (cb !== 'inf' && !boxesOverlap(cb, tb, pad))) continue;
     }
-    pushAll(edges, edgeSet(c, opts.doc, !!opts.extendEdges));
+    pushAll(edges, edgeSet(c, opts.doc, !!opts.extendEdges, opts.budget));
   }
   return { edges, self };
 }
@@ -165,7 +168,7 @@ function trimHatch(e: HatchEntity, cutters: Entity[] | 'all', pick: Vec2, opts: 
   const edges: Entity[] = [];
   for (const c of list) {
     if (c === e || (c.handle && c.handle === e.handle)) continue;
-    for (const pc of edgeSet(c, doc, !!opts.extendEdges)) {
+    for (const pc of edgeSet(c, doc, !!opts.extendEdges, opts.budget)) {
       const x = pieceEntity(tmpl, pc);
       if (x) edges.push(x);
     }
@@ -299,7 +302,7 @@ export function extendEntity(e: Entity, boundaries: Entity[], pick: Vec2, opts: 
       const bb = edgeBox(b, opts.doc);
       if (!bb || (bb !== 'inf' && !reach(bb))) continue;
     }
-    pushAll(edges, edgeSet(b, opts.doc, !!opts.extendEdges));
+    pushAll(edges, edgeSet(b, opts.doc, !!opts.extendEdges, opts.budget));
   }
   let best = Infinity;
   const tolT = ext.k === 'line' ? 1e-9 / Math.max(1e-300, dist(ext.a, ext.b)) * Math.max(1, Math.abs(ext.a.x), Math.abs(ext.a.y)) : 1e-9;

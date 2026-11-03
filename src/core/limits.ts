@@ -107,6 +107,12 @@ export const COMMAND_EXPAND_BASE = 250_000;
 /** 객체 스냅은 커서를 움직일 때마다 후보 객체들을 펼치므로 한 번에 이만큼만 쓴다(블록 객체 200개씩 세 겹이면 800만 점에 1.5초였다) */
 export const SNAP_EXPAND_LIMIT = 200_000;
 
+/**
+ * 모서리(TRIM·EXTEND 등)와 모서리 상자가 블록을 들어가는 깊이. 일은 펼침 몫(expandBudget)이 묶으므로 이 깊이는 자기 자신을 넣은 블록의 재귀 깊이만 막는다.
+ * 전에는 4라 블록을 다섯 겹 넘게 넣은 정상 도면에서 깊은 블록 안 객체가 모서리가 되지 않았다(객체 범위는 8, 경계 찾기는 16)
+ */
+export const EDGE_DEPTH_LIMIT = 16;
+
 export interface ExpandBudget {
   left: number;
   /** 몫이 모자라 펼치지 않은 것이 있다 */

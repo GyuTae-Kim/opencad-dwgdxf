@@ -36,6 +36,7 @@ export interface TransformOptions {
 
 export const MSG = {
   noIntersect: '객체가 모서리와 교차하지 않습니다.',
+  blockEdgesCut: '블록이 너무 커서 펼침 몫을 넘은 블록 참조는 모서리·경계로 쓰지 않았습니다.',
   noEdge: '그 방향에는 모서리가 없습니다.',
   cannotTrim: '이 객체는 자를 수 없습니다.',
   trimMline: '다중선은 이 웹 버전에서 자르거나 연장할 수 없습니다. MLEDIT의 자르기·T자·구석 접합을 쓰거나, 분해한 뒤 자르십시오.',

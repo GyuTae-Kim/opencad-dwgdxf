@@ -2,7 +2,7 @@
  * 절단·경계 모서리: 어떤 객체든 평면도 조각 목록으로(블록 참조·치수는 분해한 그림, 지시선·여러 줄·면은 선분).
  * EDGEMODE = 1이면 모서리를 자연스럽게 연장한다(선 → 무한선, 호 → 원, 타원호 → 타원, 열린 폴리선 → 끝 세그먼트의 연장).
  */
-import { type ExpandBudget, expandBudget, minsertGrid, spendExpand } from '../../core/limits';
+import { EDGE_DEPTH_LIMIT, type ExpandBudget, expandBudget, minsertGrid, spendExpand } from '../../core/limits';
 import { pushAll } from '../../core/arrays';
 import type { BlockDef, CadDocument, Entity, InsertEntity, Vec2 } from '../../core/model';
 import { tableKey } from '../../core/model';
@@ -37,7 +37,7 @@ export function edgePieces(e: Entity, doc?: CadDocument, depth = 0, budget?: Exp
     case 'DIMENSION':
     case 'ACAD_TABLE':
     case 'MULTILEADER': {
-      if (!doc || depth > 4) return [];
+      if (!doc || depth > EDGE_DEPTH_LIMIT) return [];
       const bud = budget ?? expandBudget(doc.entityIndex.size);
       if (!spendExpand(bud, explodeCost(e, doc))) return [];
       const r = explodeEntity(e, doc, true);
@@ -133,13 +133,13 @@ export function complement(p: ArcPiece | EllPiece): Piece {
 }
 
 /** 모서리 목록(연장 포함) */
-export function edgeSet(e: Entity, doc: CadDocument | undefined, extend: boolean): Piece[] {
+export function edgeSet(e: Entity, doc: CadDocument | undefined, extend: boolean, budget?: ExpandBudget): Piece[] {
   // 문자는 글자 상자가 절단·경계 모서리다(AutoCAD TRIM·EXTEND와 같다 — 스냅·교점에는 쓰지 않는다)
   if (TEXT_EDGES.has(e.type)) {
     const box = doc ? textOutline(e, doc) : null;
     return box ? segs(box, true) : [];
   }
-  const base = edgePieces(e, doc);
+  const base = edgePieces(e, doc, 0, budget);
   if (!extend) return base;
   const path = entityPath(e);
   if (!path || path.closed || !path.pieces.length) return base;
@@ -239,7 +239,7 @@ export function edgeBox(e: Entity, doc?: CadDocument, depth = 0): Box | 'inf' | 
     if (e.type === 'XLINE' || e.type === 'RAY') return 'inf';
     return pathBox(path);
   }
-  if (doc && depth <= 4 && (e.type === 'INSERT' || e.type === 'DIMENSION')) {
+  if (doc && depth <= EDGE_DEPTH_LIMIT && (e.type === 'INSERT' || e.type === 'DIMENSION')) {
     const b = doc.blocks.get(tableKey(e.block));
     if (!b) return null;
     const bb = blockEdgeBox(b, doc, depth);
