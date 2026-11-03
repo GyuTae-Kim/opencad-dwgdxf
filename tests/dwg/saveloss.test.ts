@@ -165,6 +165,15 @@ describe('프록시 객체를 다른 형식·버전으로', () => {
     const c = ms.find((e) => e.type === 'CIRCLE') as Entity & { center: { x: number; y: number }; radius: number; color: { aci: number } };
     expect([c.center.x, c.center.y, c.radius, c.color.aci]).toEqual([1, 2, 3, 1]);
   });
+  it('숨긴 사용자 객체의 그림은 숨긴 채로 쓴다(DXF·DWG)', () => {
+    const doc = docWithProxy();
+    (doc.blocks.get(MODEL_SPACE)!.entities[0] as Entity).invisible = true;
+    for (const back of [readDxf(writeDxf(doc, { version: 'AC1032' }).data), readDwg(writeDwg(doc, { version: 'AC1018' }).data)]) {
+      const ms = back.blocks.get(MODEL_SPACE)!.entities;
+      expect(ms.map((e) => e.type).sort()).toEqual(['CIRCLE', 'LINE']);
+      expect(ms.every((e) => e.invisible === true)).toBe(true);
+    }
+  });
   it('DWG(원본 본문 없음)도 같다', () => {
     const out = writeDwg(docWithProxy(), { version: 'AC1018' });
     expect(out.warnings.map((w) => w.code)).toContain('entity.proxy_as_geometry');
