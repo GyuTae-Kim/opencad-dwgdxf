@@ -2,14 +2,17 @@
  * 블록 개수(COUNT): 공간의 맨 위 블록 참조를 블록 이름(동적 블록은 정의 이름)별로 묶는다.
  * 외부 참조·익명 블록(*D·*X 등, 동적 블록 표현 *U는 제외)은 세지 않는다(AutoCAD와 같다).
  */
-import { minsertGrid } from '../core/limits';
+import { minsertCells } from '../core/limits';
 import type { CadDocument, Entity, InsertEntity } from '../core/model';
 import { tableKey } from '../core/model';
 import { blockDisplayName } from './extract';
 
 export interface CountRow {
   name: string;
+  /** 참조 객체(객체마다 한 번) */
   handles: string[];
+  /** 개수: 다중 삽입(MINSERT)은 배열 칸마다 하나 */
+  count: number;
 }
 
 export function countRows(doc: CadDocument, entities: readonly Entity[]): CountRow[] {
@@ -23,11 +26,10 @@ export function countRows(doc: CadDocument, entities: readonly Entity[]): CountR
     const name = blockDisplayName(doc, ins);
     if (/^\*/.test(name)) continue;
     const k = tableKey(name);
-    const row = map.get(k) ?? { name, handles: [] };
+    const row = map.get(k) ?? { name, handles: [], count: 0 };
     row.handles.push(ins.handle);
-    // 다중 삽입(MINSERT)은 배열 칸마다 하나
-    const { rows, cols } = minsertGrid(ins);
-    for (let i = 1; i < rows * cols; i++) row.handles.push(ins.handle);
+    // 다중 삽입은 칸을 펼치지 않고 행 × 열로 센다(칸마다 핸들을 쌓으면 큰 다중 삽입 100개로 1억 개가 된다)
+    row.count += minsertCells(ins);
     map.set(k, row);
   }
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
