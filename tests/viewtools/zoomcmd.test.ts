@@ -191,6 +191,19 @@ describe('ZOOM·PAN 명령(진짜 App)', () => {
     expect(h.calls).toEqual([['flush'], ['zoomExtents']]);
   });
 
+  it('가운데 버튼 두 번 누르기(뷰의 onZoomExtents)도 다시 그리기를 끝낸 뒤에 범위를 본다', async () => {
+    const h = setup(null);
+    h.app.edits.flush = async () => {
+      await Promise.resolve();
+      h.calls.push(['flush']);
+    };
+    const hook = (h.view as unknown as { onZoomExtents: (() => void) | null }).onZoomExtents;
+    expect(hook).toBeTypeOf('function');
+    hook!();
+    await settle();
+    expect(h.calls).toEqual([['flush'], ['zoomExtents']]);
+  });
+
   it('모두 선택은 다시 그리기가 끝난 장면에서 고른다(46차 — 지우고 되돌린 직후 0개를 골랐다)', async () => {
     const h = setup(null);
     h.st.scenes.set(h.st.space, { entities: [] } as never);

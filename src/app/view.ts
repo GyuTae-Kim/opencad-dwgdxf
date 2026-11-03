@@ -181,6 +181,8 @@ export class CadView {
 
   /** 문맥 복구 뒤 장면을 다시 올리는 함수(앱이 넣는다) */
   onRestore: (() => void) | null = null;
+  /** 가운데 버튼 두 번 누르기의 전체 보기(앱이 넣는다 — 미뤄 둔 다시 그리기를 먼저 끝낸다). 없으면 바로 전체 보기 */
+  onZoomExtents: (() => void) | null = null;
   /** 외부 참조 장면(앱이 연결한 참조 파일). 문서 번호·참조 블록 이름(대문자)으로 찾는다 */
   xrefPlacements: ((st: DocState, list: DisplayList, visible: (style: number) => boolean, vpFrozen?: ReadonlySet<string>) => XrefPlacement[]) | null = null;
   /** 뷰포트에서 쓸 모형 장면(PSLTSCALE 변형 포함) */
@@ -1526,7 +1528,8 @@ export class CadView {
         ev.preventDefault();
         const now = performance.now();
         if (ev.button === 1 && now - this.lastMiddle < 350) {
-          this.zoomExtents();
+          if (this.onZoomExtents) this.onZoomExtents();
+          else this.zoomExtents();
           this.lastMiddle = 0;
           return;
         }
