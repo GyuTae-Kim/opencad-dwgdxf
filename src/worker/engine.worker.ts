@@ -36,6 +36,12 @@ let imageKeys: ReadonlySet<string> = new Set();
 let pdfPages: ReadonlyMap<string, readonly [number, number]> = new Map();
 /** 문서별로 숨긴 최상위 객체 */
 const hiddenByDoc = new Map<number, ReadonlySet<string>>();
+/**
+ * 편집을 적용하지 못한 문서(80차). 메인이 replace로 다시 보낼 때까지 편집을 버리고 저장을 거절한다 —
+ * 78차 결함처럼 반쯤 적용된 문서로 다시 그리거나 저장하면 화면·파일이 메인 문서와 어긋난다
+ */
+const outOfSync = new Set<number>();
+const OUT_OF_SYNC = '도면 처리 모듈의 문서를 다시 맞추는 중입니다. 잠시 뒤 다시 저장하십시오.';
 
 function makeScene(
   doc: CadDocument,
@@ -166,13 +172,24 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
       case 'edit':
       case 'editEncoded': {
         const doc = docs.get(msg.docId);
-        if (!doc) break;
-        applyOps(doc, unpackOps(msg.type === 'edit' ? msg.ops : decodeWire(msg.enc)));
+        if (!doc || outOfSync.has(msg.docId)) break;
+        try {
+          applyOps(doc, unpackOps(msg.type === 'edit' ? msg.ops : decodeWire(msg.enc)));
+        } catch (e) {
+          // 반쯤 적용된 문서로 장면을 그리거나 저장하지 않게, 메인이 문서를 다시 보낼 때까지 이 문서의 편집·저장을 받지 않는다
+          outOfSync.add(msg.docId);
+          post({ type: 'editFailed', docId: msg.docId, message: e instanceof Error ? e.message : String(e) });
+        }
         break;
       }
+      case 'replace':
+        if (docs.has(msg.docId)) docs.set(msg.docId, msg.doc);
+        outOfSync.delete(msg.docId);
+        break;
       case 'close':
         docs.delete(msg.docId);
         hiddenByDoc.delete(msg.docId);
+        outOfSync.delete(msg.docId);
         break;
       case 'hide':
         if (msg.handles.length) hiddenByDoc.set(msg.docId, new Set(msg.handles));
@@ -198,6 +215,10 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
       case 'save': {
         const doc = docs.get(msg.docId);
         if (!doc) throw new Error('문서가 없습니다');
+        if (outOfSync.has(msg.docId)) {
+          post({ type: 'error', id: msg.id, code: 'out_of_sync', message: OUT_OF_SYNC });
+          break;
+        }
         const t0 = performance.now();
         let r: { data: Uint8Array; warnings: { code: string; message: string; count?: number; detail?: unknown }[] };
         if (msg.format === 'dwg') {

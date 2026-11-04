@@ -403,6 +403,7 @@ export class App {
   constructor(drawingParent: HTMLElement) {
     const fontBase = new URL('fonts/noto-sans-kr/', document.baseURI).href;
     this.engine = new EngineClient(fontBase);
+    this.engine.onEditFailed = (docId, message) => this.resyncWorkerDoc(docId, message);
     this.fontLib = new OutlineLibrary(fontBase);
     this.text = new TextEngine(this.fontLib);
     this.view = new CadView(drawingParent);
@@ -1494,6 +1495,19 @@ export class App {
     this.ui.refreshStatus();
     this.ui.refreshPalette();
     this.refreshSelectionOverlay();
+  }
+
+  /**
+   * 워커가 편집을 적용하지 못했을 때(80차): 워커 문서를 지금 메인 문서로 바꾸고 모든 공간을 다시 그린다.
+   * 전에는 워커 오류를 버려, 반쯤 적용된 워커 문서로 다시 그린 장면과 저장 파일이 화면의 도면과 어긋났다(78차 결함)
+   */
+  private resyncWorkerDoc(docId: number, message: string): void {
+    const st = this.docs.find((d) => d.docId === docId);
+    if (!st) return;
+    console.error('OpenCAD: worker edit failed, resyncing the document', message);
+    this.engine.replace(docId, st.doc);
+    this.edits.rebuildEverything(st);
+    toast('도면 처리 모듈이 편집을 적용하지 못해 지금 도면으로 다시 맞췄습니다.', 'warn', 8000);
   }
 
   /** 모형·배치 전환 */

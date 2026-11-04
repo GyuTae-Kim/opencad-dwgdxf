@@ -8350,5 +8350,7 @@
   "언어 선택": "选择语言",
   "https://gyutae-kim.github.io/opencad-dwgdxf/og-opencad.jpg": "https://gyutae-kim.github.io/assets/i18n/zh-CN/og/opencad.jpg",
   "사이트 이동": "网站导航",
-  "OpenCAD 사용 안내": "OpenCAD 使用指南"
+  "OpenCAD 사용 안내": "OpenCAD 使用指南",
+  "도면 처리 모듈이 편집을 적용하지 못해 지금 도면으로 다시 맞췄습니다.": "图纸处理模块未能应用编辑，已按当前图纸重新同步。",
+  "도면 처리 모듈의 문서를 다시 맞추는 중입니다. 잠시 뒤 다시 저장하십시오.": "图纸处理模块正在重新同步文档。请稍后再次保存。"
 }

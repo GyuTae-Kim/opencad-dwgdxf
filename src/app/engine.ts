@@ -52,6 +52,8 @@ export class EngineClient {
   private editScratch?: EncoderScratch;
   private nextId = 1;
   private readonly pending = new Map<number, Pending>();
+  /** 워커가 편집을 적용하지 못했다(App이 메인 문서를 replace로 다시 보낸다 — 80차) */
+  onEditFailed?: (docId: number, message: string) => void;
 
   constructor(private readonly fontBase: string) {}
 
@@ -86,6 +88,10 @@ export class EngineClient {
   }
 
   private onMessage(m: FromWorker): void {
+    if (m.type === 'editFailed') {
+      this.onEditFailed?.(m.docId, m.message);
+      return;
+    }
     const p = this.pending.get(m.id);
     if (!p) return;
     switch (m.type) {
@@ -187,6 +193,11 @@ export class EngineClient {
     }
     if (enc) this.post({ type: 'editEncoded', docId, enc }, encodedTransfer(enc));
     else this.post({ type: 'edit', docId, ops: wire });
+  }
+
+  /** 워커 문서를 메인 문서로 바꾼다(편집을 적용하지 못했을 때) */
+  replace(docId: number, doc: CadDocument): void {
+    this.post({ type: 'replace', docId, doc });
   }
 
   closeDoc(docId: number): void {
