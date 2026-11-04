@@ -26,15 +26,20 @@ describe('DWG 입력 판별', () => {
     expect(dwgVersion(r12)).toBe('AC1009');
     // R12는 읽는다. 머리가 짧으면 손상이다
     expect(code(() => readDwg(r12))).toBe('dwg.corrupt');
-    // R10(82차)·R9(83차)도 R12 리더로 읽는다. 머리가 짧으면 손상, 그 이전(R2.6 AC1003)은 지원하지 않는다
-    for (const v of ['AC1006', 'AC1004']) {
+    // R10(82차)·R9(83차)·R2.6(84차)도 R12 리더로 읽는다. 머리가 짧으면 손상, 그 이전(R2.5 AC1002)은 지원하지 않는다
+    for (const v of ['AC1006', 'AC1004', 'AC1003']) {
       const d = new Uint8Array(256);
       d.set(new TextEncoder().encode(v));
       expect(code(() => readDwg(d))).toBe('dwg.corrupt');
     }
-    const r26 = new Uint8Array(256);
-    r26.set(new TextEncoder().encode('AC1003'));
-    expect(code(() => readDwg(r26))).toBe('dwg.unsupported_version');
+    // R2.5와 판 문자열이 AC10nn 꼴이 아닌 R2.10·R1.x도 DWG로 알아보고 지원하지 않는 판으로 끝낸다(전에는 모르는 파일)
+    for (const v of ['AC1002', 'AC2.10', 'AC1.40']) {
+      const d = new Uint8Array(256);
+      d.set(new TextEncoder().encode(v));
+      expect([dwgVersion(d), code(() => readDwg(d))]).toEqual([v, 'dwg.unsupported_version']);
+    }
+    // 비슷하지만 판이 아닌 머리는 여전히 모르는 파일이다
+    expect(isDwg(new TextEncoder().encode('AC3.1x'))).toBe(false);
   });
 
   it('머리만 있는 파일은 손상으로 끝난다', () => {

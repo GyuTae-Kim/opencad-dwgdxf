@@ -4,7 +4,7 @@
  * 배치는 공개 형식 설명(Michal Josef Špaček의 CAD-Format-DWG-AC1009, dwg_ac1009.ksy, CC0)을 보고 새로 작성했고,
  * AutoCAD R11이 같은 도면을 DWG와 DXF로 저장한 짝과 공개 R12 도면(에스토니아 국토청 지형 자료, 오스트라바 3D 건물)으로 확인했다.
  * 읽은 값은 R12 DXF와 같은 태그로 바꿔 DXF 리더로 읽는다. 도면층·블록·폴리선·속성·치수의 뜻이 R12 DXF와 같기 때문이다.
- * R10(AC1006)·R9(AC1004)도 같은 배치에 칸만 적어 같은 길로 읽는다(같은 저자의 dwg_ac1006.ksy·dwg_ac1004.ksy, CC0).
+ * R10(AC1006)·R9(AC1004)·R2.6(AC1003)도 같은 배치에 칸만 적어 같은 길로 읽는다(같은 저자의 dwg_ac1006.ksy·dwg_ac1004.ksy·dwg_ac1003.ksy, CC0).
  */
 import { CadReadError } from '../../core/errors';
 import { codepageToEncoding, decoderFor, dwgCodepageName } from '../../core/codepage';
@@ -83,18 +83,18 @@ class R12File {
   readonly extra: [number, number];
   readonly headerEnd: number;
   /**
-   * R11 이전(R10 AC1006·R9 AC1004): 머리 변수와 표 자리는 R12와 같고 R12가 뒤에 더한 변수만 없다. 표 레코드에는 이름 다음의 used(2)와 끝 CRC(2)가 없고,
+   * R11 이전(R10 AC1006·R9 AC1004·R2.6 AC1003): 머리 변수와 표 자리는 R12와 같고 R12가 뒤에 더한 변수만 없다. 표 레코드에는 이름 다음의 used(2)와 끝 CRC(2)가 없고,
    * 객체에는 추가 플래그·확장 자료·뷰포트 번호와 끝 CRC가 없으며, 선종류 번호가 1바이트, 고도가 두께보다 먼저다(82차 — dwg_ac1006.ksy)
    */
   readonly pre11: boolean;
   /**
-   * R9(AC1004, 83차 — dwg_ac1004.ksy): R10에 더해 핸들이 없고, 선·점은 2D에 고도 칸이 있으며(R10부터는 고도 비트가 Z를 빼는 뜻),
-   * 3D 선·3D 면은 점마다 Z가 플래그로 있고, 치수의 점은 모두 2D다
+   * R10 이전(R9 AC1004 — 83차, R2.6 AC1003 — 84차, dwg_ac1004.ksy·dwg_ac1003.ksy): R10에 더해 핸들이 없고, 선·점은 2D에 고도 칸이 있으며
+   * (R10부터는 고도 비트가 Z를 빼는 뜻), 3D 선·3D 면은 점마다 Z가 플래그로 있고, 치수의 점은 모두 2D다. 객체 배치는 R9와 R2.6이 같다
    */
-  readonly r9: boolean;
-  /** 표 레코드 이름 뒤 칸의 어긋남(R12 0, R10·R9 -2 — used가 없다) */
+  readonly pre10: boolean;
+  /** 표 레코드 이름 뒤 칸의 어긋남(R12 0, R11 이전 -2 — used가 없다) */
   readonly rec: number;
-  /** 객체 끝 CRC 바이트(R12 2, R10·R9 0) */
+  /** 객체 끝 CRC 바이트(R12 2, R11 이전 0) */
   readonly tail: number;
   /** 지금 읽는 위치(진행률) */
   at = 0;
@@ -102,12 +102,14 @@ class R12File {
   constructor(readonly data: Uint8Array) {
     this.dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
     const ver = String.fromCharCode(...data.subarray(0, 6));
-    this.r9 = ver === 'AC1004';
-    this.pre11 = this.r9 || ver === 'AC1006';
+    const r26 = ver === 'AC1003';
+    this.pre10 = r26 || ver === 'AC1004';
+    this.pre11 = this.pre10 || ver === 'AC1006';
     this.rec = this.pre11 ? -2 : 0;
     this.tail = this.pre11 ? 0 : 2;
-    // 머리 변수는 R9 0x3ef, R10 0x512(변수 160개면 응용프로그램 표까지 0x51c)에서 끝난다
-    if (data.length < (this.r9 ? 0x3ef : this.pre11 ? 0x512 : 0x6c0)) throw new CadReadError('dwg.corrupt', { reason: 'R12 header too short' });
+    // 머리 변수는 R2.6 0x3c5(변수 122개면 0x3d5), R9 0x3ef, R10 0x512(변수 160개면 응용프로그램 표까지 0x51c)에서 끝난다
+    const minHeader = r26 ? 0x3c5 : this.pre10 ? 0x3ef : this.pre11 ? 0x512 : 0x6c0;
+    if (data.length < minHeader) throw new CadReadError('dwg.corrupt', { reason: 'R12 header too short' });
     const dv = this.dv;
     const es = dv.getInt32(0x14, true);
     const ee = dv.getInt32(0x18, true);
@@ -121,10 +123,13 @@ class R12File {
     if (!inFile(es, ee)) throw new CadReadError('dwg.corrupt', { reason: 'R12 entity section' });
     this.ent = [es, ee];
     this.blk = inFile(bs, bs + bz) ? [bs, bs + bz] : [0, 0];
-    this.extra = inFile(xs, xs + xz) ? [xs, xs + xz] : [0, 0];
-    // 헤더 변수는 객체 구역 앞의 CRC(2)와 구분자(16) 앞에서 끝난다. R10·R9는 그 둘이 없어 객체 구역이 머리 바로 뒤에 온다(표본 0x512·0x3ef).
-    // R9 머리는 0x3ef(MIRRTEXT 뒤)에서 끝나 그 뒤 자리(R10의 UCS 표·코드 페이지)는 객체 구역이 더 뒤에서 시작해도 읽지 않는다
-    this.headerEnd = Math.min(this.r9 ? Math.min(es, 0x3ef) : this.pre11 ? es : es - 18, data.length);
+    // R2.6은 추가 구역이 없다(0x24는 블록 구역 끝, 0x28은 뜻 모를 칸 — dwg_ac1003.ksy)
+    this.extra = !r26 && inFile(xs, xs + xz) ? [xs, xs + xz] : [0, 0];
+    // 헤더 변수는 객체 구역 앞의 CRC(2)와 구분자(16) 앞에서 끝난다. R11 이전은 그 둘이 없어 객체 구역이 머리 바로 뒤에 온다(표본 0x512·0x3ef·0x3d5).
+    // R9 머리는 0x3ef(MIRRTEXT 뒤), R2.6은 0x3d5(변수 수 0x11이 122일 때 DIMLFAC 뒤, 아니면 0x3c5)에서 끝나
+    // 그 뒤 자리(R10의 UCS 표·코드 페이지, R9의 SPLINESEGS 등)는 객체 구역이 더 뒤에서 시작해도 읽지 않는다
+    const varsEnd = r26 ? (dv.getInt16(0x11, true) === 122 ? 0x3d5 : 0x3c5) : 0x3ef;
+    this.headerEnd = Math.min(this.pre10 ? Math.min(es, varsEnd) : this.pre11 ? es : es - 18, data.length);
     this.codepage = dwgCodepageName(this.u16(0x3f9) ?? 0);
     this.dec = decoderFor(codepageToEncoding(this.codepage));
     this.readTables();
@@ -286,7 +291,7 @@ class R12File {
       };
       const elev = () => {
         // 선·점·3D 면은 고도 칸이 없고, 이 비트가 Z 좌표를 빼는 뜻이다(R9는 고도 칸이 있다)
-        if (mode & 4 && (this.r9 || (type !== 1 && type !== 2 && type !== 22)) && has(8)) {
+        if (mode & 4 && (this.pre10 || (type !== 1 && type !== 2 && type !== 22)) && has(8)) {
           h.elevation = dv.getFloat64(q, true);
           q += 8;
         }
@@ -303,7 +308,7 @@ class R12File {
     extra();
     props(this.pre11 || type === 14);
     // R9에는 핸들이 없다
-    if (!this.r9 && mode & 0x20 && has(1)) {
+    if (!this.pre10 && mode & 0x20 && has(1)) {
       const n = data[q++]!;
       if (has(n)) {
         let hex = '';
@@ -433,11 +438,11 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
   if (h.thickness) o.t(39, h.thickness);
   // R9에는 돌출 방향 칸이 없다(UCS가 R10부터다)
   const ext = () => {
-    if (!f.r9) o.p3(210, c.f64(), c.f64(), c.f64());
+    if (!f.pre10) o.p3(210, c.f64(), c.f64(), c.f64());
   };
   // R10부터 선·점·3D 면의 고도 비트는 Z를 빼는 뜻이고(Z는 0), R9는 Z가 늘 없고 고도 칸이 Z다
-  const noZ = f.r9 || (h.mode & 4) !== 0;
-  const nz = f.r9 ? z : 0;
+  const noZ = f.pre10 || (h.mode & 4) !== 0;
+  const nz = f.pre10 ? z : 0;
   switch (h.type) {
     case 1: {
       const x1 = c.f64();
@@ -453,7 +458,7 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
     }
     case 21: {
       // 3D 선: R10은 Z가 늘 있고, R9는 끝점마다 Z가 있는지 플래그로 알린다(없으면 고도)
-      if (f.r9) {
+      if (f.pre10) {
         o.p3(10, c.f64(), c.f64(), f2 & 0x01 ? c.f64() : z);
         o.p3(11, c.f64(), c.f64(), f2 & 0x02 ? c.f64() : z);
         break;
@@ -467,7 +472,7 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
       const x = c.f64();
       const y = c.f64();
       o.p3(10, x, y, noZ ? nz : c.f64());
-      if (f.r9) break;
+      if (f.pre10) break;
       if (f2 & 0x01) ext();
       if (f2 & 0x02) o.t(50, c.f64() * DEG);
       break;
@@ -601,15 +606,15 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
       for (const [i, k] of [10, 11, 12, 13].entries()) {
         const x = c.f64();
         const y = c.f64();
-        o.p3(k, x, y, f.r9 ? (f2 & (1 << i) ? c.f64() : z) : noZ ? 0 : c.f64());
+        o.p3(k, x, y, f.pre10 ? (f2 & (1 << i) ? c.f64() : z) : noZ ? 0 : c.f64());
       }
-      if (!f.r9 && f2 & 0x01) o.t(70, c.u16() & 0xff);
+      if (!f.pre10 && f2 & 0x01) o.t(70, c.u16() & 0xff);
       break;
     }
     case 23: {
       const bi = c.s16();
       if (bi >= 0 && bi < f.blockNames.length) o.t(2, f.blockNames[bi]!);
-      if (f.r9) {
+      if (f.pre10) {
         r9Dim(c, o, f2, f3, z);
         break;
       }
@@ -733,7 +738,7 @@ function headerTags(f: R12File, o: Out): void {
   };
   p3('$INSBASE', 0x5e);
   // R9는 0x76이 객체 수이고 0x156은 뜻을 모르는 칸이다(PLINEGEN·PSLTSCALE은 R10부터)
-  if (!f.r9) i16('$PLINEGEN', 0x76);
+  if (!f.pre10) i16('$PLINEGEN', 0x76);
   p3('$EXTMIN', 0x78);
   p3('$EXTMAX', 0x90);
   p2('$LIMMIN', 0xa8);
@@ -761,7 +766,7 @@ function headerTags(f: R12File, o: Out): void {
     o.t(9, '$CLAYER');
     o.t(8, f.layer(cl));
   }
-  if (!f.r9) i16('$PSLTSCALE', 0x156);
+  if (!f.pre10) i16('$PSLTSCALE', 0x156);
   i16('$LUNITS', 0x164);
   i16('$LUPREC', 0x166);
   r('$SKETCHINC', 0x17a);
