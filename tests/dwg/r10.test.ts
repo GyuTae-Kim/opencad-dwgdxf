@@ -4,11 +4,12 @@
  * 83차: R9(AC1004)는 R10에 더해 머리가 0x3ef에서 끝나고 핸들이 없으며, 선·점이 2D에 고도 칸이 있고,
  * 3D 선·3D 면은 점마다 Z가 플래그로 있으며 치수의 점이 모두 2D다(dwg_ac1004.ksy, CC0).
  * 84차: R2.6(AC1003)은 객체 배치가 R9와 같고, 머리가 0x3d5(변수 122개)·0x3c5에서 끝나며 추가 구역이 없다(dwg_ac1003.ksy, CC0).
+ * 85차: R2.10(AC2.10)은 R2.6과 같고 머리가 0x2e5에서 끝나며, 사이 객체를 열·행으로 되풀이하는 REPEAT(5)·ENDREP(6)이 있다(dwg_ac2_10.ksy, CC0).
  * 표본은 저장소에 넣지 않으므로 바이트를 직접 조립한다(실제 R10·R9 도면 대조는 작업 내역에 적었다).
  */
 import { describe, expect, it } from 'vitest';
 import type { ArcEntity, CadDocument, CircleEntity, DimensionEntity, FaceEntity, InsertEntity, LineEntity, PointEntity, PolylineEntity, TextEntity } from '../../src/core/model';
-import { MODEL_SPACE } from '../../src/core/model';
+import { MODEL_SPACE, tableKey } from '../../src/core/model';
 import { readDwg } from '../../src/io/dwg';
 
 class Bytes {
@@ -111,9 +112,9 @@ interface FileParts {
 }
 
 /** R10 파일: 머리(0x512, R9는 0x3ef) → 객체 구역 → 표(used·CRC 없는 레코드) → 블록 구역 → 추가 구역 */
-function r10(p: FileParts, ver: 'AC1006' | 'AC1004' | 'AC1003' = 'AC1006'): Uint8Array {
+function r10(p: FileParts, ver: 'AC1006' | 'AC1004' | 'AC1003' | 'AC2.10' = 'AC1006'): Uint8Array {
   const b = new Bytes();
-  b.fixed(ver, p.headerLen ?? (ver === 'AC1003' ? 0x3d5 : ver === 'AC1004' ? 0x3ef : 0x512));
+  b.fixed(ver, p.headerLen ?? (ver === 'AC2.10' ? 0x2e5 : ver === 'AC1003' ? 0x3d5 : ver === 'AC1004' ? 0x3ef : 0x512));
   for (const [at, v] of p.header ?? []) b.put(at, v);
   const es = b.n;
   for (const e of p.entities(es)) b.a.push(...e);
@@ -388,5 +389,33 @@ describe('R2.6 DWG 읽기', () => {
     const fewer = readDwg(r26({ layers: LAYERS, header: [[0x11, new Bytes().i16(120).a], lfac], entities: () => [line(1)] }));
     expect(fewer.header.has('$DIMLFAC')).toBe(false);
     expect(ms(fewer)).toHaveLength(1);
+  });
+});
+
+describe('R2.10 DWG 읽기', () => {
+  const r210 = (p: FileParts) => r10(p, 'AC2.10');
+  const o9 = (o: EntOpts = {}): EntOpts => ({ ...o, r9: true });
+
+  it('머리는 0x2e5(BLIPMODE 뒤)에서 끝나고, REPEAT(5)…ENDREP(6)은 익명 블록을 열·행으로 놓은 블록 참조가 된다', () => {
+    const doc = readDwg(
+      r210({
+        layers: LAYERS,
+        header: [[0x2e3, new Bytes().i16(1).a]],
+        entities: () => [
+          ent(2, (b) => b.f64(1).f64(2), o9()),
+          ent(5, () => {}, o9({ layer: 1 })),
+          ent(2, (b) => b.f64(1).f64(7), o9()),
+          ent(6, (b) => b.i16(3).i16(2).f64(1).f64(1.5), o9()),
+          ent(1, (b) => b.f64(0).f64(0).f64(1).f64(1), o9()),
+        ],
+      }),
+    );
+    expect(doc.version).toBe('AC1009');
+    expect(doc.header.get('$BLIPMODE')).toBe(1);
+    const [pt, ins, ln] = ms(doc) as [PointEntity, InsertEntity, LineEntity];
+    expect([pt.type, ins.type, ln.type]).toEqual(['POINT', 'INSERT', 'LINE']);
+    expect([ins.layer, ins.columnCount, ins.rowCount, ins.columnSpacing, ins.rowSpacing]).toEqual(['WALL', 3, 2, 1, 1.5]);
+    expect((doc.blocks.get(tableKey(ins.block))?.entities as PointEntity[]).map((e) => e.position)).toEqual([{ x: 1, y: 7, z: 0 }]);
+    expect(doc.warnings).toEqual([]);
   });
 });

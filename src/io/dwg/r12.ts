@@ -4,7 +4,7 @@
  * 배치는 공개 형식 설명(Michal Josef Špaček의 CAD-Format-DWG-AC1009, dwg_ac1009.ksy, CC0)을 보고 새로 작성했고,
  * AutoCAD R11이 같은 도면을 DWG와 DXF로 저장한 짝과 공개 R12 도면(에스토니아 국토청 지형 자료, 오스트라바 3D 건물)으로 확인했다.
  * 읽은 값은 R12 DXF와 같은 태그로 바꿔 DXF 리더로 읽는다. 도면층·블록·폴리선·속성·치수의 뜻이 R12 DXF와 같기 때문이다.
- * R10(AC1006)·R9(AC1004)·R2.6(AC1003)도 같은 배치에 칸만 적어 같은 길로 읽는다(같은 저자의 dwg_ac1006.ksy·dwg_ac1004.ksy·dwg_ac1003.ksy, CC0).
+ * R10(AC1006)·R9(AC1004)·R2.6(AC1003)·R2.10(AC2.10)도 같은 배치에 칸만 적어 같은 길로 읽는다(같은 저자의 dwg_ac1006.ksy·dwg_ac1004.ksy·dwg_ac1003.ksy·dwg_ac2_10.ksy, CC0).
  */
 import { CadReadError } from '../../core/errors';
 import { codepageToEncoding, decoderFor, dwgCodepageName } from '../../core/codepage';
@@ -88,8 +88,9 @@ class R12File {
    */
   readonly pre11: boolean;
   /**
-   * R10 이전(R9 AC1004 — 83차, R2.6 AC1003 — 84차, dwg_ac1004.ksy·dwg_ac1003.ksy): R10에 더해 핸들이 없고, 선·점은 2D에 고도 칸이 있으며
-   * (R10부터는 고도 비트가 Z를 빼는 뜻), 3D 선·3D 면은 점마다 Z가 플래그로 있고, 치수의 점은 모두 2D다. 객체 배치는 R9와 R2.6이 같다
+   * R10 이전(R9 AC1004 — 83차, R2.6 AC1003 — 84차, R2.10 AC2.10 — 85차): R10에 더해 핸들이 없고, 선·점은 2D에 고도 칸이 있으며
+   * (R10부터는 고도 비트가 Z를 빼는 뜻), 3D 선·3D 면은 점마다 Z가 플래그로 있고, 치수의 점은 모두 2D다. 객체 배치는 셋이 같고,
+   * R2.10에만 사이 객체를 열·행으로 되풀이하는 REPEAT(5)·ENDREP(6)이 있다(DXF 리더가 배열 블록 참조로 접는다 — io/dxf/repeat.ts)
    */
   readonly pre10: boolean;
   /** 표 레코드 이름 뒤 칸의 어긋남(R12 0, R11 이전 -2 — used가 없다) */
@@ -102,13 +103,15 @@ class R12File {
   constructor(readonly data: Uint8Array) {
     this.dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
     const ver = String.fromCharCode(...data.subarray(0, 6));
-    const r26 = ver === 'AC1003';
+    const r210 = ver === 'AC2.10';
+    // R2.10은 머리·표·구역 주소가 R2.6과 같고 머리 변수가 BLIPMODE(0x2e3)에서 끝난다(dwg_ac2_10.ksy)
+    const r26 = r210 || ver === 'AC1003';
     this.pre10 = r26 || ver === 'AC1004';
     this.pre11 = this.pre10 || ver === 'AC1006';
     this.rec = this.pre11 ? -2 : 0;
     this.tail = this.pre11 ? 0 : 2;
-    // 머리 변수는 R2.6 0x3c5(변수 122개면 0x3d5), R9 0x3ef, R10 0x512(변수 160개면 응용프로그램 표까지 0x51c)에서 끝난다
-    const minHeader = r26 ? 0x3c5 : this.pre10 ? 0x3ef : this.pre11 ? 0x512 : 0x6c0;
+    // 머리 변수는 R2.10 0x2e5, R2.6 0x3c5(변수 122개면 0x3d5), R9 0x3ef, R10 0x512(변수 160개면 응용프로그램 표까지 0x51c)에서 끝난다
+    const minHeader = r210 ? 0x2e5 : r26 ? 0x3c5 : this.pre10 ? 0x3ef : this.pre11 ? 0x512 : 0x6c0;
     if (data.length < minHeader) throw new CadReadError('dwg.corrupt', { reason: 'R12 header too short' });
     const dv = this.dv;
     const es = dv.getInt32(0x14, true);
@@ -123,12 +126,12 @@ class R12File {
     if (!inFile(es, ee)) throw new CadReadError('dwg.corrupt', { reason: 'R12 entity section' });
     this.ent = [es, ee];
     this.blk = inFile(bs, bs + bz) ? [bs, bs + bz] : [0, 0];
-    // R2.6은 추가 구역이 없다(0x24는 블록 구역 끝, 0x28은 뜻 모를 칸 — dwg_ac1003.ksy)
+    // R2.6·R2.10은 추가 구역이 없다(0x24는 블록 구역 끝, 0x28은 뜻 모를 칸 — dwg_ac1003.ksy·dwg_ac2_10.ksy)
     this.extra = !r26 && inFile(xs, xs + xz) ? [xs, xs + xz] : [0, 0];
     // 헤더 변수는 객체 구역 앞의 CRC(2)와 구분자(16) 앞에서 끝난다. R11 이전은 그 둘이 없어 객체 구역이 머리 바로 뒤에 온다(표본 0x512·0x3ef·0x3d5).
     // R9 머리는 0x3ef(MIRRTEXT 뒤), R2.6은 0x3d5(변수 수 0x11이 122일 때 DIMLFAC 뒤, 아니면 0x3c5)에서 끝나
     // 그 뒤 자리(R10의 UCS 표·코드 페이지, R9의 SPLINESEGS 등)는 객체 구역이 더 뒤에서 시작해도 읽지 않는다
-    const varsEnd = r26 ? (dv.getInt16(0x11, true) === 122 ? 0x3d5 : 0x3c5) : 0x3ef;
+    const varsEnd = r210 ? 0x2e5 : r26 ? (dv.getInt16(0x11, true) === 122 ? 0x3d5 : 0x3c5) : 0x3ef;
     this.headerEnd = Math.min(this.pre10 ? Math.min(es, varsEnd) : this.pre11 ? es : es - 18, data.length);
     this.codepage = dwgCodepageName(this.u16(0x3f9) ?? 0);
     this.dec = decoderFor(codepageToEncoding(this.codepage));
@@ -421,10 +424,13 @@ const TYPE_NAMES: Record<number, string> = {
   24: 'VIEWPORT',
 };
 
+/** R10 이전에만 있는 종류: 사이 객체를 열·행으로 되풀이하는 REPEAT·ENDREP(R2.10 — R2.6·R9 형식 설명에도 같은 번호로 적혀 있다) */
+const R2_TYPE_NAMES: Record<number, string> = { 5: 'REPEAT', 6: 'ENDREP' };
+
 /** 객체 하나를 R12 DXF 태그로. 읽을 수 없으면 false */
 function entityTags(f: R12File, h: Head, o: Out): boolean {
   // R10까지의 3D 선(21)은 Z가 늘 있는 선이다(R11부터는 선에 Z가 있어 이 종류가 없다)
-  const name = TYPE_NAMES[h.type] ?? (f.pre11 && h.type === 21 ? 'LINE' : undefined);
+  const name = TYPE_NAMES[h.type] ?? (f.pre11 && h.type === 21 ? 'LINE' : f.pre10 ? R2_TYPE_NAMES[h.type] : undefined);
   if (!name) return false;
   const c = new Cur(f, h.p, h.end - f.tail);
   const z = h.elevation ?? 0;
@@ -527,7 +533,15 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
       if (f2 & 0x04) c.text();
       return blockTags(f, h, o, x, y, xref);
     }
+    case 5:
     case 13:
+      break;
+    case 6:
+      // ENDREP: 열 수, 행 수, 열 간격, 행 간격(DXF 70·71·40·41 — dwg_ac2_10.ksy)
+      o.t(70, c.s16());
+      o.t(71, c.s16());
+      o.t(40, c.f64());
+      o.t(41, c.f64());
       break;
     case 14: {
       o.t(66, h.mode & 0x80 ? 1 : 0);

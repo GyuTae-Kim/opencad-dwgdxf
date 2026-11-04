@@ -22,6 +22,7 @@ import { type DxfRecord, type DxfSource, type RecordStream, isStringCode, openDx
 import { type EntityContext, parseEntity, parseVertex } from './entities';
 import { createTableHandles, readTableEntry, resolveDimStyleHandles } from './tables';
 import { parseObject } from './objects';
+import { foldRepeats } from './repeat';
 import { handle, int, name, num, parseXData, str } from './tagutil';
 
 export interface DxfReadOptions {
@@ -321,6 +322,8 @@ export function readDxfSource(src: Pick<DxfSource, 'stream' | 'version' | 'codep
     }
   }
 
+  // R2.x의 REPEAT…ENDREP을 배열 블록 참조로(핸들을 붙이기 전에 — 새 블록 참조도 핸들을 받는다)
+  foldRepeats(doc, ctx.unsupported);
   assignMissingHandles(doc);
   // ACIS 객체(REGION·3DSOLID …)의 모서리 선: SAT(원본 태그) 또는 SAB(ACDSDATA)
   attachAcisWires(doc);
