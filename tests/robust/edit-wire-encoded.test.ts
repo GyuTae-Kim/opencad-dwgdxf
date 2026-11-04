@@ -80,5 +80,10 @@ describe('묶음 부호화로 보내는 편집', () => {
     expect([small[0].type, small[0].ops?.length]).toEqual(['edit', 3]);
     expect([big[0].type, big[0].docId, big[1].length]).toEqual(['editEncoded', 7, 4]);
     expect(decodeWire(big[0].enc)).toEqual(structuredClone(packOps(many)));
+    // 작업 버퍼는 다음 큰 편집에 다시 쓴다(64MiB 안이면)
+    const scratch = (client as unknown as { editScratch?: object }).editScratch;
+    expect(scratch).toBeDefined();
+    client.edit(7, many);
+    expect((client as unknown as { editScratch?: object }).editScratch).toBe(scratch);
   });
 });
