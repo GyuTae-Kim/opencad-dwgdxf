@@ -1,11 +1,12 @@
 /**
  * 편집 명령 불변식 훑기(74차, `npm run edit-audit`): 실제 도면마다 모형 공간 객체를 모두 골라 MOVE·COPY·ROTATE·MIRROR(원본 지우기)·
  * EXPLODE·ERASE 뒤 OOPS를 돌린다(도면은 명령마다 새로 읽는다). 75차에 SCALE·MIRROR(원본 남기기)·COPYCLIP 뒤 PASTECLIP·ARRAYRECT와
- * 선택 기반 명령(-OVERKILL·JOIN·BURST·-BLOCK·CHPROP·SETBYLAYER·REVERSE·SCALETEXT·FLATTEN)을 더했다. 명령마다 본다:
+ * 선택 기반 명령(-OVERKILL·JOIN·BURST·-BLOCK·CHPROP·SETBYLAYER·REVERSE·SCALETEXT·FLATTEN)을 더했다. 76차부터 배치(도면 공간)에서도 훑는다
+ * (`--space`: 모형 공간이 빈 도면은 객체가 있는 첫 배치, paper면 언제나 배치 — 전체 용지 뷰포트는 고르지 않는다). 명령마다 본다:
  *  - 아무 객체도 쓰지 않는 익명 블록이 새로 생기지 않는다. 지우거나 분해한 객체가 쓰던 블록은 명령 취소로 되살릴 때 쓰므로 뺀다
  *    (69차 — MOVE마다 쓰이지 않는 *D가 남던 결함 같은 것)
  *  - 핸들 색인에 어느 블록에도 없는 객체가 늘지 않는다(69차 COPY)
- *  - DXF·DWG(R2018)로 쓰고 다시 읽을 때 모형 공간에서 빠지는 객체가 원본 왕복보다 늘지 않는다(늘어난 객체 수만큼은 봐 준다)
+ *  - DXF·DWG(R2018)로 쓰고 다시 읽을 때 그 공간에서 빠지는 객체가 원본 왕복보다 늘지 않는다(늘어난 객체 수만큼은 봐 준다)
  *  - 두 자리에 든 핸들, 소유자가 든 블록의 레코드가 아닌 객체, 핸들 색인이 블록 안의 그 객체가 아닌 것이 늘지 않는다(75차)
  *  - 명령 취소하면 처음 문서(블록·색인 수, 쓰이지 않는 익명 블록, 위의 세 수)로 돌아온다
  * 명령은 시험 하네스(tests/cmds2)로 흘려 넣어 화면 없이 돈다. 결과는 문제만 담은 작은 JSON이다.
@@ -34,8 +35,9 @@ import { runWith, type Input2 } from '../../tests/drawmod/ctx';
 import { perCommandGroups } from '../../tests/drawmod/groups';
 
 const USAGE = `편집 명령 불변식 훑기
-  npm run edit-audit -- --list <도면 목록 파일> [--out <결과 JSON>] [--commands MOVE,COPY,…]
-  목록 파일은 한 줄에 도면 경로 하나(# 줄은 건너뜀). 결과를 주지 않으면 화면에만 요약한다.`;
+  npm run edit-audit -- --list <도면 목록 파일> [--out <결과 JSON>] [--commands MOVE,COPY,…] [--space auto|model|paper]
+  목록 파일은 한 줄에 도면 경로 하나(# 줄은 건너뜀). 결과를 주지 않으면 화면에만 요약한다.
+  --space: auto(기본)는 모형 공간, 모형 공간이 비었으면 객체가 있는 첫 배치. paper는 언제나 배치, model은 언제나 모형 공간.`;
 
 /** 이름, 명령 차례(이름과 입력) */
 export const AUDIT_CASES: [string, [string, (hs: string[]) => Input2[]][]][] = [
@@ -100,11 +102,51 @@ export function auditDoc(doc: CadDocument): Audit {
   return { unused: anon.filter((k) => !used.has(k)).sort(), stale, blocks: doc.blocks.size, index: doc.entityIndex.size, users, dup, owner, mismatch };
 }
 
-const msCount = (doc: CadDocument) => doc.blocks.get(MODEL_SPACE)?.entities.length ?? 0;
-/** DXF·DWG(R2018) 왕복에서 모형 공간에서 빠지는 객체 수 */
-function roundtripLoss(doc: CadDocument): { dxf: number; dwg: number } {
-  const n = msCount(doc);
-  return { dxf: Math.max(0, n - msCount(readDxf(writeDxf(doc, { version: 'AC1032' }).data))), dwg: Math.max(0, n - msCount(readDwg(writeDwg(doc, { version: 'AC1032' }).data))) };
+export type AuditSpace = 'auto' | 'model' | 'paper';
+
+/** 훑는 공간: 모형 공간 또는 배치 이름(쓰고 다시 읽으면 배치 블록 이름이 바뀔 수 있어 이름으로 찾는다) */
+export interface Target {
+  layout: string | null;
+}
+
+/** 배치의 블록 열쇠 */
+function spaceKey(doc: CadDocument, t: Target): string | null {
+  if (!t.layout) return MODEL_SPACE;
+  const l = doc.layouts.find((x) => x.name === t.layout);
+  return l ? tableKey(l.blockName) : null;
+}
+
+/** 고를 객체: 배치의 전체 용지 뷰포트(번호 1 또는 배치가 가리키는 뷰포트)는 AutoCAD에서도 고를 수 없어 뺀다 */
+export function pickable(doc: CadDocument, t: Target): string[] {
+  const key = spaceKey(doc, t);
+  const ents = (key && doc.blocks.get(key)?.entities) || [];
+  if (!t.layout) return ents.map((e) => e.handle);
+  const lay = doc.layouts.find((x) => x.name === t.layout);
+  return ents.filter((e) => !(e.type === 'VIEWPORT' && (e.id === 1 || e.handle === lay?.viewport))).map((e) => e.handle);
+}
+
+const countIn = (doc: CadDocument, t: Target) => {
+  const key = spaceKey(doc, t);
+  return (key && doc.blocks.get(key)?.entities.length) || 0;
+};
+
+/** 훑을 공간을 고른다: model은 모형 공간, paper는 고를 객체가 있는 첫 배치(탭 차례), auto는 모형 공간이 비었을 때만 배치 */
+export function chooseTarget(doc: CadDocument, mode: AuditSpace): Target | null {
+  const model: Target = { layout: null };
+  if (mode !== 'paper' && pickable(doc, model).length) return model;
+  if (mode === 'model') return null;
+  const lays = doc.layouts.filter((l) => tableKey(l.blockName) !== MODEL_SPACE).sort((a, b) => a.tabOrder - b.tabOrder);
+  for (const l of lays) if (pickable(doc, { layout: l.name }).length) return { layout: l.name };
+  return null;
+}
+
+/** DXF·DWG(R2018) 왕복에서 그 공간에서 빠지는 객체 수 */
+function roundtripLoss(doc: CadDocument, t: Target): { dxf: number; dwg: number } {
+  const n = countIn(doc, t);
+  return {
+    dxf: Math.max(0, n - countIn(readDxf(writeDxf(doc, { version: 'AC1032' }).data), t)),
+    dwg: Math.max(0, n - countIn(readDwg(writeDwg(doc, { version: 'AC1032' }).data), t)),
+  };
 }
 
 /** 훑는 명령이 든 묶음을 모두 등록한다(명령을 이름으로 찾는 findCommand는 시험 하네스에 없어 채운다) */
@@ -119,7 +161,12 @@ function registerAll(app: App): void {
 export type AuditProblem = Record<string, unknown> & { file: string; cmd?: string };
 
 /** 도면 하나를 명령마다 새로 읽어 훑는다 */
-export async function auditFile(path: string, bytes: Uint8Array, cases = AUDIT_CASES): Promise<{ problems: AuditProblem[]; skipped?: string; runs: number; idle: string[] }> {
+export async function auditFile(
+  path: string,
+  bytes: Uint8Array,
+  cases = AUDIT_CASES,
+  mode: AuditSpace = 'auto',
+): Promise<{ problems: AuditProblem[]; skipped?: string; runs: number; idle: string[]; layout?: string }> {
   const load = () => readCadFile(bytes, path.split('/').pop()!);
   let base: CadDocument;
   try {
@@ -127,14 +174,15 @@ export async function auditFile(path: string, bytes: Uint8Array, cases = AUDIT_C
   } catch (e) {
     return { problems: [{ file: path, readError: String(e).slice(0, 120) }], runs: 0, idle: [] };
   }
-  if (!msCount(base)) return { problems: [], skipped: '모형 공간이 비었다', runs: 0, idle: [] };
+  const target = chooseTarget(base, mode);
+  if (!target) return { problems: [], skipped: mode === 'model' ? '모형 공간이 비었다' : mode === 'paper' ? '배치가 비었다' : '모형 공간·배치가 비었다', runs: 0, idle: [] };
   let loss0: { dxf: number; dwg: number } | null = null;
   try {
-    loss0 = roundtripLoss(base);
+    loss0 = roundtripLoss(base, target);
   } catch (e) {
     return { problems: [{ file: path, roundtripError: String(e).slice(0, 120) }], runs: 0, idle: [] };
   }
-  const n0 = msCount(base);
+  const n0 = countIn(base, target);
   const problems: AuditProblem[] = [];
   const idle: string[] = [];
   let runs = 0;
@@ -143,10 +191,11 @@ export async function auditFile(path: string, bytes: Uint8Array, cases = AUDIT_C
     try {
       const h = perCommandGroups(makeHarness((doc) => void Object.assign(doc, load())));
       registerAll(h.app);
+      h.st.space = spaceKey(h.doc, target)!;
       const s = h.st.session;
       const before = auditDoc(h.doc);
       const mark = s.undoTop();
-      const hs = h.doc.blocks.get(MODEL_SPACE)!.entities.map((e) => e.handle);
+      const hs = pickable(h.doc, target);
       try {
         for (const [cmd, inputs] of steps) await runWith(h, cmd, inputs(hs));
       } catch (e) {
@@ -156,15 +205,15 @@ export async function auditFile(path: string, bytes: Uint8Array, cases = AUDIT_C
       const after = auditDoc(h.doc);
       // 지우거나 분해한 객체가 쓰던 블록
       const gone = new Set([...before.users].filter(([x]) => !after.users.has(x)).map(([, b]) => b));
-      const p: AuditProblem = { file: path, cmd: label };
+      const p: AuditProblem = { file: path, cmd: label, ...(target.layout ? { layout: target.layout } : {}) };
       // 할 일이 없던 명령(중복·문자·곡선·블록 참조가 없는 도면 등)은 문제가 아니라 따로 센다
       if (s.undoTop() === mark) idle.push(label);
       const fresh = after.unused.filter((k) => !before.unused.includes(k) && !gone.has(k));
       if (fresh.length) p.newUnused = fresh.slice(0, 8);
       if (after.stale > before.stale) p.stale = [before.stale, after.stale];
       for (const k of ['dup', 'owner', 'mismatch'] as const) if (after[k] > before[k]) p[k] = [before[k], after[k]];
-      const loss = roundtripLoss(h.doc);
-      const k = Math.max(1, msCount(h.doc) / n0);
+      const loss = roundtripLoss(h.doc, target);
+      const k = Math.max(1, countIn(h.doc, target) / n0);
       if (loss.dxf > Math.ceil(loss0.dxf * k) || loss.dwg > Math.ceil(loss0.dwg * k)) p.roundtripLoss = { before: loss0, after: loss };
       while (s.undoTop() !== mark) s.undo();
       const back = auditDoc(h.doc);
@@ -172,23 +221,32 @@ export async function auditFile(path: string, bytes: Uint8Array, cases = AUDIT_C
       if (back.unused.join() !== before.unused.join() || !same) {
         p.undo = { before: [before.blocks, before.index, before.stale, before.dup, before.owner, before.mismatch], back: [back.blocks, back.index, back.stale, back.dup, back.owner, back.mismatch] };
       }
-      if (Object.keys(p).length > 2) problems.push(p);
+      if (Object.keys(p).length > (target.layout ? 3 : 2)) problems.push(p);
     } catch (e) {
       problems.push({ file: path, cmd: label, error: String(e).slice(0, 160) });
     }
   }
-  return { problems, runs, idle };
+  return { problems, runs, idle, ...(target.layout ? { layout: target.layout } : {}) };
 }
 
 export async function editAuditMain(argv: string[], log: (s: string) => void = (s) => console.log(s)): Promise<number> {
   let list = '';
   let out = '';
   let only: Set<string> | null = null;
+  let mode: AuditSpace = 'auto';
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === '--list') list = argv[++i] ?? '';
     else if (a === '--out') out = argv[++i] ?? '';
     else if (a === '--commands') only = new Set((argv[++i] ?? '').toUpperCase().split(',').filter(Boolean));
+    else if (a === '--space') {
+      const v = argv[++i] ?? '';
+      if (v !== 'auto' && v !== 'model' && v !== 'paper') {
+        log(`--space는 auto·model·paper 가운데 하나입니다: ${v}\n\n${USAGE}`);
+        return 2;
+      }
+      mode = v;
+    }
     else if (a === '--help' || a === '-h') {
       log(USAGE);
       return 0;
@@ -211,17 +269,20 @@ export async function editAuditMain(argv: string[], log: (s: string) => void = (
   const skipped: { file: string; why: string }[] = [];
   /** 명령마다 할 일이 없던 도면 수 */
   const idle: Record<string, number> = {};
+  /** 배치에서 훑은 도면 수 */
+  let paper = 0;
   let runs = 0;
   for (const f of files) {
-    const r = await auditFile(f, new Uint8Array(readFileSync(f)), cases);
+    const r = await auditFile(f, new Uint8Array(readFileSync(f)), cases, mode);
+    if (r.layout) paper++;
     runs += r.runs;
     problems.push(...r.problems);
     for (const c of r.idle) idle[c] = (idle[c] ?? 0) + 1;
     if (r.skipped) skipped.push({ file: f, why: r.skipped });
   }
-  const summary = { done: true, tool: 'opencad-dwgdxf edit-audit', files: files.length, runs, skipped, idle, problems };
+  const summary = { done: true, tool: 'opencad-dwgdxf edit-audit', space: mode, files: files.length, paper, runs, skipped, idle, problems };
   if (out) writeFileSync(out, JSON.stringify(summary, null, 1));
-  log(`도면 ${files.length}개, 명령 ${runs}회, 건너뜀 ${skipped.length}, 문제 ${problems.length}`);
+  log(`도면 ${files.length}개(배치에서 ${paper}개), 명령 ${runs}회, 건너뜀 ${skipped.length}, 문제 ${problems.length}`);
   if (Object.keys(idle).length) log(`할 일이 없던 명령(도면 수): ${Object.entries(idle).map(([c, n]) => `${c} ${n}`).join(', ')}`);
   for (const p of problems.slice(0, 20)) log(`  ${p.cmd ?? '-'} ${p.file.split('/').slice(-2).join('/')} ${JSON.stringify({ ...p, file: undefined, cmd: undefined })}`);
   return problems.length ? 1 : 0;
