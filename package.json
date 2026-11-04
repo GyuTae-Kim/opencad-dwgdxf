@@ -19,7 +19,8 @@
     "check:i18n": "opencad-site check-i18n",
     "test:i18n": "vitest run tests/i18n.test.ts",
     "sweep": "vite-node scripts/sweep/cli.ts sweep",
-    "sweep:compare": "vite-node scripts/sweep/cli.ts compare"
+    "sweep:compare": "vite-node scripts/sweep/cli.ts compare",
+    "edit-audit": "vite-node scripts/sweep/cli.ts edit-audit"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
