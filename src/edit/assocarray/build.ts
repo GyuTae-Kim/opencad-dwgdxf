@@ -45,7 +45,34 @@ export function newBlockOps(env: BuildEnv, name: string, entities: Entity[]): { 
   return { ops: [{ kind: 'blockRecord', key, before: null, after: rec }, { kind: 'blockDef', key, before: null, after: def }], def };
 }
 
-/** 객체를 변환해 블록에 넣을 새 객체로(새 핸들, 연결 끊기). 치수 블록 같은 딸린 블록도 돌려준다 */
+/**
+ * 변환이 만든 딸린 블록(치수 블록 등 — 핸들이 비어 있다)을 넣는 작업: 블록 레코드가 없으면 만들고, 정의·객체(블록 참조의 속성 포함)에 핸들과 소유자를 준다.
+ * 75차 — 전에는 정의만 넣어 객체 핸들이 모두 ''(핸들 색인이 한 칸에 겹침)이고 블록 레코드가 없었다
+ */
+export function dependentBlockOps(env: BuildEnv, b: BlockDef): EditOp[] {
+  const key = tableKey(b.name);
+  const before = env.doc.blocks.get(key) ?? null;
+  const ops: EditOp[] = [];
+  let rec = env.doc.blockRecords.get(key);
+  if (!rec) {
+    rec = { name: b.name, handle: env.newHandle(), flags: b.flags & 1, insertUnits: 0, explodable: true, scalable: true };
+    ops.push({ kind: 'blockRecord', key, before: null, after: rec });
+  }
+  const def: BlockDef = { ...b, handle: b.handle || before?.handle || env.newHandle(), recordHandle: rec.handle, endHandle: b.endHandle || before?.endHandle || env.newHandle() };
+  for (const e of def.entities) {
+    if (!e.handle) e.handle = env.newHandle();
+    e.owner = rec.handle;
+    if (e.type === 'INSERT')
+      for (const a of e.attribs) {
+        if (!a.handle) a.handle = env.newHandle();
+        a.owner = e.handle;
+      }
+  }
+  ops.push({ kind: 'blockDef', key, before, after: def });
+  return ops;
+}
+
+/** 객체를 변환해 블록에 넣을 새 객체로(새 핸들, 연결 끊기). 치수 블록 같은 딸린 블록도 돌려준다(넣을 때는 dependentBlockOps) */
 export function blockCopies(env: BuildEnv, list: readonly Entity[], m: Affine): { entities: Entity[]; blocks: BlockDef[] } {
   const doc = env.doc;
   const mirrorText = Number(doc.header.get('$MIRRTEXT') ?? 0) === 1;
@@ -157,10 +184,7 @@ export function createArrayOps(env: BuildEnv, input: CreateInput): Built | { err
   // 원본 블록
   const srcName = env.newBlockName();
   const copies = blockCopies(env, input.sources, input.normalize);
-  for (const b of copies.blocks) {
-    const key = tableKey(b.name);
-    ops.push({ kind: 'blockDef', key, before: doc.blocks.get(key) ?? null, after: b });
-  }
+  for (const b of copies.blocks) ops.push(...dependentBlockOps(env, b));
   const src = newBlockOps(env, srcName, copies.entities);
   ops.push(...src.ops);
   // 배열 참조(배열 블록 좌표 → 도면: 자리·회전)
@@ -305,10 +329,7 @@ export function regenerateOps(env: BuildEnv, info: ArrayInfo, next: ArrayState, 
   if (!live.length) return { error: '항목이 하나도 남지 않습니다.' };
   // 원본·대체 블록 내용
   for (const c of opt.contents ?? []) {
-    for (const b of c.blocks ?? []) {
-      const bk = tableKey(b.name);
-      ops.push({ kind: 'blockDef', key: bk, before: doc.blocks.get(bk) ?? null, after: b });
-    }
+    for (const b of c.blocks ?? []) ops.push(...dependentBlockOps(env, b));
     const key = tableKey(c.name);
     const before = doc.blocks.get(key);
     if (!before) return { error: '원본 블록이 없습니다.' };
