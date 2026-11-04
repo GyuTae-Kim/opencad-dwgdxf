@@ -1465,8 +1465,21 @@ export function entityDefaults(): Omit<EntityBase, 'type'> {
 
 export function normalizeHandle(h: string | number | bigint): string {
   if (typeof h === 'string') {
+    // 이미 정규화한 핸들(대문자 16진, 앞 0 없음)은 그대로 — 편집 고리가 객체마다 불러 연관 도면 MOVE 한 번에 약 10ms였다(87차)
+    if (isNormalHandle(h)) return h;
     const t = h.trim().replace(/^0+(?=.)/, '');
     return t.toUpperCase();
   }
   return h.toString(16).toUpperCase();
+}
+
+/** 정규화한 꼴(0~9·A~F만, 두 자 이상이면 0으로 시작하지 않는다)인지 */
+function isNormalHandle(h: string): boolean {
+  const n = h.length;
+  if (!n || (n > 1 && h.charCodeAt(0) === 48)) return false;
+  for (let i = 0; i < n; i++) {
+    const c = h.charCodeAt(i);
+    if (c < 48 || (c > 57 && c < 65) || c > 70) return false;
+  }
+  return true;
 }

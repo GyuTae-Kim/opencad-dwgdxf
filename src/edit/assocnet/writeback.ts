@@ -381,9 +381,9 @@ export function syncReactors(doc: CadDocument, ops: readonly EditOp[]): EditOp[]
     if (t0 && t0 !== t1) put(drop, t0, op.key);
     if (t1 && t1 !== t0) put(want, t1, op.key);
   }
-  // 옛 사본으로 반응자를 잃은 수정
+  // 옛 사본으로 반응자를 잃은 수정(반응자가 그대로면 보지 않는다 — 87차: 옮긴 객체 3만 개마다 핸들을 견주어 정규화했다)
   for (const op of ops) {
-    if (op.kind !== 'modify') continue;
+    if (op.kind !== 'modify' || !op.before.reactors?.length || sameList(op.before.reactors, op.after.reactors)) continue;
     const lost = (op.before.reactors ?? []).filter((r) => !(op.after.reactors ?? []).some((x) => normalizeHandle(x) === normalizeHandle(r)));
     for (const r of lost) {
       const h = normalizeHandle(r);
@@ -426,8 +426,18 @@ export function syncReactors(doc: CadDocument, ops: readonly EditOp[]): EditOp[]
   return changed || base !== ops ? p.ops : null;
 }
 
+/** 두 핸들 목록이 같은 차례로 같은지 */
+function sameList(a: readonly string[], b: readonly string[] | undefined): boolean {
+  if (a === b) return true;
+  if (!b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /** 객체 수정·삭제를 AutoCAD 그룹 캐시에 반영(acadCommitOps의 앞부분) */
 function groupCommitOps(doc: CadDocument, ops: readonly EditOp[]): EditOp[] | null {
+  // 구속 그룹이 없는 도면(대부분)은 바뀐 객체를 모으지 않는다(87차)
+  if (!groupsByTarget(doc).size && !ops.some((op) => op.kind === 'object' && (op.after ?? op.before)?.type.toUpperCase() === 'ACDBASSOC2DCONSTRAINTGROUP')) return null;
   const touched = new Set<string>();
   for (const op of ops) {
     if (op.kind === 'modify') touched.add(op.after.handle);
