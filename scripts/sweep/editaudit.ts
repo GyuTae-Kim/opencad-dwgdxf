@@ -165,9 +165,9 @@ function registerAll(app: App): void {
 
 export type AuditProblem = Record<string, unknown> & { file: string; cmd?: string };
 
-/** 블록마다 객체 핸들 차례와 색인 수(명령 직후와 다시 한 뒤를 견준다) */
+/** 블록마다 객체 핸들 차례와 색인 수(명령 직후와 다시 한 뒤를 견준다). 지웠다 되살린 블록은 표 끝으로 가므로 블록 열쇠 차례로 */
 function shape(doc: CadDocument): string[] {
-  const out = [...doc.blocks].map(([k, b]) => `${k}:${b.entities.map((e) => e.handle).join(',')}`);
+  const out = [...doc.blocks].map(([k, b]) => `${k}:${b.entities.map((e) => e.handle).join(',')}`).sort();
   out.push(`index:${doc.entityIndex.size}`, `objects:${doc.objects.size}`);
   return out;
 }
