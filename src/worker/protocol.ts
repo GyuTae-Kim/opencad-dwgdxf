@@ -18,6 +18,8 @@ export type ToWorker =
   /** 큰 편집(작업 ENCODE_MIN_OPS개 이상)은 묶음 부호화해 버퍼를 옮긴다(editwire.ts encodeWire) */
   | { type: 'editEncoded'; docId: number; enc: Encoded }
   | { type: 'close'; docId: number }
+  /** 워커가 편집을 적용하지 못했을 때(editFailed) 메인 문서로 바꾼다 */
+  | { type: 'replace'; docId: number; doc: CadDocument }
   /** 메인에서 만든 문서(새 도면)를 받아 장면을 만든다 */
   | { type: 'adopt'; id: number; name: string; doc: CadDocument }
   /** 파일이 연결된 래스터 이미지 열쇠(장면에 이미지 그리기를 넣는다) */
@@ -57,4 +59,6 @@ export type FromWorker =
   /** 점진 빌드의 미리 보기 조각(모형 공간). view: 첫 화면(맞춰 보일 사각형과 여백), 대표점이 없으면 null */
   | { type: 'partial'; id: number; part: PartialScene; view: PreviewView | null }
   | { type: 'saved'; id: number; data: ArrayBuffer; warnings: { code: string; message: string; count?: number; detail?: Record<string, unknown> }[]; ms: number }
-  | { type: 'error'; id: number; code: string; message: string };
+  | { type: 'error'; id: number; code: string; message: string }
+  /** 편집을 적용하지 못했다(그 문서는 메인이 replace로 다시 보낼 때까지 편집·저장을 받지 않는다 — 80차) */
+  | { type: 'editFailed'; docId: number; message: string };

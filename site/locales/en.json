@@ -8350,5 +8350,7 @@
   "언어 선택": "Choose language",
   "https://gyutae-kim.github.io/opencad-dwgdxf/og-opencad.jpg": "https://gyutae-kim.github.io/assets/i18n/en/og/opencad.jpg",
   "사이트 이동": "Site navigation",
-  "OpenCAD 사용 안내": "OpenCAD user guides"
+  "OpenCAD 사용 안내": "OpenCAD user guides",
+  "도면 처리 모듈이 편집을 적용하지 못해 지금 도면으로 다시 맞췄습니다.": "The drawing engine could not apply an edit, so it was resynced with the current drawing.",
+  "도면 처리 모듈의 문서를 다시 맞추는 중입니다. 잠시 뒤 다시 저장하십시오.": "The drawing engine is resyncing the document. Please save again in a moment."
 }
