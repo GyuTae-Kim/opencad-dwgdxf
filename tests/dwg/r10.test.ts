@@ -3,6 +3,7 @@
  * 표 레코드에 used·CRC가 없고, 객체에 추가 플래그·확장 자료·뷰포트 번호·CRC가 없으며, 선종류 번호가 1바이트, 고도가 두께보다 먼저다.
  * 83차: R9(AC1004)는 R10에 더해 머리가 0x3ef에서 끝나고 핸들이 없으며, 선·점이 2D에 고도 칸이 있고,
  * 3D 선·3D 면은 점마다 Z가 플래그로 있으며 치수의 점이 모두 2D다(dwg_ac1004.ksy, CC0).
+ * 84차: R2.6(AC1003)은 객체 배치가 R9와 같고, 머리가 0x3d5(변수 122개)·0x3c5에서 끝나며 추가 구역이 없다(dwg_ac1003.ksy, CC0).
  * 표본은 저장소에 넣지 않으므로 바이트를 직접 조립한다(실제 R10·R9 도면 대조는 작업 내역에 적었다).
  */
 import { describe, expect, it } from 'vitest';
@@ -110,9 +111,9 @@ interface FileParts {
 }
 
 /** R10 파일: 머리(0x512, R9는 0x3ef) → 객체 구역 → 표(used·CRC 없는 레코드) → 블록 구역 → 추가 구역 */
-function r10(p: FileParts, ver: 'AC1006' | 'AC1004' = 'AC1006'): Uint8Array {
+function r10(p: FileParts, ver: 'AC1006' | 'AC1004' | 'AC1003' = 'AC1006'): Uint8Array {
   const b = new Bytes();
-  b.fixed(ver, p.headerLen ?? (ver === 'AC1004' ? 0x3ef : 0x512));
+  b.fixed(ver, p.headerLen ?? (ver === 'AC1003' ? 0x3d5 : ver === 'AC1004' ? 0x3ef : 0x512));
   for (const [at, v] of p.header ?? []) b.put(at, v);
   const es = b.n;
   for (const e of p.entities(es)) b.a.push(...e);
@@ -149,7 +150,7 @@ function r10(p: FileParts, ver: 'AC1006' | 'AC1004' = 'AC1006'): Uint8Array {
     blocks.map((blk, i) => new Bytes().u8(0).fixed(blk.name, 32).u32((0x40000000 | addr[i]!) >>> 0).a),
   );
   // 보기 표(R10은 UCS·뷰포트 표도 — R9 머리에는 없다)
-  for (const at of ver === 'AC1004' ? [0x54] : [0x54, 0x3ef, 0x500]) b.put(at, new Bytes().i16(40).i16(0).i16(0).u32(0).a);
+  for (const at of ver === 'AC1006' ? [0x54, 0x3ef, 0x500] : [0x54]) b.put(at, new Bytes().i16(40).i16(0).i16(0).u32(0).a);
   if (p.vport) {
     // R10 VPORT 레코드(249): 이름 뒤 used 없이 10/20 왼쪽 아래 … 12/22 보기 중심, 40 높이(R12 리더의 칸 차례)
     const v = new Bytes().u8(0).fixed('*ACTIVE', 32).f64(0).f64(0).f64(1).f64(1).f64(0).f64(0).f64(0).f64(0).f64(0).f64(1).f64(0).f64(p.vport.height).f64(p.vport.center[0]).f64(p.vport.center[1]);
@@ -364,5 +365,28 @@ describe('R9 DWG 읽기', () => {
     expect([dim.defPoint, dim.textMid, dim.defPoint2, dim.defPoint3, dim.text]).toEqual([{ x: 8, y: 8, z: 0 }, { x: 7.5, y: 8.5, z: 0 }, { x: 1, y: 2, z: 0 }, { x: 3, y: 4, z: 0 }, '']);
     expect(dim.rotation).toBeCloseTo(0.5);
     expect(doc.warnings).toEqual([]);
+  });
+});
+
+describe('R2.6 DWG 읽기', () => {
+  const r26 = (p: FileParts) => r10(p, 'AC1003');
+  const o9 = (o: EntOpts = {}): EntOpts => ({ ...o, r9: true });
+  const line = (x: number) => ent(1, (b) => b.f64(x).f64(0).f64(x + 1).f64(1), o9({ elevation: 2 }));
+
+  it('객체 배치는 R9와 같고, 0x24·0x28(블록 구역 끝·모를 칸)을 추가 구역으로 읽지 않는다', () => {
+    const doc = readDwg(r26({ layers: LAYERS, header: [[0x11, new Bytes().i16(122).a]], entities: () => [line(1)], extra: () => [line(5)] }));
+    expect(doc.version).toBe('AC1009');
+    const ls = ms(doc) as LineEntity[];
+    expect(ls.map((l) => [l.start, l.end])).toEqual([[{ x: 1, y: 0, z: 2 }, { x: 2, y: 1, z: 2 }]]);
+    expect(doc.warnings).toEqual([]);
+  });
+
+  it('머리 변수가 122개면 0x3d5(DIMLFAC 뒤)까지, 아니면 0x3c5까지만 머리로 읽는다', () => {
+    const lfac: [number, number[]] = [0x3cd, new Bytes().f64(2.5).a];
+    const with122 = readDwg(r26({ layers: LAYERS, header: [[0x11, new Bytes().i16(122).a], lfac], entities: () => [line(1)] }));
+    expect(with122.header.get('$DIMLFAC')).toBe(2.5);
+    const fewer = readDwg(r26({ layers: LAYERS, header: [[0x11, new Bytes().i16(120).a], lfac], entities: () => [line(1)] }));
+    expect(fewer.header.has('$DIMLFAC')).toBe(false);
+    expect(ms(fewer)).toHaveLength(1);
   });
 });
