@@ -258,8 +258,8 @@ function asciiCompatible(decoder: TextDecoder): boolean {
 
 const isSpaceByte = (b: number) => b === 32 || b === 9 || b === 11 || b === 12 || b === 13;
 
-/** 남은 내용이 DOS 파일 끝 표시(Ctrl-Z, 0x1A)와 공백뿐이다 — DOS 시절 AutoCAD(R2.x)가 EOF 뒤에 붙였다(83차) */
-const DOS_EOF_TAIL = /^[\s\x1a]*$/;
+/** 남은 내용이 DOS 파일 끝 표시(Ctrl-Z, 0x1A)와 ASCII 공백뿐이다 — DOS 시절 AutoCAD(R2.x)가 EOF 뒤에 붙였다(83차, 바이트 토큰화기의 dosEof와 같은 판정) */
+const DOS_EOF_TAIL = /^[ \t\v\f\r\n\x1a]*$/;
 
 /**
  * ASCII DXF 태그를 바이트에서 바로 읽는다(파일 전체 문자열을 만들지 않는다).

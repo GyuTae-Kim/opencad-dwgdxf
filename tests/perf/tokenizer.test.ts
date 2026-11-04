@@ -125,9 +125,12 @@ describe('바이트 토큰화기 = 예전 토큰화기', () => {
     const d = readDxf(dxf(body, '\r\n'));
     const l = [...d.entityIndex.values()][0] as LineEntity;
     expect([l.type, l.start, l.end, d.warnings]).toEqual(['LINE', { x: 5, y: 9, z: 0 }, { x: 6, y: 10, z: 1 }, []]);
-    const bad = dxf(body.replace('\x1a', '\x1a\n  0\nLINE'));
-    expect(() => readDxf(bad, { legacyText: true })).toThrow();
-    expect(() => readDxf(bad)).toThrow();
+    // Ctrl-Z 뒤에 내용이 더 있거나(ASCII 밖 공백 NBSP도) 하면 두 토큰화기 모두 손상으로 본다
+    for (const tail of ['\x1a\n  0\nLINE', '\x1a\u00a0']) {
+      const bad = dxf(body.replace('\x1a', tail));
+      expect(() => readDxf(bad, { legacyText: true })).toThrow();
+      expect(() => readDxf(bad)).toThrow();
+    }
   });
 
   it('이진 DXF로 다시 쓴 것도 같게 읽는다', () => {
