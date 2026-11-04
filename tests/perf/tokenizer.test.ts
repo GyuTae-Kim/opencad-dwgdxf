@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import type { CadDocument } from '../../src/core/model';
+import type { CadDocument, LineEntity } from '../../src/core/model';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { parseDecimalBytes, valueKind } from '../../src/io/dxf/records';
@@ -117,6 +117,20 @@ describe('바이트 토큰화기 = 예전 토큰화기', () => {
     const bad = dxf(['  0', 'SECTION', '  2', 'ENTITIES', 'XX', 'LINE', '  0', 'EOF', ''].join('\n'));
     expect(() => readDxf(bad, { legacyText: true })).toThrow();
     expect(() => readDxf(bad)).toThrow();
+  });
+
+  it('EOF 뒤 DOS 파일 끝 표시(Ctrl-Z, R2.x DXF)는 끝으로 보고 그 뒤에 내용이 더 있으면 오류다. R11 이전의 3DLINE은 선이다(83차)', () => {
+    const body = ['  0', 'SECTION', '  2', 'ENTITIES', '  0', '3DLINE', '  8', '0', ' 10', '5.0', ' 20', '9.0', ' 11', '6.0', ' 21', '10.0', ' 31', '1.0', '  0', 'ENDSEC', '  0', 'EOF', '\x1a', ''].join('\n');
+    compareReaders(dxf(body, '\r\n'));
+    const d = readDxf(dxf(body, '\r\n'));
+    const l = [...d.entityIndex.values()][0] as LineEntity;
+    expect([l.type, l.start, l.end, d.warnings]).toEqual(['LINE', { x: 5, y: 9, z: 0 }, { x: 6, y: 10, z: 1 }, []]);
+    // Ctrl-Z 뒤에 내용이 더 있거나(ASCII 밖 공백 NBSP도) 하면 두 토큰화기 모두 손상으로 본다
+    for (const tail of ['\x1a\n  0\nLINE', '\x1a\u00a0']) {
+      const bad = dxf(body.replace('\x1a', tail));
+      expect(() => readDxf(bad, { legacyText: true })).toThrow();
+      expect(() => readDxf(bad)).toThrow();
+    }
   });
 
   it('이진 DXF로 다시 쓴 것도 같게 읽는다', () => {

@@ -1749,7 +1749,7 @@ const ACIS_TYPES = new Set([
 /** 원본 태그를 남길 객체 종류(모르는 종류도 남긴다) */
 const RAW_TYPES = new Set(['ACAD_TABLE', 'ACAD_PROXY_ENTITY', 'OLE2FRAME', 'OLEFRAME']);
 const MODELED_TYPES = new Set([
-  'LINE', 'POINT', 'CIRCLE', 'ARC', 'ELLIPSE', 'LWPOLYLINE', 'POLYLINE', 'SPLINE', 'HELIX', 'XLINE', 'RAY', 'TEXT', 'ATTRIB',
+  'LINE', '3DLINE', 'POINT', 'CIRCLE', 'ARC', 'ELLIPSE', 'LWPOLYLINE', 'POLYLINE', 'SPLINE', 'HELIX', 'XLINE', 'RAY', 'TEXT', 'ATTRIB',
   'ATTDEF', 'MTEXT', 'INSERT', 'DIMENSION', 'ARC_DIMENSION', 'LARGE_RADIAL_DIMENSION', 'LEADER', 'MULTILEADER', 'MLEADER',
   'HATCH', 'MPOLYGON', 'SOLID', 'TRACE', '3DFACE', 'IMAGE', 'WIPEOUT', 'VIEWPORT', 'MLINE', 'TOLERANCE', 'SHAPE', 'MESH',
   'PDFUNDERLAY', 'DWFUNDERLAY', 'DGNUNDERLAY', 'OLE2FRAME', 'OLEFRAME', 'VERTEX', 'SEQEND',
@@ -1764,6 +1764,8 @@ export function parseEntity(rec: DxfRecord, ctx: EntityContext): Entity | null {
   }
   switch (rec.type) {
     case 'LINE':
+    // R11 이전 AutoCAD가 쓴 DXF의 3D 선(R2.6~R10 — 칸이 LINE과 같다, 83차)
+    case '3DLINE':
       return line(c);
     case 'POINT':
       return point(c);

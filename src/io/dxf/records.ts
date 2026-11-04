@@ -93,7 +93,7 @@ class StringTagReader implements TagReader {
     if (codeLine === null) return false;
     const code = parseInt(codeLine, 10);
     if (Number.isNaN(code)) {
-      if (codeLine.trim() === '') return false;
+      if (codeLine.trim() === '' || (codeLine.includes('\x1a') && DOS_EOF_TAIL.test(codeLine + this.text.slice(this.pos)))) return false;
       throw new CadReadError('dxf.invalid', { line: this.line, reason: 'group_code' });
     }
     const v = this.readLine();
@@ -258,6 +258,9 @@ function asciiCompatible(decoder: TextDecoder): boolean {
 
 const isSpaceByte = (b: number) => b === 32 || b === 9 || b === 11 || b === 12 || b === 13;
 
+/** 남은 내용이 DOS 파일 끝 표시(Ctrl-Z, 0x1A)와 ASCII 공백뿐이다 — DOS 시절 AutoCAD(R2.x)가 EOF 뒤에 붙였다(83차, 바이트 토큰화기의 dosEof와 같은 판정) */
+const DOS_EOF_TAIL = /^[ \t\v\f\r\n\x1a]*$/;
+
 /**
  * ASCII DXF 태그를 바이트에서 바로 읽는다(파일 전체 문자열을 만들지 않는다).
  * - 줄 = '\n' 바이트까지(끝의 '\r' 하나는 뺀다). 0x0A는 UTF-8·단일 바이트·DBCS 코드 페이지에서 언제나 줄바꿈이다.
@@ -323,6 +326,18 @@ class AsciiByteTagReader implements TagReader {
     return true;
   }
 
+  /** 이 줄부터 파일 끝까지 Ctrl-Z(0x1A)와 공백뿐인지(DOS_EOF_TAIL) */
+  private dosEof(): boolean {
+    const d = this.data;
+    let z = false;
+    for (let i = this.ls; i < this.len; i++) {
+      const b = d[i]!;
+      if (b === 0x1a) z = true;
+      else if (b !== 10 && !isSpaceByte(b)) return false;
+    }
+    return z;
+  }
+
   /** 그룹 코드 줄 → 정수(parseInt(줄, 10)과 같다). 숫자가 없으면 NaN */
   private codeValue(): number {
     const d = this.data;
@@ -352,7 +367,7 @@ class AsciiByteTagReader implements TagReader {
     if (this.pos >= this.len && this.blankLine()) return false;
     const code = this.codeValue();
     if (Number.isNaN(code)) {
-      if (this.blankLine()) return false;
+      if (this.blankLine() || this.dosEof()) return false;
       throw new CadReadError('dxf.invalid', { line: this.line, reason: 'group_code' });
     }
     if (!this.readLine()) return false;

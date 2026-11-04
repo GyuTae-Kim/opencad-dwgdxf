@@ -4,6 +4,7 @@
  * 배치는 공개 형식 설명(Michal Josef Špaček의 CAD-Format-DWG-AC1009, dwg_ac1009.ksy, CC0)을 보고 새로 작성했고,
  * AutoCAD R11이 같은 도면을 DWG와 DXF로 저장한 짝과 공개 R12 도면(에스토니아 국토청 지형 자료, 오스트라바 3D 건물)으로 확인했다.
  * 읽은 값은 R12 DXF와 같은 태그로 바꿔 DXF 리더로 읽는다. 도면층·블록·폴리선·속성·치수의 뜻이 R12 DXF와 같기 때문이다.
+ * R10(AC1006)·R9(AC1004)도 같은 배치에 칸만 적어 같은 길로 읽는다(같은 저자의 dwg_ac1006.ksy·dwg_ac1004.ksy, CC0).
  */
 import { CadReadError } from '../../core/errors';
 import { codepageToEncoding, decoderFor, dwgCodepageName } from '../../core/codepage';
@@ -82,24 +83,31 @@ class R12File {
   readonly extra: [number, number];
   readonly headerEnd: number;
   /**
-   * R10(AC1006): 머리 변수와 표 자리는 R12와 같고 R12가 뒤에 더한 변수만 없다. 표 레코드에는 이름 다음의 used(2)와 끝 CRC(2)가 없고,
+   * R11 이전(R10 AC1006·R9 AC1004): 머리 변수와 표 자리는 R12와 같고 R12가 뒤에 더한 변수만 없다. 표 레코드에는 이름 다음의 used(2)와 끝 CRC(2)가 없고,
    * 객체에는 추가 플래그·확장 자료·뷰포트 번호와 끝 CRC가 없으며, 선종류 번호가 1바이트, 고도가 두께보다 먼저다(82차 — dwg_ac1006.ksy)
    */
-  readonly r10: boolean;
-  /** 표 레코드 이름 뒤 칸의 어긋남(R12 0, R10 -2 — used가 없다) */
+  readonly pre11: boolean;
+  /**
+   * R9(AC1004, 83차 — dwg_ac1004.ksy): R10에 더해 핸들이 없고, 선·점은 2D에 고도 칸이 있으며(R10부터는 고도 비트가 Z를 빼는 뜻),
+   * 3D 선·3D 면은 점마다 Z가 플래그로 있고, 치수의 점은 모두 2D다
+   */
+  readonly r9: boolean;
+  /** 표 레코드 이름 뒤 칸의 어긋남(R12 0, R10·R9 -2 — used가 없다) */
   readonly rec: number;
-  /** 객체 끝 CRC 바이트(R12 2, R10 0) */
+  /** 객체 끝 CRC 바이트(R12 2, R10·R9 0) */
   readonly tail: number;
   /** 지금 읽는 위치(진행률) */
   at = 0;
 
   constructor(readonly data: Uint8Array) {
     this.dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-    this.r10 = String.fromCharCode(...data.subarray(0, 6)) === 'AC1006';
-    this.rec = this.r10 ? -2 : 0;
-    this.tail = this.r10 ? 0 : 2;
-    // R10 머리 변수는 0x512(변수 160개면 응용프로그램 표까지 0x51c)에서 끝난다
-    if (data.length < (this.r10 ? 0x512 : 0x6c0)) throw new CadReadError('dwg.corrupt', { reason: 'R12 header too short' });
+    const ver = String.fromCharCode(...data.subarray(0, 6));
+    this.r9 = ver === 'AC1004';
+    this.pre11 = this.r9 || ver === 'AC1006';
+    this.rec = this.pre11 ? -2 : 0;
+    this.tail = this.pre11 ? 0 : 2;
+    // 머리 변수는 R9 0x3ef, R10 0x512(변수 160개면 응용프로그램 표까지 0x51c)에서 끝난다
+    if (data.length < (this.r9 ? 0x3ef : this.pre11 ? 0x512 : 0x6c0)) throw new CadReadError('dwg.corrupt', { reason: 'R12 header too short' });
     const dv = this.dv;
     const es = dv.getInt32(0x14, true);
     const ee = dv.getInt32(0x18, true);
@@ -114,8 +122,9 @@ class R12File {
     this.ent = [es, ee];
     this.blk = inFile(bs, bs + bz) ? [bs, bs + bz] : [0, 0];
     this.extra = inFile(xs, xs + xz) ? [xs, xs + xz] : [0, 0];
-    // 헤더 변수는 객체 구역 앞의 CRC(2)와 구분자(16) 앞에서 끝난다. R10은 그 둘이 없어 객체 구역이 머리 바로 뒤에 온다(표본 0x512)
-    this.headerEnd = Math.min(this.r10 ? es : es - 18, data.length);
+    // 헤더 변수는 객체 구역 앞의 CRC(2)와 구분자(16) 앞에서 끝난다. R10·R9는 그 둘이 없어 객체 구역이 머리 바로 뒤에 온다(표본 0x512·0x3ef).
+    // R9 머리는 0x3ef(MIRRTEXT 뒤)에서 끝나 그 뒤 자리(R10의 UCS 표·코드 페이지)는 객체 구역이 더 뒤에서 시작해도 읽지 않는다
+    this.headerEnd = Math.min(this.r9 ? Math.min(es, 0x3ef) : this.pre11 ? es : es - 18, data.length);
     this.codepage = dwgCodepageName(this.u16(0x3f9) ?? 0);
     this.dec = decoderFor(codepageToEncoding(this.codepage));
     this.readTables();
@@ -252,7 +261,7 @@ class R12File {
       return false;
     };
     const extra = () => {
-      if (this.r10 || !(mode & 0x40) || !has(1)) return;
+      if (this.pre11 || !(mode & 0x40) || !has(1)) return;
       xf = data[q++]!;
       if (xf & 2 && has(2)) {
         const n = dv.getUint16(q, true);
@@ -263,7 +272,7 @@ class R12File {
     };
     const props = (elevFirst: boolean) => {
       if (mode & 1 && has(1)) h.color = data[q++]!;
-      if (this.r10) {
+      if (this.pre11) {
         if (mode & 2 && has(1)) h.ltype = this.ltypeName(data[q++]!);
       } else if (mode & 2 && has(2)) {
         h.ltype = this.ltypeName(dv.getInt16(q, true));
@@ -276,8 +285,8 @@ class R12File {
         }
       };
       const elev = () => {
-        // 선·점·3D 면은 고도 칸이 없고, 이 비트가 Z 좌표를 빼는 뜻이다
-        if (mode & 4 && type !== 1 && type !== 2 && type !== 22 && has(8)) {
+        // 선·점·3D 면은 고도 칸이 없고, 이 비트가 Z 좌표를 빼는 뜻이다(R9는 고도 칸이 있다)
+        if (mode & 4 && (this.r9 || (type !== 1 && type !== 2 && type !== 22)) && has(8)) {
           h.elevation = dv.getFloat64(q, true);
           q += 8;
         }
@@ -292,8 +301,9 @@ class R12File {
     };
     // 정점도 추가 플래그가 먼저다(형식 설명은 정점만 색·고도를 앞에 두지만, 에스토니아 블록의 정점 바이트는 추가 플래그 → 고도 → 핸들 → 뷰포트다)
     extra();
-    props(this.r10 || type === 14);
-    if (mode & 0x20 && has(1)) {
+    props(this.pre11 || type === 14);
+    // R9에는 핸들이 없다
+    if (!this.r9 && mode & 0x20 && has(1)) {
       const n = data[q++]!;
       if (has(n)) {
         let hex = '';
@@ -302,7 +312,7 @@ class R12File {
       }
       q += n;
     }
-    if (!this.r10 && mode & 0x40 && xf & 4 && has(2)) {
+    if (!this.pre11 && mode & 0x40 && xf & 4 && has(2)) {
       // 도면 공간 뷰포트 번호: 최상위 객체에 있으면 도면 공간 객체다(R11 표본: TILEMODE 0, 모든 객체가 1)
       h.paper = top;
       q += 2;
@@ -409,7 +419,7 @@ const TYPE_NAMES: Record<number, string> = {
 /** 객체 하나를 R12 DXF 태그로. 읽을 수 없으면 false */
 function entityTags(f: R12File, h: Head, o: Out): boolean {
   // R10까지의 3D 선(21)은 Z가 늘 있는 선이다(R11부터는 선에 Z가 있어 이 종류가 없다)
-  const name = TYPE_NAMES[h.type] ?? (f.r10 && h.type === 21 ? 'LINE' : undefined);
+  const name = TYPE_NAMES[h.type] ?? (f.pre11 && h.type === 21 ? 'LINE' : undefined);
   if (!name) return false;
   const c = new Cur(f, h.p, h.end - f.tail);
   const z = h.elevation ?? 0;
@@ -421,25 +431,33 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
   if (h.ltype) o.t(6, h.ltype);
   if (h.color !== null) o.t(62, h.color);
   if (h.thickness) o.t(39, h.thickness);
+  // R9에는 돌출 방향 칸이 없다(UCS가 R10부터다)
   const ext = () => {
-    o.p3(210, c.f64(), c.f64(), c.f64());
+    if (!f.r9) o.p3(210, c.f64(), c.f64(), c.f64());
   };
-  const noZ = (h.mode & 4) !== 0;
+  // R10부터 선·점·3D 면의 고도 비트는 Z를 빼는 뜻이고(Z는 0), R9는 Z가 늘 없고 고도 칸이 Z다
+  const noZ = f.r9 || (h.mode & 4) !== 0;
+  const nz = f.r9 ? z : 0;
   switch (h.type) {
     case 1: {
       const x1 = c.f64();
       const y1 = c.f64();
-      const z1 = noZ ? 0 : c.f64();
+      const z1 = noZ ? nz : c.f64();
       const x2 = c.f64();
       const y2 = c.f64();
-      const z2 = noZ ? 0 : c.f64();
+      const z2 = noZ ? nz : c.f64();
       o.p3(10, x1, y1, z1);
       o.p3(11, x2, y2, z2);
       if (f2 & 0x01) ext();
       break;
     }
     case 21: {
-      // R10 3D 선: Z가 늘 있다
+      // 3D 선: R10은 Z가 늘 있고, R9는 끝점마다 Z가 있는지 플래그로 알린다(없으면 고도)
+      if (f.r9) {
+        o.p3(10, c.f64(), c.f64(), f2 & 0x01 ? c.f64() : z);
+        o.p3(11, c.f64(), c.f64(), f2 & 0x02 ? c.f64() : z);
+        break;
+      }
       o.p3(10, c.f64(), c.f64(), c.f64());
       o.p3(11, c.f64(), c.f64(), c.f64());
       if (f2 & 0x01) ext();
@@ -448,7 +466,8 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
     case 2: {
       const x = c.f64();
       const y = c.f64();
-      o.p3(10, x, y, noZ ? 0 : c.f64());
+      o.p3(10, x, y, noZ ? nz : c.f64());
+      if (f.r9) break;
       if (f2 & 0x01) ext();
       if (f2 & 0x02) o.t(50, c.f64() * DEG);
       break;
@@ -578,17 +597,22 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
       break;
     }
     case 22: {
-      for (const k of [10, 11, 12, 13]) {
+      // R9는 꼭짓점마다 Z가 있는지 플래그로 알리고(0x01~0x08, 없으면 고도) 모서리 숨김 칸이 없다
+      for (const [i, k] of [10, 11, 12, 13].entries()) {
         const x = c.f64();
         const y = c.f64();
-        o.p3(k, x, y, noZ ? 0 : c.f64());
+        o.p3(k, x, y, f.r9 ? (f2 & (1 << i) ? c.f64() : z) : noZ ? 0 : c.f64());
       }
-      if (f2 & 0x01) o.t(70, c.u16() & 0xff);
+      if (!f.r9 && f2 & 0x01) o.t(70, c.u16() & 0xff);
       break;
     }
     case 23: {
       const bi = c.s16();
       if (bi >= 0 && bi < f.blockNames.length) o.t(2, f.blockNames[bi]!);
+      if (f.r9) {
+        r9Dim(c, o, f2, f3, z);
+        break;
+      }
       o.p3(10, c.f64(), c.f64(), c.f64());
       o.p3(11, c.f64(), c.f64(), z);
       if (f2 & 0x01) o.p3(12, c.f64(), c.f64(), z);
@@ -602,10 +626,10 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
       if (f2 & 0x10) o.p3(14, c.f64(), c.f64(), c.f64());
       if (f2 & 0x20) o.p3(15, c.f64(), c.f64(), c.f64());
       // R10은 호 정의점이 3D 점이고 지시선 길이가 수 하나다(R12는 2D 점과 길이·각도)
-      if (f2 & 0x40) o.p3(16, c.f64(), c.f64(), f.r10 ? c.f64() : z);
+      if (f2 & 0x40) o.p3(16, c.f64(), c.f64(), f.pre11 ? c.f64() : z);
       if (f2 & 0x80) {
         o.t(40, c.f64());
-        if (!f.r10) {
+        if (!f.pre11) {
           o.t(50, c.f64() * DEG);
           if (h.mode & 4) c.f64();
         }
@@ -633,6 +657,22 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
   // 확장 자료는 DXF처럼 객체 자료 뒤에 둔다(R12 도면 공간 뷰포트는 보기 정보를 ACAD 확장 자료에 둔다)
   if (h.eed) for (const [k, v] of h.eed) o.t(k, v);
   return true;
+}
+
+/** R9 치수(블록 번호 다음): 점이 모두 2D이고 복제 점·지시선 길이 칸이 없다(dwg_ac1004.ksy) */
+function r9Dim(c: Cur, o: Out, f2: number, f3: number, z: number): void {
+  o.p3(10, c.f64(), c.f64(), z);
+  o.p3(11, c.f64(), c.f64(), z);
+  if (f2 & 0x02) o.t(70, c.u8());
+  if (f2 & 0x04) {
+    const s = c.text();
+    o.t(1, s === ' ' ? '' : s);
+  }
+  if (f2 & 0x08) o.p3(13, c.f64(), c.f64(), z);
+  if (f2 & 0x10) o.p3(14, c.f64(), c.f64(), z);
+  if (f2 & 0x20) o.p3(15, c.f64(), c.f64(), z);
+  if (f2 & 0x40) o.p3(16, c.f64(), c.f64(), z);
+  if (f3 & 0x01) o.t(50, c.f64() * DEG);
 }
 
 function blockTags(f: R12File, h: Head, o: Out, x: number, y: number, xref: string): boolean {
@@ -692,7 +732,8 @@ function headerTags(f: R12File, o: Out): void {
     o.t(code, f.str(off, len));
   };
   p3('$INSBASE', 0x5e);
-  i16('$PLINEGEN', 0x76);
+  // R9는 0x76이 객체 수이고 0x156은 뜻을 모르는 칸이다(PLINEGEN·PSLTSCALE은 R10부터)
+  if (!f.r9) i16('$PLINEGEN', 0x76);
   p3('$EXTMIN', 0x78);
   p3('$EXTMAX', 0x90);
   p2('$LIMMIN', 0xa8);
@@ -720,7 +761,7 @@ function headerTags(f: R12File, o: Out): void {
     o.t(9, '$CLAYER');
     o.t(8, f.layer(cl));
   }
-  i16('$PSLTSCALE', 0x156);
+  if (!f.r9) i16('$PSLTSCALE', 0x156);
   i16('$LUNITS', 0x164);
   i16('$LUPREC', 0x166);
   r('$SKETCHINC', 0x17a);
