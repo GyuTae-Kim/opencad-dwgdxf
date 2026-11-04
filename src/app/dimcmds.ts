@@ -143,10 +143,14 @@ export function dimensionBlockOps(st: DocState, dim: DimensionEntity, reuse: boo
     recordHandle = s.newHandle();
     ops.push({ kind: 'blockRecord', key, before: null, after: { name, handle: recordHandle, flags: 1, insertUnits: 0, explodable: true, scalable: true } });
   }
-  for (const e of g.entities) {
-    e.handle = s.newHandle();
+  // 이 치수의 블록을 다시 만들면 같은 자리·같은 종류 객체는 옛 핸들을 물려받는다(86차). 전에는 연관 치수 1만 개를 옮길 때마다
+  // 블록 객체 9만 개가 새 핸들을 받아 핸들 색인에서 9만 개를 빼고 9만 개를 넣었고, 핸들 씨앗($HANDSEED)도 9만씩 늘었다
+  const old = before?.entities;
+  g.entities.forEach((e, i) => {
+    const o = old?.[i];
+    e.handle = o && o.type === e.type && o.handle ? o.handle : s.newHandle();
     e.owner = recordHandle;
-  }
+  });
   const def: BlockDef = { name, handle: before?.handle ?? s.newHandle(), recordHandle, basePoint: { x: 0, y: 0, z: 0 }, flags: 1, entities: g.entities, endHandle: before?.endHandle ?? s.newHandle() };
   ops.push({ kind: 'blockDef', key, before: before ?? null, after: def });
   dim.block = name;

@@ -263,7 +263,13 @@ export function applyOps(doc: CadDocument, ops: readonly EditOp[], summary?: Cha
         doc.vports.splice(0, doc.vports.length, ...op.after);
         break;
       case 'blockDef': {
-        if (op.before) for (const e of op.before.entities) indexEntity(doc, e, false);
+        // 다시 만든 블록이 같은 자리에 같은 핸들을 쓰면(치수 블록 — 86차) 색인에서 빼지 않고 아래에서 덮어 넣는다(블록 참조는 속성 때문에 전처럼 빼고 넣는다)
+        const next = op.before && op.after ? op.after.entities : undefined;
+        if (op.before)
+          op.before.entities.forEach((e, i) => {
+            const n = next?.[i];
+            if (!n || n.handle !== e.handle || e.type === 'INSERT' || n.type === 'INSERT') indexEntity(doc, e, false);
+          });
         if (op.after) {
           doc.blocks.set(op.key, op.after);
           for (const e of op.after.entities) indexEntity(doc, e, true);

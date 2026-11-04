@@ -481,13 +481,42 @@ function acadOps(doc: CadDocument, info: ArrayInfo, next: ArrayState, items: rea
   return ops;
 }
 
+/** 문서의 경로 배열 후보: 이 앱 기록(확장 자료의 경로 핸들, 핸들 색인 차례)과 AutoCAD 연관 종속이 있는지 */
+export interface PathArrays {
+  app: { path: string; ins: Entity }[];
+  acad: boolean;
+}
+
+/**
+ * 경로 배열 후보를 찾는다. 없으면 null — 확정 고리는 바뀐 객체를 모으지 않고 끝낸다(86차: 연관 도면 전체 MOVE에서
+ * 확정마다 바뀐 객체 3만 개를 모으고 반응자마다 핸들을 정규화하던 일이 배열이 없는 도면에도 들었다)
+ */
+export function pathArrays(doc: CadDocument): PathArrays | null {
+  const app: PathArrays['app'] = [];
+  // 이 앱 기록: 확장 자료의 경로 핸들(둘째 1005)
+  for (const e of doc.entityIndex.values()) {
+    if (e.type !== 'INSERT' || !e.xdata) continue;
+    const rec = e.xdata.find((x) => x.app.toUpperCase() === 'OPENCAD_ARRAY');
+    const hs = rec?.items.filter((i) => i.code === 1005).map((i) => normalizeHandle(String(i.value)));
+    if (hs && hs[1]) app.push({ path: hs[1], ins: e });
+  }
+  let acad = false;
+  for (const o of doc.objects.values())
+    if (o.type === 'ACDBASSOCDEPENDENCY') {
+      acad = true;
+      break;
+    }
+  return app.length || acad ? { app, acad } : null;
+}
+
 /**
  * 경로 곡선이 바뀐 경로 배열을 새 경로로 다시 계산하는 작업(AutoCAD 연관 배열이 경로를 따라가는 것).
  * changed = 바뀐 객체 핸들. 배열 참조도 같은 변환으로 함께 옮겨졌으면(항목이 이미 맞으면) 그대로 둔다.
+ * arrays = 미리 찾은 경로 배열 후보(pathArrays)
  */
-export function followPathOps(env: BuildEnv, changed: ReadonlySet<string>): EditOp[] {
+export function followPathOps(env: BuildEnv, changed: ReadonlySet<string>, arrays: PathArrays | null = pathArrays(env.doc)): EditOp[] {
   const doc = env.doc;
-  if (!changed.size) return [];
+  if (!changed.size || !arrays) return [];
   const ops: EditOp[] = [];
   const seen = new Set<string>();
   const consider = (e: Entity | undefined) => {
@@ -498,22 +527,28 @@ export function followPathOps(env: BuildEnv, changed: ReadonlySet<string>): Edit
     const r = regenerateOps(env, info, info.state);
     if (!('error' in r)) ops.push(...r.ops);
   };
-  // 이 앱 기록: 확장 자료의 경로 핸들(둘째 1005)
-  for (const e of doc.entityIndex.values()) {
-    if (e.type !== 'INSERT' || !e.xdata) continue;
-    const rec = e.xdata.find((x) => x.app.toUpperCase() === 'OPENCAD_ARRAY');
-    const hs = rec?.items.filter((i) => i.code === 1005).map((i) => normalizeHandle(String(i.value)));
-    if (hs && hs[1] && changed.has(hs[1])) consider(e);
-  }
-  // AutoCAD 기록: 경로 곡선의 반응자(종속) → 동작 → 배열 참조(읽기·쓰기 종속)
+  for (const a of arrays.app) if (changed.has(a.path)) consider(a.ins);
+  if (!arrays.acad) return ops;
+  // AutoCAD 기록: 경로 곡선의 반응자(종속) → 동작 → 배열 참조(읽기·쓰기 종속).
+  // 동작마다 종속 목록은 처음 쓸 때 한 번 모은다(전에는 종속에 닿을 때마다 객체 표 전체를 훑었다 — 바뀐 경로 수 × 객체 수)
+  let byOwner: Map<string, GenericObject[]> | undefined;
   for (const h of changed) {
     const path = doc.entityIndex.get(h);
     for (const r of path?.reactors ?? []) {
       const dep = doc.objects.get(normalizeHandle(r)) as GenericObject | undefined;
       if (dep?.type !== 'ACDBASSOCDEPENDENCY' || !dep.owner) continue;
-      for (const o of doc.objects.values()) {
-        if (o.type !== 'ACDBASSOCDEPENDENCY' || !o.owner || normalizeHandle(o.owner) !== normalizeHandle(dep.owner)) continue;
-        const t = (o as GenericObject).raw?.find((x) => x.code === 330);
+      if (!byOwner) {
+        byOwner = new Map();
+        for (const o of doc.objects.values()) {
+          if (o.type !== 'ACDBASSOCDEPENDENCY' || !o.owner) continue;
+          const k = normalizeHandle(o.owner);
+          let list = byOwner.get(k);
+          if (!list) byOwner.set(k, (list = []));
+          list.push(o as GenericObject);
+        }
+      }
+      for (const o of byOwner.get(normalizeHandle(dep.owner)) ?? []) {
+        const t = o.raw?.find((x) => x.code === 330);
         const target = t ? normalizeHandle(String(t.value)) : '';
         consider(target ? doc.entityIndex.get(target) : undefined);
       }

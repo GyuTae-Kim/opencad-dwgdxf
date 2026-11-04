@@ -6,7 +6,7 @@
 import type { Entity } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
-import { type CreateInput, blockCopies, createArrayOps, dependentBlockOps, followPathOps, regenerateOps } from '../edit/assocarray/build';
+import { type CreateInput, blockCopies, createArrayOps, dependentBlockOps, followPathOps, pathArrays, regenerateOps } from '../edit/assocarray/build';
 import { isFullCircle, itemCount, pathMaxItems, pathSpacingOf, polarWithAngle, polarWithFill, polarWithItems } from '../edit/assocarray/layout';
 import { type ArrayInfo, arrayPath, expectedItems, looksLikeArray } from '../edit/assocarray/read';
 import { type ArrayKind, type ArrayParams, type ArrayState, KIND_LABEL, MAX_ITEMS, cloneState, parseKey } from '../edit/assocarray/types';
@@ -707,12 +707,15 @@ function installArrayFollow(app: App): void {
     name: 'assocarray-follow',
     after(st: DocState, tx: Transaction) {
       if (following) return;
+      // 바꾼 객체가 없으면(복사·지우기) 배열을 찾지 않고, 따라갈 배열이 없는 도면이면 바뀐 객체를 모으지 않는다
+      if (!tx.ops.some((op) => op.kind === 'modify' && op.after.type !== 'INSERT')) return;
+      const arrays = pathArrays(st.doc);
+      if (!arrays) return;
       const changed = new Set<string>();
       for (const op of tx.ops) if (op.kind === 'modify' && op.after.type !== 'INSERT') changed.add(op.after.handle);
-      if (!changed.size) return;
       following = true;
       try {
-        const ops = followPathOps(buildEnv(st), changed);
+        const ops = followPathOps(buildEnv(st), changed, arrays);
         if (ops.length) st.session.commit({ label: tx.label, ops, group: tx.group, rebuildNow: true });
       } catch {
         /* 따라가지 못하면 배열은 그대로(ARRAYEDIT에서 다시 계산) */

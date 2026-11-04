@@ -84,6 +84,26 @@ describe('치수를 옮기거나 복사할 때의 치수 블록', () => {
     expect(audit(h.doc)).toEqual({ dBlocks: 3, unused: 0, stale: 0 });
   });
 
+  it('MOVE: 다시 만든 치수 블록의 객체는 옛 핸들을 물려받아 핸들 씨앗을 블록 객체 수만큼 늘리지 않는다(86차)', async () => {
+    const h = harness(3);
+    const handles = () => dimsOf(h.doc).map((d) => h.doc.blocks.get(tableKey(d.block))!.entities.map((e) => `${e.type}:${e.handle}`));
+    const before = handles();
+    const seed0 = BigInt(`0x${String(h.doc.header.get('$HANDSEED'))}`);
+    await runWith(h, 'MOVE', [{ sel: dimsOf(h.doc).map((d) => d.handle) }, '0,0', '0,30']);
+    expect(handles()).toEqual(before);
+    expect(dimsOf(h.doc).every((d) => lowY(h.doc, d) >= 30)).toBe(true);
+    // 핸들 색인은 다시 만든 객체를 가리키고(옛 객체가 아니다) 남는 항목이 없다
+    for (const d of dimsOf(h.doc)) for (const e of h.doc.blocks.get(tableKey(d.block))!.entities) expect(h.doc.entityIndex.get(e.handle)).toBe(e);
+    expect(audit(h.doc)).toEqual({ dBlocks: 3, unused: 0, stale: 0 });
+    // 전에는 블록 객체마다 새 핸들을 받아 씨앗이 그만큼 늘었다
+    const blockEntities = before.flat().length;
+    expect(BigInt(`0x${String(h.doc.header.get('$HANDSEED'))}`) - seed0 < BigInt(blockEntities)).toBe(true);
+    h.st.session.undo();
+    expect(handles()).toEqual(before);
+    for (const d of dimsOf(h.doc)) for (const e of h.doc.blocks.get(tableKey(d.block))!.entities) expect(h.doc.entityIndex.get(e.handle)).toBe(e);
+    expect(dimsOf(h.doc).every((d) => lowY(h.doc, d) < 30)).toBe(true);
+  });
+
   it('COPY: 복사한 치수마다 블록 하나를 넣고, 덮인 블록의 객체를 핸들 색인에 남기지 않는다(되돌리기·다시 하기 포함)', async () => {
     const h = harness(3);
     const src = dimsOf(h.doc).map((d) => [d.handle, d.block, lowY(h.doc, d)] as const);
