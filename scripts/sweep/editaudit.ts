@@ -9,6 +9,7 @@
  *  - DXF·DWG(R2018)로 쓰고 다시 읽을 때 그 공간에서 빠지는 객체가 원본 왕복보다 늘지 않는다(늘어난 객체 수만큼은 봐 준다)
  *  - 두 자리에 든 핸들, 소유자가 든 블록의 레코드가 아닌 객체, 핸들 색인이 블록 안의 그 객체가 아닌 것이 늘지 않는다(75차)
  *  - 명령 취소하면 처음 문서(블록·색인 수, 쓰이지 않는 익명 블록, 위의 세 수)로 돌아온다
+ *  - 다시 하면 명령 직후 문서(블록마다 객체 차례, 색인 수, 위의 수)로 돌아오고 워커 문서도 같다(81차)
  *  - 커밋·명령 취소마다 워커와 같은 전송(packOps → 구조화 복제, 큰 편집은 묶음 부호화 → unpackOps → applyOps)으로 따로 읽은 문서에 적용하면 메인 문서와 같다
  *    (블록·객체 차례, 색인, 바뀌거나 더한 객체 — 78차, 속성 없는 블록 참조를 바꾸면 워커가 멈추던 결함)
  * 명령은 시험 하네스(tests/cmds2)로 흘려 넣어 화면 없이 돈다. 결과는 문제만 담은 작은 JSON이다.
@@ -164,6 +165,13 @@ function registerAll(app: App): void {
 
 export type AuditProblem = Record<string, unknown> & { file: string; cmd?: string };
 
+/** 블록마다 객체 핸들 차례와 색인 수(명령 직후와 다시 한 뒤를 견준다). 지웠다 되살린 블록은 표 끝으로 가므로 블록 열쇠 차례로 */
+function shape(doc: CadDocument): string[] {
+  const out = [...doc.blocks].map(([k, b]) => `${k}:${b.entities.map((e) => e.handle).join(',')}`).sort();
+  out.push(`index:${doc.entityIndex.size}`, `objects:${doc.objects.size}`);
+  return out;
+}
+
 /** 메인 문서와 워커 문서가 다른 첫 자리(같으면 null). touched: 이 편집이 바꾸거나 더한 객체 */
 export function workerDiff(a: CadDocument, b: CadDocument, touched: ReadonlySet<string>): string | null {
   if (a.blocks.size !== b.blocks.size) return `blocks ${a.blocks.size}/${b.blocks.size}`;
@@ -257,6 +265,7 @@ export async function auditFile(
       for (const k of ['dup', 'owner', 'mismatch'] as const) if (after[k] > before[k]) p[k] = [before[k], after[k]];
       const wd = wireError ?? workerDiff(h.doc, wdoc, touched);
       if (wd) p.worker = wd;
+      const shape0 = shape(h.doc);
       const loss = roundtripLoss(h.doc, target);
       const k = Math.max(1, countIn(h.doc, target) / n0);
       if (loss.dxf > Math.ceil(loss0.dxf * k) || loss.dwg > Math.ceil(loss0.dwg * k)) p.roundtripLoss = { before: loss0, after: loss };
@@ -268,6 +277,15 @@ export async function auditFile(
       if (back.unused.join() !== before.unused.join() || !same) {
         p.undo = { before: [before.blocks, before.index, before.stale, before.dup, before.owner, before.mismatch], back: [back.blocks, back.index, back.stale, back.dup, back.owner, back.mismatch] };
       }
+      // 다시 하기: 명령 직후와 같은 문서, 워커 문서도 같다
+      while (s.canRedo()) s.redo();
+      const fwd = auditDoc(h.doc);
+      const shape1 = shape(h.doc);
+      const redoSame = (['unused', 'stale', 'blocks', 'index', 'dup', 'owner', 'mismatch'] as const).every((k) => String(fwd[k]) === String(after[k]));
+      const firstDiff = shape1.findIndex((x, i) => x !== shape0[i]);
+      if (!redoSame || firstDiff >= 0 || shape1.length !== shape0.length) p.redo = firstDiff >= 0 ? (shape1[firstDiff] ?? '').slice(0, 80) : 'counts';
+      const wr = wireError ?? workerDiff(h.doc, wdoc, touched);
+      if (wr && !wd && !p.workerUndo) p.workerRedo = wr;
       if (Object.keys(p).length > (target.layout ? 3 : 2)) problems.push(p);
     } catch (e) {
       problems.push({ file: path, cmd: label, error: String(e).slice(0, 160) });
