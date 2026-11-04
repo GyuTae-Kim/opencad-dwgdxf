@@ -81,12 +81,25 @@ class R12File {
   readonly blk: [number, number];
   readonly extra: [number, number];
   readonly headerEnd: number;
+  /**
+   * R10(AC1006): 머리 변수와 표 자리는 R12와 같고 R12가 뒤에 더한 변수만 없다. 표 레코드에는 이름 다음의 used(2)와 끝 CRC(2)가 없고,
+   * 객체에는 추가 플래그·확장 자료·뷰포트 번호와 끝 CRC가 없으며, 선종류 번호가 1바이트, 고도가 두께보다 먼저다(82차 — dwg_ac1006.ksy)
+   */
+  readonly r10: boolean;
+  /** 표 레코드 이름 뒤 칸의 어긋남(R12 0, R10 -2 — used가 없다) */
+  readonly rec: number;
+  /** 객체 끝 CRC 바이트(R12 2, R10 0) */
+  readonly tail: number;
   /** 지금 읽는 위치(진행률) */
   at = 0;
 
   constructor(readonly data: Uint8Array) {
     this.dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-    if (data.length < 0x6c0) throw new CadReadError('dwg.corrupt', { reason: 'R12 header too short' });
+    this.r10 = String.fromCharCode(...data.subarray(0, 6)) === 'AC1006';
+    this.rec = this.r10 ? -2 : 0;
+    this.tail = this.r10 ? 0 : 2;
+    // R10 머리 변수는 0x512(변수 160개면 응용프로그램 표까지 0x51c)에서 끝난다
+    if (data.length < (this.r10 ? 0x512 : 0x6c0)) throw new CadReadError('dwg.corrupt', { reason: 'R12 header too short' });
     const dv = this.dv;
     const es = dv.getInt32(0x14, true);
     const ee = dv.getInt32(0x18, true);
@@ -156,7 +169,7 @@ class R12File {
         const r = bt.begin + i * bt.size;
         this.blockFlags.push(this.data[r]!);
         this.blockNames.push(this.str(r + 1, 32));
-        this.blockAt.set(this.dv.getUint32(r + 35, true) & 0x3fffffff, i);
+        this.blockAt.set(this.dv.getUint32(r + 35 + this.rec, true) & 0x3fffffff, i);
       }
     }
     // 익명 블록은 표에 *U·*D만 있다. AutoCAD는 같은 도면을 DXF로 쓸 때 표 번호를 붙인다(R11 짝: 표 2번 *D → *D2)
@@ -171,6 +184,21 @@ class R12File {
 
   layer(i: number): string {
     return this.layers[i] ?? '0';
+  }
+
+  /**
+   * JUMP 객체(머리 바로 뒤 4바이트)가 가리키는 자리와 그 구역 끝. 맨 위 바이트가 0x80이면 추가 구역, 0x40이면 블록 구역 안의 위치,
+   * 0이면 파일 안 위치(R10 표본: 객체 구역 → 추가 구역 0x80000000, 추가 구역 → 객체 구역의 절대 주소). 구역 밖이면 null
+   */
+  jump(p: number): [number, number] | null {
+    if (p + 8 > this.data.length) return null;
+    const raw = this.dv.getUint32(p + 4, true);
+    const flag = raw >>> 24;
+    const addr = raw & 0xffffff;
+    const within = (r: [number, number], at: number): [number, number] | null => (r[1] > r[0] && at >= r[0] && at + 4 <= r[1] ? [at, r[1]] : null);
+    if (flag & 0x80) return within(this.extra, this.extra[0] + addr);
+    if (flag & 0x40) return within(this.blk, this.blk[0] + addr);
+    return within(this.ent, addr) ?? within(this.extra, addr);
   }
 
   /** 선종류 번호: 표 번호, 32767(또는 256) ByLayer, 32766(또는 255) ByBlock */
@@ -207,7 +235,8 @@ class R12File {
       p: p + 4,
     };
     if (type === 18 || type < 0) return h; // JUMP·지운 객체
-    if (size < 10) {
+    // 머리 8바이트 + CRC(R12). R10은 CRC가 없어 본문 없는 POLYLINE·ENDBLK가 8바이트다
+    if (size < 8 + this.tail) {
       h.bad = true;
       return h;
     }
@@ -218,12 +247,12 @@ class R12File {
     let xf = 0;
     // 칸이 객체 끝(CRC 앞)을 넘으면 이 객체만 버린다
     const has = (n: number) => {
-      if (q + n <= h.end - 2) return true;
+      if (q + n <= h.end - this.tail) return true;
       h.bad = true;
       return false;
     };
     const extra = () => {
-      if (!(mode & 0x40) || !has(1)) return;
+      if (this.r10 || !(mode & 0x40) || !has(1)) return;
       xf = data[q++]!;
       if (xf & 2 && has(2)) {
         const n = dv.getUint16(q, true);
@@ -234,7 +263,9 @@ class R12File {
     };
     const props = (elevFirst: boolean) => {
       if (mode & 1 && has(1)) h.color = data[q++]!;
-      if (mode & 2 && has(2)) {
+      if (this.r10) {
+        if (mode & 2 && has(1)) h.ltype = this.ltypeName(data[q++]!);
+      } else if (mode & 2 && has(2)) {
         h.ltype = this.ltypeName(dv.getInt16(q, true));
         q += 2;
       }
@@ -261,7 +292,7 @@ class R12File {
     };
     // 정점도 추가 플래그가 먼저다(형식 설명은 정점만 색·고도를 앞에 두지만, 에스토니아 블록의 정점 바이트는 추가 플래그 → 고도 → 핸들 → 뷰포트다)
     extra();
-    props(type === 14);
+    props(this.r10 || type === 14);
     if (mode & 0x20 && has(1)) {
       const n = data[q++]!;
       if (has(n)) {
@@ -271,7 +302,7 @@ class R12File {
       }
       q += n;
     }
-    if (mode & 0x40 && xf & 4 && has(2)) {
+    if (!this.r10 && mode & 0x40 && xf & 4 && has(2)) {
       // 도면 공간 뷰포트 번호: 최상위 객체에 있으면 도면 공간 객체다(R11 표본: TILEMODE 0, 모든 객체가 1)
       h.paper = top;
       q += 2;
@@ -377,9 +408,10 @@ const TYPE_NAMES: Record<number, string> = {
 
 /** 객체 하나를 R12 DXF 태그로. 읽을 수 없으면 false */
 function entityTags(f: R12File, h: Head, o: Out): boolean {
-  const name = TYPE_NAMES[h.type];
+  // R10까지의 3D 선(21)은 Z가 늘 있는 선이다(R11부터는 선에 Z가 있어 이 종류가 없다)
+  const name = TYPE_NAMES[h.type] ?? (f.r10 && h.type === 21 ? 'LINE' : undefined);
   if (!name) return false;
-  const c = new Cur(f, h.p, h.end - 2);
+  const c = new Cur(f, h.p, h.end - f.tail);
   const z = h.elevation ?? 0;
   const { f2, f3 } = h;
   o.t(0, name);
@@ -403,6 +435,13 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
       const z2 = noZ ? 0 : c.f64();
       o.p3(10, x1, y1, z1);
       o.p3(11, x2, y2, z2);
+      if (f2 & 0x01) ext();
+      break;
+    }
+    case 21: {
+      // R10 3D 선: Z가 늘 있다
+      o.p3(10, c.f64(), c.f64(), c.f64());
+      o.p3(11, c.f64(), c.f64(), c.f64());
       if (f2 & 0x01) ext();
       break;
     }
@@ -562,11 +601,14 @@ function entityTags(f: R12File, h: Head, o: Out): boolean {
       if (f2 & 0x08) o.p3(13, c.f64(), c.f64(), c.f64());
       if (f2 & 0x10) o.p3(14, c.f64(), c.f64(), c.f64());
       if (f2 & 0x20) o.p3(15, c.f64(), c.f64(), c.f64());
-      if (f2 & 0x40) o.p3(16, c.f64(), c.f64(), z);
+      // R10은 호 정의점이 3D 점이고 지시선 길이가 수 하나다(R12는 2D 점과 길이·각도)
+      if (f2 & 0x40) o.p3(16, c.f64(), c.f64(), f.r10 ? c.f64() : z);
       if (f2 & 0x80) {
         o.t(40, c.f64());
-        o.t(50, c.f64() * DEG);
-        if (h.mode & 4) c.f64();
+        if (!f.r10) {
+          o.t(50, c.f64() * DEG);
+          if (h.mode & 4) c.f64();
+        }
       }
       if (f3 & 0x01) o.t(50, c.f64() * DEG);
       if (f3 & 0x04) o.t(53, c.f64() * DEG);
@@ -794,7 +836,8 @@ function tableTags(f: R12File, o: Out, kind: string, off: number, size: number, 
         o.t(0, kind);
         o.t(2, nm);
         o.t(70, f.data[r]! & 0x7f);
-        if (t.size >= size) each(r, o);
+        // R10 레코드에는 used(2)와 CRC(2)가 없다
+        if (t.size >= size + 2 * f.rec) each(r, o);
         yield;
       }
     }
@@ -817,28 +860,28 @@ function* records(f: R12File, o: Out, warn: (code: string) => void): Generator<v
   o.t(2, 'TABLES');
   yield;
   yield* tableTags(f, o, 'LTYPE', 0x4a, 191, (r) => {
-    o.t(3, f.str(r + 35, 48));
-    o.t(72, f.data[r + 83]!);
-    const n = Math.min(f.data[r + 84]!, 12);
+    o.t(3, f.str(r + 35 + f.rec, 48));
+    o.t(72, f.data[r + 83 + f.rec]!);
+    const n = Math.min(f.data[r + 84 + f.rec]!, 12);
     o.t(73, n);
-    o.t(40, dv.getFloat64(r + 85, true));
-    for (let i = 0; i < n; i++) o.t(49, dv.getFloat64(r + 93 + i * 8, true));
+    o.t(40, dv.getFloat64(r + 85 + f.rec, true));
+    for (let i = 0; i < n; i++) o.t(49, dv.getFloat64(r + 93 + f.rec + i * 8, true));
   });
   yield* tableTags(f, o, 'LAYER', 0x36, 41, (r) => {
-    o.t(62, dv.getInt16(r + 35, true));
-    o.t(6, f.ltypeName(dv.getInt16(r + 37, true)) ?? 'CONTINUOUS');
+    o.t(62, dv.getInt16(r + 35 + f.rec, true));
+    o.t(6, f.ltypeName(dv.getInt16(r + 37 + f.rec, true)) ?? 'CONTINUOUS');
   });
   yield* tableTags(f, o, 'STYLE', 0x40, 198, (r) => {
-    o.t(40, dv.getFloat64(r + 35, true));
-    o.t(41, dv.getFloat64(r + 43, true));
-    o.t(50, dv.getFloat64(r + 51, true) * DEG);
-    o.t(71, f.data[r + 59]!);
-    o.t(42, dv.getFloat64(r + 60, true));
-    o.t(3, f.str(r + 68, 64));
-    o.t(4, f.str(r + 132, 64));
+    o.t(40, dv.getFloat64(r + 35 + f.rec, true));
+    o.t(41, dv.getFloat64(r + 43 + f.rec, true));
+    o.t(50, dv.getFloat64(r + 51 + f.rec, true) * DEG);
+    o.t(71, f.data[r + 59 + f.rec]!);
+    o.t(42, dv.getFloat64(r + 60 + f.rec, true));
+    o.t(3, f.str(r + 68 + f.rec, 64));
+    o.t(4, f.str(r + 132 + f.rec, 64));
   });
   yield* tableTags(f, o, 'VPORT', 0x500, 253, (r) => {
-    const d = (k: number) => dv.getFloat64(r + k, true);
+    const d = (k: number) => dv.getFloat64(r + k + f.rec, true);
     o.p2(10, d(35), d(43));
     o.p2(11, d(51), d(59));
     o.p3(17, d(67), d(75), d(83));
@@ -850,7 +893,7 @@ function* records(f: R12File, o: Out, warn: (code: string) => void): Generator<v
     o.t(42, d(155));
     o.t(43, d(163));
     o.t(44, d(171));
-    for (let i = 0; i < 8; i++) o.t(71 + i, dv.getInt16(r + 179 + i * 2, true));
+    for (let i = 0; i < 8; i++) o.t(71 + i, dv.getInt16(r + 179 + f.rec + i * 2, true));
     o.t(50, d(195) * DEG);
     o.p2(13, d(203), d(211));
     o.p2(14, d(219), d(227));
@@ -858,7 +901,7 @@ function* records(f: R12File, o: Out, warn: (code: string) => void): Generator<v
   });
   yield* tableTags(f, o, 'APPID', 0x512, 37, () => {});
   yield* tableTags(f, o, 'DIMSTYLE', 0x522, 324, (r) => {
-    let q = r + 35;
+    let q = r + 35 + f.rec;
     const real = (code: number) => {
       o.t(code, dv.getFloat64(q, true));
       q += 8;
@@ -899,25 +942,52 @@ function* records(f: R12File, o: Out, warn: (code: string) => void): Generator<v
   o.t(0, 'SECTION');
   o.t(2, 'ENTITIES');
   yield;
-  yield* section(f, o, f.ent, true, warn);
-  yield* section(f, o, f.extra, true, warn);
+  // 객체 구역을 JUMP를 따라 읽고, 추가 구역에서 JUMP로 닿지 않은 객체를 뒤에 읽는다
+  const seen = new Set<number>();
+  yield* section(f, o, f.ent, true, warn, seen);
+  yield* section(f, o, f.extra, true, warn, seen);
   o.t(0, 'ENDSEC');
   yield;
   o.t(0, 'EOF');
   yield;
 }
 
-function* section(f: R12File, o: Out, [start, end]: [number, number], top: boolean, warn: (code: string) => void): Generator<void> {
+/**
+ * 구역의 객체를 차례로 낸다. seen이 있으면 JUMP(18)를 따라간다: 주소(아래 24비트)로 가서 읽다가 그 구역 끝에 닿으면 JUMP 다음으로 돌아온다.
+ * 한 번 읽은 자리는 다시 읽지 않는다(82차 — R10 표본: 객체 구역의 JUMP가 추가 구역의 폴리선 머리로 가고, 거기서 JUMP로 객체 구역의 정점으로 돌아온다.
+ * 전에는 JUMP를 건너뛰어 정점이 폴리선 없이 남았다)
+ */
+function* section(f: R12File, o: Out, range: [number, number], top: boolean, warn: (code: string) => void, seen?: Set<number>): Generator<void> {
   let inBlock = false;
-  for (let p = start; p + 4 <= end; ) {
+  let [, end] = range;
+  const back: [number, number][] = [];
+  for (let p = range[0]; ; ) {
+    if (p + 4 > end || seen?.has(p)) {
+      const r = back.pop();
+      if (!r) break;
+      [p, end] = r;
+      continue;
+    }
     const h = f.head(p, top);
     // 크기가 구역을 넘으면 그 뒤를 믿을 수 없다
     if (!h || h.end > end) {
       warn('dwg.object_skipped');
-      break;
+      const r = back.pop();
+      if (!r) break;
+      [p, end] = r;
+      continue;
     }
+    seen?.add(p);
     p = h.end;
     f.at = p;
+    if (h.type === 18 && seen) {
+      const t = f.jump(h.start);
+      if (t && !seen.has(t[0])) {
+        back.push([p, end]);
+        [p, end] = t;
+      }
+      continue;
+    }
     if (h.type < 0 || h.type === 18) continue;
     if (h.bad) {
       warn('dwg.object_skipped');
