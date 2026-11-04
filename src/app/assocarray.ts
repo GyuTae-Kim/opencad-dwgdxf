@@ -6,7 +6,7 @@
 import type { Entity } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
-import { type CreateInput, blockCopies, createArrayOps, followPathOps, regenerateOps } from '../edit/assocarray/build';
+import { type CreateInput, blockCopies, createArrayOps, dependentBlockOps, followPathOps, regenerateOps } from '../edit/assocarray/build';
 import { isFullCircle, itemCount, pathMaxItems, pathSpacingOf, polarWithAngle, polarWithFill, polarWithItems } from '../edit/assocarray/layout';
 import { type ArrayInfo, arrayPath, expectedItems, looksLikeArray } from '../edit/assocarray/read';
 import { type ArrayKind, type ArrayParams, type ArrayState, KIND_LABEL, MAX_ITEMS, cloneState, parseKey } from '../edit/assocarray/types';
@@ -260,7 +260,7 @@ async function enterSourceEdit(app: App, ctx: CommandContext, info: ArrayInfo): 
     const space = doc.blocks.get(st.space);
     const before = new Set((space?.entities ?? []).map((e) => e.handle));
     const ops: EditOp[] = [];
-    for (const b of copies.blocks) ops.push({ kind: 'blockDef', key: tableKey(b.name), before: doc.blocks.get(tableKey(b.name)) ?? null, after: b });
+    for (const b of copies.blocks) ops.push(...dependentBlockOps(env, b));
     for (const e of copies.entities) {
       e.owner = space?.recordHandle;
       e.paperSpace = /^\*PAPER_SPACE/i.test(st.space) ? true : undefined;
@@ -483,7 +483,7 @@ async function replaceItems(app: App, ctx: CommandContext, handle: string): Prom
     const opt = created ? {} : { newBlocks: [{ name: repName, entities: copies.entities }] };
     if (!created && copies.blocks.length) {
       // 딸린 블록(치수 블록 등)은 대체 블록보다 먼저
-      for (const b of copies.blocks) st.session.commit({ label: 'ARRAYEDIT', ops: [{ kind: 'blockDef', key: tableKey(b.name), before: doc.blocks.get(tableKey(b.name)) ?? null, after: b }], group: ctx.group });
+      for (const b of copies.blocks) st.session.commit({ label: 'ARRAYEDIT', ops: dependentBlockOps(env, b), group: ctx.group });
     }
     if (applyArrayState(app, ctx, info, next, 'ARRAYEDIT', opt)) {
       created = true;

@@ -345,9 +345,10 @@ DWG에 자리가 없는 값(스플라인의 평면·직선 비트, R2000 DWG의 
 알리지 않고 빠진 객체만 왕복 차이(`object:종류:-`)와 품질 지표 `silent-object-loss`로 남깁니다.
 `--oracle`은 `CAD_PYTHON`(ezdxf가 있는 파이썬)이 있을 때만 ezdxf와도 견줍니다(DXF 원본, 우리가 쓴 DXF와 audit, DWG 옆의 같은 이름 DXF).
 
-편집 명령 불변식 훑기(`npm run edit-audit -- --list <도면 목록> --out <결과 JSON>`)는 도면마다 모형 공간을 모두 골라 MOVE·COPY·ROTATE·MIRROR·EXPLODE·ERASE 뒤 OOPS를
-시험 하네스로 돌리고, 쓰이지 않는 익명 블록이 새로 생기지 않는지, 블록 밖 핸들 색인이 늘지 않는지, DXF·DWG 왕복에서 빠지는 객체가 원본보다 늘지 않는지,
-명령 취소가 처음 문서로 돌아오는지 봅니다(문제만 담은 결과).
+편집 명령 불변식 훑기(`npm run edit-audit -- --list <도면 목록> --out <결과 JSON>`)는 도면마다 모형 공간을 모두 골라 편집 명령 19가지
+(MOVE·COPY·ROTATE·SCALE·MIRROR 두 가지·EXPLODE·ERASE 뒤 OOPS·COPYCLIP 뒤 PASTECLIP·ARRAYRECT·-OVERKILL·JOIN·BURST·-BLOCK·CHPROP·SETBYLAYER·REVERSE·SCALETEXT·FLATTEN)를
+시험 하네스로 돌리고, 쓰이지 않는 익명 블록이 새로 생기지 않는지, 블록 밖 핸들 색인·두 자리에 든 핸들·소유자가 맞지 않는 객체·블록 안 객체와 다른 색인 항목이 늘지 않는지,
+DXF·DWG 왕복에서 빠지는 객체가 원본보다 늘지 않는지, 명령 취소가 처음 문서로 돌아오는지 봅니다(문제만 담은 결과, `--commands`로 명령을 고른다).
 
 ### 공용 사이트 도구
 
