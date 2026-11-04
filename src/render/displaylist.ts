@@ -267,9 +267,9 @@ export interface ImageDraw {
 }
 
 class ChunkBuilder {
-  readonly segs = new GrowBuffer(4096);
+  readonly segs: GrowBuffer;
   // 삼각형(채우기)은 드물어 작게 시작한다(묶음이 수만 개일 때 빈 자리가 수백 MB가 되지 않게)
-  readonly tris = new GrowBuffer(256);
+  readonly tris: GrowBuffer;
   readonly tsegs = new GrowBuffer(64);
   readonly ttris = new GrowBuffer(64);
   minX = Infinity;
@@ -287,7 +287,12 @@ class ChunkBuilder {
     readonly index: number,
     /** 객체 크기 단계(객체 크기 ≤ 2^level) */
     readonly level = 0,
-  ) {}
+    /** 객체 몇 개만 그리는 표시 목록(작게 시작한다) */
+    small = false,
+  ) {
+    this.segs = new GrowBuffer(small ? 256 : 4096);
+    this.tris = new GrowBuffer(small ? 64 : 256);
+  }
 
   get size(): number {
     return this.segs.length / SEG_STRIDE + this.tris.length / TRI_STRIDE;
@@ -383,14 +388,14 @@ export class DisplayListBuilder {
    * [묶음(-1 없음), seg 시작, 개수, tseg 시작, 개수, tri 시작, 개수, ttri 시작, 개수, 글리프 시작, 개수](PackedBoxes와 같은 꼴)
    */
   private readonly boxHandles: string[] = [];
-  private boxB = new Float64Array(4 * 1024);
-  private boxR = new Int32Array(PACK * 1024);
+  private boxB: Float64Array;
+  private boxR: Int32Array;
   private boxN = 0;
   readonly xlines: number[] = [];
   readonly xlineHandles: string[] = [];
   // 객체 하나의 임시 그림(월드 좌표, double): 선분 [x0, y0, x1, y1, depth], 삼각형 [x, y, depth]×3
-  private readonly tempSegs = new TempPieces(5, 256);
-  private readonly tempTris = new TempPieces(9, 64);
+  private readonly tempSegs: TempPieces;
+  private readonly tempTris: TempPieces;
   /** 스타일별 투명 여부(0 모름, 1 불투명, 2 투명) — 한 번 만드는 동안 바뀌지 않는다 */
   private transp = new Uint8Array(256);
   private depth = 0;
@@ -398,10 +403,10 @@ export class DisplayListBuilder {
   private readonly glyphIds = new Map<object, number>();
   private readonly glyphDefs: { kind: 0 | 1; data: Float32Array; ch?: string; adv?: number }[] = [];
   /** 글리프 인스턴스(들어온 순서): [a, b, c, d, e, f, depth, style](double), 글리프 번호, 투명, 주인 상자 번호 */
-  private instF = new Float64Array(8 * 1024);
-  private instG = new Int32Array(1024);
-  private instT = new Uint8Array(1024);
-  private instO = new Int32Array(1024);
+  private instF: Float64Array;
+  private instG: Int32Array;
+  private instT: Uint8Array;
+  private instO: Int32Array;
   private instN = 0;
   /** 객체가 끝나 주인이 정해진 인스턴스 수 */
   private instDone = 0;
@@ -414,7 +419,25 @@ export class DisplayListBuilder {
   totalMaxX = -Infinity;
   totalMaxY = -Infinity;
 
-  constructor(private readonly transparent: (style: number) => boolean) {}
+  /**
+   * small: 객체 몇 개만 그리는 표시 목록(선택 강조·고르기 형상·미리 보기 — 88차). 처음 자리를 작게 잡는다.
+   * 전에는 객체 하나를 그릴 때마다 상자·글리프·임시 그림·묶음 버퍼 약 180KB를 0으로 채워 잡아, 3천 개를 하나씩 그리면 약 540MB를 잡았다 놓았다
+   */
+  constructor(
+    private readonly transparent: (style: number) => boolean,
+    private readonly small = false,
+  ) {
+    const boxes = small ? 16 : 1024;
+    this.boxB = new Float64Array(4 * boxes);
+    this.boxR = new Int32Array(PACK * boxes);
+    const inst = small ? 16 : 1024;
+    this.instF = new Float64Array(8 * inst);
+    this.instG = new Int32Array(inst);
+    this.instT = new Uint8Array(inst);
+    this.instO = new Int32Array(inst);
+    this.tempSegs = new TempPieces(5, small ? 64 : 256);
+    this.tempTris = new TempPieces(9, small ? 16 : 64);
+  }
 
   /** 끝난 객체들이 그린 선분·삼각형 수 */
   private drawnDone = 0;
@@ -817,7 +840,7 @@ export class DisplayListBuilder {
     let ch = slot === undefined ? undefined : this.live[slot];
     if (!ch || ch.size > MAX_CHUNK) {
       // 새 묶음을 잡은 뒤에 옛 묶음을 넘긴다(못 잡으면 아무것도 바뀌지 않는다)
-      const fresh = new ChunkBuilder(`${level}:${ix}:${iy}`, (ix + 0.5) * cell, (iy + 0.5) * cell, this.chunkCount, level);
+      const fresh = new ChunkBuilder(`${level}:${ix}:${iy}`, (ix + 0.5) * cell, (iy + 0.5) * cell, this.chunkCount, level, this.small);
       this.chunkCount++;
       if (ch) this.done.push(ch);
       ch = fresh;

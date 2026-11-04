@@ -1042,7 +1042,8 @@ export class SceneBuilder {
    * 지정한 객체들만 그린다(선택 강조·객체 고르기용). 객체는 그 공간의 최상위 객체여야 한다.
    */
   buildEntities(list: readonly Entity[]): DisplayList {
-    this.out = new DisplayListBuilder(() => false);
+    // 객체 몇 개(고르기 형상은 하나씩)는 작게 시작하는 표시 목록으로
+    this.out = new DisplayListBuilder(() => false, list.length <= 64);
     this.resetLimits();
     for (const e of list) {
       const ctx: Ctx = {
