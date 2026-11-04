@@ -17,9 +17,13 @@ export interface RemoveRun {
 
 export type WireOp = EditOp | RemoveRun;
 
-/** 워커가 지우는 객체에서 쓰는 것만 남긴 객체 */
+/**
+ * 워커가 지우는 객체에서 쓰는 것만 남긴 객체. 블록 참조는 속성이 없어도 빈 속성 배열을 둔다 — 색인에서 뺄 때 속성을 돌기 때문이다
+ * (78차 — 전에는 속성 없는 블록 참조를 옮기거나 그런 참조가 든 치수 블록을 다시 만들면 워커의 applyOps가 그 작업에서 멈춰,
+ * 워커 문서(다시 그리기와 저장에 쓴다)에 그 뒤의 작업이 빠졌다)
+ */
 function stub(e: Entity): Entity {
-  if (e.type === 'INSERT' && e.attribs.length) return { type: 'INSERT', handle: e.handle, attribs: e.attribs.map((a) => ({ handle: a.handle })) } as unknown as Entity;
+  if (e.type === 'INSERT') return { type: 'INSERT', handle: e.handle, attribs: e.attribs.map((a) => ({ handle: a.handle })) } as unknown as Entity;
   return { type: e.type, handle: e.handle } as Entity;
 }
 
