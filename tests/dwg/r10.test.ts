@@ -97,6 +97,8 @@ interface FileParts {
   entities: (es: number) => number[][];
   /** 추가 구역(객체 구역 시작 위치를 받는다) */
   extra?: (es: number) => number[][];
+  /** 뷰포트 표(*ACTIVE 하나): 보기 중심, 높이 */
+  vport?: { center: [number, number]; height: number };
 }
 
 /** R10 파일: 머리(0x512) → 객체 구역 → 표(used·CRC 없는 레코드) → 블록 구역 → 추가 구역 */
@@ -138,6 +140,14 @@ function r10(p: FileParts): Uint8Array {
     blocks.map((blk, i) => new Bytes().u8(0).fixed(blk.name, 32).u32((0x40000000 | addr[i]!) >>> 0).a),
   );
   for (const at of [0x54, 0x3ef, 0x500]) b.put(at, new Bytes().i16(40).i16(0).i16(0).u32(0).a);
+  if (p.vport) {
+    // R10 VPORT 레코드(249): 이름 뒤 used 없이 10/20 왼쪽 아래 … 12/22 보기 중심, 40 높이(R12 리더의 칸 차례)
+    const v = new Bytes().u8(0).fixed('*ACTIVE', 32).f64(0).f64(0).f64(1).f64(1).f64(0).f64(0).f64(0).f64(0).f64(0).f64(1).f64(0).f64(p.vport.height).f64(p.vport.center[0]).f64(p.vport.center[1]);
+    v.f64(1.5).f64(0).f64(0).f64(0);
+    for (let i = 0; i < 8; i++) v.i16(0);
+    v.f64(0).f64(0).f64(0).f64(1).f64(1).f64(10).f64(10);
+    table(0x500, 249, [v.a]);
+  }
   const bs = b.n;
   b.a.push(...blockBytes.a);
   const xs = b.n;
@@ -178,6 +188,13 @@ describe('R10 DWG 읽기', () => {
     expect([doc.layers.get('WALL')?.color.aci, doc.layers.get('WALL')?.linetype, doc.linetypes.get('DASHED')?.description]).toEqual([1, 'DASHED', '__ __']);
     expect([doc.textStyles.get('STANDARD')?.height, doc.textStyles.get('STANDARD')?.widthFactor]).toEqual([0.5, 0.8]);
     expect(doc.warnings).toEqual([]);
+  });
+
+  it('머리에 CRC·구분자가 없어 객체 구역 바로 앞(0x500)의 뷰포트 표도 읽는다', () => {
+    const doc = readDwg(r10({ layers: LAYERS, vport: { center: [12, 34], height: 56 }, entities: () => [ent(2, (b) => b.f64(1).f64(2), { elevation: 0 })] }));
+    const vp = doc.vports.find((v) => v.name.toUpperCase() === '*ACTIVE');
+    expect([vp?.center, vp?.height]).toEqual([{ x: 12, y: 34 }, 56]);
+    expect(ms(doc)).toHaveLength(1);
   });
 
   it('블록: 본문 없는 ENDBLK(8바이트)로 닫히고, 블록 표의 시작 주소는 이름 바로 뒤다', () => {

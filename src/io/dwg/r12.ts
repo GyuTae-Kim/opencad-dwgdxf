@@ -114,8 +114,8 @@ class R12File {
     this.ent = [es, ee];
     this.blk = inFile(bs, bs + bz) ? [bs, bs + bz] : [0, 0];
     this.extra = inFile(xs, xs + xz) ? [xs, xs + xz] : [0, 0];
-    // 헤더 변수는 객체 구역 앞의 CRC(2)와 구분자(16) 앞에서 끝난다
-    this.headerEnd = Math.min(es - 18, data.length);
+    // 헤더 변수는 객체 구역 앞의 CRC(2)와 구분자(16) 앞에서 끝난다. R10은 그 둘이 없어 객체 구역이 머리 바로 뒤에 온다(표본 0x512)
+    this.headerEnd = Math.min(this.r10 ? es : es - 18, data.length);
     this.codepage = dwgCodepageName(this.u16(0x3f9) ?? 0);
     this.dec = decoderFor(codepageToEncoding(this.codepage));
     this.readTables();
