@@ -45,7 +45,7 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
 | AC1006 (R10) | 형식 설명 저장소의 AutoCAD R10 객체별 표본 32개, LibreDWG 시험 도면 2개 | `r12.ts`: R12와 같은 길(아래 "R10"). R11 2D 짝과 같은 도면 13개 중 12개가 X·Y·크기·각도·문자·블록까지 같다(셰이프 이름만 다름) |
 | AC1004 (R9) | LibreDWG 시험 도면(짝 DXF·그리기 스크립트 포함), 형식 설명 저장소의 빈 도면 | `r12.ts`: R10과 같은 길(아래 "R9"). 짝 DXF와 객체 27개(모형 16·블록 2·치수 블록 9) 중 셰이프 이름만 다르다 |
 | AC1003 (R2.6) | LibreDWG 시험 도면 2개(짝 DXF·그리기 스크립트 포함) | `r12.ts`: R9와 같은 길(아래 "R2.6"). 짝 DXF와 객체 79개 중 셰이프 이름만 다르다 |
-| AC1003 이전(R2.5 AC1002·R2.10·R1.x) | LibreDWG·형식 설명 표본 몇 개 | `dwg.unsupported_version`(판 문자열이 `AC2.10`·`AC1.40`이면 DWG로 알아보지 못한다) |
+| AC1003 이전(R2.5 AC1002·R2.10·R1.x) | LibreDWG·형식 설명 표본 몇 개 | `dwg.unsupported_version`(판 문자열 `AC1002`·`AC2.10`·`AC1.40` — 84차부터 `AC2.10`·`AC1.40` 꼴도 DWG로 알아본다) |
 
 시험:
 - `tests/dwg/oracle.test.ts`: 요약 비교(엔진 → DXF → ezdxf). 34개 표본 모두 일치.
