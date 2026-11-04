@@ -215,14 +215,21 @@ export function replaceBlockOps(doc: CadDocument, from: string, to: string, newH
   return { ops, count, skipped };
 }
 
-/** 이름으로 블록을 가리키는 치수 스타일·헤더 변수가 있는지(소거 판단) */
-export function blockNamedElsewhere(doc: CadDocument, name: string): boolean {
+/** 이름으로 블록을 가리키는 치수 스타일·헤더 변수가 있는지 */
+export function blockNamedInStyles(doc: CadDocument, name: string): boolean {
   const k = tableKey(name);
   for (const d of doc.dimStyles.values()) for (const v of ['DIMBLK', 'DIMBLK1', 'DIMBLK2', 'DIMLDRBLK']) if (typeof d.vars[v] === 'string' && tableKey(d.vars[v] as string) === k) return true;
   for (const v of ['$DIMBLK', '$DIMBLK1', '$DIMBLK2', '$DIMLDRBLK']) {
     const x = doc.header.get(v);
     if (typeof x === 'string' && tableKey(x) === k) return true;
   }
+  return false;
+}
+
+/** 이름으로 블록을 가리키는 치수 스타일·헤더 변수나 블록 핸들로 가리키는 다중 지시선이 있는지(소거 판단) */
+export function blockNamedElsewhere(doc: CadDocument, name: string): boolean {
+  const k = tableKey(name);
+  if (blockNamedInStyles(doc, name)) return true;
   const rec = doc.blockRecords.get(k);
   if (rec?.handle) {
     for (const b of doc.blocks.values())

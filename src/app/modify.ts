@@ -42,6 +42,7 @@ import type { App, CommandContext, Keyword } from './app';
 import type { DocState } from './docstate';
 import type { OverlayGeom, Pt } from './view';
 import { unlockedOnly } from './layers';
+import { blockNamedInStyles } from '../edit/util/blockutil';
 import { form } from './ui/dom';
 import { dynGripEdit } from './dynblock';
 import { currentProps } from './draw';
@@ -220,6 +221,51 @@ function blockOps(st: DocState, def: BlockDef): EditOp[] {
   return ops;
 }
 
+/**
+ * 대칭·기울임으로 그림 블록(*T)을 새로 만든 표가 제자리에서 바뀌면 새 블록이 옛 블록 이름을 물려받는다(74차 — 전에는 옛 블록이
+ * 아무 객체도 쓰지 않은 채 남았다. 표 편집의 updateTableOps도 자기 블록은 다시 쓴다). 옛 블록을 다른 객체(같은 블록을 쓰는 표·블록 참조,
+ * 블록 핸들로 가리키는 다중 지시선)나 치수 스타일이 쓰면 새 이름을 그대로 둔다. 명령 취소는 blockDef 작업이 옛 정의로 되돌린다
+ */
+function inheritTableBlocks(doc: CadDocument, mods: Iterable<{ before: Entity; after: Entity }>, made: Map<string, BlockDef>): void {
+  const cand = new Map<string, { self: string; after: Entity & { block: string }; key: string }>();
+  for (const op of mods) {
+    const { before: b, after: a } = op;
+    if (b.type !== 'ACAD_TABLE' || a.type !== 'ACAD_TABLE') continue;
+    const old = tableKey(b.block);
+    const key = tableKey(a.block);
+    if (old === key || !made.has(key) || made.has(old) || !doc.blocks.has(old) || cand.has(old)) continue;
+    cand.set(old, { self: b.handle, after: a, key });
+  }
+  if (!cand.size) return;
+  const recs = new Map<string, string>();
+  for (const k of cand.keys()) {
+    const h = doc.blockRecords.get(k)?.handle;
+    if (h) recs.set(h, k);
+  }
+  const shared = new Set<string>();
+  for (const blk of doc.blocks.values())
+    for (const e of blk.entities) {
+      const name = (e as { block?: unknown }).block;
+      if (typeof name === 'string') {
+        const c = cand.get(tableKey(name));
+        if (c && c.self !== e.handle) shared.add(tableKey(name));
+      }
+      if (e.type === 'MULTILEADER')
+        for (const h of [e.blockHandle, e.arrowHeadHandle, e.context.block?.blockHandle]) {
+          const k = h ? recs.get(h) : undefined;
+          if (k) shared.add(k);
+        }
+    }
+  for (const [old, c] of cand) {
+    if (shared.has(old) || blockNamedInStyles(doc, old)) continue;
+    const def = made.get(c.key)!;
+    made.delete(c.key);
+    def.name = doc.blocks.get(old)!.name;
+    made.set(old, def);
+    c.after.block = def.name;
+  }
+}
+
 export interface Applied {
   added: string[];
   changed: string[];
@@ -394,6 +440,7 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
   }
   ops.push(...cons.ops);
   if (cons.message && !opt.quiet) ctx.print(cons.message);
+  inheritTableBlocks(doc, mod.values(), made);
   let all = ops;
   if (made.size) {
     all = [];
