@@ -18,7 +18,7 @@ const HINTS: Record<string, string> = {
   'file.unrecognized': 'DWG·DXF 도면만 열 수 있습니다. 확장자만 바꾼 파일은 열리지 않으며, SKP·STEP·NC 파일은 OpenCAD의 다른 도구로 여십시오.',
   'file.too_large': '쓰지 않는 블록·도면층을 지우거나(PURGE) 도면을 나눠 저장한 뒤 다시 여십시오.',
   'dxf.invalid': '저장하다 끊긴 파일일 수 있습니다. 원래 프로그램에서 DXF나 DWG로 다시 저장한 뒤 여십시오.',
-  'dwg.unsupported_version': 'DWG는 R12~R2018 형식을 엽니다(AutoCAD 2018 이후 버전도 이 형식으로 저장합니다). 원래 프로그램에서 R2018 이하 DWG나 DXF로 다시 저장한 뒤 여십시오.',
+  'dwg.unsupported_version': 'DWG는 R10~R2018 형식을 엽니다(AutoCAD 2018 이후 버전도 이 형식으로 저장합니다). 원래 프로그램에서 R2018 이하 DWG나 DXF로 다시 저장한 뒤 여십시오.',
   'dwg.corrupt': '원래 프로그램의 복구(RECOVER) 기능으로 고쳐 다시 저장하거나 DXF로 저장한 뒤 여십시오.',
   'dwg.encrypted': '원래 프로그램에서 암호를 해제하고 다시 저장한 뒤 여십시오.',
   worker: '파일이 너무 크거나 기기 메모리가 모자랄 수 있습니다. 다른 탭을 닫고 다시 열거나 컴퓨터에서 여십시오.',
