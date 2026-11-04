@@ -9,6 +9,8 @@
  *  - DXF·DWG(R2018)로 쓰고 다시 읽을 때 그 공간에서 빠지는 객체가 원본 왕복보다 늘지 않는다(늘어난 객체 수만큼은 봐 준다)
  *  - 두 자리에 든 핸들, 소유자가 든 블록의 레코드가 아닌 객체, 핸들 색인이 블록 안의 그 객체가 아닌 것이 늘지 않는다(75차)
  *  - 명령 취소하면 처음 문서(블록·색인 수, 쓰이지 않는 익명 블록, 위의 세 수)로 돌아온다
+ *  - 커밋·명령 취소마다 워커와 같은 전송(packOps → 구조화 복제 → unpackOps → applyOps)으로 따로 읽은 문서에 적용하면 메인 문서와 같다
+ *    (블록·객체 차례, 색인, 바뀌거나 더한 객체 — 78차, 속성 없는 블록 참조를 바꾸면 워커가 멈추던 결함)
  * 명령은 시험 하네스(tests/cmds2)로 흘려 넣어 화면 없이 돈다. 결과는 문제만 담은 작은 JSON이다.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -18,6 +20,8 @@ import { readCadFile } from '../../src/io/index';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { readDwg, writeDwg } from '../../src/io/dwg';
+import { applyOps, type ChangeSummary, type Transaction } from '../../src/edit/session';
+import { packOps, unpackOps } from '../../src/worker/editwire';
 import type { App } from '../../src/app/app';
 import { registerBlockCommands } from '../../src/app/blocks';
 import { registerDashMiscCommands } from '../../src/app/dashcmds-misc';
@@ -160,6 +164,26 @@ function registerAll(app: App): void {
 
 export type AuditProblem = Record<string, unknown> & { file: string; cmd?: string };
 
+/** 메인 문서와 워커 문서가 다른 첫 자리(같으면 null). touched: 이 편집이 바꾸거나 더한 객체 */
+export function workerDiff(a: CadDocument, b: CadDocument, touched: ReadonlySet<string>): string | null {
+  if (a.blocks.size !== b.blocks.size) return `blocks ${a.blocks.size}/${b.blocks.size}`;
+  for (const [k, blk] of a.blocks) {
+    const o = b.blocks.get(k);
+    if (!o) return `block ${k}`;
+    if (o.entities.length !== blk.entities.length) return `${k} ${blk.entities.length}/${o.entities.length}`;
+    for (let i = 0; i < blk.entities.length; i++) if (blk.entities[i]!.handle !== o.entities[i]!.handle) return `${k}[${i}] ${blk.entities[i]!.handle}/${o.entities[i]!.handle}`;
+  }
+  if (a.entityIndex.size !== b.entityIndex.size) return `index ${a.entityIndex.size}/${b.entityIndex.size}`;
+  for (const h of touched) {
+    const x = a.entityIndex.get(h);
+    const y = b.entityIndex.get(h);
+    if (!x !== !y) return `index ${h}`;
+    if (x && JSON.stringify(x) !== JSON.stringify(y)) return `entity ${h}`;
+  }
+  if (a.objects.size !== b.objects.size) return `objects ${a.objects.size}/${b.objects.size}`;
+  return null;
+}
+
 /** 도면 하나를 명령마다 새로 읽어 훑는다 */
 export async function auditFile(
   path: string,
@@ -193,6 +217,22 @@ export async function auditFile(
       registerAll(h.app);
       h.st.space = spaceKey(h.doc, target)!;
       const s = h.st.session;
+      // 워커 문서: 편집 세션이 화면·워커에 알리는 자리(onApply — 생성자에 받은 함수)를 감싸 같은 전송으로 적용한다
+      const wdoc = load();
+      const touched = new Set<string>();
+      let wireError: string | null = null;
+      const hook = s as unknown as { onApply: (tx: Transaction, sum: ChangeSummary) => void };
+      const inner = hook.onApply;
+      hook.onApply = (tx, sum) => {
+        inner(tx, sum);
+        for (const op of tx.ops) if (op.kind === 'add') touched.add(op.entity.handle);
+        else if (op.kind === 'modify') touched.add(op.after.handle);
+        try {
+          applyOps(wdoc, unpackOps(structuredClone(packOps(tx.ops))));
+        } catch (e) {
+          wireError ??= String(e).slice(0, 120);
+        }
+      };
       const before = auditDoc(h.doc);
       const mark = s.undoTop();
       const hs = pickable(h.doc, target);
@@ -212,10 +252,14 @@ export async function auditFile(
       if (fresh.length) p.newUnused = fresh.slice(0, 8);
       if (after.stale > before.stale) p.stale = [before.stale, after.stale];
       for (const k of ['dup', 'owner', 'mismatch'] as const) if (after[k] > before[k]) p[k] = [before[k], after[k]];
+      const wd = wireError ?? workerDiff(h.doc, wdoc, touched);
+      if (wd) p.worker = wd;
       const loss = roundtripLoss(h.doc, target);
       const k = Math.max(1, countIn(h.doc, target) / n0);
       if (loss.dxf > Math.ceil(loss0.dxf * k) || loss.dwg > Math.ceil(loss0.dwg * k)) p.roundtripLoss = { before: loss0, after: loss };
       while (s.undoTop() !== mark) s.undo();
+      const wu = wireError ?? workerDiff(h.doc, wdoc, touched);
+      if (wu && !wd) p.workerUndo = wu;
       const back = auditDoc(h.doc);
       const same = (['stale', 'blocks', 'index', 'dup', 'owner', 'mismatch'] as const).every((k) => back[k] === before[k]);
       if (back.unused.join() !== before.unused.join() || !same) {
