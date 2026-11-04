@@ -1,19 +1,21 @@
 /**
- * 74차: 편집 명령 불변식 훑기 도구(scripts/sweep/editaudit.ts). 공개 견본 도면으로 도구가 문제 없이 끝나는지와 인자 처리를 본다.
+ * 74차: 편집 명령 불변식 훑기 도구(scripts/sweep/editaudit.ts). 75차에 축척·클립보드·배열과 선택 기반 명령 13가지를 더했다. 공개 견본 도면으로 도구가 문제 없이 끝나는지와 인자 처리를 본다.
  * 실제 도면 훑기는 각자 로컬 목록으로 돌린다(`npm run edit-audit -- --list …`).
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { auditDoc, auditFile, editAuditMain } from '../../scripts/sweep/editaudit';
+import { AUDIT_CASES, auditDoc, auditFile, editAuditMain } from '../../scripts/sweep/editaudit';
 import { readDxf } from '../../src/io/dxf/reader';
 
 const SAMPLE = 'public/samples/opencad-sample.dxf';
 
 describe('편집 명령 불변식 훑기 도구', () => {
-  it('견본 도면에서 명령 여섯 가지가 문제 없이 끝난다', async () => {
+  it('견본 도면에서 명령 19가지가 문제 없이 끝난다(할 일이 없던 명령은 따로 센다)', async () => {
     const r = await auditFile(SAMPLE, new Uint8Array(readFileSync(SAMPLE)));
-    expect(r.runs).toBe(6);
+    expect([r.runs, AUDIT_CASES.length]).toEqual([19, 19]);
     expect(r.problems).toEqual([]);
+    // 견본에는 중복 객체와 3D 객체가 없다
+    expect(r.idle).toEqual(['-OVERKILL', 'FLATTEN']);
   });
 
   it('문서 점검: 쓰이지 않는 익명 블록·블록 밖 색인·블록을 쓰는 객체', () => {
