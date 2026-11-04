@@ -4,7 +4,11 @@ import type { FromWorker, PreviewView, SaveFormat, SceneMessage, ToWorker } from
 import type { PartialScene } from '../render/build';
 import type { EditOp } from '../edit/session';
 import { DocAssembler } from '../worker/doctransfer';
-import { packOps } from '../worker/editwire';
+import { ENCODE_MIN_OPS, encodeWire, packOps } from '../worker/editwire';
+import { type Encoded, encodedTransfer, encoderScratch, type EncoderScratch } from '../worker/codec';
+
+/** 다음 편집에 다시 쓰려고 쥐고 있을 부호화 작업 버퍼의 상한 */
+const EDIT_SCRATCH_KEEP = 64 << 20;
 
 export interface OpenResult {
   docId: number;
@@ -44,6 +48,8 @@ type Pending = {
 
 export class EngineClient {
   private worker?: Worker;
+  /** 큰 편집을 부호화할 작업 버퍼(편집마다 새로 만들지 않는다 — 3만 개 MOVE에 약 34MiB) */
+  private editScratch?: EncoderScratch;
   private nextId = 1;
   private readonly pending = new Map<number, Pending>();
 
@@ -169,9 +175,18 @@ export class EngineClient {
     this.post({ type: 'shx', clear, files: files.map((f) => ({ name: f.name, data: f.data.slice().buffer as ArrayBuffer })) });
   }
 
-  /** 편집을 워커 문서에도 적용한다(지우는 객체는 핸들만 보낸다 — editwire.ts) */
+  /** 편집을 워커 문서에도 적용한다(지우는 객체는 핸들만 보낸다, 큰 편집은 묶음 부호화 — editwire.ts) */
   edit(docId: number, ops: EditOp[]): void {
-    this.post({ type: 'edit', docId, ops: packOps(ops) });
+    const wire = packOps(ops);
+    let enc: Encoded | null = null;
+    if (wire.length >= ENCODE_MIN_OPS) {
+      const scratch = (this.editScratch ??= encoderScratch());
+      enc = encodeWire(wire, scratch);
+      // 아주 큰 편집(객체 수백만 개) 뒤로 커진 작업 버퍼는 쥐고 있지 않는다
+      if (scratch.tags.byteLength + scratch.nums.byteLength + scratch.ints.byteLength + scratch.bins.byteLength > EDIT_SCRATCH_KEEP) this.editScratch = undefined;
+    }
+    if (enc) this.post({ type: 'editEncoded', docId, enc }, encodedTransfer(enc));
+    else this.post({ type: 'edit', docId, ops: wire });
   }
 
   closeDoc(docId: number): void {

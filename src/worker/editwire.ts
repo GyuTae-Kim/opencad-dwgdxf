@@ -6,6 +6,7 @@
  */
 import type { BlockDef, Entity } from '../core/model';
 import type { EditOp } from '../edit/session';
+import { Decoder, type Encoded, Encoder, type EncoderScratch } from './codec';
 
 /** 같은 블록에서 이어진 지우기(속성이 있는 블록 참조는 빼고) */
 export interface RemoveRun {
@@ -47,6 +48,24 @@ export function packOps(ops: readonly EditOp[]): WireOp[] {
     else out.push(op);
   }
   return out;
+}
+
+/**
+ * 작업이 이만큼 많으면 묶음 부호화(codec.ts)로 보낸다(79차). 연관 도면 3만 개 MOVE의 작업(치수 블록 정의 1만 개 포함)을
+ * postMessage로 보내면 메인의 직렬화가 Node 잰 값으로 306ms, 부호화는 185ms(문자열 표 복제 포함)이고 워커의 역직렬화 약 460ms가 되살리기 61ms가 된다.
+ * 작은 편집은 부호화 준비가 더 들어 그대로 보낸다
+ */
+export const ENCODE_MIN_OPS = 256;
+
+/** 보낼 변경을 묶음 부호화한다. 부호화할 수 없는 값이 있으면 null(그대로 보낸다) */
+export function encodeWire(ops: readonly WireOp[], scratch?: EncoderScratch): Encoded | null {
+  const enc = new Encoder(scratch);
+  return enc.add(ops) ? enc.finish() : null;
+}
+
+/** encodeWire로 받은 변경 */
+export function decodeWire(enc: Encoded): WireOp[] {
+  return new Decoder(enc).next() as WireOp[];
 }
 
 /** 받은 변경 → applyOps에 넘길 변경(지우는 객체는 핸들만 든 객체) */

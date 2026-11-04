@@ -15,7 +15,7 @@ import { ShxLibrary } from '../text/shx';
 import { collectTextUsage } from '../text/collect';
 import type { FromWorker, PreviewView, SceneMessage, ToWorker } from './protocol';
 import { applyOps } from '../edit/session';
-import { unpackOps } from './editwire';
+import { decodeWire, unpackOps } from './editwire';
 import { sendDocument } from './doctransfer';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -163,10 +163,11 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
         postDocument(msg.id, docId, doc, readMs);
         break;
       }
-      case 'edit': {
+      case 'edit':
+      case 'editEncoded': {
         const doc = docs.get(msg.docId);
         if (!doc) break;
-        applyOps(doc, unpackOps(msg.ops));
+        applyOps(doc, unpackOps(msg.type === 'edit' ? msg.ops : decodeWire(msg.enc)));
         break;
       }
       case 'close':

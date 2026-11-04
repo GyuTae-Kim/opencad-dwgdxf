@@ -4,6 +4,7 @@ import type { DisplayList, PackedBoxes } from '../render/displaylist';
 import type { LayerState, StyleSpec } from '../render/styles';
 import type { WireOp } from './editwire';
 import type { DocPart } from './doctransfer';
+import type { Encoded } from './codec';
 import type { PartialScene } from '../render/build';
 
 export type ToWorker =
@@ -14,6 +15,8 @@ export type ToWorker =
   | { type: 'build'; id: number; docId: number; space: string; ltFactor?: number; annoScale?: string | null; annoAllVisible?: boolean }
   /** 메인에서 적용한 편집을 워커 문서에도 적용한다(응답 없음, 전송 형식은 editwire.ts) */
   | { type: 'edit'; docId: number; ops: WireOp[] }
+  /** 큰 편집(작업 ENCODE_MIN_OPS개 이상)은 묶음 부호화해 버퍼를 옮긴다(editwire.ts encodeWire) */
+  | { type: 'editEncoded'; docId: number; enc: Encoded }
   | { type: 'close'; docId: number }
   /** 메인에서 만든 문서(새 도면)를 받아 장면을 만든다 */
   | { type: 'adopt'; id: number; name: string; doc: CadDocument }

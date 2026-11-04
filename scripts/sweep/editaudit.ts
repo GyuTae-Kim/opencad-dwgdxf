@@ -9,7 +9,7 @@
  *  - DXF·DWG(R2018)로 쓰고 다시 읽을 때 그 공간에서 빠지는 객체가 원본 왕복보다 늘지 않는다(늘어난 객체 수만큼은 봐 준다)
  *  - 두 자리에 든 핸들, 소유자가 든 블록의 레코드가 아닌 객체, 핸들 색인이 블록 안의 그 객체가 아닌 것이 늘지 않는다(75차)
  *  - 명령 취소하면 처음 문서(블록·색인 수, 쓰이지 않는 익명 블록, 위의 세 수)로 돌아온다
- *  - 커밋·명령 취소마다 워커와 같은 전송(packOps → 구조화 복제 → unpackOps → applyOps)으로 따로 읽은 문서에 적용하면 메인 문서와 같다
+ *  - 커밋·명령 취소마다 워커와 같은 전송(packOps → 구조화 복제, 큰 편집은 묶음 부호화 → unpackOps → applyOps)으로 따로 읽은 문서에 적용하면 메인 문서와 같다
  *    (블록·객체 차례, 색인, 바뀌거나 더한 객체 — 78차, 속성 없는 블록 참조를 바꾸면 워커가 멈추던 결함)
  * 명령은 시험 하네스(tests/cmds2)로 흘려 넣어 화면 없이 돈다. 결과는 문제만 담은 작은 JSON이다.
  */
@@ -21,7 +21,7 @@ import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { readDwg, writeDwg } from '../../src/io/dwg';
 import { applyOps, type ChangeSummary, type Transaction } from '../../src/edit/session';
-import { packOps, unpackOps } from '../../src/worker/editwire';
+import { ENCODE_MIN_OPS, decodeWire, encodeWire, packOps, unpackOps } from '../../src/worker/editwire';
 import type { App } from '../../src/app/app';
 import { registerBlockCommands } from '../../src/app/blocks';
 import { registerDashMiscCommands } from '../../src/app/dashcmds-misc';
@@ -228,7 +228,10 @@ export async function auditFile(
         for (const op of tx.ops) if (op.kind === 'add') touched.add(op.entity.handle);
         else if (op.kind === 'modify') touched.add(op.after.handle);
         try {
-          applyOps(wdoc, unpackOps(structuredClone(packOps(tx.ops))));
+          // 앱(engine.ts edit)처럼 큰 편집은 묶음 부호화로(79차)
+          const wire = packOps(tx.ops);
+          const enc = wire.length >= ENCODE_MIN_OPS ? encodeWire(wire) : null;
+          applyOps(wdoc, unpackOps(enc ? decodeWire(structuredClone(enc)) : structuredClone(wire)));
         } catch (e) {
           wireError ??= String(e).slice(0, 120);
         }
