@@ -127,6 +127,35 @@ describe('워커에 보내는 편집', () => {
     expect(state(now)).toEqual(state(doc));
   });
 
+  it('속성 없는 블록 참조를 바꾸거나 그런 참조가 든 블록 정의를 바꿔도 워커 문서가 같아진다(78차 — 전에는 워커의 applyOps가 멈췄다)', () => {
+    const doc = newDoc();
+    const add = (block: string, e: Entity) => {
+      doc.blocks.get(block)!.entities.push(e);
+      doc.entityIndex.set(e.handle, e);
+    };
+    doc.blocks.set('C', { name: 'C', handle: 'C0', recordHandle: 'C1', basePoint: { x: 0, y: 0, z: 0 }, flags: 0, entities: [] });
+    add(MODEL_SPACE, insertWith('J1', []));
+    add('C', insertWith('J2', []));
+    const blk = doc.blocks.get('C')!;
+    const ops: EditOp[] = [
+      { kind: 'modify', block: MODEL_SPACE, before: doc.entityIndex.get('J1')!, after: { ...insertWith('J1', []), insert: { x: 5, y: 0, z: 0 } } as Entity },
+      // 치수 블록을 다시 만들 때처럼 정의를 통째로(화살촉 블록 참조가 든 그림)
+      { kind: 'blockDef', key: 'C', before: blk, after: { ...blk, entities: [insertWith('J3', []), lineAt(1, 'J4')] } },
+      { kind: 'add', block: MODEL_SPACE, entity: lineAt(2, 'J5') },
+    ];
+    const old = structuredClone(doc);
+    const now = structuredClone(doc);
+    applyOps(old, structuredClone(ops));
+    applyOps(now, unpackOps(structuredClone(packOps(ops))));
+    expect(state(now)).toEqual(state(old));
+    expect(now.entityIndex.has('J5')).toBe(true);
+    const undo = inverseTransaction({ label: 'T', ops }).ops;
+    applyOps(old, structuredClone(undo));
+    applyOps(now, unpackOps(structuredClone(packOps(undo))));
+    expect(state(now)).toEqual(state(old));
+    expect(state(now)).toEqual(state(doc));
+  });
+
   it('이어진 지우기는 핸들·자리 배열 하나로 보낸다(속성 블록 참조와 다른 블록은 끊는다)', () => {
     const doc = base();
     const wire = packOps(edits(doc));

@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { AUDIT_CASES, auditDoc, auditFile, chooseTarget, editAuditMain, pickable } from '../../scripts/sweep/editaudit';
+import { AUDIT_CASES, auditDoc, auditFile, chooseTarget, editAuditMain, pickable, workerDiff } from '../../scripts/sweep/editaudit';
 import { MODEL_SPACE } from '../../src/core/model';
 import { readDxf } from '../../src/io/dxf/reader';
 
@@ -39,6 +39,20 @@ describe('편집 명령 불변식 훑기 도구', () => {
     expect(chooseTarget(doc, 'model')).toBeNull();
     expect(chooseTarget(doc, 'auto')).toEqual(chooseTarget(doc, 'paper'));
     expect(chooseTarget(doc, 'auto')!.layout).not.toBeNull();
+  });
+
+  it('워커 문서 견주기(78차): 같으면 null, 차례·색인·바뀐 객체가 다르면 그 자리', () => {
+    const a = readDxf(new Uint8Array(readFileSync(SAMPLE)));
+    const b = readDxf(new Uint8Array(readFileSync(SAMPLE)));
+    const ms = a.blocks.get(MODEL_SPACE)!.entities;
+    expect(workerDiff(a, b, new Set(ms.map((e) => e.handle)))).toBeNull();
+    const moved = { ...ms[0]!, layer: 'MOVED' };
+    ms[0] = moved;
+    a.entityIndex.set(moved.handle, moved);
+    expect(workerDiff(a, b, new Set())).toBeNull();
+    expect(workerDiff(a, b, new Set([moved.handle]))).toBe(`entity ${moved.handle}`);
+    b.blocks.get(MODEL_SPACE)!.entities.pop();
+    expect(workerDiff(a, b, new Set())).toMatch(/^\*MODEL_SPACE /);
   });
 
   it('문서 점검: 쓰이지 않는 익명 블록·블록 밖 색인·블록을 쓰는 객체', () => {
