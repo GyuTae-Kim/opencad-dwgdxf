@@ -1,10 +1,12 @@
 /**
  * 82차: R10(AC1006) DWG 읽기. R12와 같은 바이트 배치에 칸만 적다(공개 형식 설명 dwg_ac1006.ksy, CC0):
  * 표 레코드에 used·CRC가 없고, 객체에 추가 플래그·확장 자료·뷰포트 번호·CRC가 없으며, 선종류 번호가 1바이트, 고도가 두께보다 먼저다.
- * 표본은 저장소에 넣지 않으므로 바이트를 직접 조립한다(실제 R10 도면 대조는 작업 내역에 적었다).
+ * 83차: R9(AC1004)는 R10에 더해 머리가 0x3ef에서 끝나고 핸들이 없으며, 선·점이 2D에 고도 칸이 있고,
+ * 3D 선·3D 면은 점마다 Z가 플래그로 있으며 치수의 점이 모두 2D다(dwg_ac1004.ksy, CC0).
+ * 표본은 저장소에 넣지 않으므로 바이트를 직접 조립한다(실제 R10·R9 도면 대조는 작업 내역에 적었다).
  */
 import { describe, expect, it } from 'vitest';
-import type { ArcEntity, CadDocument, DimensionEntity, InsertEntity, LineEntity, PolylineEntity, TextEntity } from '../../src/core/model';
+import type { ArcEntity, CadDocument, CircleEntity, DimensionEntity, FaceEntity, InsertEntity, LineEntity, PointEntity, PolylineEntity, TextEntity } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
 import { readDwg } from '../../src/io/dwg';
 
@@ -50,9 +52,11 @@ interface EntOpts {
   elevation?: number;
   thickness?: number;
   attribs?: boolean;
+  /** R9: 선·점·3D 면에도 고도 칸이 있다 */
+  r9?: boolean;
 }
 
-/** R10 객체: 종류, 모드, 크기, 도면층, 플래그 두 바이트, 색 → 선종류(1바이트) → 고도 → 두께, 본문(CRC 없음) */
+/** R10·R9 객체: 종류, 모드, 크기, 도면층, 플래그 두 바이트, 색 → 선종류(1바이트) → 고도 → 두께, 본문(CRC 없음) */
 function ent(type: number, body: (b: Bytes) => void, o: EntOpts = {}): number[] {
   let mode = 0;
   const pre = new Bytes();
@@ -66,7 +70,7 @@ function ent(type: number, body: (b: Bytes) => void, o: EntOpts = {}): number[] 
   }
   if (o.elevation !== undefined) {
     mode |= 4;
-    if (type !== 1 && type !== 2 && type !== 22) pre.f64(o.elevation);
+    if (o.r9 || (type !== 1 && type !== 2 && type !== 22)) pre.f64(o.elevation);
   }
   if (o.thickness !== undefined) {
     mode |= 8;
@@ -99,12 +103,17 @@ interface FileParts {
   extra?: (es: number) => number[][];
   /** 뷰포트 표(*ACTIVE 하나): 보기 중심, 높이 */
   vport?: { center: [number, number]; height: number };
+  /** 머리 변수 자리에 넣을 바이트 */
+  header?: [number, number[]][];
+  /** 객체 구역 시작(기본은 판의 머리 끝) */
+  headerLen?: number;
 }
 
-/** R10 파일: 머리(0x512) → 객체 구역 → 표(used·CRC 없는 레코드) → 블록 구역 → 추가 구역 */
-function r10(p: FileParts): Uint8Array {
+/** R10 파일: 머리(0x512, R9는 0x3ef) → 객체 구역 → 표(used·CRC 없는 레코드) → 블록 구역 → 추가 구역 */
+function r10(p: FileParts, ver: 'AC1006' | 'AC1004' = 'AC1006'): Uint8Array {
   const b = new Bytes();
-  b.fixed('AC1006', 0x512);
+  b.fixed(ver, p.headerLen ?? (ver === 'AC1004' ? 0x3ef : 0x512));
+  for (const [at, v] of p.header ?? []) b.put(at, v);
   const es = b.n;
   for (const e of p.entities(es)) b.a.push(...e);
   const ee = b.n;
@@ -139,7 +148,8 @@ function r10(p: FileParts): Uint8Array {
     37,
     blocks.map((blk, i) => new Bytes().u8(0).fixed(blk.name, 32).u32((0x40000000 | addr[i]!) >>> 0).a),
   );
-  for (const at of [0x54, 0x3ef, 0x500]) b.put(at, new Bytes().i16(40).i16(0).i16(0).u32(0).a);
+  // 보기 표(R10은 UCS·뷰포트 표도 — R9 머리에는 없다)
+  for (const at of ver === 'AC1004' ? [0x54] : [0x54, 0x3ef, 0x500]) b.put(at, new Bytes().i16(40).i16(0).i16(0).u32(0).a);
   if (p.vport) {
     // R10 VPORT 레코드(249): 이름 뒤 used 없이 10/20 왼쪽 아래 … 12/22 보기 중심, 40 높이(R12 리더의 칸 차례)
     const v = new Bytes().u8(0).fixed('*ACTIVE', 32).f64(0).f64(0).f64(1).f64(1).f64(0).f64(0).f64(0).f64(0).f64(0).f64(1).f64(0).f64(p.vport.height).f64(p.vport.center[0]).f64(p.vport.center[1]);
@@ -260,6 +270,98 @@ describe('R10 DWG 읽기', () => {
     expect([l3.type, l3.start, l3.end]).toEqual(['LINE', { x: 5, y: 9, z: 0 }, { x: 6, y: 10, z: 1 }]);
     // 호 정의점 3D(16), 지시선 길이(40) 하나, 그다음 회전(50)이 제자리에서 읽힌다
     expect(dim.type).toBe('DIMENSION');
+    expect(dim.rotation).toBeCloseTo(0.5);
+    expect(doc.warnings).toEqual([]);
+  });
+});
+
+describe('R9 DWG 읽기', () => {
+  const r9 = (p: FileParts) => r10(p, 'AC1004');
+  const o9 = (o: EntOpts = {}): EntOpts => ({ ...o, r9: true });
+
+  it('선·점은 2D이고 고도 칸이 Z다. 머리는 0x3ef에서 끝나 그 뒤(코드 페이지·UCS 표)는 읽지 않고, 0x76은 PLINEGEN이 아니다', () => {
+    const doc = readDwg(
+      r9({
+        layers: LAYERS,
+        // 0x76: R9는 객체 수(R10부터 PLINEGEN)
+        header: [[0x76, new Bytes().i16(45).a]],
+        entities: () => [
+          ent(1, (b) => b.f64(1).f64(2).f64(3).f64(4), o9({ layer: 1, color: 3, ltype: 0, elevation: 5, thickness: 0.5 })),
+          ent(2, (b) => b.f64(7).f64(8), o9()),
+          ent(3, (b) => b.f64(1).f64(1).f64(2), o9({ elevation: 4 })),
+        ],
+      }),
+    );
+    expect(doc.version).toBe('AC1009');
+    const [line, pt, circle] = ms(doc) as [LineEntity, PointEntity, CircleEntity];
+    expect([line.type, line.layer, line.color.aci, line.start, line.end, line.thickness]).toEqual(['LINE', 'WALL', 3, { x: 1, y: 2, z: 5 }, { x: 3, y: 4, z: 5 }, 0.5]);
+    expect([pt.type, pt.position]).toEqual(['POINT', { x: 7, y: 8, z: 0 }]);
+    expect([circle.center, circle.radius]).toEqual([{ x: 1, y: 1, z: 4 }, 2]);
+    // 핸들이 없으면 읽기가 새로 매긴다
+    expect(new Set(ms(doc).map((e) => e.handle)).size).toBe(3);
+    expect(doc.header.has('$PLINEGEN')).toBe(false);
+    expect(doc.layers.get('WALL')?.linetype).toBe('CONTINUOUS');
+    expect(doc.warnings).toEqual([]);
+  });
+
+  it('객체 구역이 더 뒤에서 시작해도 0x3ef 뒤 자리(R10의 코드 페이지)는 머리로 읽지 않는다', () => {
+    const doc = readDwg(r9({ layers: LAYERS, headerLen: 0x400, header: [[0x3f9, new Bytes().i16(12).a]], entities: () => [ent(2, (b) => b.f64(1).f64(2), o9())] }));
+    expect([doc.codepage, ms(doc).length]).toEqual(['UTF8', 1]);
+  });
+
+  it('3D 선·3D 면은 점마다 Z가 있는지 플래그로 알리고, 없는 Z는 고도다', () => {
+    const doc = readDwg(
+      r9({
+        layers: LAYERS,
+        entities: () => [
+          // 실제 R9 표본의 3D 선: 플래그 0x02 — 끝점에만 Z
+          ent(21, (b) => b.f64(5).f64(9).f64(6).f64(10).f64(1), o9({ f2: 0x02 })),
+          // 3D 면: 첫째·셋째 점에만 Z, 고도 2
+          ent(22, (b) => b.f64(0).f64(0).f64(7).f64(1).f64(0).f64(1).f64(1).f64(8).f64(0).f64(1), o9({ f2: 0x05, elevation: 2 })),
+        ],
+      }),
+    );
+    const [l3, face] = ms(doc) as [LineEntity, FaceEntity];
+    expect([l3.type, l3.start, l3.end]).toEqual(['LINE', { x: 5, y: 9, z: 0 }, { x: 6, y: 10, z: 1 }]);
+    expect([face.type, face.points]).toEqual([
+      '3DFACE',
+      [
+        { x: 0, y: 0, z: 7 },
+        { x: 1, y: 0, z: 2 },
+        { x: 1, y: 1, z: 8 },
+        { x: 0, y: 1, z: 2 },
+      ],
+    ]);
+    // R9 3D 면에는 모서리 숨김 칸이 없다(0x01은 첫 점의 Z)
+    expect(face.invisibleEdges).toBe(0);
+    expect(doc.warnings).toEqual([]);
+  });
+
+  it('치수: 점이 모두 2D이고 복제 점·지시선 칸이 없다(실제 R9 표본의 배치)', () => {
+    const doc = readDwg(
+      r9({
+        layers: LAYERS,
+        entities: () => [
+          ent(
+            23,
+            (b) =>
+              b
+                .i16(-1)
+                .f64(8).f64(8)
+                .f64(7.5).f64(8.5)
+                .u8(0)
+                .text(' ')
+                .f64(1).f64(2)
+                .f64(3).f64(4)
+                .f64(0.5),
+            o9({ f2: 0x1e, f3: 0x01 }),
+          ),
+        ],
+      }),
+    );
+    const dim = ms(doc)[0] as DimensionEntity;
+    expect(dim.type).toBe('DIMENSION');
+    expect([dim.defPoint, dim.textMid, dim.defPoint2, dim.defPoint3, dim.text]).toEqual([{ x: 8, y: 8, z: 0 }, { x: 7.5, y: 8.5, z: 0 }, { x: 1, y: 2, z: 0 }, { x: 3, y: 4, z: 0 }, '']);
     expect(dim.rotation).toBeCloseTo(0.5);
     expect(doc.warnings).toEqual([]);
   });
