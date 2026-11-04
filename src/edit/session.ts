@@ -335,6 +335,11 @@ export class EditSession {
   /** 핸들 → 소유 블록 안의 자리. 편집으로 밀릴 수 있어 쓸 때 확인한다 */
   private ownerAt = new Map<string, number>();
   private ownerMisses = 0;
+  /**
+   * newHandle이 마지막으로 적은 $HANDSEED와 그 값. 머리말이 그대로면 다시 풀지 않는다
+   * (77차 — 치수 1만 개를 옮기면 치수 블록 객체마다 불러 명령 하나에 10만 번이 넘었다)
+   */
+  private seedMemo: { seed: string; next: bigint } | null = null;
 
   constructor(
     readonly doc: CadDocument,
@@ -346,13 +351,16 @@ export class EditSession {
   newHandle(): string {
     const seed = this.doc.header.get('$HANDSEED');
     let next = 0n;
-    try {
-      next = BigInt('0x' + (typeof seed === 'string' && seed ? seed : '0'));
-    } catch {
-      next = 0n;
-    }
+    if (this.seedMemo && this.seedMemo.seed === seed) next = this.seedMemo.next;
+    else
+      try {
+        next = BigInt('0x' + (typeof seed === 'string' && seed ? seed : '0'));
+      } catch {
+        next = 0n;
+      }
     // 이미 쓰인 핸들과 겹치지 않게 한다
-    if (next === 0n || this.doc.entityIndex.has(normalizeHandle(next.toString(16))) || this.doc.objects.has(normalizeHandle(next.toString(16)))) {
+    const h0 = normalizeHandle(next);
+    if (next === 0n || this.doc.entityIndex.has(h0) || this.doc.objects.has(h0)) {
       let max = 0n;
       for (const h of this.doc.entityIndex.keys()) {
         try {
@@ -383,8 +391,10 @@ export class EditSession {
       }
       if (next <= max) next = max + 1n;
     }
-    const h = normalizeHandle(next.toString(16));
-    this.doc.header.set('$HANDSEED', normalizeHandle((next + 1n).toString(16)));
+    const h = normalizeHandle(next);
+    const seed2 = normalizeHandle(next + 1n);
+    this.doc.header.set('$HANDSEED', seed2);
+    this.seedMemo = { seed: seed2, next: next + 1n };
     return h;
   }
 

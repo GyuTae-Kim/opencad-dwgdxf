@@ -37,6 +37,7 @@ import { entityPath } from '../edit/geom/path';
 import { associatedHatches, boundaryEntitiesOf, dissociate, reactorUnlinks, rebuildAssociative } from '../edit/hatch';
 import { pathLength } from '../edit/geom/curve';
 import { dimensionBlockOps } from './dimcmds';
+import { withDimVarsCache } from '../edit/dim/vars';
 import { planFollow } from './dimassoc';
 import type { App, CommandContext, Keyword } from './app';
 import type { DocState } from './docstate';
@@ -280,12 +281,23 @@ export interface Applied {
  */
 export function commitResults(app: App, ctx: CommandContext, results: EditResult[], label: string, opt: { quiet?: boolean; transform?: Affine } = {}): Applied {
   const st = app.active!;
+  // 작업을 모으는 동안은 문서가 그대로라 치수를 다시 만들 때 치수 스타일 값을 스타일마다 한 번만 푼다(77차)
+  const plan = withDimVarsCache(() => planResults(app, ctx, results, label, opt));
+  if (!plan) return { added: [], changed: [], removed: 0, ops: 0 };
+  if (plan.ops.length) st.session.commit({ label, ops: plan.ops, group: ctx.group });
+  plan.out.ops = plan.ops.length;
+  return plan.out;
+}
+
+/** commitResults의 작업 모으기(문서에 적용하지 않는다). 구속을 지킬 수 없으면 null */
+function planResults(app: App, ctx: CommandContext, results: EditResult[], label: string, opt: { quiet?: boolean; transform?: Affine }): { ops: EditOp[]; out: Applied } | null {
+  const st = app.active!;
   const doc = st.doc;
   // 파라메트릭 구속: 구속으로 이어진 객체를 결과에 더하고, 구속 기록 갱신 작업을 받는다
   const cons = constraintEditHook(st, results, label);
   if (!cons.ok) {
     ctx.print(cons.message ?? '구속조건을 유지하면서 객체를 편집할 수 없습니다.', 'err');
-    return { added: [], changed: [], removed: 0, ops: 0 };
+    return null;
   }
   // 따라온 객체는 같은 변환을 받지 않았다
   if (cons.results !== results) opt = { ...opt, transform: undefined };
@@ -456,9 +468,7 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
     }
     pushAll(all, ops);
   }
-  if (all.length) st.session.commit({ label, ops: all, group: ctx.group });
-  out.ops = all.length;
-  return out;
+  return { ops: all, out };
 }
 
 /** 명령 안에서 직전 단계 하나를 되돌린다 */

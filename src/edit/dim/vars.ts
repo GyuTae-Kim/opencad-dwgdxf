@@ -79,10 +79,27 @@ export function childStyleOf(doc: CadDocument, d: { dimStyle: string; dimType?: 
   return doc.dimStyles.get(tableKey(`${d.dimStyle || 'Standard'}$${suf}`)) ?? null;
 }
 
-/** 치수의 변수 값(스타일 + 재지정). 스타일이 없으면 머리말 $DIM 값을 쓴다. */
-export function rawDimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle' | 'overrides'> & { xdata?: DimensionEntity['xdata']; dimType?: number; subtype?: string }): RawVars {
+/**
+ * 한 편집 안에서 치수 스타일에서 오는 값(기본값 + 스타일 + 옛 변수 + 스타일 확장 자료)을 스타일마다 한 번만 푼다.
+ * 77차 — 치수 1만 개를 옮기면 치수마다 기본값 74개를 펼치고 스타일 값을 덮어써 다시 만들기 시간의 약 4분의 3이었다.
+ * 스타일 값은 선종류 표(핸들 → 이름)에도 기대므로 문서가 바뀌지 않는 구간(편집 작업을 모으는 동안)에만 쓴다
+ */
+let styleCache: Map<string, RawVars> | null = null;
+
+/** fn을 도는 동안 치수 스타일 값을 한 번만 푼다(그동안 문서의 치수 스타일·선종류·머리말을 바꾸지 않아야 한다) */
+export function withDimVarsCache<T>(fn: () => T): T {
+  if (styleCache) return fn();
+  styleCache = new Map();
+  try {
+    return fn();
+  } finally {
+    styleCache = null;
+  }
+}
+
+/** 기본값 + 스타일(없으면 머리말 $DIM) + 옛 변수 + 스타일 확장 자료 */
+function styleVars(doc: CadDocument, ds: DimStyle | undefined): RawVars {
   const out: RawVars = { ...DIM_VAR_DEFAULTS };
-  const ds = childStyleOf(doc, d) ?? doc.dimStyles.get(tableKey(d.dimStyle || 'Standard'));
   if (ds) {
     Object.assign(out, ds.vars);
     // R14 이전 스타일: DIMUNIT·DIMFIT만 있다
@@ -101,6 +118,21 @@ export function rawDimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle'
     const missing = new Set(['DIMLTYPE', 'DIMLTEX1', 'DIMLTEX2', 'DIMTFILL'].filter((k) => ds.vars[k] === undefined));
     if (missing.size) xdataVars(doc, ds.xdata, out, missing);
   } else for (const [k, v] of doc.header) if (k.startsWith('$DIM') && (typeof v === 'number' || typeof v === 'string')) out[k.slice(1)] = v;
+  return out;
+}
+
+/** 치수의 변수 값(스타일 + 재지정). 스타일이 없으면 머리말 $DIM 값을 쓴다. */
+export function rawDimVars(doc: CadDocument, d: Pick<DimensionEntity, 'dimStyle' | 'overrides'> & { xdata?: DimensionEntity['xdata']; dimType?: number; subtype?: string }): RawVars {
+  let out: RawVars;
+  // 스타일 이름과 하위 스타일 접미사가 같으면 같은 스타일이다
+  const key = styleCache ? `${d.dimStyle}\u0000${childStyleSuffix(d) ?? ''}` : '';
+  const hit = styleCache?.get(key);
+  if (hit) out = { ...hit };
+  else {
+    const base = styleVars(doc, childStyleOf(doc, d) ?? doc.dimStyles.get(tableKey(d.dimStyle || 'Standard')));
+    styleCache?.set(key, base);
+    out = styleCache ? { ...base } : base;
+  }
   xdataVars(doc, d.xdata, out, null);
   if (d.overrides) {
     const ov = d.overrides;
