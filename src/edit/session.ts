@@ -479,7 +479,12 @@ export class EditSession {
     if (!tx.ops.length) return;
     const summary = emptySummary();
     applyOpsAtomic(this.doc, tx.ops, summary);
-    for (const op of tx.ops) if ((op.kind === 'add' || op.kind === 'modify') && this.ownerCache) this.ownerCache.set(op.kind === 'add' ? op.entity.handle : op.after.handle, op.block);
+    // 소유 블록 기억: 같은 핸들을 제자리에서 바꾼 객체는 기억한 블록 그대로다(87차 — 연관 도면 MOVE의 바꾸기 3만 개마다 다시 넣었다)
+    if (this.ownerCache)
+      for (const op of tx.ops) {
+        if (op.kind === 'add') this.ownerCache.set(op.entity.handle, op.block);
+        else if (op.kind === 'modify' && op.after.handle !== op.before.handle) this.ownerCache.set(op.after.handle, op.block);
+      }
     const top = this.undoStack[this.undoStack.length - 1];
     if (tx.group !== undefined && top && top.group === tx.group) pushAll(top.ops, tx.ops);
     else {
