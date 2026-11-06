@@ -132,6 +132,8 @@ describe('language URLs and UI presentation', () => {
         if (code === 'zh-CN' && /[이가] 아닙니다/.test(key) && !/수 없|못/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/不能/);
         // 원문의 고를 글자 (X)·(LA)는 번역에도 보인다(en "[Exit/Undo]"처럼 빠지면 무엇을 입력할지 모른다)
         for (const m of key.matchAll(/\(([A-Z][A-Z0-9]{0,3})\)/g)) expect(value, `${code}: ${key}`).toMatch(new RegExp(`[(（]${m[1]}[)）]|\\b${m[1]}\\b`));
+        // 낱말이 빠지고 고를 글자만 남은 번역(de·zh "가리기 유형(M)" → "(M)")
+        if (/[가-힣]{2}/.test(key.replace(/\([^)]*\)/g, ''))) expect(value, `${code}: ${key}`).not.toMatch(/^\s*[(（][A-Z0-9]{1,4}[)）]\s*:?\s*$/);
         // 저장 경고의 "쓰지 않았습니다·쓰지 못해"는 파일에 쓰다(write)이지 쓰다(use)가 아니다
         if (/를 쓰지 않았습니다|쓰지 못해 뺐|를 쓰지 못했습니다|쓰지 않는 객체를 가리키는|소유 객체를 쓰지 않는/.test(key))
           expect(value, `${code}: ${key}`).not.toMatch(/\b(use|used|using)\b|verwend|使用|使わ|使え/);
@@ -144,6 +146,8 @@ describe('language URLs and UI presentation', () => {
     expect(codes.map((code) => translate('현재 제외', code))).toEqual(['Except current', '現在以外', '排除当前', 'Außer aktuellem']);
     expect(translate('좌표나 값이 수가 아닙니다.', 'zh-CN')).toBe('坐标或值不是数字。');
     expect(translate('직사각형이 너무 작아 모깎기하지 않았습니다.', 'de')).toBe('Das Rechteck ist zu klein zum Abrunden.');
+    // 이웃 줄의 머리를 삼키거나(Character alignment Find the character) 꼬리를 잃은(Grid) 번역
+    expect(['문자 정렬', '격자 X 간격', '바꾸기…'].map((key) => translate(key, 'en'))).toEqual(['Text alignment', 'Grid X spacing', 'Replace…']);
   });
   it('updates dynamic UI and switches languages without changing document data or listeners', async () => {
     const dom = new JSDOM('<!doctype html><html><head><title>OpenCAD</title></head><body><div id="app"><header class="titlebar"><button>열기</button><span class="docname">열기</span></header><canvas></canvas><div class="anno-layer">열기</div><input value="열기" placeholder="열기"><div contenteditable="true">열기</div><div translate="no">열기</div><p id="status">열기</p></div></body></html>', {url:'https://gyutae-kim.github.io/opencad-skp/en/?sample#view'});
