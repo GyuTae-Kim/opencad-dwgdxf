@@ -7,6 +7,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MODEL_SPACE, type CadDocument } from '../../src/core/model';
 import { EngineClient } from '../../src/app/engine';
 import { readDxf } from '../../src/io/dxf/reader';
+import type { EditOp } from '../../src/edit/session';
+import { encodeWire, packOps } from '../../src/worker/editwire';
 import type { FromWorker, ToWorker } from '../../src/worker/protocol';
 
 const SAMPLE = readFileSync(new URL('../../public/samples/opencad-sample.dxf', import.meta.url));
@@ -47,6 +49,28 @@ describe('워커 문서 다시 맞추기', () => {
     expect(saved).toBeDefined();
     const back: CadDocument = readDxf(new Uint8Array(saved.data));
     expect(back.blocks.get(MODEL_SPACE)!.entities.length).toBe(doc.blocks.get(MODEL_SPACE)!.entities.length);
+  });
+
+  it('묶음 부호화한 편집(editEncoded)은 적용한 뒤 받은 버퍼를 놓아 준다(97차)', async () => {
+    const doc = readDxf(new Uint8Array(SAMPLE));
+    await send({ type: 'adopt', id: 4, name: 't.dxf', doc: structuredClone(doc) });
+    const docId = (posted.find((m) => m.type === 'scene') as Extract<FromWorker, { type: 'scene' }>).docId;
+    const list = doc.blocks.get(MODEL_SPACE)!.entities;
+    expect(list.length).toBeGreaterThan(3);
+    const ops: EditOp[] = list.map((e) => ({ kind: 'modify', block: MODEL_SPACE, before: e, after: { ...structuredClone(e), ltscale: 3 } }));
+    const enc = encodeWire(packOps(ops))!;
+    expect(enc.tags.byteLength).toBeGreaterThan(0);
+    posted.length = 0;
+    await send({ type: 'editEncoded', docId, enc });
+    expect(posted).toEqual([]);
+    // 받은 버퍼는 떼어 놓았다(ArrayBuffer.transfer가 있는 곳)
+    for (const a of [enc.tags, enc.nums, enc.ints, enc.bins]) expect((a.buffer as ArrayBuffer & { detached?: boolean }).detached).toBe(true);
+    // 편집은 워커 문서에 들어갔다
+    await send({ type: 'save', id: 5, docId, format: 'dxf', version: 'AC1032' });
+    const saved = posted.find((m) => m.type === 'saved' && m.id === 5) as Extract<FromWorker, { type: 'saved' }>;
+    const back = readDxf(new Uint8Array(saved.data)).blocks.get(MODEL_SPACE)!.entities;
+    expect(back.length).toBe(list.length);
+    expect(back.every((e) => e.ltscale === 3)).toBe(true);
   });
 
   it('엔진은 editFailed를 앱에 넘기고, replace로 문서를 보낸다', () => {
