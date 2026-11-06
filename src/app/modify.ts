@@ -64,6 +64,7 @@ import { pasteDependencies } from './pastedeps';
 import { expandBudget } from '../core/limits';
 import { MSG } from '../edit/geom/types';
 import { relinkClonedColumns, relinkColumnCopies } from '../edit/util/mtextcols';
+import { columnGripEdit } from './mtextcols-grips';
 
 // ---------------------------------------------------------------------------
 // 변환 행렬(x' = a·x + c·y + e, y' = b·x + d·y + f)
@@ -1921,6 +1922,13 @@ export function registerModifyCommands(app: App): void {
       const dyn = hot.items.find((it) => it.id.startsWith('dyn:'));
       if (dyn) {
         await dynGripEdit(app, ctx, dyn.handle, dyn.id);
+        app.refreshSelectionOverlay();
+        return;
+      }
+      // 여러 단 문자의 묶음 그립(90차 — 위치·단 폭·간격·높이)
+      const col = hot.items.find((it) => it.id.startsWith('col:'));
+      if (col) {
+        await columnGripEdit(app, ctx, col.handle, col.id);
         app.refreshSelectionOverlay();
         return;
       }
