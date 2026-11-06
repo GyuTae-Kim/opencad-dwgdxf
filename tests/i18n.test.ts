@@ -141,6 +141,12 @@ describe('language URLs and UI presentation', () => {
         if (/플롯 안 함/.test(key)) expect(value, `${code}: ${key}`).toMatch(/not plot|nicht plotten|nicht geplottet|プロットしない|印刷しない|不打印/i);
         // "현재 제외"(현재 것을 뺀 나머지)는 "지금 제외됨"·"전류"가 아니다
         if (/현재 제외/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/currently|Strom|Aktuell ausgeschlossen|現在、|当前已/i);
+        // 도면층은 AutoCAD 각 언어판 낱말로: Layer(독일어판도 Layer — Ebene·Schicht 아님) · 画層(レイヤー 아님) · 图层
+        if (key.includes('도면층'))
+          expect(value, `${code}: ${key}`).toMatch({ en: /layer/i, de: /layer/i, ja: /画層/, 'zh-CN': /图层|ByLayer/ }[code]);
+        if (key.includes('도면층')) expect(value, `${code}: ${key}`).not.toMatch(/Ebene|Schicht|レイヤ/);
+        // 끌 도면층 = 끌(끄다) 도면층, 끌다(drag)가 아니다
+        if (/^끌 도면층/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/drag|zieh|ドラッグ|拖/i);
       }
     expect(codes.map((code) => translate('표시하지만 플롯 안 함(D)', code))).toEqual(['Display but do not plot (D)', '表示するがプロットしない(D)', '显示但不打印(D)', 'Anzeigen, aber nicht plotten (D)']);
     expect(codes.map((code) => translate('현재 제외', code))).toEqual(['Except current', '現在以外', '排除当前', 'Außer aktuellem']);
@@ -148,6 +154,7 @@ describe('language URLs and UI presentation', () => {
     expect(translate('직사각형이 너무 작아 모깎기하지 않았습니다.', 'de')).toBe('Das Rechteck ist zu klein zum Abrunden.');
     // 이웃 줄의 머리를 삼키거나(Character alignment Find the character) 꼬리를 잃은(Grid) 번역
     expect(['문자 정렬', '격자 X 간격', '바꾸기…'].map((key) => translate(key, 'en'))).toEqual(['Text alignment', 'Grid X spacing', 'Replace…']);
+    expect(['현재 도면층', '도면층 끄기', '새 도면층'].map((key) => translate(key, 'de'))).toEqual(['Aktueller Layer', 'Layer ausschalten', 'Neuer Layer']);
   });
   it('updates dynamic UI and switches languages without changing document data or listeners', async () => {
     const dom = new JSDOM('<!doctype html><html><head><title>OpenCAD</title></head><body><div id="app"><header class="titlebar"><button>열기</button><span class="docname">열기</span></header><canvas></canvas><div class="anno-layer">열기</div><input value="열기" placeholder="열기"><div contenteditable="true">열기</div><div translate="no">열기</div><p id="status">열기</p></div></body></html>', {url:'https://gyutae-kim.github.io/opencad-skp/en/?sample#view'});
