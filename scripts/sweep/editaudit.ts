@@ -12,6 +12,8 @@
  *  - 다시 하면 명령 직후 문서(블록마다 객체 차례, 색인 수, 위의 수)로 돌아오고 워커 문서도 같다(81차)
  *  - 커밋·명령 취소마다 워커와 같은 전송(packOps → 구조화 복제, 큰 편집은 묶음 부호화 → unpackOps → applyOps)으로 따로 읽은 문서에 적용하면 메인 문서와 같다
  *    (블록·객체 차례, 색인, 바뀌거나 더한 객체 — 78차, 속성 없는 블록 참조를 바꾸면 워커가 멈추던 결함)
+ *  - R2000~R2013 꼴 여러 단 MTEXT: 같은 블록의 MTEXT가 아닌 단을 가리키는 연결과 두 첫 단이 함께 가리키는 단이 늘지 않고,
+ *    COPY·붙여넣기 뒤에는 그 공간의 묶음이 두 배다(사본은 새 단끼리 잇는다 — 90차)
  * 명령은 시험 하네스(tests/cmds2)로 흘려 넣어 화면 없이 돈다. 결과는 문제만 담은 작은 JSON이다.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -22,6 +24,7 @@ import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { readDwg, writeDwg } from '../../src/io/dwg';
 import { applyOps, type ChangeSummary, type Transaction } from '../../src/edit/session';
+import { mtextColumnLinks } from '../../src/edit/util/mtextcols';
 import { ENCODE_MIN_OPS, decodeWire, encodeWire, packOps, unpackOps } from '../../src/worker/editwire';
 import type { App } from '../../src/app/app';
 import { registerBlockCommands } from '../../src/app/blocks';
@@ -79,6 +82,34 @@ interface Audit {
   dup: number;
   owner: number;
   mismatch: number;
+  /** 여러 단 MTEXT(90차): 같은 블록의 MTEXT가 아닌 단을 가리키는 연결, 두 첫 단이 함께 가리키는 단 */
+  colStale: number;
+  colShared: number;
+}
+
+/** 여러 단 MTEXT 묶음(R2000~R2013 꼴, 90차): 블록마다 첫 단 수와 잘못된 연결(다른 블록·없는 객체·MTEXT 아님), 겹친 단 */
+export function columnAudit(doc: CadDocument): { groups: Map<string, number>; stale: number; shared: number } {
+  const groups = new Map<string, number>();
+  let stale = 0;
+  let shared = 0;
+  for (const [key, b] of doc.blocks) {
+    let own: Set<unknown> | null = null;
+    const seen = new Set<string>();
+    for (const e of b.entities) {
+      if (e.type !== 'MTEXT' || !e.xdata) continue;
+      const links = mtextColumnLinks(e);
+      if (!links.length) continue;
+      own ??= new Set(b.entities);
+      groups.set(key, (groups.get(key) ?? 0) + 1);
+      for (const h of links) {
+        const m = doc.entityIndex.get(h);
+        if (!m || m.type !== 'MTEXT' || !own.has(m)) stale++;
+        else if (seen.has(h)) shared++;
+        seen.add(h);
+      }
+    }
+  }
+  return { groups, stale, shared };
 }
 
 export function auditDoc(doc: CadDocument): Audit {
@@ -104,7 +135,8 @@ export function auditDoc(doc: CadDocument): Audit {
   const anon = [...doc.blocks.keys()].filter((k) => /^\*[A-Z]\d+$/.test(k));
   let stale = 0;
   for (const h of doc.entityIndex.keys()) if (!inBlocks.has(h)) stale++;
-  return { unused: anon.filter((k) => !used.has(k)).sort(), stale, blocks: doc.blocks.size, index: doc.entityIndex.size, users, dup, owner, mismatch };
+  const cols = columnAudit(doc);
+  return { unused: anon.filter((k) => !used.has(k)).sort(), stale, blocks: doc.blocks.size, index: doc.entityIndex.size, users, dup, owner, mismatch, colStale: cols.stale, colShared: cols.shared };
 }
 
 export type AuditSpace = 'auto' | 'model' | 'paper';
@@ -245,6 +277,8 @@ export async function auditFile(
         }
       };
       const before = auditDoc(h.doc);
+      const space = spaceKey(h.doc, target)!;
+      const groups0 = columnAudit(h.doc).groups.get(space) ?? 0;
       const mark = s.undoTop();
       const hs = pickable(h.doc, target);
       try {
@@ -262,7 +296,12 @@ export async function auditFile(
       const fresh = after.unused.filter((k) => !before.unused.includes(k) && !gone.has(k));
       if (fresh.length) p.newUnused = fresh.slice(0, 8);
       if (after.stale > before.stale) p.stale = [before.stale, after.stale];
-      for (const k of ['dup', 'owner', 'mismatch'] as const) if (after[k] > before[k]) p[k] = [before[k], after[k]];
+      for (const k of ['dup', 'owner', 'mismatch', 'colStale', 'colShared'] as const) if (after[k] > before[k]) p[k] = [before[k], after[k]];
+      // 여러 단 MTEXT(90차): 공간을 다 골라 복사·붙여넣기하면 묶음도 두 배(사본은 새 단끼리 잇는다)
+      if (groups0 && (label === 'COPY' || label === 'COPYCLIP+PASTECLIP')) {
+        const groups1 = columnAudit(h.doc).groups.get(space) ?? 0;
+        if (groups1 !== 2 * groups0) p.columnCopies = [groups0, groups1];
+      }
       const wd = wireError ?? workerDiff(h.doc, wdoc, touched);
       if (wd) p.worker = wd;
       const shape0 = shape(h.doc);
@@ -273,7 +312,7 @@ export async function auditFile(
       const wu = wireError ?? workerDiff(h.doc, wdoc, touched);
       if (wu && !wd) p.workerUndo = wu;
       const back = auditDoc(h.doc);
-      const same = (['stale', 'blocks', 'index', 'dup', 'owner', 'mismatch'] as const).every((k) => back[k] === before[k]);
+      const same = (['stale', 'blocks', 'index', 'dup', 'owner', 'mismatch', 'colStale', 'colShared'] as const).every((k) => back[k] === before[k]);
       if (back.unused.join() !== before.unused.join() || !same) {
         p.undo = { before: [before.blocks, before.index, before.stale, before.dup, before.owner, before.mismatch], back: [back.blocks, back.index, back.stale, back.dup, back.owner, back.mismatch] };
       }
@@ -281,7 +320,7 @@ export async function auditFile(
       while (s.canRedo()) s.redo();
       const fwd = auditDoc(h.doc);
       const shape1 = shape(h.doc);
-      const redoSame = (['unused', 'stale', 'blocks', 'index', 'dup', 'owner', 'mismatch'] as const).every((k) => String(fwd[k]) === String(after[k]));
+      const redoSame = (['unused', 'stale', 'blocks', 'index', 'dup', 'owner', 'mismatch', 'colStale', 'colShared'] as const).every((k) => String(fwd[k]) === String(after[k]));
       const firstDiff = shape1.findIndex((x, i) => x !== shape0[i]);
       if (!redoSame || firstDiff >= 0 || shape1.length !== shape0.length) p.redo = firstDiff >= 0 ? (shape1[firstDiff] ?? '').slice(0, 80) : 'counts';
       const wr = wireError ?? workerDiff(h.doc, wdoc, touched);
