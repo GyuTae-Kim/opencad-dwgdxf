@@ -115,8 +115,22 @@ export function applyOpsAtomic(doc: CadDocument, ops: readonly EditOp[], summary
 const FINDER_MIN_OPS = 64;
 /** 자리 표를 다시 만드는 횟수. 더하기·지우기가 찾기와 번갈아 오면 표를 만드는 값이 더 커 그냥 훑는다 */
 const FINDER_MAX_BUILDS = 4;
-/** 소유 블록을 찾다 기억한 자리가 이만큼 틀리면 표를 다시 만든다 */
+/**
+ * 소유 블록을 찾다 기억한 자리가 이만큼 틀리면 표를 만든다(그때까지는 그냥 훑는다 — 몇 번만 찾는 작은 명령에는 표가 더 비싸다).
+ * 빠른 길은 그 블록의 자리 표만, 옛 길(핸들이 겹친 문서)은 전체 표를 다시 만든다
+ */
 const OWNER_MISS_LIMIT = 16;
+/** 빠른 길에서 소유 블록 기억에 적지 않고 미뤄 둔(객체를 넣은) 블록이 이보다 많으면 전체 표를 다시 만든다 */
+const OWNER_PENDING_LIMIT = 8;
+
+/** 블록 하나의 핸들 → 자리 표(소유 블록 찾기 빠른 길). list·len이 지금 블록과 다르면 낡은 표다 */
+interface BlockSlots {
+  list: readonly Entity[];
+  len: number;
+  /** 핸들 → 처음 자리(findIndex와 같은 답). 빗나감이 OWNER_MISS_LIMIT를 넘을 때 만든다 */
+  at: Map<string, number> | null;
+  misses: number;
+}
 
 /**
  * 변경 묶음 안에서 객체의 자리를 찾는다. 변경마다 블록을 훑으면 객체 20만 개를 옮길 때 200억 번을 비교해 화면이 멈춘다.
@@ -461,10 +475,25 @@ export class EditSession {
   /** 저장한 뒤 바뀌었는지 */
   dirty = false;
   private savedDepth = 0;
+  /**
+   * 소유 블록 기억(핸들 → 블록 키)과 자리(핸들 → 블록 안의 자리). 자리는 편집으로 밀릴 수 있어 쓸 때 확인한다.
+   *
+   * 빠른 길(103차): 마지막 전체 표 만들기에서 핸들이 모두 하나씩이었던 문서. 핸들이 하나뿐이면 답(그 핸들이 든 블록과 자리)은 문서만으로 정해져,
+   * 기억을 어떻게 고치든 확인을 거친 답은 옛 길과 같다. 그래서 확정은 넣은 객체마다 기억에 적지 않고 블록만 미뤄 두며(ownerPending),
+   * 빗나간 자리는 그 블록의 자리 표(ownerSlots)로 찾는다 — 전체 표를 다시 만들지 않는다. 답은 모두 지금 블록에서 확인한 자리다.
+   * 옛 길(ownerLegacy): 표를 만들 때 핸들이 겹치거나 빈 핸들이 둘 이상이었던 문서. 102차까지와 똑같이 한다(겹친 핸들의 답은 기억의 내력에 따라
+   * 달라지므로 길을 바꾸면 답이 바뀔 수 있다). 한 번 옛 길이면 세션 끝까지 옛 길이다
+   */
   private ownerCache: Map<string, string> | null = null;
-  /** 핸들 → 소유 블록 안의 자리. 편집으로 밀릴 수 있어 쓸 때 확인한다 */
   private ownerAt = new Map<string, number>();
   private ownerMisses = 0;
+  private ownerLegacy = false;
+  /** 빠른 길: 객체를 넣었으나 그 핸들을 기억에 적지 않은 블록(먼저 넣은 차례) */
+  private readonly ownerPending: string[] = [];
+  /** 빠른 길: 블록 키 → 자리 표. 확정이 그 블록에 넣거나 빼면 버린다 */
+  private readonly ownerSlots = new Map<string, BlockSlots>();
+  /** 빠른 길: ownerOf가 마지막으로 찾은 자리(ownerIndex가 쓴다) */
+  private ownerLast = -1;
   /**
    * newHandle이 마지막으로 적은 $HANDSEED와 그 값. 머리말이 그대로면 다시 풀지 않는다
    * (77차 — 치수 1만 개를 옮기면 치수 블록 객체마다 불러 명령 하나에 10만 번이 넘었다)
@@ -549,15 +578,56 @@ export class EditSession {
   /** 블록 키(공간) */
   ownerOf(handle: string): string | null {
     if (!this.ownerCache) this.buildOwners();
-    const cached = this.ownerCache!.get(handle);
+    if (this.ownerLegacy) return this.ownerOfLegacy(handle);
+    const owners = this.ownerCache!;
+    const cached = owners.get(handle);
     const list = cached ? this.doc.blocks.get(cached)?.entities : undefined;
     if (cached && list) {
       // 기억한 자리가 맞으면 블록을 훑지 않는다. 훑으면 객체 20만 개를 옮길 때 이 확인이 200억 번 비교가 된다
+      const at = this.ownerAt.get(handle) ?? -1;
+      if (list[at]?.handle === handle) {
+        this.ownerLast = at;
+        return cached;
+      }
+      // 앞선 지우기·넣기로 자리가 밀렸다: 그 블록의 자리 표로(103차 — 전에는 16번 빗나가면 모든 블록의 표를 다시 만들었다)
+      const i = this.slotOf(cached, list, handle);
+      if (i >= 0) {
+        this.ownerLast = i;
+        return cached;
+      }
+    }
+    // 확정이 넣고 기억에 적지 않은 객체: 미뤄 둔 블록에서
+    for (const k of this.ownerPending) {
+      if (k === cached) continue;
+      const pl = this.doc.blocks.get(k)?.entities;
+      const i = pl ? this.slotOf(k, pl, handle) : -1;
+      if (i >= 0) {
+        this.ownerLast = i;
+        return k;
+      }
+    }
+    const k = ownerBlockKey(this.doc, handle);
+    this.ownerLast = -1;
+    if (k) {
+      const i = this.doc.blocks.get(k)!.entities.findIndex((e) => e.handle === handle);
+      owners.set(handle, k);
+      this.ownerAt.set(handle, i);
+      this.ownerLast = i;
+    }
+    return k;
+  }
+
+  /** 옛 길(102차까지 그대로 — 핸들이 겹친 문서) */
+  private ownerOfLegacy(handle: string): string | null {
+    if (!this.ownerCache) this.buildOwners();
+    const cached = this.ownerCache!.get(handle);
+    const list = cached ? this.doc.blocks.get(cached)?.entities : undefined;
+    if (cached && list) {
       if (list[this.ownerAt.get(handle) ?? -1]?.handle === handle) return cached;
       // 앞선 지우기로 자리가 밀렸다. 많이 밀렸으면 표를 다시 만드는 쪽이 싸다
       if (++this.ownerMisses > OWNER_MISS_LIMIT) {
         this.buildOwners();
-        return this.ownerOf(handle);
+        return this.ownerOfLegacy(handle);
       }
       const at = list.findIndex((e) => e.handle === handle);
       if (at >= 0) {
@@ -573,23 +643,104 @@ export class EditSession {
     return k;
   }
 
+  /**
+   * 빠른 길: 블록 k(list)에서 handle의 처음 자리(없으면 -1). 답은 언제나 list에서 확인한 자리다.
+   * 블록마다 빗나감이 OWNER_MISS_LIMIT를 넘으면 자리 표를 만들고(표에서 찾은 것은 기억에 적지 않는다), 표가 낡았으면(세션 밖에서 바뀜) 버리고 훑는다.
+   * 훑어서 찾은 것은 기억에 적어 같은 핸들을 다시 찾을 때(명령은 ownerOf 뒤 ownerIndex를 부른다) 맞게 한다
+   */
+  private slotOf(k: string, list: readonly Entity[], handle: string): number {
+    let s = this.ownerSlots.get(k);
+    if (!s || s.list !== list || s.len !== list.length) {
+      s = { list, len: list.length, at: null, misses: 0 };
+      this.ownerSlots.set(k, s);
+    }
+    if (s.at) {
+      const i = s.at.get(handle);
+      if (i === undefined || list[i]?.handle === handle) return i ?? -1;
+      // 길이는 같은데 자리가 달라졌다(세션 밖에서 바뀜): 표를 버린다
+      s.at = null;
+      s.misses = 0;
+    } else if (++s.misses > OWNER_MISS_LIMIT) {
+      // 처음 자리가 이기게 뒤에서부터 넣는다(findIndex와 같은 답)
+      const at = new Map<string, number>();
+      for (let i = list.length - 1; i >= 0; i--) at.set(list[i]!.handle, i);
+      s.at = at;
+      return at.get(handle) ?? -1;
+    }
+    const i = list.findIndex((e) => e.handle === handle);
+    if (i >= 0) {
+      this.ownerCache!.set(handle, k);
+      this.ownerAt.set(handle, i);
+    }
+    return i;
+  }
+
   /** 소유 블록 안의 자리(ownerOf가 확인한 값). 블록이 없으면 -1 */
   ownerIndex(handle: string): number {
-    return this.ownerOf(handle) ? (this.ownerAt.get(handle) ?? -1) : -1;
+    const k = this.ownerOf(handle);
+    if (!k) return -1;
+    return this.ownerLegacy ? (this.ownerAt.get(handle) ?? -1) : this.ownerLast;
   }
 
   private buildOwners(): void {
     const owners = new Map<string, string>();
     this.ownerAt.clear();
     this.ownerMisses = 0;
+    this.ownerPending.length = 0;
+    this.ownerSlots.clear();
+    let named = 0;
+    let unnamed = 0;
     for (const [k, b] of this.doc.blocks) {
-      b.entities.forEach((e, i) => {
-        if (!e.handle) return;
-        owners.set(e.handle, k);
-        this.ownerAt.set(e.handle, i);
-      });
+      const list = b.entities;
+      for (let i = 0; i < list.length; i++) {
+        const h = list[i]!.handle;
+        if (!h) {
+          unnamed++;
+          continue;
+        }
+        named++;
+        owners.set(h, k);
+        this.ownerAt.set(h, i);
+      }
     }
     this.ownerCache = owners;
+    // 핸들이 겹쳤으면(넣은 수보다 표가 작다) 옛 길로
+    if (named !== owners.size || unnamed > 1) this.ownerLegacy = true;
+  }
+
+  /** 확정한 변경에 맞춰 소유 블록 기억을 고친다(applyOpsAtomic 뒤) */
+  private noteOwners(ops: readonly EditOp[]): void {
+    const owners = this.ownerCache;
+    if (!owners) return;
+    if (this.ownerLegacy) {
+      // 소유 블록 기억: 같은 핸들을 제자리에서 바꾼 객체는 기억한 블록 그대로다(87차 — 연관 도면 MOVE의 바꾸기 3만 개마다 다시 넣었다)
+      for (const op of ops) {
+        if (op.kind === 'add') owners.set(op.entity.handle, op.block);
+        else if (op.kind === 'modify' && op.after.handle !== op.before.handle) owners.set(op.after.handle, op.block);
+      }
+      return;
+    }
+    // 빠른 길: 넣은 객체마다 적지 않고 블록만 미뤄 둔다(103차 — 객체 42만 개 도면 EXPLODE는 넣기 124만 번, 그 기억이 명령의 약 14%였고
+    // 다음 명령이 16번 빗나가 전체 표를 다시 만들면서 모두 버려졌다). 넣거나 뺀 블록의 자리 표는 버린다
+    let added = '';
+    let shifted = '';
+    for (const op of ops) {
+      if (op.kind === 'add') {
+        if (op.block === added) continue;
+        added = op.block;
+        if (!this.ownerPending.includes(added)) this.ownerPending.push(added);
+        this.ownerSlots.delete(added);
+      } else if (op.kind === 'remove') {
+        if (op.block === shifted) continue;
+        shifted = op.block;
+        this.ownerSlots.delete(shifted);
+      } else if (op.kind === 'modify') {
+        if (op.after.handle === op.before.handle) continue;
+        owners.set(op.after.handle, op.block);
+        this.ownerSlots.delete(op.block);
+      } else if (op.kind === 'blockDef') this.ownerSlots.delete(op.key);
+    }
+    if (this.ownerPending.length > OWNER_PENDING_LIMIT) this.ownerCache = null;
   }
 
   /** UNDO 조정(C): 전체(기본)·하나·없음 */
@@ -621,12 +772,7 @@ export class EditSession {
     if (!tx.ops.length) return;
     const summary = emptySummary();
     applyOpsAtomic(this.doc, tx.ops, summary);
-    // 소유 블록 기억: 같은 핸들을 제자리에서 바꾼 객체는 기억한 블록 그대로다(87차 — 연관 도면 MOVE의 바꾸기 3만 개마다 다시 넣었다)
-    if (this.ownerCache)
-      for (const op of tx.ops) {
-        if (op.kind === 'add') this.ownerCache.set(op.entity.handle, op.block);
-        else if (op.kind === 'modify' && op.after.handle !== op.before.handle) this.ownerCache.set(op.after.handle, op.block);
-      }
+    this.noteOwners(tx.ops);
     const top = this.undoStack[this.undoStack.length - 1];
     if (tx.group !== undefined && top && top.group === tx.group) pushAll(top.ops, tx.ops);
     else {
