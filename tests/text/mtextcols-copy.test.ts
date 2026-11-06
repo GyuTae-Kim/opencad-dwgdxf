@@ -19,7 +19,7 @@ import { mtextColumnLinks, mtextColumnSets, readColumnXData } from '../../src/ed
 import { makeHarness } from '../cmds2/harness';
 import { runWith, type Input2 } from '../drawmod/ctx';
 import { perCommandGroups } from '../drawmod/groups';
-import { columnDoc, columnGroup } from './mtextcols-fixture';
+import { columnDoc, columnGroup, manualGroup } from './mtextcols-fixture';
 
 function harness(make: () => CadDocument = columnDoc) {
   const h = perCommandGroups(makeHarness((doc) => void Object.assign(doc, make())));
@@ -72,6 +72,22 @@ describe('여러 단 MTEXT 묶음의 복사본', () => {
     expect([...groups(h.doc)]).toEqual([['A0', ['A1', 'A2']]]);
     while (s.canRedo()) s.redo();
     expect([...groups(h.doc)]).toEqual(after);
+  });
+
+  it('확장 자료가 없는 다른 단(정한 높이 0인 수동 높이 단)도 묶음째 복사하면 잇는다', async () => {
+    const h = harness(() => {
+      const d = columnDoc();
+      model(d).push(...manualGroup());
+      return finalizeDocument(d);
+    });
+    expect(groups(h.doc).get('M0')).toEqual(['M1']);
+    await run(h, [['COPY', [{ sel: all(h.doc) }, '0,0', '0,40', '']]]);
+    expect(groups(h.doc).size).toBe(4);
+    const copies = [...groups(h.doc)].filter(([k]) => k !== 'A0' && k !== 'M0');
+    const manual = copies.find(([k]) => readColumnXData(h.doc.entityIndex.get(k)!)!.info!.type === 2 && !readColumnXData(h.doc.entityIndex.get(k)!)!.info!.autoHeight)!;
+    const m = h.doc.entityIndex.get(manual[1][0]!) as MTextEntity;
+    expect(m.text).toBe('Line 4\\PLine 5');
+    expect(m.xdata).toBeUndefined();
   });
 
   it('COPY 뒤 DXF·DWG(R2013)로 저장해 다시 열어도 두 묶음이다', async () => {

@@ -397,8 +397,8 @@ export function scaleColumnXData(e: MTextEntity, kx: number, ky: number): void {
 interface CopyNote {
   /** 원본 핸들 */
   src: string;
-  /** 떼기 전 확장 자료(변환한 값) */
-  xdata: XData[];
+  /** 떼기 전 확장 자료(변환한 값). 정한 높이가 0인 묶음의 다른 단은 확장 자료가 없다 */
+  xdata: XData[] | undefined;
   /** 같은 변환으로 만든 복사본끼리 같은 꼬리표(행렬 등) */
   tag: string;
 }
@@ -406,12 +406,12 @@ interface CopyNote {
 const notes = new WeakMap<Entity, CopyNote>();
 
 /**
- * freshEntity가 부른다: 여러 단 자료가 있는 MTEXT 복사본의 원본 핸들과 떼기 전 확장 자료를 적어 둔다.
+ * freshEntity가 부른다: MTEXT 복사본의 원본 핸들과 떼기 전 확장 자료를 적어 둔다(묶음의 다른 단은 확장 자료가 없을 수 있어
+ * MTEXT는 모두 적는다 — 수동 높이 단의 정한 높이가 0이면 AutoCAD가 다른 단에 확장 자료를 쓰지 않는다).
  * 묶음의 모든 단이 같은 편집에서 같은 변환으로 복사되면 relinkColumnCopies가 새 단끼리 다시 잇는다
  */
 export function noteColumnCopy(x: Entity): void {
-  if (x.type !== 'MTEXT' || !x.xdata || !x.handle) return;
-  if (!readColumnXData(x)) return;
+  if (x.type !== 'MTEXT' || !x.handle) return;
   notes.set(x, { src: normalizeHandle(x.handle), xdata: x.xdata, tag: '' });
 }
 
@@ -495,13 +495,17 @@ export function relinkColumnCopies(added: readonly Entity[]): number {
       for (let k = 0; k < copies.length; k++) {
         const head = copies[k] as MTextEntity;
         const n = notes.get(head)!;
+        if (!n.xdata) continue;
         const c = columnXDataOf(n.xdata);
         if (!c?.links?.handles.length) continue;
         const members = c.links.handles.map((h) => g.get(h)?.[k] as MTextEntity | undefined);
         if (members.some((m) => !m || !m.handle) || !head.handle) continue;
         if (!columnLayoutFits(head, members as MTextEntity[], c.info)) continue;
         head.xdata = relinked(n.xdata, (members as MTextEntity[]).map((m) => normalizeHandle(m.handle)));
-        for (const m of members as MTextEntity[]) m.xdata = structuredClone(notes.get(m)!.xdata);
+        for (const m of members as MTextEntity[]) {
+          const xd = notes.get(m)!.xdata;
+          if (xd) m.xdata = structuredClone(xd);
+        }
         linked++;
       }
     }

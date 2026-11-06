@@ -74,6 +74,29 @@ export function columnGroup(h0 = 'A0', h1 = 'A1', h2 = 'A2', x = 0, y = 0): MTex
   ];
 }
 
+/** 수동 높이 동적 2단(정한 높이 0): AutoCAD는 다른 단에 확장 자료를 쓰지 않는다(짝의 수동 높이 묶음) */
+export function manualGroup(h0 = 'M0', h1 = 'M1', x = 0, y = 50): MTextEntity[] {
+  const info: XData['items'] = [
+    { code: 1000, value: 'ACAD_MTEXT_COLUMN_INFO_BEGIN' },
+    ...[75, 2, 79, 0, 76, 2, 78, 0].map((v) => ({ code: 1070, value: v })),
+    { code: 1070, value: 48 },
+    { code: 1040, value: 20 },
+    { code: 1070, value: 49 },
+    { code: 1040, value: 5 },
+    { code: 1070, value: 50 },
+    { code: 1070, value: 2 },
+    { code: 1040, value: 11 },
+    { code: 1040, value: 0 },
+    { code: 1000, value: 'ACAD_MTEXT_COLUMN_INFO_END' },
+  ];
+  const head = mtext(h0, x, 'Line 1\\PLine 2\\PLine 3\\P', [{ app: 'ACAD', items: [...info, ...links(h1)] }], y);
+  const m = mtext(h1, x + 25, 'Line 4\\PLine 5', undefined, y);
+  head.rectHeight = 0;
+  m.rectHeight = 0;
+  m.width = 45;
+  return [head, m];
+}
+
 /** 세 단 MTEXT(A0 첫 단, A1·A2 다음 단)와 선 하나 */
 export function columnDoc(): CadDocument {
   const doc = createNewDocument('metric');
