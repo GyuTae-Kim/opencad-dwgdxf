@@ -8,6 +8,8 @@
  * 92차: 구멍 상자가 서로 덮는 꼴은 고리 포함 관계(상자 격자)가 고리 수의 제곱이라 ㄱ자 구멍 2,400개·기운 막대 4,000개가 칸 자르기 전에 한도를 넘었고,
  * 구멍 512개 이하는 한 번에 earcut이라 ㄱ자 구멍 500개가 2~4초였다. 변 훑기로 갈아탄 깊이·구멍이 모든 고리를 판정한 식과 같은지,
  * 일이 해치 크기에 비례하는지, 정상 꼴은 갈아타지 않는지(일까지 같다), 구멍 상자가 서로 덮는 512개 이하 꼴을 칸으로 잘라도 영역이 같은지 본다.
+ * 93차: earcut 3.2.4가 돌린 타공판·육각 원 구멍(구멍 변과 다리가 거의 한 줄에 놓인다)에서 구멍을 덮어 넓이가 2~32% 많은 꼴을
+ * 넓이 검사가 잡아 칸으로 다시 채우는지, 정상 꼴과 신발끈 식이 맞지 않는 꼴(겹친 구멍 등)은 예전 삼각형 그대로인지, 검사 일을 세는지 본다.
  */
 import earcut from 'earcut';
 import { describe, expect, it } from 'vitest';
@@ -301,7 +303,8 @@ describe('어느 축에도 구멍 사이 틈이 없는 구멍 많은 채우기 �
   });
 
   it('구멍이 512개 이하면 틈이 없어도 구멍 상자가 서로 덮지 않는 한 예전처럼 한 번에 채운다', () => {
-    const loops = rotatedGrid(22);
+    // 22 × 22는 earcut 한 번이 구멍을 덮어 넓이 검사가 다시 채운다(93차 — 아래)
+    const loops = rotatedGrid(20);
     expect(loops.length - 1).toBeLessThanOrEqual(STRIP_HOLES);
     expect(triangulateLoops(loops)).toEqual(before(loops));
   });
@@ -467,6 +470,101 @@ describe('구멍 상자가 서로 덮는 채우기 해치(92차)', () => {
     // 덮지 않으면 그대로(육각 배치 원 구멍 500개)
     const hex = hexHoles(20, 25);
     expect(triangulateLoops(hex)).toEqual(before(hex));
+  });
+});
+
+/** 돌린 타공판: g × g 네모 구멍(간격 sp, 크기 sz, 각 deg도), 바깥은 구멍 상자를 간격만큼 넓힌 사각형 */
+const rotatedPlate = (g: number, deg: number, sp: number, sz: number): number[][] => {
+  const [c, s] = [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)];
+  const holes: number[][] = [];
+  for (let i = 0; i < g; i++) for (let j = 0; j < g; j++) holes.push(square(i * sp, j * sp, sz).flatMap((_, k, a) => (k % 2 ? [] : [a[k]! * c - a[k + 1]! * s, a[k]! * s + a[k + 1]! * c])));
+  const [x0, y0, x1, y1] = boxOf(holes.flat());
+  return [[x0 - sp, y0 - sp, x1 + sp, y0 - sp, x1 + sp, y1 + sp, x0 - sp, y1 + sp], ...holes];
+};
+/** 육각 배치 6각 구멍(지름 = 간격 × 0.9)을 deg도 돌린 것 */
+const rotatedHex = (g: number, deg: number): number[][] => {
+  const [c, s] = [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)];
+  const holes: number[][] = [];
+  for (let j = 0; j < g; j++) for (let i = 0; i < g; i++) holes.push(circle(6, 4.5, i * 10 + (j % 2) * 5, (j * 10 * Math.sqrt(3)) / 2).flatMap((_, k, a) => (k % 2 ? [] : [a[k]! * c - a[k + 1]! * s, a[k]! * s + a[k + 1]! * c])));
+  const [x0, y0, x1, y1] = boxOf(holes.flat());
+  return [[x0 - 10, y0 - 10, x1 + 10, y0 - 10, x1 + 10, y1 + 10, x0 - 10, y1 + 10], ...holes];
+};
+/** 바깥 고리 하나와 구멍들의 홀짝 넓이 */
+const plateArea = (loops: number[][]): number => ringArea(loops[0]!) - loops.slice(1).reduce((a, l) => a + ringArea(l), 0);
+
+describe('earcut이 잘못 채운 꼴의 넓이 검사(93차)', () => {
+  it('돌린 타공판·육각 구멍을 earcut 한 번은 구멍을 덮어 넓이가 많은데, 넓이 검사가 잡아 칸으로 다시 채운다', () => {
+    // 30도 22 × 22(구멍 484개)는 +2.3%, 5·40·55도 4 × 4·5 × 5와 55도 육각 12 × 12는 +1.5~4%
+    for (const loops of [rotatedGrid(22), rotatedPlate(4, 5, 7.5, 4.5), rotatedPlate(4, 40, 12, 3), rotatedPlate(5, 5, 10, 6), rotatedPlate(4, 55, 10, 6), rotatedHex(12, 55)]) {
+      const want = plateArea(loops);
+      expect((area(before(loops)) - want) / want).toBeGreaterThan(0.01);
+      const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(loops.reduce((a, l) => a + l.length / 2, 0)) };
+      const t = triangulateLoops(loops, w);
+      expect(w.limited).toBeUndefined();
+      expect(w.mismatched).toBeGreaterThanOrEqual(1);
+      expect(w.refilled).toBeGreaterThanOrEqual(1);
+      expectRegion(loops, t);
+    }
+  });
+
+  it('정상 꼴은 검사에 걸리지 않아 예전 삼각형 그대로다(격자·돌린 타공판 20 × 20·육각 원 구멍·별꼴)', () => {
+    let seed = 93;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const star = (n: number, r: number): number[] =>
+      Array.from({ length: n }, (_, i) => {
+        const rr = r * (0.4 + 0.6 * rnd());
+        return [rr * Math.cos((i / n) * 2 * Math.PI), rr * Math.sin((i / n) * 2 * Math.PI)];
+      }).flat();
+    for (const loops of [gridHoles(20), rotatedGrid(20), hexHoles(20, 25), [star(300, 100)], [circle(64, 100), circle(32, 50)], [square(1e6, 1e6, 1e-3), square(1e6 + 2e-4, 1e6 + 2e-4, 5e-4)]]) {
+      const w: LoopWork = { n: 0 };
+      expect(triangulateLoops(loops, w)).toEqual(before(loops));
+      expect(w.mismatched).toBeUndefined();
+    }
+  });
+
+  it('신발끈 식이 홀짝 넓이와 다른 꼴(스스로 엇갈린 고리·겹친 구멍·바깥을 넘는 구멍)은 걸려도 다시 채운 넓이가 맞지 않아 예전 삼각형 그대로다', () => {
+    // 8자, 서로 겹친 두 구멍(둘 다 바깥 고리의 구멍 — 겹친 곳은 홀짝으로 채움), 바깥 고리를 넘어 나간 구멍
+    const eight = [0, 0, 10, 10, 10, 0, 0, 10];
+    const overlap = [square(0, 0, 100), square(10, 10, 30), square(30, 5, 30)];
+    const outside = [square(0, 0, 100), [90, 40, 95, 40, 110, 60, 90, 60], square(10, 10, 5)];
+    for (const loops of [[eight], overlap, outside]) {
+      const w: LoopWork = { n: 0 };
+      expect(triangulateLoops(loops, w)).toEqual(before(loops));
+      expect(w.mismatched).toBeGreaterThanOrEqual(1);
+      expect(w.refilled).toBeUndefined();
+    }
+  });
+
+  it('넓이 검사의 일(정점 수 + 삼각형 수 상한)을 센다', () => {
+    const work = (n: number): number => {
+      const w: LoopWork = { n: 0 };
+      triangulateLoops([circle(n, 100)], w);
+      return w.n;
+    };
+    // earcut 정점 1 + 검사 정점 1 + 삼각형 1(구멍 없음)
+    expect(work(2000) - work(1000)).toBe(3 * 1000);
+  });
+
+  it('다시 채울 일이 남은 한도 안에 없으면 earcut 결과를 그대로 쓰고 경계만으로 바꾸지 않는다', () => {
+    const loops = rotatedGrid(22);
+    const n = loops.reduce((a, l) => a + l.length / 2, 0);
+    const h = loops.length - 1;
+    const nest: LoopWork = { n: 0 };
+    loopNesting(loops, nest);
+    // 포함 관계 + earcut 한 번과 검사까지 꼭 맞는 한도, 다시 채우다 멈추는 한도
+    const once = nest.n + n + h * h + 2 * (n + h);
+    for (const limit of [once, once + 20_000]) {
+      const w: LoopWork = { n: 0, limit };
+      expect(triangulateLoops(loops, w)).toEqual(before(loops));
+      expect(w.limited).toBeUndefined();
+      expect(w.mismatched).toBeGreaterThanOrEqual(1);
+      expect(w.refilled).toBeUndefined();
+      expect(w.n).toBeLessThanOrEqual(limit + 4 * n);
+    }
+    // 한도가 넉넉하면 다시 채운다
+    const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(n) };
+    expectRegion(loops, triangulateLoops(loops, w));
+    expect(w.n).toBeGreaterThan(once + 20_000);
   });
 });
 

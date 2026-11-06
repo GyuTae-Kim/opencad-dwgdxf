@@ -106,13 +106,16 @@ export function hatchLoops(h: HatchEntity, tol: number, fit?: FitWork): number[]
 
 /**
  * 고리 포함 관계와 삼각분할에 든 일: 견준 고리 상자 수 + 포함 판정에서 본 변 수(변 훑기로 갈아타면 그 일 × SWEEP_WORK) + earcut(정점 수 + 구멍 수의 제곱)
- * + 구멍을 가로질러 칸으로 자를 때 자른 칸의 정점 수 × CUT_WORK.
- * limit을 넘으면 limited를 세우고 빈 삼각형을 돌려준다(부른 쪽이 경계만 그린다)
+ * + earcut 결과의 넓이 검사(정점 수 + 삼각형 수 상한) + 구멍을 가로질러 칸으로 자를 때 자른 칸의 정점 수 × CUT_WORK.
+ * limit을 넘으면 limited를 세우고 빈 삼각형을 돌려준다(부른 쪽이 경계만 그린다).
+ * mismatched는 넓이 검사에 걸린 earcut 수, refilled는 그 가운데 칸으로 잘라 다시 채워 넓이가 맞은 수다(검사에 걸리면 세운다)
  */
 export interface LoopWork {
   n: number;
   limit?: number;
   limited?: boolean;
+  mismatched?: number;
+  refilled?: number;
 }
 
 /** 고리가 이만큼 이하면 격자 없이 모든 고리를 판정한다(해치 대부분은 고리가 몇 개뿐이다) */
@@ -152,6 +155,27 @@ const SWEEP_AFTER_BASE = 1 << 16;
 const SWEEP_AFTER_PER = 16;
 /** 변 훑기의 일 한 단위(나무 마디·변 하나)를 상자 격자 일 몇으로 세는지: 같은 일 셈에서 약 두 배 걸린다(동심 고리 4,000개를 두 길로 끝까지 재어 봄) */
 const SWEEP_WORK = 2;
+/**
+ * earcut 넓이 검사(93차): 삼각형 넓이(절댓값)의 합이 홀짝 넓이(바깥 고리 넓이 - 구멍 넓이, 신발끈 식)와 이 비율보다 크게 다르면 잘못 채운 것으로 본다.
+ * earcut 3.2.4는 거의 한 줄 위에 놓인 정점(돌린 타공판·육각 구멍에서 줄을 따라 놓인 구멍 변과 다리)에서 방향 판정이 반올림에 흔들린다.
+ * 귀를 못 찾아 막힌 고리에서 한 줄 위에 겹친 두 변을 엇갈린 변으로 보고 정점 둘을 지우거나(cureLocalIntersections),
+ * 구멍 다리를 다른 구멍의 다리·변과 한 줄로 겹쳐 잇는다. 그 뒤 고리가 스스로 겹쳐 귀 판정(반사각 정점만 본다)이 다른 정점을 품은 귀를 자르고
+ * 구멍 일부를 덮는다(30도 22 × 22 구멍 484개 넓이 +5.7%). 바른 삼각분할은 두 넓이가 반올림 몫(AREA_ULPS)만큼만 다르고,
+ * 이 비율은 화면 1,000 × 1,000 화소에 통째로 든 해치에서 1화소 넓이다
+ */
+const AREA_REL = 1e-6;
+/** 넓이 검사의 반올림 몫: 정점·삼각형 하나마다 정점 상자 넓이 × 기계 엡실론의 이 배수(첫 정점을 원점으로 옮겨 잰다) */
+const AREA_ULPS = 16;
+/**
+ * 넓이 검사에 걸린 earcut을 다시 채울 칸의 정점 수 하한: 칸 정점 수를 반씩 줄여 가다 이보다 작아지면 earcut 결과를 그대로 쓴다.
+ * 정점 4개 이하 칸에는 구멍이 들 수 없다(바깥 3 + 구멍 3). 돌린 타공판·육각 구멍 7,326가지에서 하한 16은 20가지, 8은 2가지가 남았고 4는 모두 맞았다
+ */
+const REFILL_MIN = 4;
+/**
+ * 다시 채우기의 일 몫: 넓이 검사에 걸린 earcut 입력의 정점 하나에 이만큼(안쪽 칸의 다시 채우기도 이 몫을 나눠 쓴다).
+ * 한도가 없는 호출(이미지 자르기 경계 등)이나 신발끈 식이 맞지 않는 꼴(고리가 서로 엇갈린 해치)에서도 칸 자르기가 입력 크기에 비례해 멈춘다
+ */
+const REFILL_WORK = 256;
 
 /** 고리 안 변을 가로 띠로 나눈 색인: 점의 y가 든 띠의 변만 본다 */
 interface RingSlabs {
@@ -734,9 +758,10 @@ export function triangulateLoops(loops: number[][], work?: LoopWork): number[] {
 
 /**
  * 고리들을 홀짝 규칙으로 삼각분할해 out에 더한다. 한도를 넘으면 false.
- * split이면 구멍이 STRIP_HOLES개 넘는 바깥 고리와 구멍 상자가 서로 겹쳐 덮는 바깥 고리(wrapped)를 칸으로 나눠 채운다(칸 하나를 채울 때는 나누지 않는다)
+ * split이면 구멍이 STRIP_HOLES개 넘는 바깥 고리와 구멍 상자가 서로 겹쳐 덮는 바깥 고리(wrapped)를 칸으로 나눠 채운다(칸 하나를 채울 때는 나누지 않는다).
+ * cap은 지금 채우는 칸의 정점 수 상한이다(넓이 검사에 걸리면 이보다 작은 칸으로 다시 채운다)
  */
-function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined, split: boolean): boolean {
+function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined, split: boolean, cap = Infinity): boolean {
   const nest = loopNesting(loops, work);
   if (!nest) return false;
   const { depth, holesOf } = nest;
@@ -756,7 +781,7 @@ function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined,
       starts.push(flat.length / 2);
       pushAll(flat, loops[j]!);
     }
-    if (!earcutFill(flat, starts, out, work)) return false;
+    if (!earcutFill(flat, starts, out, work, cap)) return false;
   }
   return true;
 }
@@ -783,13 +808,105 @@ function wrapped(outer: readonly number[], holes: readonly (readonly number[])[]
   return sum > box * WRAP_COVER;
 }
 
-/** earcut 한 번(일 = 정점 수 + 구멍 수의 제곱) */
-function earcutFill(flat: number[], holes: number[], out: number[], work?: LoopWork): boolean {
-  const cost = (flat.length >> 1) + holes.length * holes.length;
+/**
+ * earcut 한 번과 넓이 검사(일 = 정점 수 + 구멍 수의 제곱 + 검사의 정점 수 + 삼각형 수 상한 — 삼각형은 정점 수 + 구멍 수 × 2개를 넘지 않는다).
+ * 검사에 걸리면(fillMismatch) 정점이 cap보다 적은 칸으로 잘라 다시 채우고(refill), 그 넓이가 맞을 때만 바꾼다. 아니면 earcut 결과 그대로
+ */
+function earcutFill(flat: number[], holes: number[], out: number[], work?: LoopWork, cap = Infinity): boolean {
+  const n = flat.length >> 1;
+  const cost = n + holes.length * holes.length + 2 * (n + holes.length);
   if (over(work, cost)) return false;
   if (work) work.n += cost;
   const idx = earcut(flat, holes, 2);
+  const want = fillMismatch(flat, holes, idx);
+  if (want) {
+    if (work) work.mismatched = (work.mismatched ?? 0) + 1;
+    if (refill(flat, holes, want, out, work, Math.min(cap, CELL_VERTS, n) >> 1)) {
+      if (work) work.refilled = (work.refilled ?? 0) + 1;
+      return true;
+    }
+  }
   for (const k of idx) out.push(flat[k * 2]!, flat[k * 2 + 1]!);
+  return true;
+}
+
+/** 삼각형 [x, y, …]의 넓이(절댓값) 합 */
+function trisArea(t: readonly number[]): number {
+  let a = 0;
+  for (let i = 0; i + 5 < t.length; i += 6) a += Math.abs((t[i + 2]! - t[i]!) * (t[i + 5]! - t[i + 1]!) - (t[i + 4]! - t[i]!) * (t[i + 3]! - t[i + 1]!));
+  return a / 2;
+}
+
+/** 넓이 want인 영역을 정점 n개·삼각형 tris개로 채웠을 때 넓이 차이의 허용치: AREA_REL과 반올림 몫((정점 수 + 삼각형 수) × 정점 상자 넓이 × 엡실론 × AREA_ULPS) 가운데 큰 것 */
+function areaTol(want: number, n: number, tris: number, box: number): number {
+  return Math.max(AREA_REL * Math.abs(want), AREA_ULPS * (n + tris) * Number.EPSILON * box);
+}
+
+/**
+ * earcut 결과의 넓이 검사: 삼각형 넓이(절댓값)의 합과 홀짝 넓이(바깥 고리 넓이 - 구멍 넓이)가 허용치(areaTol)를 넘게 다르면 [홀짝 넓이, 정점 상자 넓이], 맞으면 null.
+ * 신발끈 식은 첫 정점을 원점으로 옮겨 좌표가 커도 상쇄가 적다.
+ * 좌표가 NaN·무한대이거나 곱이 넘치면 차이가 수가 아니라 null(다시 채우지 않는다)
+ */
+function fillMismatch(flat: readonly number[], holes: readonly number[], idx: readonly number[]): [number, number] | null {
+  const n = flat.length >> 1;
+  if (!n) return null;
+  const ox = flat[0]!;
+  const oy = flat[1]!;
+  let x0 = 0;
+  let y0 = 0;
+  let x1 = 0;
+  let y1 = 0;
+  let want = 0;
+  for (let k = 0; k <= holes.length; k++) {
+    const s = k ? holes[k - 1]! : 0;
+    const e = k < holes.length ? holes[k]! : n;
+    let a = 0;
+    for (let i = s, j = e - 1; i < e; j = i++) {
+      const xi = flat[i * 2]! - ox;
+      const yi = flat[i * 2 + 1]! - oy;
+      a += (flat[j * 2]! - ox) * yi - xi * (flat[j * 2 + 1]! - oy);
+      if (xi < x0) x0 = xi;
+      if (xi > x1) x1 = xi;
+      if (yi < y0) y0 = yi;
+      if (yi > y1) y1 = yi;
+    }
+    want += k ? -Math.abs(a) : Math.abs(a);
+  }
+  want /= 2;
+  let got = 0;
+  for (let i = 0; i + 2 < idx.length; i += 3) {
+    const a = idx[i]! * 2;
+    const b = idx[i + 1]! * 2;
+    const c = idx[i + 2]! * 2;
+    got += Math.abs((flat[b]! - flat[a]!) * (flat[c + 1]! - flat[a + 1]!) - (flat[c]! - flat[a]!) * (flat[b + 1]! - flat[a + 1]!));
+  }
+  got /= 2;
+  const box = (x1 - x0) * (y1 - y0);
+  return Math.abs(got - want) > areaTol(want, n, idx.length / 3, box) ? [want, box] : null;
+}
+
+/**
+ * 넓이 검사에 걸린 바깥 고리와 구멍(earcut 입력)을 정점 cap개 이하 칸으로 잘라(cellFill) 다시 채운다. 칸마다 다시 넓이를 검사하고(걸리면 더 작은 칸으로 —
+ * cap이 반씩 줄어 끝난다), 다시 채운 넓이가 홀짝 넓이와 맞으면 out에 더하고 true.
+ * cap이 REFILL_MIN보다 작거나, 넓이가 여전히 다르거나(고리가 스스로 엇갈리거나 구멍끼리 겹쳐 홀짝 넓이가 신발끈 식과 다른 꼴), 좌표가 너무 크거나,
+ * 일 몫(정점 수 × REFILL_WORK와 남은 한도 가운데 작은 것) 안에서 끝나지 않으면 false(부른 쪽이 earcut 결과를 쓴다 — 예전과 같다). 든 일은 work에 더한다
+ */
+function refill(flat: readonly number[], holes: readonly number[], [want, box]: [number, number], out: number[], work: LoopWork | undefined, cap: number): boolean {
+  if (cap < REFILL_MIN) return false;
+  const budget = REFILL_WORK * (flat.length >> 1);
+  const sub: LoopWork = { n: 0, limit: work?.limit === undefined ? budget : Math.min(budget, work.limit - work.n) };
+  if (sub.limit! <= 0) return false;
+  const loops: number[][] = [];
+  for (let k = 0; k <= holes.length; k++) loops.push(flat.slice(k ? holes[k - 1]! * 2 : 0, k < holes.length ? holes[k]! * 2 : flat.length));
+  const pieces: number[] = [];
+  const r = cellFill(loops, pieces, sub, cap);
+  if (work) {
+    work.n += sub.n;
+    if (sub.mismatched) work.mismatched = (work.mismatched ?? 0) + sub.mismatched;
+    if (sub.refilled) work.refilled = (work.refilled ?? 0) + sub.refilled;
+  }
+  if (r !== 'ok' || !(Math.abs(trisArea(pieces) - want) <= areaTol(want, flat.length >> 1, pieces.length / 6, box))) return false;
+  pushAll(out, pieces);
   return true;
 }
 
@@ -887,16 +1004,17 @@ function splitFill(outer: number[], holes: number[][], axes: readonly [0 | 1, 0 
  * 축마다 칸 정점 상자의 가운데에서 자를 때 지나는 변을 세어 적은 축(같으면 긴 변)에서 자른다. 늘 상자 가운데라 칸이 반씩 줄고,
  * 변이 적은 축을 고르므로 긴 변을 거듭 자르지 않는다(서로 감싼 ㄱ자 구멍 2만 개 — 정점 12만 개가 칸 정점 96만 개. 긴 변만 고르면 일 한도를 넘었다).
  * 직선이 가로지른 구멍은 칸 경계 고리에 이어 붙으므로(cutLoops) 잘린 구멍이 칸 경계에 따로 닿지 않는다(바깥 고리만 자르면 earcut이 그 구멍을 채운다).
- * 한도를 넘으면 'limited'. 좌표가 1e100을 넘으면 교점 식이 넘칠 수 있어 'unsafe'(부른 쪽이 예전처럼 한 번에 earcut)
+ * 한도를 넘으면 'limited'. 좌표가 1e100을 넘으면 교점 식이 넘칠 수 있어 'unsafe'(부른 쪽이 예전처럼 한 번에 earcut).
+ * cap은 칸 정점 수 상한이다(넓이 검사에 걸린 earcut을 다시 채울 때 더 작게 — refill)
  */
-function cellFill(loops: number[][], out: number[], work?: LoopWork): 'ok' | 'limited' | 'unsafe' {
+function cellFill(loops: number[][], out: number[], work?: LoopWork, cap = CELL_VERTS): 'ok' | 'limited' | 'unsafe' {
   for (const l of loops) for (const v of l) if (!(Math.abs(v) <= 1e100)) return 'unsafe';
   const stack: [number[][], number][] = [[loops, 0]];
   while (stack.length) {
     const [ls, depth] = stack.pop()!;
     let verts = 0;
     for (const l of ls) verts += l.length >> 1;
-    if (verts > CELL_VERTS && depth < CELL_DEPTH) {
+    if (verts > cap && depth < CELL_DEPTH) {
       if (over(work, verts * CUT_WORK)) return 'limited';
       if (work) work.n += verts * CUT_WORK;
       const lo = [Infinity, Infinity];
@@ -925,7 +1043,7 @@ function cellFill(loops: number[][], out: number[], work?: LoopWork): 'ok' | 'li
         continue;
       }
     }
-    if (ls.length && !fillLoops(ls, out, work, false)) return 'limited';
+    if (ls.length && !fillLoops(ls, out, work, false, cap)) return 'limited';
   }
   return 'ok';
 }
