@@ -24,7 +24,7 @@
  *
  * 이 모듈은 문서를 바꾸지 않는다. 바뀔 객체(사전·DIMASSOC·반응자·치수)를 돌려주면 부르는 쪽이 편집 작업으로 적용한다.
  */
-import type { CadDocument, CadObject, DictionaryObject, DimensionEntity, Entity, GenericObject, RawTag, Vec2, Vec3 } from '../../core/model';
+import { type CadDocument, type CadObject, type DictionaryObject, type DimensionEntity, type Entity, type GenericObject, type RawTag, type Vec2, type Vec3, isNormalHandle } from '../../core/model';
 import { type Piece, pieceAt, pieceNearest } from '../geom/curve';
 import { ocsToWcs, wcsToOcs } from '../geom/ocs';
 import { entityPath, segOf } from '../geom/path';
@@ -101,7 +101,8 @@ const num = (v: string | number | undefined, d = 0): number => {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : d;
 };
-const hstr = (v: string | number | undefined): string => String(v ?? '').trim().toUpperCase().replace(/^0+(?=.)/, '');
+// 이미 정규화한 핸들 글자(대문자 16진, 앞 0 없음)는 그대로 — 바꿔도 같은 글자다(98차: 연관 도면 MOVE는 치수마다 핸들 글자를 정규식으로 여러 번 다듬었다)
+const hstr = (v: string | number | undefined): string => (typeof v === 'string' && isNormalHandle(v) ? v : String(v ?? '').trim().toUpperCase().replace(/^0+(?=.)/, ''));
 
 /** 연관 플래그 */
 export function assocFlags(data: DimAssocData): number {
@@ -805,10 +806,11 @@ export function resolveRef(ctx: ResolveContext, r: PointRef, hint: P, predict?: 
     }
     default: {
       const kind = r.osnap === OSNAP.START ? OSNAP.END : r.osnap;
-      const before = bySegment(was, candidates(was, kind), r.gsMarker);
       const after = bySegment(now, candidates(now, kind), r.gsMarker);
       if (!after.length) return null;
       if (predict) return nearestCand(after, predict)!.p;
+      // 편집 전 스냅 점은 이름을 찾을 때만 만든다(98차 — 변환을 알면 쓰지 않는데 연관 도면 MOVE에서 형상마다 경로를 한 번 더 풀었다)
+      const before = bySegment(was, candidates(was, kind), r.gsMarker);
       const id = nearestCand(before, hint)?.id;
       const same = id ? after.find((c) => c.id === id) : undefined;
       return (same ?? nearestCand(after, add(hint, shiftOf(was, now))))!.p;
@@ -1118,15 +1120,16 @@ function objectNow(out: AssocChanges, doc: CadDocument, key: string): CadObject 
 /**
  * 치수의 연관을 refs로 바꾼다(없던 기록은 만들고, 참조가 하나도 없으면 DIMASSOC와 빈 확장 사전을 지운다).
  * dim은 지금 모습(새 치수면 핸들이 붙은 채 아직 문서에 없어도 된다). 돌려준 dim에 확장 사전 핸들이 반영된다.
+ * parsed는 부르는 쪽이 이미 푼 DIMASSOC 객체와 그 내용이다(지금 기록이 바로 그 객체일 때만 쓴다).
  */
-export function setDimAssocChanges(doc: CadDocument, dim: DimensionEntity, refs: readonly (PointRef | null)[], env: AssocEnv, out: AssocChanges = { objects: [], entities: new Map() }, keep?: { transSpace: boolean; rotatedType: number }): { dim: DimensionEntity; changes: AssocChanges } {
+export function setDimAssocChanges(doc: CadDocument, dim: DimensionEntity, refs: readonly (PointRef | null)[], env: AssocEnv, out: AssocChanges = { objects: [], entities: new Map() }, keep?: { transSpace: boolean; rotatedType: number }, parsed?: { obj: CadObject; data: DimAssocData | null }): { dim: DimensionEntity; changes: AssocChanges } {
   let d = dim;
   // 지금 기록(같은 편집에서 바뀐 사전 포함)
   const dict0 = d.xdict ? objectNow(out, doc, d.xdict) : undefined;
   const dict = dict0 && (dict0.type === 'DICTIONARY' || dict0.type === 'ACDBDICTIONARYWDFLT') ? (dict0 as DictionaryObject) : undefined;
   const assocH = dict?.entries.get(DIMASSOC_KEY);
   const assocObj = assocH ? objectNow(out, doc, assocH) : undefined;
-  const oldData = assocObj?.type === 'DIMASSOC' ? parseDimAssoc((assocObj as GenericObject).raw) : null;
+  const oldData = assocObj?.type === 'DIMASSOC' ? (parsed && parsed.obj === assocObj ? parsed.data : parseDimAssoc((assocObj as GenericObject).raw)) : null;
   const want = [0, 1, 2, 3].map((i) => refs[i] ?? null);
   const any = want.some((r) => r);
   const oldH = refHandles(oldData);
@@ -1202,15 +1205,19 @@ export function followAssociations(
   } = {},
 ): FollowResult {
   const res: FollowResult = { objects: [], entities: new Map(), dims: new Map(), released: new Set() };
-  // 걸린 DIMASSOC
+  // 걸린 DIMASSOC. 치수에서 찾은 것은 푼 내용을 기억해 아래에서 다시 풀지 않는다(98차 — 연관 도면 MOVE는 치수마다 세 번 풀었다)
   const assocs = new Set<string>();
+  const parsed = new Map<string, { obj: CadObject; data: DimAssocData }>();
   for (const h of changes.keys()) {
     const before = doc.entityIndex.get(h);
     if (!before) continue;
     for (const r of assocReactors(doc, before)) assocs.add(r);
     if (before.type === 'DIMENSION') {
       const a = dimAssocOf(doc, before);
-      if (a) assocs.add(a.obj.handle);
+      if (a) {
+        assocs.add(a.obj.handle);
+        parsed.set(a.obj.handle, { obj: a.obj, data: a.data });
+      }
     }
   }
   if (!assocs.size) return res;
@@ -1228,7 +1235,8 @@ export function followAssociations(
   };
   for (const ah of assocs) {
     const obj = doc.objects.get(ah) as GenericObject | undefined;
-    const data = parseDimAssoc(obj?.raw);
+    const known = parsed.get(ah);
+    const data = known && known.obj === obj ? known.data : parseDimAssoc(obj?.raw);
     if (!data) continue;
     const dimH = data.dimension;
     const dimBefore = doc.entityIndex.get(dimH);
@@ -1295,7 +1303,7 @@ export function followAssociations(
     if (nd) res.dims.set(dimH, nd);
     if (released) res.released.add(dimH);
     if (released || refsChanged) {
-      const { dim } = setDimAssocChanges(doc, base, refs, env, res, { transSpace: data.transSpace, rotatedType: data.rotatedType });
+      const { dim } = setDimAssocChanges(doc, base, refs, env, res, { transSpace: data.transSpace, rotatedType: data.rotatedType }, obj ? { obj, data } : undefined);
       if (res.dims.has(dimH) || dim !== base) res.dims.set(dimH, dim);
     }
   }
@@ -1355,7 +1363,7 @@ export function regenAssociations(doc: CadDocument, alloc: () => string, only?: 
     if (released) res.released.add(dim.handle);
     if (released || refsChanged) {
       const base = nd ?? dim;
-      const out = setDimAssocChanges(doc, base, refs, env, res, { transSpace: data.transSpace, rotatedType: data.rotatedType });
+      const out = setDimAssocChanges(doc, base, refs, env, res, { transSpace: data.transSpace, rotatedType: data.rotatedType }, { obj: o, data });
       if (nd || out.dim !== base) res.dims.set(dim.handle, out.dim);
     }
   }

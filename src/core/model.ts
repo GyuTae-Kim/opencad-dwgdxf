@@ -1493,7 +1493,7 @@ export function normalizeHandle(h: string | number | bigint): string {
 }
 
 /** 정규화한 꼴(0~9·A~F만, 두 자 이상이면 0으로 시작하지 않는다)인지 */
-function isNormalHandle(h: string): boolean {
+export function isNormalHandle(h: string): boolean {
   const n = h.length;
   if (!n || (n > 1 && h.charCodeAt(0) === 48)) return false;
   for (let i = 0; i < n; i++) {
