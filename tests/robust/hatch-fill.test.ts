@@ -568,6 +568,45 @@ describe('earcut이 잘못 채운 꼴의 넓이 검사(93차)', () => {
   });
 });
 
+describe('변 훑기가 기운 변을 점 차례 띠로 자르기(93차)', () => {
+  it('기운 막대 4,000개를 채운다(예전 고리 포함 관계 1,620만으로 한도를 넘어 경계만)', () => {
+    const loops = slantedBars(4000);
+    const verts = loops.reduce((a, l) => a + l.length / 2, 0);
+    // 포함 관계 일이 한도의 10분의 1 안쪽(예전에는 점마다 왼쪽 막대 500개의 긴 변을 꺼냈다)
+    expect(nestWork(loops)).toBeLessThan(hatchFillWorkLimit(verts) / 10);
+    const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
+    const t = beforeHang(() => triangulateLoops(loops, w));
+    expect(w.limited).toBeUndefined();
+    expectRegion(loops, t);
+  });
+
+  it('첫 정점을 돌려 점의 y가 흩어진 기운 막대·평행사변형·돌린 사각형도 깊이·구멍이 모든 고리를 판정한 식과 같다', () => {
+    let seed = 931;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const roll = (l: number[], k: number): number[] => [...l.slice(2 * k), ...l.slice(0, 2 * k)];
+    for (let t = 0; t < 20; t++) {
+      const loops: number[][] = [[-50, -50, 2000, -50, 2000, 1100, -50, 1100]];
+      for (let i = 0, L = 40 + Math.floor(rnd() * 300); i < L; i++) {
+        const x = rnd() * 1500;
+        const y = rnd() * 900;
+        const h = 1 + rnd() * 100;
+        const dx = (rnd() - 0.5) * 3 * h;
+        const kind = rnd();
+        const bar = kind < 0.5 ? [x, y, x + 1 + rnd() * 3, y, x + dx + 3, y + h, x + dx, y + h] : rotatedPlate(1, rnd() * 90, 0, 1 + rnd() * 20)[1]!.map((v, k) => v + (k % 2 ? y : x));
+        loops.push(roll(bar, Math.floor(rnd() * 4)));
+        // 가끔 막대 안에 작은 섬
+        if (rnd() < 0.1) loops.push(square(x + 0.2, y + 0.2, 0.1));
+      }
+      const want = nestingBefore(loops);
+      for (const mode of ['sweep', 'auto'] as const) {
+        const got = loopNesting(loops, undefined, mode)!;
+        expect([...got.depth]).toEqual(want.depth);
+        expect(got.holesOf).toEqual(want.holesOf);
+      }
+    }
+  });
+});
+
 /** 다각형 경로 해치(채우기 또는 무늬 선) */
 const hatchOf = (paths: number[][], lines: string[][] | null): string[] => [
   '0', 'HATCH', '5', '5A', '100', 'AcDbEntity', '8', '0', '100', 'AcDbHatch', '10', '0', '20', '0', '30', '0', '210', '0', '220', '0', '230', '1',

@@ -156,6 +156,14 @@ const SWEEP_AFTER_PER = 16;
 /** 변 훑기의 일 한 단위(나무 마디·변 하나)를 상자 격자 일 몇으로 세는지: 같은 일 셈에서 약 두 배 걸린다(동심 고리 4,000개를 두 길로 끝까지 재어 봄) */
 const SWEEP_WORK = 2;
 /**
+ * 변 훑기에서 점 차례를 나누는 띠 수(93차): 기운 변을 띠마다 조각으로 잘라 조각의 큰 x를 그 조각에 든 점의 y에서 잰다.
+ * 기운 막대처럼 긴 변의 큰 x가 왼쪽 막대 수백 개의 점을 덮던 꼴에서 점 하나에 꺼내는 변이 약 1,000개 → 몇 개로 준다.
+ * 띠는 y가 바뀌는 자리에서만 자르므로 점이 모두 같은 y면 조각이 늘지 않고, 세로 변은 x가 그대로라 자르지 않는다
+ */
+const SWEEP_SLABS = 32;
+/** 조각 수 상한(변 수의 배수): 넘으면 띠 경계를 하나 걸러 솎는다 — 메모리와 일이 변 수에 비례한다 */
+const SWEEP_PIECES = 4;
+/**
  * earcut 넓이 검사(93차): 삼각형 넓이(절댓값)의 합이 홀짝 넓이(바깥 고리 넓이 - 구멍 넓이, 신발끈 식)와 이 비율보다 크게 다르면 잘못 채운 것으로 본다.
  * earcut 3.2.4는 거의 한 줄 위에 놓인 정점(돌린 타공판·육각 구멍에서 줄을 따라 놓인 구멍 변과 다리)에서 방향 판정이 반올림에 흔들린다.
  * 귀를 못 찾아 막힌 고리에서 한 줄 위에 겹친 두 변을 엇갈린 변으로 보고 정점 둘을 지우거나(cureLocalIntersections),
@@ -431,6 +439,7 @@ function inSlabs(x: number, y: number, c: readonly number[], sl: RingSlabs, w: {
  * 그래서 고리 k의 변 e는 점이 [k의 왼쪽 x - 여유, e의 큰 x + 여유) × [e의 작은 y, 큰 y) 안일 때만 센다(수평 변은 늘 거짓이라 뺀다).
  * 점을 y 순으로 훑으며 그 y를 지나는 변만 켜고, 변을 고리 왼쪽 x 순 자리에 두어 자리마다 큰 x의 최댓값 나무로 (왼쪽 x <= 점 x < 큰 x)인 켠 변만 꺼낸다.
  * 점 하나에 (꺼낸 변 수 + 1) × 나무 높이. 서로 감싼 ㄱ자 구멍처럼 고리 상자가 서로 덮어도 변 직사각형은 덮지 않아 꺼낸 변이 몇 개뿐이다.
+ * 기운 변은 점 차례 띠(SWEEP_SLABS)마다 조각으로 잘라 큰 x를 그 조각에 든 점의 y에서 잰 변의 x로 좁힌다(기운 막대 — 93차).
  * 좌표가 safe가 아닌 고리는 점마다 판정하고, 점이 safe가 아니면 그 점은 모든 고리를 판정한다. 일이 stopAt을 넘으면 멈추고 false
  */
 function loopsContaining(loops: readonly number[][], use: Uint8Array | null, qs: readonly number[], fn: (q: number, k: number) => void, stopAt: number, w: { work: number }): boolean {
@@ -469,11 +478,11 @@ function loopsContaining(loops: readonly number[][], use: Uint8Array | null, qs:
   const G = good.length;
   const aSorted = new Float64Array(G);
   const start = new Int32Array(G + 1);
-  const bx = new Float64Array(E);
+  let bx = new Float64Array(E);
   const y0 = new Float64Array(E);
   const y1 = new Float64Array(E);
-  const loopOf = new Int32Array(E);
-  const vtx = new Int32Array(E);
+  let loopOf = new Int32Array(E);
+  let vtx = new Int32Array(E);
   let e = 0;
   for (let g = 0; g < G; g++) {
     const k = good[g]!;
@@ -533,18 +542,111 @@ function loopsContaining(loops: readonly number[][], use: Uint8Array | null, qs:
     }
     return lo;
   };
-  // 변이 켜진 점 차례 [켬, 끔): y가 [작은 y, 큰 y) 안인 점들(비면 어느 점에서도 세지 않는다). 차례마다 켜고 끌 변(CSR)
-  const onAt = new Int32Array(E);
-  const offAt = new Int32Array(E);
+  // 변이 켜진 점 차례 [켬, 끔): y가 [작은 y, 큰 y) 안인 점들(비면 어느 점에서도 세지 않는다).
+  // 점 차례를 띠(SWEEP_SLABS개, y가 바뀌는 자리에서만)로 나눠 기운 변을 띠마다 조각으로 자르고, 조각의 큰 x는 그 조각에 든 첫·끝 점의 y에서 잰 변의 x + 여유로 좁힌다(93차).
+  // 교점 x는 y의 1차 함수라 조각 안 점의 교점은 두 끝 값 사이에 반올림만큼 넉넉히 든다. 조각들이 점 차례를 나누므로 점 하나에 변 하나는 많아야 한 번 센다
+  let cutsAt: number[] = [];
+  const slab = Math.ceil(Q / SWEEP_SLABS);
+  for (let t = slab; t < Q; ) {
+    let p = t;
+    while (p < Q && ys[p] === ys[p - 1]) p++;
+    if (p >= Q) break;
+    cutsAt.push(p);
+    t = p + slab;
+  }
+  let C = cutsAt.length;
+  /** cutsAt에서 v보다 큰 첫 차례 */
+  const nextCut = (v: number): number => {
+    let lo = 0;
+    let hi = C;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cutsAt[mid]! <= v) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  /** 변 p의 두 끝 x가 다른지(기운 변) */
+  const slanted = (p: number): boolean => {
+    const c = loops[loopOf[p]!]!;
+    const i = vtx[p]!;
+    return c[i] !== c[i === 0 ? c.length - 2 : i - 2];
+  };
+  const edgeOn = new Int32Array(E);
+  const edgeOff = new Int32Array(E);
+  const pieceStart = new Int32Array(E + 1);
+  for (let p = 0; p < E; p++) {
+    edgeOn[p] = lower(y0[p]!);
+    edgeOff[p] = lower(y1[p]!);
+  }
+  /** 변마다 조각 수를 pieceStart에 누적한다(세로 변은 자르지 않는다) */
+  const countPieces = (): number => {
+    for (let p = 0; p < E; p++) {
+      const a = edgeOn[p]!;
+      const b = edgeOff[p]!;
+      let k = 0;
+      if (a < b && slanted(p)) for (let r = nextCut(a); r < C && cutsAt[r]! < b; r++) k++;
+      pieceStart[p + 1] = pieceStart[p]! + (a < b ? k + 1 : 0);
+    }
+    return pieceStart[E]!;
+  };
+  let counted = 0;
+  for (;;) {
+    const pn = countPieces();
+    counted += E + pn;
+    if (pn <= SWEEP_PIECES * E || !C) break;
+    cutsAt = cutsAt.filter((_, r) => r % 2 === 1);
+    C = cutsAt.length;
+  }
+  w.work += Q + counted;
+  if (w.work > stopAt) return false;
+  const PN = pieceStart[E]!;
+  const pBx = new Float64Array(PN);
+  const pLoop = new Int32Array(PN);
+  const pVtx = new Int32Array(PN);
+  const onAt = new Int32Array(PN);
+  const offAt = new Int32Array(PN);
+  for (let p = 0; p < E; p++) {
+    const a = edgeOn[p]!;
+    const b = edgeOff[p]!;
+    if (a >= b) continue;
+    const k = loopOf[p]!;
+    const c = loops[k]!;
+    const i = vtx[p]!;
+    const j = i === 0 ? c.length - 2 : i - 2;
+    const xi = c[i]!;
+    const yi = c[i + 1]!;
+    const xj = c[j]!;
+    const yj = c[j + 1]!;
+    // pointInRing과 같은 식의 교점 x
+    const xAt = (y: number): number => ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    const split = xi !== xj;
+    let s = pieceStart[p]!;
+    let from = a;
+    for (let r = nextCut(a); from < b; r++) {
+      const to = split && r < C && cutsAt[r]! < b ? cutsAt[r]! : b;
+      pBx[s] = Math.min(bx[p]!, Math.max(xAt(ys[from]!), xAt(ys[to - 1]!)) + mOf[k]!);
+      pLoop[s] = k;
+      pVtx[s] = i;
+      onAt[s] = from;
+      offAt[s] = to;
+      s++;
+      from = to;
+    }
+  }
+  w.work += PN;
+  // 나무 자리는 조각 차례(고리 왼쪽 x 순 그대로)
+  for (let g = 0; g <= G; g++) start[g] = pieceStart[start[g]!]!;
+  bx = pBx;
+  loopOf = pLoop;
+  vtx = pVtx;
+  E = PN;
+  // 차례마다 켜고 끌 조각(CSR)
   const onStart = new Int32Array(Q + 2);
   const offStart = new Int32Array(Q + 2);
   for (let p = 0; p < E; p++) {
-    const a = (onAt[p] = lower(y0[p]!));
-    const b = (offAt[p] = lower(y1[p]!));
-    if (a < b) {
-      onStart[a + 1]!++;
-      offStart[b + 1]!++;
-    }
+    onStart[onAt[p]! + 1]!++;
+    offStart[offAt[p]! + 1]!++;
   }
   for (let t = 0; t <= Q; t++) {
     onStart[t + 1]! += onStart[t]!;
