@@ -19,6 +19,7 @@ import { transformEntity } from './transform';
 import { type EditResult, MSG, type TransformOptions } from './types';
 import { metrics, mtextDir, mtextLocalBox } from './xtext';
 import { arcTextParts } from '../../text/arctext';
+import { tagColumnCopy, transformTag } from '../util/mtextcols';
 import { pack3, splineCtrl, splineFit } from '../../core/flat3';
 
 // ---------------------------------------------------------------------------
@@ -430,7 +431,10 @@ export function copyEntity(e: Entity, m: Affine, doc: CadDocument, opts: Transfo
   const r = transformEntity(e, m, doc, opts);
   const add: Entity[] = [];
   for (const x of [...(r.replace ?? []), ...(r.add ?? [])]) {
-    add.push(freshEntity(x === e ? cloneEntity(e) : x));
+    const c = freshEntity(x === e ? cloneEntity(e) : x);
+    // 여러 단 MTEXT: 같은 변환으로 만든 단끼리 다시 잇게(commitResults)
+    if (c.type === 'MTEXT') tagColumnCopy(c, transformTag(m, opts.dz));
+    add.push(c);
   }
   const out: EditResult = {};
   if (add.length) out.add = add;

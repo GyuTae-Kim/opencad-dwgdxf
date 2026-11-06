@@ -27,7 +27,7 @@ import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, type Pat
 import { type Affine, TAU, affApply, affLin, affSimilarity, dist, normAngle, sweepToBulge } from './math';
 import { type Nurbs, arcBeziers, beziersToNurbs, domain, ellBeziers, lineBezier, normalizeNurbs, reverseNurbs, subNurbs, toBezier } from './nurbs';
 import { planProj, planZ } from './ocs';
-import { stripMTextColumnLinks } from '../util/mtextcols';
+import { noteColumnCopy, stripMTextColumnLinks } from '../util/mtextcols';
 
 // ---------------------------------------------------------------------------
 // 특성 잇기
@@ -55,6 +55,8 @@ export function inherit(src: Entity): Omit<EntityBase, 'type'> {
 
 /** 새 객체로 쓸 수 있게 핸들·확장 사전·반응자·DWG 원본 본문을 지운다(블록 속성도) */
 export function freshEntity<T extends Entity>(x: T, keepOwner = true): T {
+  // 여러 단 MTEXT: 원본 핸들과 떼기 전 확장 자료를 적어 둔다(묶음째 복사하면 commitResults가 새 단끼리 다시 잇는다)
+  if (x.type === 'MTEXT') noteColumnCopy(x);
   x.handle = '';
   delete x.xdict;
   delete x.reactors;

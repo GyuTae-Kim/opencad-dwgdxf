@@ -24,6 +24,7 @@ import { type CurveData, pathCurve, writeCurve } from '../assocnet/curve';
 import { tryParseAssocObject, writeAssocObject } from '../assocnet/objects';
 import { sameTags } from '../assocnet/tags';
 import { type ArrayItem, type ArrayParams, type ArrayState, MAX_ITEMS, MAX_REMOVED, MAX_REPLACED } from './types';
+import { relinkClonedColumns } from '../util/mtextcols';
 
 export interface BuildEnv {
   doc: CadDocument;
@@ -78,11 +79,13 @@ export function blockCopies(env: BuildEnv, list: readonly Entity[], m: Affine): 
   const mirrorText = Number(doc.header.get('$MIRRTEXT') ?? 0) === 1;
   const mirrorHatch = Number(doc.header.get('$MIRRHATCH') ?? 0) === 1;
   const out: Entity[] = [];
+  const sources: string[] = [];
   const blocks: BlockDef[] = [];
   for (const e of list) {
     const r = transformEntity(e, m, doc, { mirrorText, mirrorHatch });
     for (const x of [...(r.replace ?? []), ...(r.add ?? [])]) {
       const c = x === e ? cloneEntity(e) : x;
+      sources.push(x.handle);
       c.handle = env.newHandle();
       delete c.xdict;
       delete c.reactors;
@@ -100,6 +103,8 @@ export function blockCopies(env: BuildEnv, list: readonly Entity[], m: Affine): 
     }
     for (const b of r.blocks ?? []) blocks.push(b);
   }
+  // 여러 단 MTEXT: 블록 안의 새 단끼리 잇는다(원본 단을 가리키지 않게)
+  relinkClonedColumns(out, sources);
   return { entities: out, blocks };
 }
 

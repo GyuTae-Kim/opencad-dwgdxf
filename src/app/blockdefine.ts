@@ -10,6 +10,7 @@ import { INSUNITS_NAMES } from '../core/units';
 import type { EditOp } from '../edit/session';
 import { cloneEntity } from '../edit/session';
 import { annotativeFlag, withAnnotativeFlag } from '../edit/annoscale/xdata';
+import { relinkClonedColumns } from '../edit/util/mtextcols';
 import type { App, CommandContext } from './app';
 import { currentProps } from './draw';
 import { unlockedOnly } from './layers';
@@ -128,6 +129,8 @@ export function defineBlockOps(app: App, spec: DefineBlockSpec, make?: AttribMak
     }
     ents.push(c);
   }
+  // 원본을 남기면 블록 안 사본은 새 핸들이다: 여러 단 MTEXT는 새 단끼리 잇는다(원본 단을 가리키지 않게)
+  if (spec.mode === 'retain') relinkClonedColumns(ents, chosen);
   // 지우기는 뒤에서부터(앞 객체를 지워도 뒤 번호가 맞게)
   pushAll(ops, removeOps.reverse());
   const hasAtt = ents.some((e) => e.type === 'ATTDEF');

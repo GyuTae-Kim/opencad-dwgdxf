@@ -63,6 +63,7 @@ import { stretchSelection } from './editcmds2-stretch';
 import { pasteDependencies } from './pastedeps';
 import { expandBudget } from '../core/limits';
 import { MSG } from '../edit/geom/types';
+import { relinkClonedColumns, relinkColumnCopies } from '../edit/util/mtextcols';
 
 // ---------------------------------------------------------------------------
 // 변환 행렬(x' = a·x + c·y + e, y' = b·x + d·y + f)
@@ -434,6 +435,7 @@ function planResults(app: App, ctx: CommandContext, results: EditResult[], label
   out.removed = rem.length;
   // 더하기(지금 공간)
   const block = doc.blocks.get(st.space);
+  let addedMText: Entity[] | null = null;
   for (const r of results)
     for (const e of r.add ?? []) {
       fixBlock(e);
@@ -445,7 +447,10 @@ function planResults(app: App, ctx: CommandContext, results: EditResult[], label
       prepareNew(st, e, block?.recordHandle);
       ops.push({ kind: 'add', block: st.space, entity: e });
       out.added.push(e.handle);
+      if (e.type === 'MTEXT') (addedMText ??= []).push(e);
     }
+  // 여러 단 MTEXT를 묶음째 복사했으면 새 단끼리 잇는다(AutoCAD에서는 여러 단 문자가 객체 하나라 복사본도 한 묶음이다)
+  if (addedMText) relinkColumnCopies(addedMText);
   if (!opt.quiet) {
     const msgs = new Set(results.map((r) => r.message).filter((m): m is string => !!m));
     for (const m of msgs) ctx.print(m);
@@ -2362,7 +2367,10 @@ export function pasteAsBlock(app: App, st: DocState, list: Entity[], base: Pt, a
   const recordHandle = st.session.newHandle();
   // 붙여 넣기·복사와 같게 새 핸들을 주고 원본 본문(dwgRaw)도 버린다. R2013+ ACIS 객체의 원본 본문은
   // 자료 저장소(AcDs)의 원래 핸들 기록을 가리키므로, 새 핸들로 쓰면 형상 없는 객체가 된다.
+  const sources = list.map((e) => e.handle);
   for (const e of list) prepareNew(st, e, recordHandle);
+  // 여러 단 MTEXT: 블록 안의 새 단끼리 잇는다(원본 단을 가리키지 않게)
+  relinkClonedColumns(list, sources);
   const record: BlockRecord = { name, handle: recordHandle, flags: 0, insertUnits: Number(st.doc.header.get('$INSUNITS') ?? 0) || 0, explodable: true, scalable: true };
   const def: BlockDef = {
     name,

@@ -9,88 +9,219 @@
  *   1000 ACAD_MTEXT_COLUMN_INFO_END
  *   1000 ACAD_MTEXT_COLUMNS_BEGIN      1070 47 1070 단 객체 수(첫 단 포함)  1005 둘째 단 핸들 …
  *   1000 ACAD_MTEXT_COLUMNS_END
+ *   1000 ACAD_MTEXT_DEFINED_HEIGHT_BEGIN 1070 46 1040 정한 높이   1000 ACAD_MTEXT_DEFINED_HEIGHT_END
  *
- * 나머지 단 MTEXT에는 COLUMN_INFO만 있다. 이 앱은 단 객체를 그대로 두고(저장하면 원래 구조 그대로) 고를 때만 한 묶음으로 넓힌다.
+ * 다른 단 MTEXT에는 정한 높이만 있다(수동 높이 단은 확장 자료가 없다). AutoCAD가 같은 도면을 R2018과 R2007로 쓴 짝에서 본 배치다:
+ * 높이 목록(50)은 수동 높이 동적 단에만, 정한 높이는 정적 단과 자동 높이 동적 단에만 있고, 단 수(76)는 단 객체 수(47)보다 클 수 있다
+ * (정적 3단에 글이 두 단만 차면 단 객체는 둘). 이 앱은 단 객체를 그대로 두고(저장하면 원래 구조 그대로) 고를 때만 한 묶음으로 넓힌다.
  */
-import type { CadDocument, Entity } from '../../core/model';
+import type { CadDocument, Entity, MTextColumns, MTextEntity, Vec3, XData, XDataItem } from '../../core/model';
 import { normalizeHandle } from '../../core/model';
 
 const BEGIN = 'ACAD_MTEXT_COLUMNS_BEGIN';
 const END = 'ACAD_MTEXT_COLUMNS_END';
 const INFO_BEGIN = 'ACAD_MTEXT_COLUMN_INFO_BEGIN';
 const INFO_END = 'ACAD_MTEXT_COLUMN_INFO_END';
+const DH_BEGIN = 'ACAD_MTEXT_DEFINED_HEIGHT_BEGIN';
+const DH_END = 'ACAD_MTEXT_DEFINED_HEIGHT_END';
+const BLOCKS: Record<string, string> = { [BEGIN]: END, [INFO_BEGIN]: INFO_END, [DH_BEGIN]: DH_END };
 
-/** 첫 단 MTEXT면 나머지 단의 핸들(대문자), 아니면 빈 배열 */
-export function mtextColumnLinks(e: Entity): string[] {
-  if (e.type !== 'MTEXT' || !e.xdata) return [];
-  for (const x of e.xdata) {
-    if (x.app.toUpperCase() !== 'ACAD') continue;
-    const items = x.items;
-    const at = items.findIndex((i) => i.code === 1000 && i.value === BEGIN);
-    if (at < 0) continue;
-    const out: string[] = [];
-    for (let i = at + 1; i < items.length; i++) {
-      const it = items[i]!;
-      if (it.code === 1000 && it.value === END) break;
-      if (it.code === 1005 && typeof it.value === 'string' && it.value && it.value !== '0') out.push(normalizeHandle(it.value));
-    }
-    return out;
-  }
-  return [];
+/** 첫 단·다른 단의 ACAD 확장 자료에 든 여러 단 자료 */
+export interface ColumnXData {
+  /** 단 정보(COLUMN_INFO): 종류·단 수·폭·간격·자동 높이·흐름 거꾸로·높이 목록 */
+  info?: MTextColumns;
+  /** 단 목록(COLUMNS): 단 객체 수(47, 첫 단 포함)와 다른 단 핸들(대문자) */
+  links?: { count: number; handles: string[] };
+  /** 정한 높이(DEFINED_HEIGHT 46) */
+  definedHeight?: number;
 }
 
-/** 단 정보(COLUMN_INFO)의 단 수(76), 없으면 0 */
-function infoColumnCount(items: readonly { code: number; value: unknown }[]): number {
-  const at = items.findIndex((i) => i.code === 1000 && i.value === INFO_BEGIN);
-  if (at < 0) return 0;
-  for (let i = at + 1; i + 1 < items.length; i++) {
+function acadOf(xdata: readonly XData[] | undefined): XData | undefined {
+  return xdata?.find((d) => d.app.toUpperCase() === 'ACAD');
+}
+
+const num = (v: unknown) => (typeof v === 'number' ? v : Number(v));
+
+/** 확장 자료의 여러 단 자료(MTEXT가 아니거나 없으면 null) */
+export function readColumnXData(e: Entity): ColumnXData | null {
+  return e.type === 'MTEXT' ? columnXDataOf(e.xdata) : null;
+}
+
+export function columnXDataOf(xdata: readonly XData[] | undefined): ColumnXData | null {
+  const x = acadOf(xdata);
+  if (!x) return null;
+  const items = x.items;
+  let out: ColumnXData | null = null;
+  for (let i = 0; i < items.length; i++) {
     const it = items[i]!;
-    if (it.code === 1000 && it.value === INFO_END) break;
-    if (it.code === 1070 && it.value === 76 && items[i + 1]!.code === 1070) return Number(items[i + 1]!.value) || 0;
+    if (it.code !== 1000) continue;
+    if (it.value === INFO_BEGIN) {
+      const info: MTextColumns = { type: 0, count: 0, width: 0, gutter: 0, autoHeight: false, flowReversed: false, heights: [] };
+      for (i++; i < items.length; i++) {
+        const k = items[i]!;
+        if (k.code === 1000 && k.value === INFO_END) break;
+        if (k.code !== 1070 || i + 1 >= items.length) continue;
+        const key = num(k.value);
+        const v = num(items[i + 1]!.value);
+        i++;
+        if (key === 75) info.type = v;
+        else if (key === 79) info.autoHeight = v === 1;
+        else if (key === 76) info.count = v;
+        else if (key === 78) info.flowReversed = v === 1;
+        else if (key === 48) info.width = v;
+        else if (key === 49) info.gutter = v;
+        else if (key === 50) {
+          for (let n = 0; n < v && i + 1 < items.length && items[i + 1]!.code === 1040; n++) info.heights.push(num(items[++i]!.value));
+        }
+      }
+      (out ??= {}).info = info;
+    } else if (it.value === BEGIN) {
+      const links = { count: 0, handles: [] as string[] };
+      for (i++; i < items.length; i++) {
+        const k = items[i]!;
+        if (k.code === 1000 && k.value === END) break;
+        if (k.code === 1070 && num(k.value) === 47 && items[i + 1]?.code === 1070) links.count = num(items[++i]!.value);
+        else if (k.code === 1005 && typeof k.value === 'string' && k.value && k.value !== '0') links.handles.push(normalizeHandle(k.value));
+      }
+      (out ??= {}).links = links;
+    } else if (it.value === DH_BEGIN) {
+      for (i++; i < items.length; i++) {
+        const k = items[i]!;
+        if (k.code === 1000 && k.value === DH_END) break;
+        if (k.code === 1070 && num(k.value) === 46 && items[i + 1]?.code === 1040) (out ??= {}).definedHeight = num(items[++i]!.value);
+      }
+    }
   }
-  return 0;
+  return out;
+}
+
+/** 단 정보에 높이 목록을 쓰는지(수동 높이 동적 단) */
+export function manualHeights(c: Pick<MTextColumns, 'type' | 'autoHeight'>): boolean {
+  return c.type === 2 && !c.autoHeight;
+}
+
+/** 단 정보에 정한 높이를 쓰는지(정적 단, 자동 높이 동적 단) */
+export function hasDefinedHeight(c: Pick<MTextColumns, 'type' | 'autoHeight'>): boolean {
+  return c.type === 1 || (c.type === 2 && c.autoHeight);
+}
+
+/** 여러 단 자료 → ACAD 확장 자료 항목(AutoCAD가 쓰는 차례: 단 정보, 단 목록, 정한 높이) */
+export function columnXDataItems(c: ColumnXData): XDataItem[] {
+  const out: XDataItem[] = [];
+  const s = (v: string) => out.push({ code: 1000, value: v });
+  const i16 = (v: number) => out.push({ code: 1070, value: v });
+  const r = (v: number) => out.push({ code: 1040, value: v });
+  if (c.info) {
+    const f = c.info;
+    s(INFO_BEGIN);
+    i16(75);
+    i16(f.type);
+    i16(79);
+    i16(f.autoHeight ? 1 : 0);
+    i16(76);
+    i16(f.count);
+    i16(78);
+    i16(f.flowReversed ? 1 : 0);
+    i16(48);
+    r(f.width);
+    i16(49);
+    r(f.gutter);
+    if (manualHeights(f)) {
+      i16(50);
+      i16(f.heights.length);
+      for (const h of f.heights) r(h);
+    }
+    s(INFO_END);
+  }
+  if (c.links) {
+    s(BEGIN);
+    i16(47);
+    i16(c.links.count);
+    for (const h of c.links.handles) out.push({ code: 1005, value: h });
+    s(END);
+  }
+  if (c.definedHeight !== undefined) {
+    s(DH_BEGIN);
+    i16(46);
+    r(c.definedHeight);
+    s(DH_END);
+  }
+  return out;
 }
 
 /**
- * 복사본(COPY·ARRAY·붙여넣기 등 새 핸들로 만드는 객체)에서 여러 단 연결을 뗀다: 첫 단의 다른 단 핸들(1005)은 원본의 단을 가리키므로
- * 그대로 두면 두 첫 단이 같은 단을 갖게 된다. 단이 둘 이상인 묶음의 단 정보·단 목록을 지워 복사본은 보통 MTEXT가 된다
- * (단마다 제 글과 폭을 가지므로 보이는 모양은 같다). 한 단짜리(AutoCAD 2010+의 기본 동적 단) 정보는 그대로 둔다.
+ * 확장 자료에서 여러 단 묶음(단 정보·단 목록·정한 높이)을 빼고 c가 있으면 그 자리에 c를 넣는다. 다른 앱·다른 ACAD 항목은 그대로.
+ * 결과가 비면 undefined
  */
-export function stripMTextColumnLinks(e: Entity): void {
-  if (e.type !== 'MTEXT' || !e.xdata) return;
-  const x = e.xdata.find((d) => d.app.toUpperCase() === 'ACAD');
-  if (!x) return;
-  const linked = x.items.some((i) => i.code === 1000 && i.value === BEGIN);
-  if (!linked && infoColumnCount(x.items) < 2) return;
-  const out: typeof x.items = [];
+export function withColumnXData(xdata: readonly XData[] | undefined, c: ColumnXData | null): XData[] | undefined {
+  const add = c ? columnXDataItems(c) : [];
+  const x = acadOf(xdata);
+  if (!x) {
+    if (!add.length) return xdata?.length ? [...xdata] : undefined;
+    return [...(xdata ?? []), { app: 'ACAD', items: add }];
+  }
+  const items: XDataItem[] = [];
+  let at = -1;
   let skip: string | null = null;
   for (const it of x.items) {
     if (skip) {
       if (it.code === 1000 && it.value === skip) skip = null;
       continue;
     }
-    if (it.code === 1000 && it.value === BEGIN) skip = END;
-    else if (it.code === 1000 && it.value === INFO_BEGIN) skip = INFO_END;
-    else out.push(it);
+    const end = it.code === 1000 && typeof it.value === 'string' ? BLOCKS[it.value] : undefined;
+    if (end) {
+      if (at < 0) at = items.length;
+      skip = end;
+      continue;
+    }
+    items.push(it);
   }
-  if (out.length) e.xdata = e.xdata.map((d) => (d === x ? { ...d, items: out } : d));
-  else {
-    const rest = e.xdata.filter((d) => d !== x);
-    if (rest.length) e.xdata = rest;
-    else delete e.xdata;
-  }
+  if (add.length) items.splice(at < 0 ? items.length : at, 0, ...add);
+  const out = xdata!.flatMap((d) => (d !== x ? [d] : items.length ? [{ ...d, items }] : []));
+  return out.length ? out : undefined;
 }
 
-/** 단 묶음: 묶음에 든 MTEXT 핸들 → [첫 단, 둘째 단 …](문서에 있는 MTEXT만, 단이 둘 이상인 것만) */
+/** 첫 단 MTEXT면 나머지 단의 핸들(대문자), 아니면 빈 배열 */
+export function mtextColumnLinks(e: Entity): string[] {
+  if (e.type !== 'MTEXT' || !e.xdata) return [];
+  return readColumnXData(e)?.links?.handles ?? [];
+}
+
+/**
+ * 복사본(COPY·ARRAY·붙여넣기 등 새 핸들로 만드는 객체)에서 여러 단 연결을 뗀다: 첫 단의 다른 단 핸들(1005)은 원본의 단을 가리키므로
+ * 그대로 두면 두 첫 단이 같은 단을 갖게 된다. 단이 둘 이상인 묶음의 단 정보·단 목록·정한 높이를 지워 복사본은 보통 MTEXT가 된다
+ * (단마다 제 글과 폭을 가지므로 보이는 모양은 같다). 한 단짜리(AutoCAD 2010+의 기본 동적 단) 정보는 그대로 둔다.
+ * 묶음째 복사한 것은 relinkColumnCopies가 새 단끼리 다시 잇는다.
+ */
+export function stripMTextColumnLinks(e: Entity): void {
+  if (e.type !== 'MTEXT' || !e.xdata) return;
+  const c = readColumnXData(e);
+  if (!c) return;
+  const multi = !!c.links || (c.info?.count ?? 0) >= 2;
+  // 다른 단(정한 높이만 있다)도 보통 MTEXT로
+  if (!multi && (c.info || c.definedHeight === undefined)) return;
+  const next = withColumnXData(e.xdata, null);
+  if (next) e.xdata = next;
+  else delete e.xdata;
+}
+
+/** 단 묶음: 묶음에 든 MTEXT 핸들 → [첫 단, 둘째 단 …](첫 단과 같은 블록에 있는 MTEXT만, 단이 둘 이상인 것만) */
 export function mtextColumnSets(doc: CadDocument): Map<string, string[]> {
   const sets = new Map<string, string[]>();
   for (const b of doc.blocks.values()) {
+    let own: Set<Entity> | null = null;
     for (const e of b.entities) {
       if (e.type !== 'MTEXT' || !e.xdata) continue;
       const links = mtextColumnLinks(e);
       if (!links.length) continue;
+      own ??= new Set(b.entities);
       const head = normalizeHandle(e.handle);
-      const list = [head, ...links.filter((h) => h !== head && doc.entityIndex.get(h)?.type === 'MTEXT')];
+      const list = [head];
+      for (const h of links) {
+        const m = doc.entityIndex.get(h);
+        // 다른 블록을 가리키는 연결(새 핸들로 옮긴 사본에 남은 옛 연결)은 묶지 않는다
+        if (h !== head && m?.type === 'MTEXT' && own.has(m) && !list.includes(h)) list.push(h);
+      }
       if (list.length < 2) continue;
       for (const h of list) if (!sets.has(h)) sets.set(h, list);
     }
@@ -124,4 +255,213 @@ export function cachedMTextColumnSets(doc: CadDocument, gen: number): Map<string
   const sets = mtextColumnSets(doc);
   cache.set(doc, { gen, sets });
   return sets;
+}
+
+/** 첫 단과 다른 단(문서 차례) — 묶음의 첫 단이 아니면 null */
+export function columnGroupOf(doc: CadDocument, head: Entity, sets?: Map<string, string[]>): MTextEntity[] | null {
+  if (head.type !== 'MTEXT') return null;
+  const list = (sets ?? mtextColumnSets(doc)).get(normalizeHandle(head.handle));
+  if (!list || list[0] !== normalizeHandle(head.handle)) return null;
+  return list.map((h) => doc.entityIndex.get(h) as MTextEntity);
+}
+
+// ---------------------------------------------------------------------------
+// 확장 자료의 단 값 축척(SCALE·축척한 블록 분해 — R2018 `columns`처럼)
+// ---------------------------------------------------------------------------
+
+/**
+ * ACAD 확장 자료의 여러 단 항목만 값을 바꾼 사본(다른 항목·차례는 그대로). fn은 묶음 이름, 앞 열쇠(1070), 항목을 받아 새 항목을 돌려준다
+ */
+function mapColumnItems(xdata: readonly XData[], fn: (block: string, key: number, it: XDataItem) => XDataItem): XData[] {
+  return xdata.map((d) => {
+    if (d.app.toUpperCase() !== 'ACAD') return d;
+    let block: string | null = null;
+    let key = -1;
+    // 열쇠(1070) 다음은 값 하나, 높이 목록(50)은 개수(1070) 다음 높이(1040) 개수만큼
+    let expect: 'key' | 'value' | 'count' | 'list' = 'key';
+    let left = 0;
+    const items = d.items.map((it) => {
+      if (it.code === 1000 && typeof it.value === 'string') {
+        if (BLOCKS[it.value]) block = it.value;
+        else if (block && BLOCKS[block] === it.value) block = null;
+        expect = 'key';
+        return it;
+      }
+      if (!block) return it;
+      if (expect === 'key') {
+        if (it.code !== 1070) return fn(block, -1, it);
+        key = num(it.value);
+        expect = key === 50 && block === INFO_BEGIN ? 'count' : 'value';
+        return it;
+      }
+      if (expect === 'count') {
+        left = num(it.value);
+        expect = left > 0 ? 'list' : 'key';
+        return it;
+      }
+      if (expect === 'list' && --left <= 0) expect = 'key';
+      else if (expect === 'value') expect = 'key';
+      return fn(block, key, it);
+    });
+    return { ...d, items };
+  });
+}
+
+/** 단 폭·간격은 kx배, 높이·정한 높이는 ky배(값이 바뀌지 않으면 그대로) */
+export function scaleColumnXData(e: MTextEntity, kx: number, ky: number): void {
+  if (!e.xdata || (Math.abs(kx - 1) < 1e-12 && Math.abs(ky - 1) < 1e-12)) return;
+  const c = readColumnXData(e);
+  if (!c || (!c.info && c.definedHeight === undefined)) return;
+  e.xdata = mapColumnItems(e.xdata, (block, key, it) => {
+    if (it.code !== 1040) return it;
+    const v = num(it.value);
+    if (block === INFO_BEGIN && (key === 48 || key === 49)) return { code: 1040, value: v * kx };
+    if ((block === INFO_BEGIN && key === 50) || (block === DH_BEGIN && key === 46)) return { code: 1040, value: v * ky };
+    return it;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 복사본의 단 연결(90차)
+// ---------------------------------------------------------------------------
+
+interface CopyNote {
+  /** 원본 핸들 */
+  src: string;
+  /** 떼기 전 확장 자료(변환한 값) */
+  xdata: XData[];
+  /** 같은 변환으로 만든 복사본끼리 같은 꼬리표(행렬 등) */
+  tag: string;
+}
+
+const notes = new WeakMap<Entity, CopyNote>();
+
+/**
+ * freshEntity가 부른다: 여러 단 자료가 있는 MTEXT 복사본의 원본 핸들과 떼기 전 확장 자료를 적어 둔다.
+ * 묶음의 모든 단이 같은 편집에서 같은 변환으로 복사되면 relinkColumnCopies가 새 단끼리 다시 잇는다
+ */
+export function noteColumnCopy(x: Entity): void {
+  if (x.type !== 'MTEXT' || !x.xdata || !x.handle) return;
+  if (!readColumnXData(x)) return;
+  notes.set(x, { src: normalizeHandle(x.handle), xdata: x.xdata, tag: '' });
+}
+
+/** 같은 변환으로 만든 복사본에 같은 꼬리표(적어 둔 복사본만) */
+export function tagColumnCopy(x: Entity, tag: string): void {
+  const n = notes.get(x);
+  if (n) n.tag = tag;
+}
+
+/** 변환 행렬(과 고도 차)의 꼬리표 */
+export function transformTag(m: readonly number[], dz?: number): string {
+  return `${m.join(',')}|${dz ?? 0}`;
+}
+
+function sub3(a: Vec3, b: Vec3): Vec3 {
+  return { x: a.x - b.x, y: a.y - b.y, z: (a.z ?? 0) - (b.z ?? 0) };
+}
+function dot3(a: Vec3, b: Vec3): number {
+  return a.x * b.x + a.y * b.y + (a.z ?? 0) * (b.z ?? 0);
+}
+
+/** MTEXT의 X축(WCS 단위 벡터)과 Y축 — 방향이 없으면 회전각(OCS 법선이 +Z가 아니면 null) */
+function textFrame(e: MTextEntity): { u: Vec3; v: Vec3 } | null {
+  const n = e.extrusion ?? { x: 0, y: 0, z: 1 };
+  let u: Vec3;
+  if (e.direction && Math.hypot(e.direction.x, e.direction.y, e.direction.z ?? 0) > 0) u = e.direction;
+  else if (Math.abs(n.x) < 1e-12 && Math.abs(n.y) < 1e-12 && n.z > 0) u = { x: Math.cos(e.rotation), y: Math.sin(e.rotation), z: 0 };
+  else return null;
+  const l = Math.hypot(u.x, u.y, u.z ?? 0);
+  u = { x: u.x / l, y: u.y / l, z: (u.z ?? 0) / l };
+  const v = { x: n.y * u.z - n.z * u.y, y: n.z * u.x - n.x * u.z, z: n.x * u.y - n.y * u.x };
+  const lv = Math.hypot(v.x, v.y, v.z) || 1;
+  return { u, v: { x: v.x / lv, y: v.y / lv, z: v.z / lv } };
+}
+
+/**
+ * 첫 단에서 다른 단이 단 폭 + 간격씩 문자 방향으로 늘어섰는지(AutoCAD가 쓴 묶음의 배치 — 짝 도면의 단 삽입점이 모두 이렇다).
+ * 글자를 읽을 수 있게 둔 대칭 복사(단 차례가 뒤집힌다)처럼 어긋난 복사본은 잇지 않는다
+ */
+export function columnLayoutFits(head: MTextEntity, members: readonly MTextEntity[], info: MTextColumns | undefined): boolean {
+  if (!info || !(info.width > 0)) return false;
+  const f = textFrame(head);
+  if (!f) return false;
+  const step = info.width + info.gutter;
+  const sign = info.flowReversed ? -1 : 1;
+  const tol = 1e-6 * Math.max(1, Math.abs(step) * (members.length + 1), Math.abs(head.insert.x), Math.abs(head.insert.y));
+  for (let i = 0; i < members.length; i++) {
+    const d = sub3(members[i]!.insert, head.insert);
+    if (Math.abs(dot3(d, f.u) - sign * step * (i + 1)) > tol || Math.abs(dot3(d, f.v)) > tol) return false;
+  }
+  return true;
+}
+
+/** 단 목록의 핸들(1005)만 차례대로 바꾼 확장 자료(다른 항목은 그대로) */
+function relinked(xdata: readonly XData[], handles: readonly string[]): XData[] {
+  let j = 0;
+  return mapColumnItems(xdata, (block, _key, it) => (block === BEGIN && it.code === 1005 && typeof it.value === 'string' && it.value && it.value !== '0' && j < handles.length ? { code: 1005, value: handles[j++]! } : it));
+}
+
+/**
+ * 같은 편집에서 더하는 객체(새 핸들을 받은 뒤): 묶음의 첫 단과 다른 단이 모두 같은 변환으로 복사됐고 배치가 맞으면
+ * 복사한 첫 단의 단 목록을 새 단 핸들로 바꾸고 단마다 떼어 둔 확장 자료를 되돌린다. 일부만 복사했으면 지금처럼 보통 MTEXT.
+ * 잇은 묶음 수
+ */
+export function relinkColumnCopies(added: readonly Entity[]): number {
+  let groups: Map<string, Map<string, Entity[]>> | null = null;
+  for (const e of added) {
+    const n = notes.get(e);
+    if (!n) continue;
+    groups ??= new Map();
+    let g = groups.get(n.tag);
+    if (!g) groups.set(n.tag, (g = new Map()));
+    let l = g.get(n.src);
+    if (!l) g.set(n.src, (l = []));
+    l.push(e);
+  }
+  if (!groups) return 0;
+  let linked = 0;
+  for (const g of groups.values()) {
+    for (const copies of g.values()) {
+      for (let k = 0; k < copies.length; k++) {
+        const head = copies[k] as MTextEntity;
+        const n = notes.get(head)!;
+        const c = columnXDataOf(n.xdata);
+        if (!c?.links?.handles.length) continue;
+        const members = c.links.handles.map((h) => g.get(h)?.[k] as MTextEntity | undefined);
+        if (members.some((m) => !m || !m.handle) || !head.handle) continue;
+        if (!columnLayoutFits(head, members as MTextEntity[], c.info)) continue;
+        head.xdata = relinked(n.xdata, (members as MTextEntity[]).map((m) => normalizeHandle(m.handle)));
+        for (const m of members as MTextEntity[]) m.xdata = structuredClone(notes.get(m)!.xdata);
+        linked++;
+      }
+    }
+  }
+  for (const e of added) notes.delete(e);
+  return linked;
+}
+
+/**
+ * 원본을 그대로 복제해 새 핸들만 준 객체(블록으로 붙여넣기·연관 배열의 원본 블록 등): sources[i]가 copies[i]의 원본 핸들.
+ * 첫 단의 단 목록을 복제한 단의 새 핸들로 바꾸고, 묶음이 다 복제되지 않았으면 단 연결을 뗀다(다른 곳의 옛 단을 가리키지 않게)
+ */
+export function relinkClonedColumns(copies: readonly Entity[], sources: readonly string[]): number {
+  let map: Map<string, Entity> | null = null;
+  let linked = 0;
+  for (let i = 0; i < copies.length; i++) {
+    const e = copies[i]!;
+    if (e.type !== 'MTEXT' || !e.xdata) continue;
+    const c = readColumnXData(e);
+    if (!c?.links?.handles.length) continue;
+    if (!map) {
+      map = new Map();
+      for (let j = 0; j < copies.length; j++) if (sources[j]) map.set(normalizeHandle(sources[j]!), copies[j]!);
+    }
+    const members = c.links.handles.map((h) => map!.get(h));
+    if (members.every((m) => m?.type === 'MTEXT' && m.handle) && columnLayoutFits(e, members as MTextEntity[], c.info)) {
+      e.xdata = relinked(e.xdata, (members as MTextEntity[]).map((m) => normalizeHandle(m.handle)));
+      linked++;
+    } else stripMTextColumnLinks(e);
+  }
+  return linked;
 }
