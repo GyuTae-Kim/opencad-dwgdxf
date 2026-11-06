@@ -46,7 +46,8 @@ export function inherit(src: Entity): Omit<EntityBase, 'type'> {
     transparency: src.transparency,
   };
   if (src.owner !== undefined) out.owner = src.owner;
-  if (src.xdata) out.xdata = structuredClone(src.xdata);
+  // 구조화 복제 대신 바로 복사(98차 — EXPLODE가 조각마다 불러 실제 도면 EXPLODE 명령 시간의 약 11%였다)
+  if (src.xdata) out.xdata = cloneData(src.xdata);
   if (src.paperSpace) out.paperSpace = true;
   if (src.invisible) out.invisible = true;
   if (src.thickness) out.thickness = src.thickness;
