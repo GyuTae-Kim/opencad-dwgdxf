@@ -105,7 +105,7 @@ export function hatchLoops(h: HatchEntity, tol: number, fit?: FitWork): number[]
 }
 
 /**
- * 고리 포함 관계와 삼각분할에 든 일: 견준 고리 상자 수 + 포함 판정에서 본 변 수 + earcut(정점 수 + 구멍 수의 제곱)
+ * 고리 포함 관계와 삼각분할에 든 일: 견준 고리 상자 수 + 포함 판정에서 본 변 수(변 훑기로 갈아타면 그 일 × SWEEP_WORK) + earcut(정점 수 + 구멍 수의 제곱)
  * + 구멍을 가로질러 칸으로 자를 때 자른 칸의 정점 수 × CUT_WORK.
  * limit을 넘으면 limited를 세우고 빈 삼각형을 돌려준다(부른 쪽이 경계만 그린다)
  */
@@ -130,10 +130,28 @@ const STRIP_SIZE = 64;
  * 칸을 작게 둬 칸마다 드는 시간을 묶는다
  */
 const CELL_VERTS = 256;
+/**
+ * 구멍이 STRIP_HOLES개 이하라도 이보다 많고 구멍 상자가 서로 겹쳐 덮으면(구멍 상자 넓이 합 > 바깥 고리 상자 넓이 × WRAP_COVER) 칸으로 잘라 채운다(92차).
+ * 그런 꼴(서로 감싼 ㄱ자·ㄷ자 구멍, 기운 막대)은 earcut이 길고 가는 귀를 거듭 시험해 구멍 300개 0.1~0.5초, 500개 0.5~2.5초였고 덮는 정도가 24~333이다.
+ * 격자·벽돌·돌린 타공판·육각 원 구멍·무작위 별꼴은 0.8 아래라 예전처럼 한 번에 earcut이고, 실제 도면 해치는 바깥 고리 하나의 구멍이 17개까지라 닿지 않는다.
+ * 구멍 64개 이하는 덮어도 earcut이 20ms 안쪽이다
+ */
+const WRAP_HOLES = 64;
+const WRAP_COVER = 4;
 /** 칸 자르기 깊이 한도: 칸 상자를 반씩 줄이므로 정점이 한 점에 몰린 꼴만 닿는다(그 칸은 그대로 채운다) */
 const CELL_DEPTH = 60;
 /** 칸을 한 번 자를 때 칸 정점 하나에 세는 일(상자, 두 축의 가운데에서 지나는 변 세기, 자르기) */
 const CUT_WORK = 3;
+/**
+ * 상자 격자가 점을 품지 않는 고리를 견준 일이 이만큼(기본 + 고리·정점당)을 넘고 품은 고리를 판정한 일보다 많으면 변 훑기로 처음부터 다시 한다(92차).
+ * 격자·벽돌·타공판·육각 원 구멍 1만~4만 개는 상자 격자 일이 정점당 1~3이고 실제 도면 해치는 이 문턱의 7% 안쪽이다.
+ * 구멍 상자가 서로 덮는 꼴(서로 감싼 ㄱ자 구멍, 기운 막대)만 품지 않는 고리를 고리 수의 제곱만큼 견준다.
+ * 고리가 겹겹이 든 꼴(동심 고리)은 일 대부분이 품은 고리를 판정한 것이라(답이 고리 수의 제곱) 상자 격자 그대로 둔다
+ */
+const SWEEP_AFTER_BASE = 1 << 16;
+const SWEEP_AFTER_PER = 16;
+/** 변 훑기의 일 한 단위(나무 마디·변 하나)를 상자 격자 일 몇으로 세는지: 같은 일 셈에서 약 두 배 걸린다(동심 고리 4,000개를 두 길로 끝까지 재어 봄) */
+const SWEEP_WORK = 2;
 
 /** 고리 안 변을 가로 띠로 나눈 색인: 점의 y가 든 띠의 변만 본다 */
 interface RingSlabs {
@@ -200,6 +218,8 @@ class LoopIndex {
   /** 고리가 적어 모두 판정한다 */
   private readonly linear: boolean;
   work = 0;
+  /** work 가운데 점을 품은 고리를 판정한 일(나머지는 품지 않는 고리를 견준 일) */
+  useful = 0;
 
   constructor(private readonly loops: readonly number[][]) {
     const n = loops.length;
@@ -306,8 +326,12 @@ class LoopIndex {
     if (this.linear || !safe(x) || !safe(y)) {
       for (let k = 0; k < this.loops.length; k++) {
         if (k === self) continue;
-        this.work += 1 + (this.loops[k]!.length >> 1);
-        if (pointInRing(x, y, this.loops[k]!)) fn(k);
+        const cost = 1 + (this.loops[k]!.length >> 1);
+        this.work += cost;
+        if (pointInRing(x, y, this.loops[k]!)) {
+          this.useful += cost;
+          fn(k);
+        }
       }
       return;
     }
@@ -318,6 +342,7 @@ class LoopIndex {
 
   private test(k: number, x: number, y: number, self: number, fn: (k: number) => void): void {
     if (k === self) return;
+    const w0 = this.work;
     this.work++;
     const c = this.loops[k]!;
     if (!this.bad[k]) {
@@ -330,13 +355,19 @@ class LoopIndex {
           this.work += c.length;
         }
         if (sl) {
-          if (inSlabs(x, y, c, sl, this)) fn(k);
+          if (inSlabs(x, y, c, sl, this)) {
+            this.useful += this.work - w0;
+            fn(k);
+          }
           return;
         }
       }
     }
     this.work += c.length >> 1;
-    if (pointInRing(x, y, c)) fn(k);
+    if (pointInRing(x, y, c)) {
+      this.useful += this.work - w0;
+      fn(k);
+    }
   }
 }
 
@@ -367,6 +398,327 @@ function inSlabs(x: number, y: number, c: readonly number[], sl: RingSlabs, w: {
   return inside;
 }
 
+/**
+ * 변 훑기(92차): qs의 고리마다 그 고리 첫 변의 중점을 품는 고리(use가 있으면 use[k]인 고리만, 자기는 빼고)마다 fn(물은 고리, 품은 고리).
+ * 결과는 그 고리들에 pointInRing을 한 것과 같다. pointInRing은 점에서 오른쪽으로 그은 반직선이 지나는 변을 세는데
+ *  - 그 식이 참일 수 있는 변은 점의 y가 [변의 작은 y, 큰 y) 안이고(식의 앞 조건 그대로) 점의 x가 변의 큰 x + 여유보다 작다
+ *    (교점은 두 끝 x 사이에 반올림만큼 넉넉히 든다 — 61차 상자 거르기와 같은 여유·같은 safe 조건),
+ *  - 점이 고리 상자 왼쪽 - 여유보다 왼쪽이면 그 고리는 y를 지나는 변이 모두 참이라 짝수다.
+ * 그래서 고리 k의 변 e는 점이 [k의 왼쪽 x - 여유, e의 큰 x + 여유) × [e의 작은 y, 큰 y) 안일 때만 센다(수평 변은 늘 거짓이라 뺀다).
+ * 점을 y 순으로 훑으며 그 y를 지나는 변만 켜고, 변을 고리 왼쪽 x 순 자리에 두어 자리마다 큰 x의 최댓값 나무로 (왼쪽 x <= 점 x < 큰 x)인 켠 변만 꺼낸다.
+ * 점 하나에 (꺼낸 변 수 + 1) × 나무 높이. 서로 감싼 ㄱ자 구멍처럼 고리 상자가 서로 덮어도 변 직사각형은 덮지 않아 꺼낸 변이 몇 개뿐이다.
+ * 좌표가 safe가 아닌 고리는 점마다 판정하고, 점이 safe가 아니면 그 점은 모든 고리를 판정한다. 일이 stopAt을 넘으면 멈추고 false
+ */
+function loopsContaining(loops: readonly number[][], use: Uint8Array | null, qs: readonly number[], fn: (q: number, k: number) => void, stopAt: number, w: { work: number }): boolean {
+  const n = loops.length;
+  const brute: number[] = [];
+  const good: number[] = [];
+  const aOf = new Float64Array(n);
+  const mOf = new Float64Array(n);
+  let E = 0;
+  for (let k = 0; k < n; k++) {
+    if (use && !use[k]) continue;
+    const c = loops[k]!;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let ok = true;
+    let edges = 0;
+    for (let i = 0, j = c.length - 2; i < c.length; j = i, i += 2) {
+      const x = c[i]!;
+      const y = c[i + 1]!;
+      if (!safe(x) || !safe(y)) ok = false;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y !== c[j + 1]) edges++;
+    }
+    w.work += c.length >> 1;
+    if (!ok) brute.push(k);
+    else if (edges) {
+      const m = (Math.abs(minX) + Math.abs(maxX)) * 1e-9;
+      aOf[k] = minX - m;
+      mOf[k] = m;
+      good.push(k);
+      E += edges;
+    }
+  }
+  good.sort((p, q) => aOf[p]! - aOf[q]!);
+  const G = good.length;
+  const aSorted = new Float64Array(G);
+  const start = new Int32Array(G + 1);
+  const bx = new Float64Array(E);
+  const y0 = new Float64Array(E);
+  const y1 = new Float64Array(E);
+  const loopOf = new Int32Array(E);
+  const vtx = new Int32Array(E);
+  let e = 0;
+  for (let g = 0; g < G; g++) {
+    const k = good[g]!;
+    const c = loops[k]!;
+    const m = mOf[k]!;
+    aSorted[g] = aOf[k]!;
+    start[g] = e;
+    for (let i = 0, j = c.length - 2; i < c.length; j = i, i += 2) {
+      const yi = c[i + 1]!;
+      const yj = c[j + 1]!;
+      if (yi === yj) continue;
+      bx[e] = Math.max(c[i]!, c[j]!) + m;
+      y0[e] = Math.min(yi, yj);
+      y1[e] = Math.max(yi, yj);
+      loopOf[e] = k;
+      vtx[e] = i;
+      e++;
+    }
+  }
+  start[G] = E;
+  w.work += E;
+  const qx: number[] = [];
+  const qy: number[] = [];
+  const qk: number[] = [];
+  for (const q of qs) {
+    const c = loops[q]!;
+    const x = (c[0]! + c[2]!) / 2;
+    const y = (c[1]! + c[3]!) / 2;
+    if (safe(x) && safe(y)) {
+      qx.push(x);
+      qy.push(y);
+      qk.push(q);
+      continue;
+    }
+    for (let k = 0; k < n; k++) {
+      if (k === q || (use && !use[k])) continue;
+      w.work += 1 + (loops[k]!.length >> 1);
+      if (pointInRing(x, y, loops[k]!)) fn(q, k);
+    }
+    if (w.work > stopAt) return false;
+  }
+  const Q = qk.length;
+  if (!Q) return true;
+  const qOrder = new Int32Array(Q);
+  for (let t = 0; t < Q; t++) qOrder[t] = t;
+  qOrder.sort((p, q) => qy[p]! - qy[q]!);
+  const ys = new Float64Array(Q);
+  for (let t = 0; t < Q; t++) ys[t] = qy[qOrder[t]!]!;
+  /** ys에서 v 이상인 첫 차례 */
+  const lower = (v: number): number => {
+    let lo = 0;
+    let hi = Q;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (ys[mid]! < v) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  // 변이 켜진 점 차례 [켬, 끔): y가 [작은 y, 큰 y) 안인 점들(비면 어느 점에서도 세지 않는다). 차례마다 켜고 끌 변(CSR)
+  const onAt = new Int32Array(E);
+  const offAt = new Int32Array(E);
+  const onStart = new Int32Array(Q + 2);
+  const offStart = new Int32Array(Q + 2);
+  for (let p = 0; p < E; p++) {
+    const a = (onAt[p] = lower(y0[p]!));
+    const b = (offAt[p] = lower(y1[p]!));
+    if (a < b) {
+      onStart[a + 1]!++;
+      offStart[b + 1]!++;
+    }
+  }
+  for (let t = 0; t <= Q; t++) {
+    onStart[t + 1]! += onStart[t]!;
+    offStart[t + 1]! += offStart[t]!;
+  }
+  const onList = new Int32Array(onStart[Q + 1]!);
+  const offList = new Int32Array(offStart[Q + 1]!);
+  const fOn = onStart.slice(0, Q + 1);
+  const fOff = offStart.slice(0, Q + 1);
+  for (let p = 0; p < E; p++) {
+    if (onAt[p]! >= offAt[p]!) continue;
+    onList[fOn[onAt[p]!]!++] = p;
+    offList[fOff[offAt[p]!]!++] = p;
+  }
+  w.work += 2 * E + Q;
+  if (w.work > stopAt) return false;
+  // 자리마다 켠 변의 큰 x(꺼진 자리 -Infinity), 마디는 아래 자리들의 최댓값
+  let logP = 0;
+  while (1 << logP < E) logP++;
+  const P = 1 << logP;
+  const tree = new Float64Array(2 * P).fill(-Infinity);
+  const stack = new Int32Array(2 * logP + 4);
+  const par = new Uint8Array(n);
+  const stamp = new Int32Array(n).fill(-1);
+  const touched: number[] = [];
+  for (let t = 0; t < Q; t++) {
+    const qi = qOrder[t]!;
+    const x = qx[qi]!;
+    const y = qy[qi]!;
+    const self = qk[qi]!;
+    for (let r = offStart[t]!, re = offStart[t + 1]!; r < re; r++) {
+      let v = offList[r]! + P;
+      tree[v] = -Infinity;
+      v >>= 1;
+      w.work++;
+      while (v) {
+        const top = Math.max(tree[2 * v]!, tree[2 * v + 1]!);
+        if (top === tree[v]) break;
+        tree[v] = top;
+        v >>= 1;
+        w.work++;
+      }
+      if (w.work > stopAt) return false;
+    }
+    for (let r = onStart[t]!, re = onStart[t + 1]!; r < re; r++) {
+      const p = onList[r]!;
+      const b = bx[p]!;
+      let v = p + P;
+      tree[v] = b;
+      v >>= 1;
+      w.work++;
+      while (v && tree[v]! < b) {
+        tree[v] = b;
+        v >>= 1;
+        w.work++;
+      }
+      if (w.work > stopAt) return false;
+    }
+    // 고리 왼쪽 x <= x인 자리 [0, L)
+    let lo = 0;
+    let hi = G;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (aSorted[mid]! <= x) lo = mid + 1;
+      else hi = mid;
+    }
+    const L = start[lo]!;
+    w.work += 1 + logP;
+    let sp = 0;
+    if (L > 0) stack[sp++] = 1;
+    while (sp) {
+      const v = stack[--sp]!;
+      if (++w.work > stopAt) return false;
+      if (!(tree[v]! > x)) continue;
+      const first = (v << (logP - (31 - Math.clz32(v)))) - P;
+      if (first >= L) continue;
+      if (v < P) {
+        stack[sp++] = 2 * v + 1;
+        stack[sp++] = 2 * v;
+        continue;
+      }
+      const k = loopOf[first]!;
+      if (k === self) continue;
+      const c = loops[k]!;
+      const i = vtx[first]!;
+      const j = i === 0 ? c.length - 2 : i - 2;
+      const xi = c[i]!;
+      const yi = c[i + 1]!;
+      const xj = c[j]!;
+      const yj = c[j + 1]!;
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+        if (stamp[k] !== t) {
+          stamp[k] = t;
+          par[k] = 0;
+          touched.push(k);
+        }
+        par[k]! ^= 1;
+      }
+    }
+    for (const k of touched) if (par[k]) fn(self, k);
+    w.work += touched.length;
+    touched.length = 0;
+    for (const k of brute) {
+      if (k === self) continue;
+      w.work += 1 + (loops[k]!.length >> 1);
+      if (pointInRing(x, y, loops[k]!)) fn(self, k);
+    }
+    if (w.work > stopAt) return false;
+  }
+  return true;
+}
+
+/** 고리 깊이(자기를 품은 다른 고리 수)와 깊이가 짝수인 고리마다 구멍(깊이가 하나 깊고 그 고리가 품은 고리, 번호 순) */
+export interface LoopNest {
+  depth: Int32Array;
+  holesOf: number[][];
+}
+
+/**
+ * 고리 포함 관계. 점은 고리 첫 변의 중점이고 판정은 pointInRing 그대로라 어느 길로 해도 결과가 같다.
+ * 상자 격자(LoopIndex)로 하다가 품지 않는 고리를 견준 일이 문턱(SWEEP_AFTER_*)을 넘고 품은 고리를 판정한 일보다 많으면
+ * 변 훑기(loopsContaining)로 처음부터 다시 한다(상자 격자에 쓴 일도 센다). mode는 시험용: 'grid'는 갈아타지 않고 'sweep'은 처음부터 변 훑기.
+ * work가 있으면 든 일을 더하고, 한도를 넘으면 null(limited)
+ */
+export function loopNesting(loops: readonly number[][], work?: LoopWork, mode: 'auto' | 'grid' | 'sweep' = 'auto'): LoopNest | null {
+  const n = loops.length;
+  if (mode === 'sweep') return sweepNesting(loops, work);
+  const index = new LoopIndex(loops);
+  let cap = Infinity;
+  if (mode === 'auto' && n > INDEX_MIN_LOOPS) {
+    let verts = 0;
+    for (const l of loops) verts += l.length >> 1;
+    cap = SWEEP_AFTER_BASE + SWEEP_AFTER_PER * (n + verts);
+  }
+  /** 품지 않는 고리를 견준 일이 문턱을 넘고 절반을 넘는다 */
+  const wasteful = (): boolean => index.work - index.useful > cap && index.work - index.useful > index.useful;
+  // 고리 안쪽 점: 첫 변의 중점
+  const mid = (c: readonly number[]): [number, number] => [(c[0]! + c[2]!) / 2, (c[1]! + c[3]!) / 2];
+  // 한도에 닿으면 그때까지 든 일을 더하고 멈춘다
+  const stop = (): null => {
+    if (work) work.n += index.work;
+    return null;
+  };
+  const depth = new Int32Array(n);
+  let sweep = false;
+  for (let i = 0; i < n && !sweep; i++) {
+    const [x, y] = mid(loops[i]!);
+    index.containing(x, y, i, () => depth[i]!++);
+    if (over(work, index.work)) return stop();
+    sweep = wasteful();
+  }
+  // 구멍: 깊이가 하나 얕은, 자기를 품은 고리마다(j 순으로 돌므로 번호 순이다)
+  const holesOf: number[][] = loops.map(() => []);
+  for (let j = 0; j < n && !sweep; j++) {
+    if (depth[j]! % 2 === 0) continue;
+    const [x, y] = mid(loops[j]!);
+    index.containing(x, y, j, (i) => {
+      if (depth[i] === depth[j]! - 1) holesOf[i]!.push(j);
+    });
+    if (over(work, index.work)) return stop();
+    sweep = wasteful();
+  }
+  if (work) work.n += index.work;
+  return sweep ? sweepNesting(loops, work) : { depth, holesOf };
+}
+
+/** 변 훑기로 고리 포함 관계. 일은 변 훑기 일 × SWEEP_WORK */
+function sweepNesting(loops: readonly number[][], work: LoopWork | undefined): LoopNest | null {
+  const n = loops.length;
+  const w = { work: 0 };
+  const stopAt = work?.limit === undefined ? Infinity : (work.limit - work.n) / SWEEP_WORK;
+  const depth = new Int32Array(n);
+  const holesOf: number[][] = loops.map(() => []);
+  const all = Array.from(loops, (_, i) => i);
+  let ok = loopsContaining(loops, null, all, (q) => depth[q]!++, stopAt, w);
+  if (ok) {
+    // 구멍을 물을 고리는 깊이가 홀수인 고리, 품는 쪽은 깊이가 짝수인 고리뿐이다
+    const odd: number[] = [];
+    const even = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      if (depth[i]! % 2) odd.push(i);
+      else even[i] = 1;
+    }
+    if (odd.length)
+      ok = loopsContaining(loops, even, odd, (j, i) => {
+        if (depth[i] === depth[j]! - 1) holesOf[i]!.push(j);
+      }, stopAt, w);
+  }
+  if (work) work.n += Math.ceil(w.work * SWEEP_WORK);
+  if (!ok) {
+    if (work) work.limited = true;
+    return null;
+  }
+  // 점을 y 순으로 물었으므로 구멍을 번호 순으로(상자 격자와 같은 차례 — earcut 입력이 같다)
+  for (const h of holesOf) if (h.length > 1) h.sort((p, q) => p - q);
+  return { depth, holesOf };
+}
+
 /** 일이 한도를 넘었는지(넘으면 limited를 세운다) */
 function over(work: LoopWork | undefined, n: number): boolean {
   if (!work || work.limit === undefined || work.n + n <= work.limit) return false;
@@ -382,39 +734,22 @@ export function triangulateLoops(loops: number[][], work?: LoopWork): number[] {
 
 /**
  * 고리들을 홀짝 규칙으로 삼각분할해 out에 더한다. 한도를 넘으면 false.
- * split이면 구멍이 STRIP_HOLES개 넘는 바깥 고리를 칸으로 나눠 채운다(칸 하나를 채울 때는 나누지 않는다)
+ * split이면 구멍이 STRIP_HOLES개 넘는 바깥 고리와 구멍 상자가 서로 겹쳐 덮는 바깥 고리(wrapped)를 칸으로 나눠 채운다(칸 하나를 채울 때는 나누지 않는다)
  */
 function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined, split: boolean): boolean {
-  const index = new LoopIndex(loops);
-  // 고리 안쪽 점: 첫 변의 중점
-  const mid = (c: readonly number[]): [number, number] => [(c[0]! + c[2]!) / 2, (c[1]! + c[3]!) / 2];
-  // 한도에 닿으면 그때까지 든 일을 더하고 멈춘다
-  const stop = (): boolean => {
-    if (work) work.n += index.work;
-    return false;
-  };
-  const depth = new Int32Array(loops.length);
-  for (let i = 0; i < loops.length; i++) {
-    const [x, y] = mid(loops[i]!);
-    index.containing(x, y, i, () => depth[i]!++);
-    if (over(work, index.work)) return stop();
-  }
-  // 구멍: 깊이가 하나 얕은, 자기를 품은 고리마다(j 순으로 돌므로 번호 순이다)
-  const holesOf: number[][] = loops.map(() => []);
-  for (let j = 0; j < loops.length; j++) {
-    if (depth[j]! % 2 === 0) continue;
-    const [x, y] = mid(loops[j]!);
-    index.containing(x, y, j, (i) => {
-      if (depth[i] === depth[j]! - 1) holesOf[i]!.push(j);
-    });
-    if (over(work, index.work)) return stop();
-  }
-  if (work) work.n += index.work;
+  const nest = loopNesting(loops, work);
+  if (!nest) return false;
+  const { depth, holesOf } = nest;
   for (let i = 0; i < loops.length; i++) {
     if (depth[i]! % 2 !== 0) continue;
     const holes = holesOf[i]!;
     if (split && holes.length > STRIP_HOLES && stripTriangulate(loops[i]!, holes.map((j) => loops[j]!), out, work)) continue;
     if (work && work.limited) return false;
+    if (split && holes.length > WRAP_HOLES && holes.length <= STRIP_HOLES && wrapped(loops[i]!, holes.map((j) => loops[j]!))) {
+      const r = cellFill([loops[i]!, ...holes.map((j) => loops[j]!)], out, work);
+      if (r === 'limited') return false;
+      if (r === 'ok') continue;
+    }
     const flat = [...loops[i]!];
     const starts: number[] = [];
     for (const j of holes) {
@@ -424,6 +759,28 @@ function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined,
     if (!earcutFill(flat, starts, out, work)) return false;
   }
   return true;
+}
+
+/** 구멍 상자 넓이의 합이 바깥 고리 상자 넓이 × WRAP_COVER를 넘는지(구멍 상자가 평균 WRAP_COVER겹 넘게 서로 덮는다). 넓이가 0이거나 수가 아니면 false */
+function wrapped(outer: readonly number[], holes: readonly (readonly number[])[]): boolean {
+  const area = (c: readonly number[]): number => {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (let i = 0; i + 1 < c.length; i += 2) {
+      if (c[i]! < x0) x0 = c[i]!;
+      if (c[i]! > x1) x1 = c[i]!;
+      if (c[i + 1]! < y0) y0 = c[i + 1]!;
+      if (c[i + 1]! > y1) y1 = c[i + 1]!;
+    }
+    return (x1 - x0) * (y1 - y0);
+  };
+  const box = area(outer);
+  if (!(box > 0 && box < Infinity)) return false;
+  let sum = 0;
+  for (const h of holes) sum += area(h);
+  return sum > box * WRAP_COVER;
 }
 
 /** earcut 한 번(일 = 정점 수 + 구멍 수의 제곱) */

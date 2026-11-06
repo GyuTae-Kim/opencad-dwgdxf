@@ -5,6 +5,9 @@
  * 보장은 예전 식과 같은 삼각형·넓이·일·경고로 보고, 시간은 끝나지 않는 꼴만 가른다(timed.ts).
  * 91차: 어느 축에도 구멍 사이 틈이 없는 구멍 많은 해치는 earcut 한 번이라 모양에 따라 일로 셀 수 없이 느렸다(서로 감싼 ㄱ자 구멍 1,200개 35초).
  * 구멍을 가로질러 칸으로 자른 삼각형이 넓이와 점 표본으로 원래 홀짝 영역과 같은지 본다.
+ * 92차: 구멍 상자가 서로 덮는 꼴은 고리 포함 관계(상자 격자)가 고리 수의 제곱이라 ㄱ자 구멍 2,400개·기운 막대 4,000개가 칸 자르기 전에 한도를 넘었고,
+ * 구멍 512개 이하는 한 번에 earcut이라 ㄱ자 구멍 500개가 2~4초였다. 변 훑기로 갈아탄 깊이·구멍이 모든 고리를 판정한 식과 같은지,
+ * 일이 해치 크기에 비례하는지, 정상 꼴은 갈아타지 않는지(일까지 같다), 구멍 상자가 서로 덮는 512개 이하 꼴을 칸으로 잘라도 영역이 같은지 본다.
  */
 import earcut from 'earcut';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +15,7 @@ import { HATCH_FILL_WORK_BASE, hatchFillWorkLimit } from '../../src/core/limits'
 import { MODEL_SPACE, entityDefaults, type CadDocument, type HatchPatternLine } from '../../src/core/model';
 import { readDxf } from '../../src/io/dxf/reader';
 import { type BuildOptions, buildSpace } from '../../src/render/build';
-import { type LoopWork, STRIP_HOLES, cutLoops, patternSegments, triangulateLoops } from '../../src/render/hatch';
+import { type LoopWork, STRIP_HOLES, cutLoops, loopNesting, patternSegments, triangulateLoops } from '../../src/render/hatch';
 import { TextEngine } from '../../src/text/layout';
 import { bytesOf, dxfText } from './corrupt35';
 import { beforeHang, within2s } from './timed';
@@ -281,7 +284,7 @@ describe('어느 축에도 구멍 사이 틈이 없는 구멍 많은 채우기 �
     const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(4 + 1200 * 6) };
     const t = within2s(() => triangulateLoops(loops, w));
     expect(w.limited).toBeUndefined();
-    // 일은 한도 안쪽이다(ㄱ자 상자가 모두 겹쳐 고리 포함 관계가 대부분이고 칸 자르기와 채우기는 약 80만)
+    // 일은 한도 안쪽이다(91차에는 ㄱ자 상자가 모두 겹쳐 고리 포함 관계가 대부분이었고, 92차부터 변 훑기로 갈아타 칸 자르기와 채우기가 대부분이다)
     expect(w.n).toBeLessThan(w.limit! / 2);
     expectRegion(loops, t);
   });
@@ -297,7 +300,7 @@ describe('어느 축에도 구멍 사이 틈이 없는 구멍 많은 채우기 �
     }
   });
 
-  it('구멍이 512개 이하면 틈이 없어도 예전처럼 한 번에 채운다', () => {
+  it('구멍이 512개 이하면 틈이 없어도 구멍 상자가 서로 덮지 않는 한 예전처럼 한 번에 채운다', () => {
     const loops = rotatedGrid(22);
     expect(loops.length - 1).toBeLessThanOrEqual(STRIP_HOLES);
     expect(triangulateLoops(loops)).toEqual(before(loops));
@@ -359,6 +362,111 @@ describe('어느 축에도 구멍 사이 틈이 없는 구멍 많은 채우기 �
     const s = beforeHang(() => scene(doc));
     expect(codes(s)).not.toContain('hatch.fill_limited');
     expect(tris(s)).toBeGreaterThan(1200 * 4);
+  });
+});
+
+/** 61차 식: 고리마다 모든 고리에 점 포함을 물은 깊이와 짝수 깊이 고리의 구멍(번호 순) */
+function nestingBefore(loops: number[][]): { depth: number[]; holesOf: number[][] } {
+  const mid = (c: number[]) => [(c[0]! + c[2]!) / 2, (c[1]! + c[3]!) / 2] as const;
+  const depth = loops.map((c, i) => loops.filter((o, j) => j !== i && pointInRing(...mid(c), o)).length);
+  const holesOf = loops.map((c, i) => (depth[i]! % 2 ? [] : loops.flatMap((h, j) => (j !== i && depth[j] === depth[i]! + 1 && pointInRing(...mid(h), c) ? [j] : []))));
+  return { depth, holesOf };
+}
+/** 고리 포함 관계에 든 일 */
+const nestWork = (loops: number[][], mode?: 'auto' | 'grid'): number => {
+  const w: LoopWork = { n: 0 };
+  loopNesting(loops, w, mode);
+  return w.n;
+};
+
+describe('구멍 상자가 서로 덮는 채우기 해치(92차)', () => {
+  it('변 훑기와 상자 격자의 깊이·구멍이 모든 고리를 판정한 61차 식과 같다(겹친 고리·같은 고리·서로 감싼 고리·NaN·1e300·1e-300·홀수 길이·수평 변뿐)', () => {
+    let seed = 92;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const poly = (cx: number, cy: number, r: number, n: number, jag: number): number[] => {
+      const p: number[] = [];
+      const a0 = rnd() * 7;
+      for (let i = 0; i < n; i++) {
+        const rr = r * (1 - jag * rnd());
+        p.push(cx + rr * Math.cos(a0 + (i / n) * Math.PI * 2), cy + rr * Math.sin(a0 + (i / n) * Math.PI * 2));
+      }
+      return p;
+    };
+    for (let t = 0; t < 60; t++) {
+      const scale = rnd() < 0.5 ? 1 : 10 ** Math.round(rnd() * 60 - 30);
+      const loops: number[][] = [];
+      for (let k = 0, L = 17 + Math.floor(rnd() * 80); k < L; k++) {
+        const kind = rnd();
+        const n = 3 + Math.floor(rnd() * (rnd() < 0.2 ? 200 : 10));
+        if (kind < 0.2) loops.push(poly(rnd() * 100, rnd() * 100, 1 + rnd() * 50, n, rnd()));
+        else if (kind < 0.35) loops.push(poly(50, 50, 1 + k * 0.7, n, 0.1));
+        else if (kind < 0.5) loops.push(square(Math.floor(rnd() * 10), Math.floor(rnd() * 10), 1 + Math.floor(rnd() * 5)));
+        else if (kind < 0.6) loops.push(Array.from({ length: 2 * (3 + Math.floor(rnd() * 8)) }, () => Math.floor(rnd() * 12)));
+        else if (kind < 0.63) loops.push(poly(rnd() * 1e300, rnd() * 1e300, 1e299, n, 0.5));
+        else if (kind < 0.66) loops.push(poly(rnd() * 1e-300, 0, 1e-301, n, 0.5));
+        else if (kind < 0.68) {
+          const p = poly(50, 50, 30, n, 0.3);
+          p[Math.floor(rnd() * p.length)] = rnd() < 0.5 ? NaN : Infinity;
+          loops.push(p);
+        } else if (kind < 0.7) loops.push([rnd() * 100, rnd() * 100, rnd() * 100]);
+        else if (kind < 0.72) loops.push([5, 5, 9, 5, 2, 5]);
+        else if (kind < 0.8 && loops.length) loops.push([...loops[Math.floor(rnd() * loops.length)]!]);
+        else if (kind < 0.85) {
+          const i = Math.floor(rnd() * 50);
+          loops.push([i, i, 100, i, 100, i + 0.5, i + 0.5, i + 0.5, i + 0.5, 100, i, 100]);
+        } else if (kind < 0.9) {
+          const i = Math.floor(rnd() * 50);
+          loops.push([2 * i, 0, 2 * i + 1, 0, 2 * i + 101, 100, 2 * i + 100, 100]);
+        } else loops.push(poly(rnd() * 100, rnd() * 100, rnd() * 3, n, 0));
+      }
+      const scaled = loops.map((l) => l.map((v) => v * scale));
+      const want = nestingBefore(scaled);
+      for (const mode of ['grid', 'sweep', 'auto'] as const) {
+        const got = loopNesting(scaled, undefined, mode)!;
+        expect([...got.depth]).toEqual(want.depth);
+        expect(got.holesOf).toEqual(want.holesOf);
+      }
+    }
+  });
+
+  it('서로 감싼 ㄱ자 구멍 2,400개를 채운다(예전 고리 포함 관계에서 한도를 넘어 경계만)', () => {
+    const loops = nestedL(2400);
+    const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(4 + 2400 * 6) };
+    const t = beforeHang(() => triangulateLoops(loops, w));
+    expect(w.limited).toBeUndefined();
+    expectRegion(loops, t);
+  });
+
+  it('고리 포함 관계 일이 해치 크기에 비례한다(ㄱ자 구멍 2,400 → 4,800 → 2만, 기운 막대 2,000 → 4,000)', () => {
+    const [a, b, c] = [2400, 4800, 20_000].map((n) => nestWork(nestedL(n)));
+    expect(b / a).toBeLessThan(2 * 1.25);
+    expect(c / b).toBeLessThan((20_000 / 4800) * 1.25);
+    // 2만 개도 한도의 3분의 1 안쪽(상자 격자로 끝까지 하면 32억)
+    expect(c).toBeLessThan(hatchFillWorkLimit(4 + 20_000 * 6) / 3);
+    const [s, t] = [2000, 4000].map((n) => nestWork(slantedBars(n)));
+    expect(t / s).toBeLessThan(2 * 1.25);
+  });
+
+  it('정상 꼴은 상자 격자 그대로다(갈아탄 판과 일까지 같다 — 격자·돌린 타공판·육각 원 구멍, 일 대부분이 품은 고리인 동심 고리)', () => {
+    const rings = Array.from({ length: 500 }, (_, i) => circle(32, 10 + i));
+    for (const loops of [gridHoles(100), rotatedGrid(40), hexHoles(30, 30), rings]) expect(nestWork(loops)).toBe(nestWork(loops, 'grid'));
+  });
+
+  it('구멍이 512개 이하라도 구멍 상자가 서로 덮으면 칸으로 잘라 채운다(서로 감싼 ㄱ자 구멍 500개 예전 2~4초)', () => {
+    for (const loops of [nestedL(500), slantedBars(300)]) {
+      const holes = loops.length - 1;
+      expect(holes).toBeLessThanOrEqual(STRIP_HOLES);
+      const verts = loops.reduce((a, l) => a + l.length / 2, 0);
+      const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
+      const t = beforeHang(() => triangulateLoops(loops, w));
+      expect(w.limited).toBeUndefined();
+      // 한 번에 earcut이면 삼각형이 정점 수 + 2 × 구멍 수 - 2개다. 칸 경계만큼 는다
+      expect(t.length / 6).toBeGreaterThan(verts + 2 * holes - 2);
+      expectRegion(loops, t);
+    }
+    // 덮지 않으면 그대로(육각 배치 원 구멍 500개)
+    const hex = hexHoles(20, 25);
+    expect(triangulateLoops(hex)).toEqual(before(hex));
   });
 });
 
