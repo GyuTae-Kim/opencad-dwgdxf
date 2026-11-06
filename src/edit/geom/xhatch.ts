@@ -5,17 +5,23 @@
 import type { HatchEdge, HatchEntity, HatchPath, HatchPatternLine, Vec2 } from '../../core/model';
 import { bulgeArc, interpolateFitPoints } from '../../geom/curves';
 import { ellipseFromConjugate, geomToParam, paramToGeom } from './conic';
-import { cloneEntity } from './path';
+import { cloneEntityExcept } from './path';
 import { type Affine, TAU, affAngle, affApply, affDet, affInv, affLin, affMul, affScaleOf, affSimilarity, ccwSweep, len, normAngle, rot90 } from './math';
 import { planProj, planeMap } from './ocs';
 import type { TransformOptions } from './types';
 import { bulgeVertices, packBulge } from '../../core/lwpoly';
 import { firstEdge, hatchEdges, packEdges } from '../../core/hatchedges';
 
+/**
+ * 아래에서 늘 새 값으로 바꾸는 속성: 복사하지 않는다(98차 — 경계·무늬 선을 깊이 복사하자마자 버렸다.
+ * 연관 도면 MOVE·COPY에서 편집 객체 복사 몫의 큰 쪽이었다)
+ */
+const XFORMED: ReadonlySet<string> = new Set(['paths', 'patternLines', 'seedPoints', 'extrusion']);
+
 export function xformHatch(e: HatchEntity, m: Affine, opt: TransformOptions): HatchEntity {
   const pm = planeMap(e.extrusion, e.elevation, m, opt.dz ?? 0);
   const A = pm.A;
-  const r = cloneEntity(e);
+  const r = cloneEntityExcept(e, XFORMED);
   r.paths = e.paths.map((p) => xformPath(p, A));
   const keep = affDet(m) < 0 && !opt.mirrorHatch;
   let G = A;

@@ -18,7 +18,7 @@ import type {
   Vec3,
   XLineEntity,
 } from '../../core/model';
-import { cloneData } from '../../core/clone';
+import { cloneData, cloneDataExcept } from '../../core/clone';
 import { lwCount, packLw } from '../../core/lwpoly';
 import { packPoly, polyVertices } from '../../core/polyverts';
 import { ctrlCount, fitCount, pack3, splineCtrl } from '../../core/flat3';
@@ -73,6 +73,14 @@ export function freshEntity<T extends Entity>(x: T, keepOwner = true): T {
 export function cloneEntity<T extends Entity>(e: T): T {
   // 평탄 좌표는 형식 배열이라 그대로 옮긴다(수 배열처럼 수를 하나씩 상자에 담지 않는다). structuredClone보다 빠른 복사(97차 — core/clone.ts)
   return cloneData(e);
+}
+
+/**
+ * cloneEntity와 같되 skip 속성은 복사하지 않고 원본 값을 둔다 — 변환처럼 복사하자마자 새 값으로 바꾸는 속성(98차, core/clone.ts cloneDataExcept).
+ * 부르는 쪽은 skip 속성을 모두 바꿔야 한다(그대로 두면 원본과 함께 쓴다)
+ */
+export function cloneEntityExcept<T extends Entity>(e: T, skip: ReadonlySet<string>): T {
+  return cloneDataExcept(e, skip);
 }
 
 // ---------------------------------------------------------------------------
