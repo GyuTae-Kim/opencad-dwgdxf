@@ -20,22 +20,19 @@ const PROMPT: Record<string, string> = {
 const keyOf = (id: string) => (/^col:h\d+$/.test(id) ? 'col:h' : id);
 
 /**
- * 객체의 그립을 묶음 그립으로: 여러 단 문자(R2018 꼴 또는 묶음의 첫 단)면 묶음 그립, 묶음의 다른 단이면 빈 목록(그립 없음),
- * 그 밖은 null(보통 그립)
+ * 객체의 그립을 묶음 그립으로: 여러 단 문자(R2018 꼴 또는 묶음의 첫 단)면 묶음 그립, 묶음의 다른 단이면 빈 목록(첫 단도 골랐으면 —
+ * 첫 단이 묶음 그립을 갖는다. 다른 단만 골랐으면 그 단이 묶음 그립을 갖는다), 그 밖은 null(보통 그립)
  */
-export function columnGripsFor(app: App, e: Entity): GripPoint[] | null {
+export function columnGripsFor(app: App, e: Entity, selected?: ReadonlySet<string>): GripPoint[] | null {
   const st = app.active;
   if (!st || e.type !== 'MTEXT') return null;
-  if (!e.columns && !e.xdata) {
-    // 확장 자료가 없는 MTEXT는 수동 높이 묶음의 다른 단일 수만 있다
-    const list = cachedMTextColumnSets(st.doc, st.gen).get(e.handle);
-    return list && list[0] !== e.handle ? [] : null;
-  }
   const sets = cachedMTextColumnSets(st.doc, st.gen);
   const list = sets.get(e.handle);
-  if (list && list[0] !== e.handle) return [];
+  if (!e.columns && !list) return null;
+  if (list && list[0] !== e.handle && (!selected || selected.has(list[0]!) || list.slice(1).some((h) => h !== e.handle && selected.has(h) && list.indexOf(h) < list.indexOf(e.handle)))) return [];
   const t = columnTarget(st.doc, e, sets);
-  return t ? columnGripPoints(t) : null;
+  // 근거가 없는 꼴(왼쪽 위가 아닌 부착점 등): 첫 단·R2018 꼴은 보통 그립, 다른 단은 그립 없음
+  return t ? columnGripPoints(t) : list && list[0] !== e.handle ? [] : null;
 }
 
 /** 묶음 그립 편집: 새 점을 받아 단 자료를 바꾼다(R2000~R2013 꼴 묶음은 첫 단 자리의 한 객체로 합친다) */

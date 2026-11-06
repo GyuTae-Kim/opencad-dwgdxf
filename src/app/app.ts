@@ -1866,7 +1866,7 @@ export class App {
             if (!e) continue;
             try {
               // 여러 단 문자: 묶음 그립(위치·단 폭·간격·높이 — 묶음의 다른 단은 그립 없음)
-              const cols = e.type === 'MTEXT' ? columnGripsFor(this, e) : null;
+              const cols = e.type === 'MTEXT' ? columnGripsFor(this, e, st.selection) : null;
               for (const g of cols ?? gripPoints(e, st.doc)) this.gripList.push({ handle: h, id: g.id, point: g.point });
             } catch {
               /* 그립이 없는 객체 */
