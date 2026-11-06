@@ -170,12 +170,16 @@ export class Encoder {
   }
 
   private tag(t: number): void {
-    if (this.nt >= this.tags.length) {
-      const n = new Uint8Array(this.tags.length * 2);
-      n.set(this.tags);
-      this.tags = n;
-    }
+    if (this.nt >= this.tags.length) this.growTags(this.nt + 1);
     this.tags[this.nt++] = t;
+  }
+
+  private growTags(need: number): void {
+    let cap = this.tags.length * 2;
+    while (cap < need) cap *= 2;
+    const n = new Uint8Array(cap);
+    n.set(this.tags);
+    this.tags = n;
   }
 
   private int(v: number): void {
@@ -189,13 +193,17 @@ export class Encoder {
 
   /** 수 하나(모양별 쓰기 함수가 부르므로 private이 아니다) */
   num(v: number): void {
-    // 0~255 정수는 태그 다음 바이트 하나로(-0은 수로)
+    // 0~255 정수는 태그 다음 바이트 하나로(-0은 수로). 태그 자리는 한 번에 확인한다(97차 — 수마다 부른다)
+    const nt = this.nt;
+    if (nt + 2 > this.tags.length) this.growTags(nt + 2);
     if (v >= 0 && v <= 255 && (v | 0) === v && !(v === 0 && 1 / v < 0)) {
-      this.tag(T_U8);
-      this.tag(v);
+      this.tags[nt] = T_U8;
+      this.tags[nt + 1] = v;
+      this.nt = nt + 2;
       return;
     }
-    this.tag(T_NUM);
+    this.tags[nt] = T_NUM;
+    this.nt = nt + 1;
     if (this.nn >= this.nums.length) {
       const n = new Float64Array(this.nums.length * 2);
       n.set(this.nums);
@@ -377,13 +385,23 @@ export class Encoder {
     let id: number;
     // 일반 객체는 for-in이 자기 속성만 돈다(V8 열거 캐시를 써서 빠르다)
     if (simple && guess >= 0) {
+      // 짐작한 모양의 이름과 차례대로 견주기만 한다(97차 — 대개 맞으므로 이름을 모으지 않는다). 어긋나면 처음부터 모아 찾는다
       const names = this.shapes[guess]!;
+      const len = names.length;
       let same = true;
       for (const k in o) {
-        if (same && names[nk] !== k) same = false;
-        keys[nk++] = k;
+        if (nk >= len || names[nk] !== k) {
+          same = false;
+          break;
+        }
+        nk++;
       }
-      id = same && nk === names.length ? guess : this.shapeOf(keys, nk);
+      if (same && nk === len) id = guess;
+      else {
+        nk = 0;
+        for (const k in o) keys[nk++] = k;
+        id = this.shapeOf(keys, nk);
+      }
     } else {
       if (simple) for (const k in o) keys[nk++] = k;
       else for (const k of Object.keys(o)) keys[nk++] = k;

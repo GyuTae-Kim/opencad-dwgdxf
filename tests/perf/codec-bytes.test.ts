@@ -82,4 +82,15 @@ describe('부호화 바이트 고정(89차)', () => {
     // 되살린 객체의 이름 차례도 그대로
     expect(Object.keys((back[0] as object[])[3]!)).toEqual(['b', 'a']);
   });
+
+  it('짐작한 모양보다 속성이 적거나 많거나 이름이 달라도 제 모양으로 쓴다(97차 — 짐작이 맞을 때만 이름을 모으지 않는다)', () => {
+    // 배열 안·속성 자리에서 바로 앞 모양(짐작)이 {a, b}일 때 {a}·{a, b, c}·{a, c}·{b}·{}가 온다
+    const items = [{ a: 1, b: 2 }, { a: 3 }, { a: 1, b: 2 }, { a: 1, b: 2, c: 3 }, { a: 1, b: 2 }, { a: 1, c: 2 }, { a: 1, b: 2 }, { b: 1 }, { a: 1, b: 2 }, {}];
+    const values: unknown[] = [items, ...items.map((p) => ({ type: 'Y', at: p }))];
+    const e = encodeAll(values);
+    expect(e.shapes).toEqual([['a', 'b'], ['a'], ['a', 'b', 'c'], ['a', 'c'], ['b'], [], ['type', 'at']]);
+    const back = decodeAll(e);
+    for (let i = 0; i < values.length; i++) expect(back[i]).toStrictEqual(structuredClone(values[i]));
+    for (let i = 0; i < items.length; i++) expect(Object.keys((back[0] as object[])[i]!)).toEqual(Object.keys(items[i]!));
+  });
 });
