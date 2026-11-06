@@ -15,7 +15,9 @@ import { transformEntity } from '../../src/edit/geom/transform';
 import {
   cachedMTextColumnSets,
   columnLayoutFits,
+  columnWrapWidth,
   columnXDataItems,
+  memberColumnWidths,
   expandByMTextColumns,
   mtextColumnLinks,
   mtextColumnSets,
@@ -135,6 +137,19 @@ describe('여러 단 MTEXT 묶음', () => {
     expect(c.links!.handles).toEqual(['A1', 'A2']);
     const m = transformEntity(doc.entityIndex.get('A1')!, affScale(2, 2), doc, {}).replace![0] as MTextEntity;
     expect(readColumnXData(m)!.definedHeight).toBeCloseTo(24);
+  });
+
+  it('그릴 때 첫 단·다른 단은 단 폭으로 줄을 나눈다(41은 전체 폭), 묶음이 아닌 MTEXT는 41 그대로', () => {
+    const doc = columnDoc();
+    const members = () => memberColumnWidths(doc);
+    expect(members()).toEqual(new Map([['A1', 20], ['A2', 20]]));
+    expect(['A0', 'A1', 'A2'].map((h) => columnWrapWidth(doc.entityIndex.get(h) as MTextEntity, members))).toEqual([20, 20, 20]);
+    expect(columnWrapWidth(mtext('B0', 0, 'x'), members)).toBeUndefined();
+    // 한 단짜리 단 정보는 41 그대로
+    const one = mtext('B1', 0, 'x', [{ app: 'ACAD', items: columnXDataItems({ info: { type: 2, count: 1, width: 9, gutter: 5, autoHeight: false, flowReversed: false, heights: [0] } }) }]);
+    expect(columnWrapWidth(one, members)).toBeUndefined();
+    // 묶음 밖의 정한 높이만 있는 MTEXT도 41 그대로
+    expect(columnWrapWidth(mtext('B2', 0, 'x', [{ app: 'ACAD', items: DH }]), members)).toBeUndefined();
   });
 
   it('원본을 복제해 새 핸들만 준 사본은 사본끼리 잇고, 일부만 있으면 연결을 뗀다', () => {
