@@ -357,16 +357,23 @@ export class EditSession {
   /** 새 핸들($HANDSEED에서 하나씩) */
   newHandle(): string {
     const seed = this.doc.header.get('$HANDSEED');
+    const memo = this.seedMemo;
     let next = 0n;
-    if (this.seedMemo && this.seedMemo.seed === seed) next = this.seedMemo.next;
-    else
+    // 머리말이 지난번에 적은 그대로면 그 글자가 곧 normalizeHandle(next)다. 다시 16진 글자로 바꾸지 않는다
+    // (98차 — 연관 도면 COPY는 치수 블록 객체마다 불러 명령 하나에 15만 번, 한 번에 16진 글자 바꾸기 세 번이 COPY 명령 시간의 약 7%였다)
+    let h0: string | undefined;
+    if (memo && memo.seed === seed) {
+      next = memo.next;
+      h0 = memo.seed;
+    } else
       try {
         next = BigInt('0x' + (typeof seed === 'string' && seed ? seed : '0'));
       } catch {
         next = 0n;
       }
     // 이미 쓰인 핸들과 겹치지 않게 한다
-    const h0 = normalizeHandle(next);
+    h0 ??= normalizeHandle(next);
+    let h = h0;
     if (next === 0n || this.doc.entityIndex.has(h0) || this.doc.objects.has(h0)) {
       let max = 0n;
       for (const h of this.doc.entityIndex.keys()) {
@@ -396,12 +403,18 @@ export class EditSession {
           }
         }
       }
-      if (next <= max) next = max + 1n;
+      if (next <= max) {
+        next = max + 1n;
+        h = normalizeHandle(next);
+      }
     }
-    const h = normalizeHandle(next);
-    const seed2 = normalizeHandle(next + 1n);
+    const after = next + 1n;
+    const seed2 = normalizeHandle(after);
     this.doc.header.set('$HANDSEED', seed2);
-    this.seedMemo = { seed: seed2, next: next + 1n };
+    if (memo) {
+      memo.seed = seed2;
+      memo.next = after;
+    } else this.seedMemo = { seed: seed2, next: after };
     return h;
   }
 
