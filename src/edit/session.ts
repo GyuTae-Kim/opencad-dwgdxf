@@ -6,6 +6,7 @@
  */
 import type { BlockDef, BlockRecord, CadDocument, CadObject, Entity, HeaderValue, Layer, Layout, LayoutObject, Linetype, TableHead, TableRecordBase, TextStyle, DimStyle, UcsRecord, ViewRecord, VPortRecord } from '../core/model';
 import { pushAll } from '../core/arrays';
+import { cloneData } from '../core/clone';
 import { tableKey, normalizeHandle } from '../core/model';
 
 export type EditOp =
@@ -581,8 +582,8 @@ export class EditSession {
 
 /** 객체를 깊이 복사한다(편집 전 상태 보관용) */
 export function cloneEntity<T extends Entity>(e: T): T {
-  // 평탄 좌표는 형식 배열이라 구조화 복제가 그대로 옮긴다(수 배열처럼 수를 하나씩 상자에 담지 않는다)
-  return structuredClone(e);
+  // 평탄 좌표는 형식 배열이라 그대로 옮긴다(수 배열처럼 수를 하나씩 상자에 담지 않는다). structuredClone보다 빠른 복사(97차 — core/clone.ts)
+  return cloneData(e);
 }
 
 export { tableKey };
