@@ -10,6 +10,8 @@
  * 일이 해치 크기에 비례하는지, 정상 꼴은 갈아타지 않는지(일까지 같다), 구멍 상자가 서로 덮는 512개 이하 꼴을 칸으로 잘라도 영역이 같은지 본다.
  * 93차: earcut 3.2.4가 돌린 타공판·육각 원 구멍(구멍 변과 다리가 거의 한 줄에 놓인다)에서 구멍을 덮어 넓이가 2~32% 많은 꼴을
  * 넓이 검사가 잡아 칸으로 다시 채우는지, 정상 꼴과 신발끈 식이 맞지 않는 꼴(겹친 구멍 등)은 예전 삼각형 그대로인지, 검사 일을 세는지 본다.
+ * 94차: 이웃 고리와 변을 함께 쓰는 고리는 판정 점(첫 변 중점)이 이웃의 경계 위라 이웃의 구멍으로 분류됐다(맞붙은 사각형 12개 가운데 6개).
+ * 맞닿은 쌍만 안쪽 점과 넓이로 판정해 맞붙은 고리·벽돌·바둑판이 모두 채워지고, 바깥 변에 닿은 구멍은 구멍으로 남는지, 세 길이 같은지 본다.
  */
 import earcut from 'earcut';
 import { describe, expect, it } from 'vitest';
@@ -17,7 +19,7 @@ import { HATCH_FILL_WORK_BASE, hatchFillWorkLimit } from '../../src/core/limits'
 import { MODEL_SPACE, entityDefaults, type CadDocument, type HatchPatternLine } from '../../src/core/model';
 import { readDxf } from '../../src/io/dxf/reader';
 import { type BuildOptions, buildSpace } from '../../src/render/build';
-import { type LoopWork, STRIP_HOLES, cutLoops, loopNesting, patternSegments, triangulateLoops } from '../../src/render/hatch';
+import { type LoopWork, STRIP_HOLES, cutLoops, interiorPoint, loopNesting, patternSegments, triangulateLoops } from '../../src/render/hatch';
 import { TextEngine } from '../../src/text/layout';
 import { bytesOf, dxfText } from './corrupt35';
 import { beforeHang, within2s } from './timed';
@@ -67,16 +69,65 @@ function pointInRing(x: number, y: number, c: readonly number[]): boolean {
   }
   return inside;
 }
+/** 94차까지의 판정에 쓰는 식(src와 같은 식을 따로 적는다): 상자로 거를 수 있는 좌표, 점과 변의 여유, 신발끈 넓이 */
+const safeV = (v: number): boolean => v === 0 || (Math.abs(v) >= 1e-100 && Math.abs(v) <= 1e100);
+const goodLoop = (c: readonly number[]): boolean => c.length >= 6 && c.length % 2 === 0 && c.every(safeV);
+function nearEdgeRef(x: number, y: number, ax: number, ay: number, bx: number, by: number): boolean {
+  const tol = 1e-9 * (Math.abs(ax) + Math.abs(ay) + Math.abs(bx) + Math.abs(by));
+  const [dx, dy, px, py] = [bx - ax, by - ay, x - ax, y - ay];
+  const ll = dx * dx + dy * dy;
+  const t = ll > 0 ? Math.min(1, Math.max(0, (px * dx + py * dy) / ll)) : 0;
+  const [ex, ey] = [px - t * dx, py - t * dy];
+  return ex * ex + ey * ey <= tol * tol;
+}
+function loopAreaRef(c: readonly number[]): number {
+  const [ox, oy] = [c[0]!, c[1]!];
+  let a = 0;
+  for (let i = 0, j = c.length - 2; i < c.length; j = i, i += 2) a += (c[j]! - ox) * (c[i + 1]! - oy) - (c[i]! - ox) * (c[j + 1]! - oy);
+  return Math.abs(a / 2);
+}
+/** 점이 고리 o의 변에서 여유 안이면 0, 아니면 안 1·밖 -1 */
+const sideRef = (x: number, y: number, o: readonly number[]): number => {
+  for (let a = 0, b = o.length - 2; a < o.length; b = a, a += 2) if (nearEdgeRef(x, y, o[b]!, o[b + 1]!, o[a]!, o[a + 1]!)) return 0;
+  return pointInRing(x, y, o) ? 1 : -1;
+};
+/**
+ * 고리 k가 고리 i를 품는지(모든 고리를 판정하는 기준 식): 판정 점은 i의 첫 변 중점(61차). 94차부터 그 점이 k의 변에서 여유 안이면(맞닿은 고리)
+ * k 넓이 > i 넓이이고 i의 안쪽 점이 k 안일 때만 품는다. 안쪽 점이 없거나 넓이가 0인 i, 넓이가 같고 안쪽 점이 k 안인 쌍(같은 고리),
+ * 답과 i의 정점이 어긋나는 쌍(품는데 k 밖 정점, 아닌데 k 안 정점 — 엇갈린 고리)은 예전 그대로
+ */
+function containsRef(loops: readonly number[][], k: number, i: number): boolean {
+  const c = loops[i]!;
+  const o = loops[k]!;
+  const x = (c[0]! + c[2]!) / 2;
+  const y = (c[1]! + c[3]!) / 2;
+  if (goodLoop(c) && goodLoop(o) && safeV(x) && safeV(y) && sideRef(x, y, o) === 0) {
+    const p = interiorPoint(c);
+    const ai = loopAreaRef(c);
+    if (p && ai > 0) {
+      const ak = loopAreaRef(o);
+      const same = Math.abs(ak - ai) <= 1e-9 * ai;
+      const inside = (same || ak > ai) && sideRef(p[0], p[1], o) > 0;
+      let ok = !(same && inside);
+      for (let v = 0; v < c.length && ok; v += 2) {
+        const s = sideRef(c[v]!, c[v + 1]!, o);
+        ok = inside ? s >= 0 : s <= 0;
+      }
+      if (ok) return inside;
+    }
+  }
+  return pointInRing(x, y, o);
+}
+/** 61차 식(94차 맞닿은 쌍 포함): 고리마다 모든 고리에 포함을 묻고, 바깥 고리마다 earcut 한 번 */
 function before(loops: number[][]): number[] {
-  const mid = (c: number[]) => [(c[0]! + c[2]!) / 2, (c[1]! + c[3]!) / 2] as const;
-  const depth = loops.map((c, i) => loops.filter((o, j) => j !== i && pointInRing(...mid(c), o)).length);
+  const depth = loops.map((_, i) => loops.filter((_o, k) => k !== i && containsRef(loops, k, i)).length);
   const out: number[] = [];
   for (let i = 0; i < loops.length; i++) {
     if (depth[i]! % 2 !== 0) continue;
     const flat = [...loops[i]!];
     const holes: number[] = [];
     for (let j = 0; j < loops.length; j++) {
-      if (j === i || depth[j] !== depth[i]! + 1 || !pointInRing(...mid(loops[j]!), loops[i]!)) continue;
+      if (j === i || depth[j] !== depth[i]! + 1 || !containsRef(loops, i, j)) continue;
       holes.push(flat.length / 2);
       flat.push(...loops[j]!);
     }
@@ -368,13 +419,15 @@ describe('어느 축에도 구멍 사이 틈이 없는 구멍 많은 채우기 �
   });
 });
 
-/** 61차 식: 고리마다 모든 고리에 점 포함을 물은 깊이와 짝수 깊이 고리의 구멍(번호 순) */
+/** 61차 식(94차 맞닿은 쌍 포함): 고리마다 모든 고리에 포함을 물은 깊이와 짝수 깊이 고리의 구멍(번호 순) */
 function nestingBefore(loops: number[][]): { depth: number[]; holesOf: number[][] } {
-  const mid = (c: number[]) => [(c[0]! + c[2]!) / 2, (c[1]! + c[3]!) / 2] as const;
-  const depth = loops.map((c, i) => loops.filter((o, j) => j !== i && pointInRing(...mid(c), o)).length);
-  const holesOf = loops.map((c, i) => (depth[i]! % 2 ? [] : loops.flatMap((h, j) => (j !== i && depth[j] === depth[i]! + 1 && pointInRing(...mid(h), c) ? [j] : []))));
+  const depth = loops.map((_, i) => loops.filter((_o, k) => k !== i && containsRef(loops, k, i)).length);
+  const holesOf = loops.map((_, i) => (depth[i]! % 2 ? [] : loops.flatMap((_h, j) => (j !== i && depth[j] === depth[i]! + 1 && containsRef(loops, i, j) ? [j] : []))));
   return { depth, holesOf };
 }
+/** 93차까지의 깊이(판정 점 = 첫 변 중점만) */
+const midDepth = (loops: number[][]): number[] =>
+  loops.map((c, i) => loops.filter((o, k) => k !== i && pointInRing((c[0]! + c[2]!) / 2, (c[1]! + c[3]!) / 2, o)).length);
 /** 고리 포함 관계에 든 일 */
 const nestWork = (loops: number[][], mode?: 'auto' | 'grid'): number => {
   const w: LoopWork = { n: 0 };
@@ -604,6 +657,188 @@ describe('변 훑기가 기운 변을 점 차례 띠로 자르기(93차)', () =>
         expect(got.holesOf).toEqual(want.holesOf);
       }
     }
+  });
+});
+
+/** 고리를 (cx, cy) 둘레로 deg도 돌린다 */
+const rotate = (l: number[], deg: number, cx = 0, cy = 0): number[] => {
+  const [c, s] = [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)];
+  return l.flatMap((_, k, a) => (k % 2 ? [] : [cx + (a[k]! - cx) * c - (a[k + 1]! - cy) * s, cy + (a[k]! - cx) * s + (a[k + 1]! - cy) * c]));
+};
+/** 세로 3칸(긴 칸·네모 칸·긴 칸) × 가로 4줄로 맞붙은 사각형 12개(실도면 꼴을 본뜸: 칸마다 닫힘 정점을 한 번 더 적고 조금 돌림) */
+const stackedCells = (deg: number): number[][] => {
+  const loops: number[][] = [];
+  for (let col = 0; col < 4; col++) {
+    const x = col * 14.5;
+    for (const [y0, y1] of [[0, 6], [6, 7.2], [7.2, 13.2]] as const) {
+      const r = [x, -y0, x - 1.2, -y0, x - 1.2, -y1, x, -y1];
+      // 칸마다 시작 정점과 돌림 방향이 다르다(위 칸은 이웃과 함께 쓰는 변에서 시작)
+      const l = col % 2 ? [...r.slice(4), ...r.slice(0, 4)] : r;
+      const rot = rotate(l, deg);
+      loops.push([...rot, rot[0]!, rot[1]!]);
+    }
+  }
+  return loops;
+};
+/** 벽돌 쌓기 rows × cols(줄마다 반 장 밀림 — 위 벽돌 모서리가 아래 벽돌 윗변 가운데에 닿는다) */
+const bricks = (rows: number, cols: number, deg = 0): number[][] => {
+  const loops: number[][] = [];
+  for (let j = 0; j < rows; j++)
+    for (let i = 0; i < cols; i++) {
+      const x = i * 2 + (j % 2);
+      loops.push(rotate([x, j, x + 2, j, x + 2, j + 1, x, j + 1], deg));
+    }
+  return loops;
+};
+/** 바둑판 g × g(맞붙은 네모 칸) */
+const tiles = (g: number, deg = 0): number[][] => {
+  const loops: number[][] = [];
+  for (let j = 0; j < g; j++) for (let i = 0; i < g; i++) loops.push(rotate(square(i * 3, j * 3, 3), deg, 1.5 * g, 1.5 * g));
+  return loops;
+};
+/** 삼각형이 고리들의 홀짝 영역을 덮는지: 넓이(want)와 고리 상자마다 점 표본 */
+function expectEvenOdd(loops: number[][], t: number[], want: number): void {
+  expect(Math.abs(area(t) - want) / want).toBeLessThan(1e-9);
+  let seed = 94;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const boxes = [boxOf(loops.flat()), ...Array.from({ length: 40 }, () => boxOf(loops[Math.floor(rnd() * loops.length)]!))];
+  for (const [x0, y0, x1, y1] of boxes)
+    for (let k = 0; k < 4; k++) {
+      const x = x0 + (x1 - x0) * rnd();
+      const y = y0 + (y1 - y0) * rnd();
+      const c = cover(t, x, y);
+      expect(c).toBeLessThanOrEqual(1);
+      expect(c === 1).toBe(evenOdd(loops, x, y));
+    }
+}
+const sumArea = (loops: number[][]): number => loops.reduce((a, l) => a + ringArea(l), 0);
+
+describe('변을 함께 쓰는 고리의 포함 판정(94차)', () => {
+  it('맞붙은 사각형 12개를 모두 채운다(예전에는 판정 점이 이웃 변 위라 6개가 이웃의 구멍이 돼 넓이가 반)', () => {
+    for (const deg of [0, 0.19, -0.19, 30, 90]) {
+      const loops = stackedCells(deg);
+      expect(midDepth(loops).filter((d) => d > 0).length).toBeGreaterThan(0);
+      const w: LoopWork = { n: 0 };
+      const t = triangulateLoops(loops, w);
+      expect(w.mismatched).toBeUndefined();
+      expect([...loopNesting(loops)!.depth]).toEqual(loops.map(() => 0));
+      expectEvenOdd(loops, t, sumArea(loops));
+    }
+  });
+
+  it('직사각형과 아래 원이 짧은 변을 함께 써도 둘 다 채운다(예전에는 원이 직사각형의 구멍이라 비었다)', () => {
+    // 직사각형 아랫변의 한 토막을 원의 첫 변이 거꾸로 지난다
+    const rect = [0, 0, -0.26, 0, -0.26, -0.033, -0.134, -0.033, -0.131, -0.033, 0, -0.033, 0, 0];
+    const arc: number[] = [-0.131, -0.033, -0.134, -0.033];
+    for (let k = 1; k < 16; k++) {
+      const a = Math.PI / 2 + (k / 16) * 2 * Math.PI;
+      arc.push(-0.1325 + 0.0315 * Math.cos(a) - 0.0015 * Math.sign(Math.cos(a)), -0.0645 + 0.0315 * Math.sin(a));
+    }
+    const loops = [rect, arc];
+    expect(midDepth(loops)).toEqual([0, 1]);
+    const w: LoopWork = { n: 0 };
+    const t = triangulateLoops(loops, w);
+    expect(w.mismatched).toBeUndefined();
+    expectEvenOdd(loops, t, ringArea(rect) + ringArea(arc));
+  });
+
+  it('바깥 고리 변에 닿은 구멍은 구멍으로, 그 안의 섬은 섬으로 남는다(어느 쪽 고리의 판정 점이 닿아도)', () => {
+    const outer = [0, 0, 10, 0, 10, 10, 0, 10];
+    // 구멍의 첫 변이 바깥 고리 아랫변 위(구멍 쪽 점), 바깥 고리의 첫 변 가운데(5, 0)가 구멍 변 위(바깥 쪽 점)
+    const hole = [2, 0, 8, 0, 8, 4, 2, 4];
+    const island = [4, 1, 6, 1, 6, 2, 4, 2];
+    const topHole = [8, 10, 2, 10, 2, 6, 8, 6];
+    // 예전: 위쪽 변(반열림 규칙으로 밖)에 닿은 구멍은 구멍이 아니라 바깥 고리와 겹쳐 채웠다
+    expect(midDepth([outer, topHole])).toEqual([0, 0]);
+    for (const deg of [0, 17, 45]) {
+      const loops = [outer, hole, island].map((l) => rotate(l, deg, 5, 5));
+      const nest = loopNesting(loops)!;
+      expect([...nest.depth]).toEqual([0, 1, 2]);
+      expect(nest.holesOf[0]).toEqual([1]);
+      const t = triangulateLoops(loops);
+      expectEvenOdd(loops, t, 100 - 24 + 2);
+      const top = [outer, topHole].map((l) => rotate(l, deg, 5, 5));
+      expect([...loopNesting(top)!.depth]).toEqual([0, 1]);
+      expect(loopNesting(top)!.holesOf[0]).toEqual([1]);
+    }
+    // earcut은 바깥 고리와 변을 통째로 함께 쓰는 구멍을 돌린 꼴에서 덮기도 해(넓이 검사에 걸린다) 돌리지 않은 꼴만 영역을 본다
+    expectEvenOdd([outer, topHole], triangulateLoops([outer, topHole]), 100 - 24);
+  });
+
+  it('벽돌 쌓기와 바둑판(고리 16개 넘게 — 상자 격자·변 훑기·찾기 훑기)도 모두 채우고 세 길의 깊이·구멍이 기준 식과 같다', () => {
+    for (const loops of [bricks(6, 8), bricks(9, 9, 23), tiles(12), tiles(10, 37), bricks(3, 4, 60)]) {
+      const want = nestingBefore(loops);
+      expect(want.depth).toEqual(loops.map(() => 0));
+      for (const mode of ['grid', 'sweep', 'auto'] as const) {
+        const got = loopNesting(loops, undefined, mode)!;
+        expect([...got.depth]).toEqual(want.depth);
+        expect(got.holesOf).toEqual(want.holesOf);
+      }
+      const w: LoopWork = { n: 0 };
+      const t = triangulateLoops(loops, w);
+      expect(w.mismatched).toBeUndefined();
+      expectEvenOdd(loops, t, sumArea(loops));
+    }
+  });
+
+  it('바둑판 칸 안의 구멍·바깥 틀에 닿은 칸이 섞여도 세 길이 기준 식과 같다(무작위)', () => {
+    let seed = 940;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    for (let t = 0; t < 30; t++) {
+      const g = 3 + Math.floor(rnd() * 9);
+      const deg = rnd() < 0.5 ? 0 : rnd() * 90;
+      const roll = (l: number[], k: number): number[] => [...l.slice(2 * k), ...l.slice(0, 2 * k)];
+      const loops: number[][] = [];
+      if (rnd() < 0.5) loops.push(rotate([0, 0, g * 3, 0, g * 3, g * 3, 0, g * 3], deg, 1.5 * g, 1.5 * g));
+      for (let j = 0; j < g; j++)
+        for (let i = 0; i < g; i++) {
+          if (rnd() < 0.2) continue;
+          const kind = rnd();
+          const cell = kind < 0.6 ? square(i * 3, j * 3, 3) : kind < 0.8 ? square(i * 3 + 1, j * 3 + 1, 1) : [i * 3, j * 3, i * 3 + 3, j * 3, i * 3 + 1.5, j * 3 + 3];
+          loops.push(roll(rotate(cell, deg, 1.5 * g, 1.5 * g), Math.floor(rnd() * (cell.length / 2))));
+          if (rnd() < 0.15) loops.push(rotate(square(i * 3, j * 3, 1.5), deg, 1.5 * g, 1.5 * g));
+        }
+      const want = nestingBefore(loops);
+      for (const mode of ['grid', 'sweep', 'auto'] as const) {
+        const got = loopNesting(loops, undefined, mode)!;
+        expect([...got.depth]).toEqual(want.depth);
+        expect(got.holesOf).toEqual(want.holesOf);
+      }
+      expect(triangulateLoops(loops)).toEqual(before(loops));
+    }
+  });
+
+  it('맞닿은 쌍을 찾는 일이 해치 크기에 비례하고 맞닿지 않은 꼴은 판정이 예전 그대로다', () => {
+    const [a, b] = [30, 60].map((g) => nestWork(tiles(g)));
+    expect(b / a).toBeLessThan(4 * 1.25);
+    expect(b).toBeLessThan(hatchFillWorkLimit(60 * 60 * 4) / 10);
+    for (const loops of [gridHoles(20), rotatedGrid(12), hexHoles(10, 10), nestedL(300), slantedBars(300)]) expect([...loopNesting(loops)!.depth]).toEqual(midDepth(loops));
+  });
+
+  it('안쪽 점은 그 고리 안(pointInRing)이고 넓이가 없는 고리는 없다', () => {
+    let seed = 941;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    for (let t = 0; t < 300; t++) {
+      const n = 3 + Math.floor(rnd() * 40);
+      const l: number[] = [];
+      const a0 = rnd() * 7;
+      for (let i = 0; i < n; i++) {
+        const r = 1 + rnd() * 50;
+        l.push(r * Math.cos(a0 + (i / n) * 2 * Math.PI), r * Math.sin(a0 + (i / n) * 2 * Math.PI));
+      }
+      const p = interiorPoint(l)!;
+      expect(pointInRing(p[0], p[1], l)).toBe(true);
+    }
+    expect(interiorPoint([0, 0, 1, 0, 2, 0])).toBeNull();
+    expect(interiorPoint([0, 0, 1, 1])).toBeNull();
+  });
+
+  it('장면: 맞붙은 사각형 12개 채우기 해치를 모두 채운다', () => {
+    const doc = readDxf(bytesOf(dxfText([hatchOf(stackedCells(0.19), null)])));
+    const s = scene(doc);
+    expect(codes(s)).not.toContain('hatch.fill_limited');
+    // 칸마다 닫힘 정점을 한 번 더 적은 사각형(정점 5개)은 earcut이 삼각형 2~3개로 채운다
+    expect(tris(s)).toBeGreaterThanOrEqual(24);
   });
 });
 
