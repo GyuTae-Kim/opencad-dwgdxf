@@ -4,7 +4,7 @@
  */
 import earcut from 'earcut';
 import { pushAll } from '../core/arrays';
-import { LINETYPE_ELEMENTS } from '../core/limits';
+import { LINETYPE_ELEMENTS, hatchFillWorkLimit } from '../core/limits';
 import type { HatchEntity, HatchPath, HatchPatternLine } from '../core/model';
 import { type FitWork, arcPoints, bulgeFlatPoints, ccwSweep, ellipsePoints, interpolateFitPoints, nurbsPoints } from '../geom/curves';
 import { type DashWork, dashInterval } from './linetype';
@@ -94,14 +94,41 @@ function pointInRing(x: number, y: number, c: readonly number[]): boolean {
   return inside;
 }
 
-/** 해치 스타일에 따라 쓸 고리를 고른다(2 = 가장 바깥만). */
-export function hatchLoops(h: HatchEntity, tol: number, fit?: FitWork): number[][] {
-  let loops = h.paths.map((p) => ({ p, ring: pathLoop(p, tol, fit) })).filter((l) => l.ring.length >= 6);
-  if (h.hatchStyle === 2) {
-    const outer = loops.filter((l) => l.p.flags & 1 || l.p.flags & 16);
-    if (outer.length) loops = outer;
-  }
-  return loops.map((l) => l.ring);
+/** 해치 경로마다 고리(정점 셋 이상인 것만, 경로 차례). 섬 감지 스타일로 고르기 전이다 */
+export function hatchRings(h: HatchEntity, tol: number, fit?: FitWork): number[][] {
+  return h.paths.map((p) => pathLoop(p, tol, fit)).filter((l) => l.length >= 6);
+}
+
+/**
+ * 해치 경로를 고리로 만들고 섬 감지 스타일(DXF 75)에 따라 채울 고리를 고른다(islandLoops).
+ * work가 있으면 스타일을 가리느라 든 포함 관계 일을 더한다
+ */
+export function hatchLoops(h: HatchEntity, tol: number, fit?: FitWork, work?: { n: number }): number[][] {
+  return islandLoops(hatchRings(h, tol, fit), h.hatchStyle, work);
+}
+
+/**
+ * 섬 감지 스타일(95차). DXF 참조 HATCH의 75번은 "0 = Hatch odd parity area (Normal style), 1 = Hatch outermost area only (Outer style),
+ * 2 = Hatch through entire area (Ignore style)"이고, ObjectARX HatchStyle은 Outer를 "only the outmost level of the structure is hatched",
+ * Ignore를 "ignores all internal loops"라고 적는다. 그래서 고리 깊이(자기를 품은 다른 고리 수 — loopNesting, 94차 맞닿은 고리 판정 포함)로
+ * Outer는 깊이 1 이하(바깥 경계와 첫 겹 섬), Ignore는 깊이 0(바깥 경계)만 남겨 홀짝으로 채운다. 남긴 고리 사이에서는 깊이가 그대로라
+ * 채움은 "고리 하나에만 든 곳"(Outer)·"고리에 든 곳"(Ignore)이고 TRIM의 칠한 곳 판정(trimHatchPaths)과 같다.
+ * 경로 깃발(92: 1 External, 16 Outermost)은 쓰지 않는다: 점을 집어 만든 경로(4 Derived)는 깃발이 깊이와 맞지만
+ * 객체를 골라 만든 경로는 깊이 2·3 고리도 External이다(실제 도면 841개).
+ * 0과 그 밖의 값, 고리가 하나뿐이거나 모든 고리가 남으면 받은 배열 그대로다. 포함 관계 일이 채우기 한도(hatchFillWorkLimit)를 넘으면
+ * 모든 고리를 돌려준다(채우기도 같은 한도에 걸려 경계만 그린다)
+ */
+export function islandLoops(loops: number[][], style: number, work?: { n: number }): number[][] {
+  if ((style !== 1 && style !== 2) || loops.length < 2) return loops;
+  let verts = 0;
+  for (const l of loops) verts += l.length >> 1;
+  const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
+  const nest = loopNesting(loops, w);
+  if (work) work.n += w.n;
+  if (!nest) return loops;
+  const keep = style === 1 ? 1 : 0;
+  if (nest.depth.every((d) => d <= keep)) return loops;
+  return loops.filter((_, i) => nest.depth[i]! <= keep);
 }
 
 /**
