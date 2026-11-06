@@ -320,9 +320,9 @@ describe('소유 블록 빠른 길(103차)', () => {
       owners.push(s.ownerOf(e.handle));
       at.push(s.ownerIndex(e.handle));
     }
+    const finds = find.mock.calls.length;
     // 지운 객체는 블록이 없다(하나만 — 없는 핸들은 모든 블록을 훑는다)
     const gone = s.ownerOf((ops[0] as { entity: Entity }).entity.handle);
-    const finds = find.mock.calls.length;
     const somes = some.mock.calls.length;
     const rebuilt = rebuild.mock.calls.length;
     vi.restoreAllMocks();
@@ -331,8 +331,40 @@ describe('소유 블록 빠른 길(103차)', () => {
     expect(at).toEqual(after.map((_, i) => i));
     expect(gone).toBeNull();
     expect(rebuilt).toBe(0);
-    expect(finds).toBeLessThanOrEqual(20);
+    expect(finds).toBe(0);
     expect(somes).toBeLessThanOrEqual(doc.blocks.size);
+    // 밀린 옛 객체는 지운 자리로 옮겨, 끝에 넣은 객체는 핸들 차례로 찾아 블록 자리 표도 만들지 않았다
+    const slots = (s as unknown as { ownerSlots: Map<string, { at: Map<string, number> | null }> }).ownerSlots;
+    expect(slots.get(MODEL_SPACE)?.at ?? null).toBeNull();
+  });
+
+  it('자리 옮김이 쌓여도(지우기 → 지우기+넣기 → 지우기) 기억한 자리를 옮겨 찾는다', () => {
+    const doc = createNewDocument('metric');
+    const list = doc.blocks.get(MODEL_SPACE)!.entities;
+    for (let i = 0; i < 3000; i++) {
+      const e = line(`A${i.toString(16).toUpperCase()}`, i);
+      list.push(e);
+      doc.entityIndex.set(e.handle, e);
+    }
+    const s = new EditSession(doc, () => {});
+    s.ownerOf(list[0]!.handle);
+    const drop = (step: number, from: number) => {
+      const cur = doc.blocks.get(MODEL_SPACE)!.entities;
+      const ops: EditOp[] = [];
+      for (let i = cur.length - 1 - from; i >= 0; i -= step) ops.push({ kind: 'remove', block: MODEL_SPACE, entity: cur[i]!, index: i });
+      return ops;
+    };
+    s.commit({ label: 'E1', ops: drop(7, 0) });
+    s.commit({ label: 'E2', ops: [...drop(5, 2), ...Array.from({ length: 500 }, (_, j): EditOp => ({ kind: 'add', block: MODEL_SPACE, entity: line(`C${j.toString(16).toUpperCase()}`, j) }))] });
+    s.commit({ label: 'E3', ops: drop(11, 1) });
+    const find = vi.spyOn(Array.prototype, 'findIndex');
+    const after = doc.blocks.get(MODEL_SPACE)!.entities;
+    const at = after.map((e) => s.ownerIndex(e.handle));
+    const finds = find.mock.calls.length;
+    vi.restoreAllMocks();
+    expect(at).toEqual(after.map((_, i) => i));
+    // 넣은 객체(C…)는 마지막 확정이 넣은 것이 아니라 자리 표로 찾는다(그 전에 몇 번 훑는다)
+    expect(finds).toBeLessThanOrEqual(17);
   });
 
   it('몇 개만 찾는 작은 명령에는 자리 표를 만들지 않고 훑는다', () => {

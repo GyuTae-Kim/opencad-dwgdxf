@@ -123,6 +123,20 @@ const OWNER_MISS_LIMIT = 16;
 /** 빠른 길에서 소유 블록 기억에 적지 않고 미뤄 둔(객체를 넣은) 블록이 이보다 많으면 전체 표를 다시 만든다 */
 const OWNER_PENDING_LIMIT = 8;
 
+/** 블록마다 기억할 자리 옮김(OwnerStep) 수 */
+const OWNER_STEP_LIMIT = 4;
+
+/**
+ * 확정 하나가 블록 하나에 한 자리 옮김(소유 블록 찾기 빠른 길): 앞자리부터 지운 옛 자리(오름차순)와 그 뒤 끝에 넣은 객체(from부터 added개).
+ * 그 블록의 변경이 "자리가 줄어드는 차례의 지우기 → 끝에 넣기"(같은 핸들 바꾸기는 어디든)일 때만 남긴다(EXPLODE·ERASE·COPY의 확정 꼴 — app/modify.ts planResults).
+ * 옛 자리 p의 새 자리는 p − (p보다 앞에서 지운 수)다. 기록이 틀려도(적용이 다른 자리를 지웠거나 세션 밖에서 바뀜) 답은 언제나 블록에서 확인하므로 맞고, 못 찾으면 자리 표로 간다
+ */
+interface OwnerStep {
+  removed: Int32Array;
+  from: number;
+  added: number;
+}
+
 /** 블록 하나의 핸들 → 자리 표(소유 블록 찾기 빠른 길). list·len이 지금 블록과 다르면 낡은 표다 */
 interface BlockSlots {
   list: readonly Entity[];
@@ -480,7 +494,8 @@ export class EditSession {
    *
    * 빠른 길(103차): 마지막 전체 표 만들기에서 핸들이 모두 하나씩이었던 문서. 핸들이 하나뿐이면 답(그 핸들이 든 블록과 자리)은 문서만으로 정해져,
    * 기억을 어떻게 고치든 확인을 거친 답은 옛 길과 같다. 그래서 확정은 넣은 객체마다 기억에 적지 않고 블록만 미뤄 두며(ownerPending),
-   * 빗나간 자리는 그 블록의 자리 표(ownerSlots)로 찾는다 — 전체 표를 다시 만들지 않는다. 답은 모두 지금 블록에서 확인한 자리다.
+   * 빗나간 자리는 최근 확정의 자리 옮김(ownerSteps — 지운 자리·끝에 넣은 범위)으로, 안 되면 그 블록의 자리 표(ownerSlots)로 찾는다
+   * — 전체 표를 다시 만들지 않는다. 답은 모두 지금 블록에서 확인한 자리다.
    * 옛 길(ownerLegacy): 표를 만들 때 핸들이 겹치거나 빈 핸들이 둘 이상이었던 문서. 102차까지와 똑같이 한다(겹친 핸들의 답은 기억의 내력에 따라
    * 달라지므로 길을 바꾸면 답이 바뀔 수 있다). 한 번 옛 길이면 세션 끝까지 옛 길이다
    */
@@ -492,6 +507,8 @@ export class EditSession {
   private readonly ownerPending: string[] = [];
   /** 빠른 길: 블록 키 → 자리 표. 확정이 그 블록에 넣거나 빼면 버린다 */
   private readonly ownerSlots = new Map<string, BlockSlots>();
+  /** 빠른 길: 블록 키 → 최근 확정들의 자리 옮김(오래된 것부터, OWNER_STEP_LIMIT개까지). 꼴이 다른 확정이 오면 비운다 */
+  private readonly ownerSteps = new Map<string, OwnerStep[]>();
   /** 빠른 길: ownerOf가 마지막으로 찾은 자리(ownerIndex가 쓴다) */
   private ownerLast = -1;
   /**
@@ -589,18 +606,23 @@ export class EditSession {
         this.ownerLast = at;
         return cached;
       }
-      // 앞선 지우기·넣기로 자리가 밀렸다: 그 블록의 자리 표로(103차 — 전에는 16번 빗나가면 모든 블록의 표를 다시 만들었다)
-      const i = this.slotOf(cached, list, handle);
+      // 앞선 지우기·넣기로 자리가 밀렸다: 최근 확정의 자리 옮김으로, 안 되면 그 블록의 자리 표로
+      // (103차 — 전에는 16번 빗나가면 모든 블록의 표를 다시 만들었다)
+      let i = at >= 0 ? this.shiftedAt(cached, list, handle, at) : -1;
+      if (i >= 0) this.ownerAt.set(handle, i);
+      else i = this.slotOf(cached, list, handle);
       if (i >= 0) {
         this.ownerLast = i;
         return cached;
       }
     }
-    // 확정이 넣고 기억에 적지 않은 객체: 미뤄 둔 블록에서
+    // 확정이 넣고 기억에 적지 않은 객체: 미뤄 둔 블록에서(마지막 확정이 끝에 넣은 것이면 그 범위에서 핸들 차례로 찾는다)
     for (const k of this.ownerPending) {
       if (k === cached) continue;
       const pl = this.doc.blocks.get(k)?.entities;
-      const i = pl ? this.slotOf(k, pl, handle) : -1;
+      if (!pl) continue;
+      let i = this.appendedAt(k, pl, handle);
+      if (i < 0) i = this.slotOf(k, pl, handle);
       if (i >= 0) {
         this.ownerLast = i;
         return k;
@@ -688,6 +710,7 @@ export class EditSession {
     this.ownerMisses = 0;
     this.ownerPending.length = 0;
     this.ownerSlots.clear();
+    this.ownerSteps.clear();
     let named = 0;
     let unnamed = 0;
     for (const [k, b] of this.doc.blocks) {
@@ -721,26 +744,103 @@ export class EditSession {
       return;
     }
     // 빠른 길: 넣은 객체마다 적지 않고 블록만 미뤄 둔다(103차 — 객체 42만 개 도면 EXPLODE는 넣기 124만 번, 그 기억이 명령의 약 14%였고
-    // 다음 명령이 16번 빗나가 전체 표를 다시 만들면서 모두 버려졌다). 넣거나 뺀 블록의 자리 표는 버린다
-    let added = '';
-    let shifted = '';
+    // 다음 명령이 16번 빗나가 전체 표를 다시 만들면서 모두 버려졌다). 넣거나 뺀 블록의 자리 표는 버리고, 블록마다 자리 옮김을 남긴다
+    const shapes = new Map<string, { removed: number[]; added: number; ok: boolean }>();
+    let key = '';
+    let cur: { removed: number[]; added: number; ok: boolean } | undefined;
+    const shapeOf = (k: string) => {
+      if (k !== key || !cur) {
+        key = k;
+        cur = shapes.get(k);
+        if (!cur) shapes.set(k, (cur = { removed: [], added: 0, ok: true }));
+      }
+      return cur;
+    };
     for (const op of ops) {
       if (op.kind === 'add') {
-        if (op.block === added) continue;
-        added = op.block;
-        if (!this.ownerPending.includes(added)) this.ownerPending.push(added);
-        this.ownerSlots.delete(added);
+        const s = shapeOf(op.block);
+        if (!s.added) {
+          if (!this.ownerPending.includes(op.block)) this.ownerPending.push(op.block);
+          this.ownerSlots.delete(op.block);
+        }
+        if (op.index !== undefined) s.ok = false;
+        s.added++;
       } else if (op.kind === 'remove') {
-        if (op.block === shifted) continue;
-        shifted = op.block;
-        this.ownerSlots.delete(shifted);
+        const s = shapeOf(op.block);
+        if (!s.removed.length && !s.added) this.ownerSlots.delete(op.block);
+        const i = op.index;
+        const r = s.removed;
+        // 지우기는 넣기 앞, 자리가 줄어드는 차례여야 앞의 지우기가 뒤 지우기의 자리를 밀지 않는다
+        if (s.added || !Number.isInteger(i) || i < 0 || (r.length && i >= r[r.length - 1]!)) s.ok = false;
+        r.push(i);
       } else if (op.kind === 'modify') {
         if (op.after.handle === op.before.handle) continue;
         owners.set(op.after.handle, op.block);
         this.ownerSlots.delete(op.block);
-      } else if (op.kind === 'blockDef') this.ownerSlots.delete(op.key);
+        shapeOf(op.block).ok = false;
+      } else if (op.kind === 'blockDef') {
+        this.ownerSlots.delete(op.key);
+        shapeOf(op.key).ok = false;
+      }
+    }
+    for (const [k, s] of shapes) {
+      const len = this.doc.blocks.get(k)?.entities.length;
+      if (!s.ok || len === undefined) {
+        this.ownerSteps.delete(k);
+        continue;
+      }
+      let steps = this.ownerSteps.get(k);
+      if (!steps) this.ownerSteps.set(k, (steps = []));
+      steps.push({ removed: Int32Array.from(s.removed).reverse(), from: len - s.added, added: s.added });
+      if (steps.length > OWNER_STEP_LIMIT) steps.shift();
     }
     if (this.ownerPending.length > OWNER_PENDING_LIMIT) this.ownerCache = null;
+  }
+
+  /**
+   * 빠른 길: 기억한 자리 p(어느 확정 앞의 것인지 모름)를 블록 k의 최근 자리 옮김으로 옮겨 handle이 든 지금 자리를 찾는다(없으면 -1).
+   * 가장 최근 확정 하나부터 거슬러 올라가며 옮겨 보고, 맞는지는 블록에서 확인한다
+   */
+  private shiftedAt(k: string, list: readonly Entity[], handle: string, p: number): number {
+    const steps = this.ownerSteps.get(k);
+    if (!steps) return -1;
+    for (let j = steps.length - 1; j >= 0; j--) {
+      let q = p;
+      for (let t = j; t < steps.length && q >= 0; t++) {
+        const r = steps[t]!.removed;
+        // q보다 앞에서 지운 수(이진 찾기). q 자리를 지웠으면 그 객체는 이 블록에서 빠졌다
+        let lo = 0;
+        let hi = r.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (r[mid]! < q) lo = mid + 1;
+          else hi = mid;
+        }
+        q = r[lo] === q ? -1 : q - lo;
+      }
+      if (q >= 0 && list[q]?.handle === handle) return q;
+    }
+    return -1;
+  }
+
+  /**
+   * 빠른 길: 블록 k의 마지막 확정이 끝에 넣은 범위에서 handle을 핸들 차례(길이, 같으면 글자 — 새 핸들은 늘어나는 차례로 낸다)로 찾는다(없으면 -1).
+   * 범위가 그 차례가 아니면 못 찾을 뿐이고(자리 표로 간다), 찾은 자리는 핸들이 같은 것만 돌려준다
+   */
+  private appendedAt(k: string, list: readonly Entity[], handle: string): number {
+    const steps = this.ownerSteps.get(k);
+    const s = steps?.[steps.length - 1];
+    if (!s || !s.added) return -1;
+    let lo = s.from;
+    let hi = Math.min(s.from + s.added, list.length);
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      const m = list[mid]!.handle;
+      if (m === handle) return mid;
+      if (m.length < handle.length || (m.length === handle.length && m < handle)) lo = mid + 1;
+      else hi = mid;
+    }
+    return -1;
   }
 
   /** UNDO 조정(C): 전체(기본)·하나·없음 */
