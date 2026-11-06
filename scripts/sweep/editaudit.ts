@@ -26,6 +26,7 @@ import { readDwg, writeDwg } from '../../src/io/dwg';
 import { applyOps, type ChangeSummary, type Transaction } from '../../src/edit/session';
 import { mtextColumnLinks } from '../../src/edit/util/mtextcols';
 import { ENCODE_MIN_OPS, decodeWire, encodeWire, packOps, unpackOps } from '../../src/worker/editwire';
+import { ownIndexes } from '../../src/worker/doctransfer';
 import type { App } from '../../src/app/app';
 import { registerBlockCommands } from '../../src/app/blocks';
 import { registerDashMiscCommands } from '../../src/app/dashcmds-misc';
@@ -253,7 +254,14 @@ export async function auditFile(
   for (const [label, steps] of cases) {
     runs++;
     try {
-      const h = perCommandGroups(makeHarness((doc) => void Object.assign(doc, load())));
+      // 메인 문서는 앱처럼 핸들 색인을 HandleIndex로 받는다(app/engine.ts — 100차, 새 핸들이 겹침 확인을 건너뛰는 길)
+      const h = perCommandGroups(
+        makeHarness((doc) => {
+          const d = load();
+          ownIndexes(d);
+          Object.assign(doc, d);
+        }),
+      );
       registerAll(h.app);
       h.st.space = spaceKey(h.doc, target)!;
       const s = h.st.session;

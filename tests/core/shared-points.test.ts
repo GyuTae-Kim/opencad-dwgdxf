@@ -13,7 +13,7 @@ import { transformEntity } from '../../src/edit/geom/transform';
 import { explodeEntity } from '../../src/edit/geom/explode';
 import { affMirror, affRotate, affScale, affTranslate } from '../../src/edit/geom/math';
 import { cloneEntity } from '../../src/edit/session';
-import { DocAssembler, type DocPart, sendDocument } from '../../src/worker/doctransfer';
+import { DocAssembler, type DocPart, ownIndexes, sendDocument } from '../../src/worker/doctransfer';
 
 const P = (x: number, y: number, z = 0): Vec3 => ({ x, y, z });
 
@@ -141,7 +141,10 @@ describe('함께 쓰는 얼린 점(96차)', () => {
       { minEntities: 4, batch: 100 },
     );
     const main = asm!.doc;
-    expect(main).toStrictEqual(structuredClone(doc));
+    // 메인은 핸들 색인을 HandleIndex로 받는다(100차)
+    const want = structuredClone(doc);
+    ownIndexes(want);
+    expect(main).toStrictEqual(want);
     const scales = m.unit.map((h) => (byHandle(main, h) as InsertEntity).scale);
     expect(scales[0]).toEqual({ x: 1, y: 1, z: 1 });
     expect(Object.isFrozen(scales[0])).toBe(false);

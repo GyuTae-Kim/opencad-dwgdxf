@@ -3,7 +3,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Decoder, Encoder, encodedTransfer, releaseEncoded } from '../../src/worker/codec';
-import { DocAssembler, type DocPart, sendDocument } from '../../src/worker/doctransfer';
+import { DocAssembler, type DocPart, ownIndexes, sendDocument } from '../../src/worker/doctransfer';
+import { HandleIndex } from '../../src/core/handleindex';
 import { readCadFile } from '../../src/io/index';
 import { writeDwg } from '../../src/io/dwg/index';
 import { type CadDocument, type Entity, SHARED_BYLAYER_COLOR } from '../../src/core/model';
@@ -24,7 +25,14 @@ function roundTrip(values: unknown[]): unknown[] {
   return out;
 }
 
-/** 문서를 doctransfer로 보내고 메인처럼 되살린다 */
+/** 구조화 복제로 받은 문서를 메인이 쓰는 모양(핸들 색인을 HandleIndex로 — 100차) */
+function received(doc: CadDocument): CadDocument {
+  const copy = structuredClone(doc);
+  ownIndexes(copy);
+  return copy;
+}
+
+/** 문서를 doctransfer로 보내고 메인처럼(app/engine.ts) 되살린다 */
 function transfer(doc: CadDocument, opt: { minEntities?: number; batch?: number } = {}): { doc: CadDocument; parts: number; raw: number } {
   let asm: DocAssembler | null = null;
   let full: CadDocument | null = null;
@@ -35,7 +43,10 @@ function transfer(doc: CadDocument, opt: { minEntities?: number; batch?: number 
     (d, streamed) => {
       const copy = message(d);
       if (streamed.length) asm = new DocAssembler(copy, message(streamed));
-      else full = copy;
+      else {
+        ownIndexes(copy);
+        full = copy;
+      }
     },
     (p: DocPart, t) => {
       parts++;
@@ -159,7 +170,9 @@ describe('doctransfer', () => {
     const r = transfer(doc, { minEntities: 1000, batch: 700 });
     expect(r.parts).toBe(Math.ceil(ms.entities.length / 700));
     expect(r.raw).toBe(0);
-    expect(r.doc).toStrictEqual(structuredClone(doc));
+    expect(r.doc).toStrictEqual(received(doc));
+    expect(r.doc.entityIndex).toBeInstanceOf(HandleIndex);
+    expect(r.doc.objects).toBeInstanceOf(HandleIndex);
     expect([...r.doc.entityIndex.keys()]).toEqual([...doc.entityIndex.keys()]);
     // 색인은 블록 안 객체(속성 포함) 그 자체를 가리킨다
     for (const b of r.doc.blocks.values())
@@ -171,7 +184,7 @@ describe('doctransfer', () => {
     const many = transfer(doc, { minEntities: 3, batch: 500 });
     expect(many.doc.blocks.size).toBe(doc.blocks.size);
     expect([...many.doc.entityIndex.keys()]).toEqual([...doc.entityIndex.keys()]);
-    expect(many.doc).toStrictEqual(structuredClone(doc));
+    expect(many.doc).toStrictEqual(received(doc));
     // 공유 ByLayer 색은 사본으로(얼리지 않음) 묶음 안에서 함께 쓴다
     const lines = r.doc.blocks.get('*MODEL_SPACE')!.entities.slice(0, 50).filter((e) => e.color.aci === 256 && e.color.rgb === undefined);
     expect(lines.length).toBeGreaterThan(1);
@@ -248,7 +261,7 @@ describe('doctransfer', () => {
     }
     expect(asm.complete).toBe(true);
     // 버퍼를 놓아 준 뒤에도 되살린 문서는 같다(정점 배열은 묶음 버퍼의 복사본)
-    expect(asm.doc).toStrictEqual(structuredClone(doc));
+    expect(asm.doc).toStrictEqual(received(doc));
   });
 
   it('버퍼 일부만 차지하는 배열은 놓아 주지 않는다(함께 쓰는 버퍼)', () => {
@@ -274,7 +287,7 @@ describe('doctransfer', () => {
     for (let i = 0; i < ents.length; i += 7) ents[i]!.dwgRaw = { version: 'AC1032', typeName: 'X', typeNum: 0, data: new Uint8Array([i & 255, 1, 2]), dataBits: 20, handles: new Uint8Array([9]), handleBits: 8, fingerprint: String(i) };
     const r = transfer(doc, { minEntities: 1000, batch: 1500 });
     expect(r.parts).toBeGreaterThan(1);
-    expect(r.doc).toStrictEqual(structuredClone(doc));
+    expect(r.doc).toStrictEqual(received(doc));
   });
 
   it('객체가 적거나 색인을 블록에서 다시 만들 수 없으면 문서 전체를 보낸다', () => {
@@ -286,7 +299,7 @@ describe('doctransfer', () => {
     doc.entityIndex.set(first[0], first[1]);
     const r = transfer(doc, { minEntities: 1000 });
     expect(r.parts).toBe(0);
-    expect(r.doc).toStrictEqual(structuredClone(doc));
+    expect(r.doc).toStrictEqual(received(doc));
   });
 
   it('부호화하지 못하는 객체가 든 묶음은 그대로(구조화 복제) 보낸다', () => {
@@ -295,6 +308,6 @@ describe('doctransfer', () => {
     (ms.entities[10] as Entity & { odd?: unknown }).odd = new Date(5);
     const r = transfer(doc, { minEntities: 1000, batch: 2000 });
     expect(r.raw).toBe(1);
-    expect(r.doc).toStrictEqual(structuredClone(doc));
+    expect(r.doc).toStrictEqual(received(doc));
   });
 });
