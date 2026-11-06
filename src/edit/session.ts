@@ -494,8 +494,8 @@ export class EditSession {
       } catch {
         next = 0n;
       }
-    // 이미 쓰인 핸들과 겹치지 않게 한다. 두 색인이 HandleIndex이고 씨앗이 두 색인의 정규형 열쇠보다 모두 크면 같은 열쇠가 있을 수 없어
-    // has를 부르지 않는다(100차 — h0은 늘 정규형이다. 객체 42만 개 도면 EXPLODE는 새 핸들 약 124만 번, 두 has가 명령의 약 11%였다)
+    // 이미 쓰인 핸들과 겹치지 않게 한다. 두 색인이 HandleIndex이고 씨앗이 두 색인에 넣은 열쇠보다 모두 크면(core/handleindex.ts) 같은 열쇠가
+    // 있을 수 없어 has를 부르지 않는다(100차 — 객체 42만 개 도면 EXPLODE는 새 핸들 약 124만 번, 두 has가 명령의 약 11%였다)
     h0 ??= normalizeHandle(next);
     let h = h0;
     const ix = this.doc.entityIndex;

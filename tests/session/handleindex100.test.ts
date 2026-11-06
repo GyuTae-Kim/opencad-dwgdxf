@@ -1,5 +1,5 @@
 /**
- * 100차: 핸들 색인(HandleIndex)이 넣은 정규형 열쇠의 최댓값을 기억해, 새 핸들이 그보다 크면 이미 쓰인 핸들인지 찾지 않는다.
+ * 100차: 핸들 색인(HandleIndex)이 넣은 열쇠 가운데 (길이, 글자 차례)로 가장 큰 것을 기억해, 새 핸들이 그보다 크면 이미 쓰인 핸들인지 찾지 않는다.
  * - above(h)가 참이면 has(h)는 늘 거짓인지(무작위 넣기·지우기·비우기, 정규형이 아닌 열쇠 섞음)
  * - 세션 밖에서 색인에 넣어도(곧 낼 씨앗과 같은 핸들 등) 새 핸들이 98차 방법(일반 Map, 매번 has)과 같은 핸들·$HANDSEED를 내는지
  * - 받은 문서(DocAssembler·ownIndexes)의 색인이 같은 열쇠·값·차례의 HandleIndex인지, 새 핸들이 실제로 has를 부르지 않는지
@@ -83,12 +83,12 @@ function anyKey(r: () => number, around: number): string {
 }
 
 describe('HandleIndex(100차)', () => {
-  it('above(h)가 참이면 정규형 핸들 h는 색인에 없다(넣기·지우기·비우기·of, 정규형이 아닌 열쇠 섞음)', () => {
+  it('above(h)가 참이면 h는 색인에 없다(넣기·지우기·비우기·of, 정규형이 아닌 열쇠 섞음)', () => {
+    let aboveSeen = 0;
     for (let s = 1; s <= 40; s++) {
       const r = rng(s);
       let ix = new HandleIndex<number>();
       let base = Math.floor(r() * 0x10000);
-      let aboveSeen = 0;
       for (let step = 0; step < 300; step++) {
         const x = r();
         if (x < 0.55) ix.set(anyKey(r, base), step);
@@ -100,6 +100,8 @@ describe('HandleIndex(100차)', () => {
         const probes = [...ix.keys()].filter(() => r() < 0.2);
         for (let i = 0; i < 8; i++) probes.push(normalizeHandle(BigInt(Math.max(0, base + Math.floor((r() - 0.3) * 128)))));
         for (const k of probes) {
+          // 정규형이 아닌 글자 그대로도(어떤 글자든 위면 없다)
+          if (ix.above(k)) expect(ix.has(k), `${s}:${step} ${k}`).toBe(false);
           const h = normalizeHandle(k || '0');
           if (!/^[0-9A-F]+$/.test(h)) continue;
           if (ix.above(h)) {
@@ -110,8 +112,8 @@ describe('HandleIndex(100차)', () => {
           }
         }
       }
-      expect(aboveSeen).toBeGreaterThan(0);
     }
+    expect(aboveSeen).toBeGreaterThan(100);
   });
 
   it('Map과 같게 동작하고, 구조화 복제·new Map은 일반 Map이 된다', () => {
@@ -128,14 +130,22 @@ describe('HandleIndex(100차)', () => {
       ['0B', 3],
       ['2', 4],
     ]);
-    // 소문자 ff·앞 0 0B는 정규형이 아니라 위에 넣지 않는다(정규형 핸들과 같은 글자일 수 없다)
+    // (길이, 글자 차례)로 가장 큰 열쇠는 소문자 ff — 정규형이 아닌 열쇠는 위가 되는 일을 줄일 뿐 틀리게 하지 않는다
     expect(ix.above('1A')).toBe(false);
-    expect(ix.above('1B')).toBe(true);
-    expect(ix.above('FF')).toBe(true);
-    ix.delete('1A');
-    expect(ix.above('1A')).toBe(false);
-    ix.clear();
-    expect(ix.above('1')).toBe(true);
+    expect(ix.above('1B')).toBe(false);
+    expect(ix.above('FF')).toBe(false);
+    expect(ix.above('100')).toBe(true);
+    const up = HandleIndex.of<number>([
+      ['1A', 1],
+      ['0B', 3],
+    ]);
+    // 앞 0 열쇠는 같은 길이의 정규형 핸들보다 차례가 앞이다
+    expect(up.above('1B')).toBe(true);
+    up.delete('1A');
+    // 지워도 기억은 줄지 않는다(그래도 맞다 — 덜 건너뛸 뿐)
+    expect(up.above('1A')).toBe(false);
+    up.clear();
+    expect(up.above('1')).toBe(true);
     const c = structuredClone(HandleIndex.of([['A', 1]]));
     expect(c).not.toBeInstanceOf(HandleIndex);
     expect([...c]).toEqual([['A', 1]]);
