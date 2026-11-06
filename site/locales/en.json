@@ -833,7 +833,7 @@
   "{0} 뷰포트 구성의 이름 입력 또는 [": "{0} Enter name of viewport configuration or [",
   "{0} 뷰포트 구성의 이름 입력 또는 [?]:": "Enter the name of the {0} viewport configuration or [?]:",
   "{0} 사본": "Copy of {0}",
-  "{0} 사용": "{0}",
+  "{0} 사용": "{0} uses",
   "{0} 색 바꾸기": "{0} Change color",
   "{0} 색 선택": "{0} Select color",
   "{0} 색상": "{0} color",

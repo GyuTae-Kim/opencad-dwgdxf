@@ -87,6 +87,11 @@ describe('language URLs and UI presentation', () => {
         if (!key.startsWith('<p>')) expect(value, `${code}: ${key}`).not.toMatch(/\bI (read|did|didn't|can't|work|selected)\b|\bIch (habe|brauche|arbeite|kann|konnte)\b|District|Bezirk|VONAYER|ETERANSMIT/);
         if (code === 'zh-CN' && !key.startsWith('<p>') && !key.includes('나요?')) expect(value, `${code}: ${key}`).not.toMatch(/我(?!们)/);
         expect(value, `${code}: ${key}`).not.toMatch(/\b(The value|The|Der Wert|Der|Die|Das)$/);
+        // 머리가 앞 줄로 밀려 문장 부호나 {0}만 남은 번역(".", "?", "{0}", "ein.")
+        if (/[가-힣]{2}/.test(key.replace(/\{\d+\}/g, ''))) {
+          expect(value.replace(/\{\d+\}|[\s.,:;!?·…()（）。，：？]/g, ''), `${code}: ${key}`).not.toBe('');
+          expect(value, `${code}: ${key}`).not.toMatch(/^[a-zäöü]+[.?]$/);
+        }
         if (code === 'en' && /^[가-힣]/.test(key) && !/^(또는|를|을|의|에|와|과|로)/.test(key) && /[.:?]$/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/^[a-z]/);
       }
     expect(codes.map((code) => translate('구', code))).toEqual(['Sphere', '球', '球体', 'Kugel']);
