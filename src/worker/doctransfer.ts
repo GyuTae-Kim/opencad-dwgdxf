@@ -10,7 +10,7 @@
  */
 import type { CadDocument, Entity } from '../core/model';
 import { ownEntityArrays } from '../core/f64pool';
-import { Decoder, Encoder, type Encoded, encodedTransfer, encoderScratch } from './codec';
+import { Decoder, Encoder, type Encoded, encodedTransfer, encoderScratch, releaseEncoded } from './codec';
 
 /** 이보다 객체가 많은 블록만 따로 보낸다 */
 const STREAM_MIN = 2000;
@@ -134,7 +134,10 @@ export class DocAssembler {
     return this.waiting.size === 0;
   }
 
-  /** 묶음 하나를 붙인다. 문서가 다 모였으면 true */
+  /**
+   * 묶음 하나를 붙인다. 문서가 다 모였으면 true.
+   * 부호화한 묶음은 다 푼 뒤 그 버퍼를 놓아 준다(96차 — 받은 메시지를 다시 쓰지 않는다. 객체의 형식 배열은 제 버퍼로 복사돼 있다)
+   */
   add(p: DocPart): boolean {
     const b = this.doc.blocks.get(p.block);
     const left = this.waiting.get(p.block);
@@ -144,6 +147,7 @@ export class DocAssembler {
     if (p.enc) {
       const d = new Decoder(p.enc);
       while (d.more()) out.push(d.next() as Entity);
+      releaseEncoded(p.enc);
     } else if (p.entities) for (const e of p.entities) out.push(e);
     const rest = left - (out.length - from);
     if (rest > 0) this.waiting.set(p.block, rest);
