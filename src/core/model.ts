@@ -1450,6 +1450,25 @@ export const Z_AXIS: Readonly<Vec3> = Object.freeze({ x: 0, y: 0, z: 1 });
  */
 export const SHARED_BYLAYER_COLOR: CadColor = Object.freeze({ aci: BYLAYER }) as CadColor;
 
+/**
+ * 리더가 블록 참조 축척 (1, 1, 1)으로 함께 쓰는 얼린 점 하나(96차). 큰 지도 도면은 블록 참조가 수십만 개이고 거의 모두 축척 1이라
+ * 객체마다 같은 점을 만들지 않는다. 축척을 바꿀 때는 언제나 새 객체를 넣는다(이 객체를 고치면 오류가 난다).
+ */
+export const SHARED_UNIT_SCALE: Vec3 = Object.freeze({ x: 1, y: 1, z: 1 }) as Vec3;
+
+/** 리더가 여러 줄 문자 방향 (1, 0, 0)으로 함께 쓰는 얼린 점 하나(96차). 방향을 바꿀 때는 새 객체를 넣는다 */
+export const SHARED_X_DIRECTION: Vec3 = Object.freeze({ x: 1, y: 0, z: 0 }) as Vec3;
+
+/** 축척이 꼭 (1, 1, 1)이면 함께 쓰는 얼린 점, 아니면 받은 점 그대로 */
+export function shareUnitScale(s: Vec3): Vec3 {
+  return s.x === 1 && s.y === 1 && s.z === 1 ? SHARED_UNIT_SCALE : s;
+}
+
+/** 방향이 꼭 (1, +0, +0)이면 함께 쓰는 얼린 점, 아니면 받은 점 그대로(-0은 다시 쓸 때 바이트가 달라질 수 있어 그대로 둔다) */
+export function shareXDirection(d: Vec3): Vec3 {
+  return d.x === 1 && Object.is(d.y, 0) && Object.is(d.z, 0) ? SHARED_X_DIRECTION : d;
+}
+
 /** 객체 공통 기본값 */
 export function entityDefaults(): Omit<EntityBase, 'type'> {
   return {

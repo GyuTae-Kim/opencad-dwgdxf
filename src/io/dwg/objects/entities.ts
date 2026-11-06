@@ -47,7 +47,7 @@ import type {
 } from '../../../core/model';
 import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../../core/hatchedges';
 import { TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS } from '../../../core/limits';
-import { BYLAYER, SHARED_BYLAYER_COLOR } from '../../../core/model';
+import { BYLAYER, SHARED_BYLAYER_COLOR, shareUnitScale, shareXDirection } from '../../../core/model';
 import { tidyWidths } from '../../../core/lwpoly';
 import { f64Of, newF64 } from '../../../core/f64pool';
 import { unpack3 } from '../../../core/flat3';
@@ -769,7 +769,8 @@ function readInsert(or: ObjectReader, b: Omit<EntityBase, 'type'>, out: ParsedEn
     }
     out.seqend = hr.H(hb);
   }
-  const e: InsertEntity = { ...b, type: 'INSERT', block, insert, scale, rotation, columnCount, rowCount, columnSpacing, rowSpacing, attribs: [] };
+  // 축척 1은 얼린 점 하나를 함께 쓴다(큰 지도 도면의 블록 참조 수십만 개 — 96차)
+  const e: InsertEntity = { ...b, type: 'INSERT', block, insert, scale: shareUnitScale(scale), rotation, columnCount, rowCount, columnSpacing, rowSpacing, attribs: [] };
   setExtrusion(e, extrusion);
   return e;
 }
@@ -1103,7 +1104,7 @@ function readMText(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names, 
     drawingDirection,
     text,
     style,
-    direction,
+    direction: shareXDirection(direction),
     rotation: 0,
     lineSpacingStyle,
     lineSpacingFactor,
