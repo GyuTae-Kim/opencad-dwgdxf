@@ -153,6 +153,9 @@ describe('language URLs and UI presentation', () => {
         // 문자(TEXT 객체)를 글자(character·Zeichen·字符)로 옮기지 않는다 — 특수 문자·문자 수·이름에 쓸 수 없는 문자처럼 글자 뜻인 곳은 빼고
         if (/^(문자 (각도|값|위치|옵션|찾기|축척|회전|선택:|설정|편집|분해|비교|재지정|자리맞추기|방향)|단일 행 문자|새 문자(?!열)|셀 문자|문자의 (시작점|중간|맨|첫 번째|회전)|문자 \{0\}개)/.test(key))
           expect(value, `${code}: ${key}`).not.toMatch(/character|Zeichen|字符/i);
+        // 중국어 치수는 AutoCAD 중국어판처럼 标注(치수 객체·스타일·변수)·尺寸线(치수선)·尺寸界线(치수보조선)로 — 尺寸 단독·尺寸样式 섞임 금지
+        if (code === 'zh-CN' && key.includes('치수') && !/치수\(D\)|한계 치수/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/尺寸(?!线|界线)/);
+        if (code === 'zh-CN' && key.includes('치수보조선')) expect(value, `${code}: ${key}`).toMatch(/尺寸界线/);
         // 끌 도면층 = 끌(끄다) 도면층, 끌다(drag)가 아니다
         if (/^끌 도면층/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/drag|zieh|ドラッグ|拖/i);
       }
