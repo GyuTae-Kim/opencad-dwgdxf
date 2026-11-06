@@ -159,6 +159,12 @@ describe('여러 단 MTEXT 쓰기(R2018 합치기·R2013 이하 나누기)', () 
     expect(old[0]!.columns).toBeUndefined();
     expect(readColumnXData(old[0]!)).toEqual({ info: one });
     expect(mtexts(dxf(oldDoc, 'AC1032'))[0]!.columns).toEqual(one);
+    // 한 단은 부착점·흐름과 상관없이 단 정보를 옮긴다(경고 없음)
+    const mid = r2018Doc('DYNAMIC COLUMNS', one, 0);
+    (mid.entityIndex.get('B0') as MTextEntity).attachment = 5;
+    const w = writeDwg(mid, { version: 'AC1015' });
+    expect(w.warnings.map((x) => x.code)).not.toContain('mtext.columns_dropped');
+    expect(readColumnXData(mtexts(readDwg(w.data))[0]!)).toEqual({ info: one });
   });
 
   it('흐름 거꾸로·왼쪽 위가 아닌 부착점은 나누지 않고 단 정보를 빼고 경고한다', () => {

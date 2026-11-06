@@ -204,7 +204,8 @@ function textAxis(e: MTextEntity): { x: number; y: number; z: number } | null {
 export function splitColumnsForLegacy(e: MTextEntity, style: TextStyle | undefined, text?: TextEngine): ColumnSplit | null {
   const cols = e.columns;
   if (!cols || cols.type <= 0) return null;
-  if (cols.flowReversed || (e.attachment || 1) !== 1) return null;
+  // 단이 둘 이상이면 단 배치 근거가 있는 꼴만(한 단은 단 정보만 옮기므로 부착점·흐름과 상관없다)
+  if (cols.count > 1 && (cols.flowReversed || (e.attachment || 1) !== 1)) return null;
   const info: MTextColumns = { ...cols, count: cols.count > 0 ? cols.count : 1, heights: manualHeights(cols) ? [...cols.heights] : [] };
   const defined = hasDefinedHeight(e.rectHeight) ? e.rectHeight : undefined;
   const cx: ColumnXData = { info, ...(defined !== undefined ? { definedHeight: defined } : {}) };
