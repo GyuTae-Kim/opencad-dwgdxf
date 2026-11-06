@@ -9,7 +9,6 @@ import { columnGripMove, columnGripPoints, columnTarget } from '../edit/util/mte
 import type { GripPoint } from '../edit/geom/types';
 import type { App, CommandContext } from './app';
 import { unlockedOnly } from './layers';
-import { commitResults } from './modify';
 
 const LABEL: Record<string, string> = { 'col:ins': '이동', 'col:w': '단 폭', 'col:g': '단 간격', 'col:h': '단 높이' };
 const PROMPT: Record<string, string> = {
@@ -66,6 +65,8 @@ export async function columnGripEdit(app: App, ctx: CommandContext, handle: stri
     if (res.message) ctx.print(res.message, 'err');
     return;
   }
+  // app.ts가 이 파일을 불러오므로 수정 명령 모듈은 쓸 때 불러온다(dragmove.ts처럼 — 순환을 피한다)
+  const { commitResults } = await import('./modify');
   commitResults(app, ctx, [res], 'GRIP');
   app.setSelection([t.head.handle, ...(id === 'col:ins' ? t.members.map((m) => m.handle) : [])]);
 }
