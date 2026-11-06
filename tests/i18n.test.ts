@@ -145,6 +145,14 @@ describe('language URLs and UI presentation', () => {
         if (key.includes('도면층'))
           expect(value, `${code}: ${key}`).toMatch({ en: /layer/i, de: /layer/i, ja: /画層/, 'zh-CN': /图层|ByLayer/ }[code]);
         if (key.includes('도면층')) expect(value, `${code}: ${key}`).not.toMatch(/Ebene|Schicht|レイヤ/);
+        // 1인칭 알림(101차 규칙보다 넓게): "I inserted…", "so I used…", "habe ich…"
+        if (!key.startsWith('<p>') && !key.includes('나요?')) {
+          if (code === 'en') expect(value, `${code}: ${key}`).not.toMatch(/\bI (ran|used|inserted|placed|added|need|needed|downloaded|encountered|created|wrote|removed|turned|have|will|am|couldn['’]t)\b/);
+          if (code === 'de') expect(value, `${code}: ${key}`).not.toMatch(/\b(ich|mich|mir|mein\w*)\b/i);
+        }
+        // 문자(TEXT 객체)를 글자(character·Zeichen·字符)로 옮기지 않는다 — 특수 문자·문자 수·이름에 쓸 수 없는 문자처럼 글자 뜻인 곳은 빼고
+        if (/^(문자 (각도|값|위치|옵션|찾기|축척|회전|선택:|설정|편집|분해|비교|재지정|자리맞추기|방향)|단일 행 문자|새 문자(?!열)|셀 문자|문자의 (시작점|중간|맨|첫 번째|회전)|문자 \{0\}개)/.test(key))
+          expect(value, `${code}: ${key}`).not.toMatch(/character|Zeichen|字符/i);
         // 끌 도면층 = 끌(끄다) 도면층, 끌다(drag)가 아니다
         if (/^끌 도면층/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/drag|zieh|ドラッグ|拖/i);
       }
@@ -155,6 +163,9 @@ describe('language URLs and UI presentation', () => {
     // 이웃 줄의 머리를 삼키거나(Character alignment Find the character) 꼬리를 잃은(Grid) 번역
     expect(['문자 정렬', '격자 X 간격', '바꾸기…'].map((key) => translate(key, 'en'))).toEqual(['Text alignment', 'Grid X spacing', 'Replace…']);
     expect(['현재 도면층', '도면층 끄기', '새 도면층'].map((key) => translate(key, 'de'))).toEqual(['Aktueller Layer', 'Layer ausschalten', 'Neuer Layer']);
+    // 여러 앱이 같이 쓰는 방문 통계 동의 상자: 허용(쿠키 허락)은 공차(容差)가 아니고, 수집 안 함(하지 않겠다)은 未收集(아직 안 모음)이 아니다
+    expect(codes.map((code) => translate('허용', code))).toEqual(['Allow', '許可', '允许', 'Zulassen']);
+    expect(codes.map((code) => translate('수집 안 함', code))).toEqual(['Do not collect', '収集しない', '不收集', 'Nicht erfassen']);
   });
   it('updates dynamic UI and switches languages without changing document data or listeners', async () => {
     const dom = new JSDOM('<!doctype html><html><head><title>OpenCAD</title></head><body><div id="app"><header class="titlebar"><button>열기</button><span class="docname">열기</span></header><canvas></canvas><div class="anno-layer">열기</div><input value="열기" placeholder="열기"><div contenteditable="true">열기</div><div translate="no">열기</div><p id="status">열기</p></div></body></html>', {url:'https://gyutae-kim.github.io/opencad-skp/en/?sample#view'});
