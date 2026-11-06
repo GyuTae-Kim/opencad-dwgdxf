@@ -6,6 +6,8 @@
  * 여기서는 값 나무를 형식 배열 몇 개와 문자열 표로 바꾼다.
  * - 같은 속성 이름 순서(모양)는 한 번만 적고, 메인은 모양마다 만든 객체 리터럴 함수로 객체를 만든다(숨은 클래스가 한 번에 정해진다).
  *   워커도 모양마다 속성을 이름으로 바로 읽는 쓰기 함수를 만들어 쓴다(속성 읽기가 한 모양만 보고, 수 값을 상자에 담지 않는다).
+ *   속성 자리·배열 안의 객체는 그 자리에서 지난번에 쓴 모양부터 맞춰 보고, 속성 자리 문자열은 그 자리의 바로 앞 문자열과 같으면 표를 찾지 않는다
+ *   (89차 — 둘 다 찾은 결과와 같은 번호를 쓰므로 부호화 결과는 바이트까지 그대로다).
  * - 수는 Float64Array, 짧은 문자열은 표 하나(같은 값은 한 번), 바이트 배열은 버퍼 하나에 모은다(모두 transfer로 옮긴다).
  * - 수만 든 배열(폴리선 평탄 좌표·매듭 등)은 값마다 태그를 쓰지 않고 수 배열에 이어 적는다(되살리면 상자 없는 실수 배열).
  * - 얼린 객체(공유 ByLayer 색 등)는 같은 객체로 다시 만든다(구조화 복제처럼 한 번 보낸 안에서 공유를 지킨다).
@@ -97,6 +99,13 @@ export class Encoder {
    * 거의 늘 새 값이면(핸들·문자 내용) 찾지 않고 바로 표에 넣는다 — 큰 찾기 표를 줄인다.
    */
   private readonly dedupe: Int32Array[] = [];
+  /** 모양마다 속성 자리별 바로 앞 문자열(표에 넣은 것) — 같으면 표를 찾지 않는다. 그 번호는 dedupe의 뒤쪽 절반에 둔다 */
+  private readonly lastStr: (string | undefined)[][] = [];
+  /**
+   * 모양마다 속성 자리별 지난번 객체 값의 모양 번호 + 1(0 = 아직 없음). 같은 자리의 다음 객체는 이 모양부터 맞춰 본다
+   * (점·색·바꾸기 전 객체처럼 자리마다 모양이 거의 같다)
+   */
+  private readonly guesses: Int32Array[] = [];
   /** 모양마다 만든 값 쓰기 함수(없으면 일반 반복) */
   private readonly writers: (ShapeWriter | null)[] = [];
   /** 첫 속성 이름 → 속성 수별 → 그 모양들(대개 한둘이라 이름을 차례로 맞춰 본다, 최근에 맞은 것이 앞) */
@@ -198,8 +207,12 @@ export class Encoder {
     }
   }
 
-  /** 객체 속성 자리의 문자열: 그 자리 점수가 낮으면(늘 새 값) 찾지 않는다. 모양별 쓰기 함수가 부르므로 private이 아니다 */
-  slotStr(s: string, score: Int32Array, i: number): void {
+  /**
+   * 객체 속성 자리의 문자열: 그 자리 점수가 낮으면(늘 새 값) 찾지 않는다. 바로 앞에 같은 자리에 쓴 문자열과 같으면(도면층·선종류 이름 등)
+   * 표를 찾지 않고 그 번호를 쓴다(표에서 찾은 번호와 같다 — 89차: 연관 도면 MOVE 한 번에 표를 찾던 자리 문자열 83만 개 가운데 62만 개가 바로 앞과 같았다).
+   * 모양별 쓰기 함수가 부르므로 private이 아니다
+   */
+  slotStr(s: string, score: Int32Array, i: number, last: (string | undefined)[]): void {
     const sc = score[i]!;
     if (sc < -32 || s.length > 40) {
       this.tag(T_STR);
@@ -208,13 +221,25 @@ export class Encoder {
       return;
     }
     this.tag(T_STR);
-    let id = this.strIds.get(s);
-    if (id === undefined) {
-      id = this.strs.length;
-      this.strs.push(s);
-      this.strIds.set(s, id);
-      score[i] = sc - 1;
-    } else if (sc < 1024) score[i] = sc + 4;
+    const at = (score.length >> 1) + i;
+    let id: number;
+    if (last[i] === s) {
+      id = score[at]!;
+      if (sc < 1024) score[i] = sc + 4;
+    } else {
+      const found = this.strIds.get(s);
+      if (found === undefined) {
+        id = this.strs.length;
+        this.strs.push(s);
+        this.strIds.set(s, id);
+        score[i] = sc - 1;
+      } else {
+        id = found;
+        if (sc < 1024) score[i] = sc + 4;
+      }
+      last[i] = s;
+      score[at] = id;
+    }
     this.int(id);
   }
 
@@ -242,12 +267,33 @@ export class Encoder {
     }
   }
 
+  /**
+   * 객체 속성 자리의 수·문자열이 아닌 값: 일반 객체면 그 자리에서 지난번에 쓴 모양부터 맞춰 본다(value와 같은 결과).
+   * 모양별 쓰기 함수가 부르므로 private이 아니다
+   */
+  slotVal(v: unknown, guesses: Int32Array, i: number): void {
+    if (typeof v !== 'object' || v === null) {
+      this.value(v);
+      return;
+    }
+    const proto = Object.getPrototypeOf(v);
+    if (proto === Object.prototype || proto === null) {
+      const id = this.record(v as Record<string, unknown>, true, guesses[i]! - 1);
+      if (id >= 0) guesses[i] = id + 1;
+    } else this.nonPlain(v);
+  }
+
   private object(o: object): void {
     const proto = Object.getPrototypeOf(o);
     if (proto === Object.prototype || proto === null) {
-      this.record(o as Record<string, unknown>, true);
+      this.record(o as Record<string, unknown>, true, -1);
       return;
     }
+    this.nonPlain(o);
+  }
+
+  /** 일반 객체가 아닌 객체(원형이 Object.prototype도 null도 아님): 배열·형식 배열·Map·Set, 그 밖은 제 열거 속성만 */
+  private nonPlain(o: object): void {
     if (Array.isArray(o)) {
       const n = o.length;
       if (n > 1 && allNumbers(o, n)) {
@@ -256,9 +302,20 @@ export class Encoder {
       }
       this.tag(T_ARR);
       this.int(n);
+      // 배열 안 일반 객체는 바로 앞 객체의 모양부터 맞춰 본다(확장 자료 항목·블록 안 객체 등)
+      let guess = -1;
       for (let i = 0; i < n; i++) {
         if (!(i in o)) throw new Unsupported();
-        this.value(o[i]);
+        const v: unknown = o[i];
+        if (typeof v !== 'object' || v === null) {
+          this.value(v);
+          continue;
+        }
+        const proto = Object.getPrototypeOf(v);
+        if (proto === Object.prototype || proto === null) {
+          const id = this.record(v as Record<string, unknown>, true, guess);
+          if (id >= 0) guess = id;
+        } else this.nonPlain(v);
       }
       return;
     }
@@ -283,41 +340,58 @@ export class Encoder {
     }
     // 구조화 복제가 다루지 않거나 다르게 다루는 것(Date, RegExp, ArrayBuffer, Error, Promise …)
     if (o instanceof Date || o instanceof RegExp || o instanceof ArrayBuffer || o instanceof Error || typeof (o as { then?: unknown }).then === 'function') throw new Unsupported();
-    this.record(o as Record<string, unknown>, false);
+    this.record(o as Record<string, unknown>, false, -1);
   }
 
-  /** 객체: 얼렸으면 같은 객체 다시 쓰기, 아니면 모양 번호 + 값들 */
-  private record(o: Record<string, unknown>, simple: boolean): void {
+  /**
+   * 객체: 얼렸으면 같은 객체 다시 쓰기, 아니면 모양 번호 + 값들. guess는 짐작한 모양(-1 = 없음) — 이름이 차례대로 같으면
+   * 모양 찾기(shapeOf)를 건너뛴다(이름 차례마다 모양은 하나뿐이라 찾은 번호와 같다). 쓴 모양 번호를 돌려준다(다시 쓰기는 -1)
+   */
+  private record(o: Record<string, unknown>, simple: boolean, guess: number): number {
     if (Object.isFrozen(o)) {
       const id = this.frozen.get(o);
       if (id !== undefined) {
         this.tag(T_REF);
         this.int(id);
-        return;
+        return -1;
       }
       this.frozen.set(o, this.frozen.size);
       this.tag(T_FROZEN);
     } else this.tag(T_OBJ);
     const keys = this.keyBuf;
     let nk = 0;
+    let id: number;
     // 일반 객체는 for-in이 자기 속성만 돈다(V8 열거 캐시를 써서 빠르다)
-    if (simple) for (const k in o) keys[nk++] = k;
-    else for (const k of Object.keys(o)) keys[nk++] = k;
-    const id = this.shapeOf(keys, nk);
+    if (simple && guess >= 0) {
+      const names = this.shapes[guess]!;
+      let same = true;
+      for (const k in o) {
+        if (same && names[nk] !== k) same = false;
+        keys[nk++] = k;
+      }
+      id = same && nk === names.length ? guess : this.shapeOf(keys, nk);
+    } else {
+      if (simple) for (const k in o) keys[nk++] = k;
+      else for (const k of Object.keys(o)) keys[nk++] = k;
+      id = this.shapeOf(keys, nk);
+    }
     this.int(id);
     const score = this.dedupe[id]!;
+    const last = this.lastStr[id]!;
+    const guesses = this.guesses[id]!;
     const wr = this.writers[id];
     if (wr) {
-      wr(o, this, score);
-      return;
+      wr(o, this, score, last, guesses);
+      return id;
     }
     // keyBuf는 하위 객체가 다시 쓰므로 모양에서 이름을 읽는다
     const names = this.shapes[id]!;
     for (let i = 0; i < nk; i++) {
       const v = o[names[i]!];
-      if (typeof v === 'string') this.slotStr(v, score, i);
-      else this.value(v);
+      if (typeof v === 'string') this.slotStr(v, score, i, last);
+      else this.slotVal(v, guesses, i);
     }
+    return id;
   }
 
   private shapeOf(keys: string[], nk: number): number {
@@ -342,7 +416,10 @@ export class Encoder {
     }
     const id = this.shapes.length;
     this.shapes.push(keys.slice(0, nk));
-    this.dedupe.push(new Int32Array(nk));
+    // 앞 절반은 자리별 점수, 뒤 절반은 자리별 바로 앞 문자열의 번호
+    this.dedupe.push(new Int32Array(nk * 2));
+    this.lastStr.push(new Array<string | undefined>(nk));
+    this.guesses.push(new Int32Array(nk));
     this.writers.push(makeWriter(this.shapes[id]!));
     cands.push(id);
     return id;
@@ -390,14 +467,14 @@ export class Encoder {
  * 모양 → 값 쓰기 함수: 속성을 이름으로 바로 읽는다. 모양마다 함수가 따로라 속성 읽기가 한 모양의 객체만 보게 되어
  * 일반 반복(o[이름])보다 빠르다. eval을 막은 환경이면 null(일반 반복).
  */
-type ShapeWriter = (o: Record<string, unknown>, w: Encoder, score: Int32Array) => void;
+type ShapeWriter = (o: Record<string, unknown>, w: Encoder, score: Int32Array, last: (string | undefined)[], guesses: Int32Array) => void;
 
 function makeWriter(keys: string[]): ShapeWriter | null {
   if (keys.some((k) => k === '__proto__')) return null;
   try {
     // 수는 바로 num으로(일반 value를 거치면 실수 속성 값을 상자에 담느라 수마다 할당한다)
-    const body = keys.map((k, i) => `v = o[${JSON.stringify(k)}];\nif (typeof v === 'number') w.num(v);\nelse if (typeof v === 'string') w.slotStr(v, s, ${i});\nelse w.value(v);`).join('\n');
-    return new Function('o', 'w', 's', `let v;\n${body}`) as ShapeWriter;
+    const body = keys.map((k, i) => `v = o[${JSON.stringify(k)}];\nif (typeof v === 'number') w.num(v);\nelse if (typeof v === 'string') w.slotStr(v, s, ${i}, l);\nelse w.slotVal(v, g, ${i});`).join('\n');
+    return new Function('o', 'w', 's', 'l', 'g', `let v;\n${body}`) as ShapeWriter;
   } catch {
     return null;
   }
