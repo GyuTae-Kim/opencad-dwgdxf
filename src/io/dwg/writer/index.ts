@@ -16,6 +16,7 @@ import { ByteOut, type R2004Section, auxHeader, emptyPreview, objectMap, templat
 import { parseHandle } from './util';
 import { arcTextsForWrite } from '../../arctext';
 import { encodeSummaryInfo, summaryFromDoc } from '../../dwgprops';
+import type { TextEngine } from '../../../text/layout';
 
 export type DwgWriteVersion = 'AC1015' | 'AC1018' | 'AC1024' | 'AC1027' | 'AC1032';
 
@@ -25,6 +26,8 @@ export interface DwgWriteOptions {
   onProgress?: (fraction: number) => void;
   /** 원본 본문(dwgRaw) 되쓰기. 기본 참(거짓은 모델 값만으로 쓰는지 확인할 때) */
   raw?: boolean;
+  /** 여러 단 MTEXT를 R2018 전 단 객체로 나눌 때 줄을 재는 문자 엔진(없으면 단선 글꼴로 잰다) */
+  text?: TextEngine;
 }
 
 export interface DwgWriteResult {
@@ -59,6 +62,7 @@ export function writeDwg(doc: CadDocument, options: DwgWriteOptions = {}): DwgWr
   progress?.(0);
   const maint = MAINT[ver] ?? 0;
   const ctx = new WCtx(doc, ver, warnings, options.raw !== false);
+  ctx.text = options.text;
   ctx.plan();
   progress?.(0.1);
 

@@ -11,8 +11,8 @@
  *   1000 ACAD_MTEXT_COLUMNS_END
  *   1000 ACAD_MTEXT_DEFINED_HEIGHT_BEGIN 1070 46 1040 정한 높이   1000 ACAD_MTEXT_DEFINED_HEIGHT_END
  *
- * 다른 단 MTEXT에는 정한 높이만 있다(수동 높이 단은 확장 자료가 없다). AutoCAD가 같은 도면을 R2018과 R2007로 쓴 짝에서 본 배치다:
- * 높이 목록(50)은 수동 높이 동적 단에만, 정한 높이는 정적 단과 자동 높이 동적 단에만 있고, 단 수(76)는 단 객체 수(47)보다 클 수 있다
+ * 다른 단 MTEXT에는 정한 높이만 있다(정한 높이가 0이면 확장 자료가 없다). AutoCAD가 같은 도면을 R2018과 R2007로 쓴 짝에서 본 배치다:
+ * 높이 목록(50)은 수동 높이 동적 단에만, 정한 높이는 그 값(R2018 46)이 0이 아닐 때만 있고, 단 수(76)는 단 객체 수(47)보다 클 수 있다
  * (정적 3단에 글이 두 단만 차면 단 객체는 둘). 이 앱은 단 객체를 그대로 두고(저장하면 원래 구조 그대로) 고를 때만 한 묶음으로 넓힌다.
  */
 import type { CadDocument, Entity, MTextColumns, MTextEntity, Vec3, XData, XDataItem } from '../../core/model';
@@ -100,9 +100,12 @@ export function manualHeights(c: Pick<MTextColumns, 'type' | 'autoHeight'>): boo
   return c.type === 2 && !c.autoHeight;
 }
 
-/** 단 정보에 정한 높이를 쓰는지(정적 단, 자동 높이 동적 단) */
-export function hasDefinedHeight(c: Pick<MTextColumns, 'type' | 'autoHeight'>): boolean {
-  return c.type === 1 || (c.type === 2 && c.autoHeight);
+/**
+ * 정한 높이(46)를 확장 자료로 쓰는지: 값이 0이 아닐 때(단 종류와 상관없이 — AutoCAD가 쓴 짝에서 수동 높이 단도 46이 12면
+ * 첫 단과 다른 단에 정한 높이가 있고, 46이 0인 단은 없다)
+ */
+export function hasDefinedHeight(rectHeight: number | undefined): boolean {
+  return !!rectHeight && rectHeight > 0;
 }
 
 /** 여러 단 자료 → ACAD 확장 자료 항목(AutoCAD가 쓰는 차례: 단 정보, 단 목록, 정한 높이) */
@@ -229,6 +232,30 @@ export function mtextColumnSets(doc: CadDocument): Map<string, string[]> {
   return sets;
 }
 
+/**
+ * 그릴 때 줄을 나눌 단 폭: 첫 단(다른 단이 있거나 단 수가 둘 이상인 단 정보)은 제 단 정보의 단 폭, 다른 단(정한 높이만 있는 MTEXT)은
+ * members(memberColumnWidths)에서 찾는다. AutoCAD는 다른 단 41에 전체 폭을, 첫 단 41에는 R2018 41을 써서(짝에서 전체 폭일 때가 많다)
+ * 41로 나누면 단 사이로 글이 넘친다. 단 폭이 없으면 undefined(41로)
+ */
+export function columnWrapWidth(e: MTextEntity, members: () => Map<string, number>): number | undefined {
+  if (!e.xdata || e.columns) return undefined;
+  const c = readColumnXData(e);
+  if (!c) return undefined;
+  if (c.info) return c.info.type > 0 && c.info.width > 0 && (c.links?.handles.length || c.info.count >= 2) ? c.info.width : undefined;
+  return c.definedHeight !== undefined && !c.links ? members().get(normalizeHandle(e.handle)) : undefined;
+}
+
+/** 묶음의 다른 단 → 첫 단 단 정보의 단 폭 */
+export function memberColumnWidths(doc: CadDocument): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [h, list] of mtextColumnSets(doc)) {
+    if (list[0] !== h) continue;
+    const w = readColumnXData(doc.entityIndex.get(h)!)?.info?.width;
+    if (w && w > 0) for (const m of list.slice(1)) out.set(m, w);
+  }
+  return out;
+}
+
 /** 고른 핸들에 같은 여러 단 MTEXT의 다른 단을 더한다(순서 유지, 겹치지 않게) */
 export function expandByMTextColumns(doc: CadDocument, handles: readonly string[], sets?: Map<string, string[]>): string[] {
   if (!handles.some((h) => doc.entityIndex.get(normalizeHandle(h))?.type === 'MTEXT')) return [...handles];
@@ -255,6 +282,48 @@ export function cachedMTextColumnSets(doc: CadDocument, gen: number): Map<string
   const sets = mtextColumnSets(doc);
   cache.set(doc, { gen, sets });
   return sets;
+}
+
+/**
+ * 첫 단 + 다른 단(단 목록 차례) → 첫 단 자리의 MTEXT 하나: 글은 단 차례로 이어 붙이고(AutoCAD가 같은 도면을 R2018과 R2007로 쓴
+ * 짝에서 이어 붙인 글이 R2018 글이다), 단 정보는 단 자료(columns)로, 정한 높이는 46으로. 확장 자료의 여러 단 묶음은 뺀다
+ */
+export function mergeColumnGroup(head: MTextEntity, c: ColumnXData, members: readonly MTextEntity[]): MTextEntity {
+  const info = c.info!;
+  const columns: MTextColumns = {
+    type: info.type,
+    count: info.count > 0 ? info.count : 1 + members.length,
+    width: info.width,
+    gutter: info.gutter,
+    autoHeight: info.autoHeight,
+    flowReversed: info.flowReversed,
+    heights: manualHeights(info) ? [...info.heights] : [],
+  };
+  const out: MTextEntity = { ...head, text: head.text + members.map((m) => m.text).join(''), columns };
+  const xd = withColumnXData(head.xdata, null);
+  if (xd) out.xdata = xd;
+  else delete out.xdata;
+  // 정한 높이: 확장 자료에 있으면 그것(R2000 DXF 본문에는 46이 없다), 없으면 본문 46(짝에서 0)
+  out.rectHeight = c.definedHeight ?? head.rectHeight ?? 0;
+  delete out.dwgRaw;
+  return out;
+}
+
+/**
+ * 묶음에 든 MTEXT(어느 단이든) → 첫 단, 다른 단, 한 객체로 합친 모양. 단 정보가 없거나 묶음이 아니면 null.
+ * 그립·제자리 편집이 묶음을 AutoCAD처럼 객체 하나로 다룰 때 쓴다(바꾸면 첫 단을 합친 객체로, 다른 단은 지운다)
+ */
+export function linkedColumnGroup(doc: CadDocument, e: Entity, sets?: Map<string, string[]>): { head: MTextEntity; members: MTextEntity[]; merged: MTextEntity } | null {
+  if (e.type !== 'MTEXT') return null;
+  const s = sets ?? mtextColumnSets(doc);
+  const list = s.get(normalizeHandle(e.handle));
+  const head = list ? doc.entityIndex.get(list[0]!) : undefined;
+  if (!head || head.type !== 'MTEXT') return null;
+  const g = columnGroupOf(doc, head, s);
+  const c = readColumnXData(head);
+  if (!g || g.length < 2 || !c?.info || c.info.type <= 0) return null;
+  const members = g.slice(1);
+  return { head, members, merged: mergeColumnGroup(head, c, members) };
 }
 
 /** 첫 단과 다른 단(문서 차례) — 묶음의 첫 단이 아니면 null */

@@ -65,6 +65,10 @@ export interface TextLayout {
   background?: [number, number, number, number];
   /** MTEXT 테두리 */
   frame?: boolean;
+  /** 여러 단 MTEXT: 문단마다 첫 줄이 든 단(0부터, parseMText의 문단 차례) */
+  paraColumns?: number[];
+  /** 여러 단 MTEXT: 줄이 든 단 수 */
+  columnsUsed?: number;
 }
 
 /** 글자를 찾을 글꼴 순서 */
@@ -451,10 +455,15 @@ export class TextEngine {
       }
       baselines.push(y);
     }
-    // 단(R2018 열)
+    // 단(R2018 열). 높이 목록이 있으면(수동 높이 동적 단) 단마다 제 높이(0은 끝없이 — AutoCAD가 쓴 짝에서 마지막 단),
+    // 없으면 정한 높이(정적 단·자동 높이 동적 단)
     const colCount = p.columns && p.columns.count > 1 ? p.columns.count : 1;
-    const colHeight = colCount > 1 ? p.columns!.heights[0] || p.rectHeight || 0 : 0;
+    const colHeights = colCount > 1 ? p.columns!.heights : [];
+    const colHeight = colCount > 1 ? (colHeights.length ? Math.max(0, ...colHeights) : p.rectHeight || 0) : 0;
+    const heightOf = (c: number) => (colHeights.length ? colHeights[c] || 0 : colHeight);
     const colOffsets: { dx: number; dy: number }[] = lines.map(() => ({ dx: 0, dy: 0 }));
+    const colOf: number[] = lines.map(() => 0);
+    let deepest = 0;
     if (colCount > 1) {
       let c = 0;
       let shift = 0;
@@ -462,15 +471,18 @@ export class TextEngine {
         const base = baselines[k]! + shift;
         // 단 높이를 넘거나 단 나누기(\N) 문단이 시작하면 다음 단
         const brk = lines[k]!.first && lines[k]!.para.columnBreak;
-        if (((colHeight > 0 && base < -colHeight) || brk) && c < colCount - 1 && k > 0) {
+        const ch = heightOf(c);
+        if (((ch > 0 && base < -ch) || brk) && c < colCount - 1 && k > 0) {
           c++;
           shift = -baselines[k]! - lines[k]!.height;
         }
         colOffsets[k] = { dx: c * (p.columns!.width + p.columns!.gutter), dy: shift };
+        colOf[k] = c;
+        deepest = Math.max(deepest, -(baselines[k]! + shift));
       }
     }
     const lastBase = lines.length ? baselines[lines.length - 1]! + colOffsets[lines.length - 1]!.dy : -h;
-    const totalH = colCount > 1 && colHeight > 0 ? colHeight : -lastBase;
+    const totalH = colCount > 1 && colHeight > 0 ? Math.max(colHeight, colHeights.length ? deepest : 0) : colCount > 1 ? deepest || -lastBase : -lastBase;
     const offX = col === 0 ? 0 : col === 1 ? -boxW / 2 : -boxW;
     const offY = row === 0 ? 0 : row === 1 ? totalH / 2 : totalH;
 
@@ -566,6 +578,20 @@ export class TextEngine {
     if (p.frame) out.frame = true;
     grow(out, boxLeft, boxTop);
     grow(out, boxRight, boxBottom);
+    if (colCount > 1) {
+      // 문단마다 첫 줄의 단(R2018 → R2013 저장이 단 객체로 나눌 때 쓴다)
+      const idx = new Map<(typeof paras)[number], number>();
+      paras.forEach((q, i) => idx.set(q, i));
+      const pc = paras.map(() => -1);
+      let used = 0;
+      for (let k = 0; k < lines.length; k++) {
+        const i = idx.get(lines[k]!.para)!;
+        if (pc[i]! < 0) pc[i] = colOf[k]!;
+        used = Math.max(used, colOf[k]! + 1);
+      }
+      out.paraColumns = pc;
+      out.columnsUsed = used;
+    }
     return out;
   }
 }

@@ -39,6 +39,8 @@ import { defaultLayout } from '../../core/finalize';
 import { type DxfVersion, rawTagsValid, versionNum } from './tagwriter';
 import { convertEntity } from './wconvert';
 import { CTX_TYPES } from '../annoscale';
+import type { TextEngine } from '../../text/layout';
+import { columnsForR2018, linkColumnHead, splitColumnsForLegacy } from '../mtextcols';
 
 export interface DxfWriteOptions {
   /** 기본 AC1032(R2018) */
@@ -49,6 +51,8 @@ export interface DxfWriteOptions {
   codepage?: string;
   /** R2007 이전에 모든 비ASCII 문자를 \U+XXXX로 쓴다(파일 전체가 ASCII). 기본값: codepage를 주지 않으면 참 */
   escapeNonAscii?: boolean;
+  /** 여러 단 MTEXT를 R2018 전 버전의 단 객체로 나눌 때 줄을 재는 문자 엔진(없으면 단선 글꼴로 잰다) */
+  text?: TextEngine;
 }
 
 export interface PlannedBlock {
@@ -430,9 +434,20 @@ export class WriteContext {
     // 객체를 버전에 맞게 바꾸고 참조를 모은다.
     for (const pb of this.blocks) {
       const out: Entity[] = [];
+      // 여러 단 MTEXT: R2018은 단 묶음을 첫 단 자리의 한 객체로(다른 단은 쓰지 않는다), 그 전은 한 객체를 단 객체로(io/mtextcols.ts)
+      const cols = this.ver >= 1032 ? columnsForR2018(pb.def.entities) : null;
       for (const e of pb.def.entities) {
-        const conv = convertEntity(e, this);
-        let list = conv ?? [e];
+        let src: Entity = e;
+        if (cols?.has(e)) {
+          const merged = cols.get(e);
+          if (!merged) {
+            this.converted.set(e, []);
+            continue;
+          }
+          src = merged;
+        }
+        const conv = convertEntity(src, this);
+        let list = conv ?? (this.ver >= 1015 && this.ver < 1032 && src.type === 'MTEXT' && src.columns && src.columns.type > 0 ? this.legacyColumns(src) : [src]);
         list = list.map((x) => this.nameDimBlock(x));
         if (list.length !== 1 || list[0] !== e) this.converted.set(e, list);
         for (const x of list) {
@@ -480,6 +495,18 @@ export class WriteContext {
         this.refBlock(e.block);
         break;
     }
+  }
+
+  /**
+   * R2000~R2013: 단 자료가 있는 MTEXT → 단 정보를 확장 자료로 옮긴 첫 단 + 새 핸들의 다른 단(첫 단이 그 핸들을 가리킨다).
+   * 나눌 근거가 없으면 그대로(writeMText가 단 정보를 빼고 경고한다)
+   */
+  private legacyColumns(e: Extract<Entity, { type: 'MTEXT' }>): Entity[] {
+    const s = splitColumnsForLegacy(e, this.doc.textStyles.get(tableKey(e.style)), this.options.text);
+    if (!s) return [e];
+    if (!s.members.length) return [s.head];
+    for (const m of s.members) m.handle = this.claim(m, undefined);
+    return [linkColumnHead(s, s.members.map((m) => m.handle)), ...s.members];
   }
 
   /** 치수 그림 블록 이름이 없으면 익명 이름(*Dn)을 붙인 복사본(빈 블록은 refBlocks로 만든다) */
