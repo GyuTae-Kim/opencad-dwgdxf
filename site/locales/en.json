@@ -4948,7 +4948,7 @@
   "숫자 값, 점 또는 옵션 키워드가 필요합니다.": "Requires a numeric value, a point or an option keyword.",
   "숫자 값이 필요합니다.": "A numeric value is required.",
   "숫자를 입력하거나 점을 지정하십시오.": "Enter a number or specify a point.",
-  "숫자를 입력하십시오.": ".",
+  "숫자를 입력하십시오.": "Enter a number.",
   "쉐이프": "Shape",
   "쉐이프 옵션 입력 [": "Enter shape option [",
   "쉐이프 옵션 입력 [원형(R)/각도(A)/없음(N)] <원형(R)>:": "Enter shape option [Circular(R)/Angle(A)/None(N)] <Circular(R)>:",
