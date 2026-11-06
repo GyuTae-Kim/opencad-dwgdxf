@@ -107,6 +107,21 @@ describe('newHandle(98차 — 씨앗 글자 다시 쓰기)', () => {
     }
   });
 
+  it('99차: 다음 씨앗을 글자로 하나 늘려도(BigInt를 16진 글자로 바꾸지 않음) 자리 올림마다 97차와 같다', () => {
+    for (const seed of ['1', '9', 'F', 'FE', '9F', 'A9', 'FFF0', 'ABCDEF9', '19FFF', 'FFFFFFFFFFFFFFF0']) {
+      const p = pair(seed);
+      p.take(40);
+      // 쓰인 핸들과 겹쳐 건너뛴 다음에도
+      p.both((d) => d.entityIndex.set(String(d.header.get('$HANDSEED')), point(String(d.header.get('$HANDSEED')))));
+      p.take(40);
+      expect(p.log[1], seed).toEqual(p.log[0]);
+    }
+    const p = pair('EFFE');
+    p.take(4096 + 32);
+    expect(p.log[1]).toEqual(p.log[0]);
+    expect(p.log[1]![p.log[1]!.length - 1]).toEqual(['1001D', '1001E']);
+  });
+
   it('16진 자리가 늘어나는 곳(FFFF → 10000)과 큰 핸들도 같다', () => {
     const p = pair('FFFE');
     p.take(4);

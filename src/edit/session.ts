@@ -207,12 +207,14 @@ function removeRun(doc: CadDocument, b: BlockDef, ops: readonly EditOp[], at: { 
   list.length = w;
   out.reverse();
   let m = k;
+  // 변경 요약의 공간 칸은 묶음에 하나다(처음 성공한 변경에서 찾는다 — 하나씩 할 때 처음 부르는 자리와 같다)
+  let s: ReturnType<SpaceOf> | undefined;
   try {
     for (; m < end; m++) {
       const op = ops[m] as RemoveOp;
       finder.removed(b, op.entity.handle, op.index, len0 - (m - k) - 1);
       indexEntity(doc, op.entity, false);
-      space(op.block)?.removed.add(op.entity.handle);
+      (s ??= space(key))?.removed.add(op.entity.handle);
     }
   } catch (err) {
     // m 뒤의 지우기는 아직 하지 않은 것으로: 자리가 작은 것부터 제자리에 다시 넣는다
@@ -253,12 +255,13 @@ function addRun(doc: CadDocument, b: BlockDef, ops: readonly EditOp[], at: { i: 
     else list[w] = list[r--]!;
   }
   let m = k;
+  let s: ReturnType<SpaceOf> | undefined;
   try {
     for (; m < end; m++) {
       const op = ops[m] as AddOp;
       finder.added(b, op.entity.handle, idx[m - k]!, len0 + (m - k) + 1);
       indexEntity(doc, op.entity, true);
-      space(op.block)?.changed.push(op.entity);
+      (s ??= space(key))?.changed.push(op.entity);
     }
   } catch (err) {
     // m 뒤에 넣은 것을 뺀다(자리가 큰 것부터)
@@ -268,6 +271,15 @@ function addRun(doc: CadDocument, b: BlockDef, ops: readonly EditOp[], at: { i: 
   }
   at.i = end - 1;
   return true;
+}
+
+/** 정규화한 16진 핸들 글자(대문자, 앞 0 없음)의 다음 값. normalizeHandle(BigInt('0x' + h) + 1n)과 같다 */
+function nextHandleText(h: string): string {
+  let i = h.length - 1;
+  while (i >= 0 && h.charCodeAt(i) === 70 /* F */) i--;
+  if (i < 0) return '1' + '0'.repeat(h.length);
+  const c = h.charCodeAt(i);
+  return h.slice(0, i) + (c === 57 /* 9 */ ? 'A' : String.fromCharCode(c + 1)) + '0'.repeat(h.length - 1 - i);
 }
 
 /** 핸들이 같은 객체의 자리를 뒤에서부터 찾는다. 명령을 되돌릴 때는 더한 객체를 뒤에서부터 지운다 */
@@ -519,7 +531,8 @@ export class EditSession {
       }
     }
     const after = next + 1n;
-    const seed2 = normalizeHandle(after);
+    // h는 next를 정규화한 글자라 글자로 하나 늘리면 normalizeHandle(after)와 같다(99차 — 객체 42만 개 도면 EXPLODE는 새 핸들 약 124만 번, 16진 글자 바꾸기가 명령의 약 6.5%였다)
+    const seed2 = nextHandleText(h);
     this.doc.header.set('$HANDSEED', seed2);
     if (memo) {
       memo.seed = seed2;
