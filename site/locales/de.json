@@ -1924,6 +1924,7 @@
   "단 간격 지정 또는 [종료(X)]:": "Spaltenabstand angeben oder [Beenden(X)]:",
   "단 높이 지정 또는 [종료(X)]:": "Spaltenhöhe angeben oder [Beenden(X)]:",
   "단 폭 지정 또는 [종료(X)]:": "Spaltenbreite angeben oder [Beenden(X)]:",
+  "단마다 따로 저장된 여러 단 문자를 R2018 형식에 맞게 한 객체로 합쳐 썼습니다.": "Mehrspaltiger Text, der pro Spalte als eigenes Objekt gespeichert war, wurde für das R2018-Format zu einem Objekt zusammengeführt.",
   "돌출 방향": "Extrusionsrichtung",
   "두 번째 점 지정 또는 <다중 점>:": "Zweiten Punkt angeben oder <Mehrere Punkte>:",
   "두 번째 점 지정 또는 [다중 점(M)]:": "Zweiten Punkt angeben oder [Mehrere Punkte (M)]:",

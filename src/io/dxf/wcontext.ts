@@ -40,7 +40,7 @@ import { type DxfVersion, rawTagsValid, versionNum } from './tagwriter';
 import { convertEntity } from './wconvert';
 import { CTX_TYPES } from '../annoscale';
 import type { TextEngine } from '../../text/layout';
-import { columnsForR2018, linkColumnHead, splitColumnsForLegacy } from '../mtextcols';
+import { COLUMNS_MERGED, columnsForR2018, linkColumnHead, splitColumnsForLegacy } from '../mtextcols';
 
 export interface DxfWriteOptions {
   /** 기본 AC1032(R2018) */
@@ -441,6 +441,8 @@ export class WriteContext {
         if (cols?.has(e)) {
           const merged = cols.get(e);
           if (!merged) {
+            // 첫 단에 합친 다른 단(개수만큼 센다 — 저장 뒤 참고)
+            this.warn('mtext.columns_merged', COLUMNS_MERGED);
             this.converted.set(e, []);
             continue;
           }

@@ -23,6 +23,8 @@ export { mergeColumnGroup };
 
 /** 단 객체로 나눌 근거가 없어 단 정보를 빼고 쓴 경고(저장 전 확인에 나온다) */
 export const COLUMNS_DROPPED = 'R2018 이전 버전에는 흐름이 거꾸로이거나 부착점이 왼쪽 위가 아닌 여러 단 문자의 단 정보를 쓰지 않았습니다(문자는 그대로).';
+/** R2018로 쓸 때 단 묶음을 한 객체로 합친 알림(빠지는 것이 아니라 저장 전 확인에는 넣지 않는다 — 저장 뒤 참고로만) */
+export const COLUMNS_MERGED = '단마다 따로 저장된 여러 단 문자를 R2018 형식에 맞게 한 객체로 합쳐 썼습니다.';
 
 let fallback: TextEngine | null = null;
 

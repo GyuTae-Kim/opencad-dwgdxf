@@ -53,6 +53,8 @@ const CONVERSIONS = new Set([
   'r12.mtext_as_text',
   'r12.leader_as_polyline',
   'dwg.write_spline_fit_dropped',
+  // R2018 전 버전에 단 배치 근거가 없는 여러 단 문자(문자는 남고 단 정보만 빠진다 — 90차)
+  'mtext.columns_dropped',
 ]);
 
 /** 객체가 빠지는 경고(종류에 따라) */

@@ -14,6 +14,7 @@ import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { paragraphStarts, splitColumnText } from '../../src/io/mtextcols';
 import { mtextColumnSets, readColumnXData } from '../../src/edit/util/mtextcols';
+import { saveLosses } from '../../src/app/saveloss';
 import { columnDoc, mtext } from './mtextcols-fixture';
 
 const model = (doc: CadDocument) => doc.blocks.get(MODEL_SPACE)!.entities;
@@ -57,6 +58,11 @@ describe('여러 단 MTEXT 쓰기(R2018 합치기·R2013 이하 나누기)', () 
       expect(readColumnXData(e)).toBeNull();
       // 선은 그대로
       expect(model(back).some((x) => x.handle === 'A3')).toBe(true);
+    }
+    // 합친 다른 단 수만큼 저장 뒤 참고 알림(빠지는 것이 아니라 저장 전 확인에는 없다)
+    for (const w of [writeDxf(doc, { version: 'AC1032' }).warnings, writeDwg(doc, { version: 'AC1032' }).warnings]) {
+      expect(w.find((x) => x.code === 'mtext.columns_merged')?.count).toBe(2);
+      expect(saveLosses(w)).toEqual([]);
     }
   });
 
@@ -171,6 +177,8 @@ describe('여러 단 MTEXT 쓰기(R2018 합치기·R2013 이하 나누기)', () 
     const doc = r2018Doc('Line 1\\PLine 2\\PLine 3\\PLine 4', { ...STATIC3, flowReversed: true }, 7.0885);
     const w = writeDxf(doc, { version: 'AC1027' });
     expect(w.warnings.map((x) => x.code)).toContain('mtext.columns_dropped');
+    // 저장 전 확인에 "남지만 바뀜"으로 나온다
+    expect(saveLosses(w.warnings).map((x) => x.converted)).toEqual([true]);
     expect(mtexts(readDxf(w.data)).length).toBe(1);
     const d2 = r2018Doc('Line 1\\PLine 2\\PLine 3\\PLine 4', STATIC3, 7.0885);
     (d2.entityIndex.get('B0') as MTextEntity).attachment = 7;

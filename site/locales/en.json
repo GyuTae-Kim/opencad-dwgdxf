@@ -1924,6 +1924,7 @@
   "단 간격 지정 또는 [종료(X)]:": "Specify column gutter or [Exit (X)]:",
   "단 높이 지정 또는 [종료(X)]:": "Specify column height or [Exit (X)]:",
   "단 폭 지정 또는 [종료(X)]:": "Specify column width or [Exit (X)]:",
+  "단마다 따로 저장된 여러 단 문자를 R2018 형식에 맞게 한 객체로 합쳐 썼습니다.": "Multi-column text stored as one object per column was merged into a single object for the R2018 format.",
   "돌출 방향": "Extrusion direction",
   "두 번째 점 지정 또는 <다중 점>:": "Specify second point or <Multiple points>:",
   "두 번째 점 지정 또는 [다중 점(M)]:": "Specify second point or [Multiple points(M)]:",

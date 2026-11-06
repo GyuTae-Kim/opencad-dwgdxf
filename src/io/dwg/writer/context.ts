@@ -51,7 +51,7 @@ import { ASSOC_DWG_TYPES } from '../assoccodec';
 import { rawObjectOk } from './rawobjects';
 import { arrayRecordXData, hasAcadArrays } from './assocarray';
 import type { TextEngine } from '../../../text/layout';
-import { COLUMNS_DROPPED, columnsForR2018, linkColumnHead, splitColumnsForLegacy } from '../../mtextcols';
+import { COLUMNS_DROPPED, COLUMNS_MERGED, columnsForR2018, linkColumnHead, splitColumnsForLegacy } from '../../mtextcols';
 
 export type TableName = 'BLOCK_RECORD' | 'LAYER' | 'STYLE' | 'LTYPE' | 'VIEW' | 'UCS' | 'VPORT' | 'APPID' | 'DIMSTYLE' | 'VPENT';
 
@@ -691,7 +691,11 @@ export class WCtx {
         let e = e0;
         if (cols?.has(e0)) {
           const merged = cols.get(e0);
-          if (!merged) continue;
+          if (!merged) {
+            // 첫 단에 합친 다른 단(개수만큼 센다 — 저장 뒤 참고)
+            this.warn('mtext.columns_merged', COLUMNS_MERGED);
+            continue;
+          }
           e = merged;
         }
         if (this.ver < R2018 && e.type === 'MTEXT' && e.columns && e.columns.type > 0) {
