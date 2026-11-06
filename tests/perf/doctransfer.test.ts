@@ -127,6 +127,12 @@ describe('codec', () => {
     expect(Object.getOwnPropertyNames(back[values.length - 1])).toEqual(['__proto__', 'b']);
   });
 
+  it('0~255 밖의 정수도 같은 값으로 되살린다(정수로 돌려주는 길 — -0·int32 밖·NaN은 그대로, 96차)', () => {
+    const nums = [-1, -2, -3, 256, 70000, 2 ** 31 - 1, -(2 ** 31), 2 ** 31, -(2 ** 31) - 1, 2 ** 53, -0, 0.5, -1.5, NaN, Infinity, -Infinity, 1e300];
+    const back = roundTrip(nums.map((v) => ({ lineweight: v }))) as { lineweight: number }[];
+    for (let i = 0; i < nums.length; i++) expect(Object.is(back[i]!.lineweight, nums[i])).toBe(true);
+  });
+
   it('얼린 객체는 한 번 보낸 안에서 같은 객체(얼리지 않은 사본)로 함께 쓴다', () => {
     const shared = Object.freeze({ aci: 256 });
     const back = roundTrip([{ color: shared }, { color: shared }, { color: { aci: 256 } }]) as { color: object }[];

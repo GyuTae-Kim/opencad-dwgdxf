@@ -555,8 +555,13 @@ export class Decoder {
     switch (t) {
       case T_U8:
         return e.tags[this.ti++]!;
-      case T_NUM:
-        return e.nums[this.ni++]!;
+      case T_NUM: {
+        // 정수는 정수로 돌려준다(96차). 실수 배열에서 읽은 값을 그대로 돌려주면 최적화 단계에 따라 -1 같은 정수도 상자 든 실수가 되어,
+        // 객체 리터럴의 정수 칸(선가중치·투명도 등)이 실수 칸으로 바뀌고 그 모양의 모든 객체가 그 칸마다 실수 상자를 하나씩 더 든다.
+        // 값은 같다(-0·NaN·int32 밖의 수는 그대로)
+        const v = e.nums[this.ni++]!;
+        return (v | 0) === v && (v !== 0 || 1 / v > 0) ? v | 0 : v;
+      }
       case T_STR:
         return e.strs[e.ints[this.ii++]!]!;
       case T_OBJ:
