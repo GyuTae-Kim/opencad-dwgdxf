@@ -1240,7 +1240,7 @@ export interface LoopNest {
  * 상자 격자(LoopIndex)로 하다가 품지 않는 고리를 견준 일이 문턱(SWEEP_AFTER_*)을 넘고 품은 고리를 판정한 일보다 많으면
  * 변 훑기(loopsContaining)로 처음부터 다시 한다(상자 격자에 쓴 일도 센다). mode는 시험용: 'grid'는 갈아타지 않고 'sweep'은 처음부터 변 훑기.
  * 94차: 판정 점이 다른 고리의 경계 위인 쌍(맞닿은 고리)은 먼저 찾아 그 쌍만 안쪽 점과 넓이로 판정한다(touchOverrides). 두 길 모두 그 쌍의 답을 빼고 고친 답을 더한다.
- * touch가 거짓이면 찾지 않는다(칸 조각 — fillLoops).
+ * touches가 거짓이면 찾지 않는다(칸 조각 — fillLoops).
  * work가 있으면 든 일을 더하고, 한도를 넘으면 null(limited)
  */
 export function loopNesting(loops: readonly number[][], work?: LoopWork, mode: 'auto' | 'grid' | 'sweep' = 'auto', touches = true): LoopNest | null {
