@@ -3,6 +3,8 @@
  * 고치기 전에는 채운 해치의 구멍 4만 개(DXF 3.2MB)가 271초(고리마다 모든 고리를 판정하고, earcut이 구멍을 이을 때마다 이어 둔 구멍을 모두 훑었다),
  * 무늬 선 2,000개 × 변 2만 개(DXF 0.5MB)가 5초, 선종류 2만 개 도면의 다중 지시선 2만 개가 2.3초였다.
  * 보장은 예전 식과 같은 삼각형·넓이·일·경고로 보고, 시간은 끝나지 않는 꼴만 가른다(timed.ts).
+ * 91차: 어느 축에도 구멍 사이 틈이 없는 구멍 많은 해치는 earcut 한 번이라 모양에 따라 일로 셀 수 없이 느렸다(서로 감싼 ㄱ자 구멍 1,200개 35초).
+ * 구멍을 가로질러 칸으로 자른 삼각형이 넓이와 점 표본으로 원래 홀짝 영역과 같은지 본다.
  */
 import earcut from 'earcut';
 import { describe, expect, it } from 'vitest';
@@ -10,7 +12,7 @@ import { HATCH_FILL_WORK_BASE, hatchFillWorkLimit } from '../../src/core/limits'
 import { MODEL_SPACE, entityDefaults, type CadDocument, type HatchPatternLine } from '../../src/core/model';
 import { readDxf } from '../../src/io/dxf/reader';
 import { type BuildOptions, buildSpace } from '../../src/render/build';
-import { type LoopWork, STRIP_HOLES, patternSegments, triangulateLoops } from '../../src/render/hatch';
+import { type LoopWork, STRIP_HOLES, cutLoops, patternSegments, triangulateLoops } from '../../src/render/hatch';
 import { TextEngine } from '../../src/text/layout';
 import { bytesOf, dxfText } from './corrupt35';
 import { beforeHang, within2s } from './timed';
@@ -177,7 +179,7 @@ describe('채운 해치의 고리 포함 관계', () => {
     expect(cases).toBeGreaterThan(10);
   });
 
-  it('가로 틈이 없으면 세로로 먼저, 어느 축에도 틈이 없으면 한 번에 채운다', () => {
+  it('가로 틈이 없으면 세로로 먼저, 어느 축에도 틈이 없으면 구멍을 가로질러 칸으로 자른다', () => {
     // 벽돌: 줄마다 엇갈려 세로 틈이 없다. 눕힌 것(가로 띠 → 세로 칸)과 세운 것(가로 틈이 없어 세로 띠 → 가로 칸)
     const bricks = [square(0, 0, 4000)];
     for (let j = 0; j < 40; j++) for (let i = 0; i < 100; i++) bricks.push([10 + i * 39 + (j % 2) * 19, 10 + j * 9.9, 40 + i * 39 + (j % 2) * 19, 10 + j * 9.9, 40 + i * 39 + (j % 2) * 19, 15 + j * 9.9, 10 + i * 39 + (j % 2) * 19, 15 + j * 9.9]);
@@ -205,6 +207,158 @@ describe('채운 해치의 고리 포함 관계', () => {
     expect(triangulateLoops(few, fw)).toEqual(before(few));
     expect(fw.limited).toBeUndefined();
     expect(fw.n).toBeGreaterThan(HATCH_FILL_WORK_BASE / 4);
+  });
+});
+
+/** 서로 감싼 ㄱ자 구멍 n개: 구멍 i는 (i, i)에서 오른쪽 끝까지, 위로 끝까지 폭 0.5라 어느 축으로 비춰도 모든 구멍이 겹친다 */
+const nestedL = (n: number): number[][] => {
+  const W = n * 2 + 400;
+  const loops = [square(-10, -10, W + 20)];
+  for (let i = 0; i < n; i++) loops.push([i, i, W, i, W, i + 0.5, i + 0.5, i + 0.5, i + 0.5, W, i, W]);
+  return loops;
+};
+/** 기운 막대 n개 */
+const slantedBars = (n: number): number[][] => {
+  const loops = [[-10, -10, 2 * n + 1020, -10, 2 * n + 1020, 1010, -10, 1010]];
+  for (let i = 0; i < n; i++) loops.push([2 * i, 0, 2 * i + 1, 0, 2 * i + 1001, 1000, 2 * i + 1000, 1000]);
+  return loops;
+};
+/** 30도 돌린 격자의 네모 구멍 g × g개(간격 10, 크기 6) — 돌린 타공판 */
+const rotatedGrid = (g: number): number[][] => {
+  const [c, s] = [Math.cos(Math.PI / 6), Math.sin(Math.PI / 6)];
+  const holes: number[][] = [];
+  for (let i = 0; i < g; i++)
+    for (let j = 0; j < g; j++)
+      holes.push(square(i * 10, j * 10, 6).flatMap((_, k, a) => (k % 2 ? [] : [a[k]! * c - a[k + 1]! * s, a[k]! * s + a[k + 1]! * c])));
+  const r = g * 10 * 1.5;
+  return [[-r, -10, r, -10, r, r, -r, r], ...holes];
+};
+/** 육각 배치의 16각 원 구멍 rows × cols개(지름 = 간격 × 0.9): 줄 사이에도 칸 사이에도 틈이 없다 */
+const hexHoles = (rows: number, cols: number): number[][] => {
+  const holes: number[][] = [];
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) holes.push(circle(16, 4.5, i * 10 + (j % 2) * 5, (j * 10 * Math.sqrt(3)) / 2));
+  return [[-10, -10, cols * 10 + 10, -10, cols * 10 + 10, rows * 9 + 10, -10, rows * 9 + 10], ...holes];
+};
+/** 점 (x, y)를 안쪽에 두는 삼각형 수 */
+const cover = (t: number[], x: number, y: number): number => {
+  let n = 0;
+  for (let i = 0; i < t.length; i += 6) {
+    const [ax, ay, bx, by, cx, cy] = [t[i]!, t[i + 1]!, t[i + 2]!, t[i + 3]!, t[i + 4]!, t[i + 5]!];
+    if (x < Math.min(ax, bx, cx) || x > Math.max(ax, bx, cx) || y < Math.min(ay, by, cy) || y > Math.max(ay, by, cy)) continue;
+    const d1 = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+    const d2 = (cx - bx) * (y - by) - (cy - by) * (x - bx);
+    const d3 = (ax - cx) * (y - cy) - (ay - cy) * (x - cx);
+    if ((d1 > 0 && d2 > 0 && d3 > 0) || (d1 < 0 && d2 < 0 && d3 < 0)) n++;
+  }
+  return n;
+};
+const evenOdd = (loops: readonly number[][], x: number, y: number): boolean => loops.reduce((a, l) => a + (pointInRing(x, y, l) ? 1 : 0), 0) % 2 === 1;
+const boxOf = (l: readonly number[]): [number, number, number, number] => {
+  const xs = l.filter((_, i) => i % 2 === 0);
+  const ys = l.filter((_, i) => i % 2 === 1);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+};
+/** 삼각형이 바깥 고리 하나와 구멍들의 홀짝 영역을 덮는지: 넓이, 영역 상자와 구멍 상자 안 점 표본(구멍 안은 비고 채움 안은 한 번만 덮는다) */
+function expectRegion(loops: number[][], t: number[]): void {
+  const want = ringArea(loops[0]!) - loops.slice(1).reduce((a, l) => a + ringArea(l), 0);
+  expect(Math.abs(area(t) - want) / want).toBeLessThan(1e-9);
+  let seed = 91;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const boxes = [boxOf(loops[0]!), ...Array.from({ length: 60 }, () => boxOf(loops[1 + Math.floor(rnd() * (loops.length - 1))]!))];
+  for (const [x0, y0, x1, y1] of boxes)
+    for (let k = 0; k < 3; k++) {
+      const x = x0 + (x1 - x0) * rnd();
+      const y = y0 + (y1 - y0) * rnd();
+      const c = cover(t, x, y);
+      expect(c).toBeLessThanOrEqual(1);
+      expect(c === 1).toBe(evenOdd(loops, x, y));
+    }
+}
+
+describe('어느 축에도 구멍 사이 틈이 없는 구멍 많은 채우기 해치(91차)', () => {
+  it('서로 감싼 ㄱ자 구멍 1,200개를 구멍을 가로질러 칸으로 잘라 채운다(예전 35초)', () => {
+    const loops = nestedL(1200);
+    const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(4 + 1200 * 6) };
+    const t = within2s(() => triangulateLoops(loops, w));
+    expect(w.limited).toBeUndefined();
+    // 일은 한도 안쪽이다(ㄱ자 상자가 모두 겹쳐 고리 포함 관계가 대부분이고 칸 자르기와 채우기는 약 80만)
+    expect(w.n).toBeLessThan(w.limit! / 2);
+    expectRegion(loops, t);
+  });
+
+  it('기운 막대·돌린 타공판·육각 원 구멍도 칸마다 채우고 영역이 같다', () => {
+    for (const loops of [slantedBars(1000), rotatedGrid(40), hexHoles(30, 30)]) {
+      expect(loops.length - 1).toBeGreaterThan(STRIP_HOLES);
+      const verts = loops.reduce((a, l) => a + l.length / 2, 0);
+      const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
+      const t = beforeHang(() => triangulateLoops(loops, w));
+      expect(w.limited).toBeUndefined();
+      expectRegion(loops, t);
+    }
+  });
+
+  it('구멍이 512개 이하면 틈이 없어도 예전처럼 한 번에 채운다', () => {
+    const loops = rotatedGrid(22);
+    expect(loops.length - 1).toBeLessThanOrEqual(STRIP_HOLES);
+    expect(triangulateLoops(loops)).toEqual(before(loops));
+  });
+
+  it('직선으로 가른 두 쪽은 원래 홀짝 영역을 반평면으로 자른 것과 같다(무작위 고리 묶음)', () => {
+    let seed = 9101;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const star = (cx: number, cy: number, r: number, n: number, jag: number): number[] => {
+      const p: number[] = [];
+      const a0 = rnd() * 7;
+      for (let i = 0; i < n; i++) {
+        const rr = r * (1 - jag * rnd());
+        p.push(cx + rr * Math.cos(a0 + (i / n) * Math.PI * 2), cy + rr * Math.sin(a0 + (i / n) * Math.PI * 2));
+      }
+      return p;
+    };
+    for (let t = 0; t < 40; t++) {
+      // 오목한 바깥 고리 안에 칸마다 별꼴 구멍(가끔 그 안에 섬)
+      const g = 3 + Math.floor(rnd() * 10);
+      const loops = [star(g * 5, g * 5, g * 8, 40 + Math.floor(rnd() * 60), 0.3)];
+      for (let i = 0; i < g; i++)
+        for (let j = 0; j < g; j++) {
+          if (Math.hypot(i * 10 + 5 - g * 5, j * 10 + 5 - g * 5) > g * 5) continue;
+          loops.push(star(i * 10 + 5, j * 10 + 5, 4.5, 3 + Math.floor(rnd() * 12), rnd() * 0.6));
+          if (rnd() < 0.2) loops.push(star(i * 10 + 5, j * 10 + 5, 1, 5, 0));
+        }
+      const [x0, y0, x1, y1] = boxOf(loops[0]!);
+      const axis = rnd() < 0.5 ? 0 : 1;
+      const c = axis === 0 ? x0 + (x1 - x0) * rnd() : y0 + (y1 - y0) * rnd();
+      const [below, above] = cutLoops(loops, axis, c);
+      for (let k = 0; k < 200; k++) {
+        const x = x0 + (x1 - x0) * rnd();
+        const y = y0 + (y1 - y0) * rnd();
+        const lower = (axis === 0 ? x : y) < c;
+        expect(evenOdd(lower ? below : above, x, y)).toBe(evenOdd(loops, x, y));
+        expect(evenOdd(lower ? above : below, x, y)).toBe(false);
+      }
+    }
+  });
+
+  it('칸 자르기도 일을 세어 한도를 넘으면 멈춘다(자르기 한 번 몫 안에서)', () => {
+    // 돌린 타공판 1만 개: 상자가 작아 고리 포함 관계 일은 적고 칸 자르기와 채우기 일이 대부분이다(예전에는 구멍 수의 제곱으로 세어 경계만)
+    const loops = rotatedGrid(100);
+    const verts = loops.reduce((a, l) => a + l.length / 2, 0);
+    const full: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
+    expect(triangulateLoops(loops, full).length).toBeGreaterThan(0);
+    expect(full.limited).toBeUndefined();
+    const w: LoopWork = { n: 0, limit: Math.floor(full.n / 2) };
+    expect(triangulateLoops(loops, w)).toEqual([]);
+    expect(w.limited).toBe(true);
+    // 칸을 자르다 멈췄다(포함 관계 일보다 훨씬 많이 했다)
+    expect(w.n).toBeGreaterThan(full.n / 4);
+    expect(w.n).toBeLessThanOrEqual(w.limit! + verts * 3);
+  });
+
+  it('장면: 서로 감싼 ㄱ자 구멍 1,200개 해치를 채운다', () => {
+    const doc = readDxf(bytesOf(dxfText([hatchOf(nestedL(1200), null)])));
+    const s = beforeHang(() => scene(doc));
+    expect(codes(s)).not.toContain('hatch.fill_limited');
+    expect(tris(s)).toBeGreaterThan(1200 * 4);
   });
 });
 

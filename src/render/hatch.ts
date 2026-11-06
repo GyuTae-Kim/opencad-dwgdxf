@@ -105,7 +105,8 @@ export function hatchLoops(h: HatchEntity, tol: number, fit?: FitWork): number[]
 }
 
 /**
- * 고리 포함 관계와 삼각분할에 든 일: 견준 고리 상자 수 + 포함 판정에서 본 변 수 + earcut(정점 수 + 구멍 수의 제곱).
+ * 고리 포함 관계와 삼각분할에 든 일: 견준 고리 상자 수 + 포함 판정에서 본 변 수 + earcut(정점 수 + 구멍 수의 제곱)
+ * + 구멍을 가로질러 칸으로 자를 때 자른 칸의 정점 수 × CUT_WORK.
  * limit을 넘으면 limited를 세우고 빈 삼각형을 돌려준다(부른 쪽이 경계만 그린다)
  */
 export interface LoopWork {
@@ -124,6 +125,15 @@ const WIDE_CELLS = 64;
 export const STRIP_HOLES = 512;
 /** 칸 하나에 넣는 구멍 수(이만큼 모인 뒤 처음 나는 틈에서 자른다) */
 const STRIP_SIZE = 64;
+/**
+ * 구멍을 가로질러 자르는 칸(틈으로 나눌 수 없는 꼴)의 정점 수 상한: earcut은 모양에 따라 정점 수의 제곱보다 느려지므로(서로 감싼 ㄱ자 구멍 1,200개 35초)
+ * 칸을 작게 둬 칸마다 드는 시간을 묶는다
+ */
+const CELL_VERTS = 256;
+/** 칸 자르기 깊이 한도: 칸 상자를 반씩 줄이므로 정점이 한 점에 몰린 꼴만 닿는다(그 칸은 그대로 채운다) */
+const CELL_DEPTH = 60;
+/** 칸을 한 번 자를 때 칸 정점 하나에 세는 일(상자, 두 축의 가운데에서 지나는 변 세기, 자르기) */
+const CUT_WORK = 3;
 
 /** 고리 안 변을 가로 띠로 나눈 색인: 점의 y가 든 띠의 변만 본다 */
 interface RingSlabs {
@@ -366,13 +376,22 @@ function over(work: LoopWork | undefined, n: number): boolean {
 
 /** 고리들을 홀짝 규칙으로 삼각분할. work가 있으면 든 일을 더하고, 한도를 넘으면 빈 배열을 돌려준다 */
 export function triangulateLoops(loops: number[][], work?: LoopWork): number[] {
+  const out: number[] = [];
+  return fillLoops(loops, out, work, true) ? out : [];
+}
+
+/**
+ * 고리들을 홀짝 규칙으로 삼각분할해 out에 더한다. 한도를 넘으면 false.
+ * split이면 구멍이 STRIP_HOLES개 넘는 바깥 고리를 칸으로 나눠 채운다(칸 하나를 채울 때는 나누지 않는다)
+ */
+function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined, split: boolean): boolean {
   const index = new LoopIndex(loops);
   // 고리 안쪽 점: 첫 변의 중점
   const mid = (c: readonly number[]): [number, number] => [(c[0]! + c[2]!) / 2, (c[1]! + c[3]!) / 2];
   // 한도에 닿으면 그때까지 든 일을 더하고 멈춘다
-  const stop = (): number[] => {
+  const stop = (): boolean => {
     if (work) work.n += index.work;
-    return [];
+    return false;
   };
   const depth = new Int32Array(loops.length);
   for (let i = 0; i < loops.length; i++) {
@@ -391,21 +410,20 @@ export function triangulateLoops(loops: number[][], work?: LoopWork): number[] {
     if (over(work, index.work)) return stop();
   }
   if (work) work.n += index.work;
-  const out: number[] = [];
   for (let i = 0; i < loops.length; i++) {
     if (depth[i]! % 2 !== 0) continue;
     const holes = holesOf[i]!;
-    if (holes.length > STRIP_HOLES && stripTriangulate(loops[i]!, holes.map((j) => loops[j]!), out, work)) continue;
-    if (work && work.limited) return [];
+    if (split && holes.length > STRIP_HOLES && stripTriangulate(loops[i]!, holes.map((j) => loops[j]!), out, work)) continue;
+    if (work && work.limited) return false;
     const flat = [...loops[i]!];
     const starts: number[] = [];
     for (const j of holes) {
       starts.push(flat.length / 2);
       pushAll(flat, loops[j]!);
     }
-    if (!earcutFill(flat, starts, out, work)) return [];
+    if (!earcutFill(flat, starts, out, work)) return false;
   }
-  return out;
+  return true;
 }
 
 /** earcut 한 번(일 = 정점 수 + 구멍 수의 제곱) */
@@ -422,7 +440,8 @@ function earcutFill(flat: number[], holes: number[], out: number[], work?: LoopW
  * 구멍이 아주 많은 바깥 고리: 구멍 상자 사이 틈에서 가로 띠로 자르고, 구멍이 많은 띠는 다시 세로 틈에서 잘라 칸마다 삼각분할한다(안 되면 세로 먼저).
  * earcut은 구멍을 왼쪽으로 이으면서 이어 둔 블록을 모두 훑고 다리 끝 삼각형 안의 점을 보므로, 구멍이 적고 왼쪽 변이 짧은 칸이 빠르다.
  * 틈에서만 자르므로 구멍은 잘리지 않고 칸 하나에만 든다(구멍을 가로질러 자르면 잘린 구멍이 칸 경계에 닿아 earcut이 그 구멍을 채운다).
- * 바깥 고리를 칸으로 자르면(서덜랜드-호지먼) 홀짝 채움이 원래 영역과 칸의 교집합 그대로다. 어느 축에도 틈이 없으면 false
+ * 바깥 고리를 칸으로 자르면(서덜랜드-호지먼) 홀짝 채움이 원래 영역과 칸의 교집합 그대로다.
+ * 어느 축에도 틈이 없으면 구멍을 가로질러 칸으로 자른다(cellFill). 한도를 넘거나 좌표가 NaN·무한대면 false(부른 쪽이 한도를 보고, 아니면 한 번에 earcut)
  */
 function stripTriangulate(outer: number[], holes: number[][], out: number[], work?: LoopWork): boolean {
   for (const v of outer) if (!Number.isFinite(v)) return false;
@@ -439,12 +458,20 @@ function stripTriangulate(outer: number[], holes: number[][], out: number[], wor
       return true;
     }
   }
-  return false;
+  const pieces: number[] = [];
+  if (cellFill([outer, ...holes], pieces, work) !== 'ok') return false;
+  pushAll(out, pieces);
+  return true;
 }
 
 /** 구멍을 axes[level] 축의 틈에서 나눠 칸마다 더 나누거나 삼각분할한다. 첫 단계에서 틈이 없으면 'nocut' */
 function splitFill(outer: number[], holes: number[][], axes: readonly [0 | 1, 0 | 1], level: number, out: number[], work?: LoopWork): 'ok' | 'nocut' | 'limited' {
-  const fill = (o: number[], hs: number[][]) => {
+  const fill = (o: number[], hs: number[][]): 'ok' | 'limited' => {
+    // 틈으로 나눈 칸에도 구멍이 STRIP_HOLES개 넘게 남으면(그 칸의 축에 틈이 없다) 구멍을 가로질러 자른다
+    if (hs.length > STRIP_HOLES) {
+      const r = cellFill([o, ...hs], out, work);
+      if (r !== 'unsafe') return r;
+    }
     const flat = [...o];
     const starts: number[] = [];
     for (const h of hs) {
@@ -495,6 +522,200 @@ function splitFill(outer: number[], holes: number[][], axes: readonly [0 | 1, 0 
     if (splitFill(o, hs, axes, level + 1, out, work) === 'limited') return 'limited';
   }
   return 'ok';
+}
+
+/**
+ * 구멍이 아주 많은데 구멍 사이 틈으로 나눌 수 없는 바깥 고리와 그 구멍들: 영역을 축에 나란한 직선으로 반씩 잘라(구멍도 가로지른다)
+ * 정점이 CELL_VERTS개 이하인 칸마다 채운다. 칸마다 earcut이 따로 돌아 모양 탓에 느려져도 칸 크기에 묶이고, 든 일은 자른 칸의 정점 수로 센다.
+ * 축마다 칸 정점 상자의 가운데에서 자를 때 지나는 변을 세어 적은 축(같으면 긴 변)에서 자른다. 늘 상자 가운데라 칸이 반씩 줄고,
+ * 변이 적은 축을 고르므로 긴 변을 거듭 자르지 않는다(서로 감싼 ㄱ자 구멍 2만 개 — 정점 12만 개가 칸 정점 96만 개. 긴 변만 고르면 일 한도를 넘었다).
+ * 직선이 가로지른 구멍은 칸 경계 고리에 이어 붙으므로(cutLoops) 잘린 구멍이 칸 경계에 따로 닿지 않는다(바깥 고리만 자르면 earcut이 그 구멍을 채운다).
+ * 한도를 넘으면 'limited'. 좌표가 1e100을 넘으면 교점 식이 넘칠 수 있어 'unsafe'(부른 쪽이 예전처럼 한 번에 earcut)
+ */
+function cellFill(loops: number[][], out: number[], work?: LoopWork): 'ok' | 'limited' | 'unsafe' {
+  for (const l of loops) for (const v of l) if (!(Math.abs(v) <= 1e100)) return 'unsafe';
+  const stack: [number[][], number][] = [[loops, 0]];
+  while (stack.length) {
+    const [ls, depth] = stack.pop()!;
+    let verts = 0;
+    for (const l of ls) verts += l.length >> 1;
+    if (verts > CELL_VERTS && depth < CELL_DEPTH) {
+      if (over(work, verts * CUT_WORK)) return 'limited';
+      if (work) work.n += verts * CUT_WORK;
+      const lo = [Infinity, Infinity];
+      const hi = [-Infinity, -Infinity];
+      for (const l of ls)
+        for (let i = 0; i < l.length; i++) {
+          const v = l[i]!;
+          if (v < lo[i & 1]!) lo[i & 1] = v;
+          if (v > hi[i & 1]!) hi[i & 1] = v;
+        }
+      const longer: 0 | 1 = hi[0]! - lo[0]! >= hi[1]! - lo[1]! ? 0 : 1;
+      let cut: [0 | 1, number] | null = null;
+      let fewest = Infinity;
+      for (const axis of [longer, (1 - longer) as 0 | 1]) {
+        const c = offVertex(ls, axis, lo[axis]! / 2 + hi[axis]! / 2);
+        if (!(c > lo[axis]! && c < hi[axis]!)) continue;
+        const n = crossings(ls, axis, c);
+        if (n < fewest) {
+          fewest = n;
+          cut = [axis, c];
+        }
+      }
+      if (cut) {
+        const [below, above] = cutLoops(ls, cut[0], cut[1]);
+        stack.push([above, depth + 1], [below, depth + 1]);
+        continue;
+      }
+    }
+    if (ls.length && !fillLoops(ls, out, work, false)) return 'limited';
+  }
+  return 'ok';
+}
+
+/** 축 좌표 c에 정점이 있으면 c와 바로 위(없으면 바로 아래) 정점 좌표의 가운데로 옮긴다. 그 사이에 수가 없으면 NaN */
+function offVertex(loops: readonly number[][], axis: 0 | 1, c: number): number {
+  let below = -Infinity;
+  let above = Infinity;
+  let on = false;
+  for (const l of loops)
+    for (let i = axis; i < l.length; i += 2) {
+      const v = l[i]!;
+      if (v < c) {
+        if (v > below) below = v;
+      } else if (v > c) {
+        if (v < above) above = v;
+      } else on = true;
+    }
+  if (!on) return c;
+  const up = c / 2 + above / 2;
+  if (c < up && up < above) return up;
+  const down = below / 2 + c / 2;
+  return below < down && down < c ? down : NaN;
+}
+
+/** axis 좌표가 c인 직선을 지나는 변 수 */
+function crossings(loops: readonly number[][], axis: 0 | 1, c: number): number {
+  let n = 0;
+  for (const l of loops) {
+    let prev = l[l.length - 2 + axis]! < c;
+    for (let i = axis; i < l.length; i += 2) {
+      const cur = l[i]! < c;
+      if (cur !== prev) n++;
+      prev = cur;
+    }
+  }
+  return n;
+}
+
+/**
+ * 고리들(홀짝 영역)을 axis 좌표가 c인 직선으로 가른 두 쪽 [c보다 작은 쪽, 큰 쪽]. c와 같은 좌표의 정점이 없어야 한다.
+ * 직선을 지나지 않는 고리는 같은 배열 그대로 한쪽에 든다.
+ * 한쪽 영역 = 원래 영역 ∩ 그쪽 반평면이고, 그 경계는 고리 조각(사슬)과 직선 위에서 원래 영역 안인 구간이다
+ * (교점을 직선 위 차례로 놓으면 1-2, 3-4…번째 사이 — 직선을 따라가며 경계를 지날 때마다 안팎이 바뀐다).
+ * 교점마다 한쪽에서 끝나는 사슬 하나와 다른 쪽에서 시작하는 사슬 하나, 직선 위 구간 하나가 닿으므로 사슬과 구간을 이으면 쪽마다 닫힌 고리가 된다.
+ * 교점은 변마다 한 번 구해 두 쪽이 같은 값을 쓰고 자르는 축 좌표는 c 그대로라, 두 칸이 틈이나 겹침 없이 맞닿는다
+ */
+export function cutLoops(loops: readonly number[][], axis: 0 | 1, c: number): [number[][], number[][]] {
+  const sides: [number[][], number[][]] = [[], []];
+  const other = 1 - axis;
+  /** 교점의 직선 위 자리 */
+  const pos: number[] = [];
+  /** 사슬: 점(양 끝은 교점), 쪽, 시작·끝 교점 */
+  const chains: number[][] = [];
+  const chainSide: number[] = [];
+  const chainFrom: number[] = [];
+  const chainTo: number[] = [];
+  for (const L of loops) {
+    let below = false;
+    let above = false;
+    for (let i = axis; i < L.length; i += 2) {
+      if (L[i]! < c) below = true;
+      else above = true;
+    }
+    if (!above || !below) {
+      sides[above ? 1 : 0].push(L);
+      continue;
+    }
+    const n = L.length >> 1;
+    const side = (k: number): number => (L[k * 2 + axis]! < c ? 0 : 1);
+    // 앞 정점과 쪽이 다른 정점에서 시작한다
+    let s = 0;
+    while (side(s) === side((s + n - 1) % n)) s++;
+    /** 정점 a → b 변의 교점 번호 */
+    const cross = (a: number, b: number): number => {
+      const pa = L[a * 2 + axis]!;
+      const pb = L[a * 2 + other]!;
+      pos.push(pb + ((L[b * 2 + other]! - pb) * (c - pa)) / (L[b * 2 + axis]! - pa));
+      return pos.length - 1;
+    };
+    const point = (pts: number[], q: number): void => {
+      if (axis === 0) pts.push(c, pos[q]!);
+      else pts.push(pos[q]!, c);
+    };
+    const first = cross((s + n - 1) % n, s);
+    let sd = side(s);
+    let from = first;
+    let pts: number[] = [];
+    point(pts, first);
+    pts.push(L[s * 2]!, L[s * 2 + 1]!);
+    for (let j = 1; j <= n; j++) {
+      const k = (s + j) % n;
+      if (j < n && side(k) === sd) {
+        pts.push(L[k * 2]!, L[k * 2 + 1]!);
+        continue;
+      }
+      const q = j < n ? cross((s + j - 1) % n, k) : first;
+      point(pts, q);
+      chains.push(pts);
+      chainSide.push(sd);
+      chainFrom.push(from);
+      chainTo.push(q);
+      if (j === n) break;
+      sd = 1 - sd;
+      from = q;
+      pts = [];
+      point(pts, q);
+      pts.push(L[k * 2]!, L[k * 2 + 1]!);
+    }
+  }
+  const nx = pos.length;
+  if (!nx) return sides;
+  // 교점 q에 닿는 쪽 sd의 사슬: at[q * 2 + sd] = 사슬 번호 * 2 + (0 시작, 1 끝)
+  const at = new Int32Array(nx * 2);
+  for (let id = 0; id < chains.length; id++) {
+    at[chainFrom[id]! * 2 + chainSide[id]!] = id * 2;
+    at[chainTo[id]! * 2 + chainSide[id]!] = id * 2 + 1;
+  }
+  // 직선 위 차례로 짝짓는다(같은 자리면 번호 순)
+  const order = new Int32Array(nx);
+  for (let q = 0; q < nx; q++) order[q] = q;
+  order.sort((p, q) => pos[p]! - pos[q]! || p - q);
+  const partner = new Int32Array(nx);
+  for (let r = 0; r + 1 < nx; r += 2) {
+    partner[order[r]!] = order[r + 1]!;
+    partner[order[r + 1]!] = order[r]!;
+  }
+  const used = new Uint8Array(chains.length);
+  for (let id0 = 0; id0 < chains.length; id0++) {
+    if (used[id0]) continue;
+    const sd = chainSide[id0]!;
+    const ring: number[] = [];
+    let id = id0;
+    let fwd = true;
+    // 사슬 끝 교점 → 직선 위 짝 교점 → 그 교점에 닿는 같은 쪽 사슬을 따라 처음 사슬로 돌아올 때까지
+    while (!used[id]) {
+      used[id] = 1;
+      const p = chains[id]!;
+      if (fwd) pushAll(ring, p);
+      else for (let i = p.length - 2; i >= 0; i -= 2) ring.push(p[i]!, p[i + 1]!);
+      const r: number = at[partner[fwd ? chainTo[id]! : chainFrom[id]!]! * 2 + sd]!;
+      id = r >> 1;
+      fwd = (r & 1) === 0;
+    }
+    sides[sd].push(ring);
+  }
+  return sides;
 }
 
 /** 한 해치를 그릴 무늬 선 수의 상한(넘으면 성기게 그리고, 확대하면 보이는 곳만 원래 간격으로 — build.ts) */
