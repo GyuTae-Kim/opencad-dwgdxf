@@ -5,6 +5,7 @@
  * 돌출 방향이 −Z인 객체는 평면도 모양을 지킨 채 +Z 객체로 바꾼다(변환 행렬은 항등).
  */
 import type { CadDocument, Entity, Vec3 } from '../../core/model';
+import { cloneData } from '../../core/clone';
 import { isNaturalExt, isPlanarExt } from '../geom/ocs';
 import { transformEntity } from '../geom/transform';
 import { polyVertices, setPolyVertices } from '../../core/polyverts';
@@ -39,7 +40,9 @@ export function flattenEntity(e: Entity, doc: CadDocument): FlattenResult {
     }
     if (!isNaturalExt(src.extrusion)) return { skip: 'Z축이 −Z인 객체(바꿀 수 없음)' };
   }
-  const out = structuredClone(src) as Entity;
+  // 구조화 복제 대신 바로 복사(98차 — 객체마다 불러 실제 도면 FLATTEN 명령 시간의 약 26%였다. 아래는 칸을 새 값으로 바꾸거나
+  // 블록 참조 속성·여러 줄 꼭짓점을 같은 값으로 고치기만 해서 한 객체 안에서 같은 점을 두 칸이 함께 쓰는지에 기대지 않는다)
+  const out = cloneData(src) as Entity;
   delete out.thickness;
   delete out.extrusion;
   switch (out.type) {

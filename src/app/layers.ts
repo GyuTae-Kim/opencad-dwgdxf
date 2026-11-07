@@ -187,7 +187,7 @@ export function renameLayer(app: App, key: string, name: string): boolean {
   return true;
 }
 
-/** 잠긴 도면층의 객체를 빼고 돌려준다(뺀 것이 있으면 알린다) */
+/** 잠긴 도면층의 객체를 빼고 돌려준다(뺀 것이 있으면 알린다). 핸들 색인에 없는 핸들도 뺀다(편집 명령의 선택이 이것에 기댄다) */
 export function unlockedOnly(app: App, handles: string[]): string[] {
   const st = app.active;
   if (!st) return [];

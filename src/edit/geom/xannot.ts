@@ -5,7 +5,7 @@
 import type { BlockDef, CadDocument, DimensionEntity, Entity, LeaderEntity, MLeaderEntity, TableEntity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { dimDisplayText, dimVars as dimVarsOf } from '../../app/inquiry';
-import { cloneEntity, freshEntity } from './path';
+import { cloneEntity, cloneEntityExcept, freshEntity } from './path';
 import {
   type Affine,
   add,
@@ -135,8 +135,11 @@ export function updateDimNumber(doc: CadDocument, before: DimensionEntity, after
   }
 }
 
+/** 치수 변환이 아래에서 늘 새 값으로 바꾸는 속성(복사하지 않는다 — 98차. 호는 원본에 있을 때만 바꾸고, 없으면 복사할 것도 없다) */
+const DIM_XFORMED: ReadonlySet<string> = new Set(['textMid', 'defPoint', 'defPoint2', 'defPoint3', 'defPoint4', 'defPoint5', 'extrusion', 'arc']);
+
 export function xformDimension(e: DimensionEntity, m: Affine, opt: TransformOptions, doc: CadDocument): EditResult {
-  const r = cloneEntity(e);
+  const r = cloneEntityExcept(e, DIM_XFORMED);
   const dz = opt.dz ?? 0;
   const planar = isPlanarExt(e.extrusion);
   const W = (p: Vec3) => affApply3(m, p, dz);

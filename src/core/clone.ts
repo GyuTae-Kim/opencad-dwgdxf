@@ -83,3 +83,27 @@ export function cloneData<T>(v: T): T {
   const r = copy(v, 0);
   return (r === FAIL ? structuredClone(v) : r) as T;
 }
+
+/**
+ * cloneData와 같되 skip에 든 맨 위 속성은 깊이 복사하지 않고 원본 값을 그대로 둔다 — 부르는 쪽이 곧바로 새 값으로 바꾸는 속성
+ * (98차: 변환이 복사하자마자 버리던 해치 경계·무늬 선·씨앗점, 치수 정의점). 바꾸지 않으면 그 값을 원본과 함께 쓰게 되니 반드시 바꾼다.
+ * 속성 차례와 나머지 값은 cloneData와 같다(다루지 않는 값이 나머지에 있으면 값 전체를 structuredClone으로). 맨 위가 일반 객체가 아니면 cloneData.
+ */
+export function cloneDataExcept<T extends object>(v: T, skip: ReadonlySet<string>): T {
+  const proto = Object.getPrototypeOf(v);
+  if (Array.isArray(v) || (proto !== Object.prototype && proto !== null)) return cloneData(v);
+  const out = { ...(v as Record<string, unknown>) };
+  for (const k in out) {
+    if (skip.has(k)) continue;
+    const x = out[k];
+    if (typeof x !== 'object' || x === null) {
+      if (typeof x === 'function' || typeof x === 'symbol') return structuredClone(v);
+    } else {
+      if (k === '__proto__') return structuredClone(v);
+      const y = copy(x, 1);
+      if (y === FAIL) return structuredClone(v);
+      out[k] = y;
+    }
+  }
+  return out as T;
+}

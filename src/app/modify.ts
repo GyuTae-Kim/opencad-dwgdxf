@@ -492,8 +492,8 @@ function undoStep(app: App, ctx: CommandContext, steps: number[]): void {
 // ---------------------------------------------------------------------------
 
 async function selectEditable(app: App, ctx: CommandContext): Promise<string[]> {
-  const hs = unlockedOnly(app, await ctx.getSelection());
-  return hs.filter((h) => app.active!.doc.entityIndex.has(h));
+  // unlockedOnly가 이미 핸들 색인에 없는 것을 뺀다(98차 — 전에는 같은 핸들을 색인에서 한 번 더 찾았다)
+  return unlockedOnly(app, await ctx.getSelection());
 }
 
 /** x,y 또는 x,y,z 문자열 → 변위 */
