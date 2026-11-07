@@ -18,6 +18,7 @@ import type {
   Vec3,
   XLineEntity,
 } from '../../core/model';
+import { cloneData } from '../../core/clone';
 import { lwCount, packLw } from '../../core/lwpoly';
 import { packPoly, polyVertices } from '../../core/polyverts';
 import { ctrlCount, fitCount, pack3, splineCtrl } from '../../core/flat3';
@@ -70,8 +71,8 @@ export function freshEntity<T extends Entity>(x: T, keepOwner = true): T {
 
 /** 객체 깊은 복사 */
 export function cloneEntity<T extends Entity>(e: T): T {
-  // 평탄 좌표는 형식 배열이라 구조화 복제가 그대로 옮긴다(수 배열처럼 수를 하나씩 상자에 담지 않는다)
-  return structuredClone(e);
+  // 평탄 좌표는 형식 배열이라 그대로 옮긴다(수 배열처럼 수를 하나씩 상자에 담지 않는다). structuredClone보다 빠른 복사(97차 — core/clone.ts)
+  return cloneData(e);
 }
 
 // ---------------------------------------------------------------------------

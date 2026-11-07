@@ -16,6 +16,7 @@ import { collectTextUsage } from '../text/collect';
 import type { FromWorker, PreviewView, SceneMessage, ToWorker } from './protocol';
 import { applyOps } from '../edit/session';
 import { decodeWire, unpackOps } from './editwire';
+import { releaseEncoded } from './codec';
 import { sendDocument } from './doctransfer';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -174,7 +175,11 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
         const doc = docs.get(msg.docId);
         if (!doc || outOfSync.has(msg.docId)) break;
         try {
-          applyOps(doc, unpackOps(msg.type === 'edit' ? msg.ops : decodeWire(msg.enc)));
+          const wire = msg.type === 'edit' ? msg.ops : decodeWire(msg.enc);
+          // 다 푼 묶음의 버퍼를 바로 놓아 준다(97차 — 메인의 DocAssembler와 같다. 바꾼 객체의 형식 배열은 제 버퍼로 복사돼 있다).
+          // 그대로 두면 큰 편집(연관 도면 MOVE 약 23MiB)마다 다음 큰 GC까지 바깥 메모리로 남아 GC를 앞당긴다
+          if (msg.type === 'editEncoded') releaseEncoded(msg.enc);
+          applyOps(doc, unpackOps(wire));
         } catch (e) {
           // 반쯤 적용된 문서로 장면을 그리거나 저장하지 않게, 메인이 문서를 다시 보낼 때까지 이 문서의 편집·저장을 받지 않는다
           outOfSync.add(msg.docId);
