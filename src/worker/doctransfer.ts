@@ -10,6 +10,7 @@
  */
 import type { CadDocument, Entity } from '../core/model';
 import { ownEntityArrays } from '../core/f64pool';
+import { HandleIndex } from '../core/handleindex';
 import { Decoder, Encoder, type Encoded, encodedTransfer, encoderScratch, releaseEncoded } from './codec';
 
 /** 이보다 객체가 많은 블록만 따로 보낸다 */
@@ -109,6 +110,15 @@ export function sendDocument(
 }
 
 /**
+ * 메인: 받은 문서의 핸들 색인(entityIndex·objects)을 HandleIndex로 바꾼다(같은 열쇠·값·차례). 구조화 복제로 받은 색인은 일반 Map이라
+ * 새 핸들이 쓰인 핸들인지 매번 찾아야 한다(core/handleindex.ts — 100차). 받자마자, 다른 곳이 색인을 쥐기 전에 부른다
+ */
+export function ownIndexes(doc: CadDocument): void {
+  if (!(doc.entityIndex instanceof HandleIndex)) doc.entityIndex = HandleIndex.of(doc.entityIndex);
+  if (!(doc.objects instanceof HandleIndex)) doc.objects = HandleIndex.of(doc.objects);
+}
+
+/**
  * 메인: 껍데기와 묶음을 모아 문서를 되살린다. 핸들 색인은 finalizeDocument와 같은 순서(블록 순서 → 객체 순서, 블록 참조 뒤에 그 속성)로
  * 묶음이 오는 대로 조금씩 채운다(끝에 한꺼번에 수백만 개를 넣지 않게).
  */
@@ -126,6 +136,7 @@ export class DocAssembler {
   ) {
     for (const [k, n] of streamed) if (n > 0) this.waiting.set(k, n);
     this.blocks = [...doc.blocks];
+    ownIndexes(doc);
     doc.entityIndex.clear();
     this.advance();
   }

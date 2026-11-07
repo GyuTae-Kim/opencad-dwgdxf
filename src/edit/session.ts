@@ -8,6 +8,7 @@ import type { BlockDef, BlockRecord, CadDocument, CadObject, Entity, HeaderValue
 import { pushAll } from '../core/arrays';
 import { cloneData } from '../core/clone';
 import { tableKey, normalizeHandle } from '../core/model';
+import { HandleIndex } from '../core/handleindex';
 
 export type EditOp =
   /** 블록(공간) block의 index 자리에 객체를 넣는다(index 없으면 끝) */
@@ -493,10 +494,14 @@ export class EditSession {
       } catch {
         next = 0n;
       }
-    // 이미 쓰인 핸들과 겹치지 않게 한다
+    // 이미 쓰인 핸들과 겹치지 않게 한다. 두 색인이 HandleIndex이고 씨앗이 두 색인에 넣은 열쇠보다 모두 크면(core/handleindex.ts) 같은 열쇠가
+    // 있을 수 없어 has를 부르지 않는다(100차 — 객체 42만 개 도면 EXPLODE는 새 핸들 약 124만 번, 두 has가 명령의 약 11%였다)
     h0 ??= normalizeHandle(next);
     let h = h0;
-    if (next === 0n || this.doc.entityIndex.has(h0) || this.doc.objects.has(h0)) {
+    const ix = this.doc.entityIndex;
+    const objs = this.doc.objects;
+    const fresh = ix instanceof HandleIndex && objs instanceof HandleIndex && ix.above(h0) && objs.above(h0);
+    if (next === 0n || (!fresh && (ix.has(h0) || objs.has(h0)))) {
       let max = 0n;
       for (const h of this.doc.entityIndex.keys()) {
         try {
