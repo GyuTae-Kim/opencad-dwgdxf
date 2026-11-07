@@ -28,6 +28,7 @@ import { baseName, download } from './export';
 import { currentLayer, validLayerName } from './layers';
 import { type ListItem, PickList, TempLayerView, guardKeys, wideDialog } from './layertools-ui';
 import { layerSwatch } from './laywalk';
+import { ft } from './filetext';
 import { LINEWEIGHTS } from './propedit';
 import { ask, form, h, showMenu } from './ui/dom';
 
@@ -156,7 +157,7 @@ export function registerLayTransCommands(app: App): void {
       const refreshTo = () => {
         const items: ListItem[] = [...targets.entries()]
           .sort((a, b) => a[1].layer.name.localeCompare(b[1].layer.name, 'ko'))
-          .map(([k, t]) => ({ key: k, label: t.layer.name, swatch: layerSwatch(t.layer), tag: t.from, title: `${t.layer.name} — ${t.from}` }));
+          .map(([k, t]) => ({ key: k, label: t.layer.name, swatch: layerSwatch(t.layer), tag: t.from, fileTag: true, title: `${ft(t.layer.name)} — ${ft(t.from)}` }));
         toList.setItems(items);
       };
       const refreshTable = () => {
@@ -170,10 +171,10 @@ export function registerLayTransCommands(app: App): void {
             const tr = h(
               'tr',
               { class: selectedMaps.has(fk) ? 'sel' : '' },
-              h('td', {}, from),
-              h('td', {}, t.layer.name),
+              h('td', { translate: 'no' }, from),
+              h('td', { translate: 'no' }, t.layer.name),
               h('td', {}, colorLabel(t.layer.color)),
-              h('td', {}, t.layer.linetype),
+              h('td', { translate: 'no' }, t.layer.linetype),
               h('td', {}, lineweightLabel(t.layer.lineweight)),
               h('td', {}, transparencyLabel(t.layer.transparency)),
               h('td', {}, t.layer.plot ? '예' : '아니오'),

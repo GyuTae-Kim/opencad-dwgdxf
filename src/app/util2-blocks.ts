@@ -30,6 +30,7 @@ import { commitResults } from './modify';
 import { SAVE_TYPES } from './save';
 import { form, h } from './ui/dom';
 import type { Pt } from './view';
+import { ft } from './filetext';
 import { askInt, askKeyword, askYesNo, button, checkbox, modal, padWide, rememberErased, select, textWidth } from './util2-ui';
 
 const BAD_BLOCK_NAME = /[<>/\\":;?*|,=`]/;
@@ -91,7 +92,8 @@ export function registerUtil2BlockCommands(app: App): void {
         row = Math.max(0, Math.min(row, list.length - 1));
         tbody.innerHTML = '';
         list.forEach((a, i) => {
-          const tr = h('tr', { class: i === row ? 'sel' : '' }, h('td', {}, a.tag), h('td', {}, a.prompt ?? ''), h('td', {}, a.text), h('td', {}, modeText(a)));
+          // 태그·프롬프트·기본값은 도면 글(104차 — 옮기지 않는다)
+          const tr = h('tr', { class: i === row ? 'sel' : '' }, h('td', { translate: 'no' }, a.tag), h('td', { translate: 'no' }, a.prompt ?? ''), h('td', { translate: 'no' }, a.text), h('td', {}, modeText(a)));
           tr.addEventListener('click', () => {
             row = i;
             render();
@@ -111,7 +113,7 @@ export function registerUtil2BlockCommands(app: App): void {
         const a = list[row];
         if (!a) return;
         const v = await form(
-          `속성 편집 — ${st.doc.blocks.get(cur)!.name}`,
+          `속성 편집 — ${ft(st.doc.blocks.get(cur)!.name)}`,
           [
             { key: 'tag', label: '태그', type: 'text', value: a.tag },
             { key: 'prompt', label: '프롬프트', type: 'text', value: a.prompt ?? '' },
@@ -393,7 +395,7 @@ export function registerUtil2BlockCommands(app: App): void {
         ctx.print('대치하려면 블록 정의가 둘 이상 있어야 합니다.', 'err');
         return;
       }
-      const opts = blocks.map((b) => ({ value: b.name, label: `${b.name} (참조 ${insertsOf(st.doc, b.name).length}개)` }));
+      const opts = blocks.map((b) => ({ value: b.name, label: `${ft(b.name)} (참조 ${insertsOf(st.doc, b.name).length}개)` }));
       const v = await form(
         '블록 대치',
         [

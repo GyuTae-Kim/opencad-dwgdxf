@@ -10,6 +10,7 @@ import type { App, CommandContext, Keyword } from './app';
 import type { Pt } from './view';
 import { currentProps } from './draw';
 import { dialog, form, h } from './ui/dom';
+import { ft } from './filetext';
 import { type MLineStyleEntry, MAX_ELEMENTS, ML_END_INNER, ML_END_LINE, ML_END_OUTER, ML_FILL, ML_JOINTS, ML_START_INNER, ML_START_LINE, ML_START_OUTER, currentMLineStyle, findMLineStyle, listMLineStyles, mlineStyleUseCount, newMLineStyle, sortElements, validateMLineStyle } from '../edit/mline/style';
 import { addMLineStyleOps, deleteMLineStyleOps, updateMLineStyleOps } from '../edit/mline/ops';
 import { addVertex, cornerJoint, crossJoint, cutAll, cutSingle, deleteVertex, mlineGeometry, nearestElement, nearestSegment, teeJoint, weldAll } from '../edit/mline/geom';
@@ -594,9 +595,9 @@ export function registerMLineCommands(app: App): void {
         const refresh = (keep?: string) => {
           entries = listMLineStyles(doc);
           const cur = currentMLineStyle(doc);
-          curLine.textContent = `현재 여러 줄 스타일: ${(cur?.name ?? 'STANDARD').toUpperCase()}`;
+          curLine.textContent = `현재 여러 줄 스타일: ${ft((cur?.name ?? 'STANDARD').toUpperCase())}`;
           list.innerHTML = '';
-          for (const e of entries) list.append(h('option', { value: e.style.handle }, e.name.toUpperCase() + (mlineStyleUseCount(doc, e) ? ' (사용 중)' : '')));
+          for (const e of entries) list.append(h('option', { value: e.style.handle }, ft(e.name.toUpperCase()) + (mlineStyleUseCount(doc, e) ? ' (사용 중)' : '')));
           list.value = keep && entries.some((e) => e.style.handle === keep) ? keep : (cur?.style.handle ?? entries[0]?.style.handle ?? '');
           show();
         };

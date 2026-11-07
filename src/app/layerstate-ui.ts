@@ -27,6 +27,7 @@ import {
 } from '../edit/layerstate/record';
 import { layerStateEntry, namedPlotStyles, plotStyleNameMap, stateMatches, xrefOfState } from '../edit/layerstate/store';
 import type { App, CommandContext } from './app';
+import { ft } from './filetext';
 import {
   type ImportSource,
   currentViewport,
@@ -162,7 +163,8 @@ export async function editLayerStateDialog(app: App, state: LayerState): Promise
       .filter((l) => l.name)
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
       .map((l) => {
-        const nameTd = h('td', { style: 'cursor:default' }, l.name);
+        // 도면층·선종류·플롯 스타일 이름은 도면 글(104차 — 옮기지 않는다)
+        const nameTd = h('td', { style: 'cursor:default', translate: 'no' }, l.name);
         const tr = h('tr', { class: selected.has(l) ? 'sel' : '' });
         nameTd.addEventListener('click', (ev) => {
           if (!(ev.ctrlKey || ev.metaKey)) selected.clear();
@@ -183,13 +185,13 @@ export async function editLayerStateDialog(app: App, state: LayerState): Promise
             render();
           }
         });
-        const ltSel = h('select', { 'aria-label': `${l.name} 선종류` }, ...[...new Set([...lts, l.linetype])].map((n) => h('option', { value: n }, n))) as HTMLSelectElement;
+        const ltSel = h('select', { 'aria-label': `${ft(l.name)} 선종류` },...[...new Set([...lts, l.linetype])].map((n) => h('option', { value: n }, n))) as HTMLSelectElement;
         ltSel.value = l.linetype;
         ltSel.addEventListener('change', () => (l.linetype = ltSel.value));
-        const lwSel = h('select', { 'aria-label': `${l.name} 선가중치` }, h('option', { value: '-3' }, '기본값'), ...LINEWEIGHTS.map((w) => h('option', { value: String(w) }, lineweightText(w)))) as HTMLSelectElement;
+        const lwSel = h('select', { 'aria-label': `${ft(l.name)} 선가중치` },h('option', { value: '-3' }, '기본값'), ...LINEWEIGHTS.map((w) => h('option', { value: String(w) }, lineweightText(w)))) as HTMLSelectElement;
         lwSel.value = String(l.lineweight);
         lwSel.addEventListener('change', () => (l.lineweight = Number(lwSel.value)));
-        const tr0 = h('input', { class: 'num', type: 'text', inputmode: 'numeric', 'aria-label': `${l.name} 투명도` }) as HTMLInputElement;
+        const tr0 = h('input', { class: 'num', type: 'text', inputmode: 'numeric', 'aria-label': `${ft(l.name)} 투명도` }) as HTMLInputElement;
         tr0.value = String(Math.round((1 - l.transparency / 255) * 100));
         guardKeys(tr0);
         tr0.addEventListener('change', () => {
@@ -199,11 +201,11 @@ export async function editLayerStateDialog(app: App, state: LayerState): Promise
         });
         let psTd: HTMLTableCellElement;
         if (named) {
-          const ps = h('select', { 'aria-label': `${l.name} 플롯 스타일` }, ...[...new Set([...psNames, l.plotStyle].filter(Boolean))].map((n) => h('option', { value: n }, n))) as HTMLSelectElement;
+          const ps = h('select', { 'aria-label': `${ft(l.name)} 플롯 스타일` },...[...new Set([...psNames, l.plotStyle].filter(Boolean))].map((n) => h('option', { value: n }, n))) as HTMLSelectElement;
           ps.value = l.plotStyle;
           ps.addEventListener('change', () => (l.plotStyle = ps.value));
           psTd = h('td', {}, ps);
-        } else psTd = h('td', { class: 'lst-dim', title: '색상 종속 플롯 스타일 도면' }, l.plotStyle || '');
+        } else psTd = h('td', { class: 'lst-dim', title: '색상 종속 플롯 스타일 도면' }, h('span', { translate: 'no' }, l.plotStyle || ''));
         tr.append(
           nameTd,
           onTd,
@@ -280,7 +282,7 @@ export async function editLayerStateDialog(app: App, state: LayerState): Promise
 
 async function pickStates(src: ImportSource): Promise<LayerState[] | null> {
   const list = new PickList('도면층 상태');
-  list.setItems(src.states.map((s, i): ListItem => ({ key: String(i), label: s.name, tag: s.description, title: s.description || s.name })));
+  list.setItems(src.states.map((s, i): ListItem => ({ key: String(i), label: s.name, tag: s.description, fileTag: true, title: ft(s.description || s.name) })));
   list.setSelection(list.keys, false);
   const d = wideDialog(
     '도면층 상태 선택',
@@ -378,12 +380,12 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
       const same = stateMatches(st.doc, s.state, cv ? cv.vp.frozenLayers : null);
       const tr = h(
         'tr',
-        { title: s.state.description || s.key },
-        h('td', {}, s.key),
+        { title: ft(s.state.description || s.key) },
+        h('td', { translate: 'no' }, s.key),
         h('td', {}, s.state.paperSpace ? '배치' : '모형'),
         h('td', { style: 'text-align:center' }, same ? '예' : ''),
-        h('td', {}, xr ? `외부 참조: ${xr}` : '도면'),
-        h('td', {}, s.state.description),
+        h('td', {}, xr ? `외부 참조: ${ft(xr)}` : '도면'),
+        h('td', { translate: 'no' }, s.state.description),
       );
       // 고르기는 줄을 다시 만들지 않는다(두 번 누르기 = 이름 바꾸기가 같은 줄에서 일어나게)
       tr.addEventListener('mousedown', () => {

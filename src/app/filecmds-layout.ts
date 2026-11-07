@@ -18,6 +18,7 @@ import { PAPERS, unitMm } from './plot';
 import { paperOf } from './papers';
 import { paperInfo } from './scene';
 import { dialog, h } from './ui/dom';
+import { ft } from './filetext';
 import { packLw } from '../core/lwpoly';
 
 type Pt = { x: number; y: number };
@@ -699,7 +700,7 @@ function runWizard(st: DocState): Promise<WizardState | null> {
             h(
               'ul',
               { style: 'margin:0;padding-left:18px;line-height:1.7' },
-              h('li', {}, `이름: ${s.name}`),
+              h('li', {}, `이름: ${ft(s.name)}`),
               h('li', {}, `플롯 장치: ${PRINTERS.find((x) => x.value === s.printer)?.label ?? s.printer}`),
               h('li', {}, `용지: ${p?.label ?? s.paper}, ${s.landscape ? '가로' : '세로'}, ${s.inch ? '인치' : '밀리미터'}`),
               h('li', {}, `제목 블록: ${s.title ? `ISO ${s.title}` : '없음'}`),

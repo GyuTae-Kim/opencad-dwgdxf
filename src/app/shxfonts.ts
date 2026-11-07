@@ -106,7 +106,7 @@ export function registerShxCommands(app: App): void {
               'div',
               {},
               h('b', {}, '이 도면이 쓰는 SHX 글꼴'),
-              h('ul', {}, ...used.map((n) => h('li', {}, `${n} — ${lib.has(n) ? '불러옴' : '없음(대체 글꼴로 그림)'}`))),
+              h('ul', {}, ...used.map((n) => h('li', {}, h('span', { translate: 'no' }, n), ` — ${lib.has(n) ? '불러옴' : '없음(대체 글꼴로 그림)'}`))),
             )
           : null,
         h('div', { style: 'margin-top:6px;color:var(--text-dim)' }, `불러온 글꼴 ${lib.size}개${lib.size ? `: ${lib.names().slice(0, 12).join(', ')}${lib.size > 12 ? ' …' : ''}` : ''}`),

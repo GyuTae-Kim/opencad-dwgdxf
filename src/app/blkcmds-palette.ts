@@ -14,6 +14,7 @@ import { guardKeys } from './layertools-ui';
 import { h } from './ui/dom';
 import { icon } from './ui/icons';
 import { registerOnce } from './blkcmds-io';
+import { ft } from './filetext';
 
 const STYLE = `
 .bp-panel{position:fixed;right:12px;top:120px;width:min(340px,calc(100vw - 24px));height:min(520px,calc(100vh - 140px));z-index:60;display:flex;flex-direction:column;
@@ -244,7 +245,8 @@ class BlocksPalette {
     const cells: { c: HTMLCanvasElement; it: Item }[] = [];
     for (const it of list) {
       const c = h('canvas', { width: 74, height: 58 }) as HTMLCanvasElement;
-      const el = h('div', { class: 'bp-item', role: 'option', tabindex: 0, draggable: 'true', title: `${it.name}${this.tab === 'current' ? '' : ` — ${it.label}`}\n누르면 삽입, 그림 영역으로 끌어 놓으면 그 자리에 삽입` }, c, h('span', {}, it.name));
+      // 블록·파일 이름은 도면 글(104차 — 옮기지 않는다)
+      const el = h('div', { class: 'bp-item', role: 'option', tabindex: 0, draggable: 'true', title: `${ft(it.name)}${this.tab === 'current' ? '' : ` — ${ft(it.label)}`}\n누르면 삽입, 그림 영역으로 끌어 놓으면 그 자리에 삽입` }, c, h('span', { translate: 'no' }, it.name));
       el.addEventListener('click', () => void this.insert(it, null));
       el.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter') void this.insert(it, null);

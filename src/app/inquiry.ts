@@ -12,6 +12,7 @@ import { lwVertices } from '../core/lwpoly';
 import { polyDrawnBulgeVerts, polyVertices } from '../core/polyverts';
 import { childStyleOf, linearFactor } from '../edit/dim/vars';
 import { ctrlCount, fitCount, leaderCount, splineCtrl } from '../core/flat3';
+import { ft } from './filetext';
 
 export const TYPE_NAMES: Record<string, string> = {
   LINE: '선',
@@ -318,7 +319,12 @@ export function plainText(s: string): string {
 export interface PropRow {
   k: string;
   v: string;
+  /** 값이 도면에서 온 글(도면층·스타일·블록 이름, 문자 내용, 경로 등) — 화면 번역층이 옮기지 않는다(104차) */
+  file?: boolean;
 }
+
+/** 도면 글 값 줄 */
+const fileRow = (k: string, v: string): PropRow => ({ k, v, file: true });
 export interface PropGroup {
   title: string;
   rows: PropRow[];
@@ -352,16 +358,16 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
   const area = (v: number) => formatLength(v, { lunits: u.lunits === 3 || u.lunits === 4 ? 2 : u.lunits, luprec: u.luprec });
   const general: PropRow[] = [
     { k: '종류', v: typeName(e) },
-    { k: '도면층', v: e.layer },
+    fileRow('도면층', e.layer),
     { k: '색상', v: colorText(e.color) },
-    { k: '선종류', v: e.linetype },
+    fileRow('선종류', e.linetype),
     { k: '선종류 축척', v: String(+e.ltscale.toFixed(4)) },
     { k: '선가중치', v: lineweightText(e.lineweight) },
     { k: '투명도', v: transparencyText(e.transparency) },
     { k: '핸들', v: e.handle },
   ];
   if (e.thickness) general.push({ k: '두께', v: L(e.thickness) });
-  if (e.hyperlink) general.push({ k: '하이퍼링크', v: e.hyperlink.url });
+  if (e.hyperlink) general.push(fileRow('하이퍼링크', e.hyperlink.url));
   const geo: PropRow[] = [];
   const misc: PropRow[] = [];
   switch (e.type) {
@@ -455,10 +461,10 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
     case 'TEXT':
     case 'ATTRIB':
     case 'ATTDEF': {
-      if ('tag' in e) misc.push({ k: '태그', v: e.tag });
+      if ('tag' in e) misc.push(fileRow('태그', e.tag));
       misc.push(
-        { k: '내용', v: plainText(e.text) },
-        { k: '문자 스타일', v: e.style },
+        fileRow('내용', plainText(e.text)),
+        fileRow('문자 스타일', e.style),
         { k: '높이', v: L(e.height) },
         { k: '회전', v: A(e.rotation) },
         { k: '폭 비율', v: e.widthFactor.toFixed(4) },
@@ -471,14 +477,14 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
     case 'MTEXT': {
       const st = doc.textStyles.get(tableKey(e.style));
       misc.push(
-        { k: '내용', v: plainText(e.text) },
-        { k: '문자 스타일', v: e.style },
+        fileRow('내용', plainText(e.text)),
+        fileRow('문자 스타일', e.style),
         { k: '문자 높이', v: L(e.height) },
         { k: '폭', v: e.width ? L(e.width) : '줄바꿈 없음' },
         { k: '부착', v: ['', '위 왼쪽', '위 중심', '위 오른쪽', '중간 왼쪽', '중간 중심', '중간 오른쪽', '아래 왼쪽', '아래 중심', '아래 오른쪽'][e.attachment] ?? String(e.attachment) },
         { k: '줄 간격 비율', v: e.lineSpacingFactor.toFixed(2) },
       );
-      if (st) misc.push({ k: '글꼴', v: st.fontFamily || st.font || '-' });
+      if (st) misc.push(fileRow('글꼴', st.fontFamily || st.font || '-'));
       geo.push({ k: '위치', v: P(e.insert) });
       break;
     }
@@ -492,8 +498,8 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
           dyn = null;
         }
       }
-      misc.push({ k: '이름', v: dyn ?? e.block });
-      if (dyn) misc.push({ k: '표현 블록', v: e.block });
+      misc.push(fileRow('이름', dyn ?? e.block));
+      if (dyn) misc.push(fileRow('표현 블록', e.block));
       geo.push(
         { k: '위치', v: P(e.insert, true) },
         { k: '축척 X', v: e.scale.x.toFixed(4) },
@@ -502,9 +508,10 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
         { k: '회전', v: A(e.rotation) },
       );
       if (e.columnCount > 1 || e.rowCount > 1) geo.push({ k: '열 × 행', v: `${e.columnCount} × ${e.rowCount}` }, { k: '열 간격', v: L(e.columnSpacing) }, { k: '행 간격', v: L(e.rowSpacing) });
-      for (const a of e.attribs) misc.push({ k: `속성 ${a.tag}`, v: plainText(a.text) });
+      // 이름표의 태그도 도면 글(ft — "속성 {0}" 틀의 자리로만 옮긴다)
+      for (const a of e.attribs) misc.push(fileRow(`속성 ${ft(a.tag)}`, plainText(a.text)));
       const b = doc.blocks.get(tableKey(e.block));
-      if (b?.description) misc.push({ k: '블록 설명', v: b.description });
+      if (b?.description) misc.push(fileRow('블록 설명', b.description));
       break;
     }
     case 'DIMENSION': {
@@ -512,18 +519,18 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
       misc.push(
         { k: '치수 종류', v: dimTypeName(e) },
         { k: '측정값', v: t.isAngle ? formatAngle(t.value, { aunits: 0, auprec: 4 }) : formatLength(t.value, { lunits: 2, luprec: 4 }) },
-        { k: '표시 문자', v: t.text },
-        { k: '문자 재지정', v: e.text ? plainText(e.text) : '없음' },
-        { k: '치수 스타일', v: e.dimStyle },
+        fileRow('표시 문자', t.text),
+        e.text ? fileRow('문자 재지정', plainText(e.text)) : { k: '문자 재지정', v: '없음' },
+        fileRow('치수 스타일', e.dimStyle),
       );
       geo.push({ k: '문자 위치', v: P(e.textMid, true) });
       break;
     }
     case 'HATCH':
     case 'MPOLYGON': {
-      misc.push({ k: '무늬', v: e.solid ? 'SOLID' : e.patternName || '-' });
+      misc.push(fileRow('무늬', e.solid ? 'SOLID' : e.patternName || '-'));
       if (!e.solid) misc.push({ k: '축척', v: e.patternScale.toFixed(4) }, { k: '각도', v: A(e.patternAngle) });
-      if (e.gradient) misc.push({ k: '그라데이션', v: e.gradient.name });
+      if (e.gradient) misc.push(fileRow('그라데이션', e.gradient.name));
       misc.push({ k: '연관', v: e.associative ? '예' : '아니요' }, { k: '경계 수', v: String(e.paths.length) });
       geo.push({ k: '면적', v: area(hatchArea(e)) });
       break;
@@ -534,7 +541,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
       break;
     }
     case 'MULTILEADER':
-      if (e.context.text) misc.push({ k: '내용', v: plainText(e.context.text.text) });
+      if (e.context.text) misc.push(fileRow('내용', plainText(e.context.text.text)));
       misc.push({ k: '지시선 수', v: String(e.context.leaders.length) });
       break;
     case 'LEADER':
@@ -551,7 +558,7 @@ export function entityProperties(doc: CadDocument, e: Entity, u: UnitSettings, f
       geo.push({ k: '위치', v: P(e.insert) }, { k: '폭', v: L(w) }, { k: '높이', v: L(h) });
       if (e.imageDef) {
         const def = doc.objects.get(e.imageDef) as { fileName?: string } | undefined;
-        if (def?.fileName) misc.push({ k: '파일', v: def.fileName });
+        if (def?.fileName) misc.push(fileRow('파일', def.fileName));
       }
       break;
     }

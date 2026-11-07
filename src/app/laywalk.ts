@@ -11,6 +11,7 @@ import type { App } from './app';
 import { currentLayer, patchLayers } from './layers';
 import { type ListItem, PickList, TempLayerView, guardKeys, wideDialog } from './layertools-ui';
 import { ask, h, showMenu } from './ui/dom';
+import { ft } from './filetext';
 
 /** 도면층 견본 색 */
 export function layerSwatch(l: Layer): string {
@@ -44,7 +45,7 @@ export function registerLayWalkCommands(app: App): void {
           const ls = st.layers.get(k);
           const c = counts.get(k) ?? 0;
           const swatch = l ? layerSwatch(l) : rgbToCss(ls?.hasRgb ? ls.rgb : aciToRgb(Math.abs(ls?.aci ?? 7) || 7, true));
-          return { key: k, label: `${held.has(k) ? '*' : ''}${n}`, swatch, dim: !!l && c === 0, tag: c ? String(c) : '', title: !l ? `${n} — 외부 참조` : c ? `${n} — 객체 ${c}개` : `${n} — 참조되지 않음` };
+          return { key: k, label: `${held.has(k) ? '*' : ''}${n}`, swatch, dim: !!l && c === 0, tag: c ? String(c) : '', title: !l ? `${ft(n)} — 외부 참조` : c ? `${ft(n)} — 객체 ${c}개` : `${ft(n)} — 참조되지 않음` };
         });
         const sel = keepSel ? list.selection() : [];
         list.setItems(items);

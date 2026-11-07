@@ -12,6 +12,7 @@ import { isShxFont } from '../../text/layout';
 import type { App } from '../app';
 import type { DocState } from '../docstate';
 import { ask, dialog, form, h, showMenu } from '../ui/dom';
+import { ft } from '../filetext';
 
 /** 트루타입 글꼴(파일 → 패밀리) */
 export const TTF_FONTS: { file: string; family: string }[] = [
@@ -214,7 +215,8 @@ export function textStyleDialog(app: App): Promise<void> {
       const add = (value: string, label: string) => {
         if (seen.has(value.toUpperCase())) return;
         seen.add(value.toUpperCase());
-        fontSel.append(h('option', { value }, label));
+        // 글꼴 이름은 옮기지 않는다(104차)
+        fontSel.append(h('option', { value, translate: 'no' }, label));
       };
       for (const f of TTF_FONTS) add(`ttf:${f.family}`, f.family);
       for (const t of doc.textStyles.values()) if (t.fontFamily) add(`ttf:${t.fontFamily}`, t.fontFamily);
@@ -259,7 +261,7 @@ export function textStyleDialog(app: App): Promise<void> {
     const fill = () => {
       fontOptions();
       const fv = fontValue(work);
-      if (![...fontSel.options].some((o) => o.value === fv)) fontSel.append(h('option', { value: fv }, fv.slice(4)));
+      if (![...fontSel.options].some((o) => o.value === fv)) fontSel.append(h('option', { value: fv, translate: 'no' }, fv.slice(4)));
       fontSel.value = fv;
       const ttf = isTtfStyle(work);
       fstyle.value = String(fontStyleOf(work));
@@ -307,7 +309,7 @@ export function textStyleDialog(app: App): Promise<void> {
     /** 적용하지 않은 변경을 물어 처리한다. 계속하면 true */
     const settle = async (): Promise<boolean> => {
       if (!dirty) return true;
-      const a = await ask('문자 스타일', `현재 스타일 "${work.name}"이(가) 수정되었습니다. 변경 사항을 저장하시겠습니까?`, [
+      const a = await ask('문자 스타일', `현재 스타일 "${ft(work.name)}"이(가) 수정되었습니다. 변경 사항을 저장하시겠습니까?`, [
         { label: '예', value: 'yes', primary: true },
         { label: '아니오', value: 'no' },
         { label: '취소', value: 'cancel' },
@@ -326,13 +328,13 @@ export function textStyleDialog(app: App): Promise<void> {
     };
     const render = () => {
       const cur = curName();
-      head.textContent = `현재 문자 스타일: ${cur}`;
+      head.textContent = `현재 문자 스타일: ${ft(cur)}`;
       const used = usedTextStyles(doc);
       const styles = [...doc.textStyles.values()].filter((s) => s.name && !(s.flags & 1) && (filter === 'all' || used.has(tableKey(s.name)))).sort((a, b) => a.name.localeCompare(b.name));
       list.replaceChildren(
         ...styles.map((s) => {
           const sel = tableKey(s.name) === tableKey(picked);
-          const r = h('div', { role: 'option', 'aria-selected': sel ? 'true' : 'false', style: `padding:3px 6px;cursor:pointer;border-radius:3px;${sel ? 'background:var(--accent-soft);outline:1px solid var(--accent)' : ''}` }, `${annotativeFlag(s.xdata) ? '▲ ' : ''}${s.name}${tableKey(s.name) === tableKey(cur) ? ' (현재)' : ''}`);
+          const r = h('div', { role: 'option', 'aria-selected': sel ? 'true' : 'false', style: `padding:3px 6px;cursor:pointer;border-radius:3px;${sel ? 'background:var(--accent-soft);outline:1px solid var(--accent)' : ''}` }, `${annotativeFlag(s.xdata) ? '▲ ' : ''}${ft(s.name)}${tableKey(s.name) === tableKey(cur) ? ' (현재)' : ''}`);
           r.addEventListener('click', () => void select(s.name));
           r.addEventListener('dblclick', () => void rename());
           r.addEventListener('contextmenu', (ev) => {
@@ -404,10 +406,10 @@ export function textStyleDialog(app: App): Promise<void> {
       const s = doc.textStyles.get(key);
       if (!s) return;
       if (key === 'STANDARD' || key === tableKey(curName()) || usedTextStyles(doc).has(key)) {
-        err.textContent = `문자 스타일 "${s.name}"은(는) 현재 스타일이거나 사용 중이라 삭제할 수 없습니다.`;
+        err.textContent = `문자 스타일 "${ft(s.name)}"은(는) 현재 스타일이거나 사용 중이라 삭제할 수 없습니다.`;
         return;
       }
-      const a = await ask('문자 스타일 - 삭제', `문자 스타일 "${s.name}"을(를) 삭제하시겠습니까?`, [
+      const a = await ask('문자 스타일 - 삭제', `문자 스타일 "${ft(s.name)}"을(를) 삭제하시겠습니까?`, [
         { label: '예', value: 'yes', primary: true },
         { label: '아니오', value: 'no' },
       ]);

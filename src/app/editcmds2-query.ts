@@ -22,6 +22,7 @@ import { attachQuickProperties, qpMode, setQpMode, showQuickProperties } from '.
 import { entityProperties, typeName } from './inquiry';
 import { loadPref, savePref } from './util2-ui';
 import { formatLength } from '../core/units';
+import { ft } from './filetext';
 
 const TPY_KEY = 'opencad.transparencydisplay';
 
@@ -47,8 +48,9 @@ function spaceOrder(doc: CadDocument): string[] {
 
 const DBLIST_MAX = 5000;
 
+/** 명령행에 보일 그룹 이름(도면 글 — ft로 감싼다, 104차) */
 function groupLabel(g: GroupInfo): string {
-  return g.group.unnamed ? `${g.name}(이름 없음)` : g.name;
+  return g.group.unnamed ? `${ft(g.name)}(이름 없음)` : ft(g.name);
 }
 
 /** 그룹 고르기: 객체를 찍거나 이름(N). 여러 그룹에 든 객체면 다음(N)/수락(A) */
@@ -64,7 +66,8 @@ async function pickGroup(app: App, ctx: CommandContext): Promise<GroupInfo | nul
         if (t === '?') {
           const gs = listGroups(st.doc);
           if (!gs.length) ctx.print('이 도면에는 그룹이 없습니다.', 'res');
-          for (const g of gs) ctx.print(`${groupLabel(g).padEnd(20)} 객체 ${g.group.entities.length}개${g.group.description ? ` — ${g.group.description}` : ''}`, 'res');
+          // 표시 글자(ft) 둘은 폭이 없어 22자로 채운다
+          for (const g of gs) ctx.print(`${groupLabel(g).padEnd(22)} 객체 ${g.group.entities.length}개${g.group.description ? ` — ${ft(g.group.description)}` : ''}`, 'res');
           continue;
         }
         const g = listGroups(st.doc).find((x) => x.name.toUpperCase() === t.toUpperCase());
@@ -174,8 +177,8 @@ export function registerEditCmds2Query(app: App): void {
           total++;
           if (n >= DBLIST_MAX) continue;
           n++;
-          ctx.print(`${typeName(e)}  도면층: "${e.layer}"  공간: ${space}  핸들 = ${e.handle}`, 'res');
-          for (const g of entityProperties(st.doc, e as Entity, st.units).slice(1)) for (const row of g.rows) ctx.print(`    ${row.k}: ${row.v}`);
+          ctx.print(`${typeName(e)}  도면층: "${ft(e.layer)}"  공간: ${space}  핸들 = ${e.handle}`, 'res');
+          for (const g of entityProperties(st.doc, e as Entity, st.units).slice(1)) for (const row of g.rows) ctx.print(`    ${row.k}: ${row.file ? ft(row.v) : row.v}`);
         }
       }
       if (total > n) ctx.print(`… ${total - n}개는 생략했습니다(처음 ${DBLIST_MAX}개만 보입니다).`);

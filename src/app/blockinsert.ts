@@ -22,6 +22,7 @@ import { TEXT_JUSTIFY } from './textedit/commands';
 import { h } from './ui/dom';
 import { areaIn, checkIn, fail, group, numIn, numOf, pickList, resultDialog, row, selectIn, tabs, textIn } from './mgr-ui';
 import type { Pt } from './view';
+import { ft } from './filetext';
 
 type MakeAttribs = (def: BlockDef, ins: Vec3, scale: Vec3, rot: number, values: Map<string, string>, handle: string) => AttribEntity[];
 
@@ -56,7 +57,7 @@ const lastInsert = new WeakMap<DocState, InsertDialog>();
 function insertDialog(app: App, st: DocState, v: InsertDialog): Promise<InsertDialog | null> {
   const blocks = insertable(st);
   const name = selectIn(
-    blocks.map((b) => ({ value: b.name, label: `${b.name}${b.description ? ` — ${b.description}` : ''}` })),
+    blocks.map((b) => ({ value: b.name, label: `${ft(b.name)}${b.description ? ` — ${ft(b.description)}` : ''}` })),
     v.name,
     '이름',
   );
@@ -550,6 +551,7 @@ export async function enhancedAttributeEditor(app: App, ctx: CommandContext | nu
   const valueIn = textIn(cur.mtext ? cur.mtext.text.replace(/\\P/g, '\n') : cur.text, '값');
   const list = pickList<AttribEntity>(['태그', '프롬프트', '값'], (a) => [a.tag, promptOf(a), a.mtext ? a.mtext.text.replace(/\\P/g, ' ') : a.text], {
     height: 160,
+    fileCols: [0, 1, 2],
     onPick: (a) => {
       if (!a) return;
       store();

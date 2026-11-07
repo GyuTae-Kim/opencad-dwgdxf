@@ -21,6 +21,7 @@ import type { ViewportSnap } from './snap';
 import type { ViewportXf } from './scene';
 import { type PaperPick, paperProjection, projectedDelta } from './vpsnap';
 import { type LimitsRect, parseZoomFactor } from './vpzoom';
+import { ft } from './filetext';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -423,10 +424,11 @@ export function registerCommands(app: App): void {
       for (const hd of hs.slice(0, 200)) {
         const e = app.entity(hd);
         if (!e) continue;
-        ctx.print(`${typeName(e)}  도면층: "${e.layer}"  공간: ${st.isModel ? '모형 공간' : '도면 공간'}  핸들 = ${e.handle}`, 'res');
+        // 도면 글(도면층·스타일 이름, 문자 내용)은 ft로 감싸 명령행 번역이 옮기지 않는다(104차)
+        ctx.print(`${typeName(e)}  도면층: "${ft(e.layer)}"  공간: ${st.isModel ? '모형 공간' : '도면 공간'}  핸들 = ${e.handle}`, 'res');
         const [general, ...groups] = entityProperties(st.doc, e, st.units, frame);
-        for (const row of general!.rows) if (LIST_GENERAL.has(row.k) && !/^bylayer$/i.test(row.v)) ctx.print(`    ${row.k}: ${row.v}`);
-        for (const g of groups) for (const row of g.rows) ctx.print(`    ${row.k}: ${row.v}`);
+        for (const row of general!.rows) if (LIST_GENERAL.has(row.k) && !/^bylayer$/i.test(row.v)) ctx.print(`    ${row.k}: ${row.file ? ft(row.v) : row.v}`);
+        for (const g of groups) for (const row of g.rows) ctx.print(`    ${row.k}: ${row.file ? ft(row.v) : row.v}`);
         const len = entityLength(e);
         if (len !== null) {
           total += len;

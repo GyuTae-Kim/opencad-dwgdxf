@@ -284,7 +284,7 @@ export function registerUcsCommands(app: App): void {
       const render = () => {
         body.replaceChildren();
         const rows = [{ name: '표준', rec: null as UcsRecord | null }, ...namedUcs(st.doc).map((r) => ({ name: r.name, rec: r }))].map((it) => {
-          const tr = h('tr', { style: picked === it.name ? 'background:var(--sel, rgba(61,141,255,0.25))' : 'cursor:pointer' }, h('td', {}, it.name), h('td', {}, it.rec ? `${it.rec.origin.x.toFixed(2)}, ${it.rec.origin.y.toFixed(2)}` : '0, 0'), h('td', {}, it.rec ? `${((Math.atan2(it.rec.xAxis.y, it.rec.xAxis.x) * 180) / Math.PI).toFixed(2)}°` : '0°'));
+          const tr = h('tr', { style: picked === it.name ? 'background:var(--sel, rgba(61,141,255,0.25))' : 'cursor:pointer' }, h('td', { translate: it.rec ? 'no' : undefined }, it.name), h('td', {}, it.rec ? `${it.rec.origin.x.toFixed(2)}, ${it.rec.origin.y.toFixed(2)}` : '0, 0'), h('td', {}, it.rec ? `${((Math.atan2(it.rec.xAxis.y, it.rec.xAxis.x) * 180) / Math.PI).toFixed(2)}°` : '0°'));
           tr.addEventListener('click', () => {
             picked = it.name;
             render();

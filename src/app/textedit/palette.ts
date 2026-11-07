@@ -81,7 +81,8 @@ export function findPanel(app: App, s: FindPanelState): HTMLElement {
         'tr',
         { class: `clickable ${i === s.picked ? 'selected' : ''}`, title: '눌러서 이동' },
         h('td', { style: 'color:var(--text-dim);white-space:nowrap' }, t.label),
-        h('td', { style: 'white-space:normal' }, t.preview.slice(0, 200), t.field ? h('span', { class: 'chip', title: '필드가 있는 문자는 대치하지 않습니다' }, '필드') : null, t.locked ? h('span', { class: 'chip', title: '잠긴 도면층' }, '잠김') : null),
+        // 찾은 문자는 도면 글(104차 — 옮기지 않는다)
+        h('td', { style: 'white-space:normal' }, h('span', { translate: 'no' }, t.preview.slice(0, 200)), t.field ? h('span', { class: 'chip', title: '필드가 있는 문자는 대치하지 않습니다' }, '필드') : null, t.locked ? h('span', { class: 'chip', title: '잠긴 도면층' }, '잠김') : null),
         h('td', { style: 'text-align:right;color:var(--text-faint)' }, String(t.count)),
       );
       tr.addEventListener('click', () => {
@@ -188,7 +189,7 @@ export function tableCellGroup(app: App, handle: string): HTMLElement | null {
       const m = mergeAt(data, r, c);
       if (m && (m.row !== r || m.col !== c)) continue;
       const t = getText(data, r, c).replace(/\\P/g, ' ');
-      sel.append(h('option', { value: `${r},${c}` }, `${colName(c)}${r + 1}${t ? `: ${t.slice(0, 24)}` : ''}`));
+      sel.append(h('option', { value: `${r},${c}`, translate: 'no' }, `${colName(c)}${r + 1}${t ? `: ${t.slice(0, 24)}` : ''}`));
     }
   const key = `opencad.tablecell.${handle}`;
   let cur = '0,0';

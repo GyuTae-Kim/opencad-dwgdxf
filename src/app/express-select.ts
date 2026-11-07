@@ -23,6 +23,7 @@ import { xrefOfDoc } from './refs';
 import { dialog, h } from './ui/dom';
 import { askString, pickTolerance, visibleInSpace } from './express-util';
 import type { OverlayGeom, Pt } from './view';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // 중첩 객체 고르기
@@ -242,10 +243,12 @@ async function runXlist(app: App, ctx: CommandContext): Promise<void> {
     }
     const rows = xlistRows(r.entity, r.chain);
     if (r.owner) rows[1]!.value = r.owner.block;
-    for (const x of rows) ctx.print(`  ${x.label}: ${x.value}`);
+    // 블록·도면층·선종류 이름은 도면 글(104차 — 옮기지 않는다)
+    const file = (x: { label: string }) => x.label === '블록 이름' || x.label === '도면층' || x.label === '선종류';
+    for (const x of rows) ctx.print(`  ${x.label}: ${file(x) ? ft(x.value) : x.value}`);
     dialog(
       'XLIST',
-      h('table', { class: 'grid' }, h('tbody', {}, ...rows.map((x) => h('tr', {}, h('td', { style: 'color:var(--text-dim);width:35%' }, x.label), h('td', {}, x.value))))),
+      h('table', { class: 'grid' }, h('tbody', {}, ...rows.map((x) => h('tr', {}, h('td', { style: 'color:var(--text-dim);width:35%' }, x.label), h('td', { translate: file(x) ? 'no' : undefined }, x.value))))),
     );
     return;
   }

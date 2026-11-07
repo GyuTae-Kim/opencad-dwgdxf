@@ -19,6 +19,7 @@ import { drawGeometry } from './blockpreview';
 import { dimensionBlockOps } from './dimcmds';
 import type { DocState } from './docstate';
 import { ask, dialog, form, h, showMenu } from './ui/dom';
+import { ft } from './filetext';
 import { annotativeFlag, withAnnotativeFlag } from '../edit/annoscale/xdata';
 
 type Opt = { value: string; label: string };
@@ -587,11 +588,11 @@ function compareDialog(app: App, first: string): void {
     const vb = b.value ? styleVars(st.doc.dimStyles.get(tableKey(b.value))) : null;
     rows = compareVars(va, vb);
     out.replaceChildren(
-      h('div', { style: 'color:var(--text-dim);margin-bottom:4px' }, vb ? (rows.length ? `다른 점 ${rows.length}개` : '두 스타일이 같습니다.') : `${a.value}의 모든 특성`),
+      h('div', { style: 'color:var(--text-dim);margin-bottom:4px' }, vb ? (rows.length ? `다른 점 ${rows.length}개` : '두 스타일이 같습니다.') : `${ft(a.value)}의 모든 특성`),
       h(
         'table',
         { class: 'grid' },
-        h('thead', {}, h('tr', {}, h('th', {}, '설명'), h('th', {}, '변수'), h('th', {}, a.value), ...(vb ? [h('th', {}, b.value)] : []))),
+        h('thead', {}, h('tr', {}, h('th', {}, '설명'), h('th', {}, '변수'), h('th', { translate: 'no' }, a.value), ...(vb ? [h('th', { translate: 'no' }, b.value)] : []))),
         h('tbody', {}, ...rows.map((r) => h('tr', {}, h('td', {}, r.label), h('td', { style: 'font-family:var(--mono)' }, r.name), h('td', {}, r.a), ...(vb ? [h('td', {}, r.b)] : [])))),
       ),
     );
@@ -637,7 +638,8 @@ export function registerDimStyleCommands(app: App): void {
         const cur = curName();
         const ov = headerOverrides(doc, cur);
         const used = usedStyles(st);
-        head.textContent = `현재 치수 스타일: ${cur}`;
+        // 스타일 이름은 도면 글(ft — 104차, 옮기지 않는다)
+        head.textContent = `현재 치수 스타일: ${ft(cur)}`;
         const styles = [...doc.dimStyles.values()].filter((s) => s.name && (filter === 'all' || used.has(tableKey(s.name)) || tableKey(s.name) === tableKey(cur))).sort((a, b) => a.name.localeCompare(b.name));
         if (picked !== null && !doc.dimStyles.has(tableKey(picked))) picked = cur;
         if (picked === null && !Object.keys(ov).length) picked = cur;
@@ -671,7 +673,7 @@ export function registerDimStyleCommands(app: App): void {
         for (const s of styles) {
           if (CHILD_RE.test(s.name) && doc.dimStyles.has(tableKey(parentOf(s.name)))) continue;
           const isCur = tableKey(s.name) === tableKey(cur);
-          row(`${s.name}${isCur ? ' (현재)' : ''}${used.get(tableKey(s.name)) ? `  · ${used.get(tableKey(s.name))}` : ''}`, s.name, false);
+          row(`${ft(s.name)}${isCur ? ' (현재)' : ''}${used.get(tableKey(s.name)) ? `  · ${used.get(tableKey(s.name))}` : ''}`, s.name, false);
           // 하위 스타일은 부모 아래에 종류 이름으로(AutoCAD 목록과 같다)
           for (const [suf, label] of CHILD_KINDS) {
             const c = suf ? doc.dimStyles.get(tableKey(`${s.name}$${suf}`)) : undefined;
@@ -682,10 +684,10 @@ export function registerDimStyleCommands(app: App): void {
         const base = pickedStyle();
         const vars = picked === null ? { ...styleVars(base), ...ov } : styleVars(base);
         drawDimPreview(app, canvas, base, vars);
-        if (picked === null) desc.textContent = `설명: ${cur} + ${Object.entries(ov).map(([k, v]) => `${LABELS.get(k) ?? k} = ${show(v)}`).join(', ')}`;
+        if (picked === null) desc.textContent = `설명: ${ft(cur)} + ${Object.entries(ov).map(([k, v]) => `${LABELS.get(k) ?? k} = ${show(v)}`).join(', ')}`;
         else if (base) {
           const n = used.get(tableKey(base.name)) ?? 0;
-          desc.textContent = `설명: ${base.name}\n문자 높이 ${show(vars.DIMTXT)}, 화살표 크기 ${show(vars.DIMASZ)}, 전체 축척 ${show(vars.DIMSCALE)}\n이 스타일을 쓰는 객체 ${n}개`;
+          desc.textContent = `설명: ${ft(base.name)}\n문자 높이 ${show(vars.DIMTXT)}, 화살표 크기 ${show(vars.DIMASZ)}, 전체 축척 ${show(vars.DIMSCALE)}\n이 스타일을 쓰는 객체 ${n}개`;
         } else desc.textContent = '';
       };
       filterSel.addEventListener('change', () => {

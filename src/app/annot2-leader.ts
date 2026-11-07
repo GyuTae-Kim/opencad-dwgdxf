@@ -21,6 +21,7 @@ import { currentProps, textDialog } from './draw';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { dialog, form, h } from './ui/dom';
+import { ft } from './filetext';
 import type { Pt } from './view';
 import { pack3 } from '../core/flat3';
 
@@ -623,7 +624,7 @@ function mleaderStyleManager(app: App, ctx: CommandContext): Promise<void> {
     const fill = (pick?: string) => {
       const cur = current();
       list.innerHTML = '';
-      for (const s of styles(app)) list.append(h('option', { value: s.handle }, `${s.name}${cur?.handle === s.handle ? '  (현재)' : ''}`));
+      for (const s of styles(app)) list.append(h('option', { value: s.handle }, `${ft(s.name)}${cur?.handle === s.handle ? '  (현재)' : ''}`));
       list.value = pick ?? cur?.handle ?? list.options[0]?.value ?? '';
       describe();
     };

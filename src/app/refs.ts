@@ -524,10 +524,11 @@ export function registerRefCommands(app: App): void {
                         if (el?.classList.contains('menu')) el.style.zIndex = '80';
                       },
                     },
-                    h('td', {}, r.name),
+                    // 참조 이름·경로는 도면 글(104차 — 옮기지 않는다)
+                    h('td', { translate: 'no' }, r.name),
                     h('td', {}, kindName[r.kind]),
                     h('td', { style: r.found ? '' : 'color:var(--warn, #e0a030)' }, r.found ? '로드됨' : '찾을 수 없음'),
-                    h('td', { style: 'color:var(--text-dim);word-break:break-all' }, r.path),
+                    h('td', { style: 'color:var(--text-dim);word-break:break-all', translate: 'no' }, r.path),
                   ),
                 ),
               ),

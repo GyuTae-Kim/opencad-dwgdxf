@@ -25,6 +25,7 @@ import { colorTheme, setColorTheme, THEME_EVENT } from '../theme';
 import { type AnnoStatus, annoStatus } from '../annoscale-status';
 import { DEGREE_UNITS, POLAR_COMMON_ANGLES, formatPolarAngle } from '../polar';
 import { foldCount, layoutClasses, revealX, ribbonOverlay, statusHidden, watchViewport, wheelToHorizontal } from './layout';
+import { ft } from '../filetext';
 
 interface Btn {
   cmd?: string;
@@ -1498,13 +1499,13 @@ export class Shell implements UiHooks {
     };
     this.fileTabs.append(tab(h('span', {}, '시작'), !app.active, () => app.activate(null)));
     for (const d of app.docs) {
-      const x = h('button', { type: 'button', class: 'icon-btn x', title: '닫기', 'aria-label': `${d.name} 닫기`, html: icon('close2') });
+      const x = h('button', { type: 'button', class: 'icon-btn x', title: '닫기', 'aria-label': `${ft(d.name)} 닫기`, html: icon('close2') });
       x.addEventListener('click', (ev) => {
         ev.stopPropagation();
         app.close(d);
       });
       const dirty = d.session?.dirty;
-      const t = tab(h('span', { translate: 'no' }, `${d.saveName}${dirty ? ' *' : ''}`), app.active === d, () => app.activate(d), `${d.saveName}${d.size ? ` (${formatBytes(d.size)})` : ''}${dirty ? ' · 저장하지 않은 변경 있음' : ''}`, x);
+      const t = tab(h('span', { translate: 'no' }, `${d.saveName}${dirty ? ' *' : ''}`), app.active === d, () => app.activate(d), `${ft(d.saveName)}${d.size ? ` (${formatBytes(d.size)})` : ''}${dirty ? ' · 저장하지 않은 변경 있음' : ''}`, x);
       t.addEventListener('auxclick', (ev) => {
         if ((ev as MouseEvent).button === 1) app.close(d);
       });
@@ -1547,7 +1548,7 @@ export class Shell implements UiHooks {
       close.addEventListener('click', () => void app.run('BCLOSE'));
       const save = h('button', { class: 'layouttab', title: '블록 저장 (BSAVE)' }, '블록 저장');
       save.addEventListener('click', () => void app.run('BSAVE'));
-      this.layoutTabs.append(h('span', { class: 'layouttab active blockedit-label' }, `블록 편집기: ${be.name}`), save, close);
+      this.layoutTabs.append(h('span', { class: 'layouttab active blockedit-label' }, `블록 편집기: ${ft(be.name)}`), save, close);
       return;
     }
     for (const l of st.layouts) {
@@ -1801,14 +1802,15 @@ export class Shell implements UiHooks {
       vpm.style.display = st && (label || !st.isModel || st.msVp) ? '' : 'none';
       vpm.title = label ? `${label} · 누르면 복원 (VPMIN), Ctrl+R 다음 뷰포트` : '뷰포트 최대화 (VPMAX)';
     }
+    // 블록·배치 이름은 도면 글(ft — 상태 줄 번역이 옮기지 않는다, 104차)
     this.spaceLabel.textContent = st
       ? st.blockEdit
-        ? `블록 편집기: ${st.blockEdit.name}`
+        ? `블록 편집기: ${ft(st.blockEdit.name)}`
         : st.msVp
-          ? `배치: ${st.layoutFor(st.msVp.layout)?.name ?? ''} · 모형 공간(뷰포트)`
+          ? `배치: ${ft(st.layoutFor(st.msVp.layout)?.name ?? '')} · 모형 공간(뷰포트)`
           : st.isModel
             ? '모형'
-            : `배치: ${st.layoutFor(st.space)?.name ?? ''}`
+            : `배치: ${ft(st.layoutFor(st.space)?.name ?? '')}`
       : '';
     if (st) {
       const abbr = unitAbbr(st.units.insunits);
@@ -1978,7 +1980,7 @@ export class Shell implements UiHooks {
         // 파일 이름과 날짜(지금 언어로 적는다)는 번역하지 않는다
         const open = h('button', { type: 'button', class: 'recent-open' }, h('span', { class: 'recent-name', translate: 'no' }, r.name), h('small', { translate: 'no' }, `${formatBytes(r.size)} · ${recentTimeLabel(r.time, now, locale)}`));
         open.addEventListener('click', () => void this.openRecent(r.id));
-        const del = h('button', { type: 'button', class: 'icon-btn recent-del', title: '목록에서 지우기', 'aria-label': `최근 문서에서 지우기: ${r.name}`, html: icon('close2') });
+        const del = h('button', { type: 'button', class: 'icon-btn recent-del', title: '목록에서 지우기', 'aria-label': `최근 문서에서 지우기: ${ft(r.name)}`, html: icon('close2') });
         del.addEventListener('click', () => {
           // 지운 줄의 다음 줄(없으면 앞 줄)로 키보드 초점을 옮긴다
           const row = del.closest('li');
@@ -2041,7 +2043,7 @@ export class Shell implements UiHooks {
       h(
         'div',
         {},
-        h('div', { class: 'form-row' }, h('span', {}, '파일'), h('b', {}, `${st.name} (${formatBytes(st.size)})`)),
+        h('div', { class: 'form-row' }, h('span', {}, '파일'), h('b', {}, `${ft(st.name)} (${formatBytes(st.size)})`)),
         h('div', { class: 'form-row' }, h('span', {}, '형식'), h('b', {}, `${d.format.toUpperCase()} ${d.version}${d.binary ? ' 이진' : ''}`)),
         h('div', { class: 'form-row' }, h('span', {}, '코드 페이지'), h('b', {}, d.codepage)),
         h('div', { class: 'form-row' }, h('span', {}, '도면층·블록'), h('b', {}, `${d.layers.size}개 · ${[...d.blocks.values()].filter((b) => !b.name.startsWith('*')).length}개`)),

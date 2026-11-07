@@ -110,7 +110,8 @@ export function listBox(items: { value: string; label: string; dim?: boolean }[]
   const render = () => {
     el.innerHTML = '';
     for (const it of list) {
-      const d = h('div', { class: `u2-item${it.value === cur ? ' sel' : ''}${it.dim ? ' dim' : ''}`, title: it.label }, it.label);
+      // 글이 값과 같은 항목은 도면 이름(RENAME 목록 등) — 화면 번역층이 옮기지 않는다(104차)
+      const d = h('div', { class: `u2-item${it.value === cur ? ' sel' : ''}${it.dim ? ' dim' : ''}`, title: it.label, translate: it.label === it.value ? 'no' : undefined }, it.label);
       d.addEventListener('click', () => {
         cur = it.value;
         render();

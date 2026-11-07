@@ -32,6 +32,8 @@ export interface Field {
   regen?: boolean;
   /** 읽기 전용(측정값 등) */
   readonly?: boolean;
+  /** 이름표가 도면에서 온 글(속성 태그) — 화면 번역층이 옮기지 않는다(104차) */
+  fileLabel?: boolean;
 }
 
 export const LINEWEIGHTS = [0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211];
@@ -484,6 +486,7 @@ export function attribFields(e: InsertEntity): Field[] {
     .filter((a) => !(a.attFlags & 2))
     .map((a, i) => ({
       label: a.tag || `속성 ${i + 1}`,
+      fileLabel: !!a.tag,
       kind: (a.mtext ? 'multiline' : 'text') as FieldKind,
       get: (x: Entity) => {
         const at = findAttrib(x as InsertEntity, a.tag, i);

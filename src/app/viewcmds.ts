@@ -158,7 +158,7 @@ async function viewManager(app: App, ctx: CommandContext): Promise<void> {
       act = a;
       submitNow?.();
     };
-    const list = pickList<ViewRecord>(['이름', '공간', '크기'], (v) => [v.name, v.flags & 1 ? '배치' : '모형', `${v.width.toFixed(2)} × ${v.height.toFixed(2)}`], { height: 240, onActivate: () => go('current') });
+    const list = pickList<ViewRecord>(['이름', '공간', '크기'], (v) => [v.name, v.flags & 1 ? '배치' : '모형', `${v.width.toFixed(2)} × ${v.height.toFixed(2)}`], { height: 240, onActivate: () => go('current'), fileCols: [0] });
     const body = h(
       'div',
       { class: 'mgr-dlg' },

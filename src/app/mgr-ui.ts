@@ -172,11 +172,11 @@ export function resultDialog<T>(title: string, body: HTMLElement, opt: ResultDia
   });
 }
 
-/** 열 머리와 행으로 고르는 목록(한 행 선택). 행을 다시 그릴 때 refresh */
+/** 열 머리와 행으로 고르는 목록(한 행 선택). 행을 다시 그릴 때 refresh. fileCols: 도면 글이 드는 열 번호(화면 번역층이 옮기지 않는다 — 104차) */
 export function pickList<R>(
   columns: string[],
   cells: (r: R) => string[],
-  opt: { onPick?: (r: R | null) => void; onActivate?: (r: R) => void; rowClass?: (r: R) => string; height?: number } = {},
+  opt: { onPick?: (r: R | null) => void; onActivate?: (r: R) => void; rowClass?: (r: R) => string; height?: number; fileCols?: readonly number[] } = {},
 ): { el: HTMLElement; refresh(rows: readonly R[], keep?: (r: R) => boolean): void; selected(): R | null; select(pred: (r: R) => boolean): void } {
   const body = h('tbody');
   const el = h('div', { class: 'mgr-list', style: opt.height ? `max-height:${opt.height}px` : undefined }, h('table', {}, h('thead', {}, h('tr', {}, ...columns.map((c) => h('th', {}, c)))), body));
@@ -204,7 +204,7 @@ export function pickList<R>(
             },
             ondblclick: () => opt.onActivate?.(r),
           },
-          ...cells(r).map((c) => h('td', { title: c }, c)),
+          ...cells(r).map((c, k) => h('td', { title: c, translate: opt.fileCols?.includes(k) ? 'no' : undefined }, c)),
         );
         body.append(tr);
         if ((keep && keep(r)) || (!keep && prev !== undefined && r === prev)) sel = i;
