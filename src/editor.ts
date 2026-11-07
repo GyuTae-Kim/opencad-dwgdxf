@@ -76,6 +76,7 @@ import { dialog, formatBytes, h, toast } from './app/ui/dom';
 import { openErrorInfo } from './app/openerror';
 import { takeInterruptedOpens } from './app/openmarker';
 import { installViewLinks } from './app/viewlink-app';
+import { installFileGuard } from './app/fileguard';
 import { baseName, download, exportRaster, exportSvg } from './app/export';
 
 export function startEditor(root: HTMLElement): EditorActions {
@@ -100,6 +101,8 @@ export function startEditor(root: HTMLElement): EditorActions {
     throw e;
   }
   root.addEventListener('languagechange', () => app.view.requestRender());
+  // 도면에서 온 글은 화면 번역층이 바꾸지 않는다(104차)
+  installFileGuard(app);
   app.ui = shell;
   shell.attach(app);
   registerCommands(app);

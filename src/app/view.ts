@@ -1,4 +1,5 @@
 import { uiText } from './i18n-text';
+import { uiTextGuarded } from './fileguard';
 /**
  * 도면 영역: 카메라(확대·이동), WebGL 그리기, 배치·뷰포트, 오버레이(커서·선택·스냅·고무줄).
  * 그립 크기·십자선 길이·AutoSnap 표식기·휠 배율·시간에 민감한 오른쪽 클릭은 앱이 넣어 주는 prefs(settings.ts)를 따른다.
@@ -1325,7 +1326,8 @@ export class CadView {
     else if ((o.tip || o.dynInput) && o.cursor) {
       g.save();
       g.font = '11.5px ui-monospace, Menlo, monospace';
-      const tip = uiText(o.tip ?? '');
+      // 커서 옆 프롬프트: <기본값>·따옴표 안 도면 이름은 옮기지 않는다(104차)
+      const tip = uiTextGuarded(o.tip ?? '');
       const typed = o.dynInput ? `${o.dynInput}▏` : '';
       const tw = Math.max(tip ? g.measureText(tip).width : 0, typed ? g.measureText(typed).width + 8 : 0);
       const hgt = (tip ? 20 : 0) + (typed ? 22 : 0);
@@ -1360,7 +1362,7 @@ export class CadView {
   private drawDynFields(g: CanvasRenderingContext2D, c: Pt, tip: string, fields: { text: string; locked: boolean; active: boolean }[], covers: readonly Box[]): void {
     g.save();
     g.font = '11.5px ui-monospace, Menlo, monospace';
-    tip = uiText(tip);
+    tip = uiTextGuarded(tip);
     const lock = 11;
     const widths = fields.map((f) => Math.max(46, g.measureText(f.text + (f.active ? '▏' : '')).width + 12 + (f.locked ? lock : 0)));
     const total = widths.reduce((a, b) => a + b, 0) + (fields.length - 1) * 4;
