@@ -105,6 +105,71 @@ describe('language URLs and UI presentation', () => {
     expect(translate('객체를 선택하십시오.', 'de')).toBe('Wählen Sie Objekte aus.');
     expect(translate('{0} 지정 또는 [양쪽(B)]:', 'zh-CN')).toBe('指定 {0} 或 [两者(B)]：');
   });
+  it('keeps negation, conditions and option letters in every catalog (102nd review)', () => {
+    const codes = ['en', 'ja', 'zh-CN', 'de'] as const;
+    // 원문의 분명한 부정(않·없·못·아니·안 함·말고·금지·불가·모르 — "잘못"은 빼고)이 있으면 번역에도 부정 낱말이 있어야 한다
+    const koNeg = /않|없|(?<!잘)못(?!하게)|아니|안 (함|됨|돼|씀|보이|그리|쓰|하|맞|켜)|말고|금지|불가|모르|모름/;
+    const tNeg: Record<(typeof codes)[number], RegExp> = {
+      en: /\b(not|no|non|none|nothing|never|neither|nor|cannot|without|fail(s|ed|ure)?|missing|lacks?|absent|empty|zero|only|except|excluded?|instead|rather than|off|disabled?|disabling|disallow\w*|too|prevents?|avoid|lost|removed|hidden|invisible|incorrect|invalid|inaccessible|impossible|mismatch\w*|misplaced|malformed|regardless|outside|beyond|exceeds?|free|skip\w*|ignored?|omitted|fixed)\b|n't|\bnon-|\bun(?!der|til|ion|ique|iform|iversal|its?\b|do)[a-z]{3,}/i,
+      de: /\b(nicht|kein\w*|ohne|nie|niemals|nichts|weder|noch|nur|fehl\w*|leer\w*|aus|statt|anstatt|außer\w*|nein|zu|verloren|kostenlos|verhindert|vermeiden|falsch\w*|maximal|feste?|deaktiv\w*|entsperrt|ausgeblendet|ausgelassen|übersprungen|ignoriert|Null)\b|\bun(?!ter|d\b|s\b|ser)[a-zäöüß]{3,}/i,
+      ja: /ない|なく|なかっ|なし|無し|ず|ません|未|不|無|非|欠|空|除外|以外|対象外|代わり|のみ|だけ|いいえ|失敗|禁止|オフ|失われ|隠|しか|にくい|固定/,
+      'zh-CN': /不|没|无|未|非|勿|别|缺|空|跳过|忽略|排除|仅|只|除|否|而是|失败|禁止|关闭|丢失|隐藏|免费|避免|过|错误|固定/,
+    };
+    // 원문에 부정·제외·부족·조건 말이 전혀 없는데 번역에 분명한 부정이 끼어든 것(de "als nicht entladen markiert" ← "언로드됨으로 표시")
+    const koAny = /않|없|못|아니|아닌|아님|아닐|아닙|안 |말고|금지|불가|모르|모름|빠|빼|뺐|건너|무시|실패|비어|빈|제외|대신|만|뿐|잘못|숨|끄|끈|꺼|해제|풀|잠기지|부족|모자라|여부|이하|미만|넘|무관|다르|다른|다름|불일치|비[가-힣]|해석하지|멈|끊|덜|오류|틀|그대로|이내|최대|까지|해야|여야|어야|필요/;
+    const tStrong: Record<(typeof codes)[number], RegExp> = {
+      en: /\b(not|cannot|can't|don't|doesn't|didn't|isn't|aren't|wasn't|won't|never|without|no longer)\b/i,
+      de: /\b(nicht|nie|niemals|ohne)\b/i,
+      ja: /しない|されない|できない|ではない|ていない|しません|されません|できません|ありません/,
+      'zh-CN': /不能|不会|不要|无法|没有|并非|不是/,
+    };
+    for (const code of codes)
+      for (const [key, value] of Object.entries(catalogs[code])) {
+        if (key.startsWith('<p>') || key.startsWith('#version')) continue;
+        if (koNeg.test(key)) expect(value, `${code}: ${key}`).toMatch(tNeg[code]);
+        if (!koAny.test(key)) expect(value, `${code}: ${key}`).not.toMatch(tStrong[code]);
+        // "~이 아닙니다"(is not)를 "~일 수 없다"(cannot)로 바꾸지 않는다(zh "坐标或值不能是数字" ← "좌표나 값이 수가 아닙니다")
+        if (code === 'zh-CN' && /[이가] 아닙니다/.test(key) && !/수 없|못/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/不能/);
+        // 원문의 고를 글자 (X)·(LA)는 번역에도 보인다(en "[Exit/Undo]"처럼 빠지면 무엇을 입력할지 모른다)
+        for (const m of key.matchAll(/\(([A-Z][A-Z0-9]{0,3})\)/g)) expect(value, `${code}: ${key}`).toMatch(new RegExp(`[(（]${m[1]}[)）]|\\b${m[1]}\\b`));
+        // 낱말이 빠지고 고를 글자만 남은 번역(de·zh "가리기 유형(M)" → "(M)")
+        if (/[가-힣]{2}/.test(key.replace(/\([^)]*\)/g, ''))) expect(value, `${code}: ${key}`).not.toMatch(/^\s*[(（][A-Z0-9]{1,4}[)）]\s*:?\s*$/);
+        // 저장 경고의 "쓰지 않았습니다·쓰지 못해"는 파일에 쓰다(write)이지 쓰다(use)가 아니다
+        if (/를 쓰지 않았습니다|쓰지 못해 뺐|를 쓰지 못했습니다|쓰지 않는 객체를 가리키는|소유 객체를 쓰지 않는/.test(key))
+          expect(value, `${code}: ${key}`).not.toMatch(/\b(use|used|using)\b|verwend|使用|使わ|使え/);
+        // "표시하지만 플롯 안 함"(display but do not plot)은 플롯하지 않는다는 뜻 그대로(ja "プロットには含める"·de "nicht zeichnen"처럼 뒤집거나 바꾸지 않는다)
+        if (/플롯 안 함/.test(key)) expect(value, `${code}: ${key}`).toMatch(/not plot|nicht plotten|nicht geplottet|プロットしない|印刷しない|不打印/i);
+        // "현재 제외"(현재 것을 뺀 나머지)는 "지금 제외됨"·"전류"가 아니다
+        if (/현재 제외/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/currently|Strom|Aktuell ausgeschlossen|現在、|当前已/i);
+        // 도면층은 AutoCAD 각 언어판 낱말로: Layer(독일어판도 Layer — Ebene·Schicht 아님) · 画層(レイヤー 아님) · 图层
+        if (key.includes('도면층'))
+          expect(value, `${code}: ${key}`).toMatch({ en: /layer/i, de: /layer/i, ja: /画層/, 'zh-CN': /图层|ByLayer/ }[code]);
+        if (key.includes('도면층')) expect(value, `${code}: ${key}`).not.toMatch(/Ebene|Schicht|レイヤ/);
+        // 1인칭 알림(101차 규칙보다 넓게): "I inserted…", "so I used…", "habe ich…"
+        if (!key.startsWith('<p>') && !key.includes('나요?')) {
+          if (code === 'en') expect(value, `${code}: ${key}`).not.toMatch(/\bI (ran|used|inserted|placed|added|need|needed|downloaded|encountered|created|wrote|removed|turned|have|will|am|couldn['’]t)\b/);
+          if (code === 'de') expect(value, `${code}: ${key}`).not.toMatch(/\b(ich|mich|mir|mein\w*)\b/i);
+        }
+        // 문자(TEXT 객체)를 글자(character·Zeichen·字符)로 옮기지 않는다 — 특수 문자·문자 수·이름에 쓸 수 없는 문자처럼 글자 뜻인 곳은 빼고
+        if (/^(문자 (각도|값|위치|옵션|찾기|축척|회전|선택:|설정|편집|분해|비교|재지정|자리맞추기|방향)|단일 행 문자|새 문자(?!열)|셀 문자|문자의 (시작점|중간|맨|첫 번째|회전)|문자 \{0\}개)/.test(key))
+          expect(value, `${code}: ${key}`).not.toMatch(/character|Zeichen|字符/i);
+        // 중국어 치수는 AutoCAD 중국어판처럼 标注(치수 객체·스타일·변수)·尺寸线(치수선)·尺寸界线(치수보조선)로 — 尺寸 단독·尺寸样式 섞임 금지
+        if (code === 'zh-CN' && key.includes('치수') && !/치수\(D\)|한계 치수/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/尺寸(?!线|界线)/);
+        if (code === 'zh-CN' && key.includes('치수보조선')) expect(value, `${code}: ${key}`).toMatch(/尺寸界线/);
+        // 끌 도면층 = 끌(끄다) 도면층, 끌다(drag)가 아니다
+        if (/^끌 도면층/.test(key)) expect(value, `${code}: ${key}`).not.toMatch(/drag|zieh|ドラッグ|拖/i);
+      }
+    expect(codes.map((code) => translate('표시하지만 플롯 안 함(D)', code))).toEqual(['Display but do not plot (D)', '表示するがプロットしない(D)', '显示但不打印(D)', 'Anzeigen, aber nicht plotten (D)']);
+    expect(codes.map((code) => translate('현재 제외', code))).toEqual(['Except current', '現在以外', '排除当前', 'Außer aktuellem']);
+    expect(translate('좌표나 값이 수가 아닙니다.', 'zh-CN')).toBe('坐标或值不是数字。');
+    expect(translate('직사각형이 너무 작아 모깎기하지 않았습니다.', 'de')).toBe('Das Rechteck ist zu klein zum Abrunden.');
+    // 이웃 줄의 머리를 삼키거나(Character alignment Find the character) 꼬리를 잃은(Grid) 번역
+    expect(['문자 정렬', '격자 X 간격', '바꾸기…'].map((key) => translate(key, 'en'))).toEqual(['Text alignment', 'Grid X spacing', 'Replace…']);
+    expect(['현재 도면층', '도면층 끄기', '새 도면층'].map((key) => translate(key, 'de'))).toEqual(['Aktueller Layer', 'Layer ausschalten', 'Neuer Layer']);
+    // 여러 앱이 같이 쓰는 방문 통계 동의 상자: 허용(쿠키 허락)은 공차(容差)가 아니고, 수집 안 함(하지 않겠다)은 未收集(아직 안 모음)이 아니다
+    expect(codes.map((code) => translate('허용', code))).toEqual(['Allow', '許可', '允许', 'Zulassen']);
+    expect(codes.map((code) => translate('수집 안 함', code))).toEqual(['Do not collect', '収集しない', '不收集', 'Nicht erfassen']);
+  });
   it('updates dynamic UI and switches languages without changing document data or listeners', async () => {
     const dom = new JSDOM('<!doctype html><html><head><title>OpenCAD</title></head><body><div id="app"><header class="titlebar"><button>열기</button><span class="docname">열기</span></header><canvas></canvas><div class="anno-layer">열기</div><input value="열기" placeholder="열기"><div contenteditable="true">열기</div><div translate="no">열기</div><p id="status">열기</p></div></body></html>', {url:'https://gyutae-kim.github.io/opencad-skp/en/?sample#view'});
     for (const name of ['window','document','Node','Element','HTMLAnchorElement','MutationObserver','location','history','localStorage','CustomEvent']) vi.stubGlobal(name,(dom.window as unknown as Record<string,unknown>)[name]);
