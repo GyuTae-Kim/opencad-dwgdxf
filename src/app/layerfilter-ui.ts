@@ -38,6 +38,7 @@ import {
 import { PickList, ensureLtStyle, guardKeys, wideDialog } from './layertools-ui';
 import { loadPref, savePref } from './util2-ui';
 import { pickColor } from './ui/colorpick';
+import { ft } from './filetext';
 import { type MenuItem, ask, h, showMenu } from './ui/dom';
 import { icon } from './ui/icons';
 
@@ -190,7 +191,9 @@ export function layerFilterPanel(app: App, refresh: () => void): LayerFilterPane
           else collapsed!.add(n.ref);
           refresh();
         });
-      const lbl = h('span', { class: 'lbl' }, n.label);
+      // 사용자 필터·외부 참조 이름은 도면 글(104차 — 옮기지 않는다). 모두·사용된 모든 도면층 같은 기본 노드는 앱 글
+      const fileNode = isUserRef(n.ref) || n.kind === 'xrefItem';
+      const lbl = h('span', { class: 'lbl', translate: fileNode ? 'no' : undefined }, n.label);
       const sel = n.ref === res.ref;
       const si = info.get(n.ref);
       const tag = si?.readOnly
@@ -200,7 +203,7 @@ export function layerFilterPanel(app: App, refresh: () => void): LayerFilterPane
           : null;
       const row = h(
         'div',
-        { class: `lf-node${sel ? ' sel' : ''}`, role: 'treeitem', 'aria-selected': sel ? 'true' : 'false', 'aria-expanded': n.children.length ? (closed ? 'false' : 'true') : undefined, style: `padding-left:${4 + depth * 14}px`, title: n.label },
+        { class: `lf-node${sel ? ' sel' : ''}`, role: 'treeitem', 'aria-selected': sel ? 'true' : 'false', 'aria-expanded': n.children.length ? (closed ? 'false' : 'true') : undefined, style: `padding-left:${4 + depth * 14}px`, title: fileNode ? ft(n.label) : n.label },
         tw,
         h('span', { class: 'ic', html: nodeIcon(n) }),
         lbl,
@@ -459,18 +462,19 @@ function previewTable(app: App, keys: ReadonlySet<string>, used: ReadonlySet<str
       'tr',
       {},
       h('td', {}, used.has(tableKey(l.name)) ? '사용 중' : ''),
-      h('td', {}, l.name),
+      // 이름·선종류·플롯 스타일·설명은 도면 글(104차 — 옮기지 않는다)
+      h('td', { translate: 'no' }, l.name),
       h('td', {}, onOff(!l.off, '켜기', '끄기')),
       h('td', {}, onOff(l.frozen, '동결', '')),
       h('td', {}, onOff(l.locked, '잠금', '')),
       h('td', {}, h('span', { class: 'sw', style: `background:${swatchCss(l.color)}` }), colorValueText(l.color)),
-      h('td', {}, l.linetype || 'Continuous'),
+      h('td', { translate: 'no' }, l.linetype || 'Continuous'),
       h('td', {}, lineweightText(l.lineweight)),
       h('td', {}, String(percentFromOpacity(l.transparency))),
-      h('td', {}, plotStyle(l)),
+      h('td', { translate: 'no' }, plotStyle(l)),
       h('td', {}, onOff(l.plot !== false, '플롯', '플롯 안 함')),
       h('td', {}, onOff((l.flags & 2) !== 0, '동결', '')),
-      h('td', {}, l.description ?? ''),
+      h('td', { translate: 'no' }, l.description ?? ''),
     ),
   );
   return h('table', { class: 'ltx-table' }, h('thead', {}, head), h('tbody', {}, ...rows));

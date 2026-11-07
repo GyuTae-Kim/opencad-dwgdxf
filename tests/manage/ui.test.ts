@@ -355,8 +355,8 @@ describe('페이지 설정 관리자 연기 시험', () => {
     expect(dlg().getAttribute('aria-label')).toBe('페이지 설정 관리자');
     const items = namedPageSetups(h.doc).items;
     expect(items.map((x) => [x.name, x.model])).toEqual([['A1 출력', true]]);
-    // 목록에서 골라 현재로 설정
-    const rowEl = [...dlg().querySelectorAll('tbody tr')].find((tr) => tr.textContent === 'A1 출력') as HTMLElement;
+    // 목록에서 골라 현재로 설정(이름은 도면 글 표시 ft — U+2068·U+2069로 감싸 있다, 104차)
+    const rowEl = [...dlg().querySelectorAll('tbody tr')].find((tr) => tr.textContent?.replace(/[⁨⁩]/g, '') === 'A1 출력') as HTMLElement;
     rowEl.click();
     button('현재로 설정(S)').click();
     await tick();

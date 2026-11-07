@@ -19,6 +19,7 @@ import { layerFilterPanel } from '../layerfilter-ui';
 import { isTextEditable } from '../textedit/entity';
 import { findPanel, newFindState, tableCellGroup } from '../textedit/palette';
 import { cellSelectionGroup } from '../tablecell-palette';
+import { ft } from '../filetext';
 
 type Tab = 'props' | 'layers' | 'dims' | 'find';
 
@@ -261,13 +262,15 @@ export class Palette {
     const st = this.app.active!;
     const { value, varies } = commonValue(f, sel, st.doc);
     const id = `pf-${f.label}`;
+    // 속성 태그처럼 도면에서 온 이름표는 옮기지 않는다(104차)
+    const aria = f.fileLabel ? ft(f.label) : f.label;
     let ctl: HTMLElement;
     switch (f.kind) {
       case 'select': {
         const opts = f.options?.(st.doc) ?? [];
         const sv = value === undefined ? '' : String(value);
         if (!varies && sv && !opts.some((o) => o.value.toUpperCase() === sv.toUpperCase())) opts.unshift({ value: sv, label: sv });
-        const el = h('select', { 'data-field': id, 'aria-label': f.label }, ...(varies ? [h('option', { value: '' }, '*여러 개*')] : []), ...opts.map((o) => h('option', { value: o.value }, o.label)));
+        const el = h('select', { 'data-field': id, 'aria-label': aria }, ...(varies ? [h('option', { value: '' }, '*여러 개*')] : []), ...opts.map((o) => h('option', { value: o.value }, o.label)));
         const match = opts.find((o) => o.value.toUpperCase() === sv.toUpperCase());
         el.value = varies ? '' : (match?.value ?? sv);
         el.addEventListener('change', () => {
@@ -277,7 +280,7 @@ export class Palette {
         break;
       }
       case 'bool': {
-        const el = h('select', { 'data-field': id, 'aria-label': f.label }, ...(varies ? [h('option', { value: '' }, '*여러 개*')] : []), h('option', { value: '1' }, '예'), h('option', { value: '0' }, '아니오'));
+        const el = h('select', { 'data-field': id, 'aria-label': aria }, ...(varies ? [h('option', { value: '' }, '*여러 개*')] : []), h('option', { value: '1' }, '예'), h('option', { value: '0' }, '아니오'));
         el.value = varies ? '' : value ? '1' : '0';
         el.addEventListener('change', () => {
           if (el.value !== '') commit(el.value === '1');
@@ -290,7 +293,7 @@ export class Palette {
         const rgb = c ? (c.rgb !== undefined && c.aci !== 0 && c.aci !== 256 ? c.rgb : c.aci > 0 && c.aci < 256 ? aciToRgb(c.aci, true) : null) : null;
         const el = h(
           'button',
-          { class: 'prop-color', 'data-field': id, 'aria-label': f.label },
+          { class: 'prop-color', 'data-field': id, 'aria-label': aria },
           h('span', { class: 'swatch', style: rgb === null ? 'background:transparent' : `background:${rgbToCss(rgb)}` }),
           varies ? '*여러 개*' : c ? colorText(c) : '',
         );
@@ -302,14 +305,14 @@ export class Palette {
         break;
       }
       case 'multiline': {
-        const el = h('textarea', { 'data-field': id, rows: 3, 'aria-label': f.label, placeholder: varies ? '*여러 개*' : '' }) as HTMLTextAreaElement;
+        const el = h('textarea', { 'data-field': id, rows: 3, 'aria-label': aria, placeholder: varies ? '*여러 개*' : '' }) as HTMLTextAreaElement;
         el.value = varies ? '' : String(value ?? '');
         el.addEventListener('change', () => commit(el.value));
         ctl = el;
         break;
       }
       default: {
-        const el = h('input', { 'data-field': id, 'aria-label': f.label, placeholder: varies ? '*여러 개*' : '', readonly: !!f.readonly }) as HTMLInputElement;
+        const el = h('input', { 'data-field': id, 'aria-label': aria, placeholder: varies ? '*여러 개*' : '', readonly: !!f.readonly }) as HTMLInputElement;
         el.value = varies ? '' : formatValue(f, value, st.units);
         if (f.readonly) {
           ctl = el;
@@ -327,7 +330,7 @@ export class Palette {
           if (el.value === orig || (varies && !el.value.trim())) return;
           const r = parseValue(f, el.value, st.units);
           if ('error' in r) {
-            this.app.cmd.print(`${f.label}: ${r.error}`, 'err');
+            this.app.cmd.print(`${aria}: ${r.error}`, 'err');
             el.value = orig;
             return;
           }
@@ -336,7 +339,7 @@ export class Palette {
         ctl = el;
       }
     }
-    return h('label', { class: 'prop-row edit' }, h('span', { class: 'k' }, f.label), ctl);
+    return h('label', { class: 'prop-row edit' }, h('span', { class: 'k', translate: f.fileLabel ? 'no' : undefined }, f.label), ctl);
   }
 
   /** 문자 편집 단추(제자리 편집기로 TEXTEDIT) */
@@ -349,13 +352,14 @@ export class Palette {
     return h('div', { class: 'prop-group', style: 'display:flex;justify-content:flex-end;padding:4px 8px' }, b);
   }
 
-  private group(title: string, rows: { k: string; v: string }[]): void {
+  private group(title: string, rows: { k: string; v: string; file?: boolean }[]): void {
     this.body.append(
       h(
         'div',
         { class: 'prop-group' },
         h('h4', {}, title),
-        ...rows.map((r) => h('div', { class: 'prop-row' }, h('span', { class: 'k' }, r.k), h('span', { class: 'v', title: r.v }, r.v))),
+        // 도면에서 온 값(도면층·스타일·블록 이름, 문자 내용 등)은 옮기지 않는다(104차)
+        ...rows.map((r) => h('div', { class: 'prop-row' }, h('span', { class: 'k' }, r.k), h('span', { class: 'v', title: r.v, translate: r.file ? 'no' : undefined }, r.v))),
       ),
     );
   }
@@ -402,7 +406,7 @@ export class Palette {
     for (const [k, lay] of rows) {
       const color = lay.color.rgb !== undefined ? lay.color.rgb : aciToRgb(lay.color.aci, true);
       const tog = (ic: string, title: string, off: boolean, patch: LayerPatch) => {
-        const b = h('button', { class: `toggle ${off ? 'off' : ''}`, title, 'aria-label': `${lay.name} ${title}`, html: icon(ic) });
+        const b = h('button', { class: `toggle ${off ? 'off' : ''}`, title, 'aria-label': `${ft(lay.name)} ${title}`, html: icon(ic) });
         b.addEventListener('click', (ev) => {
           ev.stopPropagation();
           if (patch.frozen && k === clayer) {
@@ -413,16 +417,16 @@ export class Palette {
         });
         return b;
       };
-      const sw = h('button', { class: 'toggle', title: `색: ${colorText(lay.color)}`, 'aria-label': `${lay.name} 색 바꾸기` }, h('span', { class: 'swatch', style: `background:${rgbToCss(color)}` }));
+      const sw = h('button', { class: 'toggle', title: `색: ${colorText(lay.color)}`, 'aria-label': `${ft(lay.name)} 색 바꾸기` },h('span', { class: 'swatch', style: `background:${rgbToCss(color)}` }));
       sw.addEventListener('click', async (ev) => {
         ev.stopPropagation();
         const c = await pickColor(lay.color);
         if (c) patchLayers(app, 'LAYER', [[lay.name, { color: c }]]);
       });
-      const lt = h('select', { class: 'cell-select', 'aria-label': `${lay.name} 선종류` }, ...[...st.doc.linetypes.values()].filter((l) => !/^by(layer|block)$/i.test(l.name)).map((l) => h('option', { value: l.name }, l.name)));
+      const lt = h('select', { class: 'cell-select', 'aria-label': `${ft(lay.name)} 선종류` },...[...st.doc.linetypes.values()].filter((l) => !/^by(layer|block)$/i.test(l.name)).map((l) => h('option', { value: l.name }, l.name)));
       lt.value = [...st.doc.linetypes.values()].find((l) => tableKey(l.name) === tableKey(lay.linetype))?.name ?? lay.linetype;
       lt.addEventListener('change', () => patchLayers(app, 'LAYER', [[lay.name, { linetype: lt.value }]]));
-      const lw = h('select', { class: 'cell-select', 'aria-label': `${lay.name} 선가중치` }, h('option', { value: '-3' }, '기본값'), ...LINEWEIGHTS.map((w) => h('option', { value: String(w) }, lineweightText(w))));
+      const lw = h('select', { class: 'cell-select', 'aria-label': `${ft(lay.name)} 선가중치` },h('option', { value: '-3' }, '기본값'), ...LINEWEIGHTS.map((w) => h('option', { value: String(w) }, lineweightText(w))));
       lw.value = String(lay.lineweight);
       lw.addEventListener('change', () => patchLayers(app, 'LAYER', [[lay.name, { lineweight: Number(lw.value) }]]));
       const nameCell = h('td', { class: 'layer-name', title: `${lay.name}${lay.description ? ` — ${lay.description}` : ''}` }, lay.name);
@@ -577,7 +581,7 @@ export class Palette {
         'tr',
         { class: 'clickable', title: '눌러서 이동' },
         h('td', {}, dimTypeName(r.e)),
-        h('td', { style: 'max-width:110px;overflow:hidden;text-overflow:ellipsis' }, r.text || '(숨김)'),
+        h('td', { style: 'max-width:110px;overflow:hidden;text-overflow:ellipsis', translate: r.text ? 'no' : undefined }, r.text || '(숨김)'),
         h('td', { style: 'font-family:var(--mono);color:var(--text-dim)' }, r.value),
         h('td', {}, r.match === false ? h('span', { class: 'chip warn', title: '표시 문자가 실제 측정값과 다릅니다' }, '다름') : r.match ? '✓' : '-'),
       );

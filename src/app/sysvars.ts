@@ -579,6 +579,8 @@ async function sysvdlg(app: App, ctx: CommandContext): Promise<void> {
   const srcLabel: Record<SysvarSource, string> = { session: '세션', browser: '이 브라우저', header: '도면' };
   const list = pickList<SysvarInfo>(['이름', '값', '저장 위치', '설명'], (r) => [r.name, sysvarText(r.value, r.kind), srcLabel[r.source], r.desc], {
     height: 320,
+    // 값(CLAYER·TEXTSTYLE처럼 도면 이름이 든 변수)은 옮기지 않는다(104차)
+    fileCols: [0, 1],
     rowClass: (r) => (r.readOnly ? 'ro' : ''),
     onPick: (r) => {
       err.textContent = '';

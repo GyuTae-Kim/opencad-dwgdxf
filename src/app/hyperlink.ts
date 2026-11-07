@@ -10,6 +10,7 @@ import type { EditOp } from '../edit/session';
 import type { App, CommandContext } from './app';
 import { unlockedOnly } from './layers';
 import { form, toast } from './ui/dom';
+import { ft } from './filetext';
 import { restore } from './viewcmds';
 
 const PREF = 'opencad.hyperlinkoptions';
@@ -75,7 +76,8 @@ export function registerHyperlinkCommands(app: App): void {
     if (!showTips()) return null;
     const e = app.active?.doc.entityIndex.get(h);
     const l = e ? readHyperlink(e) : null;
-    return l ? `${hyperlinkLabel(l)}\nCtrl+클릭하면 링크를 엽니다.` : null;
+    // 링크 설명·주소는 도면 글(104차 — 풍선말 번역이 옮기지 않는다)
+    return l ? `${ft(hyperlinkLabel(l))}\nCtrl+클릭하면 링크를 엽니다.` : null;
   };
   app.linkClick = (h) => {
     const e = app.active?.doc.entityIndex.get(h);
@@ -104,7 +106,7 @@ export function registerHyperlinkCommands(app: App): void {
           label: '이 도면의 뷰',
           type: 'select',
           value: first?.location ?? '',
-          options: [{ value: '', label: '(없음)' }, ...views.map((n) => ({ value: n, label: n })), ...st.layouts.filter((l) => !/^\*MODEL_SPACE$/i.test(l.blockName)).map((l) => ({ value: l.name, label: `배치: ${l.name}` }))],
+          options: [{ value: '', label: '(없음)' }, ...views.map((n) => ({ value: n, label: n })), ...st.layouts.filter((l) => !/^\*MODEL_SPACE$/i.test(l.blockName)).map((l) => ({ value: l.name, label: `배치: ${ft(l.name)}` }))],
         },
         { key: 'remove', label: '링크 제거', type: 'check', value: false },
       ]);

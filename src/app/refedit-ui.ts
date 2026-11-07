@@ -6,6 +6,7 @@ import { uiText } from './i18n-text';
 import type { App } from './app';
 import type { OverlayGeom } from './view';
 import { dialog, h } from './ui/dom';
+import { ft } from './filetext';
 
 const STYLE = `
 .re-dlg{display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -172,7 +173,7 @@ export function refEditDialog(levels: readonly LevelView[], settings: RefEditSet
         b.setAttribute('aria-selected', String(k === i));
       });
       const l = levels[i]!;
-      path.textContent = l.kind === 'xref' ? `경로: ${l.path || '(없음)'}` : '';
+      path.textContent = l.kind === 'xref' ? `경로: ${l.path ? ft(l.path) : '(없음)'}` : '';
       msg.textContent = l.problem ?? '';
       requestAnimationFrame(() => drawPreview(cv, l.problem ? null : l.preview()));
     };
@@ -181,7 +182,8 @@ export function refEditDialog(levels: readonly LevelView[], settings: RefEditSet
         'button',
         { type: 'button', role: 'treeitem', class: l.problem ? 'bad' : '', title: l.problem ?? '', style: `padding-left:${8 + l.depth * 16}px` },
         l.depth ? '└ ' : '',
-        l.label,
+        // 블록·외부 참조 이름은 도면 글(104차 — 옮기지 않는다)
+        h('span', { translate: 'no' }, l.label),
         h('span', { class: 'k' }, l.kind === 'xref' && l.depth === 0 ? '외부 참조' : l.kind === 'xref' ? '외부 참조 안 블록' : '블록'),
       ) as HTMLButtonElement;
       b.addEventListener('click', () => pick(i));
@@ -287,7 +289,7 @@ export class RefEditBar {
   }
 
   set(name: string, count: number, visible: boolean): void {
-    this.title.replaceChildren('참조 편집: ', h('b', {}, name), ` · 작업 세트 ${count}개`);
+    this.title.replaceChildren('참조 편집: ', h('b', { translate: 'no' }, name), ` · 작업 세트 ${count}개`);
     this.el.hidden = !visible;
   }
 

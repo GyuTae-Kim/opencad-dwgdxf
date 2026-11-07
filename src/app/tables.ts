@@ -60,7 +60,7 @@ export function registerTableCommands(app: App): void {
         const box = h('input', { type: 'checkbox', disabled: loaded.has(tableKey(d.name)) }) as HTMLInputElement;
         box.checked = loaded.has(tableKey(d.name));
         checks.push({ name: d.name, box });
-        list.append(h('label', { class: 'lt-row' }, box, h('b', {}, d.name), h('span', {}, d.description)));
+        list.append(h('label', { class: 'lt-row' }, box, h('b', { translate: 'no' }, d.name), h('span', { translate: 'no' }, d.description)));
       }
       const cur = String(st.doc.header.get('$CELTYPE') ?? 'ByLayer');
       const sel = h('select', {}, h('option', { value: 'ByLayer' }, 'ByLayer'), h('option', { value: 'ByBlock' }, 'ByBlock'), ...[...st.doc.linetypes.values()].filter((l) => !/^by(layer|block)$/i.test(l.name)).map((l) => h('option', { value: l.name }, l.name))) as HTMLSelectElement;

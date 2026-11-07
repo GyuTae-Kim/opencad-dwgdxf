@@ -16,6 +16,7 @@ import type { App, CommandContext } from '../app';
 import { commitResults } from '../modify';
 import { commitTable } from '../tablecmds';
 import { detachedContext } from './entity';
+import { ft } from '../filetext';
 
 export type FindKind = 'text' | 'attrib' | 'dim' | 'table' | 'mleader';
 
@@ -105,7 +106,7 @@ export function findTargets(app: App, q: FindQuery): FindTarget[] {
           e.attribs.forEach((a, i) => {
             if (a.attFlags & 1) return;
             const mt = !!a.mtext;
-            push({ handle: e.handle, space, kind: 'attrib', label: `속성 ${a.tag}`, attrib: i, field: fieldTemplate(a) !== null, locked: locked(e) }, mt ? a.mtext!.text : a.text, mt ? 'mtext' : 'text');
+            push({ handle: e.handle, space, kind: 'attrib', label: `속성 ${ft(a.tag)}`, attrib: i, field: fieldTemplate(a) !== null, locked: locked(e) }, mt ? a.mtext!.text : a.text, mt ? 'mtext' : 'text');
           });
         if (q.kinds.has('table') && isEditableTable(e)) pushTable(e);
         break;

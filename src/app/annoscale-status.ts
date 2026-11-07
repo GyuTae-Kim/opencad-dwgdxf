@@ -25,6 +25,7 @@ import {
   watchAnnoDisplay,
 } from './annoscale-core';
 import { type MenuItem, h, showMenu } from './ui/dom';
+import { ft } from './filetext';
 
 const S = (body: string) =>
   `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
@@ -86,7 +87,7 @@ export function annoStatus(app: App): AnnoStatus {
     const items: MenuItem[] = [{ heading: sh.where === 'viewport' ? '뷰포트 주석 축척' : '주석 축척' }];
     for (const s of listedScales(sh.list)) {
       items.push({
-        label: `${s.name.toUpperCase() === cur ? '✓ ' : ' '}${pct ? percentText(s) : s.name}`,
+        label: `${s.name.toUpperCase() === cur ? '✓ ' : ' '}${pct ? percentText(s) : ft(s.name)}`,
         disabled: sh.locked,
         run: () => {
           chooseScale(app, s.name, newGroup());
@@ -148,14 +149,14 @@ export function annoStatus(app: App): AnnoStatus {
       return;
     }
     const s = sh.scale;
-    label.textContent = s ? (percentScales() ? percentText(s) : s.name) : '1:1';
+    label.textContent = s ? (percentScales() ? percentText(s) : ft(s.name)) : '1:1';
     scaleBtn.disabled = sh.where === 'paper';
     scaleBtn.title =
       sh.where === 'paper'
         ? '주석 축척: 도면 공간의 주석 축척은 1:1입니다'
         : sh.where === 'viewport'
-          ? `뷰포트 주석 축척: ${s?.name ?? ''}${sh.locked ? ' (잠긴 뷰포트)' : ''}`
-          : `주석 축척(CANNOSCALE): ${s?.name ?? ''}`;
+          ? `뷰포트 주석 축척: ${ft(s?.name ?? '')}${sh.locked ? ' (잠긴 뷰포트)' : ''}`
+          : `주석 축척(CANNOSCALE): ${ft(s?.name ?? '')}`;
     visBtn.classList.toggle('on', tabAllVisible(st!));
     autoBtn.classList.toggle('on', annoAutoscale() > 0);
     syncBtn.hidden = !(sh.where === 'viewport' && sh.synced === false && !sh.locked);

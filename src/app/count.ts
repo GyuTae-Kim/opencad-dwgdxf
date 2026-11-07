@@ -72,7 +72,7 @@ export function registerCountCommands(app: App): void {
             'tbody',
             {},
             ...rows.map((r) => {
-              const tr = h('tr', { style: 'cursor:pointer', title: '누르면 이 블록의 참조를 고르고 확대합니다' }, h('td', {}, r.name), h('td', { style: 'text-align:right' }, String(r.count)));
+              const tr = h('tr', { style: 'cursor:pointer', title: '누르면 이 블록의 참조를 고르고 확대합니다' }, h('td', { translate: 'no' }, r.name), h('td', { style: 'text-align:right' }, String(r.count)));
               tr.addEventListener('click', () => {
                 const hs = r.handles;
                 app.setSelection(hs, 'replace');

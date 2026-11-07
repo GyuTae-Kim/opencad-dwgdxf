@@ -8,6 +8,7 @@
 import { lispUnclosed } from '../edit/lisp/reader';
 import type { MeasureResult } from './measure-result';
 import { type AngleConvention, fromDrawingAngle } from './polar';
+import { unmark } from './filetext';
 export interface Suggestion {
   name: string;
   title: string;
@@ -104,7 +105,7 @@ export class CommandLine {
 
   /** 기록 전체(기록 복사) */
   historyText(): string {
-    return [...this.hist.children].map((c) => c.textContent ?? '').join('\n');
+    return [...this.hist.children].map((c) => unmark(c.textContent ?? '')).join('\n');
   }
 
   /** 기록에서 고른 글(없으면 빈 글) */
@@ -153,10 +154,14 @@ export class CommandLine {
 
   private promptText = '';
 
-  /** 기록에 한 줄. measure는 지켜보는 쪽에만 넘기고 기록 글은 그대로다 */
+  /**
+   * 기록에 한 줄. measure는 지켜보는 쪽에만 넘기고 기록 글은 그대로다.
+   * text의 도면 글 표시(ft — filetext.ts)는 기록 줄에만 남겨 화면 번역층이 지키게 하고, 지켜보는 쪽에는 뺀 글을 준다
+   */
   print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void {
-    this.onPrint?.(text, cls);
-    for (const w of this.watchers) w.print?.(text, cls, measure);
+    const plain = unmark(text);
+    this.onPrint?.(plain, cls);
+    for (const w of this.watchers) w.print?.(plain, cls, measure);
     const div = document.createElement('div');
     if (cls) div.className = cls;
     div.textContent = text;
@@ -167,8 +172,8 @@ export class CommandLine {
 
   /** "점 지정 또는 [윈도우(W)/이전(P)] <범위>:" 형식. 대괄호 안 키워드는 눌러서 고를 수 있다 */
   setPrompt(text: string): void {
-    this.promptText = text;
-    for (const w of this.watchers) w.prompt?.(text);
+    this.promptText = unmark(text);
+    for (const w of this.watchers) w.prompt?.(this.promptText);
     this.promptEl.textContent = '';
     if (!text) {
       this.promptEl.hidden = true;

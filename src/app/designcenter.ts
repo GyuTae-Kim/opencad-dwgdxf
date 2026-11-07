@@ -24,6 +24,7 @@ import { Ghost } from './modify';
 import type { Affine } from './modify';
 import { form, h, showMenu } from './ui/dom';
 import { icon } from './ui/icons';
+import { ft } from './filetext';
 
 const STYLE = `
 .dc-panel{position:fixed;right:12px;top:120px;width:min(700px,calc(100vw - 24px));height:min(480px,calc(100vh - 140px));z-index:60;display:flex;flex-direction:column;
@@ -270,7 +271,7 @@ class DesignCenter {
     for (const s of sources) {
       const open = this.expanded.has(s.key);
       const active = s.open && this.app.active?.doc === s.doc;
-      const n = h('div', { class: 'n', role: 'treeitem', 'aria-expanded': open ? 'true' : 'false', title: s.label }, h('span', { class: 'tw' }, open ? '▾' : '▸'), h('span', {}, `${s.label}${active ? ' (현재)' : ''}`));
+      const n = h('div', { class: 'n', role: 'treeitem', 'aria-expanded': open ? 'true' : 'false', title: ft(s.label) }, h('span', { class: 'tw' }, open ? '▾' : '▸'), h('span', {}, `${ft(s.label)}${active ? ' (현재)' : ''}`));
       n.addEventListener('click', () => {
         if (open) this.expanded.delete(s.key);
         else this.expanded.add(s.key);
@@ -322,10 +323,10 @@ class DesignCenter {
       let el: HTMLElement;
       if (kind === 'block') {
         const cv = h('canvas', {}) as HTMLCanvasElement;
-        el = h('div', { class: `dc-item${this.sel.has(name) ? ' sel' : ''}`, role: 'option', title: name }, cv, h('span', { translate: 'no' }, name));
+        el = h('div', { class: `dc-item${this.sel.has(name) ? ' sel' : ''}`, role: 'option', title: ft(name) }, cv, h('span', { translate: 'no' }, name));
         pendingThumbs.push([cv, name]);
       } else {
-        el = h('div', { class: `dc-row${this.sel.has(name) ? ' sel' : ''}`, role: 'option', title: name }, ...this.rowParts(s.doc, kind, name));
+        el = h('div', { class: `dc-row${this.sel.has(name) ? ' sel' : ''}`, role: 'option', title: ft(name) }, ...this.rowParts(s.doc, kind, name));
       }
       el.addEventListener('mousedown', (ev) => {
         if (ev.button === 2 && this.sel.has(name)) return;
@@ -369,25 +370,25 @@ class DesignCenter {
         const b = doc.blocks.get(k);
         if (!b) return '';
         const att = b.entities.filter((e) => e.type === 'ATTDEF').length;
-        return `${b.description ? `${b.description} · ` : ''}객체 ${b.entities.length}개${att ? `, 속성 ${att}개` : ''} · 기준점 ${b.basePoint.x.toFixed(2)}, ${b.basePoint.y.toFixed(2)}`;
+        return `${b.description ? `${ft(b.description)} · ` : ''}객체 ${b.entities.length}개${att ? `, 속성 ${att}개` : ''} · 기준점 ${b.basePoint.x.toFixed(2)}, ${b.basePoint.y.toFixed(2)}`;
       }
       case 'layer': {
         const l = doc.layers.get(k);
-        return l ? `${colorLabel(l.color)} · ${l.linetype} · ${lineweightLabel(l.lineweight)}${!short && l.description ? ` · ${l.description}` : ''}` : '';
+        return l ? `${colorLabel(l.color)} · ${ft(l.linetype)} · ${lineweightLabel(l.lineweight)}${!short && l.description ? ` · ${ft(l.description)}` : ''}` : '';
       }
       case 'linetype': {
         const l = doc.linetypes.get(k);
-        return l?.description ?? '';
+        return l?.description ? ft(l.description) : '';
       }
       case 'textStyle': {
         const s = doc.textStyles.get(k);
-        return s ? `${s.fontFamily || s.font || ''}${s.bigFont ? ` + ${s.bigFont}` : ''}${s.height ? ` · 높이 ${s.height}` : ''}` : '';
+        return s ? `${ft(s.fontFamily || s.font || '')}${s.bigFont ? ` + ${ft(s.bigFont)}` : ''}${s.height ? ` · 높이 ${s.height}` : ''}` : '';
       }
       case 'dimStyle': {
         const s = doc.dimStyles.get(k);
         if (!s) return '';
         const v = s.vars;
-        return `DIMSCALE ${v.DIMSCALE ?? 1} · DIMTXT ${v.DIMTXT ?? '-'} · DIMASZ ${v.DIMASZ ?? '-'}${v.DIMTXSTY ? ` · ${v.DIMTXSTY}` : ''}`;
+        return `DIMSCALE ${v.DIMSCALE ?? 1} · DIMTXT ${v.DIMTXT ?? '-'} · DIMASZ ${v.DIMASZ ?? '-'}${v.DIMTXSTY ? ` · ${ft(String(v.DIMTXSTY))}` : ''}`;
       }
       case 'mleaderStyle': {
         const s = mleaderStyles(doc).find((x) => tableKey(x.name) === k)?.obj;
@@ -395,13 +396,13 @@ class DesignCenter {
       }
       case 'tableStyle': {
         const s = listTableStyles(doc).find((x) => tableKey(x.name) === k)?.style;
-        return s ? `${s.description || ''}${s.description ? ' · ' : ''}데이터 문자 ${s.cells.data.textStyle} ${s.cells.data.height}` : '';
+        return s ? `${s.description ? `${ft(s.description)} · ` : ''}데이터 문자 ${ft(s.cells.data.textStyle)} ${s.cells.data.height}` : '';
       }
       case 'layout': {
         const l = doc.layouts.find((x) => tableKey(x.name) === k);
         if (!l) return '';
         const n = doc.blocks.get(tableKey(l.blockName))?.entities.length ?? 0;
-        return `${l.plot.paperName || '용지'} ${l.plot.paperWidth}×${l.plot.paperHeight} mm · 객체 ${n}개`;
+        return `${l.plot.paperName ? ft(l.plot.paperName) : '용지'} ${l.plot.paperWidth}×${l.plot.paperHeight} mm · 객체 ${n}개`;
       }
     }
   }
@@ -432,10 +433,10 @@ class DesignCenter {
     const one = this.sel.size === 1 ? [...this.sel][0]! : null;
     if (s && kind === 'block' && one) drawGeometry(this.previewCanvas, blockGeometry(this.app, s.doc, one), textColor());
     else drawGeometry(this.previewCanvas, null, textColor());
-    this.descEl.textContent = s && kind && one ? `${one}\n${this.describe(s.doc, kind, one)}` : s && kind ? `${s.label} — ${DEF_KIND_LABEL[kind]} ${this.items.length}개` : '';
+    this.descEl.textContent = s && kind && one ? `${ft(one)}\n${this.describe(s.doc, kind, one)}` : s && kind ? `${ft(s.label)} — ${DEF_KIND_LABEL[kind]} ${this.items.length}개` : '';
     this.descEl.style.whiteSpace = 'pre-line';
     const target = this.app.active;
-    this.statusEl.textContent = !target ? '항목을 넣을 도면을 먼저 여십시오.' : this.sel.size ? `${this.sel.size}개 선택 → ${target.name}` : '항목을 고르십시오(Ctrl·Shift로 여러 개, 더블클릭으로 바로 추가).';
+    this.statusEl.textContent = !target ? '항목을 넣을 도면을 먼저 여십시오.' : this.sel.size ? `${this.sel.size}개 선택 → ${ft(target.name)}` :'항목을 고르십시오(Ctrl·Shift로 여러 개, 더블클릭으로 바로 추가).';
     this.addBtn.disabled = !target || !this.sel.size;
     this.insertBtn.hidden = kind !== 'block';
     this.insertBtn.disabled = !target || this.sel.size !== 1;

@@ -12,6 +12,7 @@ import { pickFiles } from './drawingfiles';
 import { download } from './export';
 import { registerPlotStampCommand } from './filecmds-stamp';
 import { ask, form } from './ui/dom';
+import { ft } from './filetext';
 
 /** 지금 공간(모형 또는 배치)의 플롯 스타일 표 이름 */
 function currentSheet(st: DocState): string {
@@ -89,7 +90,7 @@ export function registerFilePlotCommands(app: App, reg: (c: Command) => void): v
             options: [
               { value: 'file', label: 'CTB 파일 고르기…' },
               ...STANDARD_CTBS.map((n) => ({ value: `std:${n}`, label: `${n} (기본 표)` })),
-              ...loaded.map((t) => ({ value: `ctb:${t.name}`, label: `${t.name} (불러온 표)` })),
+              ...loaded.map((t) => ({ value: `ctb:${t.name}`, label: `${ft(t.name)} (불러온 표)` })),
             ],
           },
           { key: 'name', label: '새 STB 이름(비우면 같은 이름)', type: 'text', value: '' },
@@ -190,10 +191,10 @@ export function registerFilePlotCommands(app: App, reg: (c: Command) => void): v
           type: 'select',
           value: ctbByName(same)?.named ? same : '',
           options: [
-            { value: '', label: same ? `같은 이름(${same})` : '없음(배치 설정 그대로)' },
+            { value: '', label: same ? `같은 이름(${ft(same)})` : '없음(배치 설정 그대로)' },
             ...ctbList()
               .filter((t) => t.named)
-              .map((t) => ({ value: t.name, label: `${t.name} (불러온 표)` })),
+              .map((t) => ({ value: t.name, label: `${ft(t.name)} (불러온 표)` })),
             { value: 'load', label: 'STB 파일 불러오기…' },
           ],
         },

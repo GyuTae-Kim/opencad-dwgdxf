@@ -13,6 +13,7 @@ import { type ContextMenuItem, addHook } from './hooks';
 import type { Pt } from './view';
 import { currentProps } from './draw';
 import { dialog, form, h } from './ui/dom';
+import { ft } from './filetext';
 import { type CellKind, type TableStyle, type TableStyleEntry, ALIGN_LABEL, KIND_LABEL, cloneTableStyle, currentTableStyle, defaultTableStyle, isMetric, listTableStyles } from '../edit/table/style';
 import {
   type MergeMode,
@@ -1161,9 +1162,9 @@ export function registerTableEditCommands(app: App): void {
           // Standard가 없는 도면(다른 프로그램이 만든 파일): 기본값으로 보이고, 수정하면 만든다
           if (!entries.some((e) => tableKey(e.name) === 'STANDARD')) entries.unshift({ name: 'Standard', handle: '', obj: { type: 'TABLESTYLE', handle: '' }, style: defaultTableStyle(isMetric(st.doc)) });
           const cur = currentTableStyle(st.doc);
-          curLine.textContent = `현재 테이블 스타일: ${cur?.name ?? 'Standard'}`;
+          curLine.textContent = `현재 테이블 스타일: ${ft(cur?.name ?? 'Standard')}`;
           list.innerHTML = '';
-          for (const e of entries) list.append(h('option', { value: e.handle }, e.name + (tablesUsingStyle(st.doc, e.handle).length ? ' (사용 중)' : '')));
+          for (const e of entries) list.append(h('option', { value: e.handle }, ft(e.name) + (tablesUsingStyle(st.doc, e.handle).length ? ' (사용 중)' : '')));
           list.value = keep && entries.some((e) => e.handle === keep) ? keep : (cur?.handle ?? entries[0]?.handle ?? '');
           show();
         };

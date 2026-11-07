@@ -10,6 +10,7 @@ import { compareRgb } from './compare-session';
 import type { CompareSettings } from '../edit/compare/settings';
 import { compareSettings, getCompareVar, setCompareVars } from './compare-vars';
 import { formatCompareColor } from '../edit/compare/settings';
+import { ft } from './filetext';
 
 const STYLE = `
 .cmp-bar{position:absolute;top:6px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:2px 4px;
@@ -280,10 +281,11 @@ export function chooseDrawing(current: DocState, others: DocState[]): Promise<Do
         r.checked = i === 0;
         r.addEventListener('change', () => (picked = d));
         r.addEventListener('keydown', (ev) => ev.stopPropagation());
-        return h('label', {}, r, d.name);
+        // 도면 파일 이름은 옮기지 않는다(104차)
+        return h('label', {}, r, h('span', { translate: 'no' }, d.name));
       }),
     );
-    const body = h('div', {}, h('div', {}, `현재 도면 "${current.name}"과(와) 비교할 도면을 고르십시오.`), list);
+    const body = h('div', {}, h('div', {}, `현재 도면 "${ft(current.name)}"과(와) 비교할 도면을 고르십시오.`), list);
     const back = dialog('DWG 비교', body, [
       { label: '찾아보기(B)...', run: () => void (result = 'browse') },
       { label: '취소' },
@@ -318,7 +320,8 @@ export function showInfo(rows: ([string, string] | [string])[]): Promise<'insert
     const table = h(
       'table',
       { class: 'cmp-info' },
-      ...rows.map((r) => (r.length === 1 ? h('tr', {}, h('th', { colspan: 2 }, r[0])) : h('tr', {}, h('td', {}, r[0]), h('td', {}, r[1])))),
+      // 도면 파일 이름·저장한 사람은 도면 글(104차 — 옮기지 않는다)
+      ...rows.map((r) => (r.length === 1 ? h('tr', {}, h('th', { colspan: 2 }, r[0])) : h('tr', {}, h('td', {}, r[0]), h('td', { translate: r[0] === '이름' || r[0] === '저장한 사람' ? 'no' : undefined }, r[1])))),
     );
     const back = dialog('도면 비교 정보', table, [
       { label: '도면에 삽입(I)', run: () => void (result = 'insert') },

@@ -22,6 +22,7 @@ import { installFileRegistry, sessionFile } from './sessionfiles';
 import { usedShxFonts } from './shxfonts';
 import { loadFonts } from './fontstore';
 import { dialog, formatBytes, h } from './ui/dom';
+import { ft } from './filetext';
 
 type XrefFile = NonNullable<ReturnType<typeof xrefOfDoc>>;
 
@@ -309,9 +310,10 @@ function transmitDialog(st: DocState, sources: Source[], settings: TransmitSetti
       tree.append(
         h(
           'label',
-          { class: it.found || it.owner === null ? '' : 'miss', style: `padding-left:${8 + it.depth * 16}px`, title: it.path ? `저장된 경로: ${it.path}` : '' },
+          // 파일 이름·경로는 도면 글(104차 — 옮기지 않는다)
+          { class: it.found || it.owner === null ? '' : 'miss', style: `padding-left:${8 + it.depth * 16}px`, title: it.path ? `저장된 경로: ${ft(it.path)}` : '' },
           cb,
-          it.name,
+          h('span', { translate: 'no' }, it.name),
           h('span', { class: 'k' }, it.owner === null ? '' : `${kindLabel(it.kind)}${it.note ? ` · ${it.note}` : ''}`),
           h('span', { class: 'st' }, status(it)),
         ),

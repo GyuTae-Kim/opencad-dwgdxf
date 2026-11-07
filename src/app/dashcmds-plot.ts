@@ -18,6 +18,7 @@ import { PAPERS, type PlotSettings, lastSettings, plotPages, styleSheetPlotStyle
 import { mediaName, paperKeyOfSize, paperOf, userPaperKey } from './papers';
 import { fileNameMode } from './script';
 import { ask, form } from './ui/dom';
+import { ft } from './filetext';
 
 export const PLOT_DEVICES = ['DWG To PDF.pc3', 'AutoCAD PDF (General Documentation).pc3', 'AutoCAD PDF (High Quality Print).pc3', 'AutoCAD PDF (Smallest File).pc3', 'AutoCAD PDF (Web and Mobile).pc3', 'SVG', '없음'];
 
@@ -498,8 +499,8 @@ export async function runPsetupin(app: App, ctx: CommandContext): Promise<void> 
     return;
   }
   const v = await form(
-    `페이지 설정 가져오기 - ${src.name}`,
-    items.map((it, i) => ({ key: `p${i}`, label: `${it.name} (${it.model ? '모형' : '배치'})`, type: 'check' as const, value: false })),
+    `페이지 설정 가져오기 - ${ft(src.name)}`,
+    items.map((it, i) => ({ key: `p${i}`, label: `${ft(it.name)} (${it.model ? '모형' : '배치'})`, type: 'check' as const, value: false })),
     { ok: '확인', note: '가져올 페이지 설정을 고르십시오. 같은 이름이 있으면 재정의할지 묻습니다.' },
   );
   if (!v) return;

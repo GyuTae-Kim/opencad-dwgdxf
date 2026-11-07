@@ -71,7 +71,7 @@ function pdfLayersDialog(title: string, layers: { id: string; name: string }[], 
     const list = h(
       'div',
       { style: 'max-height:50vh;overflow:auto;display:flex;flex-direction:column;gap:4px;min-width:260px' },
-      ...boxes.map((b) => h('label', { class: 'form-row check', style: 'display:flex;gap:8px;align-items:center' }, b.c, h('span', {}, b.l.name))),
+      ...boxes.map((b) => h('label', { class: 'form-row check', style: 'display:flex;gap:8px;align-items:center' }, b.c, h('span', { translate: 'no' }, b.l.name))),
     );
     const tools = h(
       'div',

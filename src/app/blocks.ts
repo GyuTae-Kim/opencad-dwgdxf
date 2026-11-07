@@ -7,6 +7,7 @@ import { cloneEntity } from '../edit/session';
 import { isDynamicDefinition } from '../edit/dynblock';
 import type { App, CommandContext } from './app';
 import { ask, form } from './ui/dom';
+import { ft } from './filetext';
 import { registerBlockDefine } from './blockdefine';
 import { enhancedAttributeEditor, registerInsertAttdef } from './blockinsert';
 
@@ -95,7 +96,7 @@ export function registerBlockCommands(app: App): void {
       const pre = sel?.type === 'INSERT' && editable.some((b) => tableKey(b.name) === tableKey(sel.block)) ? sel.block : editable[0]!.name;
       const v = await form(
         '블록 정의 편집',
-        [{ key: 'name', label: '편집할 블록', type: 'select', value: editable.find((b) => tableKey(b.name) === tableKey(pre))!.name, options: editable.map((b) => ({ value: b.name, label: `${b.name} (객체 ${b.entities.length}개)` })) }],
+        [{ key: 'name', label: '편집할 블록', type: 'select', value: editable.find((b) => tableKey(b.name) === tableKey(pre))!.name, options: editable.map((b) => ({ value: b.name, label: `${ft(b.name)} (객체 ${b.entities.length}개)` })) }],
         { ok: '확인', note: '블록 편집기에서 그리기·수정 명령으로 블록 정의를 고칩니다. 닫으면 이 블록의 모든 참조가 바뀝니다.' },
       );
       if (!v) return;
@@ -142,7 +143,7 @@ export function registerBlockCommands(app: App): void {
       }
       let save = true;
       if (st.session.depth > be.depth) {
-        const a = await ask('블록 - 변경 사항이 저장되지 않음', `블록 ${be.name}의 변경 사항을 저장하시겠습니까?`, [
+        const a = await ask('블록 - 변경 사항이 저장되지 않음', `블록 ${ft(be.name)}의 변경 사항을 저장하시겠습니까?`, [
           { label: '변경 사항을 저장', value: 'save', primary: true },
           { label: '변경 사항 취소', value: 'discard' },
         ]);

@@ -200,7 +200,7 @@ async function showManager(app: App): Promise<void> {
       return h(
         'tr',
         {},
-        h('td', {}, e.name),
+        h('td', { translate: 'no' }, e.name),
         h('td', { style: 'white-space:nowrap' }, fmtTime(e.savedAt)),
         h('td', { style: 'white-space:nowrap;text-align:right' }, `${(e.size / 1024).toFixed(0)} KB`),
         h('td', { style: 'white-space:nowrap' }, open, ' ', save, ' ', del),

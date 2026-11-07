@@ -19,6 +19,7 @@ import { sessionFile } from './sessionfiles';
 import { dialog, form, h } from './ui/dom';
 import { pickOneFile, registerOnce } from './blkcmds-io';
 import type { Pt } from './view';
+import { ft } from './filetext';
 
 const DWG_ACCEPT = '.dwg,.dxf,.DWG,.DXF';
 const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.gif,.bmp,.webp,.PNG,.JPG,.JPEG,.GIF,.BMP,.WEBP';
@@ -429,7 +430,8 @@ function runXbindDialog(app: App, ctx: CommandContext): Promise<void> {
     const checks: { x: string; kind: SymKind; name: string; box: HTMLInputElement }[] = [];
     const tree = h('div', { style: 'max-height:52vh;overflow:auto;min-width:340px;font-size:12px;line-height:1.7' });
     for (const x of list) {
-      const xs = h('details', { open: true }, h('summary', { style: 'font-weight:600' }, `${x.name}${x.xdoc ? '' : ' (파일 연결 안 됨)'}`));
+      // 외부 참조·기호 이름은 도면 글(104차 — 옮기지 않는다)
+      const xs = h('details', { open: true }, h('summary', { style: 'font-weight:600' }, `${ft(x.name)}${x.xdoc ? '' : ' (파일 연결 안 됨)'}`));
       for (const kind of SYM_KINDS) {
         const names = x.syms[kind];
         if (!names.length) continue;
@@ -437,7 +439,7 @@ function runXbindDialog(app: App, ctx: CommandContext): Promise<void> {
         for (const n of names) {
           const box = h('input', { type: 'checkbox' }) as HTMLInputElement;
           checks.push({ x: x.name, kind, name: n, box });
-          kd.append(h('label', { style: 'display:block;margin-left:16px;white-space:nowrap' }, box, ` ${x.name}|${n}`));
+          kd.append(h('label', { style: 'display:block;margin-left:16px;white-space:nowrap' }, box, ' ', h('span', { translate: 'no' }, `${x.name}|${n}`)));
         }
         xs.append(kd);
       }

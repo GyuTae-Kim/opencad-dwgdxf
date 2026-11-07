@@ -11,6 +11,7 @@ import { colorText, typeName } from './inquiry';
 import { type Field, GENERAL_FIELDS, applyField, commonValue, formatValue, geometryFields, parseValue } from './propedit';
 import { h } from './ui/dom';
 import { loadPref, savePref } from './util2-ui';
+import { ft } from './filetext';
 
 const QPMODE_KEY = 'opencad.qpmode';
 
@@ -107,13 +108,17 @@ function fieldInput(app: App, s: QpState, handles: string[], list: Entity[], f: 
     sync(app, true);
   };
   const base = 'width:100%;box-sizing:border-box;background:var(--bg-input);color:var(--text);border:1px solid var(--border-soft);border-radius:3px;padding:2px 4px;font:12px var(--font)';
+  // 속성 태그 이름표는 도면 글(104차)
+  const aria = f.fileLabel ? ft(f.label) : f.label;
   if (f.kind === 'select' || f.kind === 'color') {
     const opts = f.kind === 'color' ? COLOR_CHOICES.map((c) => ({ value: c.value, label: c.label })) : (f.options?.(st.doc) ?? []);
     const cv = f.kind === 'color' ? (value as CadColor | undefined) : undefined;
     // 색은 ACI(ByLayer·ByBlock 포함)만 목록에 있다. 트루 컬러는 지금 값으로만 보인다
     const cur = f.kind === 'color' ? (cv && (cv.rgb === undefined || cv.aci === 256 || cv.aci === 0) ? String(cv.aci) : '') : String(value ?? '');
-    const sel = h('select', { style: base, 'aria-label': f.label }) as HTMLSelectElement;
-    if (varies || !opts.some((o) => o.value === cur)) sel.append(h('option', { value: '' }, varies ? '*여러 값*' : f.kind === 'color' && value ? colorText(value as CadColor) : String(value ?? '')));
+    const sel = h('select', { style: base, 'aria-label': aria }) as HTMLSelectElement;
+    // 목록에 없는 지금 값(도면층·스타일 이름)은 도면 글(104차 — 옮기지 않는다)
+    const raw = !varies && f.kind !== 'color';
+    if (varies || !opts.some((o) => o.value === cur)) sel.append(h('option', { value: '', translate: raw ? 'no' : undefined }, varies ? '*여러 값*' : f.kind === 'color' && value ? colorText(value as CadColor) : String(value ?? '')));
     for (const o of opts) sel.append(h('option', { value: o.value }, o.label));
     sel.value = varies || !opts.some((o) => o.value === cur) ? '' : cur;
     sel.addEventListener('change', () => {
@@ -123,13 +128,13 @@ function fieldInput(app: App, s: QpState, handles: string[], list: Entity[], f: 
     return sel;
   }
   if (f.kind === 'bool') {
-    const c = h('input', { type: 'checkbox', 'aria-label': f.label }) as HTMLInputElement;
+    const c = h('input', { type: 'checkbox', 'aria-label': aria }) as HTMLInputElement;
     c.checked = !!value && !varies;
     c.indeterminate = varies;
     c.addEventListener('change', () => apply(c.checked));
     return c;
   }
-  const inp = h('input', { type: 'text', style: base, 'aria-label': f.label, placeholder: varies ? '*여러 값*' : '' }) as HTMLInputElement;
+  const inp = h('input', { type: 'text', style: base, 'aria-label': aria, placeholder: varies ? '*여러 값*' : '' }) as HTMLInputElement;
   inp.value = varies ? '' : formatValue(f, value, st.units).replace(/\n/g, ' ');
   const commit = () => {
     if (varies && !inp.value.trim()) return;
@@ -194,7 +199,7 @@ function render(app: App, s: QpState, handles: string[]): void {
   const grid = h('div', { style: 'display:grid;grid-template-columns:88px 1fr;gap:4px 6px;align-items:center' });
   for (const f of quickFields(s.type)) {
     if (s.type && f.kind === 'multiline' && list.length > 1) continue;
-    grid.append(h('span', { style: 'color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: f.label }, f.label), fieldInput(app, s, handles, list, f));
+    grid.append(h('span', { style: 'color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: f.label, translate: f.fileLabel ? 'no' : undefined }, f.label), fieldInput(app, s, handles, list, f));
   }
   el.append(grid);
   if (!s.el) {

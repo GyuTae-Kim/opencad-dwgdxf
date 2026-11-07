@@ -495,8 +495,9 @@ async function runShowurls(app: App, ctx: CommandContext): Promise<void> {
           'tr',
           {},
           h('td', { style: 'font-family:var(--mono)' }, r.handle),
-          h('td', {}, r.link.url || (r.link.location ? `#${r.link.location}` : '')),
-          h('td', { style: 'color:var(--text-dim)' }, r.link.description),
+          // 하이퍼링크 주소·설명은 도면 글(104차 — 옮기지 않는다)
+          h('td', { translate: 'no' }, r.link.url || (r.link.location ? `#${r.link.location}` : '')),
+          h('td', { style: 'color:var(--text-dim)', translate: 'no' }, r.link.description),
           h(
             'td',
             { style: 'white-space:nowrap' },

@@ -33,6 +33,7 @@ import { pickAndReadDrawings } from './drawingfiles';
 import { PickList, wideDialog } from './layertools-ui';
 import { commitResults } from './modify';
 import { ask, form, h } from './ui/dom';
+import { ft } from './filetext';
 
 interface StdFile {
   name: string;
@@ -106,7 +107,7 @@ async function configureDialog(app: App, ctx: CommandContext, st: DocState): Pro
   const list = new PickList('표준 파일', false);
   const desc = h('div', { class: 'ltx-box ltx-note', style: 'min-height:110px' });
   const refresh = () => {
-    list.setItems(files.map((f, i) => ({ key: String(i), label: stdFileBase(f.name), tag: f.doc ? '' : '다시 골라야 함', dim: !f.doc, title: f.doc ? f.name : `${f.name} — 이 세션에서 아직 읽지 않았습니다. 추가(+)로 같은 파일을 고르십시오.` })));
+    list.setItems(files.map((f, i) => ({ key: String(i), label: stdFileBase(f.name), tag: f.doc ? '' : '다시 골라야 함', dim: !f.doc, title: f.doc ? ft(f.name) : `${ft(f.name)} — 이 세션에서 아직 읽지 않았습니다. 추가(+)로 같은 파일을 고르십시오.` })));
     describe();
   };
   const describe = () => {
@@ -117,7 +118,7 @@ async function configureDialog(app: App, ctx: CommandContext, st: DocState): Pro
       return;
     }
     if (!f.doc) {
-      desc.textContent = `${f.name}: 이 도면에 연결되어 있지만 이 세션에서 아직 읽지 않았습니다. 브라우저는 저장된 경로를 열 수 없으므로 추가(+)로 같은 파일을 다시 고르십시오.`;
+      desc.textContent = `${ft(f.name)}: 이 도면에 연결되어 있지만 이 세션에서 아직 읽지 않았습니다. 브라우저는 저장된 경로를 열 수 없으므로 추가(+)로 같은 파일을 다시 고르십시오.`;
       return;
     }
     const d = f.doc;
@@ -288,7 +289,7 @@ async function checkFlow(app: App, ctx: CommandContext, st: DocState): Promise<v
     }
     const p = fresh;
     const cand = new PickList('대체 대상', false);
-    cand.setItems(p.candidates.map((c, i) => ({ key: String(i), label: `${i === p.recommended ? '✓ ' : ''}${c.name}`, tag: sources[c.source]?.name ?? '' })));
+    cand.setItems(p.candidates.map((c, i) => ({ key: String(i), label: `${i === p.recommended ? '✓ ' : ''}${c.name}`, tag: sources[c.source]?.name ?? '', fileTag: true })));
     if (p.candidates.length) cand.setSelection([String(Math.max(0, p.recommended))], false);
     const preview = h('table', { class: 'ltx-table' });
     const showPreview = () => {
@@ -299,7 +300,7 @@ async function checkFlow(app: App, ctx: CommandContext, st: DocState): Promise<v
       const diffs = p.type === 'props' ? p.diffs : cur && std ? diffsOf(p.kind, cur, std) : [];
       preview.replaceChildren(
         h('tr', {}, h('th', {}, '특성'), h('th', {}, '현재 값'), h('th', {}, '표준 값')),
-        ...(p.type === 'name' && c ? [h('tr', {}, h('td', {}, '이름'), h('td', {}, p.name), h('td', {}, c.name))] : []),
+        ...(p.type === 'name' && c ? [h('tr', {}, h('td', {}, '이름'), h('td', { translate: 'no' }, p.name), h('td', { translate: 'no' }, c.name))] : []),
         ...diffs.map((d) => h('tr', {}, h('td', {}, d.label), h('td', {}, d.current), h('td', {}, d.standard))),
       );
     };

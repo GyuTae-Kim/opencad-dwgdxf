@@ -35,6 +35,7 @@ import { columnGripsFor } from './mtextcols-grips';
 import { dynGrips, isDynamicReference } from '../edit/dynblock';
 import { spaceTolerance } from '../render/build';
 import { ask, closeMenu, keyboardControl, showMenu, toast } from './ui/dom';
+import { ft } from './filetext';
 import { kindName as entityKindName } from '../edit/extract';
 import { EditManager } from './edits';
 import { OverlayScene, type ViewportXf, layoutViewports, paperInfo } from './scene';
@@ -1294,7 +1295,7 @@ export class App {
    */
   reportOpenError(name: string, info: OpenErrorInfo): void {
     const text = openErrorText(name, info);
-    this.cmd.print(`${name} — ${info.message}`, 'err');
+    this.cmd.print(`${ft(name)} — ${info.message}`, 'err');
     this.cmd.print(info.hint);
     if (!this.active && this.ui.showOpenError) this.ui.showOpenError(name, info);
     else toast(text, 'error', 9000);
@@ -1371,7 +1372,7 @@ export class App {
   /** 문서 닫기(저장하지 않은 변경이 있으면 먼저 묻는다) */
   async close(st: DocState, force = false): Promise<boolean> {
     if (!force && st.session?.dirty) {
-      const answer = await ask(`${st.saveName}`, '저장하지 않은 변경이 있습니다. 닫기 전에 저장할까요?', [
+      const answer = await ask(ft(st.saveName), '저장하지 않은 변경이 있습니다. 닫기 전에 저장할까요?', [
         { label: '저장', value: 'save', primary: true },
         { label: '저장 안 함', value: 'discard' },
         { label: '취소', value: 'cancel' },
@@ -2816,7 +2817,8 @@ export class App {
     const items = all.slice(0, 20).map((h) => {
       const e = st.doc.entityIndex.get(h);
       return {
-        label: e ? `${entityKindName(e.type)} · ${e.layer}` : h,
+        // 도면층 이름은 도면 글(104차 — " · " 조각마다 옮기면 이름이 바뀌었다)
+        label: e ? `${entityKindName(e.type)} · ${ft(e.layer)}` : h,
         run: () => pick(h),
         hover: () => {
           this.view.overlay.hover = pk.geometry(h);

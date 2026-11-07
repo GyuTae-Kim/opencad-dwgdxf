@@ -6,6 +6,7 @@ import { tableKey } from '../core/model';
 import type { App } from './app';
 import type { DocState } from './docstate';
 import { dialog, h } from './ui/dom';
+import { ft } from './filetext';
 
 const STYLE = `
 .ltx-dialog{width:min(var(--ltx-w,760px),100%)!important}
@@ -102,9 +103,12 @@ export interface ListItem {
   label: string;
   /** 오른쪽 작은 글 */
   tag?: string;
+  /** tag가 도면에서 온 글(설명·파일 이름) — 화면 번역층이 옮기지 않는다 */
+  fileTag?: boolean;
   /** 색 견본(CSS 색) */
   swatch?: string;
   dim?: boolean;
+  /** 풍선 도움말(없으면 label). 도면 글은 ft()로 감싼다 */
   title?: string;
 }
 
@@ -182,10 +186,11 @@ export class PickList {
       ...this.items.map((it, i) => {
         const row = h(
           'div',
-          { class: `it${this.selected.has(it.key) ? ' sel' : ''}${it.dim ? ' dim' : ''}`, role: 'option', 'aria-selected': this.selected.has(it.key) ? 'true' : 'false', title: it.title ?? it.label },
+          // label은 늘 도면에서 온 이름(도면층·도면층 상태·필터·표준 파일) — 화면 번역층이 옮기지 않는다(104차)
+          { class: `it${this.selected.has(it.key) ? ' sel' : ''}${it.dim ? ' dim' : ''}`, role: 'option', 'aria-selected': this.selected.has(it.key) ? 'true' : 'false', title: it.title ?? ft(it.label) },
           it.swatch ? h('span', { class: 'sw', style: `background:${it.swatch}` }) : null,
-          h('span', {}, it.label),
-          it.tag ? h('span', { class: 'tag' }, it.tag) : null,
+          h('span', { translate: 'no' }, it.label),
+          it.tag ? h('span', { class: 'tag', translate: it.fileTag ? 'no' : undefined }, it.tag) : null,
         );
         row.addEventListener('mousedown', (ev) => {
           if (ev.button === 2 && this.selected.has(it.key)) return;

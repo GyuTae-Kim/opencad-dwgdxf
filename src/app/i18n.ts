@@ -9,7 +9,13 @@ const loaders: Record<string, () => Promise<{default: Record<string,string>}>> =
 async function loadLanguage(language: string): Promise<void> { if (loaders[language]) registerCatalog(language,(await loaders[language]()).default); }
 
 type RecordValue = { source: string; rendered: string };
-const SKIP = '[data-static-languages], [translate="no"], [data-i18n-skip], script, style, [contenteditable]:not([contenteditable="false"]), textarea, input, code, pre, canvas, svg, .anno-layer, .pmi-layer, .docname, .doc-name, .code-list, .cmd-input, .file-name, .tree .name, .tree-name, .boot-recent-list button, .plist .name, .def-cell, .layer-name, .scene-tabs, .scene-cap, .group-item:not(.opt) .name';
+/**
+ * 편집기가 붙이는 도면 글 지킴(104차, fileguard.ts — 첫 화면 조각에는 이 고리만 둔다): 원문·언어·요소(글 마디면 부모, 속성이면 그 요소)를 받아
+ * 보일 글을 돌려준다(도면 글이면 원문 그대로). undefined면 아래 번역을 그대로 한다
+ */
+export const fileGuard: { fn?: (text: string, language: string, el: Element) => string | undefined } = {};
+// 다른 OpenCAD 앱(SKP·STEP)에만 있는 칸(.pmi-layer·.tree-name·.scene-tabs 등)은 뺐다(104차 — 이 앱에는 없는 클래스, 첫 화면 조각 크기)
+const SKIP = '[data-static-languages], [translate="no"], [data-i18n-skip], script, style, [contenteditable]:not([contenteditable="false"]), textarea, input, code, pre, canvas, svg, .anno-layer, .docname, .cmd-input, .boot-recent-list button, .layer-name';
 export async function installLocalization(root: HTMLElement): Promise<() => void> {
   let language = currentLanguage(location.href);
   await loadLanguage(language);
@@ -17,8 +23,12 @@ export async function installLocalization(root: HTMLElement): Promise<() => void
   const texts = new WeakMap<Node, RecordValue>();
   const attributes = new WeakMap<Element, Map<string, RecordValue>>();
   const control = createLanguageMenu(languages, language, changeLanguage);
-  function value(current: string, record?: RecordValue, uiCopy = false): RecordValue {
-    const source = record && current === record.rendered ? record.source : sourceMessage(current);
+  function value(current: string, el: Element, record?: RecordValue, uiCopy = false): RecordValue {
+    const kept = record && current === record.rendered ? record.source : undefined;
+    // 도면 글 지킴은 거꾸로 찾기(sourceMessage)보다 먼저 — 다른 언어 번역 글과 같은 이름("Standard")을 한국어 열쇠로 되돌리지 않는다
+    const raw = kept ?? current, guarded = fileGuard.fn?.(raw, language, el);
+    if (guarded !== undefined) return { source: raw, rendered: guarded };
+    const source = kept ?? sourceMessage(current);
     // Only explicitly authored UI titles may translate composite fragments.
     const rendered = uiCopy && !catalogs[language]?.[source.replace(/\s+/g,' ').trim()]
       ? source.split(/(:\s+)/).map(part => translate(part,language,true)).join('')
@@ -31,7 +41,7 @@ export async function installLocalization(root: HTMLElement): Promise<() => void
     const records = attributes.get(el) ?? new Map<string, RecordValue>(); attributes.set(el, records);
     for (const name of ['title','aria-label','aria-description','placeholder','alt']) {
       if (!el.hasAttribute(name)) continue;
-      const record = value(el.getAttribute(name)!, records.get(name), !!el.closest('[data-i18n-ui-copy]')); records.set(name, record);
+      const record = value(el.getAttribute(name)!, el, records.get(name), !!el.closest('[data-i18n-ui-copy]')); records.set(name, record);
       if (el.getAttribute(name) !== record.rendered) el.setAttribute(name, record.rendered);
     }
     if (el instanceof HTMLAnchorElement && el.hasAttribute('href')) {
@@ -44,7 +54,7 @@ export async function installLocalization(root: HTMLElement): Promise<() => void
   function update(node: Node): void {
     if (node.nodeType === Node.TEXT_NODE) {
       if (!node.parentElement || node.parentElement.closest(SKIP)) return;
-      const record = value(node.nodeValue ?? '', texts.get(node), !!node.parentElement.closest('[data-i18n-ui-copy]')); texts.set(node, record);
+      const record = value(node.nodeValue ?? '', node.parentElement, texts.get(node), !!node.parentElement.closest('[data-i18n-ui-copy]')); texts.set(node, record);
       if (node.nodeValue !== record.rendered) node.nodeValue = record.rendered;
       return;
     }
@@ -73,13 +83,14 @@ export async function installLocalization(root: HTMLElement): Promise<() => void
     document.title = translate(previous,language);
     const originalName = metadataForLanguage('ko').siteName;
     if (previous.endsWith(originalName)) document.title = previous.slice(0,-originalName.length) + translate(originalName,language);
-    const fields: [string,string][] = [
-      ['meta[name="description"]',data.description],['meta[name="author"]',data.author.name],['meta[property="og:locale"]',data.locale],
-      ['meta[property="og:title"]',data.title],['meta[property="og:description"]',data.description],['meta[property="og:url"]',data.url],
-      ['meta[property="og:site_name"]',data.siteName],['meta[property="og:image"]',data.image.url],['meta[property="og:image:secure_url"]',data.image.url],['meta[property="og:image:alt"]',data.image.alt],
-      ['meta[name="twitter:title"]',data.title],['meta[name="twitter:description"]',data.description],['meta[name="twitter:image"]',data.image.url],['meta[name="twitter:image:alt"]',data.image.alt],
-    ];
-    for (const [query,content] of fields) document.querySelector(query)?.setAttribute('content',content);
+    // og:로 시작하는 것은 meta[property=…], 나머지는 meta[name=…]
+    const fields: Record<string,string> = {
+      description:data.description,author:data.author.name,'og:locale':data.locale,
+      'og:title':data.title,'og:description':data.description,'og:url':data.url,
+      'og:site_name':data.siteName,'og:image':data.image.url,'og:image:secure_url':data.image.url,'og:image:alt':data.image.alt,
+      'twitter:title':data.title,'twitter:description':data.description,'twitter:image':data.image.url,'twitter:image:alt':data.image.alt,
+    };
+    for (const [key,content] of Object.entries(fields)) document.querySelector(`meta[${key.startsWith('og:') ? 'property' : 'name'}="${key}"]`)?.setAttribute('content',content);
     document.querySelector('link[rel="canonical"]')?.setAttribute('href',data.url);
     const graph = document.querySelector('script[type="application/ld+json"]');
     if (graph?.textContent) {

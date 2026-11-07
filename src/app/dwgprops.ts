@@ -123,6 +123,7 @@ async function dwgPropsDialog(app: App, ctx: CommandContext): Promise<void> {
   const cerr = h('div', { class: 'mgr-err' });
   const list = pickList<Prop>(['이름', '값'], (p) => [p.name, p.value], {
     height: 200,
+    fileCols: [0, 1],
     onPick: (p) => {
       if (!p) return;
       nameIn.value = p.name;

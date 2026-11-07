@@ -29,6 +29,7 @@ import type { App, CommandContext, Keyword } from './app';
 import { unlockedOnly } from './layers';
 import { form, h, showMenu } from './ui/dom';
 import type { OverlayGeom, Pt } from './view';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // 공통
@@ -264,22 +265,25 @@ export function dynPaletteGroup(app: App, handle: string): HTMLElement | null {
   if (!props?.length) return null;
   const rows = props.map((p) => {
     const id = `pf-dyn-${p.key}`;
-    const title = p.description || p.label;
-    if (p.editor === 'readonly') return h('div', { class: 'prop-row', title }, h('span', { class: 'k' }, p.label), h('span', { class: 'v', title: show(app, p) }, show(app, p)));
+    // 매개변수 이름·설명·값(가시성·조회 상태 이름)은 도면 글(104차 — 옮기지 않는다). 이름 없는 반전 매개변수의 "반전 상태"만 앱 글
+    const fileLabel = p.label !== '반전 상태';
+    const label = fileLabel ? ft(p.label) : p.label;
+    const title = p.description ? ft(p.description) : label;
+    if (p.editor === 'readonly') return h('div', { class: 'prop-row', title }, h('span', { class: 'k', translate: fileLabel ? 'no' : undefined }, p.label), h('span', { class: 'v', title: show(app, p), translate: 'no' }, show(app, p)));
     let ctl: HTMLElement;
     if (p.editor === 'select' && p.options) {
       const cur = typeof p.value === 'boolean' ? (p.value ? '1' : '0') : String(p.value);
       const opts = [...p.options];
       // 일치하지 않는 조회 이름 등 목록에 없는 지금 값
       if (!opts.some((o) => o.value === cur)) opts.unshift({ value: cur, label: typeof p.value === 'number' ? formatLength(p.value, st.units) : cur || '(없음)' });
-      const el = h('select', { 'data-field': id, 'aria-label': p.label }, ...opts.map((o) => h('option', { value: o.value }, o.label)));
+      const el = h('select', { 'data-field': id, 'aria-label': label }, ...opts.map((o) => h('option', { value: o.value }, o.label)));
       el.value = cur;
       el.addEventListener('change', () => {
         if (el.value !== cur) setDynProperty(app, handle, p.key, el.value);
       });
       ctl = el;
     } else {
-      const el = h('input', { 'data-field': id, 'aria-label': p.label }) as HTMLInputElement;
+      const el = h('input', { 'data-field': id, 'aria-label': label }) as HTMLInputElement;
       el.value = p.editor === 'angle' ? formatAngle(p.value as number, st.units) : formatLength(p.value as number, st.units);
       const orig = el.value;
       el.addEventListener('keydown', (ev) => {
@@ -295,7 +299,7 @@ export function dynPaletteGroup(app: App, handle: string): HTMLElement | null {
       });
       ctl = el;
     }
-    return h('label', { class: 'prop-row edit', title }, h('span', { class: 'k' }, p.label), ctl);
+    return h('label', { class: 'prop-row edit', title }, h('span', { class: 'k', translate: fileLabel ? 'no' : undefined }, p.label), ctl);
   });
   return h('div', { class: 'prop-group' }, h('h4', {}, '사용자화'), ...rows);
 }

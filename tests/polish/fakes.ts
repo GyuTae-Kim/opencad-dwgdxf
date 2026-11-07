@@ -95,13 +95,18 @@ export class FakeCommandLine {
   }
   /** 프롬프트·출력을 지켜보는 쪽(휴대폰 보기 모드의 측정 띠) */
   readonly watchers = new Set<{ prompt?(text: string): void; print?(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void }>();
-  /** measure: 측정 명령이 결과 줄과 함께 넘긴 값(있을 때만 남긴다) */
+  /**
+   * measure: 측정 명령이 결과 줄과 함께 넘긴 값(있을 때만 남긴다).
+   * 진짜 명령행처럼 도면 글 표시(ft — U+2068·U+2069, 104차)는 빼고 모은다(보이는 글과 같게)
+   */
   print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void {
+    text = text.replace(/[⁨⁩]/g, '');
     this.onPrint?.(text, cls);
     for (const w of this.watchers) w.print?.(text, cls, measure);
     this.lines.push(measure ? { text, cls, measure } : { text, cls });
   }
   setPrompt(text: string): void {
+    text = text.replace(/[⁨⁩]/g, '');
     this.prompt = text;
     for (const w of this.watchers) w.prompt?.(text);
   }

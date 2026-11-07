@@ -17,6 +17,7 @@ import { paperInfo } from './scene';
 import { ctbList } from './ctblib';
 import { ask, h } from './ui/dom';
 import { btn, checkIn, fail, group, numIn, numOf, pickList, resultDialog, row, selectIn, textIn } from './mgr-ui';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // 값 변환(대화상자 칸 ↔ PLOTSETTINGS)
@@ -462,7 +463,7 @@ type Row = { kind: 'layout'; name: string; layout: Layout } | { kind: 'named'; n
 function describe(p: PageSettings): string {
   const size = `${+p.paperWidth.toFixed(2)} × ${+p.paperHeight.toFixed(2)} ${p.paperUnits === 0 ? 'in' : 'mm'}`;
   const ori = isLandscapeOf(p) ? '가로' : '세로';
-  return `장치: ${p.printerName || '없음'} · 용지: ${p.paperName || size} (${size}, ${ori}) · 플롯 스타일: ${p.styleSheet || '없음'}`;
+  return `장치: ${p.printerName ? ft(p.printerName) : '없음'} · 용지: ${p.paperName ? ft(p.paperName) : size} (${size}, ${ori}) · 플롯 스타일: ${p.styleSheet ? ft(p.styleSheet) : '없음'}`;
 }
 
 type ManagerAction = { act: 'current' | 'new' | 'modify' | 'rename' | 'delete' | 'import' | 'close'; row: Row | null };
@@ -473,7 +474,9 @@ function managerDialog(st: DocState, layout: Layout): Promise<ManagerAction | nu
   const rows: Row[] = [{ kind: 'layout', name: `*${label}${layout.plot.pageSetupName ? ` (${layout.plot.pageSetupName})` : ''}*`, layout }];
   for (const s of namedPageSetups(st.doc).items) if (s.model === model) rows.push({ kind: 'named', name: s.name, setup: s });
   const detail = h('div', { class: 'mgr-note', style: 'min-height:34px' });
-  const list = pickList<Row>(['페이지 설정'], (r) => [r.name], {
+  // 배치·페이지 설정 이름은 도면 글(104차): 배치 줄은 "*모형*"만 옮기고, 이름 있는 페이지 설정은 통째로 두지 않고 ft로 감싼다
+  const shown = (r: Row) => (r.kind === 'named' ? ft(r.name) : `*${model ? '모형' : ft(layout.name)}${layout.plot.pageSetupName ? ` (${ft(layout.plot.pageSetupName)})` : ''}*`);
+  const list = pickList<Row>(['페이지 설정'], (r) => [shown(r)], {
     height: 220,
     onPick: (r) => (detail.textContent = r ? describe(r.kind === 'layout' ? r.layout.plot : r.setup.plot) : ''),
     onActivate: () => go('current'),

@@ -24,6 +24,7 @@ import {
 } from '../edit/util/select';
 import type { App, CommandContext } from './app';
 import { form, h } from './ui/dom';
+import { ft } from './filetext';
 import { askKeyword, askText, button, checkbox, listBox, loadPref, modal, savePref, select, selectWithKeywords, setOptions, spaceHandles, textInput } from './util2-ui';
 
 // ---------------------------------------------------------------------------
@@ -54,8 +55,9 @@ export function groupExpander(app: App): (handles: string[]) => string[] {
   };
 }
 
+/** 명령행에 보일 그룹 이름(도면 글 — ft로 감싼다, 104차) */
 function groupLabel(g: GroupInfo): string {
-  return g.group.unnamed ? `${g.name}(이름 없음)` : g.name;
+  return g.group.unnamed ? `${ft(g.name)}(이름 없음)` : ft(g.name);
 }
 
 function listGroupsText(app: App, ctx: CommandContext): void {
@@ -64,7 +66,8 @@ function listGroupsText(app: App, ctx: CommandContext): void {
     ctx.print('이 도면에는 그룹이 없습니다.', 'res');
     return;
   }
-  for (const g of gs) ctx.print(`${groupLabel(g).padEnd(20)} 객체 ${g.group.entities.length}개${g.group.selectable ? '' : ', 선택 불가'}${g.group.description ? ` — ${g.group.description}` : ''}`, 'res');
+  // 표시 글자(ft) 둘은 폭이 없어 22자로 채운다
+  for (const g of gs) ctx.print(`${groupLabel(g).padEnd(22)} 객체 ${g.group.entities.length}개${g.group.selectable ? '' : ', 선택 불가'}${g.group.description ? ` — ${ft(g.group.description)}` : ''}`, 'res');
 }
 
 // ---------------------------------------------------------------------------
