@@ -66,6 +66,20 @@ export function encodedTransfer(e: Encoded): ArrayBuffer[] {
   return [e.tags.buffer as ArrayBuffer, e.nums.buffer as ArrayBuffer, e.ints.buffer as ArrayBuffer, e.bins.buffer as ArrayBuffer];
 }
 
+/**
+ * 다 푼 부호화 자료의 버퍼를 바로 놓아 준다(96차). Decoder는 수·문자열을 꺼내 쓰고 형식 배열은 객체마다 제 버퍼로 복사하므로,
+ * 다 푼 뒤에는 이 버퍼를 아무도 쓰지 않는다. 그대로 두면 다음 큰 GC까지 바깥 메모리로 남는데, V8은 바깥 메모리가 느는 만큼 큰 GC를 앞당긴다
+ * (큰 문서를 받는 메인은 묶음마다 받은 버퍼와 그 복사본이 함께 쌓인다). ArrayBuffer.transfer(ES2024)로 떼어 내면 바로 줄어든다.
+ * 버퍼 전체를 차지하는 배열만 떼어 낸다(다른 값과 함께 쓰는 버퍼는 두고). transfer가 없는 브라우저는 아무것도 하지 않는다.
+ */
+export function releaseEncoded(e: Encoded): void {
+  for (const a of [e.tags, e.nums, e.ints, e.bins]) {
+    const buf = a.buffer as ArrayBuffer & { transfer?: (len: number) => ArrayBuffer; detached?: boolean };
+    if (typeof buf.transfer !== 'function' || buf.detached || a.byteOffset !== 0 || a.byteLength !== buf.byteLength) continue;
+    buf.transfer(0);
+  }
+}
+
 class Unsupported extends Error {}
 
 /**
@@ -541,8 +555,13 @@ export class Decoder {
     switch (t) {
       case T_U8:
         return e.tags[this.ti++]!;
-      case T_NUM:
-        return e.nums[this.ni++]!;
+      case T_NUM: {
+        // 정수는 정수로 돌려준다(96차). 실수 배열에서 읽은 값을 그대로 돌려주면 최적화 단계에 따라 -1 같은 정수도 상자 든 실수가 되어,
+        // 객체 리터럴의 정수 칸(선가중치·투명도 등)이 실수 칸으로 바뀌고 그 모양의 모든 객체가 그 칸마다 실수 상자를 하나씩 더 든다.
+        // 값은 같다(-0·NaN·int32 밖의 수는 그대로)
+        const v = e.nums[this.ni++]!;
+        return (v | 0) === v && (v !== 0 || 1 / v > 0) ? v | 0 : v;
+      }
       case T_STR:
         return e.strs[e.ints[this.ii++]!]!;
       case T_OBJ:

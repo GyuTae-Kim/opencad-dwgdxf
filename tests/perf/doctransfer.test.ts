@@ -2,7 +2,7 @@
  * 워커 → 메인 문서 보내기(codec·doctransfer)가 구조화 복제와 같은 문서를 되살리는지.
  */
 import { describe, expect, it } from 'vitest';
-import { Decoder, Encoder, encodedTransfer } from '../../src/worker/codec';
+import { Decoder, Encoder, encodedTransfer, releaseEncoded } from '../../src/worker/codec';
 import { DocAssembler, type DocPart, sendDocument } from '../../src/worker/doctransfer';
 import { readCadFile } from '../../src/io/index';
 import { writeDwg } from '../../src/io/dwg/index';
@@ -127,6 +127,12 @@ describe('codec', () => {
     expect(Object.getOwnPropertyNames(back[values.length - 1])).toEqual(['__proto__', 'b']);
   });
 
+  it('0~255 밖의 정수도 같은 값으로 되살린다(정수로 돌려주는 길 — -0·int32 밖·NaN은 그대로, 96차)', () => {
+    const nums = [-1, -2, -3, 256, 70000, 2 ** 31 - 1, -(2 ** 31), 2 ** 31, -(2 ** 31) - 1, 2 ** 53, -0, 0.5, -1.5, NaN, Infinity, -Infinity, 1e300];
+    const back = roundTrip(nums.map((v) => ({ lineweight: v }))) as { lineweight: number }[];
+    for (let i = 0; i < nums.length; i++) expect(Object.is(back[i]!.lineweight, nums[i])).toBe(true);
+  });
+
   it('얼린 객체는 한 번 보낸 안에서 같은 객체(얼리지 않은 사본)로 함께 쓴다', () => {
     const shared = Object.freeze({ aci: 256 });
     const back = roundTrip([{ color: shared }, { color: shared }, { color: { aci: 256 } }]) as { color: object }[];
@@ -218,6 +224,45 @@ describe('doctransfer', () => {
     const rawArrays = arrays({ blocks: new Map([['X', { entities: raws }]]) } as unknown as CadDocument, () => true);
     expect(rawArrays.length).toBeGreaterThan(0);
     expect(rawArrays.every(owned)).toBe(true);
+  });
+
+  it('메인은 묶음을 다 푼 뒤 받은 버퍼를 바로 놓아 준다(객체의 형식 배열은 제 버퍼라 그대로 — 96차)', () => {
+    const doc = readCadFile(dxf, 'syn.dxf');
+    const shell: { d?: CadDocument; s?: [string, number][] } = {};
+    const parts: DocPart[] = [];
+    sendDocument(
+      doc,
+      (d, s) => Object.assign(shell, { d: message(d), s: message(s) }),
+      (p, t) => parts.push(message(p, t)),
+      undefined,
+      { minEntities: 1000, batch: 700 },
+    );
+    expect(parts.length).toBeGreaterThan(1);
+    const asm = new DocAssembler(shell.d!, shell.s!);
+    const canRelease = typeof (new ArrayBuffer(0) as ArrayBuffer & { transfer?: unknown }).transfer === 'function';
+    for (const p of parts) {
+      const bufs = [p.enc!.tags, p.enc!.nums, p.enc!.ints, p.enc!.bins].map((a) => a.buffer);
+      expect(bufs.some((b) => b.byteLength > 0)).toBe(true);
+      asm.add(p);
+      for (const b of bufs) expect(b.byteLength === 0).toBe(canRelease);
+    }
+    expect(asm.complete).toBe(true);
+    // 버퍼를 놓아 준 뒤에도 되살린 문서는 같다(정점 배열은 묶음 버퍼의 복사본)
+    expect(asm.doc).toStrictEqual(structuredClone(doc));
+  });
+
+  it('버퍼 일부만 차지하는 배열은 놓아 주지 않는다(함께 쓰는 버퍼)', () => {
+    const enc = new Encoder();
+    expect(enc.add({ v: new Float64Array([1, 2, 3]) })).toBe(true);
+    const e = enc.finish();
+    const big = new ArrayBuffer(e.bins.byteLength + 16);
+    const part = new Uint8Array(big, 8, e.bins.byteLength);
+    part.set(e.bins);
+    const shared = { ...e, bins: part };
+    expect(new Decoder(shared).next()).toEqual({ v: new Float64Array([1, 2, 3]) });
+    releaseEncoded(shared);
+    expect(big.byteLength).toBe(e.bins.byteLength + 16);
+    expect([...new Float64Array(big, 8, 3)]).toEqual([1, 2, 3]);
   });
 
   it('DWG(원본 본문 바이트 포함)도 같다', () => {

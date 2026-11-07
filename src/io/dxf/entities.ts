@@ -45,7 +45,7 @@ import type {
   ViewportEntity,
   XLineEntity,
 } from '../../core/model';
-import { BYLAYER, SHARED_BYLAYER_COLOR, entityDefaults } from '../../core/model';
+import { BYLAYER, SHARED_BYLAYER_COLOR, entityDefaults, shareUnitScale, shareXDirection } from '../../core/model';
 import type { PolyAccum } from '../../core/polyverts';
 import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../core/hatchedges';
 import { f64Of } from '../../core/f64pool';
@@ -577,7 +577,7 @@ function mtextFrom(c: Common): MTextEntity {
   }
   e.text = text;
   e.rotation = rotation;
-  if (direction && (direction.x !== 0 || direction.y !== 0)) e.direction = direction;
+  if (direction && (direction.x !== 0 || direction.y !== 0)) e.direction = shareXDirection(direction);
   e.backgroundFlags = bgFlags;
   if (bgFlags & 1) e.backgroundColor = parseColor(bgAci, bgRgb, undefined);
   if (embedStart >= 0) {
@@ -631,7 +631,8 @@ function insert(c: Common): InsertEntity {
     type: 'INSERT',
     block: name(t.str(2)),
     insert: t.point(10),
-    scale: { x: t.num(41, 1), y: t.num(42, 1), z: t.num(43, 1) },
+    // 축척 1은 얼린 점 하나를 함께 쓴다(96차)
+    scale: shareUnitScale({ x: t.num(41, 1), y: t.num(42, 1), z: t.num(43, 1) }),
     rotation: t.num(50) * DEG,
     columnCount: Math.max(1, t.int(70, 1)),
     rowCount: Math.max(1, t.int(71, 1)),
