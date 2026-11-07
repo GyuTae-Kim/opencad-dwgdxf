@@ -156,6 +156,66 @@ function sameTokens(a: Tok[], b: Tok[], tol: number): boolean {
   return true;
 }
 
+/** 이만큼 큰 묶음은 후보 표로 짝을 찾는다(작으면 첫 수 창을 그냥 훑는다) */
+const NEAR_MIN = 32;
+/** 후보 자리를 고를 때 값이 몇 가지인지 세어 볼 객체 수 */
+const NEAR_SAMPLE = 64;
+
+/**
+ * 중복 후보 찾기(99차). 같음(sameTokens)은 모든 수 자리가 공차 안이어야 하므로 한 자리 D에서도 공차 안이다. 묶음 객체를 D 값 차례로 줄 세워 두고,
+ * 객체 i와 D 값이 공차(조금 넉넉히) 안이면서 묶음 차례로 i 뒤인 객체를 차례대로 돌려준다 — 같은 객체를 빠짐없이 담고, 같지 않은 것은 sameTokens가 거른다.
+ * 같은 쌍을 같은 차례로 견주므로 결과는 첫 수 창으로 훑을 때와 같다(첫 수 창에 든 쌍만 같을 수 있다: 첫 수도 공차 안이어야 하고 첫 수 차례로 줄 섰다).
+ * 전에는 첫 수가 모두 같은 묶음(폴리선의 첫 볼록도 0 등)이면 묶음 전체가 창이라 쌍을 모두 견주었다(객체 7,483개 도면 하나에 약 2천만 쌍, -OVERKILL 약 1.6초).
+ * D는 표본 객체에서 값이 가장 여러 가지인 수 자리(모든 객체가 그 자리에 수를 가져야 한다). 그런 자리가 없거나 첫 수가 NaN이면
+ * (묶음 차례가 정해지지 않아 첫 수 창이 중간에 끊긴다) null — 전처럼 훑는다
+ */
+function nearIndex(b: readonly { tok: Tok[]; first: number }[], tol: number): ((i: number) => number[]) | null {
+  const n = b.length;
+  if (n < NEAR_MIN || b.some((x) => Number.isNaN(x.first))) return null;
+  const len = b[0]!.tok.length;
+  const sample = Array.from({ length: Math.min(n, NEAR_SAMPLE) }, (_, t) => b[Math.floor((t * n) / Math.min(n, NEAR_SAMPLE))]!.tok);
+  let d = -1;
+  let most = 1;
+  const seen = new Set<number>();
+  for (let k = 0; k < len && most < sample.length; k++) {
+    seen.clear();
+    let num = true;
+    for (const t of sample) {
+      const v = t[k];
+      if (typeof v !== 'number') {
+        num = false;
+        break;
+      }
+      seen.add(v);
+    }
+    if (num && seen.size > most) {
+      d = k;
+      most = seen.size;
+    }
+  }
+  if (d < 0 || b.some((x) => typeof x.tok[d] !== 'number')) return null;
+  const val = Float64Array.from(b, (x) => x.tok[d] as number);
+  // 무한·NaN은 그 자리가 공차 안일 수 없어 아무와도 같지 않다
+  const ord = [...val.keys()].filter((i) => Number.isFinite(val[i]!)).sort((p, q) => val[p]! - val[q]! || p - q);
+  const sorted = Float64Array.from(ord, (i) => val[i]!);
+  return (i) => {
+    const v = val[i]!;
+    if (!Number.isFinite(v)) return [];
+    // 넉넉히: 빼기의 반올림이 공차 안 객체를 빼지 않게
+    const m = 2 * tol + Math.abs(v) * 1e-12;
+    let lo = 0;
+    let hi = sorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid]! < v - m) lo = mid + 1;
+      else hi = mid;
+    }
+    const out: number[] = [];
+    for (let p = lo; p < sorted.length && sorted[p]! <= v + m; p++) if (ord[p]! > i) out.push(ord[p]!);
+    return out.sort((x, y) => x - y);
+  };
+}
+
 // ---------------------------------------------------------------------------
 
 interface Item {
@@ -194,21 +254,26 @@ export function overkill(list: readonly Entity[], opt: OverkillOptions = {}): Ov
       if (b.length < 2) continue;
       b.sort((p, q) => p.first - q.first || p.it.rank - q.it.rank);
       const gone = new Set<number>();
+      /** i와 j를 견준다. i가 지워지면 참 */
+      const visit = (i: number, j: number): boolean => {
+        if (gone.has(j)) return false;
+        if (!sameTokens(b[i]!.tok, b[j]!.tok, tol)) return false;
+        // 먼저 고른 것이 남는다(연관 객체 유지면 연관 객체를 남긴다, 둘 다 연관이면 둘 다)
+        const ki = keep(b[i]!.it.e);
+        const kj = keep(b[j]!.it.e);
+        if (ki && kj) return false;
+        const drop = ki ? j : kj ? i : b[i]!.it.rank <= b[j]!.it.rank ? j : i;
+        gone.add(drop);
+        removed.add(b[drop]!.it.e.handle);
+        duplicates++;
+        return drop === i;
+      };
+      const near = nearIndex(b, tol);
       for (let i = 0; i < b.length; i++) {
         if (gone.has(i)) continue;
-        for (let j = i + 1; j < b.length && b[j]!.first - b[i]!.first <= tol; j++) {
-          if (gone.has(j)) continue;
-          if (!sameTokens(b[i]!.tok, b[j]!.tok, tol)) continue;
-          // 먼저 고른 것이 남는다(연관 객체 유지면 연관 객체를 남긴다, 둘 다 연관이면 둘 다)
-          const ki = keep(b[i]!.it.e);
-          const kj = keep(b[j]!.it.e);
-          if (ki && kj) continue;
-          const drop = ki ? j : kj ? i : b[i]!.it.rank <= b[j]!.it.rank ? j : i;
-          gone.add(drop);
-          removed.add(b[drop]!.it.e.handle);
-          duplicates++;
-          if (drop === i) break;
-        }
+        if (near) {
+          for (const j of near(i)) if (visit(i, j)) break;
+        } else for (let j = i + 1; j < b.length && b[j]!.first - b[i]!.first <= tol; j++) if (visit(i, j)) break;
       }
     }
   }
