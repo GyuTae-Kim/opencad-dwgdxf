@@ -57,7 +57,7 @@ import { type FitWork, TAU, arcPoints, bulgePoints, ccwSweep, fitPointsCurve, in
 import { type DashPattern, type DashWork, dashPolyline, patternChars } from './linetype';
 import { DisplayListBuilder, type DisplayList, type SnapshotView, clipConvex } from './displaylist';
 import { ColorKind, type LayerState, type StyleSpec, STYLE_FLAG_FIELD, STYLE_FLAG_NO_PLOT, StyleTable, WidthKind, hiddenStyleSpec, layerStates, plotStyleNames } from './styles';
-import { HATCH_LINE_LIMIT, type LoopWork, clipLoopsToRect, hatchLoops, patternSegments, spreadPattern, triangulateLoops, userPattern } from './hatch';
+import { HATCH_LINE_LIMIT, type LoopWork, clipLoopsToRect, hatchRings, islandLoops, patternSegments, spreadPattern, triangulateLoops, userPattern } from './hatch';
 import { builtinArrow } from './arrows';
 import { boundaryEdges, contourSegments, openRing, stripOutline, textLineBoxes } from './fillmode';
 import { type Affine, type TextEngine, type TextLayout, affMul } from '../text/layout';
@@ -2226,31 +2226,35 @@ export class SceneBuilder {
     const m = this.ocsM(ctx, e.extrusion);
     const tol = this.localTol(m);
     const fit: FitWork = { n: 0 };
-    const loops = hatchLoops(e, tol, fit);
+    const rings = hatchRings(e, tol, fit);
     this.countFit(fit);
-    if (!loops.length) return;
+    if (!rings.length) return;
     let verts = 0;
-    for (const l of loops) verts += l.length >> 1;
-    this.prepWork += verts;
+    for (const l of rings) verts += l.length >> 1;
+    // 섬 감지 스타일(바깥만·무시, 95차): 채우기·무늬는 고른 고리로, 경계 윤곽(채우기를 끔·한도에 걸림·MPOLYGON 테두리)은 모든 경로로 그린다.
+    // 고르느라 든 포함 관계 일은 채우기 삼각분할의 일처럼 센다(조각 하나 = 일 32)
+    const nest = { n: 0 };
+    const loops = islandLoops(rings, e.hatchStyle, nest);
+    this.prepWork += verts + Math.floor(nest.n / 32);
     const z = e.elevation;
     // 채우기를 끄면(FILLMODE 0) 해치·그라데이션·MPOLYGON은 경계 윤곽만
     if (!this.fill) {
-      for (const l of loops) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
+      for (const l of rings) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
       return;
     }
     if (e.gradient) {
-      this.gradient(e, loops, m, z, r, ctx, verts);
+      this.gradient(e, loops, rings, m, z, r, ctx, verts);
       return;
     }
     if (e.solid || e.type === 'MPOLYGON') {
       const outlined = e.type === 'MPOLYGON' && !e.solid;
       if (outlined) {
-        for (const l of loops) this.out.polyline(this.xf(m, l, z), true, r.style);
+        for (const l of rings) this.out.polyline(this.xf(m, l, z), true, r.style);
         if (!e.fillColor) return;
       }
       // 삼각분할은 정점 하나에 조각 몇 개 그리는 시간이 든다
       this.prepWork += verts * 4;
-      const tris = this.fillTriangles(loops, verts, m, z, r, outlined);
+      const tris = this.fillTriangles(loops, rings, verts, m, z, r, outlined);
       if (!tris) return;
       const style = e.type === 'MPOLYGON' && e.fillColor ? this.styleWithColor(r, e.fillColor, ctx) : r.style;
       this.out.triangles(this.xf(m, tris, z), style);
@@ -2289,7 +2293,7 @@ export class SceneBuilder {
     if (!segs) {
       // 너무 촘촘하면(멀리서 보거나 아주 넓은 해치) 경계와 성긴 무늬로. 확대하면 세부 장면이 원래 간격으로 다시 그린다
       this.warnInc('hatch.pattern_truncated');
-      for (const l of loops) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
+      for (const l of rings) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
       if (spent) return;
       // 실패한 패스의 일도 장면 일이다(최상위 해치도 문서 전체로 묶는다). 장면 일이 다 되면 더 넓히지 않는다
       for (let f = 2; f <= 4096 && !segs; f *= 2) {
@@ -2310,22 +2314,22 @@ export class SceneBuilder {
 
   /**
    * 해치 채우기 삼각형. 고리 포함 관계와 삼각분할에 든 일을 세고(포함 판정에서 본 변 32개가 조각 하나 몫),
-   * 일이 한도(hatchFillWorkLimit)를 넘으면 경계만 그리고 null — 고리가 겹겹이 든 해치는 고리 수의 제곱만큼 걸린다
+   * 일이 한도(hatchFillWorkLimit)를 넘으면 경계(rings — 섬 감지 스타일로 고르기 전 모든 경로)만 그리고 null — 고리가 겹겹이 든 해치는 고리 수의 제곱만큼 걸린다
    */
-  private fillTriangles(loops: number[][], verts: number, m: Mat, z: number, r: Resolved, outlined = false): number[] | null {
+  private fillTriangles(loops: number[][], rings: number[][], verts: number, m: Mat, z: number, r: Resolved, outlined = false): number[] | null {
     const work: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
     const tris = triangulateLoops(loops, work);
     this.prepWork += Math.floor(work.n / 32);
     if (!work.limited) return tris;
     this.warnInc('hatch.fill_limited');
-    if (!outlined) for (const l of loops) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
+    if (!outlined) for (const l of rings) this.out.polyline(this.xf(m, openRing(l), z), true, r.style);
     return null;
   }
 
   /** 그라데이션: 삼각형을 잘게 나눠 색을 단계로 칠한다 */
-  private gradient(e: HatchEntity, loops: number[][], m: Mat, z: number, r: Resolved, ctx: Ctx, verts: number): void {
+  private gradient(e: HatchEntity, loops: number[][], rings: number[][], m: Mat, z: number, r: Resolved, ctx: Ctx, verts: number): void {
     const g = e.gradient!;
-    const tris = this.fillTriangles(loops, verts, m, z, r);
+    const tris = this.fillTriangles(loops, rings, verts, m, z, r);
     if (!tris) return;
     let minX = Infinity;
     let minY = Infinity;

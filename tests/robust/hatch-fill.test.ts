@@ -12,6 +12,8 @@
  * 넓이 검사가 잡아 칸으로 다시 채우는지, 정상 꼴과 신발끈 식이 맞지 않는 꼴(겹친 구멍 등)은 예전 삼각형 그대로인지, 검사 일을 세는지 본다.
  * 94차: 이웃 고리와 변을 함께 쓰는 고리는 판정 점(첫 변 중점)이 이웃의 경계 위라 이웃의 구멍으로 분류됐다(맞붙은 사각형 12개 가운데 6개).
  * 맞닿은 쌍만 안쪽 점과 넓이로 판정해 맞붙은 고리·벽돌·바둑판이 모두 채워지고, 바깥 변에 닿은 구멍은 구멍으로 남는지, 세 길이 같은지 본다.
+ * 95차: 칸 조각(cellFill) 안의 포함 관계는 예전 판정이라 바깥 변에 닿은 구멍·서로 변을 함께 쓰는 구멍이 칸 안에서 채워졌다.
+ * 고리가 원래 역할(바깥·구멍)을 물려받아 구멍마다 품는 조각만 찾는지(넓이·점 표본), 일이 줄어드는지 본다.
  */
 import earcut from 'earcut';
 import { describe, expect, it } from 'vitest';
@@ -839,6 +841,59 @@ describe('변을 함께 쓰는 고리의 포함 판정(94차)', () => {
     expect(codes(s)).not.toContain('hatch.fill_limited');
     // 칸마다 닫힘 정점을 한 번 더 적은 사각형(정점 5개)은 earcut이 삼각형 2~3개로 채운다
     expect(tris(s)).toBeGreaterThanOrEqual(24);
+  });
+});
+
+/** 바깥 200 × 100 안에 기운 막대 n개(폭 0.5, 높이 80, 간격 1.3): 막대의 첫 변이 바깥 고리 위쪽(top) 또는 아래쪽 변 위라 바깥 고리와 변을 함께 쓴다 */
+const touchBars = (n: number, top: boolean, deg: number): number[][] => {
+  const [W, H, w, h, g] = [200, 100, 0.5, 80, 1.3];
+  const loops: number[][] = [[0, 0, W, 0, W, H, 0, H]];
+  for (let k = 0; k < n; k++) {
+    const x0 = 85 + g * k;
+    loops.push(top ? [x0, H, x0 + w, H, x0 + w - h, H - h, x0 - h, H - h] : [x0 - h, 0, x0 - h + w, 0, x0 + w, h, x0, h]);
+  }
+  return loops.map((l) => rotate(l, deg, 100, 50));
+};
+/** 바깥 200 × 100 안에 긴 변을 함께 쓰는 기운 막대 쌍 35쌍(구멍 70개, 바깥에 닿지 않음). 오른쪽 막대의 첫 변이 함께 쓰는 변이다 */
+const pairedBars = (deg: number): number[][] => {
+  const [w, h] = [0.5, 70];
+  const loops: number[][] = [[0, 0, 200, 0, 200, 100, 0, 100]];
+  for (let k = 0; k < 35; k++) {
+    const x0 = 85 + 2.6 * k;
+    loops.push([x0, 85, x0 + w, 85, x0 + w - h, 85 - h, x0 - h, 85 - h], [x0 + w - h, 85 - h, x0 + w, 85, x0 + 2 * w, 85, x0 + 2 * w - h, 85 - h]);
+  }
+  return loops.map((l) => rotate(l, deg, 100, 50));
+};
+
+describe('칸 조각 안의 고리 포함 관계(95차)', () => {
+  it('구멍이 64개 넘게 서로 덮어 칸으로 자르는 해치에서 바깥 변에 닿은 구멍이 칸 안에서도 구멍이다(예전 17·60·120·150·300도에서 넓이 +1~21%)', () => {
+    // [각도, 위쪽 변]: 앞 여섯은 예전에 칸 안에서 구멍이 채워졌고 뒤 넷은 예전에도 맞았다.
+    // 17도 위쪽·45도 위쪽·135도 위쪽·333도 아래쪽은 칸 안 earcut이 바깥 고리와 변을 함께 쓰는 구멍을 덮어(포함 관계는 맞고 넓이 검사에 걸린다) 아직 맞지 않는다
+    const cases: [number, boolean][] = [[17, false], [60, false], [120, true], [120, false], [150, false], [300, false], [0, true], [0, false], [90, true], [271, false]];
+    for (const [deg, top] of cases) {
+      const loops = touchBars(70, top, deg);
+      // 맨 위 포함 관계(94차)는 막대 70개 모두 구멍이다
+      expect(loopNesting(loops)!.holesOf[0]).toHaveLength(70);
+      expectRegion(loops, triangulateLoops(loops));
+    }
+  });
+
+  it('서로 긴 변을 함께 쓰는 구멍 쌍도 칸 안에서 둘 다 구멍이다(예전 0.19·200·271도에서 한쪽이 다른 쪽 안으로 들어 채워져 넓이 +0.4~7%)', () => {
+    for (const deg of [0, 0.19, 17, 30, 90, 200, 271]) {
+      const loops = pairedBars(deg);
+      expect(loopNesting(loops)!.holesOf[0]).toHaveLength(70);
+      expectRegion(loops, triangulateLoops(loops));
+    }
+  });
+
+  it('기운 막대 4,000개의 채우기 일이 줄어든다(칸 안에서 구멍마다 품는 조각만 찾는다 — 예전 2,424만)', () => {
+    const loops = slantedBars(4000);
+    const verts = loops.reduce((a, l) => a + (l.length >> 1), 0);
+    const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
+    const t = triangulateLoops(loops, w);
+    expect(w.limited).toBeFalsy();
+    expect(t.length).toBeGreaterThan(0);
+    expect(w.n).toBeLessThan(hatchFillWorkLimit(verts) / 2);
   });
 });
 

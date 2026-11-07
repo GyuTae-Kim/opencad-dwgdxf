@@ -4,7 +4,7 @@
  */
 import earcut from 'earcut';
 import { pushAll } from '../core/arrays';
-import { LINETYPE_ELEMENTS } from '../core/limits';
+import { LINETYPE_ELEMENTS, hatchFillWorkLimit } from '../core/limits';
 import type { HatchEntity, HatchPath, HatchPatternLine } from '../core/model';
 import { type FitWork, arcPoints, bulgeFlatPoints, ccwSweep, ellipsePoints, interpolateFitPoints, nurbsPoints } from '../geom/curves';
 import { type DashWork, dashInterval } from './linetype';
@@ -94,14 +94,41 @@ function pointInRing(x: number, y: number, c: readonly number[]): boolean {
   return inside;
 }
 
-/** 해치 스타일에 따라 쓸 고리를 고른다(2 = 가장 바깥만). */
-export function hatchLoops(h: HatchEntity, tol: number, fit?: FitWork): number[][] {
-  let loops = h.paths.map((p) => ({ p, ring: pathLoop(p, tol, fit) })).filter((l) => l.ring.length >= 6);
-  if (h.hatchStyle === 2) {
-    const outer = loops.filter((l) => l.p.flags & 1 || l.p.flags & 16);
-    if (outer.length) loops = outer;
-  }
-  return loops.map((l) => l.ring);
+/** 해치 경로마다 고리(정점 셋 이상인 것만, 경로 차례). 섬 감지 스타일로 고르기 전이다 */
+export function hatchRings(h: HatchEntity, tol: number, fit?: FitWork): number[][] {
+  return h.paths.map((p) => pathLoop(p, tol, fit)).filter((l) => l.length >= 6);
+}
+
+/**
+ * 해치 경로를 고리로 만들고 섬 감지 스타일(DXF 75)에 따라 채울 고리를 고른다(islandLoops).
+ * work가 있으면 스타일을 가리느라 든 포함 관계 일을 더한다
+ */
+export function hatchLoops(h: HatchEntity, tol: number, fit?: FitWork, work?: { n: number }): number[][] {
+  return islandLoops(hatchRings(h, tol, fit), h.hatchStyle, work);
+}
+
+/**
+ * 섬 감지 스타일(95차). DXF 참조 HATCH의 75번은 "0 = Hatch odd parity area (Normal style), 1 = Hatch outermost area only (Outer style),
+ * 2 = Hatch through entire area (Ignore style)"이고, ObjectARX HatchStyle은 Outer를 "only the outmost level of the structure is hatched",
+ * Ignore를 "ignores all internal loops"라고 적는다. 그래서 고리 깊이(자기를 품은 다른 고리 수 — loopNesting, 94차 맞닿은 고리 판정 포함)로
+ * Outer는 깊이 1 이하(바깥 경계와 첫 겹 섬), Ignore는 깊이 0(바깥 경계)만 남겨 홀짝으로 채운다. 남긴 고리 사이에서는 깊이가 그대로라
+ * 채움은 "고리 하나에만 든 곳"(Outer)·"고리에 든 곳"(Ignore)이고 TRIM의 칠한 곳 판정(trimHatchPaths)과 같다.
+ * 경로 깃발(92: 1 External, 16 Outermost)은 쓰지 않는다: 점을 집어 만든 경로(4 Derived)는 깃발이 깊이와 맞지만
+ * 객체를 골라 만든 경로는 깊이 2·3 고리도 External이다(실제 도면 841개).
+ * 0과 그 밖의 값, 고리가 하나뿐이거나 모든 고리가 남으면 받은 배열 그대로다. 포함 관계 일이 채우기 한도(hatchFillWorkLimit)를 넘으면
+ * 모든 고리를 돌려준다(채우기도 같은 한도에 걸려 경계만 그린다)
+ */
+export function islandLoops(loops: number[][], style: number, work?: { n: number }): number[][] {
+  if ((style !== 1 && style !== 2) || loops.length < 2) return loops;
+  let verts = 0;
+  for (const l of loops) verts += l.length >> 1;
+  const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
+  const nest = loopNesting(loops, w);
+  if (work) work.n += w.n;
+  if (!nest) return loops;
+  const keep = style === 1 ? 1 : 0;
+  if (nest.depth.every((d) => d <= keep)) return loops;
+  return loops.filter((_, i) => nest.depth[i]! <= keep);
 }
 
 /**
@@ -1370,10 +1397,10 @@ export function triangulateLoops(loops: number[][], work?: LoopWork): number[] {
  * split이면 구멍이 STRIP_HOLES개 넘는 바깥 고리와 구멍 상자가 서로 겹쳐 덮는 바깥 고리(wrapped)를 칸으로 나눠 채운다(칸 하나를 채울 때는 나누지 않는다).
  * cap은 지금 채우는 칸의 정점 수 상한이다(넓이 검사에 걸리면 이보다 작은 칸으로 다시 채운다).
  * 맞닿은 고리 찾기(94차)는 맨 위(split)에서만 한다: 칸 조각(cellFill)마다 찾으면 기운 막대 4,000개의 채우기 일이 2,380만에서 7,550만으로 늘어 한도를 넘었다.
- * 칸 조각의 포함 관계는 예전 판정 그대로다(칸은 이미 나눈 바깥 고리와 그 구멍을 자른 것이다)
+ * 칸 조각(hole이 있으면 — cellFill이 자른 바깥 고리 하나와 그 구멍들)은 고리가 원래 역할을 물려받는다(cellNesting, 95차)
  */
-function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined, split: boolean, cap = Infinity): boolean {
-  const nest = loopNesting(loops, work, 'auto', split);
+function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined, split: boolean, cap = Infinity, hole?: ReadonlySet<readonly number[]>): boolean {
+  const nest = hole ? cellNesting(loops, hole, work) : loopNesting(loops, work, 'auto', split);
   if (!nest) return false;
   const { depth, holesOf } = nest;
   for (let i = 0; i < loops.length; i++) {
@@ -1616,10 +1643,13 @@ function splitFill(outer: number[], holes: number[][], axes: readonly [0 | 1, 0 
  * 변이 적은 축을 고르므로 긴 변을 거듭 자르지 않는다(서로 감싼 ㄱ자 구멍 2만 개 — 정점 12만 개가 칸 정점 96만 개. 긴 변만 고르면 일 한도를 넘었다).
  * 직선이 가로지른 구멍은 칸 경계 고리에 이어 붙으므로(cutLoops) 잘린 구멍이 칸 경계에 따로 닿지 않는다(바깥 고리만 자르면 earcut이 그 구멍을 채운다).
  * 한도를 넘으면 'limited'. 좌표가 1e100을 넘으면 교점 식이 넘칠 수 있어 'unsafe'(부른 쪽이 예전처럼 한 번에 earcut).
- * cap은 칸 정점 수 상한이다(넓이 검사에 걸린 earcut을 다시 채울 때 더 작게 — refill)
+ * cap은 칸 정점 수 상한이다(넓이 검사에 걸린 earcut을 다시 채울 때 더 작게 — refill).
+ * loops는 늘 [바깥 고리, 그 구멍…]이다(부르는 곳 넷 모두 — 맨 위 포함 관계가 정한 구멍). 칸 안의 포함 관계는 그 역할을 물려받는다(cellNesting)
  */
 function cellFill(loops: number[][], out: number[], work?: LoopWork, cap = CELL_VERTS): 'ok' | 'limited' | 'unsafe' {
   for (const l of loops) for (const v of l) if (!(Math.abs(v) <= 1e100)) return 'unsafe';
+  /** 구멍(맨 위 포함 관계의 구멍): 직선이 지나지 않으면 같은 배열 그대로 칸에 든다 */
+  const hole = new Set<readonly number[]>(loops.slice(1));
   const stack: [number[][], number][] = [[loops, 0]];
   while (stack.length) {
     const [ls, depth] = stack.pop()!;
@@ -1654,9 +1684,110 @@ function cellFill(loops: number[][], out: number[], work?: LoopWork, cap = CELL_
         continue;
       }
     }
-    if (ls.length && !fillLoops(ls, out, work, false, cap)) return 'limited';
+    if (ls.length && !fillLoops(ls, out, work, false, cap, hole)) return 'limited';
   }
   return 'ok';
+}
+
+/**
+ * 칸 조각의 포함 관계(95차). cellFill은 [바깥 고리, 그 구멍…]을 직선으로 자른다. 직선이 지나는 고리는 사슬로 끊겨 직선 위 구간과 이어진 새 고리(조각)가 되고,
+ * 지나지 않는 고리는 같은 배열 그대로 한쪽에 든다(cutLoops). 조각은 (원래 영역 ∩ 반평면)의 경계 가운데 직선에 닿은 것이라 바깥 경계다 —
+ * 조각끼리 품지 않고(직선 위 구간이 서로 겹치지 않는다), 통째로 남은 구멍 안에도 들지 않는다(들면 그 구멍도 직선이 지난다).
+ * 그래서 칸 안의 고리는 원래 역할을 물려받는다: 통째로 남은 구멍(hole에 든 배열)은 깊이 1, 조각과 통째로 남은 바깥 고리는 깊이 0이고, 구멍마다 품는 고리만 찾는다.
+ * 예전 판정(고리마다 첫 변의 중점을 모든 고리에)은 구멍이 바깥 고리와 변을 함께 쓰면 칸 안에서 그 점이 조각의 경계 위라 반열림 규칙에 달려
+ * 맨 위에서 구멍인 고리가 채워졌다(바깥 위쪽 변에 닿은 기운 막대 70개를 30도 돌리면 넓이 +18%).
+ * 구멍의 판정 점(첫 변의 중점)이 고리의 변에서 여유(TOUCH_REL) 안이면 구멍의 안쪽 점(interiorPoint)으로 묻는다. 판정 점이 경계 위가 아니면 깊이·구멍이 예전 판정과 같다.
+ * 구멍마다 품는 고리가 꼭 하나가 아니거나(고리가 엇갈리는 입력), 안쪽 점도 경계 위거나 없거나, 좌표가 safe가 아니면 예전 판정(loopNesting)으로 돌아간다.
+ * 든 일(정점 수 + 상자 비교 + 본 변 수, 안쪽 점은 정점 수의 두 배)을 work에 더하고 한도를 넘으면 null(limited)
+ */
+function cellNesting(ls: readonly number[][], hole: ReadonlySet<readonly number[]>, work: LoopWork | undefined): LoopNest | null {
+  const n = ls.length;
+  const w = { work: 0 };
+  const old = (): LoopNest | null => {
+    if (work) work.n += w.work;
+    return loopNesting(ls, work, 'auto', false);
+  };
+  const depth = new Int32Array(n);
+  const holesOf: number[][] = ls.map(() => []);
+  /** 깊이 0인 고리(조각·바깥 고리)와 그 상자(여유만큼 넓힘)·여유 */
+  const rings: number[] = [];
+  const box: number[] = [];
+  const reach: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const c = ls[i]!;
+    w.work += c.length >> 1;
+    if (c.length < 6 || c.length % 2) return old();
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    let m = 0;
+    for (let k = 0; k < c.length; k += 2) {
+      const x = c[k]!;
+      const y = c[k + 1]!;
+      if (!safe(x) || !safe(y)) return old();
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+      m = Math.max(m, Math.abs(x) + Math.abs(y));
+    }
+    if (hole.has(c)) {
+      depth[i] = 1;
+      continue;
+    }
+    const r = 2.000001 * TOUCH_REL * m;
+    rings.push(i);
+    reach.push(r);
+    box.push(x0 - r, y0 - r, x1 + r, y1 + r);
+  }
+  const asked = new Int32Array(rings.length);
+  const slabs: (RingSlabs | null | undefined)[] = new Array(rings.length);
+  /** 정점이 많은 고리는 여러 번 물을 때 띠 색인을 한 번 만든다 */
+  const index = (r: number): RingSlabs | null => {
+    const c = ls[rings[r]!]!;
+    if (c.length <= SLAB_MIN_VERTS * 2 || (asked[r] = asked[r]! + 1) <= 4) return null;
+    if (slabs[r] === undefined) {
+      slabs[r] = ringSlabs(c);
+      w.work += c.length;
+    }
+    return slabs[r]!;
+  };
+  /** 점을 품는 깊이 0 고리(꼭 하나면 그 번호, 없거나 둘 넘으면 -1, 점이 어느 고리 변에서 여유 안이면 -2) */
+  const container = (x: number, y: number): number => {
+    let found = -1;
+    let count = 0;
+    for (let r = 0; r < rings.length; r++) {
+      w.work++;
+      if (!(x >= box[r * 4]! && x <= box[r * 4 + 2]! && y >= box[r * 4 + 1]! && y <= box[r * 4 + 3]!)) continue;
+      const s = ringSide(x, y, ls[rings[r]!]!, index(r), reach[r]!, w);
+      if (s === 0) return -2;
+      if (s > 0) {
+        found = rings[r]!;
+        count++;
+      }
+    }
+    return count === 1 ? found : -1;
+  };
+  for (let j = 0; j < n; j++) {
+    if (!depth[j]) continue;
+    const c = ls[j]!;
+    let k = container((c[0]! + c[2]!) / 2, (c[1]! + c[3]!) / 2);
+    if (k === -2) {
+      const p = interiorPoint(c);
+      w.work += 2 * (c.length >> 1);
+      k = p ? container(p[0], p[1]) : -1;
+    }
+    if (k < 0) return old();
+    holesOf[k]!.push(j);
+    if (work && work.limit !== undefined && work.n + w.work > work.limit) {
+      work.n += w.work;
+      work.limited = true;
+      return null;
+    }
+  }
+  if (work) work.n += w.work;
+  return { depth, holesOf };
 }
 
 /** 축 좌표 c에 정점이 있으면 c와 바로 위(없으면 바로 아래) 정점 좌표의 가운데로 옮긴다. 그 사이에 수가 없으면 NaN */
