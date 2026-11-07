@@ -31,6 +31,7 @@ import { coverBoxes } from './overlay-place';
 import { type Acquired, type PolarTip, objectTrack, polarTrack } from './tracking';
 import { type PolarSettings, angleBase, clockwise, otrackDirections, polarAddList, polarDirections, polarReference, shiftAcquire, trackAngleText } from './polar';
 import { gripPoints } from '../edit/geom';
+import { columnGripsFor } from './mtextcols-grips';
 import { dynGrips, isDynamicReference } from '../edit/dynblock';
 import { spaceTolerance } from '../render/build';
 import { ask, closeMenu, keyboardControl, showMenu, toast } from './ui/dom';
@@ -1864,7 +1865,9 @@ export class App {
             const e = st.doc.entityIndex.get(h);
             if (!e) continue;
             try {
-              for (const g of gripPoints(e, st.doc)) this.gripList.push({ handle: h, id: g.id, point: g.point });
+              // 여러 단 문자: 묶음 그립(위치·단 폭·간격·높이 — 묶음의 다른 단은 그립 없음)
+              const cols = e.type === 'MTEXT' ? columnGripsFor(this, e, st.selection) : null;
+              for (const g of cols ?? gripPoints(e, st.doc)) this.gripList.push({ handle: h, id: g.id, point: g.point });
             } catch {
               /* 그립이 없는 객체 */
             }

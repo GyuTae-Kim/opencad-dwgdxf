@@ -38,6 +38,7 @@ import { clampedKnots } from '../../geom/curves';
 import { CollectSink, kindOf, rawTagValid, rawTagsValid, type TagSink } from './tagwriter';
 import type { WriteContext } from './wcontext';
 import { mtextPlainLines } from './wconvert';
+import { COLUMNS_DROPPED } from '../mtextcols';
 import { annoDimWriteOverrides } from '../annoscale';
 import { parseDimOverrides } from './tagutil';
 import { acdbTableTags, tableCellsOut } from '../tablecells';
@@ -515,14 +516,16 @@ function writeMText(w: TagOut, e: MTextEntity): void {
     w.t(42, totalW);
     w.t(43, cols.heights.length ? Math.max(...cols.heights) : fin(e.rectHeight ?? 0));
     w.t(71, cols.type);
-    w.t(72, cols.type === 2 && cols.autoHeight ? 0 : cols.count);
+    // 단 수: AutoCAD가 쓴 R2018 실물은 자동 높이 동적 단에도 단 수를 쓴다(읽을 때 0이면 전체 폭으로 셈한다)
+    w.t(72, count);
     w.t(44, cols.width);
     w.t(45, cols.gutter);
     w.t(73, cols.autoHeight ? 1 : 0);
     w.t(74, cols.flowReversed ? 1 : 0);
     for (const hgt of cols.heights) w.t(46, hgt);
   } else if (cols && cols.type > 0 && ver < 1032) {
-    w.ctx.warn('mtext.columns_dropped', 'R2018 이전 버전에는 MTEXT 단 정보를 쓰지 않았습니다(문자는 그대로).');
+    // 단 객체로 나눌 근거가 없는 꼴만 여기 온다(io/mtextcols.ts splitColumnsForLegacy)
+    w.ctx.warn('mtext.columns_dropped', COLUMNS_DROPPED);
   }
 }
 

@@ -71,6 +71,7 @@ import { mlineDrawing } from '../edit/mline/draw';
 import { toleranceLayout } from '../edit/annot/tolerance';
 import { breakRuns } from '../edit/annot/mleader';
 import { type AnnoDisplay, annoDisplayFor } from '../edit/annoscale/view';
+import { columnWrapWidth, memberColumnWidths } from '../edit/util/mtextcols';
 import { fitCount, leaderVertices, splineCtrl } from '../core/flat3';
 
 export interface BuildOptions {
@@ -227,6 +228,8 @@ export class SceneBuilder {
   private readonly xclipFilters = new Map<string, SpatialFilterObject | null>();
   /** 필터 사전(ACAD_FILTER) → SPATIAL 항목 핸들 */
   private readonly filterSpatial = new Map<string, string | undefined>();
+  /** R2000~R2013 꼴 여러 단 문자의 다른 단 → 단 폭(처음 찾을 때 만들고, 색인 수가 바뀐 뒤 못 찾으면 다시) */
+  private memberWidths: { size: number; map: Map<string, number> } | null = null;
 
   constructor(
     private readonly doc: CadDocument,
@@ -1669,14 +1672,23 @@ export class SceneBuilder {
     this.emitText(lay, world, r, ctx);
   }
 
+  /** 여러 단 문자 묶음의 다른 단 → 단 폭(못 찾고 색인 수가 바뀌었으면 다시 만든다 — 편집으로 새 묶음이 생긴 때) */
+  private columnMembers(): Map<string, number> {
+    const size = this.doc.entityIndex.size;
+    if (!this.memberWidths || this.memberWidths.size !== size) this.memberWidths = { size, map: memberColumnWidths(this.doc) };
+    return this.memberWidths.map;
+  }
+
   private mtext(e: Extract<Entity, { type: 'MTEXT' }>, ctx: Ctx): void {
     const r = this.resolve(e, ctx);
     const style = this.doc.textStyles.get(tableKey(e.style));
     this.prepWork += e.text.length >> 1;
+    // R2000~R2013 꼴 여러 단 문자의 단은 단 폭으로 줄을 나눈다(다른 단 41은 전체 폭이다)
+    const wrap = e.xdata ? columnWrapWidth(e, () => this.columnMembers()) : undefined;
     const lay = this.opt.text.layoutMText({
       text: e.text,
       height: e.height,
-      width: e.width,
+      width: wrap ?? e.width,
       attachment: e.attachment,
       lineSpacingStyle: e.lineSpacingStyle,
       lineSpacingFactor: e.lineSpacingFactor,

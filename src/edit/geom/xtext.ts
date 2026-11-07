@@ -11,6 +11,7 @@ import { cloneEntity } from './path';
 import { type Affine, add, affApply, affApply3, affDet, affLin, affLin3, affMul, cross, cross3, dot, len, len3, mul, norm, norm3, normAngle, rot90, sub } from './math';
 import { frameOf, isNaturalExt, isPlanarExt, planProj, planZ, planeMap } from './ocs';
 import type { TransformOptions } from './types';
+import { scaleColumnXData } from '../util/mtextcols';
 
 let engine: TextEngine | null = null;
 
@@ -247,6 +248,8 @@ export function xformMText(e: MTextEntity, m: Affine, opt: TransformOptions, doc
   out.width = e.width * kx;
   if (e.rectHeight !== undefined) out.rectHeight = e.rectHeight * ky;
   if (e.columns) out.columns = { ...e.columns, width: e.columns.width * kx, gutter: e.columns.gutter * kx, heights: e.columns.heights.map((x) => x * ky) };
+  // R2000~R2013 꼴 여러 단(확장 자료의 단 폭·간격·높이)도 같게
+  if (e.xdata) scaleColumnXData(out, kx, ky);
   return out;
 }
 

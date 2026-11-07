@@ -221,12 +221,13 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
         }
         const t0 = performance.now();
         let r: { data: Uint8Array; warnings: { code: string; message: string; count?: number; detail?: unknown }[] };
+        // 여러 단 MTEXT를 R2018 전 단 객체로 나눌 때 화면과 같은 글꼴로 줄을 잰다
         if (msg.format === 'dwg') {
           const { writeDwg } = await import('../io/dwg/index');
-          r = writeDwg(doc, { version: msg.version as never });
+          r = writeDwg(doc, { version: msg.version as never, text });
         } else {
           const { writeDxf } = await import('../io/dxf/writer');
-          r = writeDxf(doc, { version: msg.version as never, binary: msg.binary });
+          r = writeDxf(doc, { version: msg.version as never, binary: msg.binary, text });
         }
         const data = r.data.buffer.slice(r.data.byteOffset, r.data.byteOffset + r.data.byteLength) as ArrayBuffer;
         post({ type: 'saved', id: msg.id, data, warnings: r.warnings.map((w) => ({ code: w.code, message: w.message, count: w.count, detail: plainDetail((w as { detail?: unknown }).detail) })), ms: performance.now() - t0 }, [data]);

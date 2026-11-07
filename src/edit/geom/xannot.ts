@@ -33,6 +33,7 @@ import {
 import { isNaturalExt, isPlanarExt, ocsToWcs, planProj, planZ, planeMap } from './ocs';
 import { type EditResult, type TransformOptions, allocBlockName } from './types';
 import { metrics } from './xtext';
+import { tagColumnCopy, transformTag } from '../util/mtextcols';
 import { transformEntity, decomposeBlock, xformNormal } from './transform';
 import { leaderVertices, pack3 } from '../../core/flat3';
 
@@ -51,8 +52,10 @@ export function mapBlockContents(list: readonly Entity[], A: Affine, doc: CadDoc
     const src = stripOcs && c.extrusion ? ({ ...c, extrusion: undefined } as Entity) : c;
     const r = transformEntity(src, A, doc, opt);
     for (const x of [...(r.replace ?? []), ...(r.add ?? [])]) {
-      // 새 객체: 핸들·사전·반응자·DWG 원본 본문은 잇지 않는다
-      ents.push(freshEntity(x));
+      // 새 객체: 핸들·사전·반응자·DWG 원본 본문은 잇지 않는다(여러 단 MTEXT는 같은 변환으로 만든 단끼리 다시 잇는다)
+      const c = freshEntity(x);
+      if (c.type === 'MTEXT') tagColumnCopy(c, transformTag(A, opt.dz));
+      ents.push(c);
     }
     if (r.blocks) blocks.push(...r.blocks);
     if (r.message && !message) message = r.message;

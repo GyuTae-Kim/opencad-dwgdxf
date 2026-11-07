@@ -85,7 +85,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 | SPLINE·HELIX | 매듭 수가 맞지 않으면 고른 매듭으로 다시 만든다(`spline.knots_fixed`). HELIX는 R2007+ |
 | TEXT | 정렬(72·73)이 있으면 11을 늘 쓴다(없으면 삽입점). 73은 두 번째 AcDbText 뒤 |
 | ATTRIB·ATTDEF | R2010+ 버전 280, 잠금 280(R2007+), 74 세로 정렬. 여러 줄 속성(R2018)은 101 Embedded Object MTEXT, 그 전 버전은 한 줄 문자로 |
-| MTEXT | 250자 조각, 46 정의 높이(R2007+, 값이 있을 때), 배경(R2004+), 단(R2018 101 Embedded Object; 그 전은 `mtext.columns_dropped`) |
+| MTEXT | 250자 조각, 46 정의 높이(R2007+, 값이 있을 때), 배경(R2004+), 단(R2018 101 Embedded Object — R2000~R2013 꼴 단 묶음은 첫 단 자리의 한 객체로 합친다. R2013 이하는 단 정보를 ACAD 확장 자료로, 단이 둘 이상이면 단 객체로 나눈다 — `io/mtextcols.ts`. 나눌 근거가 없는 꼴은 `mtext.columns_dropped`) |
 | INSERT·MINSERT | 66·ATTRIB들·SEQEND. 행·열이 있으면 AcDbMInsertBlock |
 | DIMENSION | 종류별 하위 클래스(회전·정렬·2선 각도·지름·반지름·3점 각도·세로좌표), ARC_DIMENSION(AcDbArcDimension, 70 종류 값은 모든 버전에서 5 — AutoCAD 2026이 쓴 R2018 DXF로 확인, 다른 프로그램이 쓴 8은 읽을 때 5로), LARGE_RADIAL_DIMENSION(70 종류 값 9, 모델은 & 7로 가리는 4). 재지정(`overrides`)은 ACAD DSTYLE 확장 자료로(원래 확장 자료와 같으면 원래 순서 그대로) |
 | LEADER | 76 정점 수·10 정점, 340 주석, 210~213 |
@@ -192,7 +192,10 @@ ezdxf 결과는 파일 내용 해시로 `.runtime/dxfw-cache`에 캐시하고, �
   (AutoCAD가 기본값으로 다시 만든다).
 - 원본 태그로 쓰는 객체(모르는 객체·XRECORD·TABLESTYLE 등)는 읽은 버전의 태그 그대로다. 버전을 낮춰 쓸 때 그 객체의
   버전별 차이는 고치지 않는다.
-- R2007~R2013의 MTEXT 단 정보는 확장 자료로만 오가고(원본 확장 자료가 있으면 그대로), 모델 값(`columns`)은 R2018에만 쓴다.
+- 여러 단 MTEXT(90차): R2000~R2013 꼴(단마다 MTEXT, 첫 단의 ACAD 확장 자료)은 같은 꼴 버전으로 쓰면 그대로, R2018로 쓰면 첫 단 자리의
+  한 객체(이어 붙인 글, 단 자료)로 합친다. R2018 꼴(`columns`)을 R2013 이하로 쓰면 단 정보를 확장 자료로 옮기고, 단이 둘 이상이면 문단 끝·단 나누기에서
+  단 객체로 나눈다(새 핸들, 첫 단이 가리킨다). AutoCAD가 같은 도면을 R2018·R2007로 쓴 짝 24개 객체와 값·글이 같다. 흐름 거꾸로·왼쪽 위가 아닌
+  부착점은 근거가 없어 단 정보를 빼고 한 MTEXT로 쓴다.
 - DWG에서 읽은 문서: DWG 리더가 해석하지 않은 객체(VISUALSTYLE·MATERIAL·DICTIONARYVAR 등)는 원본 태그가 없어 빠진다.
   DWG 리더가 XRECORD의 8비트 값(280~289)을 16비트로 읽어 자료가 어긋나는 경우가 있고(예: sample_AC1018.dwg의
   AcDb_Thumbnail_Schema), 그런 XRECORD는 빠진다.

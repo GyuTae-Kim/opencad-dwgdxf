@@ -50,6 +50,8 @@ import { DYN_TYPES } from '../dyncodec';
 import { ASSOC_DWG_TYPES } from '../assoccodec';
 import { rawObjectOk } from './rawobjects';
 import { arrayRecordXData, hasAcadArrays } from './assocarray';
+import type { TextEngine } from '../../../text/layout';
+import { COLUMNS_DROPPED, COLUMNS_MERGED, columnsForR2018, linkColumnHead, splitColumnsForLegacy } from '../../mtextcols';
 
 export type TableName = 'BLOCK_RECORD' | 'LAYER' | 'STYLE' | 'LTYPE' | 'VIEW' | 'UCS' | 'VPORT' | 'APPID' | 'DIMSTYLE' | 'VPENT';
 
@@ -312,6 +314,8 @@ export class WCtx {
 
   /** 원본 본문을 되쓸지 */
   readonly useRaw: boolean;
+  /** 여러 단 MTEXT를 R2018 전 단 객체로 나눌 때 줄을 재는 문자 엔진(없으면 단선 글꼴) */
+  text?: TextEngine;
   /** DXF 원본 태그의 AutoCAD 연관 배열이 있는지(처음 배열 참조 후보를 볼 때 정한다) */
   private acadArrays: boolean | undefined;
   /** 프록시 그림으로 바꿔 쓴 사용자 객체 수 */
@@ -681,7 +685,32 @@ export class WCtx {
     for (const pb of this.blocks) {
       // 외부 참조·덧씌우기 블록 레코드는 도형을 소유하지 않는다(내용은 참조 파일에 있다)
       if (pb.def.flags & 12 && pb !== this.modelBlock && pb !== this.paperBlock) continue;
-      for (const e of pb.def.entities) {
+      // 여러 단 MTEXT: R2018은 단 묶음을 첫 단 자리의 한 객체로(다른 단은 쓰지 않는다), 그 전은 한 객체를 단 객체로(io/mtextcols.ts)
+      const cols = this.ver >= R2018 ? columnsForR2018(pb.def.entities) : null;
+      for (const e0 of pb.def.entities) {
+        let e = e0;
+        if (cols?.has(e0)) {
+          const merged = cols.get(e0);
+          if (!merged) {
+            // 첫 단에 합친 다른 단(개수만큼 센다 — 저장 뒤 참고)
+            this.warn('mtext.columns_merged', COLUMNS_MERGED);
+            continue;
+          }
+          e = merged;
+        }
+        if (this.ver < R2018 && e.type === 'MTEXT' && e.columns && e.columns.type > 0) {
+          const s = splitColumnsForLegacy(e, this.doc.textStyles.get(tableKey(e.style)), this.text);
+          if (!s) this.warn('mtext.columns_dropped', COLUMNS_DROPPED);
+          else {
+            const head = this.planEntity(s.head, dropped);
+            const rest = s.members.map((m) => this.planEntity(m, dropped)).filter((x): x is PEnt => !!x);
+            if (head) {
+              if (rest.length) head.e = linkColumnHead(s, rest.map((x) => x.h.toString(16).toUpperCase()));
+              pb.ents.push(head, ...rest);
+            }
+            continue;
+          }
+        }
         // 원본 본문으로 쓸 수 없는 사용자 객체: 프록시 그림이 있으면 보이는 모양을 보통 도형으로 남긴다(DXF 쓰기와 같다)
         if (e.type === 'UNKNOWN' && e.graphics?.length && !(this.useRaw && e.dwgRaw?.version === this.verStr)) {
           const dec = decoderFor(codepageToEncoding(this.doc.codepage || 'ANSI_1252'));

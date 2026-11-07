@@ -7,6 +7,7 @@ import { applyTemplate, withFieldTemplate } from '../../edit/field/store';
 import { buildToleranceText, parseToleranceText } from '../../edit/annot/tolerance';
 import type { EditOp } from '../../edit/session';
 import { cloneEntity } from '../../edit/session';
+import { cachedMTextColumnSets, linkedColumnGroup } from '../../edit/util/mtextcols';
 import type { App, CommandContext } from '../app';
 import { CancelError } from '../app';
 import { form } from '../ui/dom';
@@ -111,10 +112,37 @@ async function editAttdef(app: App, e: AttribEntity, ctx?: CommandContext): Prom
   return commitModify(app, ctx, e as unknown as Entity, { ...cloneEntity(e), tag } as unknown as Entity);
 }
 
-async function editMText(app: App, e: MTextEntity, ctx?: CommandContext): Promise<boolean> {
+/**
+ * 여러 단 문자 묶음(R2000~R2013 꼴): 첫 단을 합친 객체로 바꾸고 다른 단을 지운다(편집 단계 하나). after가 null이면 묶음째 지운다
+ */
+function commitGroup(app: App, ctx: CommandContext | undefined, head: MTextEntity, members: readonly MTextEntity[], after: MTextEntity | null): boolean {
+  const st = app.active!;
+  const block = st.session.ownerOf(head.handle);
+  if (!block) return false;
+  const list = st.doc.blocks.get(block)!.entities;
+  const ops: EditOp[] = after ? [{ kind: 'modify', block, before: head, after }] : [];
+  // 지우기는 뒤에서부터(되돌릴 때 같은 자리로)
+  const gone = (after ? [...members] : [head, ...members]).map((m) => ({ m, i: list.indexOf(m) })).filter((x) => x.i >= 0 && st.session.ownerOf(x.m.handle) === block);
+  gone.sort((a, b) => b.i - a.i);
+  for (const x of gone) ops.push({ kind: 'remove', block, entity: x.m, index: x.i });
+  st.session.commit({ label: 'TEXTEDIT', ops, group: ctx?.group });
+  for (const x of gone) st.selection.delete(x.m.handle);
+  return true;
+}
+
+async function editMText(app: App, e0: MTextEntity, ctx?: CommandContext): Promise<boolean> {
+  // 여러 단 문자 묶음은 객체 하나로 합쳐 편집한다(AutoCAD처럼 — 글이 단 사이로 흐르고, 저장할 때 형식에 맞게 다시 나뉜다)
+  const st = app.active!;
+  const group = linkedColumnGroup(st.doc, e0, cachedMTextColumnSets(st.doc, st.gen));
+  if (group) {
+    const { unlockedOnly } = await import('../layers');
+    const hs = [group.head.handle, ...group.members.map((m) => m.handle)];
+    if (unlockedOnly(app, hs).length !== hs.length) return false;
+  }
+  const e = group ? group.merged : e0;
   const r = await openTextEditor(app, { ...mtextInit(e), ctx });
   if (!r || !r.changed) return false;
-  if (!r.plain.trim()) return commitModify(app, ctx, e, null);
+  if (!r.plain.trim()) return group ? commitGroup(app, ctx, group.head, group.members, null) : commitModify(app, ctx, e, null);
   const after = withText(app, e, r);
   after.height = r.height;
   after.style = r.style;
@@ -128,6 +156,7 @@ async function editMText(app: App, e: MTextEntity, ctx?: CommandContext): Promis
   } else {
     delete after.columns;
   }
+  if (group) return commitGroup(app, ctx, group.head, group.members, after);
   return commitModify(app, ctx, e, after);
 }
 
