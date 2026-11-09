@@ -95,7 +95,7 @@ function randomPoly(r: () => number, seed: number): Entity {
   }
   const base: Record<string, unknown> = { ...entityDefaults(), handle: (0x100 + seed).toString(16).toUpperCase() };
   if (r() < 0.6) base.owner = '1F';
-  if (r() < 0.2) base.xdata = [{ app: 'ACAD', values: [{ code: 1000, value: 'x' }] }];
+  if (r() < 0.2) base.xdata = [{ app: 'ACAD', items: [{ code: 1000, value: 'x' }] }];
   if (r() < 0.1) base.paperSpace = true;
   if (r() < 0.1) base.invisible = true;
   if (r() < 0.1) base.thickness = 2.5;
@@ -130,7 +130,7 @@ describe('106차 폴리선 EXPLODE 조각(스프레드 없이)', () => {
     const srcs: Entity[] = [
       { type: 'LINE', ...entityDefaults(), start: { x: 0, y: 0, z: 0 }, end: { x: 1, y: 0, z: 0 } },
       { type: 'LINE', ...entityDefaults(), owner: 'AB', start: { x: 0, y: 0, z: 0 }, end: { x: 1, y: 0, z: 0 } },
-      { type: 'LINE', ...entityDefaults(), owner: 'AB', xdata: [{ app: 'A', values: [] }], thickness: 1, plotStyle: 'P', paperSpace: true, invisible: true, start: { x: 0, y: 0, z: 0 }, end: { x: 1, y: 0, z: 0 } } as Entity,
+      { type: 'LINE', ...entityDefaults(), owner: 'AB', xdata: [{ app: 'A', items: [{ code: 1000, value: 'y' }] }], thickness: 1, plotStyle: 'P', paperSpace: true, invisible: true, start: { x: 0, y: 0, z: 0 }, end: { x: 1, y: 0, z: 0 } } as Entity,
     ];
     for (const s of srcs) {
       const a = { x: 1, y: 2, z: 3 };
