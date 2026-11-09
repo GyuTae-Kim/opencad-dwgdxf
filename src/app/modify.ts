@@ -292,6 +292,15 @@ export function commitResults(app: App, ctx: CommandContext, results: EditResult
   return plan.out;
 }
 
+/**
+ * 바꾸기 변경에 ownerOf가 찾은 자리를 짐작으로 단다(107차 — 적용이 블록 전체의 자리 표를 만들지 않게. 객체 150만 개 블록에서 2,000개를 옮기면
+ * 그 표가 확정의 대부분이었다). ownerOf(op.before.handle) 바로 뒤에 부른다. 짐작이 없으면(핸들이 겹친 문서) 칸을 두지 않는다
+ */
+function hintSlot(st: DocState, op: Extract<EditOp, { kind: 'modify' }>): void {
+  const i = st.session.slotHint(op.before.handle);
+  if (i !== undefined) op.index = i;
+}
+
 /** commitResults의 작업 모으기(문서에 적용하지 않는다). 구속을 지킬 수 없으면 null */
 function planResults(app: App, ctx: CommandContext, results: EditResult[], label: string, opt: { quiet?: boolean; transform?: Affine }): { ops: EditOp[]; out: Applied } | null {
   const st = app.active!;
@@ -352,7 +361,8 @@ function planResults(app: App, ctx: CommandContext, results: EditResult[], label
       const before = doc.entityIndex.get(e.handle);
       const block = st.session.ownerOf(e.handle);
       if (!before || !block) continue;
-      const op = { kind: 'modify' as const, block, before, after: e };
+      const op: Extract<EditOp, { kind: 'modify' }> = { kind: 'modify', block, before, after: e };
+      hintSlot(st, op);
       mod.set(e.handle, op);
       out.changed.push(e.handle);
     }
@@ -378,7 +388,9 @@ function planResults(app: App, ctx: CommandContext, results: EditResult[], label
     const before = doc.entityIndex.get(h);
     const block = st.session.ownerOf(h);
     if (!before || !block) continue;
-    mod.set(h, { kind: 'modify', block, before, after: e });
+    const op: Extract<EditOp, { kind: 'modify' }> = { kind: 'modify', block, before, after: e };
+    hintSlot(st, op);
+    mod.set(h, op);
     if (!follow.moved.has(h)) noRegen.add(h);
   }
   for (const op of mod.values()) {
