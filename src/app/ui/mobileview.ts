@@ -13,6 +13,8 @@ import type { Entity } from '../../core/model';
 import type { SnapKind } from '../view';
 import { entityProperties, typeName } from '../inquiry';
 import type { MeasureResult } from '../measure-result';
+import { balanceMarks } from '../commandline';
+import { unmark } from '../filetext';
 import { h, showMenu, toast } from './dom';
 import { icon } from './icons';
 import { ribbonOverlay } from './layout';
@@ -110,19 +112,33 @@ export interface PromptParts {
   fallback: string | null;
 }
 
-/** "점 지정 또는 [윈도우(W)/이전(P)] <범위>:" → 본문, 키워드, <기본값> */
+/**
+ * "점 지정 또는 [윈도우(W)/이전(P)] <범위>:" → 본문, 키워드, <기본값>.
+ * 도면 글 표시(ft — filetext.ts)는 보일 글(text·label·fallback)에 남기고(조각 경계에서 나뉘면 조각마다 닫고 다시 연다 — 번역층은 단추마다 지킨다),
+ * 넣을 값(key)에서는 뺀다(106차)
+ */
 export function promptParts(prompt: string): PromptParts {
   const kw = /\[(.*?)\]/.exec(prompt);
   const keywords = kw
-    ? kw[1]!
-        .split('/')
+    ? balanceMarks([prompt.slice(0, kw.index) + '[', ...kw[1]!.split('/'), ']' + prompt.slice(kw.index + kw[0].length)])
+        .slice(1, -1)
         .map((p) => p.trim())
-        .filter((p) => p)
-        .map((label) => ({ key: /\(([^)]+)\)/.exec(label)?.[1] ?? label, label }))
+        .filter((p) => unmark(p).trim())
+        .map((label) => {
+          const plain = unmark(label).trim();
+          return { key: /\(([^)]+)\)/.exec(plain)?.[1] ?? plain, label };
+        })
     : [];
-  const def = /<([^<>]+)>\s*:?\s*$/.exec(prompt);
-  return { text: prompt, keywords, fallback: def ? def[1]!.trim() : null };
+  const def = /<([^<>]+)>[\s⁨⁩]*:?[\s⁨⁩]*$/.exec(prompt);
+  if (!def) return { text: prompt, keywords, fallback: null };
+  const at = def.index + 1;
+  const fallback = balanceMarks([prompt.slice(0, at), def[1]!, prompt.slice(at + def[1]!.length)])[1]!.trim();
+  // 보이는 글이 없으면(표시·빈칸뿐) 105차처럼 빈 글
+  return { text: prompt, keywords, fallback: unmark(fallback).trim() ? fallback : '' };
 }
+
+/** 단추 글이 <기본값>과 같은지(도면 글 표시는 빼고 견준다) */
+const sameLabel = (a: string, b: string | null): boolean => b !== null && unmark(a).trim() === unmark(b).trim();
 
 /** 정보 카드에 보일 치수 항목(이 차례로, 있는 것만) */
 const INFO_KEYS = ['측정값', '표시 문자', '치수 종류', '길이', '반지름', '지름', '호 길이', '사이 각도', '각도', '둘레', '면적', '장축 반지름', '단축 반지름', '델타 X', '델타 Y', '문자 높이', '높이', '내용', '이름'];
@@ -359,9 +375,10 @@ export class MobileView {
     void this.app.run(name);
   }
 
+  /** text는 화면에 보일 줄(도면 글 표시 그대로 — CommandLineWatcher). 명령 이름은 표시를 뺀 글에서 읽는다 */
   private onPrint(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void {
     // 새 명령이 시작하면 결과를 비운다(run()이 "명령: 이름"을 먼저 찍는다)
-    const m = /^명령: (\S+)/.exec(text);
+    const m = /^명령: (\S+)/.exec(unmark(text));
     // 화면 명령(전체 보기 등)은 재던 결과를 지우지 않는다
     if (m && !/^(ZOOM|PAN$|REGEN)/.test(m[1]!)) {
       this.lines = [];
@@ -371,7 +388,8 @@ export class MobileView {
       if (MEASURES.some((x) => x.name === name || RUNS_AS[x.name] === name)) this.lastMeasure = MEASURES.find((x) => x.name === name)?.name ?? (name === 'MEASUREGEOM' ? 'MEASURERADIUS' : name);
       else if (name === 'ID') this.lastMeasure = 'ID';
     } else if (cls && !m) {
-      for (const line of text.split('\n')) this.lines.push({ text: line, cls, measure });
+      // 줄마다 따로 그리므로 줄 경계에서 나뉜 표시는 줄마다 닫고 다시 연다
+      for (const line of balanceMarks(text.split('\n'))) this.lines.push({ text: line, cls, measure });
       if (this.lines.length > 8) this.lines.splice(0, this.lines.length - 8);
     }
     this.queue();
@@ -404,7 +422,8 @@ export class MobileView {
     for (const [name, b] of this.measureBtns) b.classList.toggle('on', running === name || running === RUNS_AS[name]);
     card.replaceChildren();
     card.className = 'mview-card';
-    const prompt = app.cmd.prompt;
+    // 보일 프롬프트(도면 글 표시 그대로 — 번역층이 지킨다)
+    const prompt = app.cmd.shownPrompt;
     if (running && prompt) {
       this.renderPrompt(prompt);
       return;
@@ -497,8 +516,8 @@ export class MobileView {
     body.append(h('div', { class: 'mv-prompt' }, parts.text));
     const acts = h('div', { class: 'mv-acts' });
     // <기본값>이 키워드와 같으면(<객체(O)>) 그 키워드 단추를 앞세우고 따로 두지 않는다
-    for (const k of parts.keywords) acts.append(h('button', { class: `mv-chip${k.label === parts.fallback ? ' primary' : ''}`, type: 'button', onclick: () => this.app.cmd.chooseKeyword(k.key) }, k.label));
-    if (parts.fallback && !parts.keywords.some((k) => k.label === parts.fallback)) acts.append(h('button', { class: 'mv-chip primary', type: 'button', title: 'Enter', onclick: () => this.app.cmd.pressEnter() }, parts.fallback));
+    for (const k of parts.keywords) acts.append(h('button', { class: `mv-chip${sameLabel(k.label, parts.fallback) ? ' primary' : ''}`, type: 'button', onclick: () => this.app.cmd.chooseKeyword(k.key) }, k.label));
+    if (parts.fallback && !parts.keywords.some((k) => sameLabel(k.label, parts.fallback))) acts.append(h('button', { class: 'mv-chip primary', type: 'button', title: 'Enter', onclick: () => this.app.cmd.pressEnter() }, parts.fallback));
     else if (this.app.pendingInput?.kind === 'select') acts.append(h('button', { class: 'mv-chip primary', type: 'button', title: 'Enter', onclick: () => this.app.cmd.pressEnter() }, '완료'));
     const close = h('button', { class: 'mv-close', type: 'button', title: '취소', 'aria-label': '취소', html: icon('close2'), onclick: () => this.app.cmd.escape() });
     card.append(body, close, acts);

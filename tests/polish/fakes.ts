@@ -95,20 +95,24 @@ export class FakeCommandLine {
   }
   /** 프롬프트·출력을 지켜보는 쪽(휴대폰 보기 모드의 측정 띠) */
   readonly watchers = new Set<{ prompt?(text: string): void; print?(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void }>();
+  /** 화면에 보일 프롬프트(도면 글 표시 그대로 — 진짜 명령행의 shownPrompt) */
+  shownPrompt = '';
   /**
    * measure: 측정 명령이 결과 줄과 함께 넘긴 값(있을 때만 남긴다).
-   * 진짜 명령행처럼 도면 글 표시(ft — U+2068·U+2069, 104차)는 빼고 모은다(보이는 글과 같게)
+   * 진짜 명령행처럼 도면 글 표시(ft — U+2068·U+2069, 104차)는 빼고 모은다(보이는 글과 같게). 지켜보는 쪽에는 표시를 둔 글을 준다(106차)
    */
   print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void {
+    const shown = text;
     text = text.replace(/[⁨⁩]/g, '');
     this.onPrint?.(text, cls);
-    for (const w of this.watchers) w.print?.(text, cls, measure);
+    for (const w of this.watchers) w.print?.(shown, cls, measure);
     this.lines.push(measure ? { text, cls, measure } : { text, cls });
   }
   setPrompt(text: string): void {
+    this.shownPrompt = text;
     text = text.replace(/[⁨⁩]/g, '');
     this.prompt = text;
-    for (const w of this.watchers) w.prompt?.(text);
+    for (const w of this.watchers) w.prompt?.(this.shownPrompt);
   }
   typeChar(): void {}
   toggleHistory(): void {}

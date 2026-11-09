@@ -37,6 +37,10 @@ export interface CommandLineHost {
   repeat(): void;
 }
 
+/**
+ * 프롬프트·출력을 지켜보는 쪽. 받는 글은 화면에 보일 글이라 도면 글 표시(ft — filetext.ts)를 그대로 둔다(106차 — 휴대폰 보기의 결과·프롬프트 카드도
+ * 번역층이 표시로 도면 글을 지킨다). 값(명령 이름·키워드·비교)으로 쓸 때는 unmark로 뺀다
+ */
 export interface CommandLineWatcher {
   prompt?(text: string): void;
   /** measure: 측정 명령이 이 결과 줄과 함께 넘긴 값(휴대폰 보기 모드의 결과 카드) */
@@ -161,21 +165,27 @@ export class CommandLine {
   /** 프롬프트·출력을 함께 지켜보는 쪽(휴대폰 보기 모드의 측정 띠). onPrint와 달리 여럿이 붙는다 */
   readonly watchers = new Set<CommandLineWatcher>();
 
-  /** 지금 프롬프트(없으면 빈 글) */
+  /** 지금 프롬프트(없으면 빈 글). 도면 글 표시를 뺀 값 */
   get prompt(): string {
     return this.promptText;
   }
 
+  /** 화면에 보일 지금 프롬프트(도면 글 표시 그대로 — 휴대폰 보기의 프롬프트 카드) */
+  get shownPrompt(): string {
+    return this.promptShown;
+  }
+
   private promptText = '';
+  private promptShown = '';
 
   /**
    * 기록에 한 줄. measure는 지켜보는 쪽에만 넘기고 기록 글은 그대로다.
-   * text의 도면 글 표시(ft — filetext.ts)는 기록 줄에만 남겨 화면 번역층이 지키게 하고, 지켜보는 쪽에는 뺀 글을 준다
+   * text의 도면 글 표시(ft — filetext.ts)는 화면에 보이는 기록 줄과 지켜보는 쪽(휴대폰 보기 카드)에 남겨 화면 번역층이 지키게 하고,
+   * 출력 고리(onPrint — 스크립트 실행기가 글을 견준다)에는 뺀 글을 준다
    */
   print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void {
-    const plain = unmark(text);
-    this.onPrint?.(plain, cls);
-    for (const w of this.watchers) w.print?.(plain, cls, measure);
+    this.onPrint?.(unmark(text), cls);
+    for (const w of this.watchers) w.print?.(text, cls, measure);
     const div = document.createElement('div');
     if (cls) div.className = cls;
     div.textContent = text;
@@ -187,7 +197,8 @@ export class CommandLine {
   /** "점 지정 또는 [윈도우(W)/이전(P)] <범위>:" 형식. 대괄호 안 키워드는 눌러서 고를 수 있다 */
   setPrompt(text: string): void {
     this.promptText = unmark(text);
-    for (const w of this.watchers) w.prompt?.(this.promptText);
+    this.promptShown = text;
+    for (const w of this.watchers) w.prompt?.(text);
     this.promptEl.textContent = '';
     if (!text) {
       this.promptEl.hidden = true;
