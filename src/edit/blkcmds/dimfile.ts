@@ -12,6 +12,7 @@ import { DIM_VAR_CODES } from '../../core/dimvars';
 import type { EditOp } from '../session';
 import { isFixedName } from '../refedit/names';
 import { builtinArrowBlock } from '../dim/arrows';
+import { ft } from '../../app/filetext';
 
 const DEG = Math.PI / 180;
 
@@ -292,7 +293,7 @@ export function parseDimFile(text: string): DimFileContent {
       if (code >= 340 && code <= 347) {
         const n = hname.get(v.trim().toUpperCase());
         if (n !== undefined) vars[vn] = n;
-        else errors.push(`치수 스타일 ${name}: ${vn}이(가) 가리키는 레코드(${v.trim()})가 파일에 없습니다.`);
+        else errors.push(`치수 스타일 ${ft(name)}: ${vn}이(가) 가리키는 레코드(${ft(v.trim())})가 파일에 없습니다.`);
       } else if (code >= 3 && code <= 7) {
         if (vars[vn] === undefined) vars[vn] = v;
       } else {

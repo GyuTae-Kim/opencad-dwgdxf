@@ -33,8 +33,8 @@ export interface ScriptHost {
   /** 프롬프트에 답을 넣는다 */
   submit(text: string): void;
   print(text: string, cls?: 'err' | 'res'): void;
-  /** 명령행 출력을 지켜본다. 해제 함수를 돌려준다 */
-  watchPrint(f: (text: string, cls?: 'err' | 'res') => void): () => void;
+  /** 명령행 출력을 지켜본다. 해제 함수를 돌려준다. shown은 도면 글 표시(ft)를 둔 글(없으면 text — 다시 찍을 때 쓴다) */
+  watchPrint(f: (text: string, cls?: 'err' | 'res', shown?: string) => void): () => void;
   /** Esc·Backspace를 지켜본다(없으면 생략) */
   watchKeys?(f: (key: 'esc' | 'backspace') => void): () => void;
   /** 선택 프롬프트: 그 점의 객체를 고른다. 고른 수 */
@@ -160,8 +160,9 @@ export class ScriptRunner {
     this.failed = null;
     const h = this.host;
     const mark = h.undoMark();
-    const unwatch = h.watchPrint((text, cls) => {
-      if (cls === 'err' && !this.quiet && this.status === 'running' && this.failed === null) this.failed = text;
+    // 멈춘 까닭으로 다시 찍을 오류 글은 도면 글 표시를 둔 글로(107차 — 명령 오류에 든 도면층·블록 이름 등이 번역되지 않게)
+    const unwatch = h.watchPrint((text, cls, shown) => {
+      if (cls === 'err' && !this.quiet && this.status === 'running' && this.failed === null) this.failed = shown ?? text;
     });
     const unkeys = h.watchKeys?.(() => this.interrupt()) ?? (() => {});
     let yielded = h.now();
@@ -282,7 +283,7 @@ export class ScriptRunner {
       return;
     }
     this.lastPoint = p;
-    if (!h.pickEntity(p)) this.fail(`${tok.text.trim()}에 객체가 없습니다.`);
+    if (!h.pickEntity(p)) this.fail(`${ft(tok.text.trim())}에 객체가 없습니다.`);
   }
 
   /** 윈도우 폴리곤·걸침 폴리곤·울타리의 점 하나(빈 줄이면 마침) */
@@ -300,7 +301,7 @@ export class ScriptRunner {
     const up = stripKeywordPrefix(t).toUpperCase();
     if (pg.pts.length && (up === 'U' || up === 'UNDO')) {
       pg.pts.pop();
-      this.say(`${prompt} ${t}`);
+      this.say(`${prompt} ${ft(t)}`);
       return;
     }
     const p = parseScriptPoint(t, this.lastPoint);
@@ -314,7 +315,7 @@ export class ScriptRunner {
     }
     this.lastPoint = p;
     pg.pts.push(p);
-    this.say(`${prompt} ${t}`);
+    this.say(`${prompt} ${ft(t)}`);
   }
 
   private selectToken(tok: ScriptToken): void {
@@ -334,13 +335,13 @@ export class ScriptRunner {
       this.lastPoint = p;
       if (!c.first) {
         c.first = p;
-        this.say(`첫 번째 구석 지정: ${t}`);
+        this.say(`첫 번째 구석 지정: ${ft(t)}`);
         return;
       }
       const crossing = c.mode === 'C' || ((c.mode === 'BOX' || c.mode === 'AUTO') && p.x < c.first.x);
       const n = h.selectWindow(c.first, p, crossing);
       this.corner = null;
-      this.say(`반대 구석 지정: ${t}`);
+      this.say(`반대 구석 지정: ${ft(t)}`);
       this.say(`${n}개를 찾음`);
       return;
     }
@@ -365,7 +366,7 @@ export class ScriptRunner {
       else {
         // 그 자리에 객체가 없으면 그 점이 창의 첫 구석(AutoCAD의 암시적 창)
         this.corner = { mode: 'AUTO', first: p };
-        this.say(`첫 번째 구석 지정: ${t}`);
+        this.say(`첫 번째 구석 지정: ${ft(t)}`);
       }
       return;
     }

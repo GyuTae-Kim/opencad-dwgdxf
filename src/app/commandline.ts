@@ -160,8 +160,8 @@ export class CommandLine {
     this.hist.scrollTop = this.hist.scrollHeight;
   }
 
-  /** 출력을 지켜보는 고리(스크립트 실행기가 오류 출력을 알아챈다) */
-  onPrint: ((text: string, cls?: 'err' | 'res') => void) | null = null;
+  /** 출력을 지켜보는 고리(스크립트 실행기가 오류 출력을 알아챈다). text는 표시를 뺀 글, shown은 표시를 둔 글(다시 찍을 때 — 107차) */
+  onPrint: ((text: string, cls?: 'err' | 'res', shown?: string) => void) | null = null;
   /** 프롬프트·출력을 함께 지켜보는 쪽(휴대폰 보기 모드의 측정 띠). onPrint와 달리 여럿이 붙는다 */
   readonly watchers = new Set<CommandLineWatcher>();
 
@@ -181,10 +181,10 @@ export class CommandLine {
   /**
    * 기록에 한 줄. measure는 지켜보는 쪽에만 넘기고 기록 글은 그대로다.
    * text의 도면 글 표시(ft — filetext.ts)는 화면에 보이는 기록 줄과 지켜보는 쪽(휴대폰 보기 카드)에 남겨 화면 번역층이 지키게 하고,
-   * 출력 고리(onPrint — 스크립트 실행기가 글을 견준다)에는 뺀 글을 준다
+   * 출력 고리(onPrint — 스크립트 실행기가 글을 견준다)에는 뺀 글을 주고, 그 글을 다시 찍는 쪽을 위해 표시를 둔 글도 함께 준다
    */
   print(text: string, cls?: 'err' | 'res', measure?: MeasureResult): void {
-    this.onPrint?.(unmark(text), cls);
+    this.onPrint?.(unmark(text), cls, text);
     for (const w of this.watchers) w.print?.(text, cls, measure);
     const div = document.createElement('div');
     if (cls) div.className = cls;

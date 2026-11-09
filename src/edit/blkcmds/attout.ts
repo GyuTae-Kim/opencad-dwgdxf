@@ -11,6 +11,7 @@ import type { AttribEntity, CadDocument, InsertEntity } from '../../core/model';
 import { normalizeHandle, tableKey } from '../../core/model';
 import type { EditOp } from '../session';
 import { cloneEntity } from '../session';
+import { ft } from '../../app/filetext';
 
 /** 칸에 넣을 수 없는 탭·줄바꿈은 빈칸으로 */
 const cell = (s: string) => s.replace(/[\t\r\n]+/g, ' ');
@@ -92,7 +93,7 @@ export function parseAttIn(text: string): AttInParse {
     const parts = raw.split('\t').map(unquote);
     const h = parts[0]!.trim().replace(/^'/, '');
     if (!/^[0-9A-Fa-f]+$/.test(h)) {
-      errors.push(`${n + 1}번째 줄: 핸들 "${parts[0]}"을(를) 읽을 수 없습니다.`);
+      errors.push(`${n + 1}번째 줄: 핸들 "${ft(parts[0]!)}"을(를) 읽을 수 없습니다.`);
       continue;
     }
     const values = new Map<string, string>();

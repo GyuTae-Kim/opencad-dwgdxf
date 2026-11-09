@@ -47,9 +47,9 @@ function appHost(app: App): ScriptHost {
     print: (t, cls) => app.cmd.print(t, cls),
     watchPrint(f) {
       const prev = app.cmd.onPrint;
-      const mine = (t: string, cls?: 'err' | 'res') => {
-        prev?.(t, cls);
-        f(t, cls);
+      const mine = (t: string, cls?: 'err' | 'res', shown?: string) => {
+        prev?.(t, cls, shown);
+        f(t, cls, shown);
       };
       app.cmd.onPrint = mine;
       return () => {
