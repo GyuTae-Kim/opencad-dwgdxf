@@ -797,7 +797,7 @@
   "{0} 각도": "{0} Winkel",
   "{0} 각도 구속 입력 <{1}>:": "{0} Winkelbeschränkungseingabe <{1}>:",
   "{0} 값 입력 (0-100) <{1}>:": "Geben Sie den {0}-Wert (0-100) ein <{1}>:",
-  "{0} 객체 {1}개{2}": "{0} Objekt {1} Hund{2}",
+  "{0} 객체 {1}개{2}": "{0} {1} Objekte{2}",
   "{0} 객체 {1}개{2}{3}": "{0} Objekt {1}{2}{3}",
   "{0} 구속조건": "{0}-Einschränkung",
   "{0} 근원점 지정:": "{0} Ursprungspunktbezeichnung:",
