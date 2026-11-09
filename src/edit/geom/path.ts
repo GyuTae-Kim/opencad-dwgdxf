@@ -55,6 +55,35 @@ export function inherit(src: Entity): Omit<EntityBase, 'type'> {
   return out;
 }
 
+/**
+ * inherit(src)가 공통 특성 일곱(+ 소유자)만 잇는 원본인지(확장 데이터·종이 공간·숨김·두께·출력 스타일이 없다) — 그러면 lineFrom·arcFrom이
+ * 스프레드 없이 같은 속성 차례로 바로 만든다
+ */
+function plainInherit(src: Entity): boolean {
+  return !src.xdata && !src.paperSpace && !src.invisible && !src.thickness && !src.plotStyle;
+}
+
+/**
+ * `{ type: 'LINE', ...inherit(src), start, end }`와 같은 객체(속성 차례·값도 같다). 106차 — 큰 도면 EXPLODE는 폴리선 조각마다 스프레드로
+ * 새 객체를 만들어(조각 124만 개) 명령 시간의 약 13%였다. 흔한 원본은 글자 그대로 만든다
+ */
+export function lineFrom(src: Entity, start: Vec3, end: Vec3): LineEntity {
+  if (!plainInherit(src)) return { type: 'LINE', ...inherit(src), start, end };
+  const color = { ...src.color };
+  return src.owner !== undefined
+    ? { type: 'LINE', handle: '', layer: src.layer, linetype: src.linetype, color, lineweight: src.lineweight, ltscale: src.ltscale, transparency: src.transparency, owner: src.owner, start, end }
+    : { type: 'LINE', handle: '', layer: src.layer, linetype: src.linetype, color, lineweight: src.lineweight, ltscale: src.ltscale, transparency: src.transparency, start, end };
+}
+
+/** `{ type: 'ARC', ...inherit(src), center, radius, startAngle, endAngle, extrusion }`와 같은 객체(extrusion 속성은 undefined여도 둔다) */
+export function arcFrom(src: Entity, center: Vec3, radius: number, startAngle: number, endAngle: number, extrusion: Vec3 | undefined): ArcEntity {
+  if (!plainInherit(src)) return { type: 'ARC', ...inherit(src), center, radius, startAngle, endAngle, extrusion };
+  const color = { ...src.color };
+  return src.owner !== undefined
+    ? { type: 'ARC', handle: '', layer: src.layer, linetype: src.linetype, color, lineweight: src.lineweight, ltscale: src.ltscale, transparency: src.transparency, owner: src.owner, center, radius, startAngle, endAngle, extrusion }
+    : { type: 'ARC', handle: '', layer: src.layer, linetype: src.linetype, color, lineweight: src.lineweight, ltscale: src.ltscale, transparency: src.transparency, center, radius, startAngle, endAngle, extrusion };
+}
+
 /** 새 객체로 쓸 수 있게 핸들·확장 사전·반응자·DWG 원본 본문을 지운다(블록 속성도) */
 export function freshEntity<T extends Entity>(x: T, keepOwner = true): T {
   // 여러 단 MTEXT: 원본 핸들과 떼기 전 확장 자료를 적어 둔다(묶음째 복사하면 commitResults가 새 단끼리 다시 잇는다)

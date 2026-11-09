@@ -36,7 +36,8 @@ import { builtinArrow } from '../../render/arrows';
 import { hatchLoops, patternSegments, userPattern } from '../../render/hatch';
 import { strokeFace } from '../../text/fonts';
 import { type Affine, affMul, affRotate, affScale, affTranslate, normAngle, norm3, cross3 } from './math';
-import { cloneEntity, freshEntity, inherit, lwVerts, makeEllipse, makeSpline, polyVerts } from './path';
+import { arcFrom, cloneEntity, freshEntity, inherit, lineFrom, makeEllipse, makeSpline, polyVerts } from './path';
+import { lwCount } from '../../core/lwpoly';
 import { isNaturalExt, isPlanarExt, ocsToWcs, planProj, planZ, wcsToOcs } from './ocs';
 import { type EditResult, MSG, type TransformOptions } from './types';
 import { mapBlockContents } from './xannot';
@@ -68,7 +69,7 @@ export function explodeEntity(e: Entity, doc: CadDocument, partial = false): Edi
     case 'INSERT':
       return explodeInsert(e, doc, partial);
     case 'LWPOLYLINE':
-      return done(explodeBulges(e, lwVerts(e), e.closed, e.elevation));
+      return done(explodeBulges(e, e.verts, lwCount(e), e.closed, e.elevation));
     case 'POLYLINE':
       return done(explodePolyline(e));
     case 'MESH': {
@@ -194,7 +195,7 @@ function regionCurves(e: AcisEntity): Entity[] | null {
 }
 
 function line3(src: Entity, a: Vec3, b: Vec3): Entity {
-  return { type: 'LINE', ...inherit(src), start: { ...a }, end: { ...b } };
+  return lineFrom(src, { ...a }, { ...b });
 }
 
 // ---------------------------------------------------------------------------
@@ -281,32 +282,31 @@ function attdefAsText(a: AttribEntity): TextEntity {
 // 폴리선
 // ---------------------------------------------------------------------------
 
-/** 볼록도 정점 → LINE·ARC(원본 OCS 유지) */
-function explodeBulges(src: Entity, vs: { x: number; y: number; bulge: number }[], closed: boolean, elev: number): Entity[] {
+/**
+ * 볼록도 정점 → LINE·ARC(원본 OCS 유지). v는 정점 n개의 (x, y, 볼록도)를 셋씩 잇댄 값(LWPOLYLINE verts 그대로).
+ * 106차 — 정점마다 객체로 풀지 않고(lwVerts) 조각은 lineFrom·arcFrom으로 스프레드 없이 만든다(결과·속성 차례는 전과 같다)
+ */
+function explodeBulges(src: Entity, v: ArrayLike<number>, n: number, closed: boolean, elev: number): Entity[] {
   const out: Entity[] = [];
   const ext = src.extrusion;
   const natural = !ext || isPlanarExt(ext) && ext.z > 0;
-  const n = vs.length;
   for (let i = 0; i < (closed ? n : n - 1); i++) {
-    const a = vs[i]!;
-    const b = vs[(i + 1) % n]!;
-    const arc = Math.abs(a.bulge) > 1e-12 ? bulgeArc(a.x, a.y, b.x, b.y, a.bulge) : null;
+    const j = (i + 1) % n;
+    const ax = v[i * 3]!;
+    const ay = v[i * 3 + 1]!;
+    const bulge = v[i * 3 + 2]!;
+    const bx = v[j * 3]!;
+    const by = v[j * 3 + 1]!;
+    const arc = Math.abs(bulge) > 1e-12 ? bulgeArc(ax, ay, bx, by, bulge) : null;
     if (arc) {
       const lo = arc.sweep > 0 ? arc.a0 : arc.a0 + arc.sweep;
-      out.push({
-        type: 'ARC',
-        ...inherit(src),
-        center: { x: arc.cx, y: arc.cy, z: elev },
-        radius: arc.r,
-        startAngle: normAngle(lo),
-        endAngle: normAngle(lo + Math.abs(arc.sweep)),
-        extrusion: natural ? undefined : { ...ext! },
-      });
+      out.push(arcFrom(src, { x: arc.cx, y: arc.cy, z: elev }, arc.r, normAngle(lo), normAngle(lo + Math.abs(arc.sweep)), natural ? undefined : { ...ext! }));
     } else {
-      if (Math.hypot(b.x - a.x, b.y - a.y) <= 0) continue;
-      const pa = natural ? { x: a.x, y: a.y, z: elev } : ocsToWcs({ x: a.x, y: a.y, z: elev }, ext);
-      const pb = natural ? { x: b.x, y: b.y, z: elev } : ocsToWcs({ x: b.x, y: b.y, z: elev }, ext);
-      out.push({ type: 'LINE', ...inherit(src), start: pa, end: pb });
+      // 길이 0인 조각은 뺀다(Math.hypot(dx, dy) <= 0과 같다 — 둘 다 0일 때만, NaN·무한은 남긴다)
+      if (bx - ax === 0 && by - ay === 0) continue;
+      const pa = natural ? { x: ax, y: ay, z: elev } : ocsToWcs({ x: ax, y: ay, z: elev }, ext);
+      const pb = natural ? { x: bx, y: by, z: elev } : ocsToWcs({ x: bx, y: by, z: elev }, ext);
+      out.push(lineFrom(src, pa, pb));
     }
   }
   return out;
@@ -315,8 +315,10 @@ function explodeBulges(src: Entity, vs: { x: number; y: number; bulge: number }[
 function explodePolyline(e: PolylineEntity): Entity[] {
   const closed = (e.flags & 1) !== 0;
   if (e.kind === '2d') {
-    const vs = polyVerts(e).map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge }));
-    return explodeBulges(e, vs, closed, e.elevation);
+    // 일반 배열(형식 배열이 아니다): 정점 값이 빠졌으면 undefined 그대로 — 전처럼
+    const v: number[] = [];
+    for (const p of polyVerts(e)) v.push(p.location.x, p.location.y, p.bulge);
+    return explodeBulges(e, v, v.length / 3, closed, e.elevation);
   }
   if (e.kind === '3d') {
     const vs = polyVerts(e);

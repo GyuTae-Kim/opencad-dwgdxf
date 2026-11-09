@@ -271,19 +271,19 @@ function planOf(r: FollowResult): FollowPlan {
   return { entities, moved, objectOps: r.objects.map((o) => ({ kind: 'object', key: o.key, before: o.before, after: o.after })), released: r.released.size };
 }
 
+/** 도면에 연관 기록(DIMASSOC)이 있는지 — 없으면 planFollow는 changes를 보지 않고 빈 계획을 낸다 */
+export function hasDimAssoc(st: DocState): boolean {
+  for (const o of st.doc.objects.values()) if (o.type === 'DIMASSOC') return true;
+  return false;
+}
+
 /**
  * 편집(핸들 → 편집 뒤 객체, null = 지움)에 연관 치수를 맞추는 계획. transform은 바뀐 객체가 모두 받은 변환
  * (이동·회전·축척·대칭)이다. 연관 기록이 없는 도면에서는 빈 계획이다.
  */
 export function planFollow(st: DocState, changes: ReadonlyMap<string, Entity | null>, transform?: Affine): FollowPlan {
   const doc = st.doc;
-  let any = false;
-  for (const o of doc.objects.values())
-    if (o.type === 'DIMASSOC') {
-      any = true;
-      break;
-    }
-  if (!any) return { entities: new Map(), moved: new Set(), objectOps: [], released: 0 };
+  if (!hasDimAssoc(st)) return { entities: new Map(), moved: new Set(), objectOps: [], released: 0 };
   const r = followAssociations(doc, changes, () => st.session.newHandle(), transform ? { transform: (p) => affApply(transform, p) } : {});
   // 정의점이 실제로 바뀐 치수만 블록을 다시 만든다
   const plan = planOf(r);

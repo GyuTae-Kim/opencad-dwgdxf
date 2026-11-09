@@ -194,10 +194,14 @@ export function unlockedOnly(app: App, handles: string[]): string[] {
   if (!st) return [];
   const out: string[] = [];
   let locked = 0;
+  // 잠김은 도면층 이름마다 한 번만 찾는다(106차 — 객체 42만 개를 고른 EXPLODE는 객체마다 이름을 대문자로 바꿔 명령 시간의 약 5%였다)
+  const lockedOf = new Map<string, boolean>();
   for (const h of handles) {
     const e = st.doc.entityIndex.get(h);
     if (!e) continue;
-    if (st.doc.layers.get(tableKey(e.layer))?.locked) locked++;
+    let lk = lockedOf.get(e.layer);
+    if (lk === undefined) lockedOf.set(e.layer, (lk = !!st.doc.layers.get(tableKey(e.layer))?.locked));
+    if (lk) locked++;
     else out.push(h);
   }
   if (locked) app.cmd.print(`잠긴 도면층의 객체 ${locked}개는 뺐습니다.`);
