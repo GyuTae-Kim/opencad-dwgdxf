@@ -14,6 +14,8 @@ import { bulgeArc } from '../../src/geom/curves';
 import { normAngle } from '../../src/edit/geom/math';
 import { isPlanarExt, ocsToWcs } from '../../src/edit/geom/ocs';
 import { newDoc } from './make';
+import { unlockedOnly } from '../../src/app/layers';
+import { unmark } from '../../src/app/filetext';
 
 // --- 105차 만들기(src/edit/geom/explode.ts e3ccdee) ---
 function oldBulges(src: Entity, vs: { x: number; y: number; bulge: number }[], closed: boolean, elev: number): Entity[] {
@@ -165,6 +167,24 @@ describe('106차 폴리선 EXPLODE 조각(스프레드 없이)', () => {
     }
     // 무작위가 고르게 섞였는지(조각이 충분히 나왔는지)
     expect(pieces).toBeGreaterThan(1500);
+  });
+
+  it('잠긴 도면층 빼기(unlockedOnly)는 도면층 이름마다 한 번 찾아도 답이 같다(대소문자 다른 이름·없는 핸들·차례)', () => {
+    const doc = newDoc();
+    const lay = (name: string, locked: boolean) => doc.layers.set(name.toUpperCase(), { name, handle: 'L' + name, flags: 0, color: { aci: 7 }, off: false, frozen: false, locked, linetype: 'Continuous', lineweight: -3, plot: true, transparency: 255 });
+    lay('잠금', true);
+    lay('B', false);
+    const hs: string[] = [];
+    const layers = ['잠금', 'B', 'b', '없는층', '잠금', 'B'];
+    layers.forEach((l, i) => {
+      const h = (0x500 + i).toString(16).toUpperCase();
+      doc.entityIndex.set(h, { type: 'LINE', ...entityDefaults(), handle: h, layer: l, start: { x: 0, y: 0, z: 0 }, end: { x: 1, y: 0, z: 0 } } as Entity);
+      hs.push(h);
+    });
+    const printed: string[] = [];
+    const app = { active: { doc }, cmd: { print: (t: string) => void printed.push(t) } } as unknown as Parameters<typeof unlockedOnly>[0];
+    expect(unlockedOnly(app, [...hs.slice(0, 3), 'FFFF', ...hs.slice(3)])).toEqual([hs[1], hs[2], hs[3], hs[5]]);
+    expect(printed.map(unmark)).toEqual(['잠긴 도면층의 객체 2개는 뺐습니다.']);
   });
 
   it('LWPOLYLINE 정점 수는 verts 길이로(lwCount) — 정점 0·1개는 조각 없음', () => {
