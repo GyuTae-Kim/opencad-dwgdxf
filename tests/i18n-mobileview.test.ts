@@ -95,7 +95,10 @@ describe('휴대폰 보기 카드(진짜 App·MobileView, 영어 화면)', () =>
     root.append(mv.bar, mv.card);
     installFileGuard({ docs: [{ doc: createNewDocument('metric') }] });
     dispose = await installLocalization(root);
+    // 빠진 참조 안내(renderNotice)가 나눠 받는 모듈을 미리 받아 두어, 그 확인이 시험 안에서 끝나게 한다(전역 문서를 되돌린 뒤 다시 그리지 않게)
+    await Promise.all([import('../src/app/refs'), import('../src/app/shxfonts')]);
     mv.apply(true);
+    await settle();
     return { ...h, mv };
   };
   const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -131,5 +134,11 @@ describe('휴대폰 보기 카드(진짜 App·MobileView, 영어 화면)', () =>
     // <기본값>이 키워드와 같으면 그 단추를 앞세운다(표시를 빼고 견준다)
     expect(chips[0]!.classList.contains('primary')).toBe(true);
     expect(chips).toHaveLength(2);
+    // 단추를 누르면 넘기는 키워드 값에는 표시가 없다
+    const keys: string[] = [];
+    (h.app.cmd as unknown as { chooseKeyword(k: string): void }).chooseKeyword = (k) => void keys.push(k);
+    (chips[0] as HTMLElement).click();
+    (chips[1] as HTMLElement).click();
+    expect(keys).toEqual(['D', 'N']);
   });
 });
