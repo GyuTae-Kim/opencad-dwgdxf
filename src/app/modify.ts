@@ -38,7 +38,7 @@ import { associatedHatches, boundaryEntitiesOf, dissociate, reactorUnlinks, rebu
 import { pathLength } from '../edit/geom/curve';
 import { dimensionBlockOps } from './dimcmds';
 import { withDimVarsCache } from '../edit/dim/vars';
-import { hasDimAssoc, planFollow } from './dimassoc';
+import { emptyFollow, hasDimAssoc, planFollow } from './dimassoc';
 import type { App, CommandContext, Keyword } from './app';
 import type { DocState } from './docstate';
 import type { OverlayGeom, Pt } from './view';
@@ -358,13 +358,16 @@ function planResults(app: App, ctx: CommandContext, results: EditResult[], label
     }
   const userMod = new Set(mod.keys());
   // 연관 치수: 형상을 따라 정의점을 옮기고, 지운 형상·벗어난 정의점의 연관을 끊는다(형상 반응자도 맞춘다)
-  const follow = (() => {
-    const changes = new Map<string, Entity | null>();
-    for (const [h, op] of mod) changes.set(h, op.after);
-    // 연관 기록이 없는 도면이면 planFollow가 changes를 보지 않는다 — 지운 핸들(큰 EXPLODE는 수십만 개)을 담지 않는다(106차)
-    if (hasDimAssoc(st)) for (const r of results) for (const h of r.remove ?? []) changes.set(h, null);
-    return planFollow(st, changes, opt.transform);
-  })();
+  // 연관 기록이 없는 도면이면 planFollow는 changes를 보지 않고 빈 계획을 낸다 — 바꾼·지운 핸들(큰 EXPLODE는 수십만 개)을 담지 않는다(106차).
+  // 연관 기록 찾기는 객체 사전을 훑으므로 여기서 한 번만(planFollow 안에서 다시 훑지 않게 — 있을 때는 첫 기록에서 멈춘다)
+  const follow = !hasDimAssoc(st)
+    ? emptyFollow()
+    : (() => {
+        const changes = new Map<string, Entity | null>();
+        for (const [h, op] of mod) changes.set(h, op.after);
+        for (const r of results) for (const h of r.remove ?? []) changes.set(h, null);
+        return planFollow(st, changes, opt.transform);
+      })();
   const noRegen = new Set<string>();
   for (const [h, e] of follow.entities) {
     const m = mod.get(h);

@@ -271,10 +271,18 @@ function planOf(r: FollowResult): FollowPlan {
   return { entities, moved, objectOps: r.objects.map((o) => ({ kind: 'object', key: o.key, before: o.before, after: o.after })), released: r.released.size };
 }
 
-/** 도면에 연관 기록(DIMASSOC)이 있는지 — 없으면 planFollow는 changes를 보지 않고 빈 계획을 낸다 */
+/**
+ * 도면에 연관 기록(DIMASSOC)이 있는지 — 없으면 planFollow는 changes를 보지 않고 빈 계획(emptyFollow)을 낸다.
+ * 없으면 객체 사전을 모두 훑으므로 확정 하나에 한 번만 부른다
+ */
 export function hasDimAssoc(st: DocState): boolean {
   for (const o of st.doc.objects.values()) if (o.type === 'DIMASSOC') return true;
   return false;
+}
+
+/** 연관 기록이 없을 때의 빈 따라가기 계획 */
+export function emptyFollow(): FollowPlan {
+  return { entities: new Map(), moved: new Set(), objectOps: [], released: 0 };
 }
 
 /**
@@ -283,7 +291,7 @@ export function hasDimAssoc(st: DocState): boolean {
  */
 export function planFollow(st: DocState, changes: ReadonlyMap<string, Entity | null>, transform?: Affine): FollowPlan {
   const doc = st.doc;
-  if (!hasDimAssoc(st)) return { entities: new Map(), moved: new Set(), objectOps: [], released: 0 };
+  if (!hasDimAssoc(st)) return emptyFollow();
   const r = followAssociations(doc, changes, () => st.session.newHandle(), transform ? { transform: (p) => affApply(transform, p) } : {});
   // 정의점이 실제로 바뀐 치수만 블록을 다시 만든다
   const plan = planOf(r);
