@@ -14,6 +14,7 @@ import { objectField, varField } from '../edit/field/code';
 import { type FieldContext, evaluateTemplate, objectProperty } from '../edit/field/evaluate';
 import { formatDate } from '../edit/field/format';
 import { applyTemplate, fieldTemplate, isFieldHost, updateEntityFields } from '../edit/field/store';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // FIELDDISPLAY(필드 배경 표시): AutoCAD처럼 도면이 아니라 사용자 설정이다
@@ -494,7 +495,7 @@ export function registerFieldCommands(app: App): void {
           }
           const after = applyTemplate(e, hostTemplate(e) + code, fieldContext(st));
           st.session.commit({ label: 'FIELD', ops: [{ kind: 'modify', block, before: e, after }] });
-          ctx.print(`필드를 넣었습니다: ${after.text}`);
+          ctx.print(`필드를 넣었습니다: ${ft(after.text)}`);
           return;
         }
         if (!('point' in r)) continue;

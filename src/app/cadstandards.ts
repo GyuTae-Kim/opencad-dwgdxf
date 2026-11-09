@@ -244,7 +244,7 @@ function fixProblem(app: App, ctx: CommandContext, st: DocState, p: StdProblem, 
 
 function problemText(p: StdProblem): string {
   const k = STD_KIND_LABEL[p.kind];
-  return p.type === 'name' ? `${k} "${p.name}"의 이름이 표준이 아닙니다(표준 파일에 없는 이름).` : `${k} "${p.name}"의 특성이 표준이 아닙니다.`;
+  return p.type === 'name' ? `${k} "${ft(p.name)}"의 이름이 표준이 아닙니다(표준 파일에 없는 이름).` : `${k} "${ft(p.name)}"의 특성이 표준이 아닙니다.`;
 }
 
 async function checkFlow(app: App, ctx: CommandContext, st: DocState): Promise<void> {
@@ -265,7 +265,7 @@ async function checkFlow(app: App, ctx: CommandContext, st: DocState): Promise<v
     if (!c || !loadedSources(stateOf(st.doc)).length) return;
     return checkFlow(app, ctx, st);
   }
-  if (missingNames(s).length) ctx.print(`참고: 다시 고르지 않은 표준 파일(${missingNames(s).join(', ')})은 검사에 쓰지 않습니다.`);
+  if (missingNames(s).length) ctx.print(`참고: 다시 고르지 않은 표준 파일(${missingNames(s).map(ft).join(', ')})은 검사에 쓰지 않습니다.`);
   const kinds = STD_KINDS.filter((k) => s.kinds.has(k));
   const ignoredNow = config.showIgnored ? new Set<string>() : s.ignored;
   let problems = checkStandards(st.doc, sources, kinds, ignoredNow);

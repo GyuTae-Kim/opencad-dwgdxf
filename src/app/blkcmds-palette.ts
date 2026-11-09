@@ -286,7 +286,7 @@ class BlocksPalette {
       return;
     }
     if (!it.doc.blocks.has(tableKey(it.name))) {
-      app.cmd.print(`블록 "${it.name}"을(를) 찾을 수 없습니다.`, 'err');
+      app.cmd.print(`블록 "${ft(it.name)}"을(를) 찾을 수 없습니다.`, 'err');
       return;
     }
     remember(it);

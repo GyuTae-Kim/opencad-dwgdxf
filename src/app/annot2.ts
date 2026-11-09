@@ -27,6 +27,7 @@ import { VP_PICK, pickedViewport, viewportScaled } from './dimcmds';
 import { circleToPaper } from './vpsnap';
 import { registerAnnot2Leader } from './annot2-leader';
 import { registerAnnot2Misc } from './annot2-misc';
+import { ft } from './filetext';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
@@ -396,7 +397,7 @@ export function registerAnnot2Commands(app: App): void {
         }
         if (!('keyword' in p)) return;
         if (p.keyword === 'T') {
-          const t = await ctx.getPoint(`치수 문자를 입력 <${o.text || '<>'}>:`, { allowText: true });
+          const t = await ctx.getPoint(`치수 문자를 입력 <${o.text ? ft(o.text) : '<>'}>:`, { allowText: true });
           if ('text' in t) o.text = t.text;
         } else if (p.keyword === 'M') {
           const t = await textDialog('치수 문자(<>는 측정값)', o.text || '<>', 0, { app, ctx });
@@ -451,7 +452,7 @@ export function registerAnnot2Commands(app: App): void {
           continue;
         }
         const shown = formatVarValue(doc, name, changes[code] !== undefined && code !== 342 && code < 340 ? changes[code] : cur[name]);
-        const v = await ctx.getPoint(`치수 변수에 대한 새 값 입력 <${shown}>:`, { allowText: true, preferNumber: true });
+        const v = await ctx.getPoint(`치수 변수에 대한 새 값 입력 <${ft(shown)}>:`, { allowText: true, preferNumber: true });
         if (!('text' in v)) continue;
         const pv = parseVarValue(doc, code, v.text);
         if (pv.error) {
@@ -467,7 +468,7 @@ export function registerAnnot2Commands(app: App): void {
             newBlocks.push(def);
             changes[code] = def.recordHandle;
           } else {
-            ctx.print(`블록 ${pv.needBlock}을(를) 찾을 수 없습니다.`, 'err');
+            ctx.print(`블록 ${ft(pv.needBlock)}을(를) 찾을 수 없습니다.`, 'err');
             continue;
           }
         } else changes[code] = pv.value!;

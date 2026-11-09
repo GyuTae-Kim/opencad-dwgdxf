@@ -26,6 +26,7 @@ import { peditMultiple } from './modify2-pedit';
 import { dialog, form, h } from './ui/dom';
 import { askString, whenClosed } from './express-util';
 import type { Pt } from './view';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // BREAKLINE
@@ -436,8 +437,8 @@ async function runMkltype(app: App, ctx: CommandContext): Promise<void> {
   st.session.commit({ label: 'MKLTYPE', ops: [{ kind: 'linetype', key: tableKey(name), before: existing ?? null, after: rec }], group: ctx.group });
   const text = linFileText(rec.name, description, r.pattern);
   download(new Blob([text], { type: 'text/plain' }), `${rec.name}.lin`);
-  ctx.print(`선종류 "${rec.name}"을(를) ${existing ? '다시 정의했습니다' : '만들었습니다'}: ${r.pattern}`);
-  ctx.print(`${rec.name}.lin 파일을 내려받았습니다.`);
+  ctx.print(`선종류 "${ft(rec.name)}"을(를) ${existing ? '다시 정의했습니다' : '만들었습니다'}: ${r.pattern}`);
+  ctx.print(`${ft(`${rec.name}.lin`)} 파일을 내려받았습니다.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -579,7 +580,7 @@ async function runShowurls(app: App, ctx: CommandContext): Promise<void> {
     }
     app.setSelection([target], 'replace');
     const l = readHyperlink(e);
-    if (l) ctx.print(`${l.url || `#${l.location}`}${l.description ? ` (${l.description})` : ''}`);
+    if (l) ctx.print(`${ft(l.url || `#${l.location}`)}${l.description ? ` (${ft(l.description)})` : ''}`);
   }
 }
 
@@ -613,7 +614,7 @@ async function runRedir(app: App, ctx: CommandContext): Promise<void> {
         if (k === 'L') {
           const list = redirList(doc, redirMode);
           if (!list.length) ctx.print('바꿀 수 있는 경로가 없습니다.');
-          for (const x of list) ctx.print(`  ${x.kind === 'xref' ? '외부 참조' : x.kind === 'image' ? '이미지' : '스타일'} ${x.name}: ${x.before}`);
+          for (const x of list) ctx.print(`  ${x.kind === 'xref' ? '외부 참조' : x.kind === 'image' ? '이미지' : '스타일'} ${ft(x.name)}: ${ft(x.before)}`);
           continue;
         }
         const key = ({ S: 'styles', X: 'xrefs', I: 'images', R: 'rtext' } as const)[k as 'S' | 'X' | 'I' | 'R'];
@@ -625,16 +626,16 @@ async function runRedir(app: App, ctx: CommandContext): Promise<void> {
     oldDir = t;
     break;
   }
-  const n = await askString(ctx, `"${oldDir}"을(를) 무엇으로 바꾸겠습니까:`, '');
+  const n = await askString(ctx, `"${ft(oldDir)}"을(를) 무엇으로 바꾸겠습니까:`, '');
   if (typeof n !== 'string') return;
   const { ops, changes } = redirOps(doc, oldDir, n.trim(), redirMode);
   if (redirMode.rtext) ctx.print('참고: RTEXT 객체는 이 웹 버전에서 읽지 않아 바꾸지 않습니다.');
   if (!ops.length) {
-    ctx.print(oldDir === '*' ? '바꿀 경로가 없습니다.' : `"${oldDir}"이(가) 들어간 경로가 없습니다.`);
+    ctx.print(oldDir === '*' ? '바꿀 경로가 없습니다.' : `"${ft(oldDir)}"이(가) 들어간 경로가 없습니다.`);
     return;
   }
   st.session.commit({ label: 'REDIR', ops, group: ctx.group });
-  for (const c of changes) ctx.print(`  ${c.kind === 'xref' ? '외부 참조' : c.kind === 'image' ? '이미지' : '스타일'} ${c.name}: ${c.before} → ${c.after}`);
+  for (const c of changes) ctx.print(`  ${c.kind === 'xref' ? '외부 참조' : c.kind === 'image' ? '이미지' : '스타일'} ${ft(c.name)}: ${ft(c.before)} → ${ft(c.after)}`);
   const cnt = (k: string) => changes.filter((c) => c.kind === k).length;
   ctx.print(`외부 참조 ${cnt('xref')}개, 이미지 ${cnt('image')}개, 스타일 글꼴 ${cnt('style')}개의 경로를 바꿨습니다. 브라우저는 파일을 이름으로 다시 연결하므로 화면은 그대로입니다.`);
 }

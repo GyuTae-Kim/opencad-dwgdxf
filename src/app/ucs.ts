@@ -10,6 +10,7 @@ import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { dialog, h } from './ui/dom';
 import { lwPoints } from '../core/lwpoly';
+import { ft } from './filetext';
 
 type Pt = { x: number; y: number };
 
@@ -160,8 +161,8 @@ export function registerUcsCommands(app: App): void {
     async run(ctx) {
       const st = app.active!;
       const cur = currentUcs(st);
-      const curName = String(st.doc.header.get(names(st).name) ?? '') || (isWorld(cur) ? '*표준*' : '*이름 없음*');
-      ctx.print(`현재 UCS 이름: ${curName}`);
+      const named = String(st.doc.header.get(names(st).name) ?? '');
+      ctx.print(`현재 UCS 이름: ${named ? ft(named) : isWorld(cur) ? '*표준*' : '*이름 없음*'}`);
       const r = await ctx.getPoint('UCS의 원점 지정 또는 [이름(NA)/객체(OB)/이전(P)/뷰(V)/표준(W)/Z] <표준>:', {
         keywords: [
           { key: 'NA', label: '이름' },
@@ -229,7 +230,7 @@ export function registerUcsCommands(app: App): void {
           if (o.keyword === '?') {
             const list = namedUcs(st.doc);
             if (!list.length) ctx.print('저장된 UCS가 없습니다.');
-            for (const u of list) ctx.print(`${u.name}  원점 = ${u.origin.x.toFixed(4)},${u.origin.y.toFixed(4)}  X축 각도 = ${((Math.atan2(u.xAxis.y, u.xAxis.x) * 180) / Math.PI).toFixed(2)}`);
+            for (const u of list) ctx.print(`${ft(u.name)}  원점 = ${u.origin.x.toFixed(4)},${u.origin.y.toFixed(4)}  X축 각도 = ${((Math.atan2(u.xAxis.y, u.xAxis.x) * 180) / Math.PI).toFixed(2)}`);
             return;
           }
           const t = await ctx.getPoint(o.keyword === 'S' ? 'UCS를 저장할 이름 입력 또는 [?]:' : o.keyword === 'R' ? '복원할 UCS의 이름 입력 또는 [?]:' : '삭제할 UCS 이름 입력 <없음>:', { allowText: true });
@@ -238,11 +239,11 @@ export function registerUcsCommands(app: App): void {
           if (o.keyword === 'S') saveNamed(st, name, cur, ctx);
           else if (o.keyword === 'R') {
             const rec = st.doc.ucs.get(tableKey(name));
-            if (!rec) ctx.print(`UCS "${name}"을(를) 찾을 수 없습니다.`, 'err');
+            if (!rec) ctx.print(`UCS "${ft(name)}"을(를) 찾을 수 없습니다.`, 'err');
             else applyUcs(app, st, recUcs(rec), ctx, rec.name);
           } else {
             const rec = st.doc.ucs.get(tableKey(name));
-            if (!rec) ctx.print(`UCS "${name}"을(를) 찾을 수 없습니다.`, 'err');
+            if (!rec) ctx.print(`UCS "${ft(name)}"을(를) 찾을 수 없습니다.`, 'err');
             else st.session.commit({ label: 'UCS', ops: [{ kind: 'ucs', key: tableKey(name), before: rec, after: null }], group: ctx.group });
           }
           return;

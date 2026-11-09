@@ -26,6 +26,7 @@ import type { Pt } from './view';
 import { installAcadConstraintSync } from './constraints-acad';
 import { lwCount } from '../core/lwpoly';
 import { polyCount } from '../core/polyverts';
+import { ft } from './filetext';
 
 const kw = (key: string, label: string): Keyword => ({ key, label });
 
@@ -408,7 +409,7 @@ async function askDimText(app: App, ctx: CommandContext, c: DimConstraint, store
   const st = app.active!;
   const def = nextDimName(store, c);
   for (;;) {
-    const t = (await askText(ctx, `치수 문자 = <${def}=${fmtValue(st, c, measured)}>:`, '')).trim();
+    const t = (await askText(ctx, `치수 문자 = <${ft(def)}=${fmtValue(st, c, measured)}>:`, '')).trim();
     if (!t) return { name: def, expr: numberText(measured), value: measured };
     const eq = t.indexOf('=');
     const name = (eq >= 0 ? t.slice(0, eq) : def).trim();
@@ -419,7 +420,7 @@ async function askDimText(app: App, ctx: CommandContext, c: DimConstraint, store
       continue;
     }
     if (storeParamDefs(store).some((d) => d.name.toLowerCase() === name.toLowerCase())) {
-      ctx.print(`매개변수 "${name}"이(가) 이미 있습니다.`, 'err');
+      ctx.print(`매개변수 "${ft(name)}"이(가) 이미 있습니다.`, 'err');
       continue;
     }
     try {
@@ -661,7 +662,7 @@ function storeFromRows(store: ConstraintStore, rows: ParamRow[]): ConstraintStor
     const why = paramNameProblem(r.name);
     if (why) return `${r.name || '(빈 이름)'}: ${why}`;
     const k = r.name.trim().toLowerCase();
-    if (seen.has(k)) return `이름 "${r.name}"이(가) 겹칩니다.`;
+    if (seen.has(k)) return `이름 "${ft(r.name)}"이(가) 겹칩니다.`;
     seen.add(k);
     if (!r.reference) {
       if (!r.expr.trim()) return `${r.name}: 식을 입력하십시오.`;

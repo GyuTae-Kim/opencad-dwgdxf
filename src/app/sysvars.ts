@@ -21,6 +21,7 @@ import { getSysVar, setSysVar } from './lisp-host';
 import { h } from './ui/dom';
 import { btn, checkIn, ensureMgrStyle, pickList, prefGet, prefSet, resultDialog, textIn } from './mgr-ui';
 import { POLARANG_MAX, POLARANG_MIN, formatPolarAddAng, parseAngleText, parsePolarAddAng } from './polar';
+import { ft } from './filetext';
 
 export type SysvarSource = 'session' | 'browser' | 'header';
 /** angle: 도 단위 실수(POLARANG — 명령행·목록에 90, 22.5처럼) */
@@ -489,7 +490,7 @@ export function setSysvarText(app: App, raw: string, text: string): string | nul
     }
     default: {
       const doc = st.doc;
-      const nameIn = (m: Map<string, { name: string }>, what: string): string | null => (m.has(tableKey(t)) ? m.get(tableKey(t))!.name : `${what} "${t}"이(가) 없습니다.`);
+      const nameIn = (m: Map<string, { name: string }>, what: string): string | null => (m.has(tableKey(t)) ? m.get(tableKey(t))!.name : `${what} "${ft(t)}"이(가) 없습니다.`);
       if (n === 'CLAYER') {
         const r = nameIn(doc.layers, '도면층');
         if (!doc.layers.has(tableKey(t))) return r;
@@ -501,7 +502,7 @@ export function setSysvarText(app: App, raw: string, text: string): string | nul
         if (!doc.dimStyles.has(tableKey(t))) return nameIn(doc.dimStyles, '치수 스타일');
         after = doc.dimStyles.get(tableKey(t))!.name;
       } else if (n === 'CELTYPE') {
-        if (!/^(bylayer|byblock|continuous)$/i.test(t) && !doc.linetypes.has(tableKey(t))) return `선종류 "${t}"이(가) 없습니다.`;
+        if (!/^(bylayer|byblock|continuous)$/i.test(t) && !doc.linetypes.has(tableKey(t))) return `선종류 "${ft(t)}"이(가) 없습니다.`;
         after = doc.linetypes.get(tableKey(t))?.name ?? t;
       } else after = t;
     }
@@ -524,7 +525,7 @@ export async function promptSysvar(app: App, ctx: CommandContext, raw: string, a
     return;
   }
   if (info.readOnly) {
-    ctx.print(`${info.name} = ${sysvarText(info.value, info.kind)} (읽기 전용)`);
+    ctx.print(`${info.name} = ${ft(sysvarText(info.value, info.kind))} (읽기 전용)`);
     return;
   }
   let pending = arg;
@@ -537,7 +538,7 @@ export async function promptSysvar(app: App, ctx: CommandContext, raw: string, a
     } else {
       // 글 변수는 "."으로 비운다(AutoCAD 문자열 변수의 "없음")
       const none = browserTextVar(info.name) ? ' 또는 없음은 . 입력' : '';
-      const r = await ctx.getPoint(`${info.name}에 대한 새 값 입력${none} <${sysvarText(cur.value, cur.kind)}>:`, { allowText: true, preferNumber: true });
+      const r = await ctx.getPoint(`${info.name}에 대한 새 값 입력${none} <${ft(sysvarText(cur.value, cur.kind))}>:`, { allowText: true, preferNumber: true });
       if ('enter' in r) return;
       if ('point' in r) text = `${r.point.x},${r.point.y}`;
       else if ('text' in r) text = r.text;
@@ -611,7 +612,7 @@ async function sysvdlg(app: App, ctx: CommandContext): Promise<void> {
     const e = setSysvarText(app, r.name, edit.value);
     err.textContent = e ?? '';
     if (!e) {
-      ctx.print(`${r.name} = ${sysvarText(sysvarInfo(app, r.name)?.value, r.kind)}`);
+      ctx.print(`${r.name} = ${ft(sysvarText(sysvarInfo(app, r.name)?.value, r.kind))}`);
       refresh();
     }
   };

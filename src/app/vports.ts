@@ -11,6 +11,7 @@ import type { App, CommandContext } from './app';
 import type { Camera, DocState, Tile, TileSet } from './docstate';
 import { form } from './ui/dom';
 import { type R, type Split, joinRects, splitRect } from './tilelayout';
+import { ft } from './filetext';
 
 
 const ACTIVE = '*ACTIVE';
@@ -257,7 +258,7 @@ export function registerVportCommands(app: App): void {
         ctx.print('현재 구성:');
         for (const v of activeRecords(st)) ctx.print(`  ${fmtRect(v)}`);
         for (const name of names.filter((x) => re.test(x))) {
-          ctx.print(`구성 ${name}:`);
+          ctx.print(`구성 ${ft(name)}:`);
           for (const v of st.doc.vports.filter((x) => x.name.toUpperCase() === name.toUpperCase())) ctx.print(`  ${fmtRect(v)}`);
         }
         return;
@@ -269,7 +270,7 @@ export function registerVportCommands(app: App): void {
         const name = q.text.trim();
         if (!name) return;
         if (name === '?') {
-          ctx.print(namedConfigs(st).join(', ') || '이름 있는 뷰포트 구성이 없습니다.');
+          ctx.print(namedConfigs(st).map(ft).join(', ') || '이름 있는 뷰포트 구성이 없습니다.');
           return;
         }
         if (k === 'S') {
@@ -278,10 +279,10 @@ export function registerVportCommands(app: App): void {
             return;
           }
           saveNamed(app, st, ctx, name);
-          ctx.print(`뷰포트 구성 ${name}을(를) 저장했습니다.`);
+          ctx.print(`뷰포트 구성 ${ft(name)}을(를) 저장했습니다.`);
         } else if (k === 'R') {
-          if (!restoreNamed(app, st, ctx, name)) ctx.print(`뷰포트 구성 ${name}을(를) 찾을 수 없습니다.`, 'err');
-        } else if (!deleteNamed(st, ctx, name)) ctx.print(`뷰포트 구성 ${name}을(를) 찾을 수 없습니다.`, 'err');
+          if (!restoreNamed(app, st, ctx, name)) ctx.print(`뷰포트 구성 ${ft(name)}을(를) 찾을 수 없습니다.`, 'err');
+        } else if (!deleteNamed(st, ctx, name)) ctx.print(`뷰포트 구성 ${ft(name)}을(를) 찾을 수 없습니다.`, 'err');
         return;
       }
       if (k === 'J') {
@@ -388,7 +389,7 @@ export function registerVportCommands(app: App): void {
         if (NAME_BAD.test(name) || name.toUpperCase() === ACTIVE) ctx.print('이름이 올바르지 않습니다.', 'err');
         else {
           saveNamed(app, st, ctx, name);
-          ctx.print(`뷰포트 구성 ${name}을(를) 저장했습니다.`);
+          ctx.print(`뷰포트 구성 ${ft(name)}을(를) 저장했습니다.`);
         }
       }
     },

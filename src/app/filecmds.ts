@@ -10,6 +10,7 @@ import { registerFilePlotCommands } from './filecmds-plot';
 import { RecentStore } from './recent';
 import { quickSave, savedListeners } from './save';
 import { sessionFile } from './sessionfiles';
+import { ft } from './filetext';
 
 /** 이 세션에서 마지막으로 저장한 내용(REVERT가 되돌릴 곳) */
 const lastSaved = new WeakMap<DocState, { data: Blob; name: string }>();
@@ -122,7 +123,7 @@ export function registerFileCommands(app: App): void {
         ctx.print('도면이 수정되지 않았습니다.');
         return;
       }
-      const r = await ctx.getPoint(`${st.saveName}의 변경 내용을 모두 버리고 마지막으로 저장한 상태로 되돌리겠습니까? [예(Y)/아니오(N)] <예>:`, {
+      const r = await ctx.getPoint(`${ft(st.saveName)}의 변경 내용을 모두 버리고 마지막으로 저장한 상태로 되돌리겠습니까? [예(Y)/아니오(N)] <예>:`, {
         keywords: [
           { key: 'Y', label: '예' },
           { key: 'N', label: '아니오' },
@@ -148,7 +149,7 @@ export function registerFileCommands(app: App): void {
         app.docs.splice(Math.min(index, app.docs.length), 0, fresh);
       }
       app.activate(fresh);
-      ctx.print(`${src.name}을(를) 마지막으로 저장한 상태로 되돌렸습니다.`);
+      ctx.print(`${ft(src.name)}을(를) 마지막으로 저장한 상태로 되돌렸습니다.`);
     },
   });
 

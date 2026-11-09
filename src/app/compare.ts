@@ -23,6 +23,7 @@ import { baseName } from './export';
 import type { Pt } from './view';
 import { BoxList, type EntityBox } from '../render/displaylist';
 import type { Box } from '../edit/compare';
+import { ft } from './filetext';
 
 let session: CompareSession | null = null;
 let toolbar: CompareToolbar | null = null;
@@ -50,7 +51,7 @@ function sourceFromDoc(d: DocState): CompareSource {
 }
 
 async function sourceFromFile(app: App, ctx: CommandContext, file: File): Promise<CompareSource | null> {
-  app.ui.setBusy(`${file.name} 읽는 중…`, 0);
+  app.ui.setBusy(`${ft(file.name)} 읽는 중…`, 0);
   try {
     const res = await app.engine.open(file.name, await file.arrayBuffer(), (stage, f) => app.ui.setBusy(stage === 'read' ? '비교할 도면 읽는 중…' : '비교할 도면 준비 중…', stage === 'read' ? f * 0.8 : 0.9));
     // 워커 문서는 비교가 끝날 때까지 둔다("비교 도면에서만" 객체를 워커가 그린다)
@@ -59,7 +60,7 @@ async function sourceFromFile(app: App, ctx: CommandContext, file: File): Promis
     // 객체 상자는 워커가 묶어 보낸 그대로 온다
     return { name: file.name, doc: res.doc, bounds, boxes: boxMap(res.model.boxes ? new BoxList(res.model.boxes) : l.entities), size: file.size, workerDocId: res.docId };
   } catch (e) {
-    ctx.print(`${file.name}: 도면을 읽지 못했습니다(${e instanceof Error ? e.message : String(e)}).`, 'err');
+    ctx.print(`${ft(file.name)}: 도면을 읽지 못했습니다(${e instanceof Error ? e.message : String(e)}).`, 'err');
     return null;
   } finally {
     app.ui.setBusy(null);
@@ -134,7 +135,7 @@ async function startCompare(app: App, ctx: CommandContext, st: DocState, src: Co
   unlisten = onCompareVarsChange((names) => s.applySettings(names));
   const r = s.result!;
   const t = s.timing;
-  ctx.print(`"${st.name}"과(와) "${src.name}"을(를) 비교했습니다(맞추기 ${Math.round(t.compare)}ms, 그리기 ${Math.round(t.scenes + t.sets)}ms${r.sameLineage ? ', 같은 계보 — 핸들로 맞춤' : ''}).`);
+  ctx.print(`"${ft(st.name)}"과(와) "${ft(src.name)}"을(를) 비교했습니다(맞추기 ${Math.round(t.compare)}ms, 그리기 ${Math.round(t.scenes + t.sets)}ms${r.sameLineage ? ', 같은 계보 — 핸들로 맞춤' : ''}).`);
   ctx.print(summary(s), 'res');
 }
 
@@ -356,7 +357,7 @@ async function compareExport(app: App, ctx: CommandContext): Promise<void> {
     const res = await app.engine.adopt(name, snap.doc);
     app.addDocument(res, name, 0);
     const c = snap.counts;
-    ctx.print(`스냅샷 "${name}"을(를) 열었습니다: 현재 도면에서만 ${c.current}개, 차이 없음 ${c.common}개, 비교 도면에서만 ${c.compare}개, 구름형 리비전 ${c.clouds}개. QSAVE나 SAVEAS로 저장하십시오.`);
+    ctx.print(`스냅샷 "${ft(name)}"을(를) 열었습니다: 현재 도면에서만 ${c.current}개, 차이 없음 ${c.common}개, 비교 도면에서만 ${c.compare}개, 구름형 리비전 ${c.clouds}개. QSAVE나 SAVEAS로 저장하십시오.`);
   } catch (e) {
     ctx.print(`스냅샷을 만들지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
   } finally {
@@ -484,7 +485,7 @@ export function registerCompareCommands(app: App): void {
         } else {
           const d = findOpen(app, st, name);
           if (!d) {
-            ctx.print(`"${name.trim()}" 도면이 열려 있지 않습니다. 열린 도면 이름을 입력하거나 Enter로 파일을 고르십시오.`, 'err');
+            ctx.print(`"${ft(name.trim())}" 도면이 열려 있지 않습니다. 열린 도면 이름을 입력하거나 Enter로 파일을 고르십시오.`, 'err');
             return;
           }
           src = sourceFromDoc(d);

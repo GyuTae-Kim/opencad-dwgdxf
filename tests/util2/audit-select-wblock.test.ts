@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { InsertEntity, LineEntity } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
 import { auditDocument, docStats } from '../../src/edit/util/audit';
+import { unmark } from '../../src/app/filetext';
 import { createGroupOps, listGroups } from '../../src/edit/util/groups';
 import { parseColor, parseLineweight, passesFilter, quickSelect, selectSimilar, similarKey, testProp, valueProblem } from '../../src/edit/util/select';
 import { buildWblockDocument } from '../../src/edit/util/wblock';
@@ -29,7 +30,8 @@ describe('AUDIT', () => {
     doc.header.set('$HANDSEED', '1');
     doc.header.set('$CLAYER', 'GONE');
     const rep = auditDocument(doc);
-    const msgs = rep.issues.map((i) => i.message).join('\n');
+    // 도면 글(이름)은 ft()로 감싸 나온다(105차) — 보이는 글로 견준다
+    const msgs = rep.issues.map((i) => unmark(i.message)).join('\n');
     expect(msgs).toMatch(/도면층 "GHOST"/);
     expect(msgs).toMatch(/선종류 "NOPE"/);
     expect(msgs).toMatch(/블록 "MISSING"/);

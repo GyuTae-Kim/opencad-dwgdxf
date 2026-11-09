@@ -9,6 +9,7 @@ import type { EditOp } from '../session';
 import { cloneEntity, isLayoutBlock } from '../session';
 import { blockReaches } from './blockutil';
 import { deleteGroupOps, listGroups, updateGroupOps } from './groups';
+import { ft } from '../../app/filetext';
 
 export type AuditPhase = 'header' | 'tables' | 'entities' | 'blocks' | 'objects';
 
@@ -89,7 +90,7 @@ export function auditDocument(doc: CadDocument): AuditReport {
   const headerFix = (name: string, have: boolean, after: string, what: string) => {
     const v = hstr(name);
     if (v === undefined || !v || have) return;
-    issues.push({ phase: 'header', target: name.slice(1), message: `${what} "${v}"이(가) 없습니다.`, fix: `${after}(으)로 설정` });
+    issues.push({ phase: 'header', target: name.slice(1), message: `${what} "${ft(v)}"이(가) 없습니다.`, fix: `${ft(after)}(으)로 설정` });
     fixes.push((c) => c.ops.push({ kind: 'header', name, before: v, after }));
   };
   headerFix('$CLAYER', doc.layers.has(tableKey(hstr('$CLAYER') ?? '0')), '0', '현재 도면층');
@@ -124,7 +125,7 @@ export function auditDocument(doc: CadDocument): AuditReport {
   // ---------------------------------------------------------------- 표
   for (const [lk, l] of doc.layers) {
     if (!l.linetype || BUILTIN_LT.has(tableKey(l.linetype)) || doc.linetypes.has(tableKey(l.linetype))) continue;
-    issues.push({ phase: 'tables', target: `도면층 ${l.name}`, message: `선종류 "${l.linetype}"이(가) 없습니다.`, fix: 'Continuous로 설정' });
+    issues.push({ phase: 'tables', target: `도면층 ${ft(l.name)}`, message: `선종류 "${ft(l.linetype)}"이(가) 없습니다.`, fix: 'Continuous로 설정' });
     fixes.push((c) => c.ops.push({ kind: 'layer', key: lk, before: l, after: { ...l, linetype: 'Continuous' } }));
   }
 
@@ -162,12 +163,12 @@ export function auditDocument(doc: CadDocument): AuditReport {
         return;
       }
       if (e.type === 'INSERT' && !doc.blocks.has(tableKey(e.block))) {
-        issues.push({ phase: 'entities', handle: e.handle, target: label, message: `블록 "${e.block}"의 정의가 없습니다.`, fix: '객체 삭제' });
+        issues.push({ phase: 'entities', handle: e.handle, target: label, message: `블록 "${ft(e.block)}"의 정의가 없습니다.`, fix: '객체 삭제' });
         plan(bk, i, e).next = null;
         return;
       }
       if (e.type === 'INSERT' && !isLayoutBlock(bk) && blockReaches(doc, e.block, bk)) {
-        issues.push({ phase: 'blocks', handle: e.handle, target: `블록 ${b.name}`, message: `블록 "${e.block}" 참조가 자기 자신을 품습니다.`, fix: '객체 삭제' });
+        issues.push({ phase: 'blocks', handle: e.handle, target: `블록 ${ft(b.name)}`, message: `블록 "${ft(e.block)}" 참조가 자기 자신을 품습니다.`, fix: '객체 삭제' });
         plan(bk, i, e).next = null;
         return;
       }
@@ -194,13 +195,13 @@ export function auditDocument(doc: CadDocument): AuditReport {
       for (const p of parts) {
         if (p.layer && !doc.layers.has(tableKey(p.layer))) {
           if (!missingLayers.has(tableKey(p.layer))) missingLayers.set(tableKey(p.layer), p.layer);
-          issues.push({ phase: 'entities', handle: p.handle, target: label, message: `도면층 "${p.layer}"이(가) 없습니다.`, fix: '도면층 만들기' });
+          issues.push({ phase: 'entities', handle: p.handle, target: label, message: `도면층 "${ft(p.layer)}"이(가) 없습니다.`, fix: '도면층 만들기' });
         }
       }
       // 선종류
       const bad = (lt: string) => !!lt && !BUILTIN_LT.has(tableKey(lt)) && !doc.linetypes.has(tableKey(lt));
       if (bad(e.linetype) || (e.type === 'INSERT' && e.attribs.some((a) => bad(a.linetype)))) {
-        issues.push({ phase: 'entities', handle: e.handle, target: label, message: `선종류 "${e.linetype}"이(가) 없습니다.`, fix: 'ByLayer로 설정' });
+        issues.push({ phase: 'entities', handle: e.handle, target: label, message: `선종류 "${ft(e.linetype)}"이(가) 없습니다.`, fix: 'ByLayer로 설정' });
         const n = plan(bk, i, e).next!;
         if (bad(n.linetype)) n.linetype = 'ByLayer';
         if (n.type === 'INSERT') for (const a of n.attribs) if (bad(a.linetype)) a.linetype = 'ByLayer';
@@ -221,7 +222,7 @@ export function auditDocument(doc: CadDocument): AuditReport {
       }
       // 치수 스타일
       if ((e.type === 'DIMENSION' || e.type === 'LEADER' || e.type === 'TOLERANCE') && doc.dimStyles.size && e.dimStyle && !doc.dimStyles.has(tableKey(e.dimStyle))) {
-        issues.push({ phase: 'entities', handle: e.handle, target: label, message: `치수 스타일 "${e.dimStyle}"이(가) 없습니다.`, fix: `${dimFallback}(으)로 설정` });
+        issues.push({ phase: 'entities', handle: e.handle, target: label, message: `치수 스타일 "${ft(e.dimStyle)}"이(가) 없습니다.`, fix: `${ft(dimFallback)}(으)로 설정` });
         (plan(bk, i, e).next as { dimStyle: string }).dimStyle = dimFallback;
       }
       // 0 축척 블록 참조
@@ -274,10 +275,10 @@ export function auditDocument(doc: CadDocument): AuditReport {
     const live = g.group.entities.filter((h) => doc.entityIndex.has(normalizeHandle(h)));
     if (live.length === g.group.entities.length) continue;
     if (!live.length) {
-      issues.push({ phase: 'objects', handle: g.handle, target: `그룹 ${g.name}`, message: '구성원이 없습니다.', fix: '그룹 삭제' });
+      issues.push({ phase: 'objects', handle: g.handle, target: `그룹 ${ft(g.name)}`, message: '구성원이 없습니다.', fix: '그룹 삭제' });
       fixes.push((c) => c.ops.push(...deleteGroupOps(doc, g.handle)));
     } else {
-      issues.push({ phase: 'objects', handle: g.handle, target: `그룹 ${g.name}`, message: `없는 구성원 ${g.group.entities.length - live.length}개`, fix: '구성원에서 뺌' });
+      issues.push({ phase: 'objects', handle: g.handle, target: `그룹 ${ft(g.name)}`, message: `없는 구성원 ${g.group.entities.length - live.length}개`, fix: '구성원에서 뺌' });
       fixes.push((c) => c.ops.push(...updateGroupOps(doc, g.handle, { entities: live })));
     }
   }

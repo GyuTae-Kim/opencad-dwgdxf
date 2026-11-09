@@ -9,6 +9,7 @@ import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { addEntities, currentProps } from './draw';
 import { form } from './ui/dom';
+import { ft } from './filetext';
 
 type Pt = { x: number; y: number };
 
@@ -96,7 +97,7 @@ async function changeProps(app: App, ctx: CommandContext, hs: string[], label: s
       case 'LA': {
         const t = await ask('새 도면층 이름 입력:');
         const L = t ? st.doc.layers.get(tableKey(t)) : undefined;
-        if (!L) ctx.print(`도면층 "${t ?? ''}"을(를) 찾을 수 없습니다.`, 'err');
+        if (!L) ctx.print(`도면층 "${ft(t ?? '')}"을(를) 찾을 수 없습니다.`, 'err');
         else modifyAll(st, ctx, label, hs, (e) => ({ ...e, layer: L.name }) as Entity);
         break;
       }
@@ -104,7 +105,7 @@ async function changeProps(app: App, ctx: CommandContext, hs: string[], label: s
         const t = await ask('새 선종류 이름 입력 <BYLAYER>:');
         const name = t || 'ByLayer';
         const k = tableKey(name);
-        if (k !== 'BYLAYER' && k !== 'BYBLOCK' && !st.doc.linetypes.has(k)) ctx.print(`선종류 "${name}"을(를) 찾을 수 없습니다. 선종류 관리자(LINETYPE)에서 먼저 로드하십시오.`, 'err');
+        if (k !== 'BYLAYER' && k !== 'BYBLOCK' && !st.doc.linetypes.has(k)) ctx.print(`선종류 "${ft(name)}"을(를) 찾을 수 없습니다. 선종류 관리자(LINETYPE)에서 먼저 로드하십시오.`, 'err');
         else modifyAll(st, ctx, label, hs, (e) => ({ ...e, linetype: k === 'BYLAYER' ? 'ByLayer' : k === 'BYBLOCK' ? 'ByBlock' : st.doc.linetypes.get(k)!.name }) as Entity);
         break;
       }
@@ -158,7 +159,7 @@ async function changePoint(app: App, ctx: CommandContext, hs: string[], p: Pt): 
       const pt = { x: p.x, y: p.y, z: e.insert.z };
       const nh = await ctx.getPoint(`새 높이 지정 <${e.height.toFixed(4)}>:`, { allowText: true, preferNumber: true });
       const na = await ctx.getPoint(`새 회전 각도 지정 <${((e.rotation * 180) / Math.PI).toFixed(0)}>:`, { allowText: true, preferNumber: true });
-      const nt = await ctx.getPoint(`새 문자 입력 <${e.text}>:`, { allowText: true });
+      const nt = await ctx.getPoint(`새 문자 입력 <${ft(e.text)}>:`, { allowText: true });
       const height = 'text' in nh && Number(nh.text) > 0 ? Number(nh.text) : e.height;
       const rotation = 'text' in na && Number.isFinite(Number(na.text)) ? (Number(na.text) * Math.PI) / 180 : e.rotation;
       const text = 'text' in nt ? nt.text : e.text;

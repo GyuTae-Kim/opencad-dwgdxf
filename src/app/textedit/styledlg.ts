@@ -303,7 +303,7 @@ export function textStyleDialog(app: App): Promise<void> {
       const before = doc.textStyles.get(key) ?? null;
       if (JSON.stringify(before) !== JSON.stringify(work)) st.session.commit({ label: 'STYLE', ops: [{ kind: 'textStyle', key, before, after: structuredClone(work) }] });
       dirty = false;
-      app.cmd.print(`문자 스타일 "${work.name}"을(를) 적용했습니다.`);
+      app.cmd.print(`문자 스타일 "${ft(work.name)}"을(를) 적용했습니다.`);
       return true;
     };
     /** 적용하지 않은 변경을 물어 처리한다. 계속하면 true */

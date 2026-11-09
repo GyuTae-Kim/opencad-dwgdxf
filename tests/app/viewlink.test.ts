@@ -8,6 +8,7 @@ import { decodeViewLink, encodeViewLink, rectOf, viewFromRect, viewUrl } from '.
 import { applyViewLink, copyViewLink, currentViewLink, installViewLinks } from '../../src/app/viewlink-app';
 import type { App } from '../../src/app/app';
 import type { DocState } from '../../src/app/docstate';
+import { unmark } from '../../src/app/filetext';
 
 describe('보기 링크 부호화(순수)', () => {
   it('가운데·크기·배치 이름을 담고 그대로 풀린다', () => {
@@ -129,7 +130,8 @@ describe('보기 링크를 앱에', () => {
     const f = fakes();
     expect(await applyViewLink(f.app, f.st, { center: [0, 0], size: [1, 1], layout: '없는 배치' })).toBe(false);
     expect(f.calls).toEqual([]);
-    expect(document.body.textContent).toContain('주소의 보기에 있는 배치 탭 "없는 배치"이(가) 이 도면에 없습니다.');
+    // 배치 이름은 도면 글 표시(ft — 105차)로 감싸 알린다(번역층이 지운다) — 보이는 글로 견준다
+    expect(unmark(document.body.textContent ?? '')).toContain('주소의 보기에 있는 배치 탭 "없는 배치"이(가) 이 도면에 없습니다.');
   });
 
   it('복사: 클립보드에 주소를 넣고, 못 쓰면 주소 막대에 넣는다', async () => {

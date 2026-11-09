@@ -10,6 +10,7 @@ import type { CadColor, CadDocument, Entity, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { colorText, parseColor, typeLabel } from '../util/select';
 import { hasWildcard, wcmatch } from '../util/wildcard';
+import { ft } from '../../app/filetext';
 
 export type SsxKey = 'type' | 'layer' | 'color' | 'linetype' | 'thickness' | 'style' | 'block' | 'vector';
 
@@ -112,12 +113,12 @@ export function ssxSelect(list: readonly Entity[], f: SsxFilter): string[] {
 export function ssxFilterLines(f: SsxFilter): string[] {
   const out: string[] = [];
   if (f.type !== undefined) out.push(`${SSX_LABEL.type} = ${f.type}${hasWildcard(f.type) ? '' : ` (${typeLabel(f.type)})`}`);
-  if (f.layer !== undefined) out.push(`${SSX_LABEL.layer} = ${f.layer}`);
+  if (f.layer !== undefined) out.push(`${SSX_LABEL.layer} = ${ft(f.layer)}`);
   if (f.color) out.push(`${SSX_LABEL.color} = ${colorText(f.color)}`);
-  if (f.linetype !== undefined) out.push(`${SSX_LABEL.linetype} = ${f.linetype}`);
+  if (f.linetype !== undefined) out.push(`${SSX_LABEL.linetype} = ${ft(f.linetype)}`);
   if (f.thickness !== undefined) out.push(`${SSX_LABEL.thickness} = ${f.thickness}`);
-  if (f.style !== undefined) out.push(`${SSX_LABEL.style} = ${f.style}`);
-  if (f.block !== undefined) out.push(`${SSX_LABEL.block} = ${f.block}`);
+  if (f.style !== undefined) out.push(`${SSX_LABEL.style} = ${ft(f.style)}`);
+  if (f.block !== undefined) out.push(`${SSX_LABEL.block} = ${ft(f.block)}`);
   if (f.vector) out.push(`${SSX_LABEL.vector} = ${f.vector.x},${f.vector.y},${f.vector.z}`);
   return out;
 }

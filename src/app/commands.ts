@@ -485,7 +485,7 @@ export function registerCommands(app: App): void {
         if (!('handle' in r)) return;
         const e = app.entity(r.handle)!;
         setLayer(app, e.layer, { on: false });
-        ctx.print(`도면층 "${e.layer}"을(를) 껐습니다.`);
+        ctx.print(`도면층 "${ft(e.layer)}"을(를) 껐습니다.`);
       }
     },
   });
@@ -498,7 +498,7 @@ export function registerCommands(app: App): void {
         if (!('handle' in r)) return;
         const e = app.entity(r.handle)!;
         setLayer(app, e.layer, { frozen: true });
-        ctx.print(`도면층 "${e.layer}"을(를) 동결했습니다.`);
+        ctx.print(`도면층 "${ft(e.layer)}"을(를) 동결했습니다.`);
       }
     },
   });

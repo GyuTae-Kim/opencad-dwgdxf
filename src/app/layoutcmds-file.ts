@@ -20,6 +20,7 @@ import { baseName, download } from './export';
 import { fileNameMode } from './script';
 import { sessionFile } from './sessionfiles';
 import { form } from './ui/dom';
+import { ft } from './filetext';
 
 /** 파일 내려받기(시험이 바꿔 끼운다) */
 export const layoutFileIO = {
@@ -83,7 +84,7 @@ export async function findTemplate(app: App, name: string): Promise<{ name: stri
     // 보이는 이름: 고른 파일의 이름(없으면 입력한 이름 + 찾은 확장자)
     const typed = name.trim().replace(/^"|"$/g, '').replace(/^.*[\\/]/, '');
     const shown = (blob as File).name || (TEMPLATE_EXT.test(typed) ? typed : typed + cand.slice(bare.length));
-    app.ui?.setBusy?.(`${shown} 읽는 중…`, 0.3);
+    app.ui?.setBusy?.(`${ft(shown)} 읽는 중…`, 0.3);
     try {
       const res = await app.engine.open(shown, await blob.arrayBuffer());
       app.engine.closeDoc(res.docId);
@@ -107,20 +108,20 @@ async function askTemplateByName(app: App, ctx: CommandContext): Promise<{ name:
   const r = await ctx.getPoint('템플릿 파일 이름 입력:', { allowText: true });
   if (!('text' in r) || !r.text.trim()) return null;
   const t = await findTemplate(app, r.text);
-  if (!t) ctx.print(`템플릿 파일 "${r.text.trim()}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에 연 도면·고른 파일만 이름으로 찾습니다.`, 'err');
+  if (!t) ctx.print(`템플릿 파일 "${ft(r.text.trim())}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에 연 도면·고른 파일만 이름으로 찾습니다.`, 'err');
   return t;
 }
 
 async function pickTemplateFile(app: App, ctx: CommandContext): Promise<{ name: string; doc: CadDocument } | null> {
   const f = (await pickFiles('.dwt,.dwg,.dxf,.DWT,.DWG,.DXF', false))[0];
   if (!f) return null;
-  app.ui.setBusy(`${f.name} 읽는 중…`, 0.3);
+  app.ui.setBusy(`${ft(f.name)} 읽는 중…`, 0.3);
   try {
     const res = await app.engine.open(f.name, await f.arrayBuffer());
     app.engine.closeDoc(res.docId);
     return { name: f.name, doc: res.doc };
   } catch (e) {
-    ctx.print(`${f.name}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
+    ctx.print(`${ft(f.name)}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
     return null;
   } finally {
     app.ui.setBusy(null);
@@ -135,23 +136,23 @@ export async function layoutTemplate(app: App, ctx: CommandContext): Promise<voi
   if (!tpl) return;
   const avail = paperLayouts(tpl.doc).map((l) => l.name);
   if (!avail.length) {
-    ctx.print(`"${tpl.name}"에 배치가 없습니다.`, 'err');
+    ctx.print(`"${ft(tpl.name)}"에 배치가 없습니다.`, 'err');
     return;
   }
   let names: string[] = [];
   if (byName) {
     for (;;) {
-      const r = await ctx.getPoint(`배치 이름 입력 또는 [?] <${avail[0]}>:`, { allowText: true });
+      const r = await ctx.getPoint(`배치 이름 입력 또는 [?] <${ft(avail[0]!)}>:`, { allowText: true });
       if ('enter' in r) names = [avail[0]!];
       else if ('text' in r || 'keyword' in r) {
         const t = ('text' in r ? r.text : r.keyword).trim();
         if (t === '?') {
-          ctx.print(`"${tpl.name}"의 배치: ${avail.join(', ')}`, 'res');
+          ctx.print(`"${ft(tpl.name)}"의 배치: ${avail.map(ft).join(', ')}`, 'res');
           continue;
         }
         names = matchLayouts(tpl.doc, t);
         if (!names.length) {
-          ctx.print(`배치 "${t}"이(가) "${tpl.name}"에 없습니다.`, 'err');
+          ctx.print(`배치 "${ft(t)}"이(가) "${ft(tpl.name)}"에 없습니다.`, 'err');
           return;
         }
       } else return;
@@ -162,7 +163,7 @@ export async function layoutTemplate(app: App, ctx: CommandContext): Promise<voi
     const v = await form(
       '배치 삽입',
       avail.map((n, i) => ({ key: `l${i}`, label: n, type: 'check' as const, value: i === 0 })),
-      { ok: '확인', note: `템플릿 "${tpl.name}"에서 가져올 배치를 고르십시오.`, validate: (x) => (Object.values(x).some(Boolean) ? null : '배치를 하나 이상 고르십시오.') },
+      { ok: '확인', note: `템플릿 "${ft(tpl.name)}"에서 가져올 배치를 고르십시오.`, validate: (x) => (Object.values(x).some(Boolean) ? null : '배치를 하나 이상 고르십시오.') },
     );
     if (!v) return;
     names = avail.filter((_, i) => v[`l${i}`]);
@@ -175,7 +176,7 @@ export async function layoutTemplate(app: App, ctx: CommandContext): Promise<voi
   }
   st.session.commit({ label: 'LAYOUT', ops, group: ctx.group });
   app.ui?.refreshLayouts?.();
-  for (const a of added) ctx.print(a.from === a.to ? `배치 "${a.to}"을(를) "${tpl.name}"에서 가져왔습니다.` : `배치 "${a.from}"을(를) "${tpl.name}"에서 "${a.to}"(으)로 가져왔습니다(같은 이름의 배치가 있음).`);
+  for (const a of added) ctx.print(a.from === a.to ? `배치 "${ft(a.to)}"을(를) "${ft(tpl.name)}"에서 가져왔습니다.` : `배치 "${ft(a.from)}"을(를) "${ft(tpl.name)}"에서 "${ft(a.to)}"(으)로 가져왔습니다(같은 이름의 배치가 있음).`);
 }
 
 // --------------------------------------------------------------------------- 다른 이름으로 저장(SA)
@@ -185,7 +186,7 @@ export function layoutTemplateDocument(src: CadDocument, layoutName: string): Ca
   const out: CadDocument = structuredClone(src);
   out.warnings = [];
   const lay = out.layouts.find((l) => tableKey(l.name) === tableKey(layoutName) && tableKey(l.blockName) !== MODEL_SPACE);
-  if (!lay) throw new Error(`배치 "${layoutName}"이(가) 없습니다.`);
+  if (!lay) throw new Error(`배치 "${ft(layoutName)}"이(가) 없습니다.`);
   const model = out.blocks.get(MODEL_SPACE);
   if (model) model.entities = [];
   const dicts = [...out.objects.values()].filter((o): o is DictionaryObject => o.type === 'DICTIONARY' || o.type === 'ACDBDICTIONARYWDFLT');
@@ -242,17 +243,17 @@ function formatOf(name: string): { format: 'dwg' | 'dxf'; ext: string } {
 /** LAYOUT SA */
 export async function layoutSaveAs(app: App, ctx: CommandContext, curName: string): Promise<void> {
   const st = app.active!;
-  const r = await ctx.getPoint(`템플릿에 저장할 배치 입력 <${curName}>:`, { allowText: true });
+  const r = await ctx.getPoint(`템플릿에 저장할 배치 입력 <${ft(curName)}>:`, { allowText: true });
   const lname = 'text' in r && r.text.trim() ? r.text.trim() : 'enter' in r ? curName : '';
   const lay = paperLayouts(st.doc).find((l) => tableKey(l.name) === tableKey(lname));
   if (!lay) {
-    ctx.print(`배치 "${lname}"이(가) 없습니다.`, 'err');
+    ctx.print(`배치 "${ft(lname)}"이(가) 없습니다.`, 'err');
     return;
   }
   const def = `${lay.name}.dwt`;
   let fname: string;
   if (fileNameMode(app)) {
-    const f = await ctx.getPoint(`도면 템플릿 파일 이름 입력 <${def}>:`, { allowText: true });
+    const f = await ctx.getPoint(`도면 템플릿 파일 이름 입력 <${ft(def)}>:`, { allowText: true });
     fname = 'text' in f && f.text.trim() ? f.text.trim().replace(/^"|"$/g, '').replace(/^.*[\\/]/, '') : 'enter' in f ? def : '';
     if (!fname) return;
   } else {
@@ -292,7 +293,7 @@ export async function layoutSaveAs(app: App, ctx: CommandContext, curName: strin
     docId = (await app.engine.adopt(fname, doc)).docId;
     const res = await app.engine.save(docId, format, 'AC1032', false);
     layoutFileIO.download(new Blob([res.data as BlobPart], { type: format === 'dxf' ? 'application/dxf' : 'application/acad' }), fname);
-    ctx.print(`배치 "${lay.name}"을(를) ${fname}(으)로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB).`);
+    ctx.print(`배치 "${ft(lay.name)}"을(를) ${ft(fname)}(으)로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB).`);
   } catch (e) {
     ctx.print(`저장하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
   } finally {

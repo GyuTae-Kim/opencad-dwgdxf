@@ -10,6 +10,7 @@ import { boundsOf } from '../edit/geom/query';
 import type { App, CommandContext, Keyword } from './app';
 import { addEntities, currentProps, textDialog } from './draw';
 import type { Pt } from './view';
+import { ft } from './filetext';
 
 /** 지금 다중 지시선 스타일($CMLEADERSTYLE, 없으면 Standard) */
 export function currentMLeaderStyle(doc: CadDocument): MLeaderStyleObject | null {
@@ -264,7 +265,7 @@ async function askOptions(ctx: CommandContext, doc: CadDocument, s: MLeaderSessi
           break;
         }
         for (;;) {
-          const b = await ctx.getPoint(`블록 이름 입력${s.block ? ` <${s.block}>` : ''}:`, { allowText: true });
+          const b = await ctx.getPoint(`블록 이름 입력${s.block ? ` <${ft(s.block)}>` : ''}:`, { allowText: true });
           if ('enter' in b && s.block) {
             s.content = 'B';
             break;
@@ -273,7 +274,7 @@ async function askOptions(ctx: CommandContext, doc: CadDocument, s: MLeaderSessi
           const name = b.text.trim();
           const blk = doc.blocks.get(tableKey(name));
           if (!blk || blk.name.startsWith('*')) {
-            ctx.print(`블록 ${name}을(를) 찾을 수 없습니다.`, 'err');
+            ctx.print(`블록 ${ft(name)}을(를) 찾을 수 없습니다.`, 'err');
             continue;
           }
           s.block = blk.name;

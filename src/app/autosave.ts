@@ -8,6 +8,7 @@ import type { DocState } from './docstate';
 import { sameFormat } from './save';
 import { baseName, download } from './export';
 import { ask, dialog, h, toast } from './ui/dom';
+import { ft } from './filetext';
 
 const DB = 'opencad-recovery';
 const STORE = 'docs';
@@ -171,7 +172,7 @@ async function openEntry(app: App, e: RecoveryEntry): Promise<void> {
   const st = await app.openFile(`${baseName(e.name)}_recover.${ext}`, e.data.buffer.slice(e.data.byteOffset, e.data.byteOffset + e.data.byteLength) as ArrayBuffer);
   if (st) {
     st.saveName = e.name;
-    app.cmd.print(`${e.name}의 자동 저장본(${fmtTime(e.savedAt)})을 열었습니다. 원래 파일에 저장하려면 다른 이름으로 저장하십시오.`);
+    app.cmd.print(`${ft(e.name)}의 자동 저장본(${fmtTime(e.savedAt)})을 열었습니다. 원래 파일에 저장하려면 다른 이름으로 저장하십시오.`);
   }
 }
 
@@ -309,7 +310,7 @@ export function registerAutosaveCommands(app: App): void {
       if (!file) return;
       const st = await app.openFile(file.name, await file.arrayBuffer());
       if (!st) return;
-      ctx.print(`${file.name}을(를) 열었습니다. 도면을 검사합니다.`);
+      ctx.print(`${ft(file.name)}을(를) 열었습니다. 도면을 검사합니다.`);
       if (app.findCommand('AUDIT')) await app.run('AUDIT', 'Y');
     },
   });

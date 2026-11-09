@@ -486,11 +486,11 @@ async function insertBlock(app: App, ctx: CommandContext, p: Pending): Promise<v
   const key = tableKey(name);
   const srcDef = p.doc.blocks.get(key);
   if (!srcDef) {
-    ctx.print(`블록 "${name}"을(를) 찾을 수 없습니다.`, 'err');
+    ctx.print(`블록 "${ft(name)}"을(를) 찾을 수 없습니다.`, 'err');
     return;
   }
   const exists = doc.blocks.has(key);
-  if (exists && p.doc !== doc) ctx.print(`블록 "${doc.blocks.get(key)!.name}"의 중복 정의는 무시됩니다.`);
+  if (exists && p.doc !== doc) ctx.print(`블록 "${ft(doc.blocks.get(key)!.name)}"의 중복 정의는 무시됩니다.`);
   const def = exists ? doc.blocks.get(key)! : srcDef;
   const geomDoc = exists ? doc : p.doc;
   const units = (d: CadDocument, k: string) => d.blockRecords.get(k)?.insertUnits || Number(d.header.get('$INSUNITS') ?? 0) || 0;
@@ -529,7 +529,7 @@ async function insertBlock(app: App, ctx: CommandContext, p: Pending): Promise<v
     const cp = new DefinitionCopier(p.doc, doc, () => st.session.newHandle());
     const n = cp.block(name);
     if (!n) {
-      ctx.print(`블록 "${name}"을(를) 가져올 수 없습니다(외부 참조 블록 등).`, 'err');
+      ctx.print(`블록 "${ft(name)}"을(를) 가져올 수 없습니다(외부 참조 블록 등).`, 'err');
       return;
     }
     dstName = n;
@@ -589,12 +589,12 @@ function addDefinitions(app: App, ctx: CommandContext, p: Pending): void {
   }
   const ops = cp.finish();
   if (ops.length) st.session.commit({ label: 'ADCENTER', ops, group: ctx.group });
-  if (added.length) ctx.print(`${label} ${added.length}개가 추가되었습니다(${added.join(', ')}).`);
+  if (added.length) ctx.print(`${label} ${added.length}개가 추가되었습니다(${added.map(ft).join(', ')}).`);
   if (dup.length) {
     if (p.kind === 'block') for (const n of dup) ctx.print(`블록 "${n}"의 중복 정의는 무시됩니다.`);
-    else ctx.print(`중복된 정의는 무시됩니다(이 도면에 이미 있는 ${label}: ${dup.join(', ')}).`);
+    else ctx.print(`중복된 정의는 무시됩니다(이 도면에 이미 있는 ${label}: ${dup.map(ft).join(', ')}).`);
   }
-  if (miss.length) ctx.print(`${label} ${miss.join(', ')}을(를) 가져올 수 없습니다.`, 'err');
+  if (miss.length) ctx.print(`${label} ${miss.map(ft).join(', ')}을(를) 가져올 수 없습니다.`, 'err');
   const req = new Set(added.map((n) => `${p.kind}:${tableKey(n)}`));
   const deps = cp.added.filter((a) => !req.has(`${a.kind}:${tableKey(a.name)}`));
   if (deps.length) {

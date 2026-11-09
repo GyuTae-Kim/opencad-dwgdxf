@@ -23,7 +23,7 @@ import { xrefOfDoc } from './refs';
 import { dialog, h } from './ui/dom';
 import { askString, pickTolerance, visibleInSpace } from './express-util';
 import type { OverlayGeom, Pt } from './view';
-import { ft } from './filetext';
+import { ft, unmark } from './filetext';
 
 // ---------------------------------------------------------------------------
 // 중첩 객체 고르기
@@ -195,7 +195,7 @@ async function runSsx(app: App, ctx: CommandContext): Promise<void> {
       continue;
     }
     const cur = ssxValueText(f, opt);
-    const v = await askString(ctx, `>>추가할 ${SSX_LABEL[opt]} 입력${cur ? `(지금 ${cur})` : ''}/<Enter = 필터에서 빼기>:`, '');
+    const v = await askString(ctx, `>>추가할 ${SSX_LABEL[opt]} 입력${cur ? `(지금 ${ft(cur)})` : ''}/<Enter = 필터에서 빼기>:`, '');
     if (typeof v !== 'string') continue;
     const next = ssxSetValue(f, opt, v);
     if (typeof next === 'string') ctx.print(next, 'err');
@@ -217,7 +217,7 @@ async function runGetsel(app: App, ctx: CommandContext): Promise<void> {
   app.clearSelection();
   const a = await ctx.getEntity('선택할 도면층의 객체 선택 <*>:');
   const layer = 'handle' in a ? (st.doc.entityIndex.get(a.handle)?.layer ?? '*') : '*';
-  if ('handle' in a) ctx.print(`도면층 = ${layer}`);
+  if ('handle' in a) ctx.print(`도면층 = ${ft(layer)}`);
   const b = await ctx.getEntity('선택할 객체 유형의 객체 선택 <*>:');
   const be = 'handle' in b ? st.doc.entityIndex.get(b.handle) : undefined;
   const type = be ? ssxTypeName(be) : '*';
@@ -226,7 +226,7 @@ async function runGetsel(app: App, ctx: CommandContext): Promise<void> {
   const hs = getselSelect(visibleInSpace(st), layer, type);
   app.setSelection(hs, 'replace');
   app.lastSelection = [...hs];
-  ctx.print(`${hs.length}개를 찾음(도면층 ${layer}, 유형 ${type}). 다음 명령에서 이전(P)으로 고를 수 있습니다.`);
+  ctx.print(`${hs.length}개를 찾음(도면층 ${ft(layer)}, 유형 ${type}). 다음 명령에서 이전(P)으로 고를 수 있습니다.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -265,16 +265,16 @@ async function runXdlist(app: App, ctx: CommandContext): Promise<void> {
     ctx.print('객체에 확장 데이터가 없습니다.');
     return;
   }
-  ctx.print(`등록된 응용 프로그램: ${apps.join(', ')}`);
+  ctx.print(`등록된 응용 프로그램: ${apps.map(ft).join(', ')}`);
   const a = await askString(ctx, '나열할 응용 프로그램 이름 입력 <*>:', '*');
   const pat = typeof a === 'string' ? a : '*';
   const lines = xdataLines(e.xdata, pat);
   if (!lines.length) {
-    ctx.print(`"${pat}"에 맞는 응용 프로그램의 확장 데이터가 없습니다.`);
+    ctx.print(`"${ft(pat)}"에 맞는 응용 프로그램의 확장 데이터가 없습니다.`);
     return;
   }
   for (const l of lines) ctx.print(l);
-  dialog('XDLIST', h('pre', { style: 'margin:0;max-height:60vh;overflow:auto;white-space:pre-wrap;font-family:var(--mono)' }, lines.join('\n')));
+  dialog('XDLIST', h('pre', { style: 'margin:0;max-height:60vh;overflow:auto;white-space:pre-wrap;font-family:var(--mono)' }, unmark(lines.join('\n'))));
 }
 
 // ---------------------------------------------------------------------------
@@ -439,14 +439,14 @@ async function runGatte(app: App, ctx: CommandContext): Promise<void> {
     if (a) tag = a.tag;
     break;
   }
-  ctx.print(`블록 이름: ${blockName}`);
+  ctx.print(`블록 이름: ${ft(blockName)}`);
   const tags = knownTags(doc, blockName);
   if (!tags.length) {
-    ctx.print(`블록 "${blockName}"에 속성이 없습니다.`, 'err');
+    ctx.print(`블록 "${ft(blockName)}"에 속성이 없습니다.`, 'err');
     return;
   }
   if (!tag) {
-    ctx.print(`블록에 대해 알려진 태그 이름: ${tags.join(' ')}`);
+    ctx.print(`블록에 대해 알려진 태그 이름: ${tags.map(ft).join(' ')}`);
     for (;;) {
       const r = await ctx.getPoint('속성 선택 또는 속성 이름 입력:', { allowText: true });
       if ('enter' in r) return;
@@ -456,7 +456,7 @@ async function runGatte(app: App, ctx: CommandContext): Promise<void> {
           tag = t;
           break;
         }
-        ctx.print(`"${r.text.trim()}"은(는) 이 블록의 태그가 아닙니다.`, 'err');
+        ctx.print(`"${ft(r.text.trim())}"은(는) 이 블록의 태그가 아닙니다.`, 'err');
         continue;
       }
       if ('point' in r) {
@@ -472,7 +472,7 @@ async function runGatte(app: App, ctx: CommandContext): Promise<void> {
       }
     }
   }
-  ctx.print(`속성 태그: ${tag}`);
+  ctx.print(`속성 태그: ${ft(tag)}`);
   const v = await askString(ctx, '새 문자 입력:');
   if (typeof v !== 'string') return;
   let refs = referencesOf(doc, blockName);

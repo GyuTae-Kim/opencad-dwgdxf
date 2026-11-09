@@ -9,6 +9,7 @@ import { ScriptRunner, type ScriptHost } from '../edit/script/runner';
 import { decodeScript } from '../edit/script/reader';
 import { pickFiles } from './drawingfiles';
 import type { EditSession } from '../edit/session';
+import { ft } from './filetext';
 
 /** 이 세션에서 읽은 스크립트(이름 소문자 → 글). 스크립트 안의 SCRIPT·FILEDIA 0은 이름으로 찾는다 */
 const loaded = new Map<string, { name: string; text: string }>();
@@ -149,7 +150,7 @@ export function fileNameMode(app: App): boolean {
 /** 스크립트 글을 실행한다(파일 끌어 놓기 등) */
 export function runScriptText(app: App, name: string, text: string): void {
   loaded.set(name.toLowerCase(), { name, text });
-  app.cmd.print(`스크립트 "${name}"을(를) 실행합니다.`);
+  app.cmd.print(`스크립트 "${ft(name)}"을(를) 실행합니다.`);
   scriptRunner(app).load(name, text);
 }
 
@@ -179,7 +180,7 @@ export function registerScriptCommands(app: App): void {
         if (!('text' in r)) return;
         item = findLoaded(r.text);
         if (!item) {
-          ctx.print(`스크립트 파일 "${r.text.trim()}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 연 스크립트만 이름으로 실행합니다.`, 'err');
+          ctx.print(`스크립트 파일 "${ft(r.text.trim())}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 연 스크립트만 이름으로 실행합니다.`, 'err');
           return;
         }
       } else {
@@ -191,7 +192,7 @@ export function registerScriptCommands(app: App): void {
         loaded.set(f.name.toLowerCase(), item);
         if (encoding === 'cp949') ctx.print('참고: 이 스크립트는 CP949(한국어 Windows) 인코딩으로 읽었습니다.');
       }
-      ctx.print(`스크립트 "${item.name}"을(를) 실행합니다. 멈추려면 Esc나 Backspace를 누르십시오.`);
+      ctx.print(`스크립트 "${ft(item.name)}"을(를) 실행합니다. 멈추려면 Esc나 Backspace를 누르십시오.`);
       runner.load(item.name, item.text);
     },
   });

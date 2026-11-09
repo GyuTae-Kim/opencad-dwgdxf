@@ -9,6 +9,7 @@ import type { EditOp } from '../edit/session';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { currentLayer, patchLayers, setCurrentLayer } from './layers';
+import { ft } from './filetext';
 
 /** 객체를 골라 그 도면층 이름, 또는 이름(N)으로 입력 */
 async function pickLayer(app: App, ctx: CommandContext, prompt: string, allowName: boolean): Promise<string | null | 'done'> {
@@ -20,7 +21,7 @@ async function pickLayer(app: App, ctx: CommandContext, prompt: string, allowNam
     if (!('text' in t)) return null;
     const L = st.doc.layers.get(tableKey(t.text.trim()));
     if (!L) {
-      ctx.print(`도면층 "${t.text.trim()}"을(를) 찾을 수 없습니다.`, 'err');
+      ctx.print(`도면층 "${ft(t.text.trim())}"을(를) 찾을 수 없습니다.`, 'err');
       return null;
     }
     return L.name;
@@ -137,7 +138,7 @@ export function registerLayerToolCommands(app: App): void {
       const set = new Set(hs);
       const ops = relayerOps(st, (e) => set.has(e.handle) && e.layer !== cur, cur).filter((o) => o.kind === 'modify' && set.has(o.before.handle));
       if (ops.length) st.session.commit({ label: 'LAYCUR', ops, group: ctx.group });
-      ctx.print(`${ops.length}개 객체가 현재 도면층 "${cur}"(으)로 변경되었습니다.`);
+      ctx.print(`${ops.length}개 객체가 현재 도면층 "${ft(cur)}"(으)로 변경되었습니다.`);
     },
   });
 
@@ -154,7 +155,7 @@ export function registerLayerToolCommands(app: App): void {
         if (canRemove(app, ctx, tableKey(n)) && !names.includes(n)) names.push(n);
       }
       if (!names.length) return;
-      ctx.print(`******** 경고 ********\n도면층 "${names.join(', ')}"을(를) 도면에서 삭제하려고 합니다.`);
+      ctx.print(`******** 경고 ********\n도면층 "${names.map(ft).join(', ')}"을(를) 도면에서 삭제하려고 합니다.`);
       const ok = await ctx.getPoint('계속하시겠습니까? [예(Y)/아니오(N)] <아니오>:', {
         keywords: [
           { key: 'Y', label: '예' },
@@ -195,7 +196,7 @@ export function registerLayerToolCommands(app: App): void {
       const tkey = tableKey(target);
       const from = new Set(names.map(tableKey).filter((k) => k !== tkey));
       if (!from.size) return;
-      ctx.print(`******** 경고 ********\n도면층 "${[...from].map((k) => st.doc.layers.get(k)?.name ?? k).join(', ')}"을(를) 도면층 "${target}"(으)로 병합하려고 합니다.`);
+      ctx.print(`******** 경고 ********\n도면층 "${[...from].map((k) => ft(st.doc.layers.get(k)?.name ?? k)).join(', ')}"을(를) 도면층 "${ft(target)}"(으)로 병합하려고 합니다.`);
       const ok = await ctx.getPoint('계속하시겠습니까? [예(Y)/아니오(N)] <아니오>:', {
         keywords: [
           { key: 'Y', label: '예' },
@@ -209,7 +210,7 @@ export function registerLayerToolCommands(app: App): void {
         if (before) ops.push({ kind: 'layer', key: k, before, after: null });
       }
       st.session.commit({ label: 'LAYMRG', ops, group: ctx.group });
-      ctx.print(`도면층 ${from.size}개를 "${target}"(으)로 병합했습니다.`);
+      ctx.print(`도면층 ${from.size}개를 "${ft(target)}"(으)로 병합했습니다.`);
     },
   });
 }

@@ -16,6 +16,7 @@ import { addHook } from './hooks';
 import { unlockedOnly } from './layers';
 import { form } from './ui/dom';
 import { askInt, askKeyword, askYesNo, loadPref, savePref, selectWithKeywords } from './util2-ui';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // LAYERP 기록
@@ -80,7 +81,7 @@ export function layerPrevious(app: App, print: (t: string, cls?: 'err' | 'res') 
     for (const op of ops) {
       if (op.kind === 'layer' && op.after && op.key === cl && op.after.frozen) {
         op.after.frozen = false;
-        print(`현재 도면층 "${op.after.name}"은(는) 동결할 수 없어 동결하지 않았습니다.`);
+        print(`현재 도면층 "${ft(op.after.name)}"은(는) 동결할 수 없어 동결하지 않았습니다.`);
       }
     }
     commitWithoutLayerP(st, { label: 'LAYERP', ops, group });

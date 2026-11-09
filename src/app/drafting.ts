@@ -12,6 +12,7 @@ import { isoState, setIso } from './viewtools-iso';
 import { browserSysvar, browserSysvarText, setBrowserSysvar, setBrowserSysvarText } from './sysvars';
 import { DEGREE_UNITS, POLAR_COMMON_ANGLES, formatPolarAddAng, formatPolarAngle, parsePolarAng, polarAddList, polarModeBits, polarModeFields } from './polar';
 import { polarAddEditor } from './polar-addlist';
+import { ft } from './filetext';
 
 /** -OSNAP·명령행에서 쓰는 영문 약어(이름 앞 세 글자) */
 const SNAP_ABBR: Record<string, SnapKind> = {
@@ -328,7 +329,7 @@ export function registerDraftingCommands(app: App): void {
       for (const p of t.split(',')) {
         const k = SNAP_ABBR[p.trim().slice(0, 3)];
         if (!k) {
-          ctx.print(`알 수 없는 객체 스냅 모드 "${p.trim()}".`, 'err');
+          ctx.print(`알 수 없는 객체 스냅 모드 "${ft(p.trim())}".`, 'err');
           return;
         }
         next.add(k);

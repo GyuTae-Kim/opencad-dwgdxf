@@ -18,6 +18,7 @@ import { dimensionBlockOps } from './dimcmds';
 import { purgeable } from './editcmds';
 import { fileNameMode } from './script';
 import { type NamedKind, emptyText, purgeNamedOps, purgeRegAppOps, purgeableNamed, purgeableRegApps, removeWhereOps, zeroLength } from '../edit/purge';
+import { ft } from './filetext';
 
 function headerOps(doc: { header: Map<string, HeaderValue> }, values: Record<string, HeaderValue>): EditOp[] {
   const ops: EditOp[] = [];
@@ -117,9 +118,9 @@ async function runDashPurge(app: App, ctx: CommandContext): Promise<void> {
     }
     let n = 0;
     for (const name of hit) {
-      if (verify && !(await askYN(ctx, `${noun} "${name}"을(를) 소거하시겠습니까?`, false))) continue;
+      if (verify && !(await askYN(ctx, `${noun} "${ft(name)}"을(를) 소거하시겠습니까?`, false))) continue;
       const key = tableKey(name);
-      ctx.print(`${noun} "${name}"을(를) 삭제하는 중입니다.`);
+      ctx.print(`${noun} "${ft(name)}"을(를) 삭제하는 중입니다.`);
       if (kind === 'blocks') {
         ops.push({ kind: 'blockDef', key, before: doc.blocks.get(key)!, after: null });
         const rec = doc.blockRecords.get(key);
@@ -146,8 +147,8 @@ async function runDashPurge(app: App, ctx: CommandContext): Promise<void> {
     }
     const keep: string[] = [];
     for (const it of chosen) {
-      if (verify && !(await askYN(ctx, `${noun} "${it.name}"을(를) 소거하시겠습니까?`, false))) continue;
-      ctx.print(`${noun} "${it.name}"을(를) 삭제하는 중입니다.`);
+      if (verify && !(await askYN(ctx, `${noun} "${ft(it.name)}"을(를) 소거하시겠습니까?`, false))) continue;
+      ctx.print(`${noun} "${ft(it.name)}"을(를) 삭제하는 중입니다.`);
       keep.push(it.key);
     }
     if (!keep.length) continue;
@@ -204,11 +205,11 @@ function listStyles(ctx: CommandContext, pattern: string): void {
   ).names;
   for (const n of names) {
     const s = doc.textStyles.get(tableKey(n))!;
-    ctx.print(`스타일 이름: "${s.name}"  글꼴 파일: ${styleFontText(s)}`);
+    ctx.print(`스타일 이름: "${ft(s.name)}"  글꼴 파일: ${ft(styleFontText(s))}`);
     const gen = [s.generation & 2 ? '반대로' : '', s.generation & 4 ? '거꾸로' : '', s.flags & 4 ? '수직' : ''].filter(Boolean).join(', ') || '보통';
     ctx.print(`   높이: ${fmt4(s.height)}  폭 비율: ${fmt4(s.widthFactor)}  기울기 각도: ${degText(s.oblique)}  생성: ${gen}`);
   }
-  ctx.print(`현재 문자 스타일: ${String(doc.header.get('$TEXTSTYLE') ?? 'Standard')}`);
+  ctx.print(`현재 문자 스타일: ${ft(String(doc.header.get('$TEXTSTYLE') ?? 'Standard'))}`);
 }
 
 async function runDashStyle(app: App, ctx: CommandContext): Promise<void> {
@@ -217,7 +218,7 @@ async function runDashStyle(app: App, ctx: CommandContext): Promise<void> {
   const cur = String(doc.header.get('$TEXTSTYLE') ?? 'Standard');
   let name: string;
   for (;;) {
-    const t = await askWord(ctx, `문자 스타일 이름 입력 또는 [?] <${cur}>:`);
+    const t = await askWord(ctx, `문자 스타일 이름 입력 또는 [?] <${ft(cur)}>:`);
     if (t === '?') {
       listStyles(ctx, (await askWord(ctx, '나열할 문자 스타일 입력 <*>:')) ?? '*');
       continue;
@@ -234,7 +235,7 @@ async function runDashStyle(app: App, ctx: CommandContext): Promise<void> {
   ctx.print(before ? '기존 스타일.' : '새 스타일.');
   const s: TextStyle = before ? structuredClone(before) : ({ name, handle: st.session.newHandle(), flags: 0, height: 0, widthFactor: 1, oblique: 0, generation: 0, lastHeight: 2.5, font: 'txt', bigFont: '' } as TextStyle);
   // 글꼴 이름의 공백은 Enter다(스크립트와 같다). 공백이 든 이름은 "…"로 감싼다
-  const fontText = (await askWord(ctx, `전체 글꼴 이름 또는 글꼴 파일 이름(TTF 또는 SHX) 지정 <${styleFontText(s)}>:`)) ?? '';
+  const fontText = (await askWord(ctx, `전체 글꼴 이름 또는 글꼴 파일 이름(TTF 또는 SHX) 지정 <${ft(styleFontText(s))}>:`)) ?? '';
   if (fontText.trim()) {
     const f = parseFontSpec(fontText.trim());
     s.font = f.font;
@@ -275,7 +276,7 @@ async function runDashStyle(app: App, ctx: CommandContext): Promise<void> {
   if (annotative || annotativeFlag(s.xdata) !== undefined) s.xdata = withAnnotativeFlag(s.xdata, annotative);
   const ops: EditOp[] = [{ kind: 'textStyle', key, before, after: s }, ...headerOps(doc, { $TEXTSTYLE: s.name })];
   st.session.commit({ label: 'STYLE', ops, group: ctx.group });
-  ctx.print(`"${s.name}"은(는) 이제 현재 문자 스타일입니다.`);
+  ctx.print(`"${ft(s.name)}"은(는) 이제 현재 문자 스타일입니다.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +286,7 @@ async function runDashStyle(app: App, ctx: CommandContext): Promise<void> {
 async function runDashLinetype(app: App, ctx: CommandContext): Promise<void> {
   const st = app.active!;
   const doc = st.doc;
-  ctx.print(`현재 선종류: "${String(doc.header.get('$CELTYPE') ?? 'ByLayer')}"`);
+  ctx.print(`현재 선종류: "${ft(String(doc.header.get('$CELTYPE') ?? 'ByLayer'))}"`);
   for (;;) {
     const k = await askOption(
       ctx,
@@ -315,23 +316,23 @@ async function runDashLinetype(app: App, ctx: CommandContext): Promise<void> {
         // 스크립트·FILEDIA 0: 선종류 파일 이름을 묻는다(이 앱은 내장 정의만 쓴다)
         const metricDef = Number(doc.header.get('$MEASUREMENT') ?? 1) === 1 ? 'acadiso.lin' : 'acad.lin';
         const file = await askWord(ctx, `선종류 파일 지정 <${metricDef}>:`);
-        if (file && !/^acad(iso)?(\.lin)?$/i.test(file.replace(/^.*[\\/]/, ''))) ctx.print(`"${file}"은(는) 읽을 수 없습니다. 이 앱의 표준 선종류 정의에서 로드합니다.`);
+        if (file && !/^acad(iso)?(\.lin)?$/i.test(file.replace(/^.*[\\/]/, ''))) ctx.print(`"${ft(file)}"은(는) 읽을 수 없습니다. 이 앱의 표준 선종류 정의에서 로드합니다.`);
       }
       const metric = Number(doc.header.get('$MEASUREMENT') ?? 1) === 1;
       const m = matchNameList(
         STANDARD_LINETYPES.map((d) => d.name),
         spec,
       );
-      for (const u of m.unmatched) ctx.print(`선종류 "${u}"을(를) 찾을 수 없습니다.`);
+      for (const u of m.unmatched) ctx.print(`선종류 "${ft(u)}"을(를) 찾을 수 없습니다.`);
       const ops: EditOp[] = [];
       for (const name of m.names) {
         const key = tableKey(name);
         const before = doc.linetypes.get(key) ?? null;
-        if (before && !(await askYN(ctx, `선종류 "${before.name}"이(가) 이미 로드되었습니다. 다시 로드하시겠습니까?`, true))) continue;
+        if (before && !(await askYN(ctx, `선종류 "${ft(before.name)}"이(가) 이미 로드되었습니다. 다시 로드하시겠습니까?`, true))) continue;
         const def = STANDARD_LINETYPES.find((d) => d.name === name)!;
         const after = makeLinetype(def, before?.handle ?? st.session.newHandle(), metric);
         ops.push({ kind: 'linetype', key, before, after });
-        ctx.print(`선종류 "${name}"이(가) ${before ? '다시 로드되었습니다' : '로드되었습니다'}.`);
+        ctx.print(`선종류 "${ft(name)}"이(가) ${before ? '다시 로드되었습니다' : '로드되었습니다'}.`);
       }
       if (ops.length) st.session.commit({ label: 'LINETYPE', ops, group: ctx.group });
       continue;
@@ -339,17 +340,17 @@ async function runDashLinetype(app: App, ctx: CommandContext): Promise<void> {
     // 설정
     for (;;) {
       const cur = String(doc.header.get('$CELTYPE') ?? 'ByLayer');
-      const t = await askWord(ctx, `선종류 이름 지정 또는 [?] <${cur}>:`);
+      const t = await askWord(ctx, `선종류 이름 지정 또는 [?] <${ft(cur)}>:`);
       if (t === null) break;
       if (t === '?') {
         const names = [...doc.linetypes.values()].map((l) => l.name);
-        for (const l of columns(names, 4)) ctx.print(l);
+        for (const l of columns(names.map(ft), 4)) ctx.print(l);
         continue;
       }
       const up = t.toUpperCase();
       const value: string | null = up === 'BYLAYER' ? 'ByLayer' : up === 'BYBLOCK' ? 'ByBlock' : (doc.linetypes.get(up)?.name ?? null);
       if (!value) {
-        ctx.print(`선종류 "${t}"을(를) 찾을 수 없습니다. 로드(L) 옵션으로 먼저 로드하십시오.`, 'err');
+        ctx.print(`선종류 "${ft(t)}"을(를) 찾을 수 없습니다. 로드(L) 옵션으로 먼저 로드하십시오.`, 'err');
         continue;
       }
       const ops = headerOps(doc, { $CELTYPE: value });
@@ -364,7 +365,7 @@ async function runDashLinetype(app: App, ctx: CommandContext): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const dimVal = (s: DimStyle, v: string): number | string => s.vars[v] ?? DIM_VAR_DEFAULTS[v] ?? 0;
-const showVal = (v: number | string): string => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : fmt4(v)) : `"${v}"`);
+const showVal = (v: number | string): string => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : fmt4(v)) : `"${ft(v)}"`);
 
 /** 그 스타일을 쓰는 치수(또는 고른 치수)를 다시 만드는 작업 */
 function regenDims(app: App, dims: { block: string; e: DimensionEntity }[], style: string): EditOp[] {
@@ -398,7 +399,7 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
   const doc = st.doc;
   const curName = () => String(doc.header.get('$DIMSTYLE') ?? 'Standard') || 'Standard';
   const cur = () => doc.dimStyles.get(tableKey(curName()));
-  ctx.print(`현재 치수 스타일: ${curName()}  주석: ${annotativeFlag(cur()?.xdata) ? '예' : '아니오'}`);
+  ctx.print(`현재 치수 스타일: ${ft(curName())}  주석: ${annotativeFlag(cur()?.xdata) ? '예' : '아니오'}`);
   const k = await askOption(
     ctx,
     '치수 스타일 옵션 입력 [주석(AN)/저장(S)/복원(R)/상태(ST)/변수(V)/적용(A)/?] <복원>:',
@@ -448,13 +449,13 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
         }
         const s = doc.dimStyles.get(tableKey(e.dimStyle || 'Standard'));
         if (s) return { style: s, compare: false };
-        ctx.print(`치수 스타일 "${e.dimStyle}"을(를) 찾을 수 없습니다.`, 'err');
+        ctx.print(`치수 스타일 "${ft(e.dimStyle)}"을(를) 찾을 수 없습니다.`, 'err');
         continue;
       }
       const compare = t.startsWith('~');
       const s = doc.dimStyles.get(tableKey(compare ? t.slice(1) : t));
       if (s) return { style: s, compare };
-      ctx.print(`치수 스타일 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+      ctx.print(`치수 스타일 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
     }
   };
   switch (k) {
@@ -463,7 +464,7 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
       return;
     case 'ST': {
       const s = cur();
-      ctx.print(`치수 스타일: ${curName()}`);
+      ctx.print(`치수 스타일: ${ft(curName())}`);
       if (s) printVars(s);
       return;
     }
@@ -472,11 +473,11 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
       if (!p) return;
       const base = cur();
       if (p.compare && base) {
-        ctx.print(`"${p.style.name}"과(와) 현재 설정의 차이:`);
-        ctx.print(`${'변수'.padEnd(10)} ${p.style.name.padEnd(14)} 현재 설정`);
+        ctx.print(`"${ft(p.style.name)}"과(와) 현재 설정의 차이:`);
+        ctx.print(`${'변수'.padEnd(10)} ${ft(p.style.name.padEnd(14))} 현재 설정`);
         printVars(base, p.style);
       } else {
-        ctx.print(`치수 스타일: ${p.style.name}`);
+        ctx.print(`치수 스타일: ${ft(p.style.name)}`);
         printVars(p.style);
       }
       return;
@@ -487,14 +488,14 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
       if (p.compare) {
         const base = cur();
         if (base) {
-          ctx.print(`"${p.style.name}"과(와) 현재 설정의 차이:`);
+          ctx.print(`"${ft(p.style.name)}"과(와) 현재 설정의 차이:`);
           printVars(base, p.style);
         }
         return;
       }
       const ops = headerOps(doc, { $DIMSTYLE: p.style.name });
       if (ops.length) st.session.commit({ label: 'DIMSTYLE', ops, group: ctx.group });
-      ctx.print(`현재 치수 스타일: ${p.style.name}`);
+      ctx.print(`현재 치수 스타일: ${ft(p.style.name)}`);
       return;
     }
     case 'A': {
@@ -521,7 +522,7 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
       if (k === 'AN') anno = await askYN(ctx, '주석 치수 스타일을 작성하시겠습니까?', true);
       const base = cur();
       if (!base) {
-        ctx.print(`현재 치수 스타일 "${curName()}"을(를) 찾을 수 없습니다.`, 'err');
+        ctx.print(`현재 치수 스타일 "${ft(curName())}"을(를) 찾을 수 없습니다.`, 'err');
         return;
       }
       for (;;) {
@@ -537,7 +538,7 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
         }
         const key = tableKey(t);
         const before = doc.dimStyles.get(key) ?? null;
-        if (before && key !== tableKey(base.name) && !(await askYN(ctx, `기존 스타일 "${before.name}"을(를) 재정의하시겠습니까?`, false))) return;
+        if (before && key !== tableKey(base.name) && !(await askYN(ctx, `기존 스타일 "${ft(before.name)}"을(를) 재정의하시겠습니까?`, false))) return;
         const after: DimStyle = before ? { ...structuredClone(before), vars: { ...base.vars } } : { ...structuredClone(base), name: t, handle: st.session.newHandle(), flags: 0 };
         if (!before) delete (after as { xdata?: unknown }).xdata;
         if (anno || annotativeFlag(after.xdata) !== undefined) after.xdata = withAnnotativeFlag(after.xdata, anno);
@@ -547,7 +548,7 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
           const regen = regenDims(app, dimsUsing(app, after.name), after.name);
           if (regen.length) st.session.commit({ label: 'DIMSTYLE', ops: regen, group: ctx.group, rebuildNow: true });
         }
-        ctx.print(`치수 스타일 "${after.name}"을(를) ${before ? '재정의했습니다' : '저장했습니다'}. 현재 치수 스타일입니다.`);
+        ctx.print(`치수 스타일 "${ft(after.name)}"을(를) ${before ? '재정의했습니다' : '저장했습니다'}. 현재 치수 스타일입니다.`);
         return;
       }
     }

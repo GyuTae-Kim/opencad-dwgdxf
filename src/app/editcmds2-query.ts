@@ -72,7 +72,7 @@ async function pickGroup(app: App, ctx: CommandContext): Promise<GroupInfo | nul
         }
         const g = listGroups(st.doc).find((x) => x.name.toUpperCase() === t.toUpperCase());
         if (!g) {
-          ctx.print(`그룹 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+          ctx.print(`그룹 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
           continue;
         }
         return g;
@@ -268,12 +268,12 @@ export function registerEditCmds2Query(app: App): void {
           if (!t) return;
           if (t === '?') {
             const names = [...st.doc.ucs.values()].map((u) => u.name);
-            ctx.print(names.length ? names.join(', ') : '이름 있는 UCS가 없습니다.', 'res');
+            ctx.print(names.length ? names.map(ft).join(', ') : '이름 있는 UCS가 없습니다.', 'res');
             continue;
           }
           const u = st.doc.ucs.get(tableKey(t));
           if (!u) {
-            ctx.print(`UCS "${t}"을(를) 찾을 수 없습니다.`, 'err');
+            ctx.print(`UCS "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
             continue;
           }
           angle = Math.atan2(u.xAxis.y, u.xAxis.x);
@@ -329,7 +329,7 @@ export function registerEditCmds2Query(app: App): void {
         ctx.print(`그룹 ${groupLabel(g)}에서 객체 ${r.removed}개를 제거했습니다.`);
       } else if (k === 'REN') {
         for (;;) {
-          const t = (await askWordLine(ctx, `그룹의 새 이름 입력 또는 [?] <${g.group.unnamed ? '' : g.name}>:`)).trim();
+          const t = (await askWordLine(ctx, `그룹의 새 이름 입력 또는 [?] <${g.group.unnamed ? '' : ft(g.name)}>:`)).trim();
           if (!t) return;
           if (t === '?') {
             for (const x of listGroups(st.doc)) ctx.print(groupLabel(x), 'res');
@@ -341,7 +341,7 @@ export function registerEditCmds2Query(app: App): void {
             continue;
           }
           if (ops.length) st.session.commit({ label: 'GROUPEDIT', ops, group: ctx.group });
-          ctx.print(`그룹 이름을 ${t}(으)로 바꿨습니다.`);
+          ctx.print(`그룹 이름을 ${ft(t)}(으)로 바꿨습니다.`);
           return;
         }
       } else if (k === 'E') {

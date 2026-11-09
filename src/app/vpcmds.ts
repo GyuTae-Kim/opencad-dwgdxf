@@ -11,6 +11,7 @@ import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { layoutViewports, outlineOf, paperInfo, viewportXf } from './scene';
 import { packLw, packLwPoints } from '../core/lwpoly';
+import { ft } from './filetext';
 
 type Pt = { x: number; y: number };
 type Rect = [number, number, number, number];
@@ -238,7 +239,7 @@ export function registerViewportCommands(app: App): void {
         const vps = layoutVps(st);
         if (r.keyword === '?') {
           const vs = await pickVps(ctx, st, vps, false);
-          for (const v of vs) ctx.print(`뷰포트 ${v.id}: ${v.frozenLayers.length ? v.frozenLayers.join(', ') : '동결된 도면층 없음'}`);
+          for (const v of vs) ctx.print(`뷰포트 ${v.id}: ${v.frozenLayers.length ? v.frozenLayers.map(ft).join(', ') : '동결된 도면층 없음'}`);
           continue;
         }
         if (r.keyword === 'N') {
@@ -310,7 +311,7 @@ export function registerViewportCommands(app: App): void {
       const others = layoutVps(st).filter((v) => v.handle !== st.msVp!.handle);
       const ops = freezeOps(st, others, names, true);
       if (ops.length) st.session.commit({ label: 'LAYVPI', ops, group: ctx.group });
-      ctx.print(`도면층 ${names.join(', ')}을(를) 다른 뷰포트 ${others.length}개에서 동결했습니다.`);
+      ctx.print(`도면층 ${names.map(ft).join(', ')}을(를) 다른 뷰포트 ${others.length}개에서 동결했습니다.`);
     },
   });
 

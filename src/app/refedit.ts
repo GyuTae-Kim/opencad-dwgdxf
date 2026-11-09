@@ -29,6 +29,7 @@ import { SAVE_TYPES } from './save';
 import { ask, toast } from './ui/dom';
 import { type LevelView, RefEditBar, type RefEditSettings, refEditDialog } from './refedit-ui';
 import { rememberFile } from './sessionfiles';
+import { ft } from './filetext';
 
 type XrefFile = NonNullable<ReturnType<typeof xrefOfDoc>>;
 
@@ -156,12 +157,12 @@ function levelsAt(app: App, st: DocState, ins: InsertEntity, at: Pt, tol: number
       const file = inXref ? null : xrefOfDoc(doc, key);
       lv = { label: blk.name, depth, kind: 'xref', chain: next, defDoc: file?.doc ?? null, defKey: MODEL_SPACE, xref: file ?? undefined, xrefName: blk.name, path: blk.xrefPath ?? '' };
       if (inXref) lv.problem = '외부 참조 안의 외부 참조(중첩된 외부 참조)는 이 웹 버전에서 참조 편집할 수 없습니다. 그 외부 참조 도면을 따로 열어 편집하십시오.';
-      else if (!file) lv.problem = `외부 참조 "${blk.name}"의 파일이 로드되지 않았습니다. 외부 참조(XR)에서 파일을 고른 뒤 다시 실행하십시오.`;
-      else if (file.doc.header.get('$XEDIT') === 0) lv.problem = `외부 참조 "${blk.name}"은(는) 다른 도면에서 참조 편집할 수 없도록 설정되어 있습니다(참조 도면의 XEDIT = 0).`;
+      else if (!file) lv.problem = `외부 참조 "${ft(blk.name)}"의 파일이 로드되지 않았습니다. 외부 참조(XR)에서 파일을 고른 뒤 다시 실행하십시오.`;
+      else if (file.doc.header.get('$XEDIT') === 0) lv.problem = `외부 참조 "${ft(blk.name)}"은(는) 다른 도면에서 참조 편집할 수 없도록 설정되어 있습니다(참조 도면의 XEDIT = 0).`;
     } else {
       lv = { label: inXref ? `${inXref.name}|${blk.name}` : blk.name, depth, kind: inXref ? 'xref' : 'block', chain: next, defDoc: doc, defKey: key, xref: inXref?.file, xrefName: inXref?.name, path: inXref?.path };
       if (isDynamicReference(doc, insert) || isDynamicDefinition(doc, key))
-        lv.problem = `동적 블록 "${definitionName(doc, insert) ?? blk.name}"의 참조는 참조 편집할 수 없습니다(매개변수·동작이 사라집니다). 블록 편집기(BEDIT)에서 정의를 편집하십시오.`;
+        lv.problem = `동적 블록 "${ft(definitionName(doc, insert) ?? blk.name)}"의 참조는 참조 편집할 수 없습니다(매개변수·동작이 사라집니다). 블록 편집기(BEDIT)에서 정의를 편집하십시오.`;
       else if (blk.name.startsWith('*')) lv.problem = `이름 없는 블록(${blk.name})은 참조 편집할 수 없습니다.`;
     }
     const xf = chainXf(next);
@@ -444,7 +445,7 @@ function tick(app: App): void {
     // 명령 취소로 세션을 연 단계까지 되돌렸으면 세션이 끝난다
     if (s.st.session.depth <= s.depth) {
       endSession(app, s);
-      app.cmd.print(`참조 "${s.name}"의 편집을 끝냈습니다(명령 취소).`);
+      app.cmd.print(`참조 "${ft(s.name)}"의 편집을 끝냈습니다(명령 취소).`);
     }
   }
   if (!sessions.size) {
@@ -575,7 +576,7 @@ async function openSession(app: App, ctx: CommandContext, st: DocState, lv: Leve
   }
   refreshBar(app);
   app.view.requestRender();
-  const what = lv.kind === 'xref' ? (lv.depth && lv.xrefName ? `외부 참조 "${lv.xrefName}" 안의 블록 "${lv.label}"` : `외부 참조 "${lv.label}"`) : `블록 "${lv.label}"`;
+  const what = lv.kind === 'xref' ? (lv.depth && lv.xrefName ? `외부 참조 "${ft(lv.xrefName)}" 안의 블록 "${ft(lv.label)}"` : `외부 참조 "${ft(lv.label)}"`) : `블록 "${ft(lv.label)}"`;
   ctx.print(`${what}을(를) 내부 편집합니다. 작업 세트 ${sess.working().length}개(나머지는 XFADECTL ${xfadectl()}%로 흐리게). 끝내려면 REFCLOSE 또는 띠의 "변경 사항 저장"·"변경 사항 취소"를 쓰십시오.`);
   if (res.skipped) ctx.print(`${res.skipped}개 객체는 작업 세트로 가져올 수 없어 참조에 그대로 둡니다.`);
   if (res.hiddenAttdefs) ctx.print(`속성 정의 ${res.hiddenAttdefs}개는 작업 세트에 넣지 않았습니다(설정 탭의 "편집을 위한 속성 정의 표시"로 넣을 수 있습니다).`);
@@ -603,7 +604,7 @@ async function saveSession(app: App, ctx: CommandContext, sess: RefEditSession):
     commitAsOne(st, sess.depth, 'REFEDIT', ops);
     endSession(app, sess);
     const n = insertsOf(st.doc, sess.target.key).length;
-    ctx.print(`블록 "${sess.name}"의 참조 편집을 저장했습니다(그대로 ${plan.kept}, 바뀜 ${plan.changed}, 새로 ${plan.added}, 지움 ${plan.removed} — 참조 ${n}개에 반영).`);
+    ctx.print(`블록 "${ft(sess.name)}"의 참조 편집을 저장했습니다(그대로 ${plan.kept}, 바뀜 ${plan.changed}, 새로 ${plan.added}, 지움 ${plan.removed} — 참조 ${n}개에 반영).`);
     if (plan.left.length) ctx.print(`${plan.left.length}개 객체는 참조에 넣을 수 없어 현재 도면에 남겼습니다.`);
     if (plan.attdefsChanged) ctx.print('속성 정의를 바꿨습니다. 기존 블록 참조의 속성은 그대로이니 ATTSYNC로 맞추십시오.');
     return true;
@@ -625,7 +626,7 @@ async function saveSession(app: App, ctx: CommandContext, sess: RefEditSession):
     applyOps(xdoc, xops);
     app.engine.edit(file.docId, xops);
     const fmt = docSaveFormat(xdoc);
-    app.ui.setBusy(`${file.name} 저장하는 중…`, 0.5);
+    app.ui.setBusy(`${ft(file.name)} 저장하는 중…`, 0.5);
     try {
       const saved = await app.engine.save(file.docId, fmt.format, fmt.version, fmt.binary);
       const blob = new Blob([saved.data as BlobPart], { type: fmt.format === 'dxf' ? 'application/dxf' : 'application/acad' });
@@ -650,9 +651,9 @@ async function saveSession(app: App, ctx: CommandContext, sess: RefEditSession):
   for (const d of app.docs) expandXrefBounds(app, d);
   app.view.requestRender();
   if (changedFile) {
-    ctx.print(`외부 참조 "${xname}"의 변경 사항(바뀜 ${plan.changed}, 새로 ${plan.added}, 지움 ${plan.removed})을 ${file.name}(으)로 저장해 내려받았습니다. 브라우저는 디스크의 원래 파일에 쓸 수 없으니 원래 파일을 내려받은 파일로 바꾸십시오.`);
-    toast(`${file.name}을(를) 내려받았습니다. 원래 외부 참조 파일을 바꾸십시오.`, 'info', 6000);
-  } else ctx.print(`외부 참조 "${xname}"에 바뀐 것이 없어 파일을 쓰지 않았습니다.`);
+    ctx.print(`외부 참조 "${ft(xname)}"의 변경 사항(바뀜 ${plan.changed}, 새로 ${plan.added}, 지움 ${plan.removed})을 ${ft(file.name)}(으)로 저장해 내려받았습니다. 브라우저는 디스크의 원래 파일에 쓸 수 없으니 원래 파일을 내려받은 파일로 바꾸십시오.`);
+    toast(`${ft(file.name)}을(를) 내려받았습니다. 원래 외부 참조 파일을 바꾸십시오.`, 'info', 6000);
+  } else ctx.print(`외부 참조 "${ft(xname)}"에 바뀐 것이 없어 파일을 쓰지 않았습니다.`);
   if (plan.left.length) ctx.print(`${plan.left.length}개 객체는 참조에 넣을 수 없어 현재 도면에 남겼습니다.`);
   return true;
 }
@@ -679,7 +680,7 @@ export function registerRefEditCommands(app: App): void {
         return;
       }
       if (sessions.has(st)) {
-        ctx.print(`이미 참조 "${sessions.get(st)!.name}"을(를) 편집하고 있습니다. 먼저 REFCLOSE로 저장하거나 취소하십시오.`, 'err');
+        ctx.print(`이미 참조 "${ft(sessions.get(st)!.name)}"을(를) 편집하고 있습니다. 먼저 REFCLOSE로 저장하거나 취소하십시오.`, 'err');
         return;
       }
       if (st.msVp) {
@@ -816,13 +817,13 @@ export function registerRefEditCommands(app: App): void {
         else return;
       }
       if (k === 'D') {
-        const a = await ask('참조 편집 - 변경 사항 취소', `참조 "${sess.name}"에 대한 모든 변경 사항이 취소됩니다. 계속하시겠습니까?`, [
+        const a = await ask('참조 편집 - 변경 사항 취소', `참조 "${ft(sess.name)}"에 대한 모든 변경 사항이 취소됩니다. 계속하시겠습니까?`, [
           { label: '확인', value: 'ok', primary: true },
           { label: '취소', value: 'cancel' },
         ]);
         if (a !== 'ok') return;
         discardSession(app, sess);
-        ctx.print(`참조 "${sess.name}"의 변경 사항을 버렸습니다.`);
+        ctx.print(`참조 "${ft(sess.name)}"의 변경 사항을 버렸습니다.`);
         return;
       }
       await saveSession(app, ctx, sess);

@@ -7,6 +7,7 @@ import { MSG_MINSERT, MSG_NONUNIFORM, insertXf, chainXf, composeXf, invertXf } f
 import { openWorkingSet, planSave, referencedBlocks, dropBlocksOps, seedAllocator } from '../../src/edit/refedit/workset';
 import { affApply } from '../../src/edit/geom/math';
 import { arc, circle, line, lw, newDoc, text } from '../edit/make';
+import { unmark } from '../../src/app/filetext';
 
 function counter(start = 0x8000): () => string {
   let n = start;
@@ -270,7 +271,8 @@ describe('작업 세트(블록)', () => {
     const ins = ms.entities.find((e) => e.type === 'INSERT' && e !== self)!;
     const working = ms.entities.filter((e) => e !== ins);
     const plan = planSave({ target, host: doc, space: MODEL_SPACE, working, origin: res.origin, snapshot: res.snapshot, newHandle });
-    expect(plan.error).toBe('블록 "PART"이(가) 자신을 참조합니다.');
+    // 블록 이름은 도면 글 표시(ft — 105차)로 감싼다 — 보이는 글로 견준다
+    expect(unmark(plan.error ?? '')).toBe('블록 "PART"이(가) 자신을 참조합니다.');
     const none = planSave({ target, host: doc, space: MODEL_SPACE, working: [], origin: res.origin, snapshot: res.snapshot, newHandle });
     expect(none.error).toBe('작업 세트가 비어 있어 블록 정의를 저장할 수 없습니다.');
   });

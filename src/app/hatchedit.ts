@@ -10,6 +10,7 @@ import { HATCH_CREATE_LIMIT } from '../render/hatch';
 import type { App, CommandContext } from './app';
 import { unlockedOnly } from './layers';
 import { form } from './ui/dom';
+import { ft } from './filetext';
 
 interface Edit {
   pattern: string;
@@ -208,7 +209,7 @@ export function registerHatchEditCommands(app: App): void {
         });
         if ('keyword' in s) e.style = s.keyword === 'I' ? 2 : s.keyword === 'O' ? 1 : 0;
       } else {
-        const name = await ctx.getPoint(`무늬 이름 입력 또는 [?/단색(S)/사용자 정의(U)] <${c.pattern}>:`, { allowText: true });
+        const name = await ctx.getPoint(`무늬 이름 입력 또는 [?/단색(S)/사용자 정의(U)] <${ft(c.pattern)}>:`, { allowText: true });
         if ('text' in name) {
           const t = name.text.trim().toUpperCase();
           if (t === '?') {

@@ -46,6 +46,7 @@ import {
 import { lwPoints, lwVertices, setLwVertices } from '../../core/lwpoly';
 import { polyLocs, polyVertices, setPolyVertices } from '../../core/polyverts';
 import { fitCount, pack3, splineCtrl, splineFit } from '../../core/flat3';
+import { ft } from '../../app/filetext';
 
 export class DynError extends Error {}
 
@@ -815,7 +816,7 @@ export class DynEval {
   /** 가시성 상태. 바뀌면 참 */
   setVisibility(p: VisibilityParam, name: string): boolean {
     const st = p.states.find((s) => s.name === name) ?? p.states.find((s) => s.name.toUpperCase() === name.trim().toUpperCase());
-    if (!st) throw new DynError(`가시성 상태 "${name}"이(가) 없습니다.`);
+    if (!st) throw new DynError(`가시성 상태 "${ft(name)}"이(가) 없습니다.`);
     const show = new Set(st.entities);
     let changed = this.state(p) !== st.name;
     for (const h of p.entities) {
@@ -1100,7 +1101,7 @@ export class DynEval {
     if (!rows.length) {
       const col = a.columns[k]!;
       if (want === (col.unmatched.trim() || LOOKUP_CUSTOM)) return false;
-      throw new DynError(`조회 값 "${value}"이(가) 표에 없습니다.`);
+      throw new DynError(`조회 값 "${ft(value)}"이(가) 표에 없습니다.`);
     }
     const inputs = a.columns.map((c, i) => ({ c, i })).filter((x) => !x.c.lookup);
     // 여러 행이면 지금 입력과 맞는 행

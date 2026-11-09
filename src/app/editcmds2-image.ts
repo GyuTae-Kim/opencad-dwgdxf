@@ -16,6 +16,7 @@ import { askOption, askReal, askYN } from './dashcmds-ask';
 import { unlockedOnly } from './layers';
 import { pdfFileBytes, refHooks, replacePdfRaster } from './refs';
 import { dialog, form, h } from './ui/dom';
+import { ft } from './filetext';
 
 const isImage = (e: Entity | undefined): e is ImageEntity => e?.type === 'IMAGE';
 const isPdf = (e: Entity | undefined): e is UnderlayEntity => e?.type === 'PDFUNDERLAY';
@@ -283,7 +284,7 @@ export function registerEditCmds2Image(app: App): void {
       }
       const bytes = pdfFileBytes(src.file);
       if (!bytes) {
-        ctx.print(`PDF 파일(${src.file})이 연결되지 않았습니다. EXTERNALREFERENCES(XR)에서 파일을 연결하십시오.`, 'err');
+        ctx.print(`PDF 파일(${ft(src.file)})이 연결되지 않았습니다. EXTERNALREFERENCES(XR)에서 파일을 연결하십시오.`, 'err');
         return;
       }
       const r = await import('./pdfraster');

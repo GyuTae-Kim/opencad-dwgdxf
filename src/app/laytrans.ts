@@ -246,7 +246,7 @@ export function registerLayTransCommands(app: App): void {
             added++;
           }
         }
-        if (files.length) ctx.print(`변환 대상에 도면층 ${added}개를 넣었습니다(${files.map((f) => f.name).join(', ')}).${bad ? ` 이름을 쓸 수 없거나 외부 참조 종속인 ${bad}개는 뺐습니다.` : ''}`);
+        if (files.length) ctx.print(`변환 대상에 도면층 ${added}개를 넣었습니다(${files.map((f) => ft(f.name)).join(', ')}).${bad ? ` 이름을 쓸 수 없거나 외부 참조 종속인 ${bad}개는 뺐습니다.` : ''}`);
         // 파일에 저장된 매핑(ACLAYTRANS): 이 도면에 있는 원본 도면층만, 이미 매핑한 것은 그대로
         let loaded = 0;
         for (const f of files) {
@@ -335,7 +335,7 @@ export function registerLayTransCommands(app: App): void {
           docId = (await app.engine.adopt(name, out)).docId;
           const res = await app.engine.save(docId, 'dwg', 'AC1032', false);
           download(new Blob([res.data as BlobPart], { type: 'application/acad' }), name);
-          ctx.print(`도면층 매핑 ${mapping.size}개(변환 대상 ${byTarget.size}개)를 ${name}(으)로 저장했습니다.`);
+          ctx.print(`도면층 매핑 ${mapping.size}개(변환 대상 ${byTarget.size}개)를 ${ft(name)}(으)로 저장했습니다.`);
         } catch (e) {
           ctx.print(`매핑을 저장하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
         } finally {
@@ -413,7 +413,7 @@ export function registerLayTransCommands(app: App): void {
       }
       st.session.commit({ label: 'LAYTRANS', ops, group: ctx.group });
       ctx.print(`도면층 ${mappings.length}개를 변환했습니다: 객체 ${r.moved}개를 옮겼습니다.${r.created.length ? ` 만든 도면층: ${r.created.join(', ')}.` : ''}${r.removed.length ? ` 삭제한 도면층: ${r.removed.join(', ')}.` : ''}`);
-      if (r.kept.length) ctx.print(`블록 정의 안 등에 객체가 남아 지우지 않은 도면층: ${r.kept.join(', ')}`);
+      if (r.kept.length) ctx.print(`블록 정의 안 등에 객체가 남아 지우지 않은 도면층: ${r.kept.map(ft).join(', ')}`);
       if (settings.log) {
         const text = translateLog(st.name, mappings, settings, r);
         download(new Blob([text], { type: 'text/plain;charset=utf-8' }), `${baseName(st.name)}.log`);

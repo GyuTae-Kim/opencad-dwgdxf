@@ -22,6 +22,7 @@ import { baseName, download } from './export';
 import { commitTable, formatLockedIn, lockedLayer, pickCell } from './tablecmds';
 import { currentUcs } from './ucs';
 import type { Pt } from './view';
+import { ft } from './filetext';
 
 const v3 = (p: Pt): Vec3 => ({ x: p.x, y: p.y, z: 0 });
 
@@ -136,7 +137,7 @@ export function registerEditCmds2Dim(app: App): void {
         }
         const name = `${baseName(st.name.replace(/^.*[\\/]/, '')) || 'table'}.csv`;
         download(new Blob([csvFileText(t.data)], { type: 'text/csv;charset=utf-8' }), name);
-        ctx.print(`표(${t.data.rows}행 × ${t.data.cols}열)를 ${name}(으)로 내보냈습니다.`);
+        ctx.print(`표(${t.data.rows}행 × ${t.data.cols}열)를 ${ft(name)}(으)로 내보냈습니다.`);
         return;
       }
     },

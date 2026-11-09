@@ -65,6 +65,7 @@ import { expandBudget } from '../core/limits';
 import { MSG } from '../edit/geom/types';
 import { relinkClonedColumns, relinkColumnCopies } from '../edit/util/mtextcols';
 import { columnGripEdit } from './mtextcols-grips';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // 변환 행렬(x' = a·x + c·y + e, y' = b·x + d·y + f)
@@ -2358,7 +2359,7 @@ export function registerModifyCommands(app: App): void {
       const list = clip.entities.map((e) => cloneEntity(e));
       const deps = importDependencies(st, clip.doc, list);
       const name = pasteAsBlock(app, st, list, clip.base, r.point, { deps, group: ctx.group });
-      ctx.print(`블록 "${name}"(객체 ${list.length}개)으로 붙여 넣었습니다.`);
+      ctx.print(`블록 "${ft(name)}"(객체 ${list.length}개)으로 붙여 넣었습니다.`);
     },
   });
 }

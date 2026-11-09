@@ -239,7 +239,7 @@ export function layerFilterPanel(app: App, refresh: () => void): LayerFilterPane
           if (!names) return;
           ev.preventDefault();
           const n2 = editGroupLayers(app, n.label, names, 'add');
-          if (n2 > 0) app.cmd.print(`그룹 필터 "${n.label}"에 도면층 ${n2}개를 넣었습니다.`);
+          if (n2 > 0) app.cmd.print(`그룹 필터 "${ft(n.label)}"에 도면층 ${n2}개를 넣었습니다.`);
         });
       }
       box.append(row);
@@ -406,7 +406,7 @@ function filterMenu(app: App, n: FilterNode, x: number, y: number, startRename: 
       disabled: !f || !canConvertToGroup(filters, f),
       run: () => {
         const err = convertToGroupFilter(app, f!.name);
-        app.cmd.print(err ?? `특성 필터 "${f!.name}"을(를) 그룹 필터로 바꿨습니다.`, err ? 'err' : undefined);
+        app.cmd.print(err ?? `특성 필터 "${ft(f!.name)}"을(를) 그룹 필터로 바꿨습니다.`, err ? 'err' : undefined);
       },
     },
     { separator: true },
@@ -419,7 +419,7 @@ function filterMenu(app: App, n: FilterNode, x: number, y: number, startRename: 
       const names = await pickLayersFromDrawing(app);
       if (!names) return;
       const k = editGroupLayers(app, f.name, names, mode);
-      if (k >= 0) app.cmd.print(`그룹 필터 "${f.name}"의 도면층: ${mode === 'add' ? '추가' : '대치'} — ${names.join(', ')}`);
+      if (k >= 0) app.cmd.print(`그룹 필터 "${ft(f.name)}"의 도면층: ${mode === 'add' ? '추가' : '대치'} — ${names.map(ft).join(', ')}`);
     };
     items.push({ heading: '도면층 선택' }, { label: '추가', run: () => void pick('add')() }, { label: '대치', run: () => void pick('replace')() });
   }

@@ -13,6 +13,7 @@ import { Ghost, commitResults, translate } from './modify';
 import { PickList, guardKeys, wideDialog } from './layertools-ui';
 import { layerSwatch } from './laywalk';
 import { h } from './ui/dom';
+import { ft } from './filetext';
 
 /** "도면층으로 복사" 대화상자: 대상 도면층 이름(목록에서 고르거나 새 이름 입력). 취소하면 null */
 async function chooseTargetLayer(app: App): Promise<string | null> {
@@ -63,7 +64,7 @@ async function ensureLayer(app: App, ctx: CommandContext, name: string): Promise
   const st = app.active!;
   const have = st.doc.layers.get(tableKey(name));
   if (have) return have.name;
-  const r = await ctx.getPoint(`도면층 "${name}"이(가) 없습니다. 만드시겠습니까? [예(Y)/아니오(N)] <예>:`, {
+  const r = await ctx.getPoint(`도면층 "${ft(name)}"이(가) 없습니다. 만드시겠습니까? [예(Y)/아니오(N)] <예>:`, {
     keywords: [
       { key: 'Y', label: '예' },
       { key: 'N', label: '아니오' },
@@ -125,7 +126,7 @@ export function registerCopyToLayerCommands(app: App): void {
         return;
       }
       app.lastCreated = a.added;
-      ctx.print(`${a.added.length}개의 객체가 "${target}" 도면층으로 복사되었습니다.`);
+      ctx.print(`${a.added.length}개의 객체가 "${ft(target)}" 도면층으로 복사되었습니다.`);
       // 옮기기(선택)
       const b = await ctx.getPoint('지정된 기준점 또는 [종료(X)] <종료>:', { keywords: [{ key: 'X', label: '종료' }] });
       if (!('point' in b)) {

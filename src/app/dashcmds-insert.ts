@@ -20,6 +20,7 @@ import { previewOf } from './modify2-util';
 import { askAngleDeg, askLine, askOption, askReal, askWord, askYN, fmt4, matchKeyword } from './dashcmds-ask';
 import { attReq } from './sysvars';
 import type { Pt } from './view';
+import { ft } from './filetext';
 
 /** 문서별 직전 블록 이름 */
 const lastBlock = new WeakMap<object, string>();
@@ -39,7 +40,7 @@ export function listBlocks(ctx: CommandContext, pattern: string): void {
   ctx.print('정의된 블록.');
   for (const b of [...user, ...xref, ...dep].sort((a, c) => a.name.localeCompare(c.name))) {
     if (!hit.has(b.name.toUpperCase())) continue;
-    ctx.print(b.flags & 4 ? `  "${b.name}"   외부 참조: ${b.xrefPath ?? ''}` : `  "${b.name}"`);
+    ctx.print(b.flags & 4 ? `  "${ft(b.name)}"   외부 참조: ${ft(b.xrefPath ?? '')}` : `  "${ft(b.name)}"`);
   }
   ctx.print('사용자 블록   외부 참조   종속 블록   명명되지 않은 블록');
   ctx.print(`${String(user.length).padStart(6)}${String(xref.length).padStart(12)}${String(dep.length).padStart(12)}${String(unnamed.length).padStart(14)}`);
@@ -75,7 +76,7 @@ export function registerDashInsertCommands(app: App): void {
       const last = lastBlock.get(doc) ?? '';
       let name = '';
       for (;;) {
-        const t = await askWord(ctx, `블록 이름 입력 또는 [?]${last ? ` <${last}>` : ''}:`);
+        const t = await askWord(ctx, `블록 이름 입력 또는 [?]${last ? ` <${ft(last)}>` : ''}:`);
         if (t === null) {
           if (!last) return;
           name = last;
@@ -96,7 +97,7 @@ export function registerDashInsertCommands(app: App): void {
       }
       const def = doc.blocks.get(tableKey(name));
       if (!def || isLayoutBlock(tableKey(name)) || def.name.startsWith('*')) {
-        ctx.print(`블록 "${name}"을(를) 찾을 수 없습니다. 이 웹 버전은 같은 이름의 도면 파일(${name}.dwg)을 찾아 읽을 수 없습니다.`, 'err');
+        ctx.print(`블록 "${ft(name)}"을(를) 찾을 수 없습니다. 이 웹 버전은 같은 이름의 도면 파일(${ft(name)}.dwg)을 찾아 읽을 수 없습니다.`, 'err');
         return;
       }
       if (st.blockEdit && tableKey(st.blockEdit.name) === tableKey(def.name)) {
@@ -223,7 +224,7 @@ export function registerDashInsertCommands(app: App): void {
       const askThese = attdefs.filter((d) => !(d.attFlags & 8));
       if (!explode && askThese.length && attReq(app)) {
         ctx.print('속성 값 입력');
-        const ask = (d: AttribEntity, cur: string) => askLine(ctx, `${d.prompt || d.tag}${cur ? ` <${cur}>` : ''}:`, cur);
+        const ask = (d: AttribEntity, cur: string) => askLine(ctx, `${ft(d.prompt || d.tag)}${cur ? ` <${ft(cur)}>` : ''}:`, cur);
         for (const d of askThese) values.set(d.tag, await ask(d, d.text));
         const verify = askThese.filter((d) => d.attFlags & 4);
         if (verify.length) {
@@ -362,7 +363,7 @@ export function registerDashInsertCommands(app: App): void {
         for (;;) {
           const a = attrOf(it);
           if (!a) break;
-          ctx.print(`속성: ${a.tag} = "${a.text}"`);
+          ctx.print(`속성: ${ft(a.tag)} = "${ft(a.text)}"`);
           const k = await askOption(ctx, '속성 편집 옵션 입력 [값(V)/위치(P)/높이(H)/각도(A)/스타일(S)/도면층(L)/색상(C)/다음(N)] <다음>:', OPTS, 'N');
           if (k === 'N' || k === null) break;
           switch (k) {
@@ -416,11 +417,11 @@ export function registerDashInsertCommands(app: App): void {
               break;
             }
             case 'S': {
-              const v = await askWord(ctx, `새 문자 스타일 입력 <${a.style}>:`);
+              const v = await askWord(ctx, `새 문자 스타일 입력 <${ft(a.style)}>:`);
               if (v === null) break;
               const ts = doc.textStyles.get(tableKey(v));
               if (!ts) {
-                ctx.print(`문자 스타일 "${v}"을(를) 찾을 수 없습니다.`, 'err');
+                ctx.print(`문자 스타일 "${ft(v)}"을(를) 찾을 수 없습니다.`, 'err');
                 break;
               }
               patch(it, (x) => {
@@ -430,11 +431,11 @@ export function registerDashInsertCommands(app: App): void {
               break;
             }
             case 'L': {
-              const v = await askWord(ctx, `새 도면층 이름 입력 <${a.layer}>:`);
+              const v = await askWord(ctx, `새 도면층 이름 입력 <${ft(a.layer)}>:`);
               if (v === null) break;
               const l = doc.layers.get(tableKey(v));
               if (!l) {
-                ctx.print(`도면층 "${v}"을(를) 찾을 수 없습니다.`, 'err');
+                ctx.print(`도면층 "${ft(v)}"을(를) 찾을 수 없습니다.`, 'err');
                 break;
               }
               patch(it, (x) => {

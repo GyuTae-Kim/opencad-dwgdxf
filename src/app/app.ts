@@ -562,7 +562,7 @@ export class App {
     if (!c) {
       const raw = name.trim().toUpperCase().replace(/^[_.']+/, '');
       for (const f of this.commandFallbacks) if (await f.run(raw, arg)) return;
-      this.cmd.print(`알 수 없는 명령 "${name}". 도움말은 F1을 누르십시오.`, 'err');
+      this.cmd.print(`알 수 없는 명령 "${ft(name)}". 도움말은 F1을 누르십시오.`, 'err');
       return;
     }
     if (!c.noDoc && !this.active) {
@@ -876,7 +876,7 @@ export class App {
         const name = 'text' in g ? g.text.trim() : '';
         if (name) {
           const grp = listGroups(st.doc).find((x) => x.name.toUpperCase() === name.toUpperCase());
-          if (!grp) this.cmd.print(`그룹 "${name}"이(가) 없습니다.`, 'err');
+          if (!grp) this.cmd.print(`그룹 "${ft(name)}"이(가) 없습니다.`, 'err');
           else {
             const hs = grp.group.entities.map((h) => normalizeHandle(h)).filter((h) => st.doc.entityIndex.has(h));
             step(this.expandPick(hs), mode);
@@ -1065,7 +1065,7 @@ export class App {
     }
     if (r.kind === 'point') {
       if (r.preferNumber && /^-?[\d.]+(?:e-?\d+)?$/i.test(t)) {
-        this.cmd.print(`${this.promptOf(r)} ${t}`);
+        this.cmd.print(`${this.promptOf(r)} ${ft(t)}`);
         remember(this.recentInputs, t);
         r.resolve({ text: t });
         return;
@@ -1073,14 +1073,14 @@ export class App {
       // 객체 스냅 재지정(END·FROM·M2P·TT·.X …): 글을 받는 프롬프트에서는 글 그대로
       const ov = r.freeText ? null : parseOverride(t);
       if (ov) {
-        this.cmd.print(`${this.promptOf(r)} ${t}`);
+        this.cmd.print(`${this.promptOf(r)} ${ft(t)}`);
         void this.applyOverride(r, ov);
         return;
       }
       const p = this.parsePoint(r, interactive && this.dynOn && r.base ? dynRelative(t) : t);
       if (p) {
         if (this.outsideLimits(p)) return;
-        this.cmd.print(`${this.promptOf(r)} ${t}`);
+        this.cmd.print(`${this.promptOf(r)} ${ft(t)}`);
         remember(this.recentInputs, t);
         this.lastPoint = p;
         this.finishPoint(r, { ...App.pointResult(p), snap: null });
@@ -1103,7 +1103,7 @@ export class App {
     if (r.emptyPick) {
       const p = this.parsePoint(null, interactive && this.dynOn && this.lastPoint ? dynRelative(t) : t);
       if (p) {
-        this.cmd.print(`${this.promptOf(r)} ${t}`);
+        this.cmd.print(`${this.promptOf(r)} ${ft(t)}`);
         this.lastPoint = p;
         r.resolve({ point: { x: p.x, y: p.y }, empty: true });
         return;
@@ -1240,7 +1240,7 @@ export class App {
 
   async openFile(name: string, data: ArrayBuffer, input: InputKind = 'local', attempt = beginOpen(input, name.split('.').pop() ?? 'other')): Promise<DocState | null> {
     const size = data.byteLength;
-    this.ui.setBusy(`${name} 여는 중…`, 0);
+    this.ui.setBusy(`${ft(name)} 여는 중…`, 0);
     // 점진 빌드: 장면을 만드는 동안 오는 조각을 먼저 그린다(문서·장면이 다 오면 탭을 연다)
     const preview = new LoadPreview(this.view.renderer);
     const showPreview = () => {
@@ -1270,7 +1270,7 @@ export class App {
       preview.dispose();
       const st = this.addDocument(res, name, size);
       const w = st.warnings.filter((x) => x.code !== 'entity.not_drawn' || (x.count ?? 0) > 0);
-      this.cmd.print(`${name}: ${res.doc.format.toUpperCase()} ${res.doc.version}, 객체 ${res.doc.entityIndex.size.toLocaleString()}개, 읽기 ${Math.round(res.readMs)}ms, 그리기 ${Math.round(res.model.ms)}ms`);
+      this.cmd.print(`${ft(name)}: ${res.doc.format.toUpperCase()} ${res.doc.version}, 객체 ${res.doc.entityIndex.size.toLocaleString()}개, 읽기 ${Math.round(res.readMs)}ms, 그리기 ${Math.round(res.model.ms)}ms`);
       for (const x of w.slice(0, 6)) this.cmd.print(`참고: ${x.message}${x.count ? ` (${x.count})` : ''}`);
       this.onOpened?.(st);
       attempt.success();

@@ -69,7 +69,7 @@ export function registerFilePlotCommands(app: App, reg: (c: Command) => void): v
         return;
       }
       if (r.ops.length) st.session.commit({ label: 'PLOTSTYLE', ops: r.ops, group: ctx.group });
-      ctx.print(`객체 ${r.changed}개의 플롯 스타일을 "${name}"(으)로 지정했습니다.`);
+      ctx.print(`객체 ${r.changed}개의 플롯 스타일을 "${ft(name)}"(으)로 지정했습니다.`);
     },
   });
 
@@ -105,12 +105,12 @@ export function registerFilePlotCommands(app: App, reg: (c: Command) => void): v
         const [f] = await pickFiles('.ctb,.CTB', false);
         if (!f) return;
         if (f.size > 4 * 1024 * 1024) {
-          ctx.print(`${f.name}: 너무 큰 파일입니다.`, 'err');
+          ctx.print(`${ft(f.name)}: 너무 큰 파일입니다.`, 'err');
           return;
         }
         const r = await unpackPia(new Uint8Array(await f.arrayBuffer()));
         if (!r || r.kind !== 'CTB') {
-          ctx.print(`${f.name}은(는) 색상 종속 플롯 스타일 테이블(CTB) 파일이 아닙니다.`, 'err');
+          ctx.print(`${ft(f.name)}은(는) 색상 종속 플롯 스타일 테이블(CTB) 파일이 아닙니다.`, 'err');
           return;
         }
         text = r.text;
@@ -138,7 +138,7 @@ export function registerFilePlotCommands(app: App, reg: (c: Command) => void): v
       // 바로 플롯·CONVERTPSTYLES에서 쓸 수 있게 불러 둔다
       const table = await readCtb(data, name);
       if (table) addCtb(table);
-      ctx.print(`색상 종속 플롯 스타일 테이블 ${srcName}을(를) 이름 있는 플롯 스타일 테이블 ${name}(으)로 변환했습니다(Normal, Color_1~Color_255).`);
+      ctx.print(`색상 종속 플롯 스타일 테이블 ${ft(srcName)}을(를) 이름 있는 플롯 스타일 테이블 ${ft(name)}(으)로 변환했습니다(Normal, Color_1~Color_255).`);
     },
   });
 

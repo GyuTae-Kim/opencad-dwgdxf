@@ -78,13 +78,14 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
   const detailed = await askYN(ctx, '상세한 플롯 구성을 원하십니까?', false);
   // 배치
   const layoutName = (l: Layout) => (tableKey(l.blockName) === MODEL_SPACE ? '모형' : l.name);
+  const shownName = (l: Layout) => (tableKey(l.blockName) === MODEL_SPACE ? '모형' : ft(l.name));
   let layout: Layout | undefined;
   for (;;) {
     const cur = st.layoutFor(st.displaySpace);
     const def = cur ? layoutName(cur) : '모형';
-    const t = await askWord(ctx, `배치 이름 또는 [?] 입력 <${def}>:`);
+    const t = await askWord(ctx, `배치 이름 또는 [?] 입력 <${cur ? shownName(cur) : '모형'}>:`);
     if (t === '?') {
-      for (const l of st.layouts) ctx.print(`  ${layoutName(l)}`);
+      for (const l of st.layouts) ctx.print(`  ${shownName(l)}`);
       continue;
     }
     const name = t ?? def;
@@ -92,7 +93,7 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
     layout = st.layouts.find((l) => (up === '모형' || up === 'MODEL' ? tableKey(l.blockName) === MODEL_SPACE : l.name.toUpperCase() === up));
     if (!layout && (up === '모형' || up === 'MODEL')) break;
     if (!layout) {
-      ctx.print(`배치 "${name}"이(가) 없습니다.`, 'err');
+      ctx.print(`배치 "${ft(name)}"이(가) 없습니다.`, 'err');
       continue;
     }
     break;
@@ -132,7 +133,7 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
       }
       const name = t ?? devName;
       if (!deviceKind(name)) {
-        ctx.print(`장치 "${name}"을(를) 찾을 수 없습니다. ?로 목록을 보십시오(이 웹 버전은 PDF·SVG 파일로만 출력합니다).`, 'err');
+        ctx.print(`장치 "${ft(name)}"을(를) 찾을 수 없습니다. ?로 목록을 보십시오(이 웹 버전은 PDF·SVG 파일로만 출력합니다).`, 'err');
         continue;
       }
       devName = name;
@@ -142,11 +143,11 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
   if (!detailed) {
     const { items } = namedPageSetups(st.doc);
     for (;;) {
-      const t = await askWord(ctx, `페이지 설정 이름 입력 <${page?.pageSetupName ?? ''}>:`);
+      const t = await askWord(ctx, `페이지 설정 이름 입력 <${ft(page?.pageSetupName ?? '')}>:`);
       if (t === null) break;
       const hit = items.find((x) => x.name.toUpperCase() === t.toUpperCase());
       if (!hit) {
-        ctx.print(`페이지 설정 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+        ctx.print(`페이지 설정 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
         continue;
       }
       const k = keyOfPage(hit.plot);
@@ -234,7 +235,7 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
           if (t === null) break;
           const v = st.doc.views.get(tableKey(t));
           if (!v) {
-            ctx.print(`뷰 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+            ctx.print(`뷰 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
             continue;
           }
           s.what = 'window';
@@ -316,9 +317,9 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
     const withStyles = await askYN(ctx, '플롯 스타일로 플롯?', true);
     for (;;) {
       const curTable = s.ctb ?? (s.plotStyle === 'mono' ? 'monochrome.ctb' : s.plotStyle === 'gray' ? 'Grayscale.ctb' : '');
-      const t = await askWord(ctx, `플롯 스타일 테이블 이름 또는 [?] 입력 (없는 경우 . 입력) <${curTable}>:`);
+      const t = await askWord(ctx, `플롯 스타일 테이블 이름 또는 [?] 입력 (없는 경우 . 입력) <${ft(curTable)}>:`);
       if (t === '?') {
-        for (const n of ['monochrome.ctb', 'Grayscale.ctb', ...ctbList().map((x) => x.name)]) ctx.print(`  ${n}`);
+        for (const n of ['monochrome.ctb', 'Grayscale.ctb', ...ctbList().map((x) => x.name)]) ctx.print(`  ${ft(n)}`);
         continue;
       }
       const name = t ?? curTable;
@@ -332,7 +333,7 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
         s.ctb = undefined;
         s.plotStyle = styleSheetPlotStyle(name)!;
       } else {
-        ctx.print(`플롯 스타일 테이블 "${name}"을(를) 불러오지 않았습니다. PLOT 대화상자에서 CTB 파일을 불러오십시오. 색 그대로 플롯합니다.`);
+        ctx.print(`플롯 스타일 테이블 "${ft(name)}"을(를) 불러오지 않았습니다. PLOT 대화상자에서 CTB 파일을 불러오십시오. 색 그대로 플롯합니다.`);
         s.ctb = undefined;
         s.plotStyle = 'color';
       }
@@ -368,7 +369,7 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
   const spaceName = model ? '모형' : (layout?.name ?? 'layout');
   let fileName = `${baseName(st.saveName)}-${spaceName}.${kind === 'svg' ? 'svg' : 'pdf'}`;
   if (kind !== 'none') {
-    const t = (await askLine(ctx, `파일 이름 입력 <${fileName}>:`, fileName)).trim().replace(/^"(.*)"$/, '$1');
+    const t = (await askLine(ctx, `파일 이름 입력 <${ft(fileName)}>:`, fileName)).trim().replace(/^"(.*)"$/, '$1');
     if (t) fileName = t.replace(/^.*[\\/]/, '');
     if (!new RegExp(`\\.${kind}$`, 'i').test(fileName)) fileName += `.${kind}`;
   }
@@ -403,7 +404,7 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
   }
   if (kind === 'svg') download(exportPageSvg(pages[0]!, 'mm'), fileName);
   else download(await pdfDocument(pages, st.saveName), fileName);
-  ctx.print(`${fileName}(으)로 플롯했습니다.`);
+  ctx.print(`${ft(fileName)}(으)로 플롯했습니다.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -421,7 +422,7 @@ async function sourceDrawing(app: App, ctx: CommandContext, byName: boolean): Pr
     if (read) return { name: read.name, doc: read.doc };
     const open = app.docs.find((d) => same(d.saveName) || same(d.name));
     if (open) return { name: open.saveName, doc: open.doc };
-    ctx.print(`"${t}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 열린 도면이나 이번 세션에서 읽은 도면(디자인센터 등)만 이름으로 쓸 수 있습니다.`, 'err');
+    ctx.print(`"${ft(t)}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 열린 도면이나 이번 세션에서 읽은 도면(디자인센터 등)만 이름으로 쓸 수 있습니다.`, 'err');
     return null;
   }
   const files = await pickFiles(DRAWING_ACCEPT, false);
@@ -431,7 +432,7 @@ async function sourceDrawing(app: App, ctx: CommandContext, byName: boolean): Pr
     const d = await readDrawingFile(app, f);
     return { name: d.name, doc: d.doc };
   } catch (e) {
-    ctx.print(`${f.name}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
+    ctx.print(`${ft(f.name)}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
     return null;
   } finally {
     app.ui.setBusy(null);
@@ -455,21 +456,21 @@ async function runDashPsetupin(app: App, ctx: CommandContext): Promise<void> {
   if (!src) return;
   const { items } = namedPageSetups(src.doc);
   if (!items.length) {
-    ctx.print(`${src.name}에 가져올 사용자 정의 페이지 설정이 없습니다.`);
+    ctx.print(`${ft(src.name)}에 가져올 사용자 정의 페이지 설정이 없습니다.`);
     return;
   }
   for (;;) {
     const spec = await askWord(ctx, '가져올 사용자 정의 페이지 설정 입력 또는 [?]:');
     if (spec === null) return;
     if (spec === '?') {
-      for (const it of items) ctx.print(`  ${it.name.padEnd(24)}${it.model ? '모형' : '배치'}`);
+      for (const it of items) ctx.print(`  ${ft(it.name.padEnd(24))}${it.model ? '모형' : '배치'}`);
       continue;
     }
     const m = matchNameList(
       items.map((x) => x.name),
       spec,
     );
-    for (const u of m.unmatched) ctx.print(`페이지 설정 "${u}"을(를) 찾을 수 없습니다.`);
+    for (const u of m.unmatched) ctx.print(`페이지 설정 "${ft(u)}"을(를) 찾을 수 없습니다.`);
     if (!m.names.length) continue;
     const chosen = items.filter((x) => m.names.includes(x.name) && validSetupName(x.name));
     const existing = new Set(namedPageSetups(st.doc).items.map((x) => x.name.toUpperCase()));
@@ -477,7 +478,7 @@ async function runDashPsetupin(app: App, ctx: CommandContext): Promise<void> {
     const take: NamedPageSetup[] = [];
     for (const it of chosen) {
       if (existing.has(it.name.toUpperCase())) {
-        if (!(await askYN(ctx, `페이지 설정 "${it.name}"이(가) 이미 있습니다. 재정의하시겠습니까?`, false))) continue;
+        if (!(await askYN(ctx, `페이지 설정 "${ft(it.name)}"이(가) 이미 있습니다. 재정의하시겠습니까?`, false))) continue;
         overwrite.add(it.name.toUpperCase());
       }
       take.push(it);
@@ -495,7 +496,7 @@ export async function runPsetupin(app: App, ctx: CommandContext): Promise<void> 
   if (!src) return;
   const { items } = namedPageSetups(src.doc);
   if (!items.length) {
-    ctx.print(`${src.name}에 가져올 사용자 정의 페이지 설정이 없습니다.`);
+    ctx.print(`${ft(src.name)}에 가져올 사용자 정의 페이지 설정이 없습니다.`);
     return;
   }
   const v = await form(

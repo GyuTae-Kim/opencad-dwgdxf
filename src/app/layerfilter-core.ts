@@ -15,6 +15,7 @@ import type { App } from './app';
 import type { DocState } from './docstate';
 import { currentViewport } from './layerstate-core';
 import { currentLayer, patchLayers } from './layers';
+import { ft } from './filetext';
 
 export type Print = (text: string, cls?: 'err' | 'res') => void;
 
@@ -109,13 +110,13 @@ export function saveLayerFilter(app: App, f: LayerFilter, previousName?: string,
   const st = app.active!;
   const filters = listLayerFilters(st.doc);
   const prev = previousName ? findFilter(filters, previousName) : null;
-  if (previousName && !prev) return `필터 "${previousName}"을(를) 찾을 수 없습니다.`;
+  if (previousName && !prev) return `필터 "${ft(previousName)}"을(를) 찾을 수 없습니다.`;
   const others = filters.filter((x) => x !== prev).map((x) => x.name);
   const name = f.name.trim();
   const bad = filterNameProblem(name, others);
   if (bad) return bad;
   const parent = findFilter(filters, f.parent);
-  if (f.parent && !parent) return `부모 필터 "${f.parent}"을(를) 찾을 수 없습니다.`;
+  if (f.parent && !parent) return `부모 필터 "${ft(f.parent)}"을(를) 찾을 수 없습니다.`;
   if (parent && !canNest(parent.kind, f.kind)) return '특성 필터 아래에는 그룹 필터를 둘 수 없습니다.';
   if (prev && parent && descendantsOf(filters, prev.name).some((d) => filterKey(d.name) === filterKey(parent.name))) return '필터를 자기 아래 필터 안에 둘 수 없습니다.';
   if (prev && f.kind === 'property' && filters.some((d) => d.kind === 'group' && filterKey(d.parent ?? '') === filterKey(prev.name))) return '그룹 필터가 들어 있는 필터는 특성 필터로 바꿀 수 없습니다.';
@@ -186,7 +187,7 @@ export function deleteLayerFilters(app: App, names: readonly string[], group?: n
 /** 이름 바꾸기(문제가 있으면 그 까닭) */
 export function renameLayerFilter(app: App, oldName: string, newName: string, group?: number): string | null {
   const f = findFilter(listLayerFilters(app.active!.doc), oldName);
-  if (!f) return `필터 "${oldName}"을(를) 찾을 수 없습니다.`;
+  if (!f) return `필터 "${ft(oldName)}"을(를) 찾을 수 없습니다.`;
   if (f.name === newName.trim()) return null;
   return saveLayerFilter(app, { ...f, name: newName }, f.name, group);
 }
@@ -196,7 +197,7 @@ export function convertToGroupFilter(app: App, name: string, group?: number): st
   const st = app.active!;
   const filters = listLayerFilters(st.doc);
   const f = findFilter(filters, name);
-  if (!f) return `필터 "${name}"을(를) 찾을 수 없습니다.`;
+  if (!f) return `필터 "${ft(name)}"을(를) 찾을 수 없습니다.`;
   if (f.kind !== 'property') return '이미 그룹 필터입니다.';
   if (!canConvertToGroup(filters, f)) return '특성 필터 아래의 특성 필터는 그룹 필터로 바꿀 수 없습니다.';
   const keys = new FilterEvaluator(st.doc, filters).of(f);
@@ -275,7 +276,7 @@ export function applyFilterAction(app: App, ref: string, action: FilterAction, p
     case 'freeze': {
       const cl = tableKey(currentLayer(app));
       const list = layers.filter((l) => tableKey(l.name) !== cl);
-      if (list.length < layers.length) print(`현재 도면층 "${currentLayer(app)}"은(는) 동결할 수 없어 동결하지 않았습니다.`);
+      if (list.length < layers.length) print(`현재 도면층 "${ft(currentLayer(app))}"은(는) 동결할 수 없어 동결하지 않았습니다.`);
       return patchLayers(app, 'LAYER', list.map((l) => [l.name, { frozen: true }]));
     }
     case 'vpfreeze':

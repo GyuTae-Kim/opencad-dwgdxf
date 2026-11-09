@@ -60,6 +60,7 @@ import {
   withDimPoints,
 } from './context';
 import { withContext } from './mlctx';
+import { ft } from '../../app/filetext';
 import { type AnnoState, type ScaleIndex, type Similarity, annoKindOf, annoState, representation, scaleLines, scaleMLeader, simApply } from './represent';
 import { type AnnoScale, changed, dictOf, factorOf, newDict, pendingObject, upper } from './scales';
 import { annotativeFlag, blockAnnotative, dimStyleAnnotative, mleaderStyleAnnotative, ownRecord, textStyleAnnotative, withAnnotativeFlag, withOwnRecord } from './xdata';
@@ -101,7 +102,7 @@ export function isPartKind(e: Entity): boolean {
 
 function scaleOf(env: EditEnv, name: string): AnnoScale {
   const s = env.idx.name(name);
-  if (!s) throw new Error(`축척 ${name}을(를) 찾지 못했습니다.`);
+  if (!s) throw new Error(`축척 ${ft(name)}을(를) 찾지 못했습니다.`);
   return s;
 }
 

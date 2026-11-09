@@ -17,6 +17,7 @@ import { form, h } from './ui/dom';
 import { prefGet, resultDialog } from './mgr-ui';
 import { type SaveLoss, saveLosses, saveLossLines } from './saveloss';
 import { commandLineMode, inScript } from './script';
+import { ft } from './filetext';
 
 interface SaveTarget {
   format: SaveFormat;
@@ -81,7 +82,7 @@ async function write(app: App, ctx: CommandContext, st: DocState, t: SaveTarget,
   await app.edits.flush(st);
   // 다시 열 때 같은 화면·타일 뷰포트로 열리게 *Active 뷰를 지금 화면으로
   syncActiveVports(app, st);
-  ctx.print(`${name} 저장하는 중…`);
+  ctx.print(`${ft(name)} 저장하는 중…`);
   app.ui.setBusy('저장하는 중…', 0.5);
   let res;
   try {
@@ -120,7 +121,7 @@ async function write(app: App, ctx: CommandContext, st: DocState, t: SaveTarget,
   app.ui.refreshTabs();
   document.title = `${st.saveName} - OpenCAD DWG·DXF`;
   const label = t.ext === 'dwt' ? TEMPLATE_TYPE.label : (SAVE_TYPES.find((x) => x.format === t.format && x.version === t.version)?.label ?? t.version);
-  ctx.print(`${name}을(를) ${label}${t.binary ? ' 이진' : ''} 형식으로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB, ${Math.round(res.ms)}ms).`);
+  ctx.print(`${ft(name)}을(를) ${label}${t.binary ? ' 이진' : ''} 형식으로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB, ${Math.round(res.ms)}ms).`);
   for (const w of res.warnings.slice(0, 5)) ctx.print(`참고: ${w.message}${w.count ? ` (${w.count})` : ''}`);
   return true;
 }
@@ -277,7 +278,7 @@ export function registerSaveCommands(app: App): void {
         try {
           doc = (await readDrawingFile(app, f)).doc;
         } catch (e) {
-          ctx.print(`${f.name}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
+          ctx.print(`${ft(f.name)}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
           return;
         } finally {
           app.ui.setBusy(null);
@@ -289,7 +290,7 @@ export function registerSaveCommands(app: App): void {
         fresh.header.set('$TDINDWG', 0);
         const res = await app.engine.adopt(name, fresh);
         app.addDocument(res, name, 0);
-        ctx.print(`템플릿 ${f.name}(으)로 새 도면 ${name}을(를) 만들었습니다.`);
+        ctx.print(`템플릿 ${ft(f.name)}(으)로 새 도면 ${ft(name)}을(를) 만들었습니다.`);
         return;
       }
       const units = v.units === 'imperial' ? 'imperial' : 'metric';
@@ -301,7 +302,7 @@ export function registerSaveCommands(app: App): void {
       const doc = createNewDocument(units);
       const res = await app.engine.adopt(name, doc);
       app.addDocument(res, name, 0);
-      ctx.print(`새 도면 ${name}을(를) 만들었습니다(${units === 'metric' ? 'acadiso, mm' : 'acad, inch'}).`);
+      ctx.print(`새 도면 ${ft(name)}을(를) 만들었습니다(${units === 'metric' ? 'acadiso, mm' : 'acad, inch'}).`);
     },
   });
 }

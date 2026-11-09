@@ -13,6 +13,7 @@ import { transformEntity } from '../geom/transform';
 import { boundsOf } from '../geom/query';
 import { maxHandle } from './audit';
 import { groupDictionary } from './groups';
+import { ft } from '../../app/filetext';
 
 export type WblockSource =
   | { kind: 'block'; name: string }
@@ -44,7 +45,7 @@ export function buildWblockDocument(src: CadDocument, source: WblockSource, opt:
     if (source.kind === 'block') {
       const k = tableKey(source.name);
       const def = out.blocks.get(k);
-      if (!def || isLayoutBlock(k)) throw new Error(`블록 "${source.name}"이(가) 없습니다.`);
+      if (!def || isLayoutBlock(k)) throw new Error(`블록 "${ft(source.name)}"이(가) 없습니다.`);
       base = { ...def.basePoint };
       list = def.entities;
       out.blocks.delete(k);

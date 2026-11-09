@@ -26,6 +26,7 @@ import { askNumber, choose, previewOf } from './modify2-util';
 import { form } from './ui/dom';
 import { askAngle, askString, degText, numText } from './express-util';
 import type { Pt } from './view';
+import { ft } from './filetext';
 
 /** 고른 것 중 조건에 맞고 잠기지 않은 객체 */
 function pickTargets(app: App, hs: string[], ok: (e: Entity) => boolean): Entity[] {
@@ -150,7 +151,7 @@ async function runTcount(app: App, ctx: CommandContext): Promise<void> {
   const plan = planCount(list, app.active!.doc, { sort: countSort, start: si.start, inc: si.inc, decimals: si.decimals, place: countPlace, find: countFind });
   const n = commitReplace(app, ctx, plan.map((x) => x.after), 'TCOUNT');
   app.clearSelection();
-  if (!plan.length) ctx.print(countPlace === 'F' ? `"${countFind}"을(를) 담은 문자가 없습니다.` : '바뀐 문자가 없습니다.');
+  if (!plan.length) ctx.print(countPlace === 'F' ? `"${ft(countFind)}"을(를) 담은 문자가 없습니다.` : '바뀐 문자가 없습니다.');
   else ctx.print(`문자 ${n}개에 번호 ${plan[0]!.number}~${plan[plan.length - 1]!.number}을(를) 넣었습니다.`);
 }
 

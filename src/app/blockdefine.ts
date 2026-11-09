@@ -17,6 +17,7 @@ import { unlockedOnly } from './layers';
 import { listBlocks } from './dashcmds-insert';
 import { askOption, askWord, askYN } from './dashcmds-ask';
 import { ask, h } from './ui/dom';
+import { ft } from './filetext';
 import { checkIn, fail, group, numIn, numOf, resultDialog, row, selectIn, textIn, areaIn, btn } from './mgr-ui';
 
 export const BAD_BLOCK_NAME = /[<>/\\":;?*|,=`]/;
@@ -69,8 +70,8 @@ function referencesBlock(doc: CadDocument, e: Entity, key: string, seen: Set<str
 
 /** 재정의할 수 없는 블록(배치·외부 참조·외부 의존·익명)이면 이유 */
 function notRedefinable(def: BlockDef): string | null {
-  if (def.name.startsWith('*')) return `블록 "${def.name}"은(는) 재정의할 수 없습니다.`;
-  if (def.flags & (4 | 16) || def.xrefPath || def.name.includes('|')) return `외부 참조 "${def.name}"은(는) 재정의할 수 없습니다.`;
+  if (def.name.startsWith('*')) return `블록 "${ft(def.name)}"은(는) 재정의할 수 없습니다.`;
+  if (def.flags & (4 | 16) || def.xrefPath || def.name.includes('|')) return `외부 참조 "${ft(def.name)}"은(는) 재정의할 수 없습니다.`;
   return null;
 }
 
@@ -94,7 +95,7 @@ export function defineBlockOps(app: App, spec: DefineBlockSpec, make?: AttribMak
   }
   const space = st.space;
   const block = doc.blocks.get(space)!;
-  if (tableKey(block.name) === key) return { error: `블록 "${name}"을(를) 편집하는 중에는 재정의할 수 없습니다.` };
+  if (tableKey(block.name) === key) return { error: `블록 "${ft(name)}"을(를) 편집하는 중에는 재정의할 수 없습니다.` };
   const order = new Map(block.entities.map((e, i) => [e.handle, i]));
   const chosen = spec.handles.filter((x) => st.session.ownerOf(x) === space && order.has(x)).sort((a, b) => order.get(a)! - order.get(b)!);
   // 자기 참조(중첩 포함)
@@ -324,7 +325,7 @@ function blockDialog(app: App, s: BlockDialogState): Promise<{ action: DialogAct
 
 /** 재정의 확인(대화상자). 재정의하면 true */
 async function confirmRedefine(name: string): Promise<boolean> {
-  const a = await ask('블록 - 블록 재정의', `"${name}" 블록이 이미 정의되어 있습니다. 블록을 재정의하면 이 블록의 모든 참조가 새 정의로 바뀝니다. 무엇을 하시겠습니까?`, [
+  const a = await ask('블록 - 블록 재정의', `"${ft(name)}" 블록이 이미 정의되어 있습니다. 블록을 재정의하면 이 블록의 모든 참조가 새 정의로 바뀝니다. 무엇을 하시겠습니까?`, [
     { label: '블록 재정의', value: 'yes', primary: true },
     { label: '블록 재정의 안 함', value: 'no' },
   ]);
@@ -342,7 +343,7 @@ function commitDefinition(app: App, ctx: CommandContext, spec: DefineBlockSpec, 
   st.selection.clear();
   st.session.commit({ label, ops: r.ops, group: ctx.group });
   if (r.insertHandle) app.setSelection([r.insertHandle]);
-  ctx.print(r.redefined ? `블록 ${spec.name.trim()}이(가) 재정의되었습니다(객체 ${r.count}개).` : `블록 "${spec.name.trim()}"을(를) 만들었습니다(객체 ${r.count}개).`);
+  ctx.print(r.redefined ? `블록 ${ft(spec.name.trim())}이(가) 재정의되었습니다(객체 ${r.count}개).` : `블록 "${ft(spec.name.trim())}"을(를) 만들었습니다(객체 ${r.count}개).`);
   return spec.name.trim();
 }
 
@@ -469,7 +470,7 @@ export async function dashBlock(app: App, ctx: CommandContext): Promise<void> {
       ctx.print(why, 'err');
       return;
     }
-    if (!(await askYN(ctx, `블록 "${old.name}"이(가) 이미 있습니다. 재정의하시겠습니까?`, false))) return;
+    if (!(await askYN(ctx, `블록 "${ft(old.name)}"이(가) 이미 있습니다. 재정의하시겠습니까?`, false))) return;
     name = old.name;
   }
   let annotative = false;

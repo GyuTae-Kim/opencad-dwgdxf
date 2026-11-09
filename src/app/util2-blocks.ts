@@ -188,7 +188,7 @@ export function registerUtil2BlockCommands(app: App): void {
         }
         if (ops.length) {
           st.session.commit({ label: 'BATTMAN', ops, group: ctx.group });
-          const names = keys.map((k) => st.doc.blocks.get(k)?.name ?? k).join(', ');
+          const names = keys.map((k) => ft(st.doc.blocks.get(k)?.name ?? k)).join(', ');
           ctx.print(`블록 ${names}의 속성 정의를 고쳤습니다${sync ? `(참조 ${refs}개 동기화)` : ''}.`);
         }
         for (const k of keys) {
@@ -220,7 +220,7 @@ export function registerUtil2BlockCommands(app: App): void {
             { class: 'u2-col' },
             button('동기화(Y)', () => {
               const n = commit([cur], true);
-              ctx.print(`블록 ${st.doc.blocks.get(cur)?.name}의 참조 ${n}개를 동기화했습니다.`);
+              ctx.print(`블록 ${ft(st.doc.blocks.get(cur)?.name ?? cur)}의 참조 ${n}개를 동기화했습니다.`);
               render();
             }),
             button('위로 이동(U)', () => move(-1)),
@@ -282,7 +282,7 @@ export function registerUtil2BlockCommands(app: App): void {
         );
         if (r === '?') {
           const list = attributedBlocks(app).map((b) => b.name);
-          ctx.print(list.length ? `속성이 있는 블록: ${list.join(', ')}` : '속성이 있는 블록이 없습니다.', 'res');
+          ctx.print(list.length ? `속성이 있는 블록: ${list.map(ft).join(', ')}` : '속성이 있는 블록이 없습니다.', 'res');
           continue;
         }
         if (r === 'N' || (typeof r === 'object' && r)) {
@@ -311,14 +311,14 @@ export function registerUtil2BlockCommands(app: App): void {
       }
       const def = st.doc.blocks.get(tableKey(name))!;
       if (!def.entities.some((e) => e.type === 'ATTDEF')) {
-        ctx.print(`블록 ${name}에는 속성 정의가 없습니다.`, 'err');
+        ctx.print(`블록 ${ft(name)}에는 속성 정의가 없습니다.`, 'err');
         return;
       }
-      if (!(await askYesNo(ctx, `ATTSYNC 블록 ${name}?`, true))) return;
+      if (!(await askYesNo(ctx, `ATTSYNC 블록 ${ft(name)}?`, true))) return;
       const r = syncAllOps(st.doc, name, () => st.session.newHandle());
       if (r.ops.length) st.session.commit({ label: 'ATTSYNC', ops: r.ops, group: ctx.group });
       if (r.locked) ctx.print(`잠긴 도면층의 참조 ${r.locked}개는 건너뛰었습니다.`);
-      ctx.print(`ATTSYNC 완료: 블록 ${name}의 참조 ${r.count}개(바뀐 참조 ${r.ops.length}개).`);
+      ctx.print(`ATTSYNC 완료: 블록 ${ft(name)}의 참조 ${r.count}개(바뀐 참조 ${r.ops.length}개).`);
     },
   });
 
@@ -344,7 +344,7 @@ export function registerUtil2BlockCommands(app: App): void {
       const w = Math.max(16, ...rows.map((r) => textWidth(r.name) + 2));
       ctx.print(`블록${'.'.repeat(Math.max(2, w - 4))}${'개수'.padStart(4)} (${scope}, 중첩 포함)`, 'res');
       ctx.print('-'.repeat(w + 6), 'res');
-      for (const r of rows) ctx.print(`${padWide(r.name, w)}${String(r.count).padStart(6)}`, 'res');
+      for (const r of rows) ctx.print(`${padWide(ft(r.name), w)}${String(r.count).padStart(6)}`, 'res');
     },
   });
 
@@ -410,7 +410,7 @@ export function registerUtil2BlockCommands(app: App): void {
       const to = String(v.to);
       const r = replaceBlockOps(st.doc, from, to, () => st.session.newHandle());
       if (!r.count) {
-        ctx.print(r.skipped ? `블록 ${from}의 참조가 모두 ${to} 안에 있어 대치하면 자기 자신을 참조하게 됩니다.` : `블록 ${from}의 참조가 없습니다.`, 'err');
+        ctx.print(r.skipped ? `블록 ${ft(from)}의 참조가 모두 ${ft(to)} 안에 있어 대치하면 자기 자신을 참조하게 됩니다.` : `블록 ${ft(from)}의 참조가 없습니다.`, 'err');
         return;
       }
       st.session.commit({ label: 'BLOCKREPLACE', ops: r.ops, group: ctx.group });
@@ -422,7 +422,7 @@ export function registerUtil2BlockCommands(app: App): void {
           purged = true;
         }
       }
-      ctx.print(`블록 ${from}의 참조 ${r.count}개를 ${to}(으)로 대치했습니다.${r.skipped ? ` ${r.skipped}개는 자기 참조가 되어 건너뛰었습니다.` : ''}${purged ? ` 블록 ${from}을(를) 소거했습니다.` : ''}`);
+      ctx.print(`블록 ${ft(from)}의 참조 ${r.count}개를 ${ft(to)}(으)로 대치했습니다.${r.skipped ? ` ${r.skipped}개는 자기 참조가 되어 건너뛰었습니다.` : ''}${purged ? ` 블록 ${ft(from)}을(를) 소거했습니다.` : ''}`);
     },
   });
 
@@ -441,7 +441,7 @@ export function registerUtil2BlockCommands(app: App): void {
       let def: BlockDef | undefined;
       const defName = blocks.some((b) => b.name === lastMinsert) ? lastMinsert : '';
       while (!def) {
-        const r = await ctx.getPoint(`블록 이름 입력 또는 [?]${defName ? ` <${defName}>` : ''}:`, { allowText: true });
+        const r = await ctx.getPoint(`블록 이름 입력 또는 [?]${defName ? ` <${ft(defName)}>` : ''}:`, { allowText: true });
         if ('enter' in r) {
           if (!defName) continue;
           def = st.doc.blocks.get(tableKey(defName));
@@ -450,12 +450,12 @@ export function registerUtil2BlockCommands(app: App): void {
         if (!('text' in r)) continue;
         const t = r.text.trim();
         if (t === '?') {
-          ctx.print(`블록: ${blocks.map((b) => b.name).join(', ')}`, 'res');
+          ctx.print(`블록: ${blocks.map((b) => ft(b.name)).join(', ')}`, 'res');
           continue;
         }
         def = st.doc.blocks.get(tableKey(t));
         if (!def || def.name.startsWith('*')) {
-          ctx.print(`블록 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+          ctx.print(`블록 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
           def = undefined;
         }
       }
@@ -591,7 +591,7 @@ export function registerUtil2BlockCommands(app: App): void {
       };
       e.attribs = buildAttribs(bd, e, values, () => st.session.newHandle());
       addEntities(app, ctx, [e], 'MINSERT');
-      ctx.print(`블록 ${bd.name}을(를) ${rows}행 × ${cols}열로 넣었습니다.`);
+      ctx.print(`블록 ${ft(bd.name)}을(를) ${rows}행 × ${cols}열로 넣었습니다.`);
     },
   });
 
@@ -676,7 +676,7 @@ export function registerUtil2BlockCommands(app: App): void {
           const out = await app.engine.save(res.docId, type.format, type.version, false);
           download(new Blob([out.data as BlobPart], { type: type.format === 'dxf' ? 'application/dxf' : 'application/acad' }), fileName);
           saved = true;
-          ctx.print(`${fileName}을(를) 썼습니다(객체 ${built.entities}개, ${(out.data.byteLength / 1024).toFixed(0)} KB).${built.skipped ? ` 옮길 수 없는 객체 ${built.skipped}개는 뺐습니다.` : ''}`);
+          ctx.print(`${ft(fileName)}을(를) 썼습니다(객체 ${built.entities}개, ${(out.data.byteLength / 1024).toFixed(0)} KB).${built.skipped ? ` 옮길 수 없는 객체 ${built.skipped}개는 뺐습니다.` : ''}`);
           for (const w of out.warnings.slice(0, 3)) ctx.print(`참고: ${w.message}${w.count ? ` (${w.count})` : ''}`);
         } finally {
           app.engine.closeDoc(res.docId);
@@ -706,7 +706,7 @@ export function registerUtil2BlockCommands(app: App): void {
       // 블록으로 변환: 파일 이름의 블록 정의와 참조 하나
       const bname = baseName(fileName);
       if (BAD_BLOCK_NAME.test(bname) || bname.startsWith('*') || st.doc.blocks.has(tableKey(bname))) {
-        ctx.print(`블록 이름 "${bname}"을(를) 쓸 수 없거나 이미 있어 객체를 그대로 두었습니다.`, 'err');
+        ctx.print(`블록 이름 "${ft(bname)}"을(를) 쓸 수 없거나 이미 있어 객체를 그대로 두었습니다.`, 'err');
         return;
       }
       const recordHandle = st.session.newHandle();
@@ -751,7 +751,7 @@ export function registerUtil2BlockCommands(app: App): void {
         ops: [...removes.reverse(), { kind: 'blockRecord', key: tableKey(bname), before: null, after: record }, { kind: 'blockDef', key: tableKey(bname), before: null, after: def }, { kind: 'add', block: space, entity: insE }],
       });
       app.setSelection([insH]);
-      ctx.print(`객체 ${mine.length}개를 블록 ${bname}의 참조로 바꿨습니다.`);
+      ctx.print(`객체 ${mine.length}개를 블록 ${ft(bname)}의 참조로 바꿨습니다.`);
     },
   });
 }

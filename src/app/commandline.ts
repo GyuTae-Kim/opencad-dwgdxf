@@ -9,6 +9,20 @@ import { lispUnclosed } from '../edit/lisp/reader';
 import type { MeasureResult } from './measure-result';
 import { type AngleConvention, fromDrawingAngle } from './polar';
 import { unmark } from './filetext';
+/**
+ * 차례로 이어 붙일 글 조각들: 도면 글 표시(ft — filetext.ts)가 조각 경계에서 나뉘면 그 조각 안에서 닫고 다음 조각에서 다시 연다
+ * (프롬프트를 키워드 단추로 나눌 때 — 번역층은 글 마디마다 지킨다)
+ */
+export function balanceMarks(parts: readonly string[]): string[] {
+  let open = false;
+  return parts.map((p) => {
+    const start = open;
+    for (const ch of p) if (ch === '⁨') open = true;
+    else if (ch === '⁩') open = false;
+    return (start ? '⁨' : '') + p + (open ? '⁩' : '');
+  });
+}
+
 export interface Suggestion {
   name: string;
   title: string;
@@ -187,21 +201,23 @@ export class CommandLine {
       this.promptEl.textContent = text;
       return;
     }
-    this.promptEl.append(document.createTextNode(m[1] + '['));
     const parts = m[2]!.split('/');
+    // 글 마디(앞 글·키워드·/·뒤 글)마다 도면 글 표시(ft)를 닫고 다시 연다 — 번역층은 마디 단위로 지킨다
+    const shown = balanceMarks([m[1] + '[', ...parts.flatMap((p, i) => (i < parts.length - 1 ? [p, '/'] : [p])), ']' + m[3]]);
+    this.promptEl.append(document.createTextNode(shown[0]!));
     parts.forEach((p, i) => {
       const span = document.createElement('span');
       span.className = 'kw';
-      span.textContent = p;
-      const key = /\(([^)]+)\)/.exec(p)?.[1] ?? p;
+      span.textContent = shown[1 + i * 2]!;
+      const key = /\(([^)]+)\)/.exec(unmark(p))?.[1] ?? unmark(p);
       span.addEventListener('mousedown', (ev) => {
         ev.preventDefault();
         this.host.keyword(key);
       });
       this.promptEl.append(span);
-      if (i < parts.length - 1) this.promptEl.append(document.createTextNode('/'));
+      if (i < parts.length - 1) this.promptEl.append(document.createTextNode(shown[2 + i * 2]!));
     });
-    this.promptEl.append(document.createTextNode(']' + m[3]));
+    this.promptEl.append(document.createTextNode(shown[shown.length - 1]!));
   }
 
   focus(): void {

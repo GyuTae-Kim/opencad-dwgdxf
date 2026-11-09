@@ -47,6 +47,7 @@ import type { OverlayGeom, Pt } from './view';
 import type { ViewportXf } from './scene';
 import { circleToPaper, geometryToPaper, modelToPaperVp, paperProjection, paperToModelVp } from './vpsnap';
 import { currentUcs, ucsOrigin } from './ucs';
+import { ft } from './filetext';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
@@ -221,7 +222,7 @@ export function registerDimSmartCommand(app: App): void {
       // ---------------------------------------------------------- 문자 옵션
       const textOption = async (key: string, o: TextOpts): Promise<boolean> => {
         if (key === 'T') {
-          const t = await askText(ctx, `치수 문자를 입력 <${o.text ? o.text : '<>'}>:`, o.text ?? '');
+          const t = await askText(ctx, `치수 문자를 입력 <${o.text ? ft(o.text) : '<>'}>:`, o.text ?? '');
           o.text = t === '<>' ? '' : t;
           return true;
         }
@@ -760,7 +761,7 @@ export function registerDimSmartCommand(app: App): void {
       // ---------------------------------------------------------- 도면층(L)
       const layerOption = async (): Promise<void> => {
         const cur = dimLayerSetting();
-        const r = await ctx.getPoint(`도면층 이름 입력 또는 도면층 이름을 지정할 객체 선택 또는 [현재 사용(.)] <"${cur === '.' ? '현재 사용' : cur}">:`, {
+        const r = await ctx.getPoint(`도면층 이름 입력 또는 도면층 이름을 지정할 객체 선택 또는 [현재 사용(.)] <"${cur === '.' ? '현재 사용' : ft(cur)}">:`, {
           keywords: [{ key: '.', label: '현재 사용' }],
           allowText: true,
         });
@@ -778,9 +779,9 @@ export function registerDimSmartCommand(app: App): void {
           next = doc.layers.get(tableKey(e.layer))?.name ?? e.layer;
         }
         if (!next) return;
-        if (next !== '.' && !doc.layers.has(tableKey(next))) ctx.print(`도면층 "${next}"이(가) 없어 새 치수는 현재 도면층에 만듭니다.`);
+        if (next !== '.' && !doc.layers.has(tableKey(next))) ctx.print(`도면층 "${ft(next)}"이(가) 없어 새 치수는 현재 도면층에 만듭니다.`);
         savePref(DIMLAYER_PREF, next);
-        ctx.print(`새 치수의 도면층 = ${next === '.' ? '현재 사용' : `"${next}"`}`);
+        ctx.print(`새 치수의 도면층 = ${next === '.' ? '현재 사용' : `"${ft(next)}"`}`);
       };
 
       // ---------------------------------------------------------- 첫 프롬프트

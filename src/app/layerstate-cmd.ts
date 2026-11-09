@@ -53,6 +53,7 @@ import {
   visibleStates,
 } from './layerstate-core';
 import { askYesNo, padWide } from './util2-ui';
+import { ft, unmark } from './filetext';
 
 export const STATE_OPTIONS: Keyword[] = [
   { key: '?', label: '?' },
@@ -115,9 +116,9 @@ function listStates(app: App, ctx: CommandContext, pattern = '*'): void {
     ctx.print('저장된 도면층 상태가 없습니다.');
     return;
   }
-  const rows = all.filter((s) => names.includes(s.key)).map((s) => [`"${s.key}"`, s.state.paperSpace ? '배치' : '모형', s.state.description]);
+  const rows = all.filter((s) => names.includes(s.key)).map((s) => [`"${ft(s.key)}"`, s.state.paperSpace ? '배치' : '모형', s.state.description ? ft(s.state.description) : '']);
   const head = ['도면층 상태 이름', '공간', '설명'];
-  const widths = head.map((h, i) => Math.min(40, Math.max(h.length * 2, ...rows.map((r) => r[i]!.length + 2))));
+  const widths = head.map((h, i) => Math.min(40, Math.max(h.length * 2, ...rows.map((r) => unmark(r[i]!).length + 2))));
   ctx.print(head.map((h, i) => padWide(h, widths[i]!)).join(' '));
   for (const r of rows) ctx.print(r.map((v, i) => padWide(v, widths[i]!)).join(' '));
 }
@@ -133,7 +134,7 @@ async function askStateName(app: App, ctx: CommandContext, what: string): Promis
     }
     const s = stateByName(app, t);
     if (!s) {
-      ctx.print(`도면층 상태 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+      ctx.print(`도면층 상태 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
       return null;
     }
     return s.key;
@@ -204,7 +205,7 @@ async function editState(app: App, ctx: CommandContext, name: string): Promise<v
       s.layers.filter((l) => l.name).map((l) => l.name),
       t,
     );
-    if (m.unmatched.length) ctx.print(`상태에서 일치하는 도면층 이름을 찾지 못함: ${m.unmatched.join(', ')}`);
+    if (m.unmatched.length) ctx.print(`상태에서 일치하는 도면층 이름을 찾지 못함: ${m.unmatched.map(ft).join(', ')}`);
     const keys = new Set(m.names.map(tableKey));
     return s.layers.filter((l) => keys.has(tableKey(l.name)));
   };
@@ -272,7 +273,7 @@ async function editState(app: App, ctx: CommandContext, name: string): Promise<v
         const n = t === null ? 'Continuous' : unquote(t);
         const lt = st.doc.linetypes.get(tableKey(n));
         if (!lt && tableKey(n) !== 'CONTINUOUS') {
-          ctx.print(`선종류 ${n}을(를) 찾을 수 없습니다. LINETYPE 명령으로 로드하십시오.`, 'err');
+          ctx.print(`선종류 ${ft(n)}을(를) 찾을 수 없습니다. LINETYPE 명령으로 로드하십시오.`, 'err');
           break;
         }
         const name2 = lt?.name ?? 'Continuous';
@@ -313,7 +314,7 @@ async function editState(app: App, ctx: CommandContext, name: string): Promise<v
           [...st.doc.layers.values()].map((l) => l.name),
           t,
         );
-        if (m.unmatched.length) ctx.print(`일치하는 도면층 이름을 찾지 못함: ${m.unmatched.join(', ')}`);
+        if (m.unmatched.length) ctx.print(`일치하는 도면층 이름을 찾지 못함: ${m.unmatched.map(ft).join(', ')}`);
         let n = 0;
         for (const nm of m.names) {
           if (have.has(tableKey(nm))) continue;
@@ -364,7 +365,7 @@ export async function runLayerStateOptions(app: App, ctx: CommandContext): Promi
           break;
         }
         const old = stateByName(app, name);
-        if (old && !(await askYesNo(ctx, `도면층 상태 "${old.key}"이(가) 이미 있습니다. 덮어쓰시겠습니까?`, false))) break;
+        if (old && !(await askYesNo(ctx, `도면층 상태 "${ft(old.key)}"이(가) 이미 있습니다. 덮어쓰시겠습니까?`, false))) break;
         const mask = await chooseMask(ctx, old ? old.state.mask & LSM_ALL : LSM_ALL);
         if (mask === null) break;
         putLayerState(app, captureNow(st, name, old?.state.description ?? '', mask), ctx.group, '-LAYERSTATE');
@@ -400,17 +401,17 @@ export async function runLayerStateOptions(app: App, ctx: CommandContext): Promi
         const src = await pickImportSource(app, ctx.print);
         if (!src) break;
         if (!src.states.length) {
-          ctx.print(`${src.file}에 가져올 도면층 상태가 없습니다.`);
+          ctx.print(`${ft(src.file)}에 가져올 도면층 상태가 없습니다.`);
           break;
         }
         // 같은 이름은 하나씩 묻는다
         const yes = new Set<string>();
         for (const s of src.states) {
           const old = stateByName(app, s.name);
-          if (old && (await askYesNo(ctx, `도면층 상태 "${old.key}"이(가) 이미 있습니다. 덮어쓰시겠습니까?`, false))) yes.add(s.name.toUpperCase());
+          if (old && (await askYesNo(ctx, `도면층 상태 "${ft(old.key)}"이(가) 이미 있습니다. 덮어쓰시겠습니까?`, false))) yes.add(s.name.toUpperCase());
         }
         const got = importLayerStates(app, ctx.print, src, src.states, (n) => yes.has(n.toUpperCase()), ctx.group);
-        ctx.print(got.length ? `도면층 상태 ${got.length}개를 가져왔습니다: ${got.join(', ')}` : '가져온 도면층 상태가 없습니다.');
+        ctx.print(got.length ? `도면층 상태 ${got.length}개를 가져왔습니다: ${got.map(ft).join(', ')}` : '가져온 도면층 상태가 없습니다.');
         break;
       }
       case 'EX': {

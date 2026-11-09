@@ -11,6 +11,7 @@
 import { type ScriptToken, ScriptReader, parseCommandWord, parseScriptPoint, scriptCommandName, stripKeywordPrefix } from './reader';
 import { lispExtent } from '../lisp/reader';
 import { SELF_CROSS, polygonWouldCross } from '../geom/selpoly';
+import { ft } from '../../app/filetext';
 
 export type HostState = 'command' | 'input' | 'busy';
 type Pt = { x: number; y: number };
@@ -122,7 +123,7 @@ export class ScriptRunner {
   interrupt(): void {
     if (this.status !== 'running') return;
     this.status = 'paused';
-    this.say(`스크립트 "${this.name}"을(를) ${this.current?.line ?? 1}번째 줄에서 멈췄습니다. 이어서 하려면 RESUME을 입력하십시오.`);
+    this.say(`스크립트 "${ft(this.name)}"을(를) ${this.current?.line ?? 1}번째 줄에서 멈췄습니다. 이어서 하려면 RESUME을 입력하십시오.`);
     this.onStop?.('paused', 'interrupt');
   }
 
@@ -147,7 +148,7 @@ export class ScriptRunner {
   private fail(message: string): void {
     const t = this.current;
     this.status = 'paused';
-    this.say(`스크립트 "${this.name}" ${t?.line ?? 0}번째 줄${t ? ` "${t.text}"` : ''}에서 멈췄습니다: ${message}`, 'err');
+    this.say(`스크립트 "${ft(this.name)}" ${t?.line ?? 0}번째 줄${t ? ` "${ft(t.text)}"` : ''}에서 멈췄습니다: ${message}`, 'err');
     this.say('고친 뒤 이어서 하려면 RESUME, 처음부터는 RSCRIPT를 입력하십시오.');
     this.onStop?.('paused', 'error');
   }
@@ -206,7 +207,7 @@ export class ScriptRunner {
     // 마지막 입력의 오류는 반복 첫머리(settle 뒤)에서 이미 보았다
     if (finished && this.status === 'running') {
       this.status = 'idle';
-      this.say(`스크립트 "${this.name}"을(를) 끝까지 실행했습니다.`, 'res');
+      this.say(`스크립트 "${ft(this.name)}"을(를) 끝까지 실행했습니다.`, 'res');
       if (this.host.state() === 'input') this.say('참고: 명령이 아직 입력을 기다립니다. 스크립트 마지막 줄 끝의 Enter(빈 줄)가 빠졌을 수 있습니다.');
       this.onStop?.('idle', 'end');
     }
@@ -248,7 +249,7 @@ export class ScriptRunner {
     }
     const w = parseCommandWord(raw);
     if (!w) {
-      this.fail(`알 수 없는 명령 "${raw}".`);
+      this.fail(`알 수 없는 명령 "${ft(raw)}".`);
       return;
     }
     const canonical = h.findCommand(w.name);
@@ -259,7 +260,7 @@ export class ScriptRunner {
         h.runCommand('SETVAR', w.name);
         return;
       }
-      this.fail(`알 수 없는 명령 "${w.name}".`);
+      this.fail(`알 수 없는 명령 "${ft(w.name)}".`);
       return;
     }
     const name = scriptCommandName(w.name, canonical, (n) => h.hasCommand(n));

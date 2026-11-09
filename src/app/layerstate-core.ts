@@ -16,6 +16,7 @@ import { readDrawingFile } from './drawingfiles';
 import { pickFiles } from './drawingfiles';
 import { download } from './export';
 import { loadPref, savePref } from './util2-ui';
+import { ft } from './filetext';
 
 export type Print = (text: string, cls?: 'err' | 'res') => void;
 
@@ -125,8 +126,8 @@ export function renameLayerState(app: App, oldName: string, newName: string, gro
   if (bad) return bad;
   const dup = findLayerState(st.doc, n);
   const cur = findLayerState(st.doc, oldName);
-  if (!cur) return `도면층 상태 "${oldName}"을(를) 찾을 수 없습니다.`;
-  if (dup && dup.handle !== cur.handle) return `도면층 상태 "${n}"이(가) 이미 있습니다.`;
+  if (!cur) return `도면층 상태 "${ft(oldName)}"을(를) 찾을 수 없습니다.`;
+  if (dup && dup.handle !== cur.handle) return `도면층 상태 "${ft(n)}"이(가) 이미 있습니다.`;
   const w = new LayerStateWriter(st.doc, () => st.session.newHandle());
   w.rename(cur.key, n);
   commit(app, 'LAYERSTATE', w.finish(), group);
@@ -162,9 +163,9 @@ export function restoreLayerState(app: App, print: Print, state: LayerState, o: 
   if (plan.viewportFrozen && cv) ops.push({ kind: 'modify', block: cv.block, before: cv.vp, after: { ...cv.vp, frozenLayers: plan.viewportFrozen } });
   commit(app, 'LAYERSTATE', ops, o.group);
   if (plan.skippedOverrides) print('뷰포트 재지정은 이 웹 버전에서 지원하지 않아 색상·선종류·선가중치·투명도·플롯 스타일은 복원하지 않았습니다.');
-  if (plan.missingLinetypes.length) print(`모든 선종류를 복원할 수 없습니다. 이 도면에 없는 선종류: ${plan.missingLinetypes.join(', ')}`);
-  if (plan.missingPlotStyles.length) print(`플롯 스타일을 찾을 수 없어 복원하지 않았습니다: ${plan.missingPlotStyles.join(', ')}`);
-  if (plan.keptCurrent) print(`현재 도면층 "${plan.keptCurrent}"은(는) 동결할 수 없어 동결하지 않았습니다.`);
+  if (plan.missingLinetypes.length) print(`모든 선종류를 복원할 수 없습니다. 이 도면에 없는 선종류: ${plan.missingLinetypes.map(ft).join(', ')}`);
+  if (plan.missingPlotStyles.length) print(`플롯 스타일을 찾을 수 없어 복원하지 않았습니다: ${plan.missingPlotStyles.map(ft).join(', ')}`);
+  if (plan.keptCurrent) print(`현재 도면층 "${ft(plan.keptCurrent)}"은(는) 동결할 수 없어 동결하지 않았습니다.`);
   if (state.paperSpace && !cv && state.mask & 512 && state.layers.some((l) => l.flags & 32)) print('배치에서 저장한 상태의 현재 VP 가시성은 배치 탭에서 복원할 때만 적용됩니다.');
   return true;
 }
@@ -207,7 +208,7 @@ export async function pickImportSource(app: App, print: Print): Promise<ImportSo
     const d = await readDrawingFile(app, f);
     return { file: f.name, states: listLayerStates(d.doc).map((s) => s.state), source: d.doc };
   } catch (e) {
-    print(e instanceof LasFormatError ? e.message : `${f.name}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
+    print(e instanceof LasFormatError ? e.message : `${ft(f.name)}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
     return null;
   } finally {
     app.ui.setBusy(null);
@@ -219,10 +220,10 @@ export function importLayerStates(app: App, print: Print, src: ImportSource, sta
   const st = app.active!;
   const r = importLayerStatesOps(st.doc, () => st.session.newHandle(), states, { overwrite, source: src.source });
   commit(app, 'LAYERSTATE', r.ops, group);
-  if (r.invalid.length) print(`이름이 올바르지 않은 도면층 상태는 가져오지 않았습니다: ${r.invalid.join(', ')}`, 'err');
-  if (r.createdLayers.length) print(`도면층 ${r.createdLayers.length}개를 만들었습니다: ${r.createdLayers.slice(0, 20).join(', ')}${r.createdLayers.length > 20 ? ' …' : ''}`);
-  if (r.loadedLinetypes.length) print(`선종류를 로드했습니다: ${r.loadedLinetypes.join(', ')}`);
-  if (r.missingLinetypes.length) print(`선종류를 찾을 수 없어 Continuous로 두었습니다: ${r.missingLinetypes.join(', ')}`);
+  if (r.invalid.length) print(`이름이 올바르지 않은 도면층 상태는 가져오지 않았습니다: ${r.invalid.map(ft).join(', ')}`, 'err');
+  if (r.createdLayers.length) print(`도면층 ${r.createdLayers.length}개를 만들었습니다: ${r.createdLayers.slice(0, 20).map(ft).join(', ')}${r.createdLayers.length > 20 ? ' …' : ''}`);
+  if (r.loadedLinetypes.length) print(`선종류를 로드했습니다: ${r.loadedLinetypes.map(ft).join(', ')}`);
+  if (r.missingLinetypes.length) print(`선종류를 찾을 수 없어 Continuous로 두었습니다: ${r.missingLinetypes.map(ft).join(', ')}`);
   if (r.droppedLayers) print(`이름이 올바르지 않거나 외부 참조인 도면층 ${r.droppedLayers}개는 상태에서 뺐습니다.`);
   return r.imported;
 }

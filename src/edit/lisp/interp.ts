@@ -7,6 +7,8 @@
  */
 import { badType, prin1, princ } from './printer';
 import { EOF, LispReader } from './reader';
+// AutoLISP이 찍는 글(princ·print·prompt)은 프로그램이 정한 글이라 화면 번역층이 옮기지 않게 감싼다(105차)
+import { ft, unmark } from '../../app/filetext';
 import {
   Builtin,
   Call,
@@ -151,7 +153,7 @@ export class Interp {
     let i: number;
     while ((i = s.indexOf('\n')) >= 0) {
       const line = s.slice(0, i).replace(/\r/g, '');
-      if (line) this.opts.print(line);
+      if (line) this.opts.print(ft(line));
       s = s.slice(i + 1);
     }
     this.lineBuf = s;
@@ -159,7 +161,7 @@ export class Interp {
 
   /** 줄 끝이 아직 안 온 출력을 내보낸다 */
   flush(): void {
-    if (this.lineBuf) this.opts.print(this.lineBuf.replace(/\r/g, ''));
+    if (this.lineBuf) this.opts.print(ft(this.lineBuf.replace(/\r/g, '')));
     this.lineBuf = '';
   }
 
@@ -442,7 +444,8 @@ export class Interp {
           if (i >= base) {
             this.unwind(i + 1);
             st.pop();
-            v = new CatchAllError(err.message);
+            // LISP 값이 되는 오류 글에는 화면용 도면 글 표시(ft)를 남기지 않는다
+            v = new CatchAllError(unmark(err.message));
             mode = RET;
             continue;
           }
@@ -504,7 +507,7 @@ export class Interp {
     const wasCancelled = this.cancelled;
     this.cancelled = false;
     try {
-      await this.exec(null, h, [error.message]);
+      await this.exec(null, h, [unmark(error.message)]);
     } catch (e) {
       this.flush();
       this.opts.print(`; 오류: *error* 함수 안에서 오류가 발생했습니다: ${toLispError(e).message}`, 'err');

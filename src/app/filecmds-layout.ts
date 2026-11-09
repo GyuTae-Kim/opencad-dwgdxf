@@ -493,7 +493,7 @@ async function optionsStep(app: App, ctx: CommandContext, st: DocState): Promise
     });
     if (!('keyword' in r)) return;
     if (r.keyword === 'L') {
-      const t = await ctx.getPoint(`제목 블록을 넣을 도면층 이름 입력 또는 [.(현재 도면층)] <${mv.layer || '.'}>:`, { allowText: true });
+      const t = await ctx.getPoint(`제목 블록을 넣을 도면층 이름 입력 또는 [.(현재 도면층)] <${mv.layer ? ft(mv.layer) : '.'}>:`, { allowText: true });
       if (!('text' in t)) continue;
       const n = t.text.trim();
       if (n === '.' || !n) mv.layer = '';
@@ -564,7 +564,7 @@ async function titleStep(app: App, ctx: CommandContext, st: DocState, key: strin
   if (mv.limits) ops.push({ kind: 'layout', key, before: lay, after: { ...lay, limitsMin: { x: at.x, y: at.y }, limitsMax: { x: at.x + sheet.w * k, y: at.y + sheet.h * k } } });
   commit(ops);
   titleAreas.set(key, offsetRect(sheet.area, at, k));
-  ctx.print(`ISO ${sheet.key} 도면 틀과 제목 블록을 넣었습니다(블록 ${insert.block}, 제목 칸은 속성 — ATTEDIT·더블클릭으로 고칩니다).`);
+  ctx.print(`ISO ${sheet.key} 도면 틀과 제목 블록을 넣었습니다(블록 ${ft(insert.block)}, 제목 칸은 속성 — ATTEDIT·더블클릭으로 고칩니다).`);
 }
 
 // ---------------------------------------------------------------------------
@@ -849,7 +849,7 @@ async function layoutWizard(app: App, ctx: CommandContext): Promise<void> {
     titleAreas.set(key, area);
   }
   st.session.commit({ label: 'LAYOUTWIZARD', ops, group: ctx.group });
-  ctx.print(`배치 "${s.name}"을(를) 만들었습니다(${paperOf(s.paper)?.label ?? s.paper}, ${s.landscape ? '가로' : '세로'}${sheet ? `, ISO ${sheet.key} 제목 블록` : ''}).`);
+  ctx.print(`배치 "${ft(s.name)}"을(를) 만들었습니다(${paperOf(s.paper)?.label ?? s.paper}, ${s.landscape ? '가로' : '세로'}${sheet ? `, ISO ${sheet.key} 제목 블록` : ''}).`);
   if (s.pick && s.vpMode !== 'none') pendingPick = { st, key, s };
   // 공간을 바꾸면 이 명령은 끝난다. 위치 선택이면 새 배치에서 다시 시작해 두 점을 받는다
   await app.setSpace(layout.blockName);

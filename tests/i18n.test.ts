@@ -87,6 +87,8 @@ describe('language URLs and UI presentation', () => {
         if (!key.startsWith('<p>')) expect(value, `${code}: ${key}`).not.toMatch(/\bI (read|did|didn't|can't|work|selected)\b|\bIch (habe|brauche|arbeite|kann|konnte)\b|District|Bezirk|VONAYER|ETERANSMIT/);
         if (code === 'zh-CN' && !key.startsWith('<p>') && !key.includes('나요?')) expect(value, `${code}: ${key}`).not.toMatch(/我(?!们)/);
         expect(value, `${code}: ${key}`).not.toMatch(/\b(The value|The|Der Wert|Der|Die|Das)$/);
+        // 셈 단위 "개"를 동물 "개"로 옮긴 것(105차: "객체 16개" → "object 16 dog"·"Hund"·"狗")
+        expect(value, `${code}: ${key}`).not.toMatch(/\bdogs?\b|\bHund(e)?\b|狗|犬/);
         // 머리가 앞 줄로 밀려 문장 부호나 {0}만 남은 번역(".", "?", "{0}", "ein.")
         if (/[가-힣]{2}/.test(key.replace(/\{\d+\}/g, ''))) {
           expect(value.replace(/\{\d+\}|[\s.,:;!?·…()（）。，：？]/g, ''), `${code}: ${key}`).not.toBe('');

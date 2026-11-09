@@ -17,6 +17,7 @@ import { inScript } from './script';
 import { ctbByName, pickCtbFiles } from './ctblib';
 import { PAPERS, paperOf } from './papers';
 import { plotStampOn, setPlotStampOn, stampPages } from './filecmds-stamp';
+import { ft } from './filetext';
 
 /** 용지(mm, 세로 방향 폭 × 높이) — ISO A·B, JIS B, ANSI, ARCH와 사용자 크기(src/app/papers.ts) */
 export { PAPERS } from './papers';
@@ -505,7 +506,7 @@ async function runPlot(app: App, ctx: CommandContext): Promise<void> {
         const np = pageSettingsOf(layout.plot, form, model);
         np.pageSetupName = setupName;
         st.session.commit({ label: 'PLOT', ops: layoutPlotOps(layout, np), group: ctx.group });
-        ctx.print(`지금 설정을 ${model ? '모형' : `배치 "${layout.name}"`}의 페이지 설정으로 저장했습니다.`);
+        ctx.print(`지금 설정을 ${model ? '모형' : `배치 "${ft(layout.name)}"`}의 페이지 설정으로 저장했습니다.`);
       }
       continue;
     }
@@ -603,7 +604,7 @@ function plotDialog(app: App, ctx: CommandContext, v: PlotDialogState): Promise<
       ctx.print('플롯 스타일 표 파일을 읽지 못했습니다.', 'err');
       return;
     }
-    ctx.print(`플롯 스타일 표 ${loaded.map((t) => t.name).join(', ')}을(를) 불러왔습니다.`);
+    ctx.print(`플롯 스타일 표 ${loaded.map((t) => ft(t.name)).join(', ')}을(를) 불러왔습니다.`);
     fields.set({ ...fields.read(), styleSheet: loaded[0]!.name });
   };
   const body = h(

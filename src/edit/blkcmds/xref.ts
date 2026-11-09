@@ -14,6 +14,7 @@ import type { EditOp } from '../session';
 import { cloneEntity, isLayoutBlock } from '../session';
 import { bindMapper, createImporter, isFixedName, type NameKind } from '../refedit/names';
 import { blockNamedElsewhere, insertsOf } from '../util/blockutil';
+import { ft } from '../../app/filetext';
 
 export type SymKind = NameKind;
 export const SYM_KINDS: SymKind[] = ['block', 'dimStyle', 'layer', 'linetype', 'textStyle'];
@@ -62,7 +63,7 @@ export function xrefDefinitionOps(host: CadDocument, o: XrefDefOptions, newHandl
   const key = tableKey(o.name);
   const old = host.blocks.get(key);
   if (old) {
-    if (!(old.flags & 4)) throw new Error(`"${old.name}"은(는) 이미 이 도면의 블록 이름입니다.`);
+    if (!(old.flags & 4)) throw new Error(`"${ft(old.name)}"은(는) 이미 이 도면의 블록 이름입니다.`);
     return { ops: [], created: false };
   }
   const x = o.xdoc;
@@ -336,8 +337,8 @@ export interface BlockToXrefResult {
 export function blockToXrefOps(doc: CadDocument, block: string, def: XrefDefOptions, purge: boolean, newHandle: () => string): BlockToXrefResult {
   const bk = tableKey(block);
   const old = doc.blocks.get(bk);
-  if (!old) throw new Error(`블록 "${block}"이(가) 없습니다.`);
-  if (old.flags & 4) throw new Error(`"${old.name}"은(는) 이미 외부 참조입니다.`);
+  if (!old) throw new Error(`블록 "${ft(block)}"이(가) 없습니다.`);
+  if (old.flags & 4) throw new Error(`"${ft(old.name)}"은(는) 이미 외부 참조입니다.`);
   const xk = tableKey(def.name);
   const ops: EditOp[] = [];
   let purged = false;

@@ -19,6 +19,7 @@ import { badType, badValue, prin1 } from './printer';
 import { EOF, LispReader } from './reader';
 import { angtof, distof } from './text';
 import { Cons, Ename, Ev, type Gen, LispError, LispFile, MSG, PickSet, Real, fromArray, isNum, numOf, toArray, type Value } from './types';
+import { ft } from '../../app/filetext';
 
 interface Kw {
   /** 고를 때 돌려줄 이름(국제 이름이 있으면 그것) */
@@ -146,10 +147,11 @@ export function installHost(it: Interp, host: LispHost): void {
   const promptOf = (msg: Value | undefined, def0: string): string => {
     const pending = it.takeLine();
     if (msg !== undefined && msg !== null) {
-      if (pending.trim()) it.opts.print(pending.replace(/^[\r\n]+/, ''));
-      return str(msg).replace(/^[\r\n]+/, '').replace(/\n/g, ' ').trimEnd();
+      if (pending.trim()) it.opts.print(ft(pending.replace(/^[\r\n]+/, '')));
+      return ft(str(msg).replace(/^[\r\n]+/, '').replace(/\n/g, ' ').trimEnd());
     }
-    return pending.replace(/^[\r\n]+/, '').trimEnd() || def0;
+    const shown = pending.replace(/^[\r\n]+/, '').trimEnd();
+    return shown ? ft(shown) : def0;
   };
 
   const ucsPt = (p: Pt2, z = 0) => ptList(p.x, p.y, z);

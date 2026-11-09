@@ -19,6 +19,7 @@ import type { EditOp } from '../session';
 import type { Importer } from './names';
 import { canCrossDocs } from './names';
 import { type RefXf, invertXf, xformEntity } from './xform';
+import { ft } from '../../app/filetext';
 
 /** 편집할 정의 */
 export interface RefTarget {
@@ -267,7 +268,7 @@ export function planSave(inp: SaveInput): SavePlan {
       }
       // 블록 자신을 참조하면 저장할 수 없다
       if ((c.type === 'INSERT' || c.type === 'DIMENSION' || c.type === 'ACAD_TABLE') && c.block && blockReaches(tdoc, tableKey(c.block), target.key))
-        return { ...empty, error: `블록 "${def.name}"이(가) 자신을 참조합니다.` };
+        return { ...empty, error: `블록 "${ft(def.name)}"이(가) 자신을 참조합니다.` };
     }
     delete c.paperSpace;
     delete c.dwgRaw;

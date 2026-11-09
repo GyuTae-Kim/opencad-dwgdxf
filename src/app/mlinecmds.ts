@@ -469,7 +469,7 @@ export function registerMLineCommands(app: App): void {
       let just = Math.min(2, Math.max(0, Math.round(headerNum(doc, '$CMLJUST', 0))));
       let scale = headerNum(doc, '$CMLSCALE', metric ? 20 : 1);
       let style = currentMLineStyle(doc);
-      const status = () => ctx.print(`현재 설정: 자리맞추기 = ${JUST_LABEL[just]}, 축척 = ${fmtNum(scale)}, 스타일 = ${(style?.name ?? 'STANDARD').toUpperCase()}`);
+      const status = () => ctx.print(`현재 설정: 자리맞추기 = ${JUST_LABEL[just]}, 축척 = ${fmtNum(scale)}, 스타일 = ${ft((style?.name ?? 'STANDARD').toUpperCase())}`);
       status();
       const pts: Pt[] = [];
       let handle: string | null = null;
@@ -516,12 +516,12 @@ export function registerMLineCommands(app: App): void {
             const name = v.text.trim();
             if (name === '?') {
               ctx.print('로드된 여러 줄 스타일:');
-              for (const s of listMLineStyles(doc)) ctx.print(`  ${s.name.padEnd(20)} ${s.style.description}`);
+              for (const s of listMLineStyles(doc)) ctx.print(`  ${ft(s.name.padEnd(20))} ${ft(s.style.description)}`);
               continue;
             }
             const f = findMLineStyle(doc, name);
             if (!f) {
-              ctx.print(`여러 줄 스타일 ${name}을(를) 찾을 수 없습니다.`, 'err');
+              ctx.print(`여러 줄 스타일 ${ft(name)}을(를) 찾을 수 없습니다.`, 'err');
               continue;
             }
             style = f;

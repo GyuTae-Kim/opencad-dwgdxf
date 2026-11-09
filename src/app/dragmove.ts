@@ -13,6 +13,7 @@ import type { App, CommandContext } from './app';
 import { unlockedOnly } from './layers';
 import type { MenuItem } from './ui/dom';
 import type { OverlayGeom, Pt } from './view';
+import { ft } from './filetext';
 
 export type PressKind = 'grip' | 'move' | 'window';
 
@@ -116,6 +117,6 @@ export async function pasteDragAsBlock(app: App, handles: readonly string[], bas
   const { pasteAsBlock } = await import('./modify');
   if (app.active !== st) return null;
   const name = pasteAsBlock(app, st, list, base, at, { group: app.nextGroup() });
-  app.cmd.print(`블록 "${name}"(객체 ${list.length}개)으로 붙여 넣었습니다.`);
+  app.cmd.print(`블록 "${ft(name)}"(객체 ${list.length}개)으로 붙여 넣었습니다.`);
   return name;
 }
