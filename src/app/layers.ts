@@ -8,6 +8,7 @@ import type { EditOp } from '../edit/session';
 import { dropLayerFromFiltersOps } from '../edit/layerfilter/store';
 import { cloneEntity } from '../edit/session';
 import type { App } from './app';
+import { ft } from './filetext';
 
 export type LayerPatch = Partial<Pick<Layer, 'off' | 'frozen' | 'locked' | 'color' | 'linetype' | 'lineweight' | 'plot' | 'transparency' | 'description'>>;
 
@@ -40,7 +41,7 @@ export function setCurrentLayer(app: App, name: string): boolean {
   const l = st.doc.layers.get(tableKey(name));
   if (!l) return false;
   if (l.frozen) {
-    app.cmd.print(`동결된 도면층 "${l.name}"은(는) 현재 도면층으로 만들 수 없습니다.`, 'err');
+    app.cmd.print(`동결된 도면층 "${ft(l.name)}"은(는) 현재 도면층으로 만들 수 없습니다.`, 'err');
     return false;
   }
   const before = st.doc.header.get('$CLAYER');
@@ -79,7 +80,7 @@ export function createLayer(app: App, name: string, props: LayerPatch = {}): Lay
   }
   const key = tableKey(name.trim());
   if (st.doc.layers.has(key)) {
-    app.cmd.print(`도면층 "${name}"이(가) 이미 있습니다.`, 'err');
+    app.cmd.print(`도면층 "${ft(name)}"이(가) 이미 있습니다.`, 'err');
     return null;
   }
   const layer: Layer = {
@@ -150,7 +151,7 @@ export function renameLayer(app: App, key: string, name: string): boolean {
   const before = st.doc.layers.get(k);
   if (!before) return false;
   if (k === '0' || k === 'DEFPOINTS') {
-    app.cmd.print(`도면층 "${before.name}"의 이름은 바꿀 수 없습니다.`, 'err');
+    app.cmd.print(`도면층 "${ft(before.name)}"의 이름은 바꿀 수 없습니다.`, 'err');
     return false;
   }
   const err = validLayerName(name);
@@ -160,7 +161,7 @@ export function renameLayer(app: App, key: string, name: string): boolean {
   }
   const nk = tableKey(name.trim());
   if (nk !== k && st.doc.layers.has(nk)) {
-    app.cmd.print(`도면층 "${name}"이(가) 이미 있습니다.`, 'err');
+    app.cmd.print(`도면층 "${ft(name)}"이(가) 이미 있습니다.`, 'err');
     return false;
   }
   const after: Layer = { ...structuredClone(before), name: name.trim() };

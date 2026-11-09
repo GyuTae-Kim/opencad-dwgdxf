@@ -859,7 +859,7 @@ export function registerDimStyleCommands(app: App): void {
         if (!s || picked === null) return;
         const key = tableKey(s.name);
         if (key === 'STANDARD' || key === tableKey(curName()) || usedStyles(st).has(key)) {
-          app.cmd.print(`치수 스타일 "${s.name}"은(는) 현재 스타일이거나 사용 중이라 삭제할 수 없습니다.`, 'err');
+          app.cmd.print(`치수 스타일 "${ft(s.name)}"은(는) 현재 스타일이거나 사용 중이라 삭제할 수 없습니다.`, 'err');
           return;
         }
         const a = await ask('치수 스타일 - 삭제', `치수 스타일 "${s.name}"을(를) 삭제하시겠습니까?`, [

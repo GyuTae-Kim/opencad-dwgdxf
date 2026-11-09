@@ -28,6 +28,7 @@ import type { App, CommandContext, Keyword } from './app';
 import { currentLayer, renameLayer, setCurrentLayer, validLayerName } from './layers';
 import { runLayerStateOptions } from './layerstate-cmd';
 import { askText, padWide } from './util2-ui';
+import { ft, unmark } from './filetext';
 
 const OPTION_KEYWORDS: Keyword[] = DASH_LAYER_OPTIONS.map((o) => ({ key: o.key, label: o.label }));
 
@@ -66,7 +67,7 @@ export function registerDashLayerCommand(app: App): void {
       /** 이름 리스트 → 도면층(맞지 않는 패턴은 알린다) */
       const layersOf = (list: string): Layer[] => {
         const m = matchNameList(layerNames(), list);
-        if (m.unmatched.length) ctx.print(`일치하는 도면층 이름을 찾지 못함: ${m.unmatched.join(', ')}`);
+        if (m.unmatched.length) ctx.print(`일치하는 도면층 이름을 찾지 못함: ${m.unmatched.map(ft).join(', ')}`);
         return m.names.map((n) => doc.layers.get(tableKey(n))!).filter(Boolean);
       };
       /** 고른 객체의 도면층 */
@@ -82,7 +83,7 @@ export function registerDashLayerCommand(app: App): void {
       };
       /** `…의 이름 리스트 입력 [또는 <객체 선택>] [<현재>]` */
       const askLayers = async (prompt: string, opt: { select?: boolean; current?: boolean } = {}): Promise<Layer[]> => {
-        const tail = opt.select ? ' 또는 <객체 선택>' : opt.current ? ` <${cur()}>` : '';
+        const tail = opt.select ? ' 또는 <객체 선택>' : opt.current ? ` <${ft(cur())}>` : '';
         const t = await askWord(ctx, `${prompt}${tail}:`);
         if (t === null) {
           if (opt.select) return pickLayers();
@@ -92,7 +93,7 @@ export function registerDashLayerCommand(app: App): void {
         return layersOf(t);
       };
 
-      ctx.print(`현재 도면층: "${cur()}"`);
+      ctx.print(`현재 도면층: "${ft(cur())}"`);
       for (;;) {
         const r = await ctx.getPoint(dashLayerPrompt(), { keywords: OPTION_KEYWORDS, allowText: true });
         if ('enter' in r) return;
@@ -108,16 +109,16 @@ export function registerDashLayerCommand(app: App): void {
             const list = matchNameList(layerNames(), t || '*').names.map((n) => doc.layers.get(tableKey(n))!);
             const rows = list
               .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-              .map((l) => [`"${l.name}"`, layerStateText(l), layerColorText(l.color), l.linetype || 'Continuous', lineweightText(l.lineweight), String(percentFromOpacity(l.transparency ?? 255)), l.plot ? '플롯' : '플롯 안 함', l.description ?? '']);
+              .map((l) => [`"${ft(l.name)}"`, layerStateText(l), layerColorText(l.color), ft(l.linetype || 'Continuous'), lineweightText(l.lineweight), String(percentFromOpacity(l.transparency ?? 255)), l.plot ? '플롯' : '플롯 안 함', l.description ? ft(l.description) : '']);
             const head = ['도면층 이름', '상태', '색상', '선종류', '선가중치', '투명도', '플롯', '설명'];
-            const widths = head.map((h, i) => Math.min(32, Math.max(h.length * 2, ...rows.map((x) => x[i]!.length + 2))));
+            const widths = head.map((h, i) => Math.min(32, Math.max(h.length * 2, ...rows.map((x) => unmark(x[i]!).length + 2))));
             ctx.print(head.map((h, i) => padWide(h, widths[i]!)).join(' '));
             for (const x of rows) ctx.print(x.map((v, i) => padWide(v, widths[i]!)).join(' '));
-            ctx.print(`현재 도면층: "${cur()}"`);
+            ctx.print(`현재 도면층: "${ft(cur())}"`);
             break;
           }
           case 'M': {
-            const t = await askWord(ctx, `새 도면층에 대한 이름 입력 (현재 도면층으로 함 ) <${cur()}>:`);
+            const t = await askWord(ctx, `새 도면층에 대한 이름 입력 (현재 도면층으로 함 ) <${ft(cur())}>:`);
             const name = unquote(t ?? cur());
             if (!name) break;
             const key0 = tableKey(name);
@@ -125,7 +126,7 @@ export function registerDashLayerCommand(app: App): void {
             if (!existing) {
               const err = validLayerName(name);
               if (err) {
-                ctx.print(`"${name}"은(는) 유효하지 않은 도면층 이름임.`, 'err');
+                ctx.print(`"${ft(name)}"은(는) 유효하지 않은 도면층 이름임.`, 'err');
                 break;
               }
               // 새 도면층과 현재 도면층 바꾸기를 한 단계로
@@ -138,7 +139,7 @@ export function registerDashLayerCommand(app: App): void {
                   { kind: 'header', name: '$CLAYER', before, after: layer.name },
                 ],
               });
-            } else if (existing.frozen) ctx.print(`동결된 도면층 "${existing.name}"은(는) 현재 도면층으로 만들 수 없습니다.`, 'err');
+            } else if (existing.frozen) ctx.print(`동결된 도면층 "${ft(existing.name)}"은(는) 현재 도면층으로 만들 수 없습니다.`, 'err');
             else setCurrentLayer(app, existing.name);
             break;
           }
@@ -152,7 +153,7 @@ export function registerDashLayerCommand(app: App): void {
               if (!name) break;
             }
             const l = doc.layers.get(tableKey(name));
-            if (!l) ctx.print(`도면층 "${name}"을(를) 찾을 수 없습니다.`, 'err');
+            if (!l) ctx.print(`도면층 "${ft(name)}"을(를) 찾을 수 없습니다.`, 'err');
             else setCurrentLayer(app, l.name);
             break;
           }
@@ -163,7 +164,7 @@ export function registerDashLayerCommand(app: App): void {
             const made = new Set<string>();
             for (const n of splitNameList(t)) {
               if (validLayerName(n)) {
-                ctx.print(`"${n}"은(는) 유효하지 않은 도면층 이름임.`, 'err');
+                ctx.print(`"${ft(n)}"은(는) 유효하지 않은 도면층 이름임.`, 'err');
                 continue;
               }
               const k = tableKey(n);
@@ -179,7 +180,7 @@ export function registerDashLayerCommand(app: App): void {
             if (!a) break;
             const l = doc.layers.get(tableKey(unquote(a)));
             if (!l) {
-              ctx.print(`도면층 "${unquote(a)}"을(를) 찾을 수 없습니다.`, 'err');
+              ctx.print(`도면층 "${ft(unquote(a))}"을(를) 찾을 수 없습니다.`, 'err');
               break;
             }
             const b = await askWord(ctx, '새 도면층 이름 입력:');
@@ -197,7 +198,7 @@ export function registerDashLayerCommand(app: App): void {
             const out: Layer[] = [];
             for (const l of ls) {
               if (tableKey(l.name) === tableKey(cur()) && !l.off) {
-                const r2 = await ctx.getPoint(`현재 도면층 "${l.name}"을(를) 끄시겠습니까? [예(Y)/아니오(N)] <아니오(N)>:`, {
+                const r2 = await ctx.getPoint(`현재 도면층 "${ft(l.name)}"을(를) 끄시겠습니까? [예(Y)/아니오(N)] <아니오(N)>:`, {
                   keywords: [
                     { key: 'Y', label: '예' },
                     { key: 'N', label: '아니오' },
@@ -248,18 +249,18 @@ export function registerDashLayerCommand(app: App): void {
               const n = t === null ? 'Continuous' : unquote(t);
               if (n === '?') {
                 const list = [...doc.linetypes.values()].map((x) => x.name);
-                ctx.print(list.length ? `로드된 선종류: ${list.join(', ')}` : '로드된 선종류: Continuous');
+                ctx.print(list.length ? `로드된 선종류: ${list.map(ft).join(', ')}` : '로드된 선종류: Continuous');
                 continue;
               }
               const found = doc.linetypes.get(tableKey(n));
               if (!found && tableKey(n) !== 'CONTINUOUS') {
-                ctx.print(`선종류 ${n}을(를) 찾을 수 없습니다. LINETYPE 명령으로 로드하십시오.`, 'err');
+                ctx.print(`선종류 ${ft(n)}을(를) 찾을 수 없습니다. LINETYPE 명령으로 로드하십시오.`, 'err');
                 continue;
               }
               lt = found?.name ?? 'Continuous';
               break;
             }
-            const ls = await askLayers(`선종류 "${lt}"에 대한 도면층의 이름 리스트 입력`, { current: true });
+            const ls = await askLayers(`선종류 "${ft(lt)}"에 대한 도면층의 이름 리스트 입력`, { current: true });
             commitLayers('-LAYER', ls.map((l) => [l, { linetype: lt! }]));
             break;
           }
@@ -313,7 +314,7 @@ export function registerDashLayerCommand(app: App): void {
             const ls = await askLayers('동결할 도면층의 이름 리스트 입력', { select: true });
             const ok = ls.filter((l) => {
               if (tableKey(l.name) !== tableKey(cur())) return true;
-              ctx.print(`도면층 "${l.name}"을(를) 동결할 수 없습니다. 현재 도면층입니다.`, 'err');
+              ctx.print(`도면층 "${ft(l.name)}"을(를) 동결할 수 없습니다. 현재 도면층입니다.`, 'err');
               return false;
             });
             commitLayers('-LAYER', ok.map((l) => [l, { frozen: true }]));

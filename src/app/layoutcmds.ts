@@ -15,6 +15,7 @@ import { layoutSaveAs, layoutTemplate } from './layoutcmds-file';
 import { runPageSetupManager } from './pagesetup-ui';
 import { runPsetupin } from './dashcmds-plot';
 import { mediaName } from './papers';
+import { ft } from './filetext';
 
 /** AutoCAD식 용지 이름(src/app/papers.ts) */
 export { mediaName };
@@ -179,11 +180,11 @@ export function createLayoutOps(app: App, st: DocState, name: string, plot: Plot
 
 async function chooseLayout(ctx: CommandContext, prompt: string, def: string): Promise<Layout | null> {
   const st = ctx.app.active!;
-  const r = await ctx.getPoint(`${prompt} <${def}>:`, { allowText: true });
+  const r = await ctx.getPoint(`${prompt} <${ft(def)}>:`, { allowText: true });
   const name = 'text' in r ? r.text.trim() : 'enter' in r ? def : '';
   const l = st.doc.layouts.find((x) => x.name.toUpperCase() === name.toUpperCase() && tableKey(x.blockName) !== MODEL_SPACE);
   if (!l) {
-    ctx.print(`배치 "${name}"이(가) 없습니다.`, 'err');
+    ctx.print(`배치 "${ft(name)}"이(가) 없습니다.`, 'err');
     return null;
   }
   return l;
@@ -226,33 +227,33 @@ export function registerLayoutCommands(app: App): void {
       switch (opt) {
         case 'N': {
           const def = nextLayoutName(st);
-          const r = await ctx.getPoint(`새 배치 이름 입력 <${def}>:`, { allowText: true });
+          const r = await ctx.getPoint(`새 배치 이름 입력 <${ft(def)}>:`, { allowText: true });
           const name = 'text' in r && r.text.trim() ? r.text.trim() : def;
           if (st.doc.layouts.some((l) => l.name.toUpperCase() === name.toUpperCase())) {
-            ctx.print(`배치 "${name}"이(가) 이미 있습니다.`, 'err');
+            ctx.print(`배치 "${ft(name)}"이(가) 이미 있습니다.`, 'err');
             return;
           }
           await app.edits.flush(st);
           const { ops, layout } = createLayoutOps(app, st, name, defaultPlot(st));
           st.session.commit({ label: 'LAYOUT', ops });
           await app.setSpace(layout.blockName);
-          ctx.print(`배치 "${name}"을(를) 만들었습니다.`);
+          ctx.print(`배치 "${ft(name)}"을(를) 만들었습니다.`);
           return;
         }
         case 'C': {
           const src = await chooseLayout(ctx, '복사할 배치 입력', curName);
           if (!src) return;
           const def = `${src.name} (2)`;
-          const r = await ctx.getPoint(`복사된 배치의 이름 입력 <${def}>:`, { allowText: true });
+          const r = await ctx.getPoint(`복사된 배치의 이름 입력 <${ft(def)}>:`, { allowText: true });
           const name = 'text' in r && r.text.trim() ? r.text.trim() : def;
           if (st.doc.layouts.some((l) => l.name.toUpperCase() === name.toUpperCase())) {
-            ctx.print(`배치 "${name}"이(가) 이미 있습니다.`, 'err');
+            ctx.print(`배치 "${ft(name)}"이(가) 이미 있습니다.`, 'err');
             return;
           }
           const srcBlock = st.doc.blocks.get(tableKey(src.blockName));
           const { ops } = createLayoutOps(app, st, name, structuredClone(src.plot), srcBlock?.entities ?? []);
           st.session.commit({ label: 'LAYOUT', ops });
-          ctx.print(`배치 "${src.name}"을(를) "${name}"(으)로 복사했습니다.`);
+          ctx.print(`배치 "${ft(src.name)}"을(를) "${ft(name)}"(으)로 복사했습니다.`);
           return;
         }
         case 'R': {
@@ -262,14 +263,14 @@ export function registerLayoutCommands(app: App): void {
           const name = 'text' in r ? r.text.trim() : '';
           if (!name) return;
           if (st.doc.layouts.some((x) => x !== l && x.name.toUpperCase() === name.toUpperCase())) {
-            ctx.print(`배치 "${name}"이(가) 이미 있습니다.`, 'err');
+            ctx.print(`배치 "${ft(name)}"이(가) 이미 있습니다.`, 'err');
             return;
           }
           const ops: EditOp[] = [{ kind: 'layout', key: tableKey(l.blockName), before: l, after: { ...l, name } }];
           const dict = layoutDict(st);
           if (dict) ops.push({ kind: 'object', key: dict.handle, before: dict, after: dictWith(dict, name, l.handle, l.name) });
           st.session.commit({ label: 'LAYOUT', ops });
-          ctx.print(`배치 "${l.name}"의 이름을 "${name}"(으)로 바꿨습니다.`);
+          ctx.print(`배치 "${ft(l.name)}"의 이름을 "${ft(name)}"(으)로 바꿨습니다.`);
           return;
         }
         case 'D': {
@@ -281,7 +282,7 @@ export function registerLayoutCommands(app: App): void {
           }
           // 스크립트에서는 AutoCAD 명령행처럼 확인 없이 지운다
           if (!inScript(app)) {
-            const a = await ask('배치 삭제', `배치 "${l.name}"이(가) 영구적으로 삭제됩니다(명령 취소로 되돌릴 수 있습니다).`, [
+            const a = await ask('배치 삭제', `배치 "${ft(l.name)}"이(가) 영구적으로 삭제됩니다(명령 취소로 되돌릴 수 있습니다).`, [
               { label: '삭제', value: 'ok', primary: true },
               { label: '취소', value: 'cancel' },
             ]);
@@ -299,7 +300,7 @@ export function registerLayoutCommands(app: App): void {
           const rec = st.doc.blockRecords.get(key);
           if (rec) ops.push({ kind: 'blockRecord', key, before: rec, after: null });
           st.session.commit({ label: 'LAYOUT', ops });
-          ctx.print(`배치 "${l.name}"을(를) 삭제했습니다.`);
+          ctx.print(`배치 "${ft(l.name)}"을(를) 삭제했습니다.`);
           return;
         }
         case 'T':
@@ -309,7 +310,7 @@ export function registerLayoutCommands(app: App): void {
           await layoutSaveAs(app, ctx, curName);
           return;
         case '?':
-          ctx.print(`배치: ${st.doc.layouts.map((l) => l.name).join(', ')}`, 'res');
+          ctx.print(`배치: ${st.doc.layouts.map((l) => ft(l.name)).join(', ')}`, 'res');
           return;
         default: {
           const l = await chooseLayout(ctx, '현재로 설정할 배치 입력', curName);
@@ -353,7 +354,7 @@ async function moveOrCopyLayout(app: App, ctx: CommandContext, arg?: string): Pr
   const v = await form(
     '이동 또는 복사',
     [
-      { key: 'before', label: `"${src.name}"을(를) 앞으로 이동`, type: 'select', value: opts[0]!.value, options: opts },
+      { key: 'before', label: `"${ft(src.name)}"을(를) 앞으로 이동`, type: 'select', value: opts[0]!.value, options: opts },
       { key: 'copy', label: '사본 작성(C)', type: 'check', value: false },
     ],
     { ok: '확인' },
@@ -375,7 +376,7 @@ async function moveOrCopyLayout(app: App, ctx: CommandContext, arg?: string): Pr
     // 새 배치(만드는 작업과 LAYOUT 객체가 같은 값을 가리킨다)와 뒤로 밀린 배치의 탭 번호
     layout.tabOrder = order.indexOf(newKey) + 1;
     st.session.commit({ label: 'LAYOUT', ops: [...ops, ...layoutOrderOps(st, order)] });
-    ctx.print(`배치 "${src.name}"을(를) "${name}"(으)로 복사했습니다.`);
+    ctx.print(`배치 "${ft(src.name)}"을(를) "${ft(name)}"(으)로 복사했습니다.`);
     return;
   }
   const order = keys.filter((k) => k !== srcKey);
@@ -384,5 +385,5 @@ async function moveOrCopyLayout(app: App, ctx: CommandContext, arg?: string): Pr
   const ops = layoutOrderOps(st, order);
   if (!ops.length) return;
   st.session.commit({ label: 'LAYOUT', ops });
-  ctx.print(`배치 "${src.name}"을(를) 옮겼습니다.`);
+  ctx.print(`배치 "${ft(src.name)}"을(를) 옮겼습니다.`);
 }

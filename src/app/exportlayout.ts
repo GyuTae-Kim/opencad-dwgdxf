@@ -6,6 +6,7 @@ import { exportLayoutDocument } from '../edit/exportlayout';
 import type { App } from './app';
 import { baseName } from './export';
 import { layoutViewports, viewportXf } from './scene';
+import { ft } from './filetext';
 
 export function registerExportLayoutCommands(app: App): void {
   app.register({
@@ -36,7 +37,7 @@ export function registerExportLayoutCommands(app: App): void {
       for (let i = 2; app.docs.some((d) => d.saveName === name); i++) name = `${baseName(st.saveName)}_${lay.name}(${i}).${ext}`;
       const res = await app.engine.adopt(name, doc);
       app.addDocument(res, name, 0);
-      ctx.print(`배치 ${lay.name}을(를) 새 도면 ${name}의 모형 공간으로 내보냈습니다(뷰포트 ${vps.length}개는 잘린 블록 참조). 저장하려면 QSAVE를 실행하십시오.`);
+      ctx.print(`배치 ${ft(lay.name)}을(를) 새 도면 ${ft(name)}의 모형 공간으로 내보냈습니다(뷰포트 ${vps.length}개는 잘린 블록 참조). 저장하려면 QSAVE를 실행하십시오.`);
     },
   });
 }

@@ -23,6 +23,7 @@ import { askText } from './util2-ui';
 import { registerLeaderAssoc } from './leaderassoc';
 import type { Pt } from './view';
 import { pack3 } from '../core/flat3';
+import { ft } from './filetext';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
@@ -215,12 +216,12 @@ async function askAnnotation(app: App, ctx: CommandContext, pts: Pt[]): Promise<
     const name = r.text.trim();
     if (name === '?') {
       const names = [...doc.blocks.values()].filter((b) => !b.name.startsWith('*') && !(b.flags & 1)).map((b) => b.name);
-      ctx.print(names.length ? names.join(', ') : '블록이 없습니다.');
+      ctx.print(names.length ? names.map(ft).join(', ') : '블록이 없습니다.');
       continue;
     }
     const b = doc.blocks.get(tableKey(name));
     if (!b || b.name.startsWith('*')) {
-      ctx.print(`블록 ${name}을(를) 찾을 수 없습니다.`, 'err');
+      ctx.print(`블록 ${ft(name)}을(를) 찾을 수 없습니다.`, 'err');
       continue;
     }
     const ip = await ctx.getPoint('삽입점 지정:', { base: last });

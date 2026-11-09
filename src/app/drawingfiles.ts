@@ -6,6 +6,7 @@
 import type { CadDocument } from '../core/model';
 import type { App } from './app';
 import { h } from './ui/dom';
+import { ft } from './filetext';
 
 export interface LoadedDrawing {
   /** 파일 이름 */
@@ -66,7 +67,7 @@ export async function pickAndReadDrawings(app: App, print: (text: string, cls?: 
       try {
         out.push(await readDrawingFile(app, f));
       } catch (e) {
-        print(`${f.name}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
+        print(`${ft(f.name)}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
       }
     }
   } finally {

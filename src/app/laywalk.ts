@@ -153,7 +153,7 @@ export function registerLayWalkCommands(app: App): void {
         if (!sel.length) return;
         const r = purgeLayersOps(doc, sel, currentLayer(app));
         if (!r.ops.length) {
-          ctx.print(`소거할 수 있는 도면층이 없습니다.${r.refused[0] ? ` ${r.refused[0].name}: ${r.refused[0].reason}` : ''}`, 'err');
+          ctx.print(`소거할 수 있는 도면층이 없습니다.${r.refused[0] ? ` ${ft(r.refused[0].name)}: ${r.refused[0].reason}` : ''}`, 'err');
           return;
         }
         const ok = await ask('도면층 소거', `참조되지 않은 도면층 ${r.purged.length}개(${r.purged.join(', ')})를 지우시겠습니까?${r.refused.length ? ` 객체가 있거나 지울 수 없는 ${r.refused.length}개는 건너뜁니다.` : ''}`, [

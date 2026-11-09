@@ -46,6 +46,7 @@ import type { ViewportXf } from './scene';
 import { circleToPaper, layoutXfs, modelToPaperVp, paperProjection } from './vpsnap';
 import { plainText } from './inquiry';
 import { currentUcs, ucsOrigin } from './ucs';
+import { ft } from './filetext';
 
 const v3 = (p: Pt): Vec3 => ({ x: p.x, y: p.y, z: 0 });
 
@@ -221,7 +222,7 @@ function printDimText(app: App, ctx: CommandContext, dim: DimensionEntity): void
     shown = formatLength(dim.measurement, st.units);
   }
   // 각도·지름·호 기호(\U+00B0 등)와 서식 코드는 글자로(이전에는 코드 그대로 보였다)
-  ctx.print(`치수 문자 = ${plainText(dim.text && dim.text !== '<>' ? dim.text.replace('<>', shown) : shown)}`);
+  ctx.print(`치수 문자 = ${ft(plainText(dim.text && dim.text !== '<>' ? dim.text.replace('<>', shown) : shown))}`);
 }
 
 /** 원·호 객체(연관 참조용) */
@@ -281,7 +282,7 @@ export async function textOption(ctx: CommandContext, key: string, o: DimOpts): 
     }
   }
   if (key === 'T') {
-    const r = await ctx.getPoint(`치수 문자를 입력 <${o.text ? o.text : '<>'}>:`, { allowText: true });
+    const r = await ctx.getPoint(`치수 문자를 입력 <${o.text ? ft(o.text) : '<>'}>:`, { allowText: true });
     if ('text' in r) o.text = r.text;
     return true;
   }

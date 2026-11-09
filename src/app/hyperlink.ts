@@ -31,8 +31,8 @@ export async function followHyperlink(app: App, link: Hyperlink): Promise<void> 
     if (isWebUrl(link.url)) {
       const url = /^www\./i.test(link.url.trim()) ? `https://${link.url.trim()}` : link.url.trim();
       window.open(url, '_blank', 'noopener');
-      app.cmd.print(`하이퍼링크를 열었습니다: ${url}`);
-    } else app.cmd.print(`이 컴퓨터의 파일(${link.url})은 브라우저에서 열 수 없습니다. 파일을 직접 여십시오.`, 'err');
+      app.cmd.print(`하이퍼링크를 열었습니다: ${ft(url)}`);
+    } else app.cmd.print(`이 컴퓨터의 파일(${ft(link.url)})은 브라우저에서 열 수 없습니다. 파일을 직접 여십시오.`, 'err');
     if (!link.location) return;
   }
   if (!st || !link.location) return;
@@ -47,7 +47,7 @@ export async function followHyperlink(app: App, link: Hyperlink): Promise<void> 
     await app.setSpace(tableKey(lay.blockName));
     return;
   }
-  app.cmd.print(`도면 안 위치 "${link.location}"을(를) 찾을 수 없습니다.`, 'err');
+  app.cmd.print(`도면 안 위치 "${ft(link.location)}"을(를) 찾을 수 없습니다.`, 'err');
 }
 
 function linkOps(app: App, handles: string[], link: Hyperlink | null): EditOp[] {

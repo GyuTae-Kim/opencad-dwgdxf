@@ -109,7 +109,7 @@ export function setDynProperty(app: App, handle: string, key: string, input: str
   if (!p) return false;
   const c = changeOf(app, p, input);
   if ('error' in c) {
-    (ctx ?? app.cmd).print(`${p.label}: ${c.error}`, 'err');
+    (ctx ?? app.cmd).print(`${ft(p.label)}: ${c.error}`, 'err');
     return false;
   }
   return commitResult(app, 'DYNPROPS', dynSetOps(st.doc, ins, c, () => st.session.newHandle()), ctx);
@@ -317,7 +317,7 @@ async function askValue(app: App, ctx: CommandContext, ins: InsertEntity, p: Dyn
   if (p.editor === 'select' && p.options) {
     const kws: Keyword[] = p.options.map((o, i) => ({ key: String(i + 1), label: kwLabel(o.label) }));
     for (;;) {
-      const r = await ctx.getPoint(`${kwLabel(p.label)} 입력 [${kws.map((k) => `${k.label}(${k.key})`).join('/')}] <${cur}>:`, { keywords: kws, allowText: true });
+      const r = await ctx.getPoint(`${ft(kwLabel(p.label))} 입력 [${kws.map((k) => `${ft(k.label)}(${k.key})`).join('/')}] <${ft(cur)}>:`, { keywords: kws, allowText: true });
       if ('enter' in r) return null;
       let input: string | null = null;
       if ('keyword' in r) input = p.options[Number(r.keyword) - 1]?.value ?? null;
@@ -338,7 +338,7 @@ async function askValue(app: App, ctx: CommandContext, ins: InsertEntity, p: Dyn
     }
   }
   for (;;) {
-    const r = await ctx.getPoint(`${kwLabel(p.label)} 입력 <${cur}>:`, { preferNumber: true, base: grip?.anchor ?? null });
+    const r = await ctx.getPoint(`${ft(kwLabel(p.label))} 입력 <${ft(cur)}>:`, { preferNumber: true, base: grip?.anchor ?? null });
     if ('enter' in r || 'keyword' in r) return null;
     if ('point' in r) {
       if (grip && (p.kind === 'linear' || p.kind === 'rotation' || p.kind === 'polar' || p.kind === 'point')) return applyDynGrip(st.doc, ins, grip.id, r.point, nh);
@@ -364,12 +364,12 @@ export function registerDynBlockCommands(app: App): void {
       const first = await pickReference(app, ctx);
       if (!first || undecoded(app, ctx, first)) return;
       const handle = first.handle;
-      ctx.print(`동적 블록: ${definitionName(st.doc, first) ?? first.block}`);
+      ctx.print(`동적 블록: ${ft(definitionName(st.doc, first) ?? first.block)}`);
       for (;;) {
         const ins = insertOf(app, handle);
         if (!ins) return;
         const props = dynProperties(st.doc, ins) ?? [];
-        for (const p of props) ctx.print(`  ${p.label} = ${show(app, p)}${p.editor === 'readonly' ? ' (읽기 전용)' : ''}`);
+        for (const p of props) ctx.print(`  ${ft(p.label)} = ${ft(show(app, p))}${p.editor === 'readonly' ? ' (읽기 전용)' : ''}`);
         const editable = props.filter((p) => p.editor !== 'readonly');
         if (!editable.length) {
           ctx.print('고칠 수 있는 동적 블록 특성이 없습니다.');

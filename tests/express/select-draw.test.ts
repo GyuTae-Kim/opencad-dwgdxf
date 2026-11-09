@@ -19,6 +19,7 @@ import { createNewDocument } from '../../src/core/newdoc';
 import { getselSelect, ssxFilterLines, ssxFilterOf, ssxMatch, ssxSelect, ssxSetValue } from '../../src/edit/express/ssx';
 import { nestedCopy, xdataLines, xlistRows } from '../../src/edit/express/xlist';
 import { gatteChanges } from '../../src/edit/express/gatte';
+import { ft, unmark } from '../../src/app/filetext';
 import { breaklinePoints } from '../../src/edit/express/breakline';
 import { applyGap, chainsOf, offsetChain } from '../../src/edit/express/exoffset';
 import { flattenEntity } from '../../src/edit/express/flatten';
@@ -89,7 +90,9 @@ describe('SSX·GETSEL', () => {
     expect(ssxSelect(list, f)).toEqual([a.handle, b.handle, c.handle, d.handle]);
     expect(typeof ssxSetValue(f, 'color', 'zzz')).toBe('string');
     expect(ssxMatch(c, ssxSetValue({}, 'color', '2') as object)).toBe(true);
-    expect(ssxFilterLines({ type: 'TEXT', layer: 'WALL' })).toEqual(['객체 = TEXT (문자)', '도면층 = WALL']);
+    // 도면 글(도면층 이름)은 ft()로 감싸 나온다(105차) — 보이는 글로 견준다
+    expect(ssxFilterLines({ type: 'TEXT', layer: 'WALL' }).map(unmark)).toEqual(['객체 = TEXT (문자)', '도면층 = WALL']);
+    expect(ssxFilterLines({ layer: 'WALL' })).toEqual([`도면층 = ${ft('WALL')}`]);
   });
   it('GETSEL: 도면층·유형(* = 모두)', () => {
     expect(getselSelect(list, 'WALL', 'TEXT')).toEqual([a.handle, b.handle, c.handle]);
@@ -104,7 +107,7 @@ describe('XDLIST·XLIST·NCOPY', () => {
       { app: 'ACAD', items: [{ code: 1000, value: 'hello' }] },
       { app: 'MYAPP', items: [{ code: 1070, value: 7 }, { code: 1010, value: { x: 1, y: 2, z: 3 } }, { code: 1005, value: '1F' }] },
     ];
-    expect(xdataLines(x, 'MY*')).toEqual(['* 등록된 응용 프로그램 이름: MYAPP', '* 코드 1070, 정수: 7', '* 코드 1010, 3D 점: (1, 2, 3)', '* 코드 1005, 데이터베이스 핸들: 1F']);
+    expect(xdataLines(x, 'MY*').map(unmark)).toEqual(['* 등록된 응용 프로그램 이름: MYAPP', '* 코드 1070, 정수: 7', '* 코드 1010, 3D 점: (1, 2, 3)', '* 코드 1005, 데이터베이스 핸들: 1F']);
     expect(xdataLines(x).length).toBe(6);
     expect(xdataLines(undefined)).toEqual([]);
   });

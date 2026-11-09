@@ -298,10 +298,10 @@ export function feedPrompt(app: App, text: string): void {
   }, 0);
 }
 
-/** 고정폭 글꼴에서 글의 칸 수(한글·전각은 두 칸) */
+/** 고정폭 글꼴에서 글의 칸 수(한글·전각은 두 칸, 보이지 않는 도면 글 표시 ft는 0칸) */
 export function textWidth(s: string): number {
   let w = 0;
-  for (const ch of s) w += /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/.test(ch) ? 2 : 1;
+  for (const ch of s) w += /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/.test(ch) ? 2 : ch === '\u2068' || ch === '\u2069' ? 0 : 1;
   return w;
 }
 

@@ -9,6 +9,7 @@ import { colorText, lineweightText, typeLabel } from '../util/select';
 import { wcmatch } from '../util/wildcard';
 import { chainXf, xformEntity } from '../refedit/xform';
 import { freshEntity } from '../geom/path';
+import { ft } from '../../app/filetext';
 
 /** 바깥부터 차례로 놓인 참조(블록 정의와 그 참조) */
 export type NestChain = readonly { def: BlockDef; insert: InsertEntity; xref?: string }[];
@@ -65,8 +66,8 @@ export function xdataLines(xdata: readonly XData[] | undefined, app = '*'): stri
   if (!list.length) return [];
   const out: string[] = [];
   for (const x of list) {
-    out.push(`* 등록된 응용 프로그램 이름: ${x.app}`);
-    for (const it of x.items) out.push(`* 코드 ${it.code}, ${CODE_LABEL[it.code] ?? '값'}: ${valueText(it.value)}`);
+    out.push(`* 등록된 응용 프로그램 이름: ${ft(x.app)}`);
+    for (const it of x.items) out.push(`* 코드 ${it.code}, ${CODE_LABEL[it.code] ?? '값'}: ${ft(valueText(it.value))}`);
   }
   return out;
 }

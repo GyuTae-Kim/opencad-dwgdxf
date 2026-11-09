@@ -16,6 +16,7 @@ import { presetPdfImportFile } from './pdfimport';
 import { ensureLayoutVariants } from './psltscale';
 import { paperInfo } from './scene';
 import { ask } from './ui/dom';
+import { ft } from './filetext';
 
 /** 지금 화면(모형) 또는 배치 용지를 mm 단위 쪽으로 */
 async function screenPage(app: App, st: DocState): Promise<Page | null> {
@@ -116,7 +117,7 @@ async function importDrawing(app: App, ctx: CommandContext, file: File): Promise
   try {
     src = (await readDrawingFile(app, file)).doc;
   } catch (e) {
-    ctx.print(`${file.name}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
+    ctx.print(`${ft(file.name)}을(를) 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
     return;
   } finally {
     app.ui.setBusy(null);
@@ -125,12 +126,12 @@ async function importDrawing(app: App, ctx: CommandContext, file: File): Promise
   const key = tableKey(name);
   const model = (src.blocks.get(MODEL_SPACE)?.entities ?? []).filter((e) => !e.paperSpace);
   if (!model.length) {
-    ctx.print(`${file.name}의 모형 공간에 객체가 없습니다.`, 'err');
+    ctx.print(`${ft(file.name)}의 모형 공간에 객체가 없습니다.`, 'err');
     return;
   }
   const have = doc.blocks.get(key);
   if (have) {
-    const a = await ask('블록 - 재정의', `블록 "${have.name}"이(가) 이미 도면에 있습니다. ${file.name}의 내용으로 재정의할까요?`, [
+    const a = await ask('블록 - 재정의', `블록 "${ft(have.name)}"이(가) 이미 도면에 있습니다. ${ft(file.name)}의 내용으로 재정의할까요?`, [
       { label: '블록 재정의', value: 'redefine', primary: true },
       { label: '기존 정의 사용', value: 'keep' },
       { label: '취소', value: 'cancel' },
@@ -141,7 +142,7 @@ async function importDrawing(app: App, ctx: CommandContext, file: File): Promise
       return;
     }
     if (have.flags & 4 || have.name.startsWith('*')) {
-      ctx.print(`블록 "${have.name}"은(는) 다시 정의할 수 없습니다.`, 'err');
+      ctx.print(`블록 "${ft(have.name)}"은(는) 다시 정의할 수 없습니다.`, 'err');
       return;
     }
   }
@@ -164,7 +165,7 @@ async function importDrawing(app: App, ctx: CommandContext, file: File): Promise
   }
   st.session.commit({ label: 'IMPORT', ops, group: ctx.group });
   const skipped = [...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(', ');
-  ctx.print(`${file.name}의 모형 객체 ${ents.length}개로 블록 "${name}"을(를) ${have ? '재정의' : '만들었'}습니다.${skipped ? ` 옮길 수 없는 객체(${skipped})는 뺐습니다.` : ''}`);
+  ctx.print(`${ft(file.name)}의 모형 객체 ${ents.length}개로 블록 "${ft(name)}"을(를) ${have ? '재정의' : '만들었'}습니다.${skipped ? ` 옮길 수 없는 객체(${skipped})는 뺐습니다.` : ''}`);
   // INSERT 흐름으로 삽입점·축척·회전을 받는다
   await app.run('INSERT', name);
 }
@@ -193,7 +194,7 @@ export function registerFileExportCommands(app: App, reg: (c: Command) => void):
       const data = pageToWmf(sel);
       const name = `${baseName(st.saveName)}.wmf`;
       download(new Blob([data], { type: 'image/wmf' }), name);
-      ctx.print(`객체 ${handles.length}개를 ${name}(으)로 저장했습니다(${(data.length / 1024).toFixed(1)} KB, 지금 ${st.onLayout ? '배치 용지' : '화면'} 범위, 래스터 이미지는 빠집니다).`);
+      ctx.print(`객체 ${handles.length}개를 ${ft(name)}(으)로 저장했습니다(${(data.length / 1024).toFixed(1)} KB, 지금 ${st.onLayout ? '배치 용지' : '화면'} 범위, 래스터 이미지는 빠집니다).`);
     },
   });
 

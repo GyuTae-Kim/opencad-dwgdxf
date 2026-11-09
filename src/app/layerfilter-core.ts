@@ -15,6 +15,7 @@ import type { App } from './app';
 import type { DocState } from './docstate';
 import { currentViewport } from './layerstate-core';
 import { currentLayer, patchLayers } from './layers';
+import { ft } from './filetext';
 
 export type Print = (text: string, cls?: 'err' | 'res') => void;
 
@@ -275,7 +276,7 @@ export function applyFilterAction(app: App, ref: string, action: FilterAction, p
     case 'freeze': {
       const cl = tableKey(currentLayer(app));
       const list = layers.filter((l) => tableKey(l.name) !== cl);
-      if (list.length < layers.length) print(`현재 도면층 "${currentLayer(app)}"은(는) 동결할 수 없어 동결하지 않았습니다.`);
+      if (list.length < layers.length) print(`현재 도면층 "${ft(currentLayer(app))}"은(는) 동결할 수 없어 동결하지 않았습니다.`);
       return patchLayers(app, 'LAYER', list.map((l) => [l.name, { frozen: true }]));
     }
     case 'vpfreeze':
