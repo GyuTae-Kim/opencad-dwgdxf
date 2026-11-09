@@ -18,6 +18,7 @@ import { SELECT_METHODS, runSelectMethod, selectMethodOf } from '../../src/app/s
 import { lispBusy, lispSession, registerLispCommands } from '../../src/app/lisp';
 import { runScriptText, scriptRunner } from '../../src/app/script';
 import { fakePolySelect } from '../script/selfake';
+import { unmark } from '../../src/app/filetext';
 
 type Pt = { x: number; y: number };
 type PointOpts = Parameters<CommandContext['getPoint']>[1];
@@ -41,6 +42,8 @@ export interface LispApp {
   script(text: string, name?: string): Promise<'idle' | 'paused'>;
   out(): string;
   errors(): string[];
+  /** 명령행에 넘긴 원문(도면 글 표시 ft 포함) */
+  raw: string[];
   add(e: Entity): Entity;
   model<T extends Entity['type']>(type: T): (Entity & { type: T } & Record<string, any>)[];
   pending(): { kind: string; prompt: string } | null;
@@ -96,7 +99,11 @@ export function makeLispApp(setup?: (doc: CadDocument) => void): LispApp {
     },
     ...fakePolySelect(doc, space),
   };
+  // 진짜 명령행처럼 도면·프로그램 글 표시(ft — 105차)는 빼고 모은다(보이는 글과 같게). 표시 든 원문은 raw에
+  const raw: string[] = [];
   const print = (text: string, cls?: 'err' | 'res') => {
+    raw.push(text);
+    text = unmark(text);
     cmd.onPrint?.(text, cls);
     printed.push({ text, cls });
   };
@@ -106,7 +113,7 @@ export function makeLispApp(setup?: (doc: CadDocument) => void): LispApp {
     lispContinue: false,
     prompt: '',
     setPrompt(t: string) {
-      cmd.prompt = t;
+      cmd.prompt = unmark(t);
     },
     onPrint: null as null | ((t: string, c?: 'err' | 'res') => void),
     input: { value: '' },
@@ -123,7 +130,7 @@ export function makeLispApp(setup?: (doc: CadDocument) => void): LispApp {
   const promptOf = (r: { prompt: string; keywords: Keyword[] }) => (r.keywords.length && !r.prompt.includes('[') ? `${r.prompt.replace(/:$/, '')} [${r.keywords.map((k) => `${k.label}(${k.key})`).join('/')}]:` : r.prompt);
 
   function setRequest(r: Req): void {
-    prompts.push(r.prompt);
+    prompts.push(unmark(r.prompt));
     a.request = r;
     cmd.setPrompt(promptOf(r));
     r.signal.addEventListener(
@@ -428,6 +435,7 @@ export function makeLispApp(setup?: (doc: CadDocument) => void): LispApp {
     },
     out: () => printed.map((p) => p.text).join('\n'),
     errors: () => printed.filter((p) => p.cls === 'err').map((p) => p.text),
+    raw,
     add(e: Entity) {
       if (!e.handle) e.handle = st.session.newHandle();
       e.owner = doc.blocks.get(MODEL_SPACE)!.recordHandle;

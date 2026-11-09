@@ -77,7 +77,7 @@ function changeOf(app: App, p: DynProperty, input: string): DynChange | { error:
     case 'visibility':
     case 'lookup': {
       const o = p.options?.find((x) => x.value === t) ?? p.options?.find((x) => x.label.toUpperCase() === t.toUpperCase());
-      return o ? { key: p.key, value: o.value } : { error: `"${t}"은(는) 목록에 없습니다.` };
+      return o ? { key: p.key, value: o.value } : { error: `"${ft(t)}"은(는) 목록에 없습니다.` };
     }
     case 'rotation': {
       const a = parseAngle(t, app.active!.units.aunits);

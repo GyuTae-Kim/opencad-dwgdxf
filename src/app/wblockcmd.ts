@@ -15,6 +15,7 @@ import { unlockedOnly } from './layers';
 import { SAVE_TYPES } from './save';
 import { askText, rememberErased } from './util2-ui';
 import type { Pt } from './view';
+import { ft } from './filetext';
 
 const BAD_FILE = /[<>/\\":;?*|]/;
 
@@ -43,7 +44,7 @@ async function writeWblock(app: App, ctx: CommandContext, source: WblockSource, 
     try {
       const out = await app.engine.save(res.docId, target.format, target.version, false);
       download(new Blob([out.data as BlobPart], { type: target.format === 'dxf' ? 'application/dxf' : 'application/acad' }), target.fileName);
-      ctx.print(`${target.fileName}을(를) 썼습니다(객체 ${built.entities}개, ${(out.data.byteLength / 1024).toFixed(0)} KB).${built.skipped ? ` 옮길 수 없는 객체 ${built.skipped}개는 뺐습니다.` : ''}`);
+      ctx.print(`${ft(target.fileName)}을(를) 썼습니다(객체 ${built.entities}개, ${(out.data.byteLength / 1024).toFixed(0)} KB).${built.skipped ? ` 옮길 수 없는 객체 ${built.skipped}개는 뺐습니다.` : ''}`);
       for (const w of out.warnings.slice(0, 3)) ctx.print(`참고: ${w.message}${w.count ? ` (${w.count})` : ''}`);
       return true;
     } finally {
@@ -86,7 +87,7 @@ export function registerDashWblockCommand(app: App): void {
           const name = 'keyword' in r ? target.base : r.text.trim().replace(/^"(.*)"$/, '$1');
           const b = userBlocks(app).find((x) => tableKey(x.name) === tableKey(name));
           if (!b) {
-            ctx.print(`블록 "${name}"을(를) 찾을 수 없습니다.`, 'err');
+            ctx.print(`블록 "${ft(name)}"을(를) 찾을 수 없습니다.`, 'err');
             if ('keyword' in r) return;
             continue;
           }

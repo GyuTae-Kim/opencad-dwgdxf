@@ -11,6 +11,7 @@ import { textStyleDialog } from './textedit/styledlg';
 import { compareVar } from '../edit/compare/settings';
 import { VIEWTOOL_VARS } from '../edit/viewtools/vars';
 import { EDITCMDS2_VARS } from '../edit/editcmds2/vars';
+import { ft } from './filetext';
 
 
 function setHeaderOps(doc: { header: Map<string, HeaderValue> }, values: Record<string, HeaderValue>): EditOp[] {
@@ -266,14 +267,14 @@ export function registerTableCommands(app: App): void {
           await promptSysvar(app, ctx, info.name);
           return;
         }
-        ctx.print(`변수 "${name}"이(가) 이 도면에 없습니다.`, 'err');
+        ctx.print(`변수 "${ft(name)}"이(가) 이 도면에 없습니다.`, 'err');
         return;
       }
       if (typeof cur === 'object') {
-        ctx.print(`${key.slice(1)} = ${show(cur)} (읽기 전용)`);
+        ctx.print(`${key.slice(1)} = ${ft(show(cur))} (읽기 전용)`);
         return;
       }
-      const r = await ctx.getPoint(`${key.slice(1)}에 대한 새 값 입력 <${show(cur)}>:`, { allowText: true });
+      const r = await ctx.getPoint(`${key.slice(1)}에 대한 새 값 입력 <${ft(show(cur))}>:`, { allowText: true });
       if (!('text' in r)) return;
       let after: HeaderValue = r.text;
       if (typeof cur === 'number') {

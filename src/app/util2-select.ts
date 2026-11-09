@@ -187,7 +187,7 @@ export function registerUtil2SelectCommands(app: App): void {
       }
       st.session.commit({ label: 'GROUP', ops: g.ops, group: ctx.group });
       app.clearSelection();
-      ctx.print(name ? `그룹 "${g.name}"이(가) 작성되었습니다(객체 ${hs.length}개).` : `이름 없는 그룹이 작성되었습니다(객체 ${hs.length}개).`);
+      ctx.print(name ? `그룹 "${ft(g.name)}"이(가) 작성되었습니다(객체 ${hs.length}개).` : `이름 없는 그룹이 작성되었습니다(객체 ${hs.length}개).`);
     },
   });
 
@@ -227,7 +227,7 @@ export function registerUtil2SelectCommands(app: App): void {
             }
             const g = listGroups(st.doc).find((x) => x.name.toUpperCase() === t.toUpperCase());
             if (!g) {
-              ctx.print(`그룹 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+              ctx.print(`그룹 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
               continue;
             }
             doUngroup([g]);

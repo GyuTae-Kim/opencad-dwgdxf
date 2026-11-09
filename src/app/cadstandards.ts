@@ -244,7 +244,7 @@ function fixProblem(app: App, ctx: CommandContext, st: DocState, p: StdProblem, 
 
 function problemText(p: StdProblem): string {
   const k = STD_KIND_LABEL[p.kind];
-  return p.type === 'name' ? `${k} "${p.name}"의 이름이 표준이 아닙니다(표준 파일에 없는 이름).` : `${k} "${p.name}"의 특성이 표준이 아닙니다.`;
+  return p.type === 'name' ? `${k} "${ft(p.name)}"의 이름이 표준이 아닙니다(표준 파일에 없는 이름).` : `${k} "${ft(p.name)}"의 특성이 표준이 아닙니다.`;
 }
 
 async function checkFlow(app: App, ctx: CommandContext, st: DocState): Promise<void> {

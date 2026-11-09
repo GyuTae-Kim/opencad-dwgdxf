@@ -12,6 +12,7 @@ import { SpaceScene } from './scene';
 import type { App } from './app';
 import type { DocState } from './docstate';
 import { type MenuItem, dialog, h, showMenu, toast } from './ui/dom';
+import { ft } from './filetext';
 
 export interface RefItem {
   kind: 'image' | 'xref' | 'pdf';
@@ -249,7 +250,7 @@ export async function linkXrefFiles(app: App, files: File[], asKey?: string): Pr
       out.push(f.name);
       if (old) refHooks.onXrefReload?.(key, { name: old.name, doc: old.doc }, { name: f.name, doc: res.doc });
     } catch (e) {
-      app.cmd.print(`${f.name}: 외부 참조를 열지 못했습니다(${e instanceof Error ? e.message : String(e)}).`, 'err');
+      app.cmd.print(`${ft(f.name)}: 외부 참조를 열지 못했습니다(${e instanceof Error ? e.message : String(e)}).`, 'err');
     }
   }
   if (out.length) {
@@ -554,9 +555,9 @@ export function registerRefCommands(app: App): void {
         const pdf = await linkPdfFiles(app, pick);
         const names = [...img.linked, ...x, ...pdf.linked];
         const n = names.length;
-        ctx.print(n ? `파일 ${n}개를 연결했습니다: ${names.slice(0, 6).join(', ')}${n > 6 ? ' …' : ''}` : '이 도면이 찾는 이름의 파일이 없습니다.', n ? undefined : 'err');
-        if (pdf.failed.length) ctx.print(`참고: ${pdf.failed.slice(0, 4).join(', ')}은(는) 읽을 수 없는 PDF입니다(암호가 걸렸거나 손상됨).`, 'err');
-        if (img.unsupported.length) ctx.print(`참고: ${img.unsupported.slice(0, 4).join(', ')}은(는) 이 브라우저가 읽을 수 없는 이미지 형식입니다(PNG·JPEG·GIF·BMP·WebP만).`);
+        ctx.print(n ? `파일 ${n}개를 연결했습니다: ${names.slice(0, 6).map(ft).join(', ')}${n > 6 ? ' …' : ''}` : '이 도면이 찾는 이름의 파일이 없습니다.', n ? undefined : 'err');
+        if (pdf.failed.length) ctx.print(`참고: ${pdf.failed.slice(0, 4).map(ft).join(', ')}은(는) 읽을 수 없는 PDF입니다(암호가 걸렸거나 손상됨).`, 'err');
+        if (img.unsupported.length) ctx.print(`참고: ${img.unsupported.slice(0, 4).map(ft).join(', ')}은(는) 이 브라우저가 읽을 수 없는 이미지 형식입니다(PNG·JPEG·GIF·BMP·WebP만).`);
         if (n) toast(`외부 파일 ${n}개를 연결했습니다.`, 'info', 3000);
       };
       const back = dialog('외부 참조', body, [

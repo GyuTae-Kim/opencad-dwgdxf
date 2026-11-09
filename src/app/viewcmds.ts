@@ -9,6 +9,7 @@ import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { ask, h } from './ui/dom';
 import { btn, fail, pickList, resultDialog, row, textIn } from './mgr-ui';
+import { ft } from './filetext';
 
 type Rect = [number, number, number, number];
 
@@ -91,7 +92,7 @@ export function registerViewCommands(app: App): void {
       if (r.keyword === '?') {
         const list = [...st.doc.views.values()];
         if (!list.length) ctx.print('저장된 뷰가 없습니다.');
-        for (const v of list) ctx.print(`${v.name}  ${v.flags & 1 ? '종이' : '모형'}  폭 ${v.width.toFixed(4)}, 높이 ${v.height.toFixed(4)}`);
+        for (const v of list) ctx.print(`${ft(v.name)}  ${v.flags & 1 ? '종이' : '모형'}  폭 ${v.width.toFixed(4)}, 높이 ${v.height.toFixed(4)}`);
         return;
       }
       const t = await ctx.getPoint(r.keyword === 'D' ? '삭제할 뷰 이름 입력:' : r.keyword === 'R' ? '복원할 뷰 이름 입력:' : '저장할 뷰 이름 입력:', { allowText: true });
@@ -100,12 +101,12 @@ export function registerViewCommands(app: App): void {
       if (r.keyword === 'D') {
         let n = 0;
         for (const one of name.split(',')) if (remove(app, one.trim())) n++;
-        if (!n) ctx.print(`뷰 "${name}"을(를) 찾을 수 없습니다.`, 'err');
+        if (!n) ctx.print(`뷰 "${ft(name)}"을(를) 찾을 수 없습니다.`, 'err');
         return;
       }
       if (r.keyword === 'R') {
         const v = st.doc.views.get(tableKey(name));
-        if (!v) ctx.print(`뷰 "${name}"을(를) 찾을 수 없습니다.`, 'err');
+        if (!v) ctx.print(`뷰 "${ft(name)}"을(를) 찾을 수 없습니다.`, 'err');
         else await restore(app, v);
         return;
       }
@@ -200,7 +201,7 @@ async function viewManager(app: App, ctx: CommandContext): Promise<void> {
         });
         if (!n) break;
         if (st.doc.views.has(tableKey(n))) {
-          const a = await ask('뷰 - 재정의', `뷰 "${n}"이(가) 이미 있습니다. 바꾸시겠습니까?`, [
+          const a = await ask('뷰 - 재정의', `뷰 "${ft(n)}"이(가) 이미 있습니다. 바꾸시겠습니까?`, [
             { label: '예', value: 'Y', primary: true },
             { label: '아니오', value: 'N' },
           ]);

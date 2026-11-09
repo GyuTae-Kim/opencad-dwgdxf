@@ -126,8 +126,8 @@ export function renameLayerState(app: App, oldName: string, newName: string, gro
   if (bad) return bad;
   const dup = findLayerState(st.doc, n);
   const cur = findLayerState(st.doc, oldName);
-  if (!cur) return `도면층 상태 "${oldName}"을(를) 찾을 수 없습니다.`;
-  if (dup && dup.handle !== cur.handle) return `도면층 상태 "${n}"이(가) 이미 있습니다.`;
+  if (!cur) return `도면층 상태 "${ft(oldName)}"을(를) 찾을 수 없습니다.`;
+  if (dup && dup.handle !== cur.handle) return `도면층 상태 "${ft(n)}"이(가) 이미 있습니다.`;
   const w = new LayerStateWriter(st.doc, () => st.session.newHandle());
   w.rename(cur.key, n);
   commit(app, 'LAYERSTATE', w.finish(), group);

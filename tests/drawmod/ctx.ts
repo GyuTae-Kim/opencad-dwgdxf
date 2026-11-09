@@ -5,6 +5,7 @@
 import type { Command, CommandContext, Keyword } from '../../src/app/app';
 import { parsePointInput } from '../../src/app/commandline';
 import type { Harness } from '../cmds2/harness';
+import { unmark } from '../../src/app/filetext';
 
 export type Input2 = string | { pick: string; at: [number, number]; shift?: boolean } | { empty: [number, number]; shift?: boolean } | { sel: string[] };
 
@@ -20,7 +21,8 @@ export async function runWith(h: Harness, name: string, inputs: Input2[], group 
   const ctx = {
     app: h.app,
     group,
-    print: (t: string) => h.printed.push(t),
+    // 진짜 명령행처럼 도면 글 표시(ft — 105차)는 빼고 모은다
+    print: (t: string) => h.printed.push(unmark(t)),
     async getPoint(prompt: string, opt: { keywords?: Keyword[]; base?: { x: number; y: number } | null; allowText?: boolean; preferNumber?: boolean } = {}) {
       const x = next(prompt);
       if (typeof x !== 'string') throw new Error(`점 프롬프트에 맞지 않는 입력 (${prompt})`);

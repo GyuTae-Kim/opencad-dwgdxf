@@ -16,6 +16,7 @@ import { pathNearest } from '../../src/edit/geom/curve';
 import { boundsOf } from '../../src/edit/geom/query';
 import { newDoc } from '../edit/make';
 import { type CommandFallback, type CommitHook, type DblClickHandler, type EntityClickHandler, type GripMenuProvider, type InputFilter, type PointFilter, bindCommitHooks } from '../../src/app/hooks';
+import { unmark } from '../../src/app/filetext';
 
 export type Input = string | { click: [number, number]; snap?: string; ctrl?: boolean } | { pick: string; at: [number, number]; shift?: boolean } | { sel: string[] } | { ctrlTap: true };
 
@@ -97,7 +98,8 @@ export function makeHarness(setup?: (doc: CadDocument) => void): Harness {
     // 모형 공간만 다루는 틀: 도면 공간의 뷰포트 안 모형 객체는 없다(App.viewportObjectAt)
     viewportObjectAt: () => null,
     view: { overlay, pixelSize: () => 0.02, requestOverlay() {}, requestRender() {} },
-    cmd: { print: (t: string) => printed.push(t), acceptSpaces: false },
+    // 진짜 명령행처럼 도면 글 표시(ft — 105차)는 빼고 모은다(보이는 글과 같게)
+    cmd: { print: (t: string) => printed.push(unmark(t)), acceptSpaces: false },
     ui: { setBusy() {} },
     clearSelection() {
       st.selection.clear();
@@ -134,14 +136,14 @@ export function makeHarness(setup?: (doc: CadDocument) => void): Harness {
     async run(name: string, inputs: Input[], arg?: string) {
       const queue = [...inputs];
       const next = (prompt: string): Input => {
-        prompts.push(prompt);
-        if (!queue.length) throw new Error(`입력이 모자랍니다: ${prompt}`);
+        prompts.push(unmark(prompt));
+        if (!queue.length) throw new Error(`입력이 모자랍니다: ${unmark(prompt)}`);
         return queue.shift()!;
       };
       const kwOf = (t: string, kws: Keyword[]) => kws.find((k) => k.key.toUpperCase() === t.trim().toUpperCase() || k.label === t.trim());
       const ctx: CommandContext = {
         app,
-        print: (t: string) => printed.push(t),
+        print: (t: string) => printed.push(unmark(t)),
         group: 99,
         async getPoint(prompt, opt = {}) {
           const x = next(prompt);

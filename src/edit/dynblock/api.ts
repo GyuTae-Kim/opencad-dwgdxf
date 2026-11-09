@@ -13,6 +13,7 @@ import { DynError, DynEval, assertEditable, flipCell, flipStateName, valueChoice
 import { buildChangeOps, buildResetOps, insertAffine } from './build';
 import { type DynRef, pointProp, readReference } from './reference';
 import { type DynDefinition, type DynEditResult, type DynGripNode, type DynParam, type ParamKind, MSG_NOT_DYNAMIC, MSG_SAME, MSG_UNSUPPORTED } from './types';
+import { ft } from '../../app/filetext';
 
 // ---------------------------------------------------------------------------
 // 특성
@@ -150,14 +151,14 @@ function toNumber(v: string | number | boolean): number {
 
 function applyChange(ev: DynEval, c: DynChange, exact: boolean): boolean {
   const r = resolveKey(ev.def, c.key);
-  if (!r) throw new DynError(`매개변수 "${c.key}"이(가) 없습니다.`);
+  if (!r) throw new DynError(`매개변수 "${ft(c.key)}"이(가) 없습니다.`);
   const p = r.param;
   switch (p.kind) {
     case 'visibility':
       return ev.setVisibility(p, String(c.value));
     case 'flip': {
       const f = typeof c.value === 'boolean' ? c.value : flipCell(p, String(c.value));
-      if (f === null) throw new DynError(`반전 상태 "${String(c.value)}"을(를) 알 수 없습니다.`);
+      if (f === null) throw new DynError(`반전 상태 "${ft(String(c.value))}"을(를) 알 수 없습니다.`);
       return ev.setFlip(p, f);
     }
     case 'linear':

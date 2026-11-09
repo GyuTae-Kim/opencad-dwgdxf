@@ -1266,13 +1266,13 @@ export function registerTableEditCommands(app: App): void {
       const cur = currentTableStyle(st.doc);
       let name = arg?.trim();
       if (!name) {
-        const r = await ctx.getPoint(`CTABLESTYLE에 대한 새 값 입력 <${cur?.name ?? 'Standard'}>:`, { allowText: true });
+        const r = await ctx.getPoint(`CTABLESTYLE에 대한 새 값 입력 <${ft(cur?.name ?? 'Standard')}>:`, { allowText: true });
         if (!('text' in r)) return;
         name = r.text.trim();
       }
       const f = listTableStyles(st.doc).find((s) => tableKey(s.name) === tableKey(name));
       if (!f) {
-        ctx.print(`테이블 스타일 "${name}"을(를) 찾을 수 없습니다.`, 'err');
+        ctx.print(`테이블 스타일 "${ft(name)}"을(를) 찾을 수 없습니다.`, 'err');
         return;
       }
       st.session.commit({ label: 'CTABLESTYLE', ops: [{ kind: 'header', name: '$CTABLESTYLE', before: st.doc.header.get('$CTABLESTYLE'), after: f.name }] });

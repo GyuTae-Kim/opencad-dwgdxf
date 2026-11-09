@@ -37,7 +37,8 @@ export function pureLisp(): PureLisp {
   const host: LispHost = {
     alert: (t) => void printed.push(`[alert] ${t}`),
     ask: async (_kind, prompt) => {
-      prompts.push(prompt);
+      // 도면·프로그램 글 표시(ft — 105차)는 빼고 모은다(보이는 글과 같게)
+      prompts.push(unmark(prompt));
       const r = inputs.shift();
       if (!r) throw Object.assign(new Error('취소'), { name: 'CancelError' });
       return r;
@@ -73,7 +74,7 @@ export function pureLisp(): PureLisp {
     grdraw: (vs) => void grdrawn.push(...vs),
     redraw: () => void (grdrawn.length = 0),
   };
-  const it = createInterp(host, { print: (t, cls) => void printed.push(cls ? `${cls}:${t}` : t) });
+  const it = createInterp(host, { print: (t, cls) => void printed.push(cls ? `${cls}:${unmark(t)}` : unmark(t)) });
   return {
     it,
     printed,

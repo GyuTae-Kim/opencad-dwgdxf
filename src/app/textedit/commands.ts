@@ -12,6 +12,7 @@ import type { DocState } from '../docstate';
 import { addEntities, currentProps } from '../draw';
 import type { Pt } from '../view';
 import { type EditorResult, TextEditor, openTextEditor } from './editor';
+import { ft } from '../filetext';
 
 const v3 = (p: Pt) => ({ x: p.x, y: p.y, z: 0 });
 const dist = (a: Pt, b: Pt) => Math.hypot(b.x - a.x, b.y - a.y);
@@ -68,17 +69,17 @@ async function askInt(ctx: CommandContext, prompt: string, def: number, min: num
 /** 스타일 이름 입력(? = 목록). 취소·Enter면 지금 스타일 */
 async function askStyle(ctx: CommandContext, doc: CadDocument, cur: string, prompt: string): Promise<string> {
   for (;;) {
-    const r = await ctx.getPoint(`${prompt} <${cur}>:`, { allowText: true });
+    const r = await ctx.getPoint(`${prompt} <${ft(cur)}>:`, { allowText: true });
     if (!('text' in r)) return cur;
     const t = r.text.trim();
     if (t === '?') {
       const names = [...doc.textStyles.values()].filter((s) => s.name && !(s.flags & 1)).map((s) => s.name);
-      ctx.print(`문자 스타일: ${names.join(', ')}`);
+      ctx.print(`문자 스타일: ${names.map(ft).join(', ')}`);
       continue;
     }
     const s = doc.textStyles.get(tableKey(t));
     if (!s || !s.name || s.flags & 1) {
-      ctx.print(`문자 스타일 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+      ctx.print(`문자 스타일 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
       continue;
     }
     return s.name;
@@ -88,7 +89,7 @@ async function askStyle(ctx: CommandContext, doc: CadDocument, cur: string, prom
 function styleLine(doc: CadDocument, name: string, ctx: CommandContext): void {
   const s = doc.textStyles.get(tableKey(name));
   const defH = Number(doc.header.get('$TEXTSIZE') ?? 2.5) || 2.5;
-  ctx.print(`현재 문자 스타일: "${s?.name ?? name}"  문자 높이: ${fmt(ctx, s?.height || defH)}  주석: ${textStyleAnnotative(doc, name) ? '예' : '아니오'}`);
+  ctx.print(`현재 문자 스타일: "${ft(s?.name ?? name)}"  문자 높이: ${fmt(ctx, s?.height || defH)}  주석: ${textStyleAnnotative(doc, name) ? '예' : '아니오'}`);
 }
 
 // ---------------------------------------------------------------------------

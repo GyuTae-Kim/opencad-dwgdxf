@@ -8,6 +8,7 @@ import { tableKey } from '../../core/model';
 import type { EditOp } from '../session';
 import { cloneEntity } from '../session';
 import { blockReaches, syncAllOps } from '../util/blockutil';
+import { ft } from '../../app/filetext';
 
 export interface AttRedefResult {
   ops: EditOp[];
@@ -26,15 +27,15 @@ export interface AttRedefResult {
 export function attRedefOps(doc: CadDocument, name: string, space: string, handles: readonly string[], base: Vec3, newHandle: () => string): AttRedefResult {
   const key = tableKey(name);
   const old = doc.blocks.get(key);
-  if (!old) throw new Error(`블록 "${name}"이(가) 없습니다.`);
-  if (old.flags & 4) throw new Error(`"${old.name}"은(는) 외부 참조라 다시 정의할 수 없습니다.`);
+  if (!old) throw new Error(`블록 "${ft(name)}"이(가) 없습니다.`);
+  if (old.flags & 4) throw new Error(`"${ft(old.name)}"은(는) 외부 참조라 다시 정의할 수 없습니다.`);
   const blk = doc.blocks.get(space);
   if (!blk) throw new Error('공간이 없습니다.');
   const order = new Map(blk.entities.map((e, i) => [e.handle, i]));
   const chosen = handles.filter((h) => order.has(h)).sort((a, b) => order.get(a)! - order.get(b)!);
   for (const h of chosen) {
     const e = doc.entityIndex.get(h);
-    if (e?.type === 'INSERT' && blockReaches(doc, e.block, key)) throw new Error(`블록 "${old.name}"은(는) 자기 자신을 참조할 수 없습니다.`);
+    if (e?.type === 'INSERT' && blockReaches(doc, e.block, key)) throw new Error(`블록 "${ft(old.name)}"은(는) 자기 자신을 참조할 수 없습니다.`);
   }
   const ents: Entity[] = [];
   const removes: EditOp[] = [];

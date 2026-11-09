@@ -7,6 +7,7 @@ import type { App } from './app';
 import type { DocState } from './docstate';
 import { toast } from './ui/dom';
 import { decodeViewLink, rectOf, viewFromRect, viewUrl, type ViewLink } from './viewlink';
+import { ft } from './filetext';
 
 /** 지금 화면의 보기(블록 편집기 중이면 그 뒤의 공간, 배치의 뷰포트 안이면 배치 화면) */
 export function currentViewLink(app: App, st: DocState): ViewLink | null {
@@ -38,7 +39,7 @@ export async function applyViewLink(app: App, st: DocState, link: ViewLink): Pro
     const name = link.layout.toUpperCase();
     const lay = st.doc.layouts.find((l) => tableKey(l.blockName) !== MODEL_SPACE && l.name.toUpperCase() === name);
     if (!lay) {
-      toast(`주소의 보기에 있는 배치 탭 "${link.layout}"이(가) 이 도면에 없습니다.`, 'warn');
+      toast(`주소의 보기에 있는 배치 탭 "${ft(link.layout)}"이(가) 이 도면에 없습니다.`, 'warn');
       return false;
     }
     space = lay.blockName;

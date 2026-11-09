@@ -8,6 +8,7 @@ import { pathsFillPoint } from './boundary';
 import { patternLines, userPatternLines } from './lines';
 import { findPattern } from './patterns';
 import { numArray } from '../../core/lwpoly';
+import { ft } from '../../app/filetext';
 
 export interface CreateHatchOptions {
   /** 무늬 이름('SOLID', 'ANSI31' …, 사용자 정의는 '_USER') */
@@ -92,7 +93,7 @@ export function createHatch(doc: CadDocument, paths: HatchPath[], opt: CreateHat
     return h;
   }
   const def = findPattern(name);
-  if (!def) throw new Error(`알 수 없는 해치 무늬: ${name}`);
+  if (!def) throw new Error(`알 수 없는 해치 무늬: ${ft(name)}`);
   const scale = def.kind === 'iso' && opt.isoPenWidth ? opt.isoPenWidth : (opt.scale ?? 1);
   h.solid = !def.lines.length;
   h.patternName = def.name;

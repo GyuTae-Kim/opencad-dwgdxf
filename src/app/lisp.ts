@@ -17,6 +17,7 @@ import { type HostState, makeHost, supply } from './lisp-host';
 import { pickFiles } from './drawingfiles';
 import { sessionFile } from './sessionfiles';
 import { fileNameMode, linkLisp } from './script';
+import { ft } from './filetext';
 
 /** 입력 고리 이름(App.inputFilters) */
 const HOOK = 'autolisp';
@@ -132,7 +133,7 @@ class LispSession implements HostState {
       return;
     }
     const p = pending as { prompt?: string } | null;
-    app.cmd.print(p ? `${p.prompt ?? ''} ${bang ? '!' : ''}${text}`.trim() : `명령: ${bang ? '!' : ''}${text}`);
+    app.cmd.print(p ? `${p.prompt ?? ''} ${bang ? '!' : ''}${ft(text)}`.trim() : `명령: ${bang ? '!' : ''}${ft(text)}`);
     // 한 줄에 식이 여럿이면 차례로(명령행에서 식마다 Enter를 친 것처럼)
     const forms: Value[] = [];
     try {
@@ -277,13 +278,13 @@ class LispSession implements HostState {
   async loadText(name: string, text: string): Promise<boolean> {
     const app = this.app;
     if (this.depth > 0) {
-      app.cmd.print(`"${name}": 다른 AutoLISP 식이 실행 중이어서 로드할 수 없습니다.`, 'err');
+      app.cmd.print(`"${ft(name)}": 다른 AutoLISP 식이 실행 중이어서 로드할 수 없습니다.`, 'err');
       return false;
     }
     const o = await this.run(`APPLOAD ${name}`, false, () => this.it.evalText(text));
     this.it.flush();
-    if (o.ok) app.cmd.print(`"${name}"을(를) 로드했습니다.`);
-    else app.cmd.print(`"${name}"을(를) 로드하다가 멈췄습니다.`, 'err');
+    if (o.ok) app.cmd.print(`"${ft(name)}"을(를) 로드했습니다.`);
+    else app.cmd.print(`"${ft(name)}"을(를) 로드하다가 멈췄습니다.`, 'err');
     return o.ok;
   }
 }
@@ -310,7 +311,7 @@ export async function loadLispFile(app: App, file: Blob & { name?: string }, nam
   const s = lispSession(app);
   const { text, encoding } = decodeScript(new Uint8Array(await file.arrayBuffer()));
   s.remember(name, text);
-  if (encoding === 'cp949') app.cmd.print(`참고: "${name}"은(는) CP949(한국어 Windows) 인코딩으로 읽었습니다.`);
+  if (encoding === 'cp949') app.cmd.print(`참고: "${ft(name)}"은(는) CP949(한국어 Windows) 인코딩으로 읽었습니다.`);
   await new Promise<void>((resolve) => s.later(() => s.loadText(name, text).then(() => resolve())));
 }
 
@@ -361,7 +362,7 @@ export function registerLispCommands(app: App): void {
         if (!('text' in r)) return;
         const f = await s.findFile(r.text);
         if (!f) {
-          ctx.print(`파일 "${r.text.trim()}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 연 파일만 이름으로 로드합니다.`, 'err');
+          ctx.print(`파일 "${ft(r.text.trim())}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 연 파일만 이름으로 로드합니다.`, 'err');
           return;
         }
         s.later(() => s.loadText(f.name, f.text));
@@ -371,7 +372,7 @@ export function registerLispCommands(app: App): void {
       const items: { name: string; text: string }[] = [];
       for (const f of files) {
         const { text, encoding } = decodeScript(new Uint8Array(await f.arrayBuffer()));
-        if (encoding === 'cp949') ctx.print(`참고: "${f.name}"은(는) CP949(한국어 Windows) 인코딩으로 읽었습니다.`);
+        if (encoding === 'cp949') ctx.print(`참고: "${ft(f.name)}"은(는) CP949(한국어 Windows) 인코딩으로 읽었습니다.`);
         s.remember(f.name, text);
         items.push({ name: f.name, text });
       }

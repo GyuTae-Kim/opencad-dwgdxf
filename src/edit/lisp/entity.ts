@@ -20,6 +20,7 @@ import { Cons, Ename, LispError, Real, fromArray, isNum, numOf, toArray, type Va
 import { lwCount, lwVertices, setLwVertices } from '../../core/lwpoly';
 import { polyCount, polyHas, polyVertex, polyVertices, setPolyVertices } from '../../core/polyverts';
 import { ctrlCount, fitCount, splineCtrl, splineFit } from '../../core/flat3';
+import { ft } from '../../app/filetext';
 
 type Pair = [number, Value];
 
@@ -469,7 +470,7 @@ function applyCommon(d: LispDrawing, e: Entity, code: number, v: Value, ctx: App
     }
     case 6: {
       const n = sv(code, v);
-      if (!linetypeOk(d, n)) throw new LispError(`선종류 "${n}"이(가) 도면에 없습니다`);
+      if (!linetypeOk(d, n)) throw new LispError(`선종류 "${ft(n)}"이(가) 도면에 없습니다`);
       e.linetype = /^bylayer$/i.test(n) ? 'ByLayer' : /^byblock$/i.test(n) ? 'ByBlock' : (d.doc.linetypes.get(tableKey(n))?.name ?? n);
       return true;
     }
@@ -641,7 +642,7 @@ function applyGroups(d: LispDrawing, e: Entity, pairs: Pair[], ctx: Apply): void
         if (code === 2) {
           const n = sv(code, v);
           const b = d.doc.blocks.get(tableKey(n));
-          if (!b) throw new LispError(`블록 "${n}"이(가) 도면에 없습니다`);
+          if (!b) throw new LispError(`블록 "${ft(n)}"이(가) 도면에 없습니다`);
           e.block = b.name;
         } else if (code === 10) e.insert = pv(code, v);
         else if (code === 41) e.scale = { ...e.scale, x: nv(code, v) };

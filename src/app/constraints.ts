@@ -662,7 +662,7 @@ function storeFromRows(store: ConstraintStore, rows: ParamRow[]): ConstraintStor
     const why = paramNameProblem(r.name);
     if (why) return `${r.name || '(빈 이름)'}: ${why}`;
     const k = r.name.trim().toLowerCase();
-    if (seen.has(k)) return `이름 "${r.name}"이(가) 겹칩니다.`;
+    if (seen.has(k)) return `이름 "${ft(r.name)}"이(가) 겹칩니다.`;
     seen.add(k);
     if (!r.reference) {
       if (!r.expr.trim()) return `${r.name}: 식을 입력하십시오.`;

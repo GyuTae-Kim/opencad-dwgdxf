@@ -25,6 +25,7 @@ import { sessionFile } from './sessionfiles';
 import { findSnap } from './snap';
 import { grClear, grDraw } from './lisp-gr';
 import { affApply } from '../text/layout';
+import { ft } from './filetext';
 import { isBrowserSysvar, setSysvarText, sysvarInfo } from './sysvars';
 
 type Pt = { x: number; y: number };
@@ -182,7 +183,7 @@ async function runCommand(app: App, s: HostState, args: Value[], mode: 'command'
       if (typeof a !== 'string') throw new LispError(`알 수 없는 명령: ${prin1(a)}`);
       const w = parseCommandWord(a);
       const canonical = w ? app.findCommand(w.name)?.name : undefined;
-      if (!w || !canonical) throw new LispError(`알 수 없는 명령 "${a.trim()}"`);
+      if (!w || !canonical) throw new LispError(`알 수 없는 명령 "${ft(a.trim())}"`);
       const name = scriptCommandName(w.name, canonical, (n) => app.commands.has(n.toUpperCase()));
       if (app.active?.selection.size) app.clearSelection();
       started = true;
@@ -492,8 +493,8 @@ export function makeHost(app: App, s: HostState): LispHost {
 
   return {
     alert(text) {
-      for (const line of text.split('\n')) app.cmd.print(`[알림] ${line}`);
-      if (typeof document !== 'undefined') toast(text, 'info', 6000);
+      for (const line of text.split('\n')) app.cmd.print(`[알림] ${ft(line)}`);
+      if (typeof document !== 'undefined') toast(ft(text), 'info', 6000);
     },
     async ask(kind, prompt, opt: AskOptions): Promise<AskResult> {
       const ai = internals(app);

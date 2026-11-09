@@ -19,6 +19,7 @@ import { fakePolySelect } from './selfake';
 import { readCadFile } from '../../src/io';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { writeDwg } from '../../src/io/dwg/writer/index';
+import { unmark } from '../../src/app/filetext';
 
 /** 엔진 워커 흉내: 같은 스레드에서 읽고 쓴다 */
 export function fakeEngine() {
@@ -124,7 +125,9 @@ export function makeScriptApp(setup?: (doc: CadDocument) => void): ScriptApp {
       return e ? (boundsOf([e], doc) ?? undefined) : undefined;
     },
   };
+  // 진짜 명령행처럼 도면 글 표시(ft — 105차)는 빼고 모은다(보이는 글과 같게)
   const print = (text: string, cls?: 'err' | 'res') => {
+    text = unmark(text);
     cmd.onPrint?.(text, cls);
     printed.push({ text, cls });
   };
@@ -147,7 +150,7 @@ export function makeScriptApp(setup?: (doc: CadDocument) => void): ScriptApp {
         },
         reject,
       );
-      prompts.push(r.prompt);
+      prompts.push(unmark(r.prompt));
       request = r;
     });
 

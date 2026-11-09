@@ -435,8 +435,8 @@ async function runTransmit(app: App, ctx: CommandContext): Promise<void> {
   }
   download(built.blob, built.name);
   const total = built.entries.reduce((n, e) => n + e.size, 0);
-  ctx.print(`${built.name}을(를) 만들었습니다(파일 ${built.entries.length}개, 압축 전 ${formatBytes(total)}, zip ${formatBytes(built.blob.size)}).`);
-  if (built.plan.missing.length) ctx.print(`찾을 수 없는 파일 ${built.plan.missing.length}개: ${built.plan.missing.slice(0, 5).map((i) => i.name).join(', ')}${built.plan.missing.length > 5 ? ' …' : ''} — 보고서에 적었습니다.`, 'err');
+  ctx.print(`${ft(built.name)}을(를) 만들었습니다(파일 ${built.entries.length}개, 압축 전 ${formatBytes(total)}, zip ${formatBytes(built.blob.size)}).`);
+  if (built.plan.missing.length) ctx.print(`찾을 수 없는 파일 ${built.plan.missing.length}개: ${built.plan.missing.slice(0, 5).map((i) => ft(i.name)).join(', ')}${built.plan.missing.length > 5 ? ' …' : ''} — 보고서에 적었습니다.`, 'err');
 }
 
 export function registerTransmitCommands(app: App): void {

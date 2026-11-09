@@ -14,6 +14,7 @@ import { SNAP_NAMES } from './snap';
 import type { SnapKind } from './view';
 import { h } from './ui/dom';
 import { askKeyword, askText, button, feedPrompt, isNested, listBox, loadPref, modal, padWide, savePref, select, takeErased, textInput, rememberErased, type ErasedItem } from './util2-ui';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // OOPS: ERASE를 감싸 지운 객체를 기억한다
@@ -218,11 +219,11 @@ export function registerUtil2MiscCommands(app: App): void {
           if (x.now === x.orig) continue;
           const ops = renameOps(st.doc, k, x.orig, x.now);
           if (!ops.length) {
-            ctx.print(`${x.orig} → ${x.now}: ${renameProblem(st.doc, k, x.orig, x.now) ?? '바꿀 수 없습니다.'}`, 'err');
+            ctx.print(`${ft(x.orig)} → ${ft(x.now)}: ${renameProblem(st.doc, k, x.orig, x.now) ?? '바꿀 수 없습니다.'}`, 'err');
             continue;
           }
           st.session.commit({ label: 'RENAME', ops, group: ctx.group });
-          ctx.print(`${RENAME_KINDS.find((y) => y.kind === k)!.label} ${x.orig} → ${x.now}`);
+          ctx.print(`${RENAME_KINDS.find((y) => y.kind === k)!.label} ${ft(x.orig)} → ${ft(x.now)}`);
           n++;
         }
       if (n) {
@@ -249,7 +250,7 @@ export function registerUtil2MiscCommands(app: App): void {
       if (!oldName) return;
       const real = namesOf(st.doc, kd.kind).find((n) => tableKey(n) === tableKey(oldName));
       if (!real) {
-        ctx.print(`${kd.label} "${oldName}"을(를) 찾을 수 없습니다.`, 'err');
+        ctx.print(`${kd.label} "${ft(oldName)}"을(를) 찾을 수 없습니다.`, 'err');
         return;
       }
       const lock = lockedReason(st.doc, kd.kind, real);
@@ -321,7 +322,7 @@ export function registerUtil2MiscCommands(app: App): void {
       const stats = docStats(d);
       const isModel = st.space === MODEL_SPACE;
       const layout = st.layoutFor(st.space);
-      out(`${st.saveName} — ${d.format.toUpperCase()} ${d.version}`);
+      out(`${ft(st.saveName)} — ${d.format.toUpperCase()} ${d.version}`);
       out(`도면에 있는 객체 ${stats.total}개 (${stats.bySpace.map((s) => `${s.name} ${s.count}`).join(', ')})`);
       const lmin = isModel ? v2of(d.header.get('$LIMMIN'), { x: 0, y: 0 }) : (layout?.limitsMin ?? v2of(d.header.get('$PLIMMIN'), { x: 0, y: 0 }));
       const lmax = isModel ? v2of(d.header.get('$LIMMAX'), { x: 420, y: 297 }) : (layout?.limitsMax ?? v2of(d.header.get('$PLIMMAX'), { x: 420, y: 297 }));
@@ -346,18 +347,18 @@ export function registerUtil2MiscCommands(app: App): void {
         out(`${padWide('스냅 해상도는', 16)} X:${L(vp.snapSpacing.x)}  Y:${L(vp.snapSpacing.y)}`);
         out(`${padWide('그리드 간격은', 16)} X:${L(vp.gridSpacing.x)}  Y:${L(vp.gridSpacing.y)}`);
       }
-      out(`${padWide('현재 공간:', 16)} ${spaceName}${st.blockEdit ? ` (블록 편집기: ${st.blockEdit.name})` : ''}`);
-      out(`${padWide('현재 배치:', 16)} ${layout?.name ?? 'Model'}`);
+      out(`${padWide('현재 공간:', 16)} ${spaceName}${st.blockEdit ? ` (블록 편집기: ${ft(st.blockEdit.name)})` : ''}`);
+      out(`${padWide('현재 배치:', 16)} ${ft(layout?.name ?? 'Model')}`);
       const hs = (n: string, def: string) => {
         const v = d.header.get(n);
         return typeof v === 'string' && v ? v : def;
       };
-      out(`${padWide('현재 도면층:', 16)} "${hs('$CLAYER', '0')}"`);
+      out(`${padWide('현재 도면층:', 16)} "${ft(hs('$CLAYER', '0'))}"`);
       const cl = d.layers.get(tableKey(hs('$CLAYER', '0')));
       const cecolor = d.header.get('$CECOLOR');
       out(`${padWide('현재 색상:', 16)} ${colorName(typeof cecolor === 'number' ? cecolor : 256)}${(typeof cecolor !== 'number' || cecolor === 256) && cl ? ` -- ${colorName(cl.color)}` : ''}`);
       const celt = hs('$CELTYPE', 'ByLayer');
-      out(`${padWide('현재 선종류:', 16)} ${celt.toUpperCase()}${/^bylayer$/i.test(celt) && cl ? ` -- "${cl.linetype}"` : ''}`);
+      out(`${padWide('현재 선종류:', 16)} ${ft(celt.toUpperCase())}${/^bylayer$/i.test(celt) && cl ? ` -- "${ft(cl.linetype)}"` : ''}`);
       const celw = Number(d.header.get('$CELWEIGHT') ?? -1);
       out(`${padWide('현재 선가중치:', 16)} ${celw === -1 ? 'BYLAYER' : celw === -2 ? 'BYBLOCK' : celw === -3 ? '기본값' : `${(celw / 100).toFixed(2)} mm`}`);
       out(`${padWide('현재 고도:', 16)} ${formatLength(Number(d.header.get('$ELEVATION') ?? 0), st.units)}  두께: ${formatLength(Number(d.header.get('$THICKNESS') ?? 0), st.units)}`);
@@ -607,7 +608,7 @@ export function registerUtil2MiscCommands(app: App): void {
       if (!name) return;
       const c = app.findCommand(name);
       if (!c) {
-        ctx.print(`알 수 없는 명령 "${name}".`, 'err');
+        ctx.print(`알 수 없는 명령 "${ft(name)}".`, 'err');
         return;
       }
       if (c.name === 'MULTIPLE') return;

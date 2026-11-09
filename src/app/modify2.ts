@@ -33,6 +33,7 @@ import { unlockedOnly } from './layers';
 import { form } from './ui/dom';
 import type { OverlayGeom, Pt } from './view';
 import { MSG } from '../edit/geom/types';
+import { ft } from './filetext';
 
 const sub = (a: Pt, b: Pt): Pt => ({ x: a.x - b.x, y: a.y - b.y });
 
@@ -412,7 +413,7 @@ export function registerModify2Commands(app: App): void {
         if (!('text' in r)) return false;
         const def = doc.blocks.get(tableKey(r.text.trim()));
         if (!def || r.text.trim().startsWith('*')) {
-          ctx.print(`블록 "${r.text.trim()}"을(를) 찾을 수 없습니다.`, 'err');
+          ctx.print(`블록 "${ft(r.text.trim())}"을(를) 찾을 수 없습니다.`, 'err');
           continue;
         }
         block = def.name;
@@ -476,7 +477,7 @@ export function registerModify2Commands(app: App): void {
     const added = addEntities(app, ctx, ents, mode === 'divide' ? 'DIVIDE' : 'MEASURE');
     app.lastSelection = added;
     app.lastCreated = added;
-    ctx.print(`${block ? `블록 "${block}"` : '점'} ${added.length}개를 놓았습니다.`);
+    ctx.print(`${block ? `블록 "${ft(block)}"` : '점'} ${added.length}개를 놓았습니다.`);
     const pd = hnum(doc, '$PDMODE', 0);
     if (!block && (pd === 0 || pd === 1)) ctx.print('점이 잘 보이지 않으면 SETVAR로 PDMODE(예: 3)를 바꾸십시오.');
   };
