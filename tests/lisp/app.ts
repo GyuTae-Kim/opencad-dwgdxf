@@ -445,6 +445,7 @@ export function makeLispApp(setup?: (doc: CadDocument) => void): LispApp {
     model<T extends Entity['type']>(type: T) {
       return space().filter((e) => e.type === type) as (Entity & { type: T } & Record<string, any>)[];
     },
-    pending: () => (a.request ? { kind: a.request.kind, prompt: a.request.prompt } : null),
+    // 보이는 프롬프트(도면·프로그램 글 표시 ft는 뺀다 — 105차)
+    pending: () => (a.request ? { kind: a.request.kind, prompt: unmark(a.request.prompt) } : null),
   };
 }

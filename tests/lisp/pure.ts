@@ -5,6 +5,7 @@ import { createInterp, type Interp, type LispHost } from '../../src/edit/lisp';
 import type { AskResult } from '../../src/edit/lisp/host';
 import { prin1 } from '../../src/edit/lisp/printer';
 import type { Value } from '../../src/edit/lisp/types';
+import { unmark } from '../../src/app/filetext';
 
 export interface PureLisp {
   it: Interp;

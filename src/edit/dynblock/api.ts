@@ -151,7 +151,7 @@ function toNumber(v: string | number | boolean): number {
 
 function applyChange(ev: DynEval, c: DynChange, exact: boolean): boolean {
   const r = resolveKey(ev.def, c.key);
-  if (!r) throw new DynError(`매개변수 "${ft(c.key)}"이(가) 없습니다.`);
+  if (!r) throw new DynError(`매개변수 "${ft(String(c.key))}"이(가) 없습니다.`);
   const p = r.param;
   switch (p.kind) {
     case 'visibility':
