@@ -265,7 +265,7 @@ async function checkFlow(app: App, ctx: CommandContext, st: DocState): Promise<v
     if (!c || !loadedSources(stateOf(st.doc)).length) return;
     return checkFlow(app, ctx, st);
   }
-  if (missingNames(s).length) ctx.print(`참고: 다시 고르지 않은 표준 파일(${missingNames(s).join(', ')})은 검사에 쓰지 않습니다.`);
+  if (missingNames(s).length) ctx.print(`참고: 다시 고르지 않은 표준 파일(${missingNames(s).map(ft).join(', ')})은 검사에 쓰지 않습니다.`);
   const kinds = STD_KINDS.filter((k) => s.kinds.has(k));
   const ignoredNow = config.showIgnored ? new Set<string>() : s.ignored;
   let problems = checkStandards(st.doc, sources, kinds, ignoredNow);

@@ -45,6 +45,7 @@ import {
 } from './annoscale-core';
 import { applyObjectScales, applyScaleList, objectScaleDialog, resetList, scaleListDialog } from './annoscale-ui';
 import { askKeyword, askText, askYesNo } from './util2-ui';
+import { ft } from './filetext';
 
 const unquote = (t: string): string => t.trim().replace(/^"(.*)"$/, '$1').trim();
 
@@ -92,12 +93,12 @@ export function registerAnnoScaleCommands(app: App): void {
         return;
       }
       const cur = sh.scale?.name ?? currentScaleName(st);
-      const raw = arg ?? (await askText(ctx, `CANNOSCALE에 대한 새 값 입력 <"${cur}">:`, ''));
+      const raw = arg ?? (await askText(ctx, `CANNOSCALE에 대한 새 값 입력 <"${ft(cur)}">:`, ''));
       const t = unquote(raw);
       if (!t) return;
       const s = findScale(listOf(st), t);
       if (!s) {
-        ctx.print(`주석 축척 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+        ctx.print(`주석 축척 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
         return;
       }
       if (!chooseScale(app, s.name, ctx.group)) return;
@@ -150,7 +151,7 @@ export function registerAnnoScaleCommands(app: App): void {
         if (key === '?') {
           const pat = unquote(await askText(ctx, '나열할 축척 이름 입력 <*>:', '*')) || '*';
           const cur = currentScaleName(st).toUpperCase();
-          for (const s of listOf(st)) if (wcmatch(s.name, pat)) ctx.print(`  ${s.name.toUpperCase() === cur ? '* ' : '  '}${s.name}    ${fmtNum(s.paper)} 용지 단위 = ${fmtNum(s.drawing)} 도면 단위`);
+          for (const s of listOf(st)) if (wcmatch(s.name, pat)) ctx.print(`  ${s.name.toUpperCase() === cur ? '* ' : '  '}${ft(s.name)}    ${fmtNum(s.paper)} 용지 단위 = ${fmtNum(s.drawing)} 도면 단위`);
           continue;
         }
         if (key === 'A') {
@@ -163,7 +164,7 @@ export function registerAnnoScaleCommands(app: App): void {
           }
           const work = listOf(st).map((s) => ({ ...s }));
           const have = findScale(work, name);
-          if (have && !(await askYesNo(ctx, `${have.name}이(가) 이미 있습니다.  축척을 재정의하시겠습니까?`, false))) continue;
+          if (have && !(await askYesNo(ctx, `${ft(have.name)}이(가) 이미 있습니다.  축척을 재정의하시겠습니까?`, false))) continue;
           let ratio: { paper: number; drawing: number } | null = null;
           while (!ratio) {
             const t = (await askText(ctx, '축척 비율 입력:', '')).trim();
@@ -190,10 +191,10 @@ export function registerAnnoScaleCommands(app: App): void {
           else {
             const hits = work.filter((s) => wcmatch(s.name, t));
             if (!hits.length) {
-              ctx.print(`축척 ${t}을(를) 찾지 못했습니다.`, 'err');
+              ctx.print(`축척 ${ft(t)}을(를) 찾지 못했습니다.`, 'err');
               continue;
             }
-            for (const s of hits.filter(keep)) ctx.print(`축척 ${s.name}은(는) ${s === cur ? '현재 주석 축척이므로' : '사용 중이므로'} 삭제할 수 없습니다.`);
+            for (const s of hits.filter(keep)) ctx.print(`축척 ${ft(s.name)}은(는) ${s === cur ? '현재 주석 축척이므로' : '사용 중이므로'} 삭제할 수 없습니다.`);
             drop = hits.filter((s) => !keep(s));
           }
           if (drop.length >= work.length) drop = drop.slice(0, work.length - 1);
@@ -253,7 +254,7 @@ export function registerAnnoScaleCommands(app: App): void {
       const listScales = () => {
         for (const e of list) {
           const s = annoState(st.doc, st.doc.entityIndex.get(e.handle) ?? e, idx);
-          if (s) ctx.print(`  ${e.type} ${e.handle}: ${s.scales.map((n) => idx.name(n)?.name ?? n).join(', ')}`);
+          if (s) ctx.print(`  ${e.type} ${e.handle}: ${s.scales.map((n) => ft(idx.name(n)?.name ?? n)).join(', ')}`);
         }
       };
       if (key === '?') return listScales();
@@ -261,7 +262,7 @@ export function registerAnnoScaleCommands(app: App): void {
       const def = currentFor(app, st)?.name ?? '1:1';
       const names: string[] = [];
       for (;;) {
-        const t = unquote(await askText(ctx, `${add ? '추가' : '삭제'}할 명명된 축척 입력 또는 [?] <${names.length ? '종료' : def}>:`, names.length ? '' : def));
+        const t = unquote(await askText(ctx, `${add ? '추가' : '삭제'}할 명명된 축척 입력 또는 [?] <${names.length ? '종료' : ft(def)}>:`, names.length ? '' : def));
         if (!t) break;
         if (t === '?') {
           listScales();
@@ -269,7 +270,7 @@ export function registerAnnoScaleCommands(app: App): void {
         }
         const s = findScale(idx.list, t);
         if (!s) {
-          ctx.print(`축척 ${t}을(를) 찾지 못했습니다.`, 'err');
+          ctx.print(`축척 ${ft(t)}을(를) 찾지 못했습니다.`, 'err');
           continue;
         }
         if (!names.includes(s.name)) names.push(s.name);
@@ -292,7 +293,7 @@ export function registerAnnoScaleCommands(app: App): void {
     if (!s) return;
     const r = applyObjectScales(st, list, add ? [s.name] : [], add ? [] : [s.name], ctx.group, add ? 'AIOBJECTSCALEADD' : 'AIOBJECTSCALEREMOVE');
     if (r.single) ctx.print(`${r.single}개의 객체는 축척이 하나뿐이어서 삭제하지 않았습니다.`);
-    ctx.print(`${r.changed}개의 객체가 주석 축척 <${s.name}>을(를) 지원하도록 업데이트되었습니다.`);
+    ctx.print(`${r.changed}개의 객체가 주석 축척 <${ft(s.name)}>을(를) 지원하도록 업데이트되었습니다.`);
   };
   app.register({ name: 'AIOBJECTSCALEADD', title: '현재 축척 추가', run: addRemove(true) });
   app.register({ name: 'AIOBJECTSCALEREMOVE', title: '현재 축척 삭제', run: addRemove(false) });

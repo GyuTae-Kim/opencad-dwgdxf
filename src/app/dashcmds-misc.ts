@@ -17,6 +17,7 @@ import { askLine, askOption, askReal, askWord, askYN } from './dashcmds-ask';
 import { commitResults } from './modify';
 import { memOf, selectEditable } from './modify2-util';
 import { xrefOfDoc } from './refs';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // -OVERKILL
@@ -124,7 +125,7 @@ function pickXrefs(ctx: CommandContext, spec: string) {
     all.map((b) => b.name),
     spec,
   );
-  if (!m.names.length) ctx.print(`외부 참조 "${spec}"을(를) 찾을 수 없습니다.`, 'err');
+  if (!m.names.length) ctx.print(`외부 참조 "${ft(spec)}"을(를) 찾을 수 없습니다.`, 'err');
   return m.names.map((n) => doc.blocks.get(tableKey(n))!).filter(Boolean);
 }
 
@@ -181,7 +182,7 @@ async function runDashXref(app: App, ctx: CommandContext): Promise<void> {
       ).names.map(tableKey),
     );
     ctx.print('참조 이름               경로');
-    for (const b of all) if (names.has(tableKey(b.name))) ctx.print(`${b.name.padEnd(24)}${b.xrefPath ?? ''}${b.flags & 8 ? '  (중첩)' : ''}`);
+    for (const b of all) if (names.has(tableKey(b.name))) ctx.print(`${ft(b.name.padEnd(24))}${ft(b.xrefPath ?? '')}${b.flags & 8 ? '  (중첩)' : ''}`);
     ctx.print(`총 외부 참조: ${all.length}개`);
     return;
   }
@@ -200,8 +201,8 @@ async function runDashXref(app: App, ctx: CommandContext): Promise<void> {
   }
   if (k === 'P') {
     for (const b of blocks) {
-      ctx.print(`외부 참조 이름: ${b.name}`);
-      ctx.print(`이전 경로: ${b.xrefPath ?? ''}`);
+      ctx.print(`외부 참조 이름: ${ft(b.name)}`);
+      ctx.print(`이전 경로: ${ft(b.xrefPath ?? '')}`);
       const path = (await askLine(ctx, '새 경로 입력:', '')).trim().replace(/^"(.*)"$/, '$1');
       if (!path) continue;
       st.session.commit({ label: 'XREF', ops: [{ kind: 'blockDef', key: tableKey(b.name), before: b, after: { ...b, xrefPath: path } }], group: ctx.group });
@@ -211,20 +212,20 @@ async function runDashXref(app: App, ctx: CommandContext): Promise<void> {
   if (k === 'D') {
     const ops = blocks.flatMap((b) => detachXrefOps(doc, b.name));
     if (ops.length) st.session.commit({ label: 'XREF', ops, group: ctx.group, rebuildNow: true });
-    for (const b of blocks) ctx.print(`외부 참조 "${b.name}"을(를) 분리했습니다.`);
+    for (const b of blocks) ctx.print(`외부 참조 "${ft(b.name)}"을(를) 분리했습니다.`);
     return;
   }
   // 결합
   for (const b of blocks) {
     const file = xrefOfDoc(doc, tableKey(b.name));
     if (!file) {
-      ctx.print(`외부 참조 "${b.name}"의 파일이 연결되지 않아 결합할 수 없습니다. EXTERNALREFERENCES(XR)에서 파일을 먼저 연결하십시오.`, 'err');
+      ctx.print(`외부 참조 "${ft(b.name)}"의 파일이 연결되지 않아 결합할 수 없습니다. EXTERNALREFERENCES(XR)에서 파일을 먼저 연결하십시오.`, 'err');
       continue;
     }
     const r = bindXrefOps(doc, tableKey(b.name), file.doc, () => st.session.newHandle());
     if (!r) continue;
     st.session.commit({ label: 'XREF', ops: r.ops, group: ctx.group, rebuildNow: true });
-    ctx.print(`외부 참조 "${b.name}"을(를) 결합했습니다(객체 ${r.entities}개${r.skipped ? `, 옮기지 못한 객체 ${r.skipped}개` : ''}${r.nested ? `, 중첩 참조 ${r.nested}개는 빠짐` : ''}).`);
+    ctx.print(`외부 참조 "${ft(b.name)}"을(를) 결합했습니다(객체 ${r.entities}개${r.skipped ? `, 옮기지 못한 객체 ${r.skipped}개` : ''}${r.nested ? `, 중첩 참조 ${r.nested}개는 빠짐` : ''}).`);
   }
 }
 
@@ -307,13 +308,13 @@ async function runDashImage(app: App, ctx: CommandContext): Promise<void> {
       ).names.map((n) => n.toUpperCase()),
     );
     const hit = all.filter((x) => names.has(x.name.toUpperCase()));
-    if (!hit.length) ctx.print(`이미지 "${spec}"을(를) 찾을 수 없습니다.`, 'err');
+    if (!hit.length) ctx.print(`이미지 "${ft(spec)}"을(를) 찾을 수 없습니다.`, 'err');
     return hit;
   };
   if (k === '?') {
     const hit = pick((await askWord(ctx, '나열할 이미지 입력 <*>:')) ?? '*');
     ctx.print('이미지 이름             로드됨   경로');
-    for (const x of hit) ctx.print(`${x.name.padEnd(24)}${(x.def.loaded ? '예' : '아니오').padEnd(9)}${x.def.fileName}`);
+    for (const x of hit) ctx.print(`${ft(x.name.padEnd(24))}${(x.def.loaded ? '예' : '아니오').padEnd(9)}${ft(x.def.fileName)}`);
     ctx.print(`총 이미지 정의: ${all.length}개`);
     return;
   }
@@ -325,13 +326,13 @@ async function runDashImage(app: App, ctx: CommandContext): Promise<void> {
   if (k === 'D') {
     const ops = hit.flatMap((x) => detachImageOps(doc, x));
     st.session.commit({ label: 'IMAGE', ops, group: ctx.group, rebuildNow: true });
-    for (const x of hit) ctx.print(`이미지 "${x.name}"을(를) 분리했습니다.`);
+    for (const x of hit) ctx.print(`이미지 "${ft(x.name)}"을(를) 분리했습니다.`);
     return;
   }
   if (k === 'P') {
     for (const x of hit) {
-      ctx.print(`이미지 이름: ${x.name}`);
-      ctx.print(`이전 경로: ${x.def.fileName}`);
+      ctx.print(`이미지 이름: ${ft(x.name)}`);
+      ctx.print(`이전 경로: ${ft(x.def.fileName)}`);
       const path = (await askLine(ctx, '새 경로 입력:', '')).trim().replace(/^"(.*)"$/, '$1');
       if (path) st.session.commit({ label: 'IMAGE', ops: [{ kind: 'object', key: x.def.handle, before: x.def, after: { ...x.def, fileName: path } }], group: ctx.group });
     }
@@ -344,8 +345,8 @@ async function runDashImage(app: App, ctx: CommandContext): Promise<void> {
     const found = app.imageKeys.has(x.def.fileName.replace(/^.*[\\/]/, '').toLowerCase());
     ctx.print(
       loaded
-        ? `이미지 "${x.name}"을(를) 로드됨으로 표시했습니다.${found ? '' : ' 파일이 연결되지 않아 테두리만 보입니다. EXTERNALREFERENCES(XR)에서 파일을 연결하십시오.'}`
-        : `이미지 "${x.name}"을(를) 언로드됨으로 표시했습니다(저장하면 AutoCAD에서 언로드 상태로 열립니다).`,
+        ? `이미지 "${ft(x.name)}"을(를) 로드됨으로 표시했습니다.${found ? '' : ' 파일이 연결되지 않아 테두리만 보입니다. EXTERNALREFERENCES(XR)에서 파일을 연결하십시오.'}`
+        : `이미지 "${ft(x.name)}"을(를) 언로드됨으로 표시했습니다(저장하면 AutoCAD에서 언로드 상태로 열립니다).`,
     );
   }
 }

@@ -17,6 +17,7 @@ import { unlockedOnly } from './layers';
 import { listBlocks } from './dashcmds-insert';
 import { askOption, askWord, askYN } from './dashcmds-ask';
 import { ask, h } from './ui/dom';
+import { ft } from './filetext';
 import { checkIn, fail, group, numIn, numOf, resultDialog, row, selectIn, textIn, areaIn, btn } from './mgr-ui';
 
 export const BAD_BLOCK_NAME = /[<>/\\":;?*|,=`]/;
@@ -342,7 +343,7 @@ function commitDefinition(app: App, ctx: CommandContext, spec: DefineBlockSpec, 
   st.selection.clear();
   st.session.commit({ label, ops: r.ops, group: ctx.group });
   if (r.insertHandle) app.setSelection([r.insertHandle]);
-  ctx.print(r.redefined ? `블록 ${spec.name.trim()}이(가) 재정의되었습니다(객체 ${r.count}개).` : `블록 "${spec.name.trim()}"을(를) 만들었습니다(객체 ${r.count}개).`);
+  ctx.print(r.redefined ? `블록 ${ft(spec.name.trim())}이(가) 재정의되었습니다(객체 ${r.count}개).` : `블록 "${ft(spec.name.trim())}"을(를) 만들었습니다(객체 ${r.count}개).`);
   return spec.name.trim();
 }
 
@@ -469,7 +470,7 @@ export async function dashBlock(app: App, ctx: CommandContext): Promise<void> {
       ctx.print(why, 'err');
       return;
     }
-    if (!(await askYN(ctx, `블록 "${old.name}"이(가) 이미 있습니다. 재정의하시겠습니까?`, false))) return;
+    if (!(await askYN(ctx, `블록 "${ft(old.name)}"이(가) 이미 있습니다. 재정의하시겠습니까?`, false))) return;
     name = old.name;
   }
   let annotative = false;

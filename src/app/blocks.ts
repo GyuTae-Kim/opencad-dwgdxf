@@ -101,7 +101,7 @@ export function registerBlockCommands(app: App): void {
       );
       if (!v) return;
       if (await app.openBlockEditor(String(v.name))) {
-        ctx.print(`블록 편집기: ${String(v.name)}. 끝내려면 BCLOSE를 입력하십시오.`);
+        ctx.print(`블록 편집기: ${ft(String(v.name))}. 끝내려면 BCLOSE를 입력하십시오.`);
         // 동적 블록: 형상은 고치되 매개변수·동작·가시성 상태는 손대지 않는다(만들기·고치기는 BPARAMETER 안내)
         if (isDynamicDefinition(app.active!.doc, tableKey(String(v.name)))) ctx.print(DYN_EDIT_NOTE);
       }
@@ -114,7 +114,7 @@ export function registerBlockCommands(app: App): void {
       aliases,
       title,
       run(ctx) {
-        ctx.print(`${name}: ${DYN_AUTHORING_NOTE}`, 'err');
+        ctx.print(`${ft(name)}: ${DYN_AUTHORING_NOTE}`, 'err');
       },
     });
   }
@@ -128,7 +128,7 @@ export function registerBlockCommands(app: App): void {
         return;
       }
       st.blockEdit.depth = st.session.depth;
-      ctx.print(`블록 ${st.blockEdit.name}을(를) 저장했습니다.`);
+      ctx.print(`블록 ${ft(st.blockEdit.name)}을(를) 저장했습니다.`);
     },
   });
   app.register({
@@ -151,7 +151,7 @@ export function registerBlockCommands(app: App): void {
         save = a === 'save';
       }
       await app.closeBlockEditor(save);
-      ctx.print(save ? `블록 ${be.name}을(를) 고쳤습니다.` : `블록 ${be.name}의 변경을 버렸습니다.`);
+      ctx.print(save ? `블록 ${ft(be.name)}을(를) 고쳤습니다.` : `블록 ${ft(be.name)}의 변경을 버렸습니다.`);
     },
   });
 }

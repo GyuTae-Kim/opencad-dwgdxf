@@ -27,6 +27,7 @@ import { type Box, type ChangeSet, type CompareOptions, type CompareSettings, ch
 import { type Affine, type XrefDiff, diffXrefVersions, fadeStyles, placeBox, placedDiffBoxes, placementMatrix, xcompareSummary, xrefBlockKeys, xrefChanged, xrefInserts } from '../edit/viewtools/xcompare';
 import { h, toast } from './ui/dom';
 import { packLw } from '../core/lwpoly';
+import { ft } from './filetext';
 
 /** 참조 파일 한 버전 */
 interface Version {
@@ -453,7 +454,7 @@ async function start(app: App, ctx: CommandContext, st: DocState, blockKey: stri
     s.applySettings(names);
   });
   const d = s.diff!;
-  ctx.print(`외부 참조 "${s.blockName}"을(를) 비교했습니다: 이전 "${prev.name}", 현재 "${cur.name}"${d.sameLineage ? '(같은 계보 — 핸들로 맞춤)' : ''}.`);
+  ctx.print(`외부 참조 "${ft(s.blockName)}"을(를) 비교했습니다: 이전 "${ft(prev.name)}", 현재 "${ft(cur.name)}"${d.sameLineage ? '(같은 계보 — 핸들로 맞춤)' : ''}.`);
   ctx.print(xcompareSummary(d, s.sets.length), 'res');
   if (!d.onlyNew.length && !d.onlyOld.length) ctx.print('두 버전에 차이가 없습니다.');
 }
@@ -476,7 +477,7 @@ async function xcompare(app: App, ctx: CommandContext, arg?: string): Promise<vo
   if (arg?.trim()) {
     key = keys.find((k) => k === tableKey(arg.trim())) ?? null;
     if (!key) {
-      ctx.print(`"${arg.trim()}"은(는) 모형 공간에 부착된 외부 참조가 아닙니다.`, 'err');
+      ctx.print(`"${ft(arg.trim())}"은(는) 모형 공간에 부착된 외부 참조가 아닙니다.`, 'err');
       return;
     }
   } else if (keys.length === 1) key = keys[0]!;
@@ -496,12 +497,12 @@ async function xcompare(app: App, ctx: CommandContext, arg?: string): Promise<vo
   const fileKey = xrefFileKey(blk);
   const file = xrefOfDoc(st.doc, key);
   if (!file) {
-    ctx.print(`외부 참조 "${blk.name}"의 파일이 로드되지 않았습니다. 외부 참조 창(XR)에서 파일을 연결한 뒤 비교하십시오.`, 'err');
+    ctx.print(`외부 참조 "${ft(blk.name)}"의 파일이 로드되지 않았습니다. 외부 참조 창(XR)에서 파일을 연결한 뒤 비교하십시오.`, 'err');
     return;
   }
   let prev = previous.get(fileKey) ?? null;
   if (!prev) {
-    ctx.print(`외부 참조 "${blk.name}"의 이전 버전이 없습니다(이 세션에서 다른 내용으로 다시 로드하지 않았습니다). 바뀐 파일을 고르면 그 파일로 다시 로드하고 지금 내용과 비교합니다.`);
+    ctx.print(`외부 참조 "${ft(blk.name)}"의 이전 버전이 없습니다(이 세션에서 다른 내용으로 다시 로드하지 않았습니다). 바뀐 파일을 고르면 그 파일로 다시 로드하고 지금 내용과 비교합니다.`);
     const f = await pickDrawingFile();
     if (!f) return;
     const before: Version = { name: file.name, doc: file.doc };
@@ -561,8 +562,8 @@ export function registerXCompareCommands(app: App): void {
     if (!xrefChanged(d)) return;
     const names = hostBlockNames(app, key);
     const label = names.length ? names.join(', ') : next.name;
-    app.cmd.print(`외부 참조 "${label}"이(가) 바뀌었습니다(현재 외부 참조에서만 ${d.onlyNew.length}개, 현재 외부 참조에 없음 ${d.onlyOld.length}개). XCOMPARE로 바뀐 내용을 비교할 수 있습니다.`);
-    toast(`외부 참조 "${label}"이(가) 바뀌었습니다. XCOMPARE로 비교할 수 있습니다.`, 'info', 6000);
+    app.cmd.print(`외부 참조 "${ft(label)}"이(가) 바뀌었습니다(현재 외부 참조에서만 ${d.onlyNew.length}개, 현재 외부 참조에 없음 ${d.onlyOld.length}개). XCOMPARE로 바뀐 내용을 비교할 수 있습니다.`);
+    toast(`외부 참조 "${ft(label)}"이(가) 바뀌었습니다. XCOMPARE로 비교할 수 있습니다.`, 'info', 6000);
   };
 
   // 외부 참조 창의 행 메뉴
@@ -601,7 +602,7 @@ export function registerXCompareCommands(app: App): void {
       transparent: true,
       noDoc: true,
       run(ctx) {
-        ctx.print(`${name}: 이 웹 버전에는 이전 버전을 둘 폴더가 없습니다. 외부 참조를 다시 로드할 때 이전 버전은 이 페이지 메모리에만 남고(XCOMPAREENABLE 1), 새로 고치면 사라집니다.`);
+        ctx.print(`${ft(name)}: 이 웹 버전에는 이전 버전을 둘 폴더가 없습니다. 외부 참조를 다시 로드할 때 이전 버전은 이 페이지 메모리에만 남고(XCOMPAREENABLE 1), 새로 고치면 사라집니다.`);
       },
     });
   }

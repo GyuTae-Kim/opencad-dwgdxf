@@ -215,12 +215,12 @@ export function registerAnnot2Leader(app: App): void {
           if (!('text' in r)) break;
           if (r.text.trim() === '?') {
             const names = [...doc.blocks.values()].filter((b) => !b.name.startsWith('*') && !(b.flags & 1)).map((b) => b.name);
-            ctx.print(names.length ? names.join(', ') : '블록이 없습니다.');
+            ctx.print(names.length ? names.map(ft).join(', ') : '블록이 없습니다.');
             continue;
           }
           const b = doc.blocks.get(tableKey(r.text.trim()));
           if (!b || b.name.startsWith('*')) {
-            ctx.print(`블록 ${r.text.trim()}을(를) 찾을 수 없습니다.`, 'err');
+            ctx.print(`블록 ${ft(r.text.trim())}을(를) 찾을 수 없습니다.`, 'err');
             continue;
           }
           const ins: InsertEntity = {
@@ -644,7 +644,7 @@ function mleaderStyleManager(app: App, ctx: CommandContext): Promise<void> {
       const s = selected();
       if (!s) return;
       st.session.commit({ label: 'MLEADERSTYLE', ops: [{ kind: 'header', name: '$CMLEADERSTYLE', before: doc.header.get('$CMLEADERSTYLE'), after: s.name }], group: ctx.group });
-      say(`현재 다중 지시선 스타일: ${s.name}`);
+      say(`현재 다중 지시선 스타일: ${ft(s.name)}`);
       fill(s.handle);
     };
     const create = async () => {
@@ -684,7 +684,7 @@ function mleaderStyleManager(app: App, ctx: CommandContext): Promise<void> {
         ],
         group: ctx.group,
       });
-      say(`스타일 ${nm}을(를) 만들었습니다.`);
+      say(`스타일 ${ft(nm)}을(를) 만들었습니다.`);
       fill(ns.handle);
     };
     const modify = async () => {
@@ -694,7 +694,7 @@ function mleaderStyleManager(app: App, ctx: CommandContext): Promise<void> {
       if (!vals) return;
       const ns = updateStyle(s, vals);
       st.session.commit({ label: 'MLEADERSTYLE', ops: [{ kind: 'object', key: s.handle, before: s, after: ns }], group: ctx.group });
-      say(`스타일 ${s.name}을(를) 고쳤습니다. 이미 있는 다중 지시선은 그대로입니다.`);
+      say(`스타일 ${ft(s.name)}을(를) 고쳤습니다. 이미 있는 다중 지시선은 그대로입니다.`);
       fill(s.handle);
     };
     const remove = (): void => {
@@ -712,7 +712,7 @@ function mleaderStyleManager(app: App, ctx: CommandContext): Promise<void> {
         ops.push({ kind: 'object', key: dict.handle, before: dict, after: { ...dict, entries } });
       }
       st.session.commit({ label: 'MLEADERSTYLE', ops, group: ctx.group });
-      say(`스타일 ${s.name}을(를) 삭제했습니다.`);
+      say(`스타일 ${ft(s.name)}을(를) 삭제했습니다.`);
       fill();
     };
     const btn = (label: string, run: () => void | Promise<void>) => h('button', { class: 'btn', style: 'display:block;width:100%;margin-bottom:6px', onclick: () => void run() }, label);

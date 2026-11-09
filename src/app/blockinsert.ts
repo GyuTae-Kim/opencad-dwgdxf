@@ -146,7 +146,7 @@ export async function attributeValues(app: App, ctx: CommandContext, def: BlockD
     return values;
   }
   ctx.print('속성 값 입력');
-  const ask = (d: AttribEntity, cur: string) => askLine(ctx, `${d.prompt || d.tag}${cur ? ` <${cur}>` : ''}:`, cur);
+  const ask = (d: AttribEntity, cur: string) => askLine(ctx, `${ft(d.prompt || d.tag)}${cur ? ` <${ft(cur)}>` : ''}:`, cur);
   for (const d of askThese) values.set(d.tag, await ask(d, d.text));
   const verify = askThese.filter((d) => d.attFlags & 4);
   if (verify.length) {
@@ -302,7 +302,7 @@ export async function runInsert(app: App, ctx: CommandContext, arg: string | und
       }
       const res = commitResults(app, ctx, [{ add: r.add, blocks: r.blocks }], 'INSERT', { quiet: true });
       app.lastCreated = res.added;
-      ctx.print(`블록 "${def.name}"을(를) 분해해서 객체 ${res.added.length}개로 넣었습니다.`);
+      ctx.print(`블록 "${ft(def.name)}"을(를) 분해해서 객체 ${res.added.length}개로 넣었습니다.`);
     } else {
       const values = await attributeValues(app, ctx, def);
       if (!values) return;

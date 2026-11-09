@@ -26,6 +26,7 @@ import { form, h } from './ui/dom';
 import { checkbox, modal, select, textInput } from './util2-ui';
 import { outputName, pickOneFile, readTextFile, registerOnce, saveText } from './blkcmds-io';
 import { attachImageFile } from './blkcmds-xref';
+import { ft } from './filetext';
 
 // ---------------------------------------------------------------------------
 // UNDEFINE·REDEFINE
@@ -203,10 +204,10 @@ function registerTinsert(app: App): void {
       let align = 5;
       if (commandLineMode(app)) {
         for (;;) {
-          const t = await askWord(ctx, `블록 이름 입력 또는 [?] <${name}>:`, [{ key: '?', label: '?' }]);
+          const t = await askWord(ctx, `블록 이름 입력 또는 [?] <${ft(name)}>:`, [{ key: '?', label: '?' }]);
           if (t === null) break;
           if (t === '?') {
-            ctx.print(blocks.map((b) => b.name).join(', '));
+            ctx.print(blocks.map((b) => ft(b.name)).join(', '));
             continue;
           }
           const b = blocks.find((x) => tableKey(x.name) === tableKey(t));
@@ -214,7 +215,7 @@ function registerTinsert(app: App): void {
             name = b.name;
             break;
           }
-          ctx.print(`블록 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+          ctx.print(`블록 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
         }
         autofit = await askYN(ctx, '셀에 맞춰 자동 축척', true);
         if (!autofit) scale = await askReal(ctx, `축척 비율 지정 <${fmt4(1)}>:`, 1, (v) => (v > 0 ? null : '축척은 0보다 커야 합니다.'));
@@ -291,7 +292,7 @@ function registerTinsert(app: App): void {
       if (/^\*PAPER_SPACE/i.test(st.space)) ins.paperSpace = true;
       ins.attribs = makeAttribs(app, def, pl.insert, sc, pl.rotation, values, handle);
       app.lastCreated = addEntities(app, ctx, [ins], 'TINSERT');
-      ctx.print(`블록 ${def.name}을(를) 셀에 맞춰 넣었습니다(축척 ${+pl.scale.toPrecision(6)}). 참고: 이 버전은 셀 안에 블록을 담는 표 형식을 쓰지 않아 셀 자리에 맞춘 별도의 블록 참조로 넣습니다(표를 옮기면 함께 옮기십시오).`);
+      ctx.print(`블록 ${ft(def.name)}을(를) 셀에 맞춰 넣었습니다(축척 ${+pl.scale.toPrecision(6)}). 참고: 이 버전은 셀 안에 블록을 담는 표 형식을 쓰지 않아 셀 자리에 맞춘 별도의 블록 참조로 넣습니다(표를 옮기면 함께 옮기십시오).`);
     },
   });
 }
@@ -434,14 +435,14 @@ function registerPasteSpec(app: App): void {
         }
         const file = new File([png.blob], `${baseName(st.saveName)}_붙여넣기_${stampOf()}.png`, { type: 'image/png' });
         rememberFile(file.name, file);
-        if (await attachImageFile(app, ctx, file, 'PASTESPEC', png.width)) ctx.print(`참고: 그림은 파일 ${file.name}(으)로 연결했습니다. 도면을 다른 곳에서 열려면 이 파일이 함께 있어야 합니다(ETRANSMIT로 묶으면 들어갑니다).`);
+        if (await attachImageFile(app, ctx, file, 'PASTESPEC', png.width)) ctx.print(`참고: 그림은 파일 ${ft(file.name)}(으)로 연결했습니다. 도면을 다른 곳에서 열려면 이 파일이 함께 있어야 합니다(ETRANSMIT로 묶으면 들어갑니다).`);
         return;
       }
       if (kind === 'image' && sys.image) {
         const ext = (sys.image.type.split('/')[1] ?? 'png').replace('jpeg', 'jpg');
         const file = new File([sys.image], `${baseName(st.saveName)}_붙여넣기_${stampOf()}.${ext}`, { type: sys.image.type });
         rememberFile(file.name, file);
-        if (await attachImageFile(app, ctx, file, 'PASTESPEC')) ctx.print(`참고: 그림은 파일 ${file.name}(으)로 연결했습니다. 도면을 다른 곳에서 열려면 이 파일이 함께 있어야 합니다(ETRANSMIT로 묶으면 들어갑니다).`);
+        if (await attachImageFile(app, ctx, file, 'PASTESPEC')) ctx.print(`참고: 그림은 파일 ${ft(file.name)}(으)로 연결했습니다. 도면을 다른 곳에서 열려면 이 파일이 함께 있어야 합니다(ETRANSMIT로 묶으면 들어갑니다).`);
         return;
       }
       if (kind === 'text' && sys.text) {
@@ -496,9 +497,9 @@ function registerDimFile(app: App): void {
       let full = true;
       let fileName = `${baseName(st.saveName)}.dim`;
       if (commandLineMode(app)) {
-        const spec = (await askWord(ctx, `내보낼 치수 스타일 이름 입력 <${cur}>:`)) ?? cur;
+        const spec = (await askWord(ctx, `내보낼 치수 스타일 이름 입력 <${ft(cur)}>:`)) ?? cur;
         const m = matchNameList(all, spec);
-        for (const u of m.unmatched) ctx.print(`치수 스타일 "${u}"을(를) 찾을 수 없습니다.`, 'err');
+        for (const u of m.unmatched) ctx.print(`치수 스타일 "${ft(u)}"을(를) 찾을 수 없습니다.`, 'err');
         names = m.names;
         const k = await askOption(
           ctx,
@@ -552,7 +553,7 @@ function registerDimFile(app: App): void {
       if (!names.length) return;
       const out = writeDimFile(doc, names, { fullTextStyle: full });
       saveText(fileName, out.text, false, 'application/dxf');
-      ctx.print(`치수 스타일 ${out.styles.length}개(${out.styles.join(', ')})를 ${fileName}(으)로 내보냈습니다.`);
+      ctx.print(`치수 스타일 ${out.styles.length}개(${out.styles.map(ft).join(', ')})를 ${ft(fileName)}(으)로 내보냈습니다.`);
     },
   });
 
@@ -570,7 +571,7 @@ function registerDimFile(app: App): void {
       const dup = content.styles.filter((s) => st.doc.dimStyles.has(tableKey(s.name))).map((s) => s.name);
       let overwrite = true;
       if (dup.length) {
-        if (commandLineMode(app)) overwrite = await askYN(ctx, `기존 치수 스타일(${dup.join(', ')})을 덮어쓰시겠습니까?`, true);
+        if (commandLineMode(app)) overwrite = await askYN(ctx, `기존 치수 스타일(${dup.map(ft).join(', ')})을 덮어쓰시겠습니까?`, true);
         else {
           const v = await form('치수 스타일 가져오기', [{ key: 'ow', label: '같은 이름의 치수 스타일 덮어쓰기', type: 'check', value: true }], {
             ok: '가져오기',
@@ -583,7 +584,7 @@ function registerDimFile(app: App): void {
       const r = importDimStylesOps(st.doc, content, overwrite, () => st.session.newHandle());
       if (r.ops.length) st.session.commit({ label: 'DIMIM', ops: r.ops, group: ctx.group, rebuildNow: true });
       if (r.added.length) ctx.print(`치수 스타일을 추가했습니다: ${r.added.join(', ')}`);
-      if (r.replaced.length) ctx.print(`치수 스타일을 덮어썼습니다: ${r.replaced.join(', ')}`);
+      if (r.replaced.length) ctx.print(`치수 스타일을 덮어썼습니다: ${r.replaced.map(ft).join(', ')}`);
       if (r.skipped.length) ctx.print(`이미 있어 건너뛴 치수 스타일: ${r.skipped.join(', ')}`);
       if (r.created.length) ctx.print(`함께 만든 정의: ${r.created.join(', ')}`);
       for (const n of r.notes) ctx.print(`참고: ${n}`);

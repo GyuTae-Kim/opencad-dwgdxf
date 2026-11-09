@@ -18,6 +18,7 @@ import { commandLineMode } from './script';
 import { form } from './ui/dom';
 import { askText } from './util2-ui';
 import { outputName, pickOneFile, readTextFile, registerOnce, saveText } from './blkcmds-io';
+import { ft } from './filetext';
 
 const TXT_ACCEPT = '.txt,.TXT,.tsv,.TSV,.csv,.CSV';
 
@@ -68,7 +69,7 @@ function writeExtract(app: App, ctx: CommandContext, format: 'CDF' | 'SDF' | 'DX
     return;
   }
   saveText(fileName, out.text, false, format === 'DXF' ? 'application/dxf' : 'text/plain;charset=utf-8');
-  ctx.print(`추출 파일 ${fileName}에 ${out.records}개 레코드가 있습니다.`);
+  ctx.print(`추출 파일 ${ft(fileName)}에 ${out.records}개 레코드가 있습니다.`);
 }
 
 /** 템플릿 파일 고르기·읽기 */
@@ -78,7 +79,7 @@ async function pickTemplate(app: App, ctx: CommandContext): Promise<Template | n
   const { text } = await readTextFile(f);
   const t = parseTemplate(text);
   if (!printTemplateErrors(ctx, t)) return null;
-  ctx.print(`템플릿 ${f.name}: 필드 ${t.fields.length}개`);
+  ctx.print(`템플릿 ${ft(f.name)}: 필드 ${t.fields.length}개`);
   return t;
 }
 
@@ -99,7 +100,7 @@ export function registerBlkAttCommands(app: App): void {
         return;
       }
       saveText(fileName, r.text, true);
-      ctx.print(`블록 ${r.rows}개의 속성(태그 ${r.columns.length}개)을 ${fileName}(으)로 내보냈습니다. 값을 고친 뒤 ATTIN으로 다시 읽으십시오.`);
+      ctx.print(`블록 ${r.rows}개의 속성(태그 ${r.columns.length}개)을 ${ft(fileName)}(으)로 내보냈습니다. 값을 고친 뒤 ATTIN으로 다시 읽으십시오.`);
     },
   });
 
@@ -112,7 +113,7 @@ export function registerBlkAttCommands(app: App): void {
       const f = await pickOneFile(app, ctx, TXT_ACCEPT, '입력 파일 이름 입력:', ['.txt']);
       if (!f) return;
       const { text, encoding } = await readTextFile(f);
-      if (encoding === 'cp949') ctx.print(`참고: ${f.name}은(는) CP949(한국어 Windows) 인코딩으로 읽었습니다.`);
+      if (encoding === 'cp949') ctx.print(`참고: ${ft(f.name)}은(는) CP949(한국어 Windows) 인코딩으로 읽었습니다.`);
       const p = parseAttIn(text);
       for (const e of p.errors.slice(0, 5)) ctx.print(e, 'err');
       if (!p.rows.length) {
@@ -124,7 +125,7 @@ export function registerBlkAttCommands(app: App): void {
       ctx.print(`블록 ${r.updated}개의 속성 값을 바꿨습니다${r.unchanged ? `(그대로인 블록 ${r.unchanged}개)` : ''}.`);
       if (r.missing.length) ctx.print(`핸들 ${r.missing.slice(0, 8).join(', ')}${r.missing.length > 8 ? ' …' : ''}에 해당하는 블록 참조가 이 도면에 없습니다(${r.missing.length}개).`, 'err');
       if (r.locked) ctx.print(`잠긴 도면층의 블록 ${r.locked}개는 건너뛰었습니다.`);
-      if (r.unknownTags.size) ctx.print(`참고: 블록에 없는 태그 열 ${[...r.unknownTags].slice(0, 8).join(', ')}은(는) 무시했습니다.`);
+      if (r.unknownTags.size) ctx.print(`참고: 블록에 없는 태그 열 ${[...r.unknownTags].slice(0, 8).map(ft).join(', ')}은(는) 무시했습니다.`);
     },
   });
 
@@ -256,7 +257,7 @@ export function registerBlkAttCommands(app: App): void {
         if (!t) return;
         const b = doc.blocks.get(tableKey(t));
         if (!b || b.name.startsWith('*') || b.flags & 4) {
-          ctx.print(`블록 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+          ctx.print(`블록 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
           continue;
         }
         name = b.name;
@@ -273,7 +274,7 @@ export function registerBlkAttCommands(app: App): void {
         const r = attRedefOps(doc, name, st.space, hs, { x: p.point.x, y: p.point.y, z: 0 }, () => st.session.newHandle());
         st.selection.clear();
         st.session.commit({ label: 'ATTREDEF', ops: r.ops, group: ctx.group });
-        ctx.print(`블록 "${name}"을(를) 다시 정의했습니다(객체 ${r.entities}개). 참조 ${r.references}개의 속성을 새 정의에 맞췄습니다.`);
+        ctx.print(`블록 "${ft(name)}"을(를) 다시 정의했습니다(객체 ${r.entities}개). 참조 ${r.references}개의 속성을 새 정의에 맞췄습니다.`);
         if (r.locked) ctx.print(`잠긴 도면층의 참조 ${r.locked}개는 속성을 맞추지 않았습니다.`);
       } catch (e) {
         ctx.print(e instanceof Error ? e.message : String(e), 'err');

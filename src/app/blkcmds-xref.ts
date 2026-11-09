@@ -93,11 +93,11 @@ async function runXattach(app: App, ctx: CommandContext): Promise<void> {
   const file = await pickOneFile(app, ctx, DWG_ACCEPT, '부착할 파일 이름 입력:', ['.dwg', '.dxf']);
   if (!file) return;
   if (!/\.(dwg|dxf)$/i.test(file.name)) {
-    ctx.print(`${file.name}: DWG·DXF 파일만 외부 참조로 부착할 수 있습니다.`, 'err');
+    ctx.print(`${ft(file.name)}: DWG·DXF 파일만 외부 참조로 부착할 수 있습니다.`, 'err');
     return;
   }
   if (file.name.toLowerCase() === st.name.toLowerCase() || file.name.toLowerCase() === st.saveName.toLowerCase()) {
-    ctx.print(`${file.name}은(는) 지금 도면이라 자신에게 부착할 수 없습니다(순환 참조).`, 'err');
+    ctx.print(`${ft(file.name)}은(는) 지금 도면이라 자신에게 부착할 수 없습니다(순환 참조).`, 'err');
     return;
   }
   const linked = await linkXrefFiles(app, [file]);
@@ -109,16 +109,16 @@ async function runXattach(app: App, ctx: CommandContext): Promise<void> {
   if (exist && !(exist.flags & 4)) {
     let n = 1;
     while (doc.blocks.has(tableKey(`${name}_${n}`))) n++;
-    ctx.print(`"${exist.name}"은(는) 이미 이 도면의 블록 이름이라 외부 참조 이름을 ${name}_${n}(으)로 합니다.`);
+    ctx.print(`"${ft(exist.name)}"은(는) 이미 이 도면의 블록 이름이라 외부 참조 이름을 ${ft(`${name}_${n}`)}(으)로 합니다.`);
     name = `${name}_${n}`;
-  } else if (exist) ctx.print(`외부 참조 ${exist.name}이(가) 이미 정의되어 있습니다. 기존 정의를 사용합니다.`);
+  } else if (exist) ctx.print(`외부 참조 ${ft(exist.name)}이(가) 이미 정의되어 있습니다. 기존 정의를 사용합니다.`);
   const insunits = Number(doc.header.get('$INSUNITS') ?? 0) || 0;
   let scale = unitFactor(Number(xdoc.header.get('$INSUNITS') ?? 0) || 0, insunits);
   let rotDeg = 0;
   let overlay = !!exist && !!(exist.flags & 8);
   if (!commandLineMode(app)) {
     const v = await form(
-      `외부 참조 부착 — ${file.name}`,
+      `외부 참조 부착 — ${ft(file.name)}`,
       [
         { key: 'name', label: '이름', type: 'text', value: name },
         {
@@ -136,7 +136,7 @@ async function runXattach(app: App, ctx: CommandContext): Promise<void> {
       ],
       {
         ok: '확인',
-        note: `저장 경로: ${file.name}(상대 경로). 삽입점은 화면에서 지정합니다.${scale !== 1 ? ` 블록 단위 환산 축척 ${+scale.toPrecision(6)}을(를) 넣었습니다.` : ''}`,
+        note: `저장 경로: ${ft(file.name)}(상대 경로). 삽입점은 화면에서 지정합니다.${scale !== 1 ? ` 블록 단위 환산 축척 ${+scale.toPrecision(6)}을(를) 넣었습니다.` : ''}`,
         validate: (x) => {
           const n = String(x.name).trim();
           if (!n || /[<>/\\":;?*|,=`]/.test(n)) return '이름에 쓸 수 없는 문자가 있습니다.';
@@ -173,7 +173,7 @@ async function runXattach(app: App, ctx: CommandContext): Promise<void> {
     st.session.commit({ label: 'XATTACH', ops: r.ops, group: ctx.group, rebuildNow: true });
     app.lastCreated = [r.insert.handle];
     await finishXref(app);
-    ctx.print(`외부 참조 "${r.insert.block}"을(를) ${overlay ? '중첩' : '부착'}했습니다(${file.name}).`);
+    ctx.print(`외부 참조 "${ft(r.insert.block)}"을(를) ${overlay ? '중첩' : '부착'}했습니다(${ft(file.name)}).`);
   } catch (e) {
     ctx.print(e instanceof Error ? e.message : String(e), 'err');
   }
@@ -193,19 +193,19 @@ export async function attachImageFile(app: App, ctx: CommandContext, file: File,
     hgt = bmp.height;
     bmp.close();
   } catch {
-    ctx.print(`${file.name}: 이 브라우저가 읽을 수 없는 이미지 형식입니다(PNG·JPEG·GIF·BMP·WebP만).`, 'err');
+    ctx.print(`${ft(file.name)}: 이 브라우저가 읽을 수 없는 이미지 형식입니다(PNG·JPEG·GIF·BMP·WebP만).`, 'err');
     return false;
   }
   const res = await linkImageFiles(app, [file]);
   if (!res.linked.length) {
-    ctx.print(`${file.name}: 이미지를 연결하지 못했습니다.`, 'err');
+    ctx.print(`${ft(file.name)}: 이미지를 연결하지 못했습니다.`, 'err');
     return false;
   }
   let scale = defaultWidth > 0 ? defaultWidth : 1;
   let rotDeg = 0;
   if (!commandLineMode(app) && label === 'IMAGEATTACH') {
     const v = await form(
-      `이미지 부착 — ${file.name}`,
+      `이미지 부착 — ${ft(file.name)}`,
       [
         { key: 'scale', label: '축척(이미지 폭, 도면 단위)', type: 'number', value: 1 },
         { key: 'rot', label: '회전(도)', type: 'number', value: 0 },
@@ -273,8 +273,8 @@ function commitImage(app: App, ctx: CommandContext, file: File, w: number, hgt: 
   st.selection.clear();
   st.session.commit({ label, ops: r.ops, group: ctx.group, rebuildNow: true });
   app.lastCreated = [r.image.handle];
-  if (r.reused) ctx.print(`이미지 ${file.name}이(가) 이미 정의되어 있습니다. 기존 정의를 사용합니다.`);
-  ctx.print(`이미지 ${file.name}(${w} × ${hgt} 화소)을(를) 부착했습니다.`);
+  if (r.reused) ctx.print(`이미지 ${ft(file.name)}이(가) 이미 정의되어 있습니다. 기존 정의를 사용합니다.`);
+  ctx.print(`이미지 ${ft(file.name)}(${w} × ${hgt} 화소)을(를) 부착했습니다.`);
   return true;
 }
 
@@ -286,7 +286,7 @@ async function runPdfattach(app: App, ctx: CommandContext): Promise<void> {
   const file = await pickOneFile(app, ctx, '.pdf,.PDF', '부착할 PDF 파일 이름 입력:', ['.pdf']);
   if (!file) return;
   if (!/\.pdf$/i.test(file.name)) {
-    ctx.print(`${file.name}: PDF 파일이 아닙니다.`, 'err');
+    ctx.print(`${ft(file.name)}: PDF 파일이 아닙니다.`, 'err');
     return;
   }
   // 페이지 수(크기는 고른 페이지만 잰다)
@@ -296,7 +296,7 @@ async function runPdfattach(app: App, ctx: CommandContext): Promise<void> {
     const r = await import('./pdfraster');
     opened = await r.openPdf(new Uint8Array(await file.arrayBuffer()));
   } catch (e) {
-    ctx.print(`${file.name}: PDF를 읽지 못했습니다(${e instanceof Error ? e.message : String(e)}). 암호가 걸렸거나 손상된 파일입니다.`, 'err');
+    ctx.print(`${ft(file.name)}: PDF를 읽지 못했습니다(${e instanceof Error ? e.message : String(e)}). 암호가 걸렸거나 손상된 파일입니다.`, 'err');
     return;
   } finally {
     app.ui.setBusy(null);
@@ -312,7 +312,7 @@ async function placePdf(app: App, ctx: CommandContext, file: File, pdf: { numPag
   const st = app.active!;
   const pages = { length: pdf.numPages };
   if (!pages.length) {
-    ctx.print(`${file.name}: 페이지가 없습니다.`, 'err');
+    ctx.print(`${ft(file.name)}: 페이지가 없습니다.`, 'err');
     return;
   }
   const insunits = Number(st.doc.header.get('$INSUNITS') ?? 0) || 0;
@@ -321,7 +321,7 @@ async function placePdf(app: App, ctx: CommandContext, file: File, pdf: { numPag
   let rotDeg = 0;
   if (!commandLineMode(app)) {
     const v = await form(
-      `PDF 언더레이 부착 — ${file.name}`,
+      `PDF 언더레이 부착 — ${ft(file.name)}`,
       [
         { key: 'page', label: `페이지(1~${pages.length})`, type: 'number', value: 1 },
         { key: 'scale', label: '축척', type: 'number', value: 1 },
@@ -374,8 +374,8 @@ async function placePdf(app: App, ctx: CommandContext, file: File, pdf: { numPag
   app.lastCreated = [r.underlay.handle];
   const linked = await linkPdfFiles(app, [file]);
   if (!linked.linked.length) await renderPdfPages(app);
-  if (linked.failed.length) ctx.print(`${file.name}: 페이지를 그리지 못했습니다. 경계만 보입니다.`, 'err');
-  ctx.print(`PDF 언더레이 ${file.name}(${page}쪽)을(를) 부착했습니다.`);
+  if (linked.failed.length) ctx.print(`${ft(file.name)}: 페이지를 그리지 못했습니다. 경계만 보입니다.`, 'err');
+  ctx.print(`PDF 언더레이 ${ft(file.name)}(${page}쪽)을(를) 부착했습니다.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -411,9 +411,9 @@ function commitXbind(app: App, ctx: CommandContext, picks: Map<string, { kind: S
     if (r.ops.length) st.session.commit({ label: 'XBIND', ops: r.ops, group: ctx.group, rebuildNow: true });
     for (const b of r.bound) {
       counts.set(b.kind, (counts.get(b.kind) ?? 0) + 1);
-      ctx.print(`${SYM_LABEL[b.kind]} ${b.from} → ${b.to}`);
+      ctx.print(`${SYM_LABEL[b.kind]} ${ft(b.from)} → ${ft(b.to)}`);
     }
-    for (const f of r.failed) ctx.print(`${SYM_LABEL[f.kind]} ${f.name}은(는) 결합할 수 없습니다${f.kind === 'block' && !x.xdoc ? '(참조 파일이 연결되지 않음)' : ''}.`, 'err');
+    for (const f of r.failed) ctx.print(`${SYM_LABEL[f.kind]} ${ft(f.name)}은(는) 결합할 수 없습니다${f.kind === 'block' && !x.xdoc ? '(참조 파일이 연결되지 않음)' : ''}.`, 'err');
     failed += r.failed.length;
   }
   const parts = SYM_KINDS.filter((k) => counts.get(k)).map((k) => `${SYM_LABEL[k]} ${counts.get(k)}개`);
@@ -507,7 +507,7 @@ async function runDashXbind(app: App, ctx: CommandContext): Promise<void> {
     all.map((a) => a.full),
     spec,
   );
-  for (const u of m.unmatched) ctx.print(`종속 ${SYM_LABEL[kind]} "${u}"을(를) 찾을 수 없습니다.`, 'err');
+  for (const u of m.unmatched) ctx.print(`종속 ${SYM_LABEL[kind]} "${ft(u)}"을(를) 찾을 수 없습니다.`, 'err');
   if (!m.names.length) return;
   const set = new Set(m.names.map((n) => n.toUpperCase()));
   const picks = new Map<string, { kind: SymKind; name: string }[]>();
@@ -545,22 +545,22 @@ async function runXopen(app: App, ctx: CommandContext): Promise<void> {
   const open = app.docs.find((d) => d.name.toLowerCase() === (xf?.name ?? fname).toLowerCase());
   if (open) {
     app.activate(open);
-    ctx.print(`${open.name}은(는) 이미 열려 있습니다.`);
+    ctx.print(`${ft(open.name)}은(는) 이미 열려 있습니다.`);
     return;
   }
   const blob = sessionFile(fname);
   if (blob) {
     const opened = await app.openFile(fname, await blob.arrayBuffer());
-    if (opened) ctx.print(`외부 참조 ${def.name}을(를) 새 탭에서 열었습니다(${fname}). 고쳐 저장한 뒤 외부 참조 창(XR)에서 다시 연결하면 반영됩니다.`);
+    if (opened) ctx.print(`외부 참조 ${ft(def.name)}을(를) 새 탭에서 열었습니다(${ft(fname)}). 고쳐 저장한 뒤 외부 참조 창(XR)에서 다시 연결하면 반영됩니다.`);
     return;
   }
   if (xf) {
-    app.ui.setBusy(`${xf.name} 여는 중…`, 0.5);
+    app.ui.setBusy(`${ft(xf.name)} 여는 중…`, 0.5);
     try {
       const res = await app.engine.adopt(xf.name, xf.doc);
       const nst = app.addDocument(res, xf.name, 0);
       app.onOpened?.(nst);
-      ctx.print(`외부 참조 ${def.name}을(를) 새 탭에서 열었습니다(${xf.name}). 고쳐 저장한 뒤 외부 참조 창(XR)에서 다시 연결하면 반영됩니다.`);
+      ctx.print(`외부 참조 ${ft(def.name)}을(를) 새 탭에서 열었습니다(${ft(xf.name)}). 고쳐 저장한 뒤 외부 참조 창(XR)에서 다시 연결하면 반영됩니다.`);
     } catch (e) {
       ctx.print(`외부 참조를 열지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
     } finally {
@@ -568,7 +568,7 @@ async function runXopen(app: App, ctx: CommandContext): Promise<void> {
     }
     return;
   }
-  ctx.print(`외부 참조 파일 ${fname}을(를) 찾을 수 없습니다. 파일을 고르십시오.`);
+  ctx.print(`외부 참조 파일 ${ft(fname)}을(를) 찾을 수 없습니다. 파일을 고르십시오.`);
   const f = await pickOneFile(app, ctx, DWG_ACCEPT, '열 파일 이름 입력:', ['.dwg', '.dxf']);
   if (!f) return;
   await app.openFile(f.name, await f.arrayBuffer());
@@ -592,11 +592,11 @@ async function runBlockToXref(app: App, ctx: CommandContext): Promise<void> {
     else if (def.name.startsWith('*')) ctx.print('이름 없는(익명) 블록은 바꿀 수 없습니다.', 'err');
     else block = def.name;
   }
-  ctx.print(`블록 ${block}의 참조를 바꿀 외부 참조 도면을 고르십시오.`);
+  ctx.print(`블록 ${ft(block)}의 참조를 바꿀 외부 참조 도면을 고르십시오.`);
   const file = await pickOneFile(app, ctx, DWG_ACCEPT, '외부 참조로 쓸 도면 파일 이름 입력:', ['.dwg', '.dxf']);
   if (!file) return;
   if (!/\.(dwg|dxf)$/i.test(file.name)) {
-    ctx.print(`${file.name}: DWG·DXF 파일만 외부 참조가 될 수 있습니다.`, 'err');
+    ctx.print(`${ft(file.name)}: DWG·DXF 파일만 외부 참조가 될 수 있습니다.`, 'err');
     return;
   }
   const linked = await linkXrefFiles(app, [file]);
@@ -609,7 +609,7 @@ async function runBlockToXref(app: App, ctx: CommandContext): Promise<void> {
     purge = await askYN(ctx, '끝나면 참조되지 않는 항목을 소거하시겠습니까?', true);
   } else {
     const v = await form(
-      `블록을 외부 참조로 — ${block}`,
+      `블록을 외부 참조로 — ${ft(block)}`,
       [
         {
           key: 'type',
@@ -623,7 +623,7 @@ async function runBlockToXref(app: App, ctx: CommandContext): Promise<void> {
         },
         { key: 'purge', label: '끝나면 참조되지 않는 블록 정의 소거', type: 'check', value: true },
       ],
-      { ok: '변환', note: `블록 ${block}의 모든 참조(블록 안의 참조 포함)를 ${file.name}의 외부 참조로 바꿉니다. 삽입점·축척·회전·도면층은 그대로이고 속성은 없어집니다.` },
+      { ok: '변환', note: `블록 ${ft(block)}의 모든 참조(블록 안의 참조 포함)를 ${ft(file.name)}의 외부 참조로 바꿉니다. 삽입점·축척·회전·도면층은 그대로이고 속성은 없어집니다.` },
     );
     if (!v) return;
     overlay = v.type === 'overlay';
@@ -634,7 +634,7 @@ async function runBlockToXref(app: App, ctx: CommandContext): Promise<void> {
   if (ex && !(ex.flags & 4) && tableKey(ex.name) !== tableKey(block)) {
     let n = 1;
     while (doc.blocks.has(tableKey(`${name}_${n}`))) n++;
-    ctx.print(`"${ex.name}"은(는) 이미 블록 이름이라 외부 참조 이름을 ${name}_${n}(으)로 합니다.`);
+    ctx.print(`"${ft(ex.name)}"은(는) 이미 블록 이름이라 외부 참조 이름을 ${ft(`${name}_${n}`)}(으)로 합니다.`);
     name = `${name}_${n}`;
   }
   // 같은 이름이면 블록 정의를 소거해야 외부 참조 정의가 그 자리에 들어간다
@@ -642,14 +642,14 @@ async function runBlockToXref(app: App, ctx: CommandContext): Promise<void> {
     let n = 1;
     while (doc.blocks.has(tableKey(`${name}_${n}`))) n++;
     name = `${name}_${n}`;
-    ctx.print(`블록 정의를 남기므로 외부 참조 이름을 ${name}(으)로 합니다.`);
+    ctx.print(`블록 정의를 남기므로 외부 참조 이름을 ${ft(name)}(으)로 합니다.`);
   }
   try {
     const r = blockToXrefOps(doc, block, { name, path: file.name, overlay, xdoc: xf.doc }, purge, () => st.session.newHandle());
     st.selection.clear();
     st.session.commit({ label: 'BLOCKTOXREF', ops: r.ops, group: ctx.group, rebuildNow: true });
     await finishXref(app);
-    ctx.print(`블록 참조 ${r.count}개를 외부 참조 ${name}(${file.name})(으)로 바꿨습니다.${r.droppedAttribs ? ` 속성이 있던 참조 ${r.droppedAttribs}개는 속성이 없어졌습니다.` : ''}${r.purged ? ` 블록 정의 ${block}을(를) 소거했습니다.` : ''}`);
+    ctx.print(`블록 참조 ${r.count}개를 외부 참조 ${ft(name)}(${ft(file.name)})(으)로 바꿨습니다.${r.droppedAttribs ? ` 속성이 있던 참조 ${r.droppedAttribs}개는 속성이 없어졌습니다.` : ''}${r.purged ? ` 블록 정의 ${block}을(를) 소거했습니다.` : ''}`);
   } catch (e) {
     ctx.print(e instanceof Error ? e.message : String(e), 'err');
   }

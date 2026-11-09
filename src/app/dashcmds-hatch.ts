@@ -24,6 +24,7 @@ import { memOf, previewOf, visibleEntities } from './modify2-util';
 import type { OverlayGeom, Pt } from './view';
 import { lwPoints, packBulge } from '../core/lwpoly';
 import { MSG } from '../edit/geom/types';
+import { ft } from './filetext';
 
 /** -HATCH 그라데이션 이름 ↔ 해치 객체의 그라데이션 이름 */
 export const GRADIENT_NAMES: [string, string][] = [
@@ -221,7 +222,7 @@ export function registerDashHatchCommands(app: App): void {
               }
               const spec = parsePatternSpec(t);
               if (!spec) {
-                ctx.print(`패턴 "${t}"을(를) 찾을 수 없습니다. ?로 목록을 보십시오.`, 'err');
+                ctx.print(`패턴 "${ft(t)}"을(를) 찾을 수 없습니다. ?로 목록을 보십시오.`, 'err');
                 continue;
               }
               gradient = null;
@@ -404,7 +405,7 @@ export function registerDashHatchCommands(app: App): void {
             continue;
           }
           case 'LA': {
-            const t = await askWord(ctx, `해치 작성에 사용할 도면층 입력 또는 [현재 사용(.)] <${layer ?? '현재 사용'}>:`, [{ key: '.', label: '현재 사용' }]);
+            const t = await askWord(ctx, `해치 작성에 사용할 도면층 입력 또는 [현재 사용(.)] <${layer == null ? '현재 사용' : ft(layer)}>:`, [{ key: '.', label: '현재 사용' }]);
             if (t === null) continue;
             if (t === '.') {
               layer = null;
@@ -412,7 +413,7 @@ export function registerDashHatchCommands(app: App): void {
             }
             const l = doc.layers.get(tableKey(t));
             if (!l) {
-              ctx.print(`도면층 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+              ctx.print(`도면층 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
               continue;
             }
             layer = l.name;
@@ -646,7 +647,7 @@ async function askGradient(ctx: CommandContext, cur: HatchGradient | null): Prom
     }
     const hit = GRADIENT_NAMES.find(([n, m]) => n === t.toUpperCase() || m === t.toUpperCase());
     if (!hit) {
-      ctx.print(`그라데이션 패턴 "${t}"을(를) 찾을 수 없습니다.`, 'err');
+      ctx.print(`그라데이션 패턴 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
       continue;
     }
     g.name = hit[1];

@@ -9,6 +9,7 @@ import { fileNameMode } from './script';
 import { sessionFile } from './sessionfiles';
 import { askText } from './util2-ui';
 import { decodeScript } from '../edit/script/reader';
+import { ft } from './filetext';
 
 /** 이미 등록된 이름은 건너뛰고, 다른 명령이 쓰는 별칭은 뺀다 */
 export function registerOnce(app: App, c: Command): void {
@@ -36,7 +37,7 @@ export async function pickOneFile(app: App, ctx: CommandContext, accept: string,
       const b = sessionFile(n);
       if (b) return b instanceof File ? b : new File([b], n.replace(/^.*[\\/]/, ''));
     }
-    ctx.print(`파일 "${t}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 고른 파일만 이름으로 찾습니다.`, 'err');
+    ctx.print(`파일 "${ft(t)}"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 고른 파일만 이름으로 찾습니다.`, 'err');
     return null;
   }
   const files = await pickFiles(accept, false);
@@ -47,7 +48,7 @@ export async function pickOneFile(app: App, ctx: CommandContext, accept: string,
 export async function outputName(app: App, ctx: CommandContext, prompt: string, def: string, ext: string): Promise<string> {
   let n = def;
   if (fileNameMode(app)) {
-    const t = (await askText(ctx, `${prompt} <${def}>:`, def)).trim().replace(/^"(.*)"$/, '$1');
+    const t = (await askText(ctx, `${prompt} <${ft(def)}>:`, def)).trim().replace(/^"(.*)"$/, '$1');
     if (t) n = t.replace(/^.*[\\/]/, '');
   }
   if (!new RegExp(`\\${ext}$`, 'i').test(n)) n += ext;
