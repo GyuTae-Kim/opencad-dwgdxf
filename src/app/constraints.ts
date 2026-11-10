@@ -731,7 +731,7 @@ async function parametersManager(app: App, ctx: CommandContext): Promise<void> {
       const e = ev.errors.get(k);
       cell.textContent = e ? '오류' : v === undefined ? '' : r.type === '각도' ? `${numberText(Number(v.toFixed(8)))}°` : formatLength(v, st.units);
       cell.title = e ?? '';
-      if (e && !err.textContent) err.textContent = `${r.name}: ${e}`;
+      if (e && !err.textContent) err.textContent = `${ft(r.name)}: ${e}`;
     }
   };
   const render = () => {

@@ -57,7 +57,7 @@ export function registerFilePlotCommands(app: App, reg: (c: Command) => void): v
         ],
         {
           ok: '확인',
-          note: `원래 값: ${curNames.size === 1 ? cur : '*여러 값*'} · 활성 플롯 스타일 테이블: ${sheet || '없음'}${sheet && !ctbByName(sheet) ? '(불러오지 않음 — PLOT에서 STB 파일을 불러오면 목록에 나옵니다)' : ''}`,
+          note: `원래 값: ${curNames.size === 1 ? ft(cur) : '*여러 값*'} · 활성 플롯 스타일 테이블: ${sheet ? ft(sheet) : '없음'}${sheet && !ctbByName(sheet) ? '(불러오지 않음 — PLOT에서 STB 파일을 불러오면 목록에 나옵니다)' : ''}`,
           validate: (x) => (/[<>/\\":;?*|,=`]/.test(String(x.other)) ? '이름에 쓸 수 없는 문자가 있습니다.' : null),
         },
       );

@@ -512,7 +512,7 @@ export async function runPsetupin(app: App, ctx: CommandContext): Promise<void> 
   const take: NamedPageSetup[] = [];
   for (const it of chosen) {
     if (existing.has(it.name.toUpperCase())) {
-      const a = await ask('페이지 설정 - 재정의', `페이지 설정 "${it.name}"이(가) 이 도면에 이미 있습니다. 재정의하시겠습니까?`, [
+      const a = await ask('페이지 설정 - 재정의', `페이지 설정 "${ft(it.name)}"이(가) 이 도면에 이미 있습니다. 재정의하시겠습니까?`, [
         { label: '예', value: 'Y', primary: true },
         { label: '아니오', value: 'N' },
         { label: '취소', value: 'C' },

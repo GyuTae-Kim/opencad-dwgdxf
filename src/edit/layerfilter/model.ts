@@ -6,6 +6,7 @@
  * - 그룹 필터: 고른 도면층 목록(이름·특성과 상관없이).
  * - 중첩: 특성 필터 아래에는 특성 필터만, 그룹 필터 아래에는 특성·그룹 필터를 둘 수 있다(AutoCAD 도움말의 규칙).
  */
+import { ft } from '../../app/filetext';
 
 export type FilterKind = 'property' | 'group';
 
@@ -161,9 +162,9 @@ export function filterNameProblem(name: string, others: Iterable<string> = []): 
   if (BAD.test(n)) return '필터 이름에 < > / \\ " : ; ? * | , = ` 문자는 쓸 수 없습니다.';
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f]/.test(n)) return '필터 이름에 제어 문자는 쓸 수 없습니다.';
-  if (RESERVED.has(filterKey(n))) return `"${n}"은(는) 기본 필터 이름이라 쓸 수 없습니다.`;
+  if (RESERVED.has(filterKey(n))) return `"${ft(n)}"은(는) 기본 필터 이름이라 쓸 수 없습니다.`;
   const k = filterKey(n);
-  for (const o of others) if (filterKey(o) === k) return `필터 "${n}"이(가) 이미 있습니다.`;
+  for (const o of others) if (filterKey(o) === k) return `필터 "${ft(n)}"이(가) 이미 있습니다.`;
   return null;
 }
 

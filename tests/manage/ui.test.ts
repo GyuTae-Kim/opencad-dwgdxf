@@ -16,6 +16,7 @@ import { registerDraftingCommands } from '../../src/app/drafting';
 import { prefSet } from '../../src/app/mgr-ui';
 import { makeHarness } from '../cmds2/harness';
 import { line } from '../edit/make';
+import { ft } from '../../src/app/filetext';
 
 // jsdom에는 캔버스가 없다(블록 미리보기는 그리지 않고 넘어간다)
 HTMLCanvasElement.prototype.getContext = (() => null) as never;
@@ -347,7 +348,8 @@ describe('페이지 설정 관리자 연기 시험', () => {
     input('새 페이지 설정 이름(N)').value = 'A1 출력';
     ok();
     await tick();
-    expect(dlg().getAttribute('aria-label')).toBe('페이지 설정 - A1 출력');
+    // 페이지 설정 이름은 도면 글이라 화면 번역층이 옮기지 않게 표시로 감싼다(108차)
+    expect(dlg().getAttribute('aria-label')).toBe(`페이지 설정 - ${ft('A1 출력')}`);
     (input('용지 크기') as unknown as HTMLSelectElement).value = 'A1';
     ok();
     await tick();

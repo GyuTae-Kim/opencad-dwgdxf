@@ -13,6 +13,7 @@ import type { PlotSettings } from './plot';
 import { paperOf } from './papers';
 import { type SpaceScene, paperInfo } from './scene';
 import { form } from './ui/dom';
+import { ft } from './filetext';
 
 const KEY = 'opencad.plotstamp';
 let cached: PlotStampSettings | null = null;
@@ -179,7 +180,8 @@ export function registerPlotStampCommand(app: App, reg: (c: Parameters<App['regi
         ],
         {
           ok: '확인',
-          note: `미리보기: ${plotStampLines({ ...cur, on: true }, sample).join(' / ') || '(필드 없음)'} — 스탬프는 화면에 그리지 않고 PLOT·PUBLISH의 PDF·SVG에만 넣습니다.`,
+          // 미리보기 글은 스탬프에 찍힐 글 그대로다(도면·배치 이름 등 — 화면 번역층이 옮기지 않게, 108차)
+          note: `미리보기: ${plotStampLines({ ...cur, on: true }, sample).map(ft).join(' / ') || '(필드 없음)'} — 스탬프는 화면에 그리지 않고 PLOT·PUBLISH의 PDF·SVG에만 넣습니다.`,
           validate: (x) => (Number(x.height) > 0 ? null : '문자 높이는 0보다 커야 합니다.'),
         },
       );
@@ -187,7 +189,7 @@ export function registerPlotStampCommand(app: App, reg: (c: Parameters<App['regi
       const next = normalizeStamp({ ...DEFAULT_STAMP, ...v });
       savePlotStampSettings(next);
       const lines = plotStampLines(next, sample);
-      ctx.print(next.on ? `플롯 스탬프를 켰습니다: ${lines.join(' / ') || '(필드 없음)'}` : '플롯 스탬프를 껐습니다.');
+      ctx.print(next.on ? `플롯 스탬프를 켰습니다: ${lines.map(ft).join(' / ') || '(필드 없음)'}` : '플롯 스탬프를 껐습니다.');
       if (next.on && next.date) ctx.print(`날짜 형식: ${stampDate(sample.date)}`);
     },
   });

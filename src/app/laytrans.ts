@@ -95,7 +95,7 @@ async function layerDialog(title: string, doc: CadDocument, base: Layer | null, 
         const n = String(x.name).trim();
         const e = validLayerName(n);
         if (e) return e;
-        if (taken(n)) return `도면층 "${n}"이(가) 이미 변환 대상에 있습니다.`;
+        if (taken(n)) return `도면층 "${ft(n)}"이(가) 이미 변환 대상에 있습니다.`;
         const c = Number(x.color);
         if (!Number.isInteger(c) || c < 1 || c > 255) return '색상은 1~255의 정수입니다.';
         const t = Number(x.transparency);

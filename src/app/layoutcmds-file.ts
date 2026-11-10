@@ -273,7 +273,7 @@ export async function layoutSaveAs(app: App, ctx: CommandContext, curName: strin
           ],
         },
       ],
-      { ok: '저장', note: `배치 "${lay.name}"만 든 새 도면을 이 컴퓨터에 내려받습니다(모형 공간 객체는 넣지 않습니다).`, validate: (x) => (String(x.name ?? '').trim() ? null : '파일 이름을 입력하십시오.') },
+      { ok: '저장', note: `배치 "${ft(lay.name)}"만 든 새 도면을 이 컴퓨터에 내려받습니다(모형 공간 객체는 넣지 않습니다).`, validate: (x) => (String(x.name ?? '').trim() ? null : '파일 이름을 입력하십시오.') },
     );
     if (!v) return;
     fname = `${baseName(String(v.name).trim()).replace(/\.dwt$/i, '')}.${String(v.type)}`;

@@ -118,7 +118,7 @@ export async function newLayerStateDialog(app: App, group?: number): Promise<str
     const name = String(v.name).trim();
     const old = stateByName(app, name);
     if (old) {
-      const a = await ask('도면층 상태', `도면층 상태 "${old.key}"이(가) 이미 있습니다. 덮어쓰시겠습니까?`, [
+      const a = await ask('도면층 상태', `도면층 상태 "${ft(old.key)}"이(가) 이미 있습니다. 덮어쓰시겠습니까?`, [
         { label: '예(Y)', value: 'yes', primary: true },
         { label: '아니오(N)', value: 'no' },
       ]);
@@ -286,7 +286,7 @@ async function pickStates(src: ImportSource): Promise<LayerState[] | null> {
   list.setSelection(list.keys, false);
   const d = wideDialog(
     '도면층 상태 선택',
-    h('div', { class: 'ltx-col' }, h('div', { class: 'ltx-note' }, `${src.file}에서 가져올 도면층 상태를 고르십시오.`), list.el),
+    h('div', { class: 'ltx-col' }, h('div', { class: 'ltx-note' }, `${ft(src.file)}에서 가져올 도면층 상태를 고르십시오.`), list.el),
     [
       { label: '확인', value: 'ok', primary: true },
       { label: '취소', value: 'cancel' },
@@ -427,7 +427,7 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
         const bad = layerStateNameProblem(n);
         if (bad) return bad;
         const dup = stateByName(app, n);
-        if (dup && dup.key.toUpperCase() !== old.toUpperCase()) return `도면층 상태 "${n}"이(가) 이미 있습니다.`;
+        if (dup && dup.key.toUpperCase() !== old.toUpperCase()) return `도면층 상태 "${ft(n)}"이(가) 이미 있습니다.`;
         return null;
       },
     });
@@ -446,7 +446,7 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
   addSide('update', '업데이트(U)', () => {
     if (!selected) return;
     updateLayerState(app, selected, group);
-    note.textContent = `도면층 상태 "${selected}"을(를) 지금 도면층 설정으로 업데이트했습니다.`;
+    note.textContent = `도면층 상태 "${ft(selected)}"을(를) 지금 도면층 설정으로 업데이트했습니다.`;
     refresh();
   });
   addSide('edit', '편집(I)...', async () => {
@@ -460,7 +460,7 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
   addSide('rename', '이름 바꾸기', renameSel);
   addSide('delete', '삭제(D)', async () => {
     if (!selected) return;
-    const a = await ask('도면층 상태', `도면층 상태 "${selected}"을(를) 삭제하시겠습니까?`, [
+    const a = await ask('도면층 상태', `도면층 상태 "${ft(selected)}"을(를) 삭제하시겠습니까?`, [
       { label: '예(Y)', value: 'yes', primary: true },
       { label: '아니오(N)', value: 'no' },
     ]);
@@ -474,7 +474,7 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
     const src = await pickImportSource(app, ctx.print);
     if (!src) return;
     if (!src.states.length) {
-      note.textContent = `${src.file}에 가져올 도면층 상태가 없습니다.`;
+      note.textContent = `${ft(src.file)}에 가져올 도면층 상태가 없습니다.`;
       return;
     }
     const chosen = src.source ? await pickStates(src) : src.states;
@@ -483,7 +483,7 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
     for (const s of chosen) {
       const old = stateByName(app, s.name);
       if (!old) continue;
-      const a = await ask('도면층 상태', `도면층 상태 "${old.key}"이(가) 이미 있습니다. 덮어쓰시겠습니까?`, [
+      const a = await ask('도면층 상태', `도면층 상태 "${ft(old.key)}"이(가) 이미 있습니다. 덮어쓰시겠습니까?`, [
         { label: '예(Y)', value: 'yes', primary: true },
         { label: '아니오(N)', value: 'no' },
       ]);
@@ -497,9 +497,9 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
     }
     selected = stateByName(app, got[got.length - 1]!)?.key ?? null;
     refresh();
-    note.textContent = `도면층 상태 ${got.length}개를 가져왔습니다: ${got.join(', ')}`;
+    note.textContent = `도면층 상태 ${got.length}개를 가져왔습니다: ${got.map(ft).join(', ')}`;
     if (got.length === 1) {
-      const a = await ask('도면층 상태', `도면층 상태 "${got[0]}"을(를) 가져왔습니다. 지금 복원하시겠습니까?`, [
+      const a = await ask('도면층 상태', `도면층 상태 "${ft(got[0]!)}"을(를) 가져왔습니다. 지금 복원하시겠습니까?`, [
         { label: '예(Y)', value: 'yes', primary: true },
         { label: '아니오(N)', value: 'no' },
       ]);
@@ -513,7 +513,7 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
   addSide('export', '내보내기(X)...', () => {
     if (!selected) return;
     const f = exportLayerState(app, selected);
-    if (f) note.textContent = `${f}을(를) 내려받았습니다.`;
+    if (f) note.textContent = `${ft(f)}을(를) 내려받았습니다.`;
   });
 
   const props = h(

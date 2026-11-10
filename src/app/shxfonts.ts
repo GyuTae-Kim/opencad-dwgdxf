@@ -9,6 +9,7 @@ import type { App } from './app';
 import type { DocState } from './docstate';
 import { clearFonts, loadFonts, saveFonts } from './fontstore';
 import { dialog, h, toast } from './ui/dom';
+import { ft } from './filetext';
 
 /** 도면의 문자 스타일이 쓰는 SHX 글꼴 이름(소문자, .shx 붙임) */
 export function usedShxFonts(doc: CadDocument): string[] {
@@ -109,7 +110,7 @@ export function registerShxCommands(app: App): void {
               h('ul', {}, ...used.map((n) => h('li', {}, h('span', { translate: 'no' }, n), ` — ${lib.has(n) ? '불러옴' : '없음(대체 글꼴로 그림)'}`))),
             )
           : null,
-        h('div', { style: 'margin-top:6px;color:var(--text-dim)' }, `불러온 글꼴 ${lib.size}개${lib.size ? `: ${lib.names().slice(0, 12).join(', ')}${lib.size > 12 ? ' …' : ''}` : ''}`),
+        h('div', { style: 'margin-top:6px;color:var(--text-dim)' }, `불러온 글꼴 ${lib.size}개${lib.size ? `: ${lib.names().slice(0, 12).map(ft).join(', ')}${lib.size > 12 ? ' …' : ''}` : ''}`),
       );
       const load = async (folder: boolean) => {
         const files = await readShx(await pickFiles(folder));

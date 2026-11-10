@@ -607,8 +607,8 @@ export function registerMLineCommands(app: App): void {
           preview.innerHTML = '';
           if (!s) return void (info.textContent = '');
           preview.append(stylePreview(s.style));
-          const els = s.style.elements.map((e) => `  ${String(+e.offset.toFixed(4)).padStart(8)}  ${colorText(e.color).padEnd(8)} ${e.linetype}`).join('\n');
-          info.textContent = `설명: ${s.style.description || '(없음)'}\n요소 ${s.style.elements.length}개(간격띄우기·색상·선종류):\n${els}\n채우기: ${s.style.flags & ML_FILL ? colorText(s.style.fillColor) : '없음'}  조인 표시: ${s.style.flags & ML_JOINTS ? '예' : '아니요'}`;
+          const els = s.style.elements.map((e) => `  ${String(+e.offset.toFixed(4)).padStart(8)}  ${colorText(e.color).padEnd(8)} ${ft(e.linetype)}`).join('\n');
+          info.textContent = `설명: ${s.style.description ? ft(s.style.description) : '(없음)'}\n요소 ${s.style.elements.length}개(간격띄우기·색상·선종류):\n${els}\n채우기: ${s.style.flags & ML_FILL ? colorText(s.style.fillColor) : '없음'}  조인 표시: ${s.style.flags & ML_JOINTS ? '예' : '아니요'}`;
         };
         list.addEventListener('change', show);
         const body = h('div', {}, curLine, h('div', { style: 'display:grid;grid-template-columns:200px 1fr;gap:12px' }, list, h('div', {}, info, preview)));

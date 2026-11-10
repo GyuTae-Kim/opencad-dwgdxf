@@ -862,7 +862,7 @@ export function registerDimStyleCommands(app: App): void {
           app.cmd.print(`치수 스타일 "${ft(s.name)}"은(는) 현재 스타일이거나 사용 중이라 삭제할 수 없습니다.`, 'err');
           return;
         }
-        const a = await ask('치수 스타일 - 삭제', `치수 스타일 "${s.name}"을(를) 삭제하시겠습니까?`, [
+        const a = await ask('치수 스타일 - 삭제', `치수 스타일 "${ft(s.name)}"을(를) 삭제하시겠습니까?`, [
           { label: '예', value: 'yes', primary: true },
           { label: '아니오', value: 'no' },
         ]);

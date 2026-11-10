@@ -721,7 +721,7 @@ function runWizard(st: DocState): Promise<WizardState | null> {
         const n = s.name.trim();
         if (!n) return '배치 이름을 입력하십시오.';
         if (/[<>/\\":;?*|,=`]/.test(n)) return '배치 이름에 쓸 수 없는 문자가 있습니다.';
-        if (st.doc.layouts.some((l) => l.name.toUpperCase() === n.toUpperCase())) return `배치 "${n}"이(가) 이미 있습니다.`;
+        if (st.doc.layouts.some((l) => l.name.toUpperCase() === n.toUpperCase())) return `배치 "${ft(n)}"이(가) 이미 있습니다.`;
       }
       if (step === 5 && s.vpMode === 'array' && !(Number.isInteger(s.rows) && Number.isInteger(s.cols) && s.rows >= 1 && s.cols >= 1 && s.rows <= 20 && s.cols <= 20 && s.rowGap >= 0 && s.colGap >= 0)) return '행·열은 1~20의 정수, 간격은 0 이상이어야 합니다.';
       return null;
