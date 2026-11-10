@@ -217,7 +217,8 @@ export function registerUtil2MiscCommands(app: App): void {
       for (const [k, m] of pending)
         for (const x of m.values()) {
           if (x.now === x.orig) continue;
-          const ops = renameOps(st.doc, k, x.orig, x.now);
+          // 객체 바꾸기에 훑은 자리 짐작(109차 — 바꿀 객체가 있을 때만 판정한다)
+          const ops = renameOps(st.doc, k, x.orig, x.now, () => st.session.scanHints());
           if (!ops.length) {
             ctx.print(`${ft(x.orig)} → ${ft(x.now)}: ${renameProblem(st.doc, k, x.orig, x.now) ?? '바꿀 수 없습니다.'}`, 'err');
             continue;
@@ -264,7 +265,7 @@ export function registerUtil2MiscCommands(app: App): void {
         ctx.print(bad, 'err');
         return;
       }
-      st.session.commit({ label: 'RENAME', ops: renameOps(st.doc, kd.kind, real, newName), group: ctx.group });
+      st.session.commit({ label: 'RENAME', ops: renameOps(st.doc, kd.kind, real, newName, () => st.session.scanHints()), group: ctx.group });
       app.ui.refreshLayouts();
     },
   });

@@ -350,7 +350,8 @@ async function moveOrCopyLayout(app: App, ctx: CommandContext, arg?: string): Pr
   if (!papers.length) return;
   const cur = st.layoutFor(st.displaySpace);
   const src = papers.find((l) => arg && l.name.toUpperCase() === arg.trim().toUpperCase()) ?? (cur && tableKey(cur.blockName) !== MODEL_SPACE ? cur : papers[0]!);
-  const opts = [...papers.filter((l) => l !== src).map((l) => ({ value: tableKey(l.blockName), label: l.name })), { value: '', label: '(끝으로 이동)' }];
+  // 배치 이름은 도면 글(109차 — 값이 블록 키라 고르기 항목 지킴이 못 알아본다)
+  const opts = [...papers.filter((l) => l !== src).map((l) => ({ value: tableKey(l.blockName), label: ft(l.name) })), { value: '', label: '(끝으로 이동)' }];
   const v = await form(
     '이동 또는 복사',
     [

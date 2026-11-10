@@ -31,6 +31,8 @@ export interface PropDiff {
   label: string;
   current: string;
   standard: string;
+  /** 값이 도면 글(선종류 이름·설명·글꼴 파일·치수 변수 값 — 화면 번역층이 옮기지 않는다, 109차). 없으면 앱 글(색 이름·예/아니오 등) */
+  file?: boolean;
 }
 
 export interface StdCandidate {
@@ -93,7 +95,7 @@ const near = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Mat
 export function layerDiffs(cur: Layer, std: Layer): PropDiff[] {
   const out: PropDiff[] = [];
   if (!sameColor(cur.color, std.color)) out.push({ label: '색상', current: colorLabel(cur.color), standard: colorLabel(std.color) });
-  if (tableKey(cur.linetype || 'Continuous') !== tableKey(std.linetype || 'Continuous')) out.push({ label: '선종류', current: cur.linetype, standard: std.linetype });
+  if (tableKey(cur.linetype || 'Continuous') !== tableKey(std.linetype || 'Continuous')) out.push({ label: '선종류', current: cur.linetype, standard: std.linetype, file: true });
   if (cur.lineweight !== std.lineweight) out.push({ label: '선가중치', current: lineweightLabel(cur.lineweight), standard: lineweightLabel(std.lineweight) });
   if ((cur.transparency ?? 255) !== (std.transparency ?? 255)) out.push({ label: '투명도', current: transparencyLabel(cur.transparency), standard: transparencyLabel(std.transparency) });
   if (cur.plot !== std.plot) out.push({ label: '플롯', current: cur.plot ? '예' : '아니오', standard: std.plot ? '예' : '아니오' });
@@ -104,7 +106,7 @@ const pattern = (l: Linetype) => l.elements.map((e) => fmt(e.length) + (e.flags 
 
 export function linetypeDiffs(cur: Linetype, std: Linetype): PropDiff[] {
   const out: PropDiff[] = [];
-  if ((cur.description ?? '') !== (std.description ?? '')) out.push({ label: '설명', current: cur.description ?? '', standard: std.description ?? '' });
+  if ((cur.description ?? '') !== (std.description ?? '')) out.push({ label: '설명', current: cur.description ?? '', standard: std.description ?? '', file: true });
   if (pattern(cur) !== pattern(std) || !near(cur.patternLength, std.patternLength)) out.push({ label: '무늬', current: pattern(cur) || '실선', standard: pattern(std) || '실선' });
   return out;
 }
@@ -112,9 +114,9 @@ export function linetypeDiffs(cur: Linetype, std: Linetype): PropDiff[] {
 export function textStyleDiffs(cur: TextStyle, std: TextStyle): PropDiff[] {
   const out: PropDiff[] = [];
   const s = (v: string | undefined) => (v ?? '').trim();
-  if (s(cur.font).toUpperCase() !== s(std.font).toUpperCase()) out.push({ label: '글꼴 파일', current: s(cur.font), standard: s(std.font) });
-  if (s(cur.bigFont).toUpperCase() !== s(std.bigFont).toUpperCase()) out.push({ label: '큰 글꼴', current: s(cur.bigFont), standard: s(std.bigFont) });
-  if (s(cur.fontFamily).toUpperCase() !== s(std.fontFamily).toUpperCase()) out.push({ label: '글꼴 이름', current: s(cur.fontFamily), standard: s(std.fontFamily) });
+  if (s(cur.font).toUpperCase() !== s(std.font).toUpperCase()) out.push({ label: '글꼴 파일', current: s(cur.font), standard: s(std.font), file: true });
+  if (s(cur.bigFont).toUpperCase() !== s(std.bigFont).toUpperCase()) out.push({ label: '큰 글꼴', current: s(cur.bigFont), standard: s(std.bigFont), file: true });
+  if (s(cur.fontFamily).toUpperCase() !== s(std.fontFamily).toUpperCase()) out.push({ label: '글꼴 이름', current: s(cur.fontFamily), standard: s(std.fontFamily), file: true });
   if (!near(cur.height, std.height)) out.push({ label: '높이', current: fmt(cur.height), standard: fmt(std.height) });
   if (!near(cur.widthFactor, std.widthFactor)) out.push({ label: '폭 비율', current: fmt(cur.widthFactor), standard: fmt(std.widthFactor) });
   if (!near(cur.oblique, std.oblique)) out.push({ label: '기울기 각도', current: fmt(cur.oblique), standard: fmt(std.oblique) });
@@ -134,11 +136,11 @@ export function dimStyleDiffs(cur: DimStyle, std: DimStyle): PropDiff[] {
     const b = dimValue(std, k);
     if (a === undefined || b === undefined) {
       if (a === b) continue;
-      out.push({ label: k, current: fmt(a), standard: fmt(b) });
+      out.push({ label: k, current: fmt(a), standard: fmt(b), file: true });
       continue;
     }
     const same = typeof a === 'number' && typeof b === 'number' ? near(a, b) : String(a).toUpperCase() === String(b).toUpperCase();
-    if (!same) out.push({ label: k, current: fmt(a), standard: fmt(b) });
+    if (!same) out.push({ label: k, current: fmt(a), standard: fmt(b), file: true });
   }
   return out;
 }

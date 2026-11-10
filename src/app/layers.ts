@@ -6,7 +6,7 @@ import type { Entity, Layer } from '../core/model';
 import { tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { dropLayerFromFiltersOps } from '../edit/layerfilter/store';
-import { cloneEntity } from '../edit/session';
+import { cloneEntity, hintOnce, modifyOp } from '../edit/session';
 import type { App } from './app';
 import { ft } from './filetext';
 
@@ -176,10 +176,15 @@ export function renameLayer(app: App, key: string, name: string): boolean {
     if (c.type === 'INSERT') for (const a of c.attribs) if (tableKey(a.layer) === k) a.layer = after.name;
     return c;
   };
+  // 훑은 자리를 자리 짐작으로 단다(109차 — 핸들이 하나씩인 문서만, EditSession.scanHints. 적용이 큰 블록의 자리 표를 만들지 않게.
+  // 판정은 바꿀 객체가 있을 때만)
+  const hint = hintOnce(() => st.session.scanHints());
   for (const [bk, b] of st.doc.blocks) {
-    for (const e of b.entities) {
+    const list = b.entities;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i]!;
       const c = fix(e);
-      if (c) ops.push({ kind: 'modify', block: bk, before: e, after: c });
+      if (c) ops.push(modifyOp(bk, e, c, hint() ? i : undefined));
     }
   }
   const cl = st.doc.header.get('$CLAYER');

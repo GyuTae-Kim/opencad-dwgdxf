@@ -597,7 +597,7 @@ async function tableInsertDialog(app: App): Promise<InsertSettings | null> {
   const v = await form(
     '테이블 삽입',
     [
-      { key: 'style', label: '테이블 스타일', type: 'select', value: prev?.style ?? cur?.handle ?? '', options: styles.length ? styles.map((s) => ({ value: s.handle, label: s.name })) : [{ value: '', label: 'Standard' }] },
+      { key: 'style', label: '테이블 스타일', type: 'select', value: prev?.style ?? cur?.handle ?? '', options: styles.length ? styles.map((s) => ({ value: s.handle, label: ft(s.name) })) : [{ value: '', label: ft('Standard') }] },
       {
         key: 'mode',
         label: '삽입 동작',
@@ -1192,7 +1192,7 @@ export function registerTableEditCommands(app: App): void {
               '새 테이블 스타일 작성',
               [
                 { key: 'name', label: '새 스타일 이름', type: 'text', value: `${s?.name ?? 'Standard'}의 복사` },
-                { key: 'from', label: '시작', type: 'select', value: s?.handle ?? '', options: entries.map((e) => ({ value: e.handle, label: e.name })) },
+                { key: 'from', label: '시작', type: 'select', value: s?.handle ?? '', options: entries.map((e) => ({ value: e.handle, label: ft(e.name) })) },
               ],
               {
                 ok: '계속',

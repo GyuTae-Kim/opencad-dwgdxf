@@ -8,8 +8,8 @@
  */
 import type { CadDocument, Entity } from '../../core/model';
 import { BYBLOCK, BYLAYER, LW_BYBLOCK, LW_BYLAYER, TRANSPARENCY_BYBLOCK, TRANSPARENCY_BYLAYER, normalizeHandle, tableKey } from '../../core/model';
-import type { EditOp } from '../session';
-import { cloneEntity, isLayoutBlock } from '../session';
+import type { EditOp, ScanHint } from '../session';
+import { cloneEntity, hintOnce, isLayoutBlock, modifyOp } from '../session';
 
 export const SBL_COLOR = 1;
 export const SBL_LINETYPE = 2;
@@ -46,6 +46,8 @@ export interface SetByLayerOptions {
   includeBlocks: boolean;
   /** 이 도면층의 객체는 건너뛴다(잠긴 도면층) */
   skipLayer?: (layer: string) => boolean;
+  /** 블록 정의 안 객체의 바꾸기에 훑은 자리를 자리 짐작으로 단다(109차 — () => EditSession.scanHints(), 핸들이 하나씩인 문서만) */
+  blockHints?: ScanHint;
 }
 
 /** 재질 핸들이 ByBlock 재질인지(재질 사전의 이름) */
@@ -136,18 +138,21 @@ export function setByLayerOps(doc: CadDocument, targets: readonly { block: strin
   const isBB = (h: string) => mats.get(normalizeHandle(h)) === 'BYBLOCK';
   const res: SetByLayerResult = { ops: [], changed: 0, nested: 0, blocks: 0 };
   const doneBlocks = new Set<string>();
+  const blockHint = hintOnce(o.blockHints ?? false);
   const visitBlock = (name: string) => {
     const k = tableKey(name);
     if (doneBlocks.has(k) || !editableBlock(doc, name)) return;
     doneBlocks.add(k);
     const b = doc.blocks.get(k)!;
     let any = false;
-    for (const e of b.entities) {
+    const list = b.entities;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i]!;
       if (e.type === 'INSERT') visitBlock(e.block);
       if (o.skipLayer?.(e.layer)) continue;
       const c = setByLayerEntity(e, o, isBB);
       if (!c) continue;
-      res.ops.push({ kind: 'modify', block: k, before: e, after: c });
+      res.ops.push(modifyOp(k, e, c, blockHint() ? i : undefined));
       res.nested++;
       any = true;
     }
@@ -158,7 +163,7 @@ export function setByLayerOps(doc: CadDocument, targets: readonly { block: strin
     if (o.skipLayer?.(e.layer)) continue;
     const c = setByLayerEntity(e, o, isBB);
     if (c) {
-      res.ops.push(t.index === undefined ? { kind: 'modify', block: t.block, before: e, after: c } : { kind: 'modify', block: t.block, before: e, after: c, index: t.index });
+      res.ops.push(modifyOp(t.block, e, c, t.index));
       res.changed++;
     }
     if (o.includeBlocks && e.type === 'INSERT') visitBlock(e.block);

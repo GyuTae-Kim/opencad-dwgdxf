@@ -5,8 +5,9 @@
  */
 import type { CadDocument, DictionaryObject, DimStyle, Entity, GenericObject, HeaderValue, Layer, Layout, MLineStyleObject } from '../../core/model';
 import { MODEL_SPACE, tableKey } from '../../core/model';
-import type { EditOp } from '../session';
-import { cloneEntity, isLayoutBlock } from '../session';
+import { pushAll } from '../../core/arrays';
+import type { EditOp, ScanHint } from '../session';
+import { cloneEntity, hintOnce, isLayoutBlock, modifyOp } from '../session';
 import { mapTableTextStyles } from '../table/entity';
 
 export type RenameKind = 'block' | 'dimStyle' | 'layer' | 'linetype' | 'textStyle' | 'layout';
@@ -122,16 +123,22 @@ export function renameProblem(doc: CadDocument, kind: RenameKind, oldName: strin
 
 const same = (a: string | undefined, k: string) => typeof a === 'string' && tableKey(a) === k;
 
-/** 블록마다 객체를 고쳐 modify 작업을 만든다(fix가 null이면 그대로) */
-function entityOps(doc: CadDocument, fix: (c: Entity) => boolean): EditOp[] {
+/**
+ * 블록마다 객체를 고쳐 modify 작업을 만든다(fix가 null이면 그대로). hint면 훑은 자리를 자리 짐작으로 단다
+ * (109차 — EditSession.scanHints: 핸들이 하나씩인 문서만. 적용이 큰 블록의 자리 표를 만들지 않게)
+ */
+function entityOps(doc: CadDocument, fix: (c: Entity) => boolean, hint: ScanHint): EditOp[] {
   const ops: EditOp[] = [];
+  const useHint = hintOnce(hint);
   for (const [bk, b] of doc.blocks) {
-    for (const e of b.entities) {
+    const list = b.entities;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i]!;
       const c = cloneEntity(e);
       if (!fix(c)) continue;
       delete c.dwgRaw;
       if (c.type === 'INSERT') for (const a of c.attribs) delete a.dwgRaw;
-      ops.push({ kind: 'modify', block: bk, before: e, after: c });
+      ops.push(modifyOp(bk, e, c, useHint() ? i : undefined));
     }
   }
   return ops;
@@ -164,9 +171,9 @@ function dimStyleVarOps(doc: CadDocument, vars: string[], k: string, newName: st
 
 /**
  * 이름 바꾸기 작업. 순서대로 한 트랜잭션으로 적용한다(앞 작업이 옛 이름의 표 키를 쓴다).
- * 바꿀 수 없으면 빈 배열.
+ * 바꿀 수 없으면 빈 배열. hint면 객체 바꾸기에 훑은 자리를 자리 짐작으로 단다(() => EditSession.scanHints() — 109차, 바꿀 객체가 있을 때만 묻는다)
  */
-export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, newName: string): EditOp[] {
+export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, newName: string, hint: ScanHint = false): EditOp[] {
   if (renameProblem(doc, kind, oldName, newName)) return [];
   const k = tableKey(oldName);
   const nk = tableKey(newName);
@@ -176,8 +183,9 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
       const before = doc.layers.get(k)!;
       const after: Layer = { ...structuredClone(before), name: newName };
       delete (after as { dwgRaw?: unknown }).dwgRaw;
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           let hit = false;
           if (same(c.layer, k)) {
             c.layer = newName;
@@ -194,7 +202,7 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
             hit = true;
           }
           return hit;
-        }),
+        }, hint),
       );
       for (const [bk, b] of doc.blocks) if (same(b.layer, k)) ops.push({ kind: 'blockDef', key: bk, before: b, after: { ...b, layer: newName } });
       if (nk === k) ops.push({ kind: 'layer', key: k, before, after });
@@ -204,8 +212,9 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
     }
     case 'linetype': {
       const before = doc.linetypes.get(k)!;
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           let hit = false;
           if (same(c.linetype, k)) {
             c.linetype = newName;
@@ -218,7 +227,7 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
                 hit = true;
               }
           return hit;
-        }),
+        }, hint),
       );
       for (const [lk, l] of doc.layers) if (same(l.linetype, k)) ops.push({ kind: 'layer', key: lk, before: l, after: { ...l, linetype: newName } });
       ops.push(...dimStyleVarOps(doc, ['DIMLTYPE', 'DIMLTEX1', 'DIMLTEX2'], k, newName));
@@ -236,8 +245,9 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
     }
     case 'textStyle': {
       const before = doc.textStyles.get(k)!;
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           let hit = false;
           const t = c as { style?: string };
           if ((c.type === 'TEXT' || c.type === 'MTEXT' || c.type === 'ATTRIB' || c.type === 'ATTDEF') && same(t.style, k)) {
@@ -268,7 +278,7 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
             hit = true;
           }
           return hit;
-        }),
+        }, hint),
       );
       ops.push(...dimStyleVarOps(doc, ['DIMTXSTY'], k, newName));
       // 33차: 테이블 스타일(원본 태그의 7 — 셀 스타일마다의 문자 스타일 이름)
@@ -293,14 +303,15 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
         if (m && tableKey(m[1]!) === k) family.push([tableKey(d.name), `${newName}$${m[2]}`]);
       }
       const map = new Map(family);
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           if ((c.type === 'DIMENSION' || c.type === 'LEADER' || c.type === 'TOLERANCE') && map.has(tableKey(c.dimStyle))) {
             c.dimStyle = map.get(tableKey(c.dimStyle))!;
             return true;
           }
           return false;
-        }),
+        }, hint),
       );
       for (const [ok, nn] of family) {
         const before = doc.dimStyles.get(ok)!;
@@ -314,14 +325,15 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
     }
     case 'block': {
       const def = doc.blocks.get(k)!;
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           if (c.type === 'INSERT' && same(c.block, k)) {
             c.block = newName;
             return true;
           }
           return false;
-        }).filter((o) => !(o.kind === 'modify' && o.block === k)),
+        }, hint).filter((o) => !(o.kind === 'modify' && o.block === k)),
       );
       ops.push(...dimStyleVarOps(doc, ['DIMBLK', 'DIMBLK1', 'DIMBLK2', 'DIMLDRBLK'], k, newName));
       const rec = doc.blockRecords.get(k);

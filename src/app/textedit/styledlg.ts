@@ -8,6 +8,7 @@ import type { CadDocument, Entity, TextStyle } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { annotativeFlag, withAnnotativeFlag } from '../../edit/annoscale/xdata';
 import type { EditOp } from '../../edit/session';
+import { hintOnce, modifyOp } from '../../edit/session';
 import { isShxFont } from '../../text/layout';
 import type { App } from '../app';
 import type { DocState } from '../docstate';
@@ -102,11 +103,16 @@ export function textStyleRenameOps(st: DocState, from: string, to: string): Edit
       }
     return changed ? c : null;
   };
-  for (const [bk, b] of doc.blocks)
-    for (const e of b.entities) {
+  // 훑은 자리를 자리 짐작으로 단다(109차 — 핸들이 하나씩인 문서만, EditSession.scanHints. 판정은 바꿀 객체가 있을 때만)
+  const hint = hintOnce(() => st.session.scanHints());
+  for (const [bk, b] of doc.blocks) {
+    const list = b.entities;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i]!;
       const c = fix(e);
-      if (c) ops.push({ kind: 'modify', block: bk, before: e, after: c });
+      if (c) ops.push(modifyOp(bk, e, c, hint() ? i : undefined));
     }
+  }
   for (const [k, ds] of doc.dimStyles) if (typeof ds.vars.DIMTXSTY === 'string' && tableKey(ds.vars.DIMTXSTY) === fk) ops.push({ kind: 'dimStyle', key: k, before: ds, after: { ...ds, vars: { ...ds.vars, DIMTXSTY: to } } });
   for (const hk of ['$TEXTSTYLE', '$DIMTXSTY']) if (tableKey(String(doc.header.get(hk) ?? '')) === fk) ops.push({ kind: 'header', name: hk, before: doc.header.get(hk), after: to });
   return ops;

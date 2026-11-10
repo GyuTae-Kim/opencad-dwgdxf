@@ -10,6 +10,7 @@ import { createNewDocument } from '../../src/core/newdoc';
 import { mergeResults } from '../../src/edit/geom/types';
 import type { EditOp } from '../../src/edit/session';
 import { EditSession } from '../../src/edit/session';
+import { renameOps } from '../../src/edit/util/rename';
 import { triangulateLoops } from '../../src/render/hatch';
 
 /** 메인 스레드 한도보다 많은 수 */
@@ -62,6 +63,22 @@ describe('큰 선택', () => {
     s.commit({ label: 'B', ops: ops(), group: 7 });
     expect(doc.blocks.get(MODEL_SPACE)!.entities.length).toBe(before + 2 * N);
     expect(s.opsInGroup(7)).toBe(2 * N);
+  });
+
+  // 109차: 이름 바꾸기가 객체 바꾸기 목록을 push(...)로 붙여, 객체 42만 개 실도면에서 많이 쓰인 도면층의 -RENAME이 스택 넘침으로 죽었다
+  it('객체가 많이 쓰는 도면층·선종류 이름도 바꾸고 되돌린다', () => {
+    const doc = createNewDocument('metric');
+    const s = new EditSession(doc, () => {});
+    doc.layers.set('BIG', { ...doc.layers.get('0')!, name: 'BIG', handle: s.newHandle() });
+    doc.linetypes.set('DASH', { ...doc.linetypes.get('CONTINUOUS')!, name: 'DASH', handle: s.newHandle() });
+    s.commit({ label: 'A', ops: Array.from({ length: N }, () => ({ kind: 'add' as const, block: MODEL_SPACE, entity: { ...line(s.newHandle()), layer: 'BIG', linetype: 'DASH' } })) });
+    const list = doc.blocks.get(MODEL_SPACE)!.entities;
+    s.commit({ label: 'RENAME', ops: renameOps(doc, 'layer', 'BIG', 'HUGE', s.scanHints()) });
+    s.commit({ label: 'RENAME', ops: renameOps(doc, 'linetype', 'DASH', 'DASH2', s.scanHints()) });
+    expect([list.length, list.at(-1)!.layer, list.at(-1)!.linetype, doc.layers.has('HUGE')]).toEqual([N, 'HUGE', 'DASH2', true]);
+    s.undo();
+    s.undo();
+    expect([list.at(-1)!.layer, list.at(-1)!.linetype, doc.layers.has('BIG')]).toEqual(['BIG', 'DASH', true]);
   });
 });
 

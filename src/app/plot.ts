@@ -311,12 +311,13 @@ export function registerPlotCommands(app: App): void {
       const preset = (x: (typeof sheets)[number]) => x.st === st && x.model !== mineHasLayout;
       let chosen = sheets.filter(preset);
       if (!inScript(app)) {
-        const checks = sheets.map((x) => checkIn(preset(x), x.label));
+        // 도면 파일·배치 이름은 도면 글(109차 — 화면 번역층이 옮기지 않게 ft로 감싼다. '모형'은 앱 글)
+        const checks = sheets.map((x) => checkIn(preset(x), `${ft(baseName(x.st.saveName))} - ${x.model ? '모형' : ft(x.name)}`));
         const many = new Set(sheets.map((x) => x.st)).size > 1;
         const groups = [...new Set(sheets.map((x) => x.st))].map((d) =>
           group(
-            many ? baseName(d.saveName) : '게시할 시트',
-            ...sheets.flatMap((x, i) => (x.st === d ? [row(x.model ? '모형(범위, 용지에 맞춤)' : x.name, checks[i]!)] : [])),
+            many ? ft(baseName(d.saveName)) : '게시할 시트',
+            ...sheets.flatMap((x, i) => (x.st === d ? [row(x.model ? '모형(범위, 용지에 맞춤)' : ft(x.name), checks[i]!)] : [])),
           ),
         );
         const note = many ? '고른 시트를 열린 도면 차례, 배치 탭 순서대로 PDF 한 파일에 담습니다. 각 배치의 페이지 설정(용지)을 씁니다.' : '고른 배치를 탭 순서대로 PDF 한 파일에 담습니다. 각 배치의 페이지 설정(용지)을 씁니다.';

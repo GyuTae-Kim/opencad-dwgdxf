@@ -123,7 +123,7 @@ async function configureDialog(app: App, ctx: CommandContext, st: DocState): Pro
     }
     const d = f.doc;
     desc.replaceChildren(
-      h('div', {}, h('b', {}, f.name)),
+      h('div', {}, h('b', { translate: 'no' }, f.name)),
       h('div', {}, `도면층 ${d.layers.size}개, 선종류 ${d.linetypes.size}개, 문자 스타일 ${[...d.textStyles.values()].filter((x) => x.name).length}개, 치수 스타일 ${d.dimStyles.size}개`),
       h('div', {}, `형식: ${d.format.toUpperCase()} ${d.version}`),
     );
@@ -301,7 +301,8 @@ async function checkFlow(app: App, ctx: CommandContext, st: DocState): Promise<v
       preview.replaceChildren(
         h('tr', {}, h('th', {}, '특성'), h('th', {}, '현재 값'), h('th', {}, '표준 값')),
         ...(p.type === 'name' && c ? [h('tr', {}, h('td', {}, '이름'), h('td', { translate: 'no' }, p.name), h('td', { translate: 'no' }, c.name))] : []),
-        ...diffs.map((d) => h('tr', {}, h('td', {}, d.label), h('td', {}, d.current), h('td', {}, d.standard))),
+        // 도면 글 값(선종류 이름·설명·글꼴 파일·치수 변수 값)은 옮기지 않고, 색 이름·예/아니오 같은 앱 글은 옮긴다(109차)
+        ...diffs.map((d) => h('tr', {}, h('td', {}, d.label), h('td', { translate: d.file ? 'no' : undefined }, d.current), h('td', { translate: d.file ? 'no' : undefined }, d.standard))),
       );
     };
     cand.onChange = showPreview;
