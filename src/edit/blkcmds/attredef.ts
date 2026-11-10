@@ -3,6 +3,7 @@
  * - 두 정의에 다 있는 태그의 값은 지킨다. 새 정의에만 있는 태그는 기본값으로 만든다. 새 정의에 없는 태그는 지운다.
  * - 고른 객체는 정의로 옮기고 도면에서 지운다(BLOCK과 같다). 블록 이름·레코드 핸들·설명은 그대로 둔다.
  */
+import { pushAll } from '../../core/arrays';
 import type { BlockDef, CadDocument, Entity, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import type { EditOp } from '../session';
@@ -57,6 +58,10 @@ export function attRedefOps(doc: CadDocument, name: string, space: string, handl
   const sync = syncAllOps(doc, old.name, newHandle, def);
   // 지우는 객체 중에 그 블록의 참조가 있으면(고른 객체가 참조였다면) 맞추지 않는다
   const gone = new Set(chosen);
-  ops.push(...sync.ops.filter((op) => op.kind !== 'modify' || !gone.has(op.before.handle)));
+  // 참조 수를 따른다(펼치지 않고 붙인다 — 110차)
+  pushAll(
+    ops,
+    sync.ops.filter((op) => op.kind !== 'modify' || !gone.has(op.before.handle)),
+  );
   return { ops, entities: ents.length, references: sync.count, locked: sync.locked };
 }

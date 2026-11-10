@@ -3,6 +3,7 @@
  * 그리고 치수 명령·수정 명령이 쓰는 연결 도우미(작성할 때 연관 만들기, 편집할 때 따라가기).
  * 기록 해석·계산은 src/edit/dim/assoc.ts. 프롬프트는 AutoCAD 2026 한국어판을 따른다.
  */
+import { pushAll } from '../core/arrays';
 import type { DimensionEntity, Entity, HeaderValue } from '../core/model';
 import { tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
@@ -332,7 +333,8 @@ export function followOps(st: DocState, changes: ReadonlyMap<string, Entity | nu
     }
     ops.push({ kind: 'modify', block, before, after: e });
   }
-  ops.push(...plan.objectOps);
+  // 따라가는 연관 객체 수는 옮긴 객체에 붙은 치수 수를 따른다(펼치지 않고 붙인다 — 110차)
+  pushAll(ops, plan.objectOps);
   return { ops, patched };
 }
 
@@ -449,7 +451,7 @@ export function registerDimAssocCommands(app: App): void {
         }
         ops.push({ kind: 'modify', block, before, after: e });
       }
-      ops.push(...plan.objectOps);
+      pushAll(ops, plan.objectOps);
       if (ops.length) st.session.commit({ label: 'DIMREGEN', ops, group: ctx.group });
     },
   });

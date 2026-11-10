@@ -3,6 +3,7 @@
  * 원호·타원호의 유리 2차 표현, 닫힌(주기) 3차 보간.
  * 조정점은 3D(Z 유지), 가중치가 없으면 모두 1이다.
  */
+import { maxOf } from '../../core/arrays';
 import { SPLINE_MAX_DEGREE } from '../../core/limits';
 import type { Vec2, Vec3 } from '../../core/model';
 import { clampedKnots } from '../../geom/curves';
@@ -333,7 +334,8 @@ export function joinBeziers(segs: H[][]): Nurbs | null {
 /** 여러 곡선을 차수를 맞춰 잇는다(끝점이 같아야 한다) */
 export function joinNurbs(list: Nurbs[]): Nurbs | null {
   if (!list.length) return null;
-  const p = Math.max(...list.map((c) => c.degree));
+  // 잇는 곡선 수·베지어 조각 수는 정점 수를 따른다(펼쳐 넘기지 않는다 — 110차)
+  const p = maxOf(list.map((c) => c.degree));
   const segs: H[][] = [];
   for (const c of list) for (const s of toBezier(c)) segs.push(elevateBezier(s, p - (s.length - 1)));
   return joinBeziers(segs);
@@ -379,7 +381,7 @@ export function lineBezier(a: Vec3, b: Vec3): H[] {
 
 export function beziersToNurbs(segs: H[][]): Nurbs | null {
   if (!segs.length) return null;
-  const p = Math.max(...segs.map((s) => s.length - 1));
+  const p = maxOf(segs.map((s) => s.length - 1));
   return joinBeziers(segs.map((s) => elevateBezier(s, p - (s.length - 1))));
 }
 

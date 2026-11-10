@@ -2,6 +2,7 @@
  * 블록 명령(util2): BATTMAN(블록 속성 관리자), ATTSYNC, BCOUNT, BURST, BLOCKREPLACE, MINSERT, WBLOCK
  * 프롬프트는 AutoCAD 2026 한국어판을 따른다.
  */
+import { pushAll } from '../core/arrays';
 import type { AttribEntity, BlockDef, BlockRecord, Entity, InsertEntity, Vec3 } from '../core/model';
 import { entityDefaults, tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
@@ -181,7 +182,8 @@ export function registerUtil2BlockCommands(app: App): void {
           }
           if (sync) {
             const r = syncAllOps(st.doc, k, () => st.session.newHandle(), def);
-            ops.push(...r.ops);
+            // 참조 수를 따른다(펼치지 않고 붙인다 — 110차, ATTREDEF와 같은 syncAllOps)
+            pushAll(ops, r.ops);
             refs += r.ops.length;
             if (r.locked) ctx.print(`잠긴 도면층의 참조 ${r.locked}개는 건너뛰었습니다.`);
           }

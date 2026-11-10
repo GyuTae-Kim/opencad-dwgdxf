@@ -354,11 +354,12 @@ export function registerEditCommands(app: App): void {
       if (v.textStyles) for (const k of found.textStyles) ops.push({ kind: 'textStyle', key: k, before: st.doc.textStyles.get(k)!, after: null });
       if (v.dimStyles) for (const k of found.dimStyles) ops.push({ kind: 'dimStyle', key: k, before: st.doc.dimStyles.get(k)!, after: null });
       const namedSel = (['mleaderStyles', 'tableStyles', 'mlineStyles', 'groups'] as const).filter((k) => v[k]).flatMap((k) => named[k]);
-      ops.push(...purgeNamedOps(doc, namedSel));
-      if (v.regApps) ops.push(...purgeRegAppOps(doc, apps));
+      // 등록된 응용프로그램(수십만 개로 불어난 도면이 있다)·0 길이 형상(객체 수를 따른다)은 펼치지 않고 붙인다(110차)
+      pushAll(ops, purgeNamedOps(doc, namedSel));
+      if (v.regApps) pushAll(ops, purgeRegAppOps(doc, apps));
       let removed = 0;
       if (v.zeroEmpty) {
-        ops.push(...zeroEmpty);
+        pushAll(ops, zeroEmpty);
         removed = zeroEmpty.length;
       }
       if (!ops.length) return;

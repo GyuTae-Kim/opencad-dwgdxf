@@ -3,6 +3,7 @@
  * PDF는 직접 쓴다(선·채움만, 문자는 모양 그대로 그린다).
  */
 import { ensureLayoutVariants, viewportModel } from './psltscale';
+import { pushAll } from '../core/arrays';
 import { MODEL_SPACE } from '../core/model';
 import { trackExport, type ExportFormat } from 'opencad-site-kit/analytics';
 import { imageDataUrl, imagePixels, xrefPlacements } from './refs';
@@ -592,10 +593,17 @@ export function pdfContent(page: Page, images: string[] = [], res?: PdfResources
           curAlpha = a;
         }
       }
+      // 채운 삼각형은 40만 개까지 한 경로로 모은다 — 펼쳐 넘기지 않고 붙인다(110차)
       if (kind === 'seg') {
         const w = (styles[cur * 8 + 4]! > 0 ? styles[cur * 8 + 4]! : THIN_MM) * page.lwScale;
-        ops.push(`${color(cur)} RG ${w.toFixed(3)} w`, ...buf, 'S');
-      } else ops.push(`${color(cur)} rg`, ...buf, 'f');
+        ops.push(`${color(cur)} RG ${w.toFixed(3)} w`);
+        pushAll(ops, buf);
+        ops.push('S');
+      } else {
+        ops.push(`${color(cur)} rg`);
+        pushAll(ops, buf);
+        ops.push('f');
+      }
       buf = [];
     };
     walk(
@@ -633,7 +641,8 @@ export function pdfContent(page: Page, images: string[] = [], res?: PdfResources
     if (openLayer !== null) ops.push('EMC');
     ops.push('Q');
   }
-  if (res && chars.length) ops.push(...hiddenText(chars, H, res));
+  // 숨은 검색 글자는 쪽의 글자마다 하나다(펼치지 않고 붙인다 — 110차)
+  if (res && chars.length) pushAll(ops, hiddenText(chars, H, res));
   return ops.join('\n');
 }
 

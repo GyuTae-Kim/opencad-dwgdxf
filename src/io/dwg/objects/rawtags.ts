@@ -16,6 +16,7 @@
  *
  * 풀다가 자료 비트가 남거나 모자라면(배치가 맞지 않는 파일) null을 돌려 원본 태그 없이 둔다.
  */
+import { pushAll } from '../../../core/arrays';
 import type { FieldObject, RawTag } from '../../../core/model';
 import { fieldListTags, fieldTags } from '../../fields';
 import { BitReader } from '../bitstream';
@@ -76,7 +77,8 @@ function dimAssoc(or: ObjectReader): RawTag[] {
     if (ni > 0) inter.push({ code: 74, value: r.BS() }, { code: 92, value: r.BL() });
     out.push({ code: 40, value: r.BD() });
     pt3(10, r.BD3(), out);
-    out.push(...inter);
+    // 교차 객체 수는 파일 값이다(펼치지 않고 붙인다 — 110차)
+    pushAll(out, inter);
     out.push({ code: 75, value: r.B() });
   }
   return out;

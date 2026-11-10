@@ -4,6 +4,7 @@
  * 사양은 값 문자열 길이(98)를 TV로 적었지만 DXF 98은 정수라 BL로 읽는다.
  * AutoCAD가 쓴 FIELD 표본이 없어 이 배치는 사양대로이고 우리 쓰기와의 왕복으로만 확인했다.
  */
+import { charsOf } from '../../../core/arrays';
 import type { FieldObject, FieldValue } from '../../../core/model';
 import { DwgFormatError } from '../bitstream';
 import { R2004, R2007 } from '../version';
@@ -43,7 +44,8 @@ export function readFieldValue(or: ObjectReader): FieldValue {
           if (n & 1) r.RC();
           let len = codes.length;
           while (len > 0 && codes[len - 1] === 0) len--;
-          v.value = String.fromCharCode(...codes.slice(0, len));
+          // 글자 수는 파일을 따른다(조각으로 나눠 푼다 — 110차, 작업자 인자 한도 약 6.3만)
+          v.value = charsOf(codes, len);
         }
         break;
       case 8:

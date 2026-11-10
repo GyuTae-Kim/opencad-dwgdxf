@@ -1,4 +1,5 @@
 /** 객체 특성·측정값(특성 창, LIST, 치수 목록) */
+import { codePointsOf } from '../core/arrays';
 import type { CadColor, CadDocument, DimensionEntity, Entity, HatchEntity, Vec3 } from '../core/model';
 import { isNaturalExt, ocsToWcs } from '../edit/geom/ocs';
 import { tableKey } from '../core/model';
@@ -308,7 +309,8 @@ export function plainText(s: string): string {
     .replace(/\\[LlOoKk~]/g, '')
     .replace(/\\([\\{}])/g, '$1')
     .replace(/[{}]/g, '');
-  t = String.fromCodePoint(...decodePercent(t).filter((c) => c >= 0));
+  // 문자 내용 길이를 따른다(조각으로 나눠 푼다 — 110차)
+  t = codePointsOf(decodePercent(t).filter((c) => c >= 0));
   return t;
 }
 
