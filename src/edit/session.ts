@@ -9,6 +9,7 @@ import { pushAll } from '../core/arrays';
 import { cloneData } from '../core/clone';
 import { tableKey, normalizeHandle } from '../core/model';
 import { HandleIndex } from '../core/handleindex';
+import { OwnerMemo } from './ownermemo';
 
 export type EditOp =
   /** 블록(공간) block의 index 자리에 객체를 넣는다(index 없으면 끝) */
@@ -503,9 +504,12 @@ export class EditSession {
    * 기억을 어떻게 고치든 확인을 거친 답은 옛 길과 같다. 그래서 확정은 넣은 객체마다 기억에 적지 않고 블록만 미뤄 두며(ownerPending),
    * 빗나간 자리는 최근 확정의 자리 옮김(ownerSteps — 지운 자리·끝에 넣은 범위)으로, 안 되면 그 블록의 자리 표(ownerSlots)로 찾는다
    * — 전체 표를 다시 만들지 않는다. 답은 모두 지금 블록에서 확인한 자리다.
+   * 빠른 길의 기억은 ownerMemo 하나(108차 — 수로 바꾼 핸들의 형식 배열 표, edit/ownermemo.ts)이고, 명령 취소·다시도 버리지 않고 변경으로 고친다.
    * 옛 길(ownerLegacy): 표를 만들 때 핸들이 겹치거나 빈 핸들이 둘 이상이었던 문서. 102차까지와 똑같이 한다(겹친 핸들의 답은 기억의 내력에 따라
-   * 달라지므로 길을 바꾸면 답이 바뀔 수 있다). 한 번 옛 길이면 세션 끝까지 옛 길이다
+   * 달라지므로 길을 바꾸면 답이 바뀔 수 있다 — Map 둘 ownerCache·ownerAt, 명령 취소·다시 뒤 다시 만든다). 한 번 옛 길이면 세션 끝까지 옛 길이다
    */
+  private ownerBuilt = false;
+  private ownerMemo: OwnerMemo | null = null;
   private ownerCache: Map<string, string> | null = null;
   private ownerAt = new Map<string, number>();
   private ownerMisses = 0;
@@ -603,15 +607,15 @@ export class EditSession {
 
   /** 블록 키(공간) */
   ownerOf(handle: string): string | null {
-    if (!this.ownerCache) this.buildOwners();
+    if (!this.ownerBuilt) this.buildOwners();
     this.ownerLastHandle = handle;
     if (this.ownerLegacy) return this.ownerOfLegacy(handle);
-    const owners = this.ownerCache!;
-    const cached = owners.get(handle);
+    const memo = this.ownerMemo!;
+    const cached = memo.get(handle) ? memo.block : undefined;
     const list = cached ? this.doc.blocks.get(cached)?.entities : undefined;
     if (cached && list) {
       // 기억한 자리가 맞으면 블록을 훑지 않는다. 훑으면 객체 20만 개를 옮길 때 이 확인이 200억 번 비교가 된다
-      const at = this.ownerAt.get(handle) ?? -1;
+      const at = memo.at;
       if (list[at]?.handle === handle) {
         this.ownerLast = at;
         return cached;
@@ -619,7 +623,7 @@ export class EditSession {
       // 앞선 지우기·넣기로 자리가 밀렸다: 최근 확정의 자리 옮김으로, 안 되면 그 블록의 자리 표로
       // (103차 — 전에는 16번 빗나가면 모든 블록의 표를 다시 만들었다)
       let i = at >= 0 ? this.shiftedAt(cached, list, handle, at) : -1;
-      if (i >= 0) this.ownerAt.set(handle, i);
+      if (i >= 0) memo.put(handle, cached, i);
       else i = this.slotOf(cached, list, handle);
       if (i >= 0) {
         this.ownerLast = i;
@@ -642,8 +646,7 @@ export class EditSession {
     this.ownerLast = -1;
     if (k) {
       const i = this.doc.blocks.get(k)!.entities.findIndex((e) => e.handle === handle);
-      owners.set(handle, k);
-      this.ownerAt.set(handle, i);
+      memo.put(handle, k, i);
       this.ownerLast = i;
     }
     return k;
@@ -651,7 +654,7 @@ export class EditSession {
 
   /** 옛 길(102차까지 그대로 — 핸들이 겹친 문서) */
   private ownerOfLegacy(handle: string): string | null {
-    if (!this.ownerCache) this.buildOwners();
+    if (!this.ownerBuilt) this.buildOwners();
     const cached = this.ownerCache!.get(handle);
     const list = cached ? this.doc.blocks.get(cached)?.entities : undefined;
     if (cached && list) {
@@ -700,10 +703,7 @@ export class EditSession {
       return at.get(handle) ?? -1;
     }
     const i = list.findIndex((e) => e.handle === handle);
-    if (i >= 0) {
-      this.ownerCache!.set(handle, k);
-      this.ownerAt.set(handle, i);
-    }
+    if (i >= 0) this.ownerMemo!.put(handle, k, i);
     return i;
   }
 
@@ -713,7 +713,7 @@ export class EditSession {
    * ownerOf(handle) 바로 뒤에 부르면 다시 찾지 않는다. 짐작일 뿐이라(적용이 핸들로 확인한다) 그 사이에 문서가 바뀌어도 답이 틀리지 않는다
    */
   slotHint(handle: string): number | undefined {
-    if (this.ownerLastHandle !== handle || !this.ownerCache) this.ownerOf(handle);
+    if (this.ownerLastHandle !== handle || !this.ownerBuilt) this.ownerOf(handle);
     return this.ownerLegacy || this.ownerLast < 0 ? undefined : this.ownerLast;
   }
 
@@ -725,37 +725,61 @@ export class EditSession {
   }
 
   private buildOwners(): void {
-    const owners = new Map<string, string>();
+    this.ownerBuilt = true;
     this.ownerAt.clear();
     this.ownerMisses = 0;
     this.ownerPending.length = 0;
     this.ownerSlots.clear();
     this.ownerSteps.clear();
-    let named = 0;
-    let unnamed = 0;
+    if (!this.ownerLegacy) {
+      // 빠른 길: 핸들 수 표 하나(108차). 핸들이 겹치거나 빈 핸들이 둘 이상이면 null — 옛 길로 Map 둘을 만든다
+      this.ownerMemo = OwnerMemo.build(this.doc);
+      if (this.ownerMemo) {
+        this.ownerCache = null;
+        return;
+      }
+      this.ownerLegacy = true;
+    }
+    this.ownerMemo = null;
+    // 옛 길(102차 표 그대로): 겹친 핸들은 블록 차례·블록 안 차례로 마지막 것
+    const owners = new Map<string, string>();
     for (const [k, b] of this.doc.blocks) {
       const list = b.entities;
       for (let i = 0; i < list.length; i++) {
         const h = list[i]!.handle;
-        if (!h) {
-          unnamed++;
-          continue;
-        }
-        named++;
+        if (!h) continue;
         owners.set(h, k);
         this.ownerAt.set(h, i);
       }
     }
     this.ownerCache = owners;
-    // 핸들이 겹쳤으면(넣은 수보다 표가 작다) 옛 길로
-    if (named !== owners.size || unnamed > 1) this.ownerLegacy = true;
+  }
+
+  /** 소유 블록 기억을 버린다(다음 찾기가 표를 다시 만든다) */
+  private dropOwners(): void {
+    this.ownerBuilt = false;
+    this.ownerMemo = null;
+    this.ownerCache = null;
+    this.ownerLastHandle = null;
+  }
+
+  /**
+   * 명령 취소·다시·단계 취소로 적용한 변경 뒤(108차): 빠른 길이면 확정처럼 기억을 고쳐 다음 명령이 표를 다시 만들지 않게 하고,
+   * 옛 길이면 전처럼 버린다(102차와 같은 내력). 빠른 길의 답은 기억과 상관없이 문서로 정해진다(위 설명)
+   */
+  private ownersAfterReplay(ops: readonly EditOp[]): void {
+    if (!this.ownerBuilt || this.ownerLegacy) {
+      this.dropOwners();
+      return;
+    }
+    this.noteOwners(ops);
   }
 
   /** 확정한 변경에 맞춰 소유 블록 기억을 고친다(applyOpsAtomic 뒤) */
   private noteOwners(ops: readonly EditOp[]): void {
-    const owners = this.ownerCache;
-    if (!owners) return;
+    if (!this.ownerBuilt) return;
     if (this.ownerLegacy) {
+      const owners = this.ownerCache!;
       // 소유 블록 기억: 같은 핸들을 제자리에서 바꾼 객체는 기억한 블록 그대로다(87차 — 연관 도면 MOVE의 바꾸기 3만 개마다 다시 넣었다)
       for (const op of ops) {
         if (op.kind === 'add') owners.set(op.entity.handle, op.block);
@@ -764,7 +788,10 @@ export class EditSession {
       return;
     }
     // 빠른 길: 넣은 객체마다 적지 않고 블록만 미뤄 둔다(103차 — 객체 42만 개 도면 EXPLODE는 넣기 124만 번, 그 기억이 명령의 약 14%였고
-    // 다음 명령이 16번 빗나가 전체 표를 다시 만들면서 모두 버려졌다). 넣거나 뺀 블록의 자리 표는 버리고, 블록마다 자리 옮김을 남긴다
+    // 다음 명령이 16번 빗나가 전체 표를 다시 만들면서 모두 버려졌다). 넣거나 뺀 블록의 자리 표는 버리고, 블록마다 자리 옮김을 남긴다.
+    // 문서가 바뀌었으니 마지막으로 찾은 자리는 짐작에 다시 쓰지 않는다(slotHint — 명령 취소 뒤에도 기억을 남기므로, 108차)
+    this.ownerLastHandle = null;
+    const memo = this.ownerMemo!;
     const shapes = new Map<string, { removed: number[]; added: number; ok: boolean }>();
     let key = '';
     let cur: { removed: number[]; added: number; ok: boolean } | undefined;
@@ -791,11 +818,13 @@ export class EditSession {
         const i = op.index;
         const r = s.removed;
         // 지우기는 넣기 앞, 자리가 줄어드는 차례여야 앞의 지우기가 뒤 지우기의 자리를 밀지 않는다
+        // (꼴이 깨진 블록은 자리 옮김을 남기지 않으므로 더 모으지 않는다 — EXPLODE 명령 취소는 지우기 124만 개)
+        if (!s.ok) continue;
         if (s.added || !Number.isInteger(i) || i < 0 || (r.length && i >= r[r.length - 1]!)) s.ok = false;
-        r.push(i);
+        else r.push(i);
       } else if (op.kind === 'modify') {
         if (op.after.handle === op.before.handle) continue;
-        owners.set(op.after.handle, op.block);
+        memo.put(op.after.handle, op.block);
         this.ownerSlots.delete(op.block);
         shapeOf(op.block).ok = false;
       } else if (op.kind === 'blockDef') {
@@ -814,7 +843,7 @@ export class EditSession {
       steps.push({ removed: Int32Array.from(s.removed).reverse(), from: len - s.added, added: s.added });
       if (steps.length > OWNER_STEP_LIMIT) steps.shift();
     }
-    if (this.ownerPending.length > OWNER_PENDING_LIMIT) this.ownerCache = null;
+    if (this.ownerPending.length > OWNER_PENDING_LIMIT) this.dropOwners();
   }
 
   /**
@@ -921,7 +950,7 @@ export class EditSession {
     applyOpsAtomic(this.doc, inv.ops, summary);
     top.ops.splice(top.ops.length - n, n);
     if (!top.ops.length) this.undoStack.pop();
-    this.ownerCache = null;
+    this.ownersAfterReplay(inv.ops);
     this.onApply(inv, summary);
     return n;
   }
@@ -944,7 +973,7 @@ export class EditSession {
     this.undoStack.pop();
     this.redoStack.push(tx);
     this.dirty = this.undoStack.length !== this.savedDepth;
-    this.ownerCache = null;
+    this.ownersAfterReplay(inv.ops);
     this.onApply(inv, summary);
     return tx;
   }
@@ -957,7 +986,7 @@ export class EditSession {
     this.redoStack.pop();
     this.undoStack.push(tx);
     this.dirty = this.undoStack.length !== this.savedDepth;
-    this.ownerCache = null;
+    this.ownersAfterReplay(tx.ops);
     this.onApply(tx, summary);
     return tx;
   }
