@@ -352,7 +352,7 @@ function transmitDialog(st: DocState, sources: Source[], settings: TransmitSetti
       );
       const fmt = read().format;
       const rootName = drawingName(sources[0]!.item.name, fmt);
-      sum.textContent = `${baseName(st.saveName)}.zip — 파일 ${plan.files.length}개${read().report ? ' + 보고서' : ''}${plan.missing.length ? `, 찾을 수 없음 ${plan.missing.length}` : ''}${plan.bound.length ? `, 결합 ${plan.bound.length}` : ''} (주 도면 ${rootName})`;
+      sum.textContent = `${ft(`${baseName(st.saveName)}.zip`)} — 파일 ${plan.files.length}개${read().report ? ' + 보고서' : ''}${plan.missing.length ? `, 찾을 수 없음 ${plan.missing.length}` : ''}${plan.bound.length ? `, 결합 ${plan.bound.length}` : ''} (주 도면 ${ft(rootName)})`;
     }
     const body = h(
       'div',

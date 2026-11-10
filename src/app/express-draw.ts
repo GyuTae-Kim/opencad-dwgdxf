@@ -414,7 +414,7 @@ async function runMkltype(app: App, ctx: CommandContext): Promise<void> {
     break;
   }
   const existing = doc.linetypes.get(tableKey(name));
-  if (existing && !(await yesNo(ctx, `선종류 "${existing.name}"이(가) 이미 있습니다. 다시 정의하겠습니까?`, false))) return;
+  if (existing && !(await yesNo(ctx, `선종류 "${ft(existing.name)}"이(가) 이미 있습니다. 다시 정의하겠습니까?`, false))) return;
   const d = await askString(ctx, '선종류 설명 입력:', '');
   const description = typeof d === 'string' ? d.replace(/[\r\n]/g, ' ').trim() : '';
   const a = await ctx.getPoint('선종류 정의의 시작점 지정:');

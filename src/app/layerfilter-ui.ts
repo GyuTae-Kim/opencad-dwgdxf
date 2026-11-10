@@ -371,7 +371,7 @@ async function confirmDelete(app: App, name: string): Promise<void> {
   const filters = listLayerFilters(app.active!.doc);
   const kids = descendantsOf(filters, name);
   if (kids.length) {
-    const a = await ask('도면층 필터 삭제', `필터 "${name}"과(와) 그 안의 필터 ${kids.length}개를 삭제하시겠습니까?`, [
+    const a = await ask('도면층 필터 삭제', `필터 "${ft(name)}"과(와) 그 안의 필터 ${kids.length}개를 삭제하시겠습니까?`, [
       { label: '예(Y)', value: 'yes', primary: true },
       { label: '아니오(N)', value: 'no' },
     ]);
@@ -650,7 +650,7 @@ export async function propertyFilterDialog(app: App, init: LayerFilter, previous
   nameIn.addEventListener('input', () => (err.textContent = ''));
   guardKeys(nameIn);
 
-  const parentNote = init.parent ? h('div', { class: 'ltx-note' }, `상위 필터: ${init.parent} — 이 필터는 상위 필터의 도면층 가운데에서 고릅니다.`) : null;
+  const parentNote = init.parent ? h('div', { class: 'ltx-note' }, `상위 필터: ${ft(init.parent)} — 이 필터는 상위 필터의 도면층 가운데에서 고릅니다.`) : null;
   const definition =
     readOnlyExpr !== undefined
       ? [
@@ -800,7 +800,7 @@ export async function groupFilterDialog(app: App, init: LayerFilter, previousNam
       'div',
       { class: 'ltx-col' },
       h('label', { class: 'ltx-row' }, h('span', { class: 'ltx-h' }, '필터 이름(N):'), nameIn),
-      init.parent ? h('div', { class: 'ltx-note' }, `상위 필터: ${init.parent}`) : null,
+      init.parent ? h('div', { class: 'ltx-note' }, `상위 필터: ${ft(init.parent)}`) : null,
       h('div', { class: 'lf-grp' }, h('div', { class: 'ltx-col' }, h('div', { class: 'ltx-h' }, '도면층'), find, left.el), mid, h('div', { class: 'ltx-col' }, count, right.el)),
       h('div', { class: 'ltx-note' }, '도면층을 끌어 오른쪽 목록에 놓거나 "도면층 추가"로 넣습니다. 두 번 누르면 옮깁니다. 그룹 필터는 이름이나 특성과 상관없이 고른 도면층을 보여 줍니다.'),
       err,

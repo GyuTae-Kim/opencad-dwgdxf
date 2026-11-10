@@ -490,7 +490,7 @@ function managerDialog(st: DocState, layout: Layout): Promise<ManagerAction | nu
   const body = h(
     'div',
     { class: 'mgr-dlg' },
-    h('div', { class: 'mgr-note' }, `현재 배치: ${label}`),
+    h('div', { class: 'mgr-note' }, `현재 배치: ${model ? label : ft(label)}`),
     h('div', { class: 'mgr-cols' }, list.el, h('div', { class: 'mgr-btns', style: 'flex-direction:column;flex:0 0 140px;min-width:140px' }, btn('현재로 설정(S)', () => go('current')), btn('새로 만들기(N)...', () => go('new')), btn('수정(M)...', () => go('modify')), btn('이름 바꾸기(R)...', () => go('rename')), btn('삭제(D)', () => go('delete')), btn('가져오기(I)...', () => go('import')))),
     group('선택된 페이지 설정 세부 정보', detail),
   );
@@ -522,7 +522,7 @@ async function askSetupName(title: string, label: string, def: string, taken: (n
     submit: () => {
       const n = name.value.trim();
       if (!validSetupName(n)) return fail('이름에 쓸 수 없는 문자가 있습니다.');
-      if (taken(n)) return fail(`페이지 설정 "${n}"이(가) 이미 있습니다.`);
+      if (taken(n)) return fail(`페이지 설정 "${ft(n)}"이(가) 이미 있습니다.`);
       return { name: n, from: from?.value ?? '' };
     },
   });
@@ -556,16 +556,16 @@ export async function runPageSetupManager(app: App, ctx: CommandContext, importS
     const taken = (n: string) => named().some((x) => x.name.toUpperCase() === n.toUpperCase());
     switch (r.act) {
       case 'current':
-        if (row0?.kind === 'named') commit(applyNamedSetupOps(layout, row0.setup), `페이지 설정 "${row0.setup.name}"을(를) ${model ? '모형' : `배치 "${layout.name}"`}에 적용했습니다.`);
+        if (row0?.kind === 'named') commit(applyNamedSetupOps(layout, row0.setup), `페이지 설정 "${ft(row0.setup.name)}"을(를) ${model ? '모형' : `배치 "${ft(layout.name)}"`}에 적용했습니다.`);
         break;
       case 'modify': {
         if (!row0) break;
         if (row0.kind === 'layout') {
-          const np = await editPage(ctx, `페이지 설정 - ${model ? '모형' : layout.name}`, layout.plot, model);
-          if (np) commit(layoutPlotOps(st.layoutFor(st.displaySpace)!, { ...np, pageSetupName: '' }), `${model ? '모형' : `배치 "${layout.name}"`}의 페이지 설정을 바꿨습니다.`);
+          const np = await editPage(ctx, `페이지 설정 - ${model ? '모형' : ft(layout.name)}`, layout.plot, model);
+          if (np) commit(layoutPlotOps(st.layoutFor(st.displaySpace)!, { ...np, pageSetupName: '' }), `${model ? '모형' : `배치 "${ft(layout.name)}"`}의 페이지 설정을 바꿨습니다.`);
         } else {
-          const np = await editPage(ctx, `페이지 설정 - ${row0.setup.name}`, row0.setup.plot, model);
-          if (np) commit(saveNamedSetupOps(st.doc, row0.setup.name, np, () => st.session.newHandle()), `페이지 설정 "${row0.setup.name}"을(를) 고쳤습니다.`);
+          const np = await editPage(ctx, `페이지 설정 - ${ft(row0.setup.name)}`, row0.setup.plot, model);
+          if (np) commit(saveNamedSetupOps(st.doc, row0.setup.name, np, () => st.session.newHandle()), `페이지 설정 "${ft(row0.setup.name)}"을(를) 고쳤습니다.`);
         }
         break;
       }
@@ -574,31 +574,31 @@ export async function runPageSetupManager(app: App, ctx: CommandContext, importS
         while (taken(`설정${n}`)) n++;
         const label = model ? '모형' : layout.name;
         const r2 = await askSetupName('새 페이지 설정', '새 페이지 설정 이름(N)', `설정${n}`, taken, [
-          { value: '*layout*', label: `*${label}*` },
+          { value: '*layout*', label: `*${model ? label : ft(label)}*` },
           { value: '', label: '<없음>' },
           ...named()
             .filter((x) => x.model === model)
-            .map((x) => ({ value: x.name, label: x.name })),
+            .map((x) => ({ value: x.name, label: ft(x.name) })),
         ]);
         if (!r2) break;
         const base = r2.from === '*layout*' ? layout.plot : r2.from ? (named().find((x) => x.name === r2.from)?.plot ?? layout.plot) : { ...layout.plot, styleSheet: '', plotOrigin: { x: 0, y: 0 } };
-        const np = await editPage(ctx, `페이지 설정 - ${r2.name}`, { ...base, pageSetupName: r2.name }, model);
-        if (np) commit(saveNamedSetupOps(st.doc, r2.name, np, () => st.session.newHandle()), `페이지 설정 "${r2.name}"을(를) 만들었습니다.`);
+        const np = await editPage(ctx, `페이지 설정 - ${ft(r2.name)}`, { ...base, pageSetupName: r2.name }, model);
+        if (np) commit(saveNamedSetupOps(st.doc, r2.name, np, () => st.session.newHandle()), `페이지 설정 "${ft(r2.name)}"을(를) 만들었습니다.`);
         break;
       }
       case 'rename': {
         if (row0?.kind !== 'named') break;
         const r2 = await askSetupName('페이지 설정 이름 바꾸기', '새 이름', row0.setup.name, (x) => x.toUpperCase() !== row0.setup.name.toUpperCase() && taken(x));
-        if (r2 && r2.name !== row0.setup.name) commit(renameNamedSetupOps(st.doc, row0.setup.name, r2.name), `페이지 설정 "${row0.setup.name}"의 이름을 "${r2.name}"(으)로 바꿨습니다.`);
+        if (r2 && r2.name !== row0.setup.name) commit(renameNamedSetupOps(st.doc, row0.setup.name, r2.name), `페이지 설정 "${ft(row0.setup.name)}"의 이름을 "${ft(r2.name)}"(으)로 바꿨습니다.`);
         break;
       }
       case 'delete': {
         if (row0?.kind !== 'named') break;
-        const a = await ask('페이지 설정 - 삭제', `페이지 설정 "${row0.setup.name}"을(를) 삭제하시겠습니까?`, [
+        const a = await ask('페이지 설정 - 삭제', `페이지 설정 "${ft(row0.setup.name)}"을(를) 삭제하시겠습니까?`, [
           { label: '삭제', value: 'Y', primary: true },
           { label: '취소', value: 'N' },
         ]);
-        if (a === 'Y') commit(deleteNamedSetupOps(st.doc, row0.setup.name), `페이지 설정 "${row0.setup.name}"을(를) 삭제했습니다.`);
+        if (a === 'Y') commit(deleteNamedSetupOps(st.doc, row0.setup.name), `페이지 설정 "${ft(row0.setup.name)}"을(를) 삭제했습니다.`);
         break;
       }
       case 'import':

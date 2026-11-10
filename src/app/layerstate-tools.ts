@@ -201,7 +201,8 @@ export function registerLayerToolCommands(app: App): void {
         .map((h) => {
           const entity = st.doc.entityIndex.get(h);
           const block = entity ? st.session.ownerOf(h) : null;
-          return entity && block ? { block, entity } : null;
+          // 자리 짐작(108차 — 큰 선택의 특성 바꾸기가 적용 때 블록 전체의 자리 표를 만들지 않게)
+          return entity && block ? { block, entity, index: st.session.slotHint(entity.handle) } : null;
         })
         .filter((x): x is NonNullable<typeof x> => !!x);
       const res = setByLayerOps(st.doc, targets, { mode, byBlock, includeBlocks: blocks });

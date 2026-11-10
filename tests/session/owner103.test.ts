@@ -301,14 +301,15 @@ describe('소유 블록 빠른 길(103차)', () => {
     }
     const s = new EditSession(doc, () => {});
     expect(s.ownerIndex(list[5]!.handle)).toBe(5);
-    const memo = s as unknown as { ownerCache: Map<string, string>; buildOwners(): void };
-    const size0 = memo.ownerCache.size;
+    // 빠른 길의 기억(108차부터 ownerMemo — 핸들 수 표)
+    const memo = s as unknown as { ownerMemo: { size: number }; buildOwners(): void };
+    const size0 = memo.ownerMemo.size;
     // EXPLODE처럼: 셋에 하나를 뒤에서부터 지우고, 새 객체 4만 개를 끝에 넣는다
     const ops: EditOp[] = [];
     for (let i = list.length - 1; i >= 0; i -= 3) ops.push({ kind: 'remove', block: MODEL_SPACE, entity: list[i]!, index: i });
     for (let j = 0; j < 40000; j++) ops.push({ kind: 'add', block: MODEL_SPACE, entity: line(`B${j.toString(16).toUpperCase()}`, j) });
     s.commit({ label: 'EXPLODE', ops });
-    expect(memo.ownerCache.size).toBe(size0);
+    expect(memo.ownerMemo.size).toBe(size0);
     const rebuild = vi.spyOn(memo, 'buildOwners');
     const some = vi.spyOn(Array.prototype, 'some');
     const find = vi.spyOn(Array.prototype, 'findIndex');

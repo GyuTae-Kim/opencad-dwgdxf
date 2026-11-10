@@ -161,7 +161,7 @@ export function registerUtil2MiscCommands(app: App): void {
             return n === null ? [] : [{ orig: x.orig, now: x.now, next: n }];
           });
           if (!targets.length) {
-            err.textContent = `"${oldName}"에 맞는 이름이 없습니다.`;
+            err.textContent = `"${ft(oldName)}"에 맞는 이름이 없습니다.`;
             return;
           }
         } else {
@@ -171,7 +171,7 @@ export function registerUtil2MiscCommands(app: App): void {
           }
           const hit = list.find((x) => tableKey(x.now) === tableKey(oldName));
           if (!hit) {
-            err.textContent = lockedReason(st.doc, kind, oldName) ?? `"${oldName}"을(를) 찾을 수 없습니다.`;
+            err.textContent = lockedReason(st.doc, kind, oldName) ?? `"${ft(oldName)}"을(를) 찾을 수 없습니다.`;
             return;
           }
           targets = [{ orig: hit.orig, now: hit.now, next: newName }];
@@ -181,7 +181,7 @@ export function registerUtil2MiscCommands(app: App): void {
         for (const t of targets) {
           const bad = renameProblem(st.doc, kind, t.orig, t.next, takenFor(t.orig));
           if (bad || nextKeys.has(tableKey(t.next))) {
-            err.textContent = `${t.now}: ${bad ?? `${t.next}은(는) 이미 있는 이름입니다.`}`;
+            err.textContent = `${ft(t.now)}: ${bad ?? `${ft(t.next)}은(는) 이미 있는 이름입니다.`}`;
             return;
           }
           nextKeys.add(tableKey(t.next));

@@ -139,7 +139,7 @@ export async function attributeValues(app: App, ctx: CommandContext, def: BlockD
   if (!askThese.length || !attReq(app)) return values;
   if (attDia()) {
     const ins = askThese.map((d) => (d.mtext ? areaIn(d.mtext.text.replace(/\\P/g, '\n'), d.tag, 2) : textIn(d.text, d.tag)));
-    const body = h('div', { class: 'mgr-dlg' }, h('div', { class: 'mgr-note' }, `블록 이름: ${def.name}`), ...askThese.map((d, i) => row(d.prompt || d.tag, ins[i]!)));
+    const body = h('div', { class: 'mgr-dlg' }, h('div', { class: 'mgr-note' }, `블록 이름: ${ft(def.name)}`), ...askThese.map((d, i) => row(d.prompt || d.tag, ins[i]!)));
     const r = await resultDialog('속성 편집', body, { width: 480, submit: () => ins.map((el) => el.value) });
     if (!r) return null;
     askThese.forEach((d, i) => values.set(d.tag, d.mtext ? r[i]!.replace(/\r?\n/g, '\\P') : r[i]!));

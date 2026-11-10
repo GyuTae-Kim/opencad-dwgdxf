@@ -219,7 +219,7 @@ async function viewManager(app: App, ctx: CommandContext): Promise<void> {
           submit: () => {
             const t = nameIn.value.trim();
             if (!nameOk(t)) return fail('뷰 이름에 쓸 수 없는 문자가 있습니다.');
-            if (tableKey(t) !== tableKey(v.name) && st.doc.views.has(tableKey(t))) return fail(`뷰 "${t}"이(가) 이미 있습니다.`);
+            if (tableKey(t) !== tableKey(v.name) && st.doc.views.has(tableKey(t))) return fail(`뷰 "${ft(t)}"이(가) 이미 있습니다.`);
             return t;
           },
         });

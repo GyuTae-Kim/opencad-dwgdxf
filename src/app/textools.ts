@@ -12,6 +12,7 @@ import { registerArcTextCommands } from './arctext';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { form } from './ui/dom';
+import { ft } from './filetext';
 import type { Pt } from './view';
 
 // ---------------------------------------------------------------------------
@@ -294,7 +295,7 @@ async function runAttIpEdit(app: App, ctx: CommandContext): Promise<void> {
       ctx.print('그 자리에 고칠 수 있는 속성이 없습니다.', 'err');
       continue;
     }
-    const v = await form(`속성 편집 - ${a.tag}`, [{ key: 'v', label: a.prompt || a.tag, type: a.mtext ? 'textarea' : 'text', value: attributeValue(a) }], {
+    const v = await form(`속성 편집 - ${ft(a.tag)}`, [{ key: 'v', label: a.prompt || a.tag, type: a.mtext ? 'textarea' : 'text', value: attributeValue(a) }], {
       note: a.mtext ? '여러 줄 속성입니다. 줄바꿈은 그대로 여러 줄 문자 줄바꿈이 됩니다.' : undefined,
     });
     if (!v) return;

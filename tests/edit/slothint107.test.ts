@@ -169,12 +169,17 @@ describe('slotHint', () => {
 
   it('빠른 길에서 찾은 뒤 문서가 옛 길로 바뀌면(핸들이 겹침) 그 핸들도 짐작을 주지 않는다', () => {
     const { doc, list } = docWith(30);
+    for (let b = 1; b <= 9; b++) doc.blocks.set(`B${b}`, { name: `B${b}`, handle: '', recordHandle: '', basePoint: { x: 0, y: 0, z: 0 }, flags: 0, entities: [] });
     const s = new EditSession(doc, () => {});
     expect(s.slotHint(list[7]!.handle)).toBe(7);
     list.push(line(list[5]!.handle, 99));
-    // 명령 취소는 소유 블록 기억을 버린다 → 다음 찾기에서 표를 다시 만들며 겹친 핸들을 본다
+    // 108차부터 빠른 길은 명령 취소 뒤에도 기억을 남긴다: 짐작은 지금 그 핸들이 든(확인한) 자리다
     s.commit({ label: 'X', ops: [{ kind: 'header', name: '$TEST107', before: undefined, after: 1 }] });
     s.undo();
+    expect(s.slotHint(list[7]!.handle)).toBe(7);
+    expect(s.slotHint(list[5]!.handle)).toBe(5);
+    // 객체를 넣은 블록이 많아 기억을 버리면 다음 찾기에서 표를 다시 만들며 겹친 핸들을 본다
+    s.commit({ label: 'Y', ops: Array.from({ length: 9 }, (_, b): EditOp => ({ kind: 'add', block: `B${b + 1}`, entity: line(`C${b}`, b) })) });
     expect(s.slotHint(list[7]!.handle)).toBeUndefined();
   });
 });

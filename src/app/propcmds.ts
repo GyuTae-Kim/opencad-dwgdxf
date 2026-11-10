@@ -60,7 +60,8 @@ function modifyAll(st: DocState, ctx: CommandContext, label: string, hs: string[
     const block = e ? st.session.ownerOf(h) : null;
     if (!e || !block) continue;
     const after = f(e);
-    if (after) ops.push({ kind: 'modify', block, before: e, after });
+    // 자리 짐작(108차 — 큰 선택의 특성 바꾸기가 적용 때 블록 전체의 자리 표를 만들지 않게)
+    if (after) ops.push(st.session.hinted({ kind: 'modify', block, before: e, after }));
   }
   if (ops.length) st.session.commit({ label, ops, group: ctx.group });
   return ops.length;
@@ -147,14 +148,17 @@ async function changePoint(app: App, ctx: CommandContext, hs: string[], p: Pt): 
     const e = st.doc.entityIndex.get(h);
     const block = e ? st.session.ownerOf(h) : null;
     if (!e || !block) continue;
+    // 자리 짐작(108차 — 찾은 바로 뒤에 단다. 문자·블록 참조는 아래에서 값을 묻는다)
+    const at = st.session.slotHint(e.handle);
+    const modify = (after: Entity) => ops.push(at === undefined ? { kind: 'modify', block, before: e, after } : { kind: 'modify', block, before: e, after, index: at });
     if (e.type === 'LINE') {
       const ds = Math.hypot(e.start.x - p.x, e.start.y - p.y);
       const de = Math.hypot(e.end.x - p.x, e.end.y - p.y);
       const np = { x: p.x, y: p.y, z: ds <= de ? e.start.z : e.end.z };
-      ops.push({ kind: 'modify', block, before: e, after: ds <= de ? { ...e, start: np } : { ...e, end: np } });
+      modify(ds <= de ? { ...e, start: np } : { ...e, end: np });
     } else if (e.type === 'CIRCLE') {
       const r = Math.hypot(p.x - e.center.x, p.y - e.center.y);
-      if (r > 1e-12) ops.push({ kind: 'modify', block, before: e, after: { ...e, radius: r } });
+      if (r > 1e-12) modify({ ...e, radius: r });
     } else if (e.type === 'TEXT' || e.type === 'ATTDEF') {
       const pt = { x: p.x, y: p.y, z: e.insert.z };
       const nh = await ctx.getPoint(`새 높이 지정 <${e.height.toFixed(4)}>:`, { allowText: true, preferNumber: true });
@@ -166,13 +170,13 @@ async function changePoint(app: App, ctx: CommandContext, hs: string[], p: Pt): 
       const after = { ...e, insert: pt, height, rotation, text } as Entity;
       // 맞춤점을 쓰는 자리맞추기면 맞춤점도 같은 만큼 옮긴다
       if ('alignPoint' in e && e.alignPoint && (e.halign || e.valign)) (after as typeof e).alignPoint = { x: e.alignPoint.x + p.x - e.insert.x, y: e.alignPoint.y + p.y - e.insert.y, z: e.alignPoint.z };
-      ops.push({ kind: 'modify', block, before: e, after });
+      modify(after);
     } else if (e.type === 'INSERT') {
       const na = await ctx.getPoint(`새 블록 회전 각도 지정 <${((e.rotation * 180) / Math.PI).toFixed(0)}>:`, { allowText: true, preferNumber: true });
       const rotation = 'text' in na && Number.isFinite(Number(na.text)) ? (Number(na.text) * Math.PI) / 180 : e.rotation;
       const dx = p.x - e.insert.x;
       const dy = p.y - e.insert.y;
-      ops.push({ kind: 'modify', block, before: e, after: { ...e, insert: { x: p.x, y: p.y, z: e.insert.z }, rotation, attribs: e.attribs.map((a) => ({ ...a, insert: { ...a.insert, x: a.insert.x + dx, y: a.insert.y + dy } })) } });
+      modify({ ...e, insert: { x: p.x, y: p.y, z: e.insert.z }, rotation, attribs: e.attribs.map((a) => ({ ...a, insert: { ...a.insert, x: a.insert.x + dx, y: a.insert.y + dy } })) });
     }
   }
   if (ops.length) st.session.commit({ label: 'CHANGE', ops, group: ctx.group });
