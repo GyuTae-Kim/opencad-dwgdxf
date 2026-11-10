@@ -63,6 +63,8 @@ describe('표준 수정', () => {
     const std = standard();
     const p = checkStandards(t.doc, [std], ['layer']).find((x) => x.id === 'layer:S-WALL')!;
     expect(p.diffs.map((d) => d.label)).toEqual(['색상', '선종류', '선가중치']);
+    // 109차: 선종류 이름 값만 도면 글(대화 상자 표 칸이 translate="no") — 색 이름·선가중치는 앱 글
+    expect(p.diffs.map((d) => !!d.file)).toEqual([false, true, false]);
     commit(t, fixPropsOps(t.doc, p, [std], t.nh));
     const L = t.doc.layers.get('S-WALL')!;
     expect(L.color.aci).toBe(1);

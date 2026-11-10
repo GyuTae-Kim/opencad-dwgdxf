@@ -301,7 +301,8 @@ async function checkFlow(app: App, ctx: CommandContext, st: DocState): Promise<v
       preview.replaceChildren(
         h('tr', {}, h('th', {}, '특성'), h('th', {}, '현재 값'), h('th', {}, '표준 값')),
         ...(p.type === 'name' && c ? [h('tr', {}, h('td', {}, '이름'), h('td', { translate: 'no' }, p.name), h('td', { translate: 'no' }, c.name))] : []),
-        ...diffs.map((d) => h('tr', {}, h('td', {}, d.label), h('td', {}, d.current), h('td', {}, d.standard))),
+        // 도면 글 값(선종류 이름·설명·글꼴 파일·치수 변수 값)은 옮기지 않고, 색 이름·예/아니오 같은 앱 글은 옮긴다(109차)
+        ...diffs.map((d) => h('tr', {}, h('td', {}, d.label), h('td', { translate: d.file ? 'no' : undefined }, d.current), h('td', { translate: d.file ? 'no' : undefined }, d.standard))),
       );
     };
     cand.onChange = showPreview;
