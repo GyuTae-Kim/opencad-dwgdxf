@@ -5,6 +5,7 @@
  */
 import type { CadDocument, DictionaryObject, DimStyle, Entity, GenericObject, HeaderValue, Layer, Layout, MLineStyleObject } from '../../core/model';
 import { MODEL_SPACE, tableKey } from '../../core/model';
+import { pushAll } from '../../core/arrays';
 import type { EditOp } from '../session';
 import { cloneEntity, isLayoutBlock, modifyOp } from '../session';
 import { mapTableTextStyles } from '../table/entity';
@@ -181,8 +182,9 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
       const before = doc.layers.get(k)!;
       const after: Layer = { ...structuredClone(before), name: newName };
       delete (after as { dwgRaw?: unknown }).dwgRaw;
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           let hit = false;
           if (same(c.layer, k)) {
             c.layer = newName;
@@ -209,8 +211,9 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
     }
     case 'linetype': {
       const before = doc.linetypes.get(k)!;
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           let hit = false;
           if (same(c.linetype, k)) {
             c.linetype = newName;
@@ -241,8 +244,9 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
     }
     case 'textStyle': {
       const before = doc.textStyles.get(k)!;
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           let hit = false;
           const t = c as { style?: string };
           if ((c.type === 'TEXT' || c.type === 'MTEXT' || c.type === 'ATTRIB' || c.type === 'ATTDEF') && same(t.style, k)) {
@@ -298,8 +302,9 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
         if (m && tableKey(m[1]!) === k) family.push([tableKey(d.name), `${newName}$${m[2]}`]);
       }
       const map = new Map(family);
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           if ((c.type === 'DIMENSION' || c.type === 'LEADER' || c.type === 'TOLERANCE') && map.has(tableKey(c.dimStyle))) {
             c.dimStyle = map.get(tableKey(c.dimStyle))!;
             return true;
@@ -319,8 +324,9 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
     }
     case 'block': {
       const def = doc.blocks.get(k)!;
-      ops.push(
-        ...entityOps(doc, (c) => {
+      pushAll(
+        ops,
+        entityOps(doc, (c) => {
           if (c.type === 'INSERT' && same(c.block, k)) {
             c.block = newName;
             return true;
