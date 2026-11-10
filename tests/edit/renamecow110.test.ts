@@ -211,7 +211,7 @@ describe('이름 바꾸기·SETBYLAYER는 바뀌는 칸만 새 객체로(110차)
       (doc) => expected(doc, (e) => old(e, oldLayer('L1', 'L9', true), true)),
       6,
     );
-    const line = mod(mods, 'C01') as Extract<Modify, { before: LineEntity }> & { after: LineEntity; before: LineEntity };
+    const line = mod(mods, 'C01') as unknown as { before: LineEntity; after: LineEntity };
     expect(line.after.start).toBe(line.before.start);
     expect(line.after.xdata).toBe(line.before.xdata);
     expect('dwgRaw' in line.after).toBe(false);
