@@ -14,7 +14,7 @@ import type { CadDocument, Entity, Layer } from '../../core/model';
 import { BYLAYER, TRANSPARENCY_BYLAYER, tableKey } from '../../core/model';
 import { createNewDocument } from '../../core/newdoc';
 import type { EditOp } from '../session';
-import { applyOps, isLayoutBlock } from '../session';
+import { applyOps, isLayoutBlock, modifyOp } from '../session';
 import { maxHandle } from '../util/audit';
 import { DefinitionCopier } from './clone';
 
@@ -82,6 +82,7 @@ const sameLayerProps = (a: Layer, b: Layer) =>
 /**
  * 변환 작업. resolveLinetype은 대상 정의의 선종류를 이 도면에서 쓸 이름으로 바꾼다
  * (호출한 쪽이 원본 파일에서 선종류를 복사한 뒤 그 이름을 준다. 없으면 이 도면에 있을 때만 쓰고 아니면 Continuous).
+ * hint면 객체 옮기기에 훑은 자리를 자리 짐작으로 단다(EditSession.scanHints() — 109차, 핸들이 하나씩인 문서만).
  */
 export function translateLayersOps(
   doc: CadDocument,
@@ -89,6 +90,7 @@ export function translateLayersOps(
   settings: TranslateSettings,
   newHandle: () => string,
   resolveLinetype: (name: string) => string = (n) => (doc.linetypes.has(tableKey(n)) ? doc.linetypes.get(tableKey(n))!.name : 'Continuous'),
+  hint = false,
 ): TranslateResult {
   const res: TranslateResult = { ops: [], moved: 0, counts: new Map(), created: [], updated: [], removed: [], kept: [] };
   const map = new Map<string, string>();
@@ -165,9 +167,11 @@ export function translateLayersOps(
     if (b.flags & 4) continue;
     const translate = settings.blocks || isLayoutBlock(bk);
     const list: Entity[] = [];
-    for (const e of b.entities) {
+    const from = b.entities;
+    for (let i = 0; i < from.length; i++) {
+      const e = from[i]!;
       const c = translate ? touch(e) : null;
-      if (c) entityOps.push({ kind: 'modify', block: bk, before: e, after: c });
+      if (c) entityOps.push(modifyOp(bk, e, c, hint ? i : undefined));
       list.push(c ?? e);
     }
     after.set(bk, list);

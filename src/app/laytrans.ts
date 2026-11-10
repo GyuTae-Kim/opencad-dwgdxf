@@ -405,7 +405,8 @@ export function registerLayTransCommands(app: App): void {
         }
         mappings.push({ from: from.name, to: t.layer });
       }
-      const r = translateLayersOps(doc, mappings, settings, () => st.session.newHandle(), (n) => lt.get(tableKey(n)) ?? (doc.linetypes.get(tableKey(n))?.name ?? 'Continuous'));
+      // 객체 옮기기에 훑은 자리 짐작(109차 — 핸들이 하나씩인 문서만)
+      const r = translateLayersOps(doc, mappings, settings, () => st.session.newHandle(), (n) => lt.get(tableKey(n)) ?? (doc.linetypes.get(tableKey(n))?.name ?? 'Continuous'), st.session.scanHints());
       const ops = [...[...copiers.values()].flatMap((c) => c.finish()), ...r.ops];
       if (!ops.length) {
         ctx.print('바꿀 것이 없습니다.');

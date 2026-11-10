@@ -727,6 +727,17 @@ export class EditSession {
     return op;
   }
 
+  /**
+   * 블록을 훑으며 바꾸기 변경을 만드는 길(109차 — 이름 바꾸기·도면층 관리자·LAYMRG·도면층 변환기·SETBYLAYER의 블록 정의 안 등)이
+   * 훑은 자리를 변경의 index(자리 짐작)로 달아도 되는지. 소유 블록 찾기 빠른 길(핸들이 하나씩인 문서)이면 훑은 자리가 곧 적용이 찾을 자리라 참,
+   * 옛 길(핸들이 겹친 문서 — 적용은 처음 자리를 찾아야 같은 답이다)이면 거짓. 아직 표를 만들지 않았으면 만든다
+   * (객체 42만 개 도면에서 약 50ms로 적용이 큰 블록의 자리 표를 만드는 것보다 싸고, 다음 명령이 그대로 쓴다)
+   */
+  scanHints(): boolean {
+    if (!this.ownerBuilt) this.buildOwners();
+    return !this.ownerLegacy;
+  }
+
   /** 소유 블록 안의 자리(ownerOf가 확인한 값). 블록이 없으면 -1 */
   ownerIndex(handle: string): number {
     const k = this.ownerOf(handle);
@@ -1024,6 +1035,14 @@ export class EditSession {
     this.savedDepth = this.undoStack.length;
     this.dirty = false;
   }
+}
+
+/**
+ * 바꾸기 변경. at은 블록을 훑어 안 자리 짐작(109차 — EditSession.scanHints가 참일 때만 넘긴다). 없으면 칸을 두지 않는다
+ * (짐작 없는 변경과 워커 묶음·지문이 같게)
+ */
+export function modifyOp(block: string, before: Entity, after: Entity, at?: number): Extract<EditOp, { kind: 'modify' }> {
+  return at === undefined ? { kind: 'modify', block, before, after } : { kind: 'modify', block, before, after, index: at };
 }
 
 /** 객체를 깊이 복사한다(편집 전 상태 보관용) */

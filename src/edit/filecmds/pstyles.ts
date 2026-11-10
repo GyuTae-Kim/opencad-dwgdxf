@@ -9,6 +9,7 @@ import { nearestAci } from '../../core/color';
 import type { CadDocument, CadObject, DictionaryObject, Entity, GenericObject, Layer, Layout } from '../../core/model';
 import { normalizeHandle, tableKey } from '../../core/model';
 import type { EditOp } from '../session';
+import { modifyOp } from '../session';
 
 /** 이름 있는 플롯 스타일 도면인지 */
 export function isNamedPlotStyleDoc(doc: CadDocument): boolean {
@@ -79,19 +80,28 @@ export function ensurePlotStyleNames(doc: CadDocument, names: Iterable<string>, 
   return out;
 }
 
-/** 최상위 객체를 담은 블록(외부 참조 블록 제외): [블록 키, 객체] */
-function* ownEntities(doc: CadDocument): Generator<[string, Entity]> {
+/** 최상위 객체를 담은 블록(외부 참조 블록 제외): [블록 키, 객체, 블록 안 자리] */
+function* ownEntities(doc: CadDocument): Generator<[string, Entity, number]> {
   for (const [key, b] of doc.blocks) {
     if (b.flags & 4 || b.flags & 16) continue;
-    for (const e of b.entities) yield [key, e];
+    const list = b.entities;
+    for (let i = 0; i < list.length; i++) yield [key, list[i]!, i];
   }
 }
 
 /**
  * PLOTSTYLE: 고른 객체의 플롯 스타일을 바꾸는 작업. name이 BYLAYER면 핸들을 지운다.
+ * slotHint는 ownerOf 바로 뒤에 부르는 자리 짐작(109차 — EditSession.slotHint)이고 바꾸기 변경에 그대로 단다.
  * 반환: 작업과 바뀐 객체 수(이름 있는 플롯 스타일 사전이 없으면 null)
  */
-export function assignPlotStyleOps(doc: CadDocument, handles: readonly string[], name: string, newHandle: () => string, ownerOf: (h: string) => string | null): { ops: EditOp[]; changed: number } | null {
+export function assignPlotStyleOps(
+  doc: CadDocument,
+  handles: readonly string[],
+  name: string,
+  newHandle: () => string,
+  ownerOf: (h: string) => string | null,
+  slotHint: (h: string) => number | undefined = () => undefined,
+): { ops: EditOp[]; changed: number } | null {
   const ops: EditOp[] = [];
   let target: string | undefined;
   if (name.toUpperCase() !== 'BYLAYER') {
@@ -104,12 +114,13 @@ export function assignPlotStyleOps(doc: CadDocument, handles: readonly string[],
     const e = doc.entityIndex.get(h);
     const block = ownerOf(h);
     if (!e || !block || e.type === 'ATTRIB') continue;
+    const at = slotHint(h);
     const cur = e.plotStyle ? normalizeHandle(e.plotStyle) : undefined;
     if (cur === target) continue;
     const after = { ...e } as Entity;
     if (target) after.plotStyle = target;
     else delete after.plotStyle;
-    ops.push({ kind: 'modify', block, before: e, after });
+    ops.push(modifyOp(block, e, after, at));
     changed++;
   }
   return { ops, changed };
@@ -127,8 +138,9 @@ const swapExt = (sheet: string, ext: 'ctb' | 'stb') => (sheet ? sheet.replace(/\
 /**
  * 색상 종속 → 이름 있는 플롯 스타일. 도면층은 색에 맞는 Color_n, 색을 직접 지정한 객체도 Color_n,
  * ByLayer·ByBlock 색 객체는 ByLayer 플롯 스타일. 배치(모형 포함)의 플롯 스타일 표는 stb(없으면 .ctb를 .stb로)로 바꾼다.
+ * hint면 객체 바꾸기에 훑은 자리를 자리 짐작으로 단다(EditSession.scanHints() — 109차, 핸들이 하나씩인 문서만).
  */
-export function convertToNamedOps(doc: CadDocument, newHandle: () => string, stb?: string): ConvertResult | null {
+export function convertToNamedOps(doc: CadDocument, newHandle: () => string, stb?: string, hint = false): ConvertResult | null {
   const ops: EditOp[] = [];
   const want = new Set<string>(['Normal']);
   const layerName = (l: Layer) => colorPlotStyleName(l.color.aci, l.color.rgb);
@@ -153,7 +165,7 @@ export function convertToNamedOps(doc: CadDocument, newHandle: () => string, stb
     layers++;
   }
   let entities = 0;
-  for (const [block, e] of ownEntities(doc)) {
+  for (const [block, e, i] of ownEntities(doc)) {
     const n = entName(e);
     const h = n ? handles.get(n.toUpperCase()) : undefined;
     const cur = e.plotStyle ? normalizeHandle(e.plotStyle) : undefined;
@@ -161,7 +173,7 @@ export function convertToNamedOps(doc: CadDocument, newHandle: () => string, stb
     const after = { ...e } as Entity;
     if (h) after.plotStyle = h;
     else delete after.plotStyle;
-    ops.push({ kind: 'modify', block, before: e, after });
+    ops.push(modifyOp(block, e, after, hint ? i : undefined));
     entities++;
   }
   const layouts = layoutSheetOps(doc, ops, (s) => stb || swapExt(s, 'stb'));
@@ -171,9 +183,9 @@ export function convertToNamedOps(doc: CadDocument, newHandle: () => string, stb
 
 /**
  * 이름 있는 플롯 스타일 → 색상 종속. 도면층·객체의 플롯 스타일 이름을 모두 지우고(사전에는 Normal만 남긴다),
- * 배치의 플롯 스타일 표는 ctb(없으면 .stb를 .ctb로)로 바꾼다.
+ * 배치의 플롯 스타일 표는 ctb(없으면 .stb를 .ctb로)로 바꾼다. hint는 convertToNamedOps와 같다.
  */
-export function convertToColorOps(doc: CadDocument, ctb?: string): ConvertResult {
+export function convertToColorOps(doc: CadDocument, ctb?: string, hint = false): ConvertResult {
   const ops: EditOp[] = [];
   const d = plotStyleDictionary(doc);
   const normal = d ? [...d.entries].find(([n]) => n.toUpperCase() === 'NORMAL') : undefined;
@@ -188,11 +200,11 @@ export function convertToColorOps(doc: CadDocument, ctb?: string): ConvertResult
     layers++;
   }
   let entities = 0;
-  for (const [block, e] of ownEntities(doc)) {
+  for (const [block, e, i] of ownEntities(doc)) {
     if (!e.plotStyle) continue;
     const after = { ...e } as Entity;
     delete after.plotStyle;
-    ops.push({ kind: 'modify', block, before: e, after });
+    ops.push(modifyOp(block, e, after, hint ? i : undefined));
     entities++;
   }
   if (d) {

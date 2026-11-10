@@ -14,6 +14,7 @@ import { tableKey } from '../core/model';
 import { createLinearDimension, createRadialDimension, generateDimensionGeometry } from '../edit/dim';
 import { DIM_VAR_BY_NAME, type Overrides } from '../edit/annot/override';
 import type { EditOp } from '../edit/session';
+import { modifyOp } from '../edit/session';
 import type { App } from './app';
 import { drawGeometry } from './blockpreview';
 import { dimensionBlockOps } from './dimcmds';
@@ -322,14 +323,18 @@ function regenOps(st: DocState, styleName: string): EditOp[] {
   const ops: EditOp[] = [];
   const extra = new Set<string>();
   const key = tableKey(styleName);
+  // 훑은 자리를 자리 짐작으로 단다(109차 — 핸들이 하나씩인 문서만, EditSession.scanHints. 치수 블록 작업은 객체 자리를 옮기지 않는다)
+  const hint = st.session.scanHints();
   for (const [bk, b] of st.doc.blocks) {
     if (/^\*D\d+$/i.test(b.name)) continue;
-    for (const e of b.entities) {
+    const list = b.entities;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i]!;
       if (e.type !== 'DIMENSION' || tableKey(e.dimStyle || 'Standard') !== key) continue;
       const copy = structuredClone(e) as DimensionEntity;
       try {
         const bo = dimensionBlockOps(st, copy, true, extra);
-        ops.push(...bo, { kind: 'modify', block: bk, before: e, after: copy as Entity });
+        ops.push(...bo, modifyOp(bk, e, copy as Entity, hint ? i : undefined));
       } catch {
         /* 생성기가 못 다루는 치수는 그대로 둔다 */
       }
@@ -359,10 +364,16 @@ export function dimStyleRenameOps(st: DocState, from: string, to: string): EditO
     { kind: 'dimStyle', key: fk, before: s, after: null },
     { kind: 'dimStyle', key: tableKey(to), before: null, after: { ...s, name: to } },
   ];
-  for (const [bk, b] of doc.blocks)
-    for (const e of b.entities) {
-      if ((e.type === 'DIMENSION' || e.type === 'LEADER' || e.type === 'TOLERANCE') && tableKey((e as { dimStyle: string }).dimStyle || 'Standard') === fk) ops.push({ kind: 'modify', block: bk, before: e, after: { ...structuredClone(e), dimStyle: to } as Entity });
+  // 훑은 자리를 자리 짐작으로 단다(109차 — 핸들이 하나씩인 문서만)
+  const hint = st.session.scanHints();
+  for (const [bk, b] of doc.blocks) {
+    const list = b.entities;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i]!;
+      if ((e.type === 'DIMENSION' || e.type === 'LEADER' || e.type === 'TOLERANCE') && tableKey((e as { dimStyle: string }).dimStyle || 'Standard') === fk)
+        ops.push(modifyOp(bk, e, { ...structuredClone(e), dimStyle: to } as Entity, hint ? i : undefined));
     }
+  }
   if (tableKey(String(doc.header.get('$DIMSTYLE') ?? '')) === fk) ops.push({ kind: 'header', name: '$DIMSTYLE', before: doc.header.get('$DIMSTYLE'), after: to });
   // 하위 스타일(이름$n)도 새 이름을 따른다
   for (const [k, c] of doc.dimStyles) {
