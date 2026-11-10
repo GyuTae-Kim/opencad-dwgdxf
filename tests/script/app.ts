@@ -125,13 +125,14 @@ export function makeScriptApp(setup?: (doc: CadDocument) => void): ScriptApp {
       return e ? (boundsOf([e], doc) ?? undefined) : undefined;
     },
   };
-  // 진짜 명령행처럼 도면 글 표시(ft — 105차)는 빼고 모은다(보이는 글과 같게)
+  // 진짜 명령행처럼 도면 글 표시(ft — 105차)는 빼고 모은다(보이는 글과 같게). 출력 고리에는 표시를 둔 글도 함께 준다(107차 — CommandLine.print)
   const print = (text: string, cls?: 'err' | 'res') => {
+    const shown = text;
     text = unmark(text);
-    cmd.onPrint?.(text, cls);
+    cmd.onPrint?.(text, cls, shown);
     printed.push({ text, cls });
   };
-  const cmd = { print, acceptSpaces: false, onPrint: null as null | ((t: string, c?: 'err' | 'res') => void), input: { value: '' } };
+  const cmd = { print, acceptSpaces: false, onPrint: null as null | ((t: string, c?: 'err' | 'res', shown?: string) => void), input: { value: '' } };
 
   const findCommand = (name: string): Command | undefined => {
     const raw = name.trim().toUpperCase().replace(/^[_.']+/, '');

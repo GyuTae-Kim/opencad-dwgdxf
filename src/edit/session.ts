@@ -15,8 +15,11 @@ export type EditOp =
   | { kind: 'add'; block: string; entity: Entity; index?: number }
   /** 블록에서 객체를 뺀다(되돌릴 때 같은 자리에 넣는다) */
   | { kind: 'remove'; block: string; entity: Entity; index: number }
-  /** 같은 핸들의 객체를 바꾼다 */
-  | { kind: 'modify'; block: string; before: Entity; after: Entity }
+  /**
+   * 같은 핸들의 객체를 바꾼다. index는 계획 때 안 자리 짐작이다(107차 — EditSession.slotHint): 적용할 때 그 자리의 핸들이 같으면 자리 표 없이 쓰고,
+   * 아니면 전처럼 찾는다. 워커에도 그대로 보낸다(worker/editwire.ts — 두 문서가 같아 같은 자리를 고른다)
+   */
+  | { kind: 'modify'; block: string; before: Entity; after: Entity; index?: number }
   | { kind: 'layer'; key: string; before: Layer | null; after: Layer | null }
   | { kind: 'linetype'; key: string; before: Linetype | null; after: Linetype | null }
   | { kind: 'textStyle'; key: string; before: TextStyle | null; after: TextStyle | null }
@@ -70,7 +73,8 @@ function invert(op: EditOp): EditOp {
     case 'remove':
       return { kind: 'add', block: op.block, entity: op.entity, index: op.index };
     case 'modify':
-      return { kind: 'modify', block: op.block, before: op.after, after: op.before };
+      // 제자리 바꾸기라 되돌릴 때도 같은 자리다(되돌리기는 뒤 변경부터 거꾸로 적용한다)
+      return op.index === undefined ? { kind: 'modify', block: op.block, before: op.after, after: op.before } : { kind: 'modify', block: op.block, before: op.after, after: op.before, index: op.index };
     case 'header':
       return { kind: 'header', name: op.name, before: op.after, after: op.before };
     default:
@@ -365,7 +369,10 @@ export function applyOps(doc: CadDocument, ops: readonly EditOp[], summary?: Cha
       case 'modify': {
         const b = doc.blocks.get(op.block);
         if (!b) break;
-        const i = finder.find(b, op.before.handle);
+        // 계획 때 안 자리에 같은 핸들이 있으면 그대로 쓴다(107차 — 객체 150만 개 블록에서 2,000개를 옮기면 자리 표 만들기가 확정의 대부분이었다).
+        // 짐작은 핸들이 하나씩인 문서에서만 단다(EditSession.slotHint)
+        const at = op.index;
+        const i = at !== undefined && b.entities[at]?.handle === op.before.handle ? at : finder.find(b, op.before.handle);
         if (i >= 0) {
           b.entities[i] = op.after;
           finder.renamed(b, op.before.handle, op.after.handle, i);
@@ -511,6 +518,8 @@ export class EditSession {
   private readonly ownerSteps = new Map<string, OwnerStep[]>();
   /** 빠른 길: ownerOf가 마지막으로 찾은 자리(ownerIndex가 쓴다) */
   private ownerLast = -1;
+  /** ownerOf가 마지막으로 찾은 핸들(slotHint가 다시 찾지 않게) */
+  private ownerLastHandle: string | null = null;
   /**
    * newHandle이 마지막으로 적은 $HANDSEED와 그 값. 머리말이 그대로면 다시 풀지 않는다
    * (77차 — 치수 1만 개를 옮기면 치수 블록 객체마다 불러 명령 하나에 10만 번이 넘었다)
@@ -595,6 +604,7 @@ export class EditSession {
   /** 블록 키(공간) */
   ownerOf(handle: string): string | null {
     if (!this.ownerCache) this.buildOwners();
+    this.ownerLastHandle = handle;
     if (this.ownerLegacy) return this.ownerOfLegacy(handle);
     const owners = this.ownerCache!;
     const cached = owners.get(handle);
@@ -695,6 +705,16 @@ export class EditSession {
       this.ownerAt.set(handle, i);
     }
     return i;
+  }
+
+  /**
+   * 바꾸기 변경에 달 자리 짐작(107차 — EditOp modify의 index): 소유 블록 찾기 빠른 길이면 ownerOf가 그 블록에서 확인한 자리.
+   * 옛 길(핸들이 겹친 문서 — 적용은 전처럼 처음 자리를 찾아야 같은 답이다)이나 못 찾았으면 undefined.
+   * ownerOf(handle) 바로 뒤에 부르면 다시 찾지 않는다. 짐작일 뿐이라(적용이 핸들로 확인한다) 그 사이에 문서가 바뀌어도 답이 틀리지 않는다
+   */
+  slotHint(handle: string): number | undefined {
+    if (this.ownerLastHandle !== handle || !this.ownerCache) this.ownerOf(handle);
+    return this.ownerLegacy || this.ownerLast < 0 ? undefined : this.ownerLast;
   }
 
   /** 소유 블록 안의 자리(ownerOf가 확인한 값). 블록이 없으면 -1 */

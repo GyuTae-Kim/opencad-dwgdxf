@@ -12,6 +12,7 @@
 import type { AttribEntity, CadDocument, Entity, InsertEntity, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { attribText } from './attout';
+import { ft } from '../../app/filetext';
 
 export interface TemplateField {
   /** 필드 이름(대문자) */
@@ -33,6 +34,7 @@ const BL_FIELDS = new Set(['BL:LEVEL', 'BL:NAME', 'BL:X', 'BL:Y', 'BL:Z', 'BL:NU
 const BL_CHAR = new Set(['BL:NAME', 'BL:HANDLE', 'BL:LAYER']);
 
 /** 템플릿 글 읽기 */
+/** 템플릿 오류 글(명령행에 찍는다). 템플릿 파일에서 온 글(줄·필드 이름)은 ft()로 감싼다(107차 — 화면 번역층이 바꾸지 않게) */
 export function parseTemplate(text: string): Template {
   const t: Template = { fields: [], quote: "'", delim: ',', errors: [] };
   const lines = text.replace(/^﻿/, '').split(/\r\n|\n|\r/);
@@ -43,29 +45,29 @@ export function parseTemplate(text: string): Template {
     const name = (m?.[1] ?? line).toUpperCase();
     if (name === 'C:QUOTE' || name === 'C:DELIM') {
       const v = line.slice(name.length).trim();
-      if (!v) t.errors.push(`${i + 1}번째 줄: ${name}의 기호가 없습니다.`);
+      if (!v) t.errors.push(`${i + 1}번째 줄: ${ft(name)}의 기호가 없습니다.`);
       else if (name === 'C:QUOTE') t.quote = v[0]!;
       else t.delim = v[0]!;
       return;
     }
     const f = m ? /^([CN])(\d{3})(\d{3})$/i.exec(m[2]!) : null;
     if (!m || !f) {
-      t.errors.push(`${i + 1}번째 줄: 필드 사양이 올바르지 않습니다: ${line}`);
+      t.errors.push(`${i + 1}번째 줄: 필드 사양이 올바르지 않습니다: ${ft(line)}`);
       return;
     }
     const kind = f[1]!.toUpperCase() as 'C' | 'N';
     const width = Number(f[2]);
     const decimals = Number(f[3]);
     if (name.startsWith('BL:') && !BL_FIELDS.has(name)) {
-      t.errors.push(`${i + 1}번째 줄: 알 수 없는 블록 필드 ${name}`);
+      t.errors.push(`${i + 1}번째 줄: 알 수 없는 블록 필드 ${ft(name)}`);
       return;
     }
     if (BL_CHAR.has(name) && kind !== 'C') {
-      t.errors.push(`${i + 1}번째 줄: ${name}은(는) 문자 필드(C)여야 합니다.`);
+      t.errors.push(`${i + 1}번째 줄: ${ft(name)}은(는) 문자 필드(C)여야 합니다.`);
       return;
     }
     if (name.startsWith('BL:') && !BL_CHAR.has(name) && kind !== 'N') {
-      t.errors.push(`${i + 1}번째 줄: ${name}은(는) 숫자 필드(N)여야 합니다.`);
+      t.errors.push(`${i + 1}번째 줄: ${ft(name)}은(는) 숫자 필드(N)여야 합니다.`);
       return;
     }
     if (width < 1) {
@@ -175,7 +177,7 @@ function fieldValue(b: ExtractBlock, f: TemplateField, displayName: (b: ExtractB
 export interface ExtractOutput {
   text: string;
   records: number;
-  /** 필드 넘침·숫자가 아닌 값 같은 알림 */
+  /** 필드 넘침·숫자가 아닌 값 같은 알림(명령행에 찍는다 — 필드 이름·값은 ft()로 감싼다, 107차) */
   warnings: string[];
 }
 
@@ -191,19 +193,19 @@ export function formatRecords(blocks: readonly ExtractBlock[], t: Template, form
       if (f.kind === 'N') {
         let n = typeof v === 'number' ? v : v === null || v.trim() === '' ? 0 : Number(v.trim());
         if (!Number.isFinite(n)) {
-          warnings.push(`레코드 ${ri + 1}: ${f.name}의 값 "${String(v)}"이(가) 숫자가 아니어서 0으로 썼습니다.`);
+          warnings.push(`레코드 ${ri + 1}: ${ft(f.name)}의 값 "${ft(String(v))}"이(가) 숫자가 아니어서 0으로 썼습니다.`);
           n = 0;
         }
         s = n.toFixed(f.decimals);
         if (s.length > f.width) {
-          warnings.push(`레코드 ${ri + 1}: ${f.name} 필드 넘침(${s})`);
+          warnings.push(`레코드 ${ri + 1}: ${ft(f.name)} 필드 넘침(${ft(s)})`);
           s = s.slice(0, f.width);
         }
         cells.push(format === 'SDF' ? s.padStart(f.width) : s);
       } else {
         s = v === null ? '' : String(v);
         if (s.length > f.width) {
-          warnings.push(`레코드 ${ri + 1}: ${f.name} 필드 넘침(${s})`);
+          warnings.push(`레코드 ${ri + 1}: ${ft(f.name)} 필드 넘침(${ft(s)})`);
           s = s.slice(0, f.width);
         }
         cells.push(format === 'SDF' ? s.padEnd(f.width) : `${t.quote}${s.replace(/\s+$/, '')}${t.quote}`);

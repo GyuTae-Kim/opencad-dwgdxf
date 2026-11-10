@@ -575,7 +575,7 @@ function registerDimFile(app: App): void {
         else {
           const v = await form('치수 스타일 가져오기', [{ key: 'ow', label: '같은 이름의 치수 스타일 덮어쓰기', type: 'check', value: true }], {
             ok: '가져오기',
-            note: `${f.name}: 치수 스타일 ${content.styles.length}개(${content.styles.map((s) => s.name).join(', ')}). 이 도면에 이미 있는 것: ${dup.join(', ')}`,
+            note: `${ft(f.name)}: 치수 스타일 ${content.styles.length}개(${content.styles.map((s) => ft(s.name)).join(', ')}). 이 도면에 이미 있는 것: ${dup.map(ft).join(', ')}`,
           });
           if (!v) return;
           overwrite = !!v.ow;
