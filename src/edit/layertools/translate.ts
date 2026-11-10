@@ -126,9 +126,10 @@ export function translateLayersOps(
   }
   // 2. 객체 옮기기
   const entityOps: EditOp[] = [];
+  // 옮길 객체만 얕은 사본으로 고친다(110차 — 구조화 복제 없이. 확정한 문서 객체는 제자리에서 고치지 않아 바뀌지 않은 칸은 원본과 함께 쓴다)
   const touch = (e: Entity): Entity | null => {
     let out: Entity | null = null;
-    const get = () => (out ??= structuredClone(e) as Entity);
+    const get = () => (out ??= { ...e });
     const move = (x: Entity) => {
       const to = map.get(tableKey(x.layer));
       if (to === undefined) return false;
@@ -146,7 +147,12 @@ export function translateLayersOps(
     }
     if (e.type === 'INSERT' && e.attribs.some((a) => map.has(tableKey(a.layer)))) {
       const c = get() as typeof e;
-      for (const a of c.attribs) move(a);
+      c.attribs = e.attribs.map((a) => {
+        if (!map.has(tableKey(a.layer))) return a;
+        const y = { ...a };
+        move(y);
+        return y;
+      });
     }
     if (e.type === 'VIEWPORT' && e.frozenLayers.some((n) => map.has(tableKey(n)))) {
       const c = get() as typeof e;

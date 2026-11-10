@@ -364,14 +364,15 @@ export function dimStyleRenameOps(st: DocState, from: string, to: string): EditO
     { kind: 'dimStyle', key: fk, before: s, after: null },
     { kind: 'dimStyle', key: tableKey(to), before: null, after: { ...s, name: to } },
   ];
-  // 훑은 자리를 자리 짐작으로 단다(109차 — 핸들이 하나씩인 문서만, 판정은 바꿀 객체가 있을 때만)
+  // 훑은 자리를 자리 짐작으로 단다(109차 — 핸들이 하나씩인 문서만, 판정은 바꿀 객체가 있을 때만).
+  // 바뀌는 칸만 새 값인 얕은 사본(110차 — 구조화 복제 없이. 확정한 문서 객체는 제자리에서 고치지 않는다)
   const hint = hintOnce(() => st.session.scanHints());
   for (const [bk, b] of doc.blocks) {
     const list = b.entities;
     for (let i = 0; i < list.length; i++) {
       const e = list[i]!;
       if ((e.type === 'DIMENSION' || e.type === 'LEADER' || e.type === 'TOLERANCE') && tableKey((e as { dimStyle: string }).dimStyle || 'Standard') === fk)
-        ops.push(modifyOp(bk, e, { ...structuredClone(e), dimStyle: to } as Entity, hint() ? i : undefined));
+        ops.push(modifyOp(bk, e, { ...e, dimStyle: to } as Entity, hint() ? i : undefined));
     }
   }
   if (tableKey(String(doc.header.get('$DIMSTYLE') ?? '')) === fk) ops.push({ kind: 'header', name: '$DIMSTYLE', before: doc.header.get('$DIMSTYLE'), after: to });

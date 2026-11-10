@@ -3,6 +3,7 @@
  * 프롬프트 순서는 AutoCAD 2026 한국어판을 따른다(스크립트가 그대로 쓴다). 대화상자판과 같은 데이터·함수를 쓴다
  * (소거 대상은 PURGE의 purgeable, 선종류 정의는 LINETYPE의 표준 목록, 치수 다시 만들기는 dimensionBlockOps).
  */
+import { pushAll } from '../core/arrays';
 import { DIM_VAR_DEFAULTS } from '../core/dimvars';
 import type { DimStyle, DimensionEntity, Entity, HeaderValue, TextStyle } from '../core/model';
 import { tableKey } from '../core/model';
@@ -152,8 +153,9 @@ async function runDashPurge(app: App, ctx: CommandContext): Promise<void> {
       keep.push(it.key);
     }
     if (!keep.length) continue;
-    if (kind === 'regApps') ops.push(...purgeRegAppOps(doc, keep));
-    else ops.push(...purgeNamedOps(doc, named![kind].filter((it) => keep.includes(it.handle))));
+    // 수십만 개로 불어난 등록된 응용프로그램도 펼치지 않고 붙인다(110차)
+    if (kind === 'regApps') pushAll(ops, purgeRegAppOps(doc, keep));
+    else pushAll(ops, purgeNamedOps(doc, named![kind].filter((it) => keep.includes(it.handle))));
     ctx.print(`${noun} ${keep.length}개가 삭제되었습니다.`);
     total += keep.length;
   }

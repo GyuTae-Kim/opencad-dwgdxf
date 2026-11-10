@@ -96,6 +96,11 @@ class Builder {
     for (const x of v) this.nums.push(x ?? 0);
   }
 
+  /** n(...v)와 같다 — 매듭·가중치처럼 정점 수를 따르는 배열은 펼쳐 넘기지 않는다(110차) */
+  nAll(v: readonly (number | undefined)[]): void {
+    for (const x of v) this.nums.push(x ?? 0);
+  }
+
   p(v: Vec3 | Vec2 | undefined, z = true): void {
     if (!v) {
       this.nums.push(0, 0);
@@ -189,9 +194,9 @@ function hatchEdge(s: Builder, e: HatchEdge): void {
       break;
     case 'spline':
       s.k(e.degree, e.rational, e.periodic, e.knots.length, e.controlPoints.length, e.fitPoints?.length ?? 0);
-      s.n(...e.knots);
+      s.nAll(e.knots);
       for (const c of e.controlPoints) s.p(c, false);
-      if (e.weights) s.n(...e.weights);
+      if (e.weights) s.nAll(e.weights);
       for (const f of e.fitPoints ?? []) s.p(f, false);
       break;
   }
@@ -363,8 +368,8 @@ export function entitySignature(e: Entity, opt: CompareOptions, doc?: CadDocumen
       if (p0) s.anchor(p0.x, p0.y);
       s.k(e.flags & 0x1f, e.degree, e.knots.length, ctrl.length, fit.length, !!e.weights, !!e.startTangent, !!e.endTangent);
       for (const c of ctrl) s.p(c);
-      s.n(...e.knots);
-      if (e.weights) s.n(...e.weights);
+      s.nAll(e.knots);
+      if (e.weights) s.nAll(e.weights);
       for (const f of fit) s.p(f);
       if (e.startTangent) s.p(e.startTangent);
       if (e.endTangent) s.p(e.endTangent);
@@ -527,7 +532,8 @@ export function entitySignature(e: Entity, opt: CompareOptions, doc?: CadDocumen
       s.p(e.direction);
       s.p(e.scale);
       s.a(e.rotation);
-      s.n(...e.rowHeights, ...e.columnWidths);
+      s.nAll(e.rowHeights);
+      s.nAll(e.columnWidths);
       break;
     }
     default:

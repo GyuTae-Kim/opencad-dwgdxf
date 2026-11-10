@@ -13,6 +13,7 @@
  * - 표 객체의 색(TC)은 모든 버전에서 R2004+ CMC 배치다(BS 번호 + BL RGB + RC 이름 플래그).
  * - 값 종류 4(문자열)는 R2007+에서 자료 흐름의 BL 바이트 수 + UTF-16LE다(끝 0 포함 여부는 strZ에 남긴다).
  */
+import { charsOf } from '../../core/arrays';
 import type { Vec3 } from '../../core/model';
 import { type BitReader, DwgFormatError } from './bitstream';
 import { R2007, R2010, R2013 } from './version';
@@ -82,7 +83,8 @@ export function readIO(dat: BitReader, hdl: BitReader, base: number, ver: number
       if (n & 1) dat.RC();
       let len = codes.length;
       while (len > 0 && codes[len - 1] === 0) len--;
-      return { s: String.fromCharCode(...codes.slice(0, len)), zeros: codes.length - len };
+      // 글자 수는 파일을 따른다(조각으로 나눠 푼다 — 110차)
+      return { s: charsOf(codes, len), zeros: codes.length - len };
     },
     RCs: (_v, n) => {
       const out: number[] = [];

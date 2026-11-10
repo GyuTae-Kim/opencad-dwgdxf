@@ -9,6 +9,7 @@
  *   플래그·선가중치·플롯·확장 데이터).
  * 바꾸는 일은 LispDrawing.commit 한 번이 명령 취소 한 단계다(최상위 평가 하나로 다시 묶인다).
  */
+import { pushAll } from '../../core/arrays';
 import type { BlockDef, CadDocument, CadObject, DictionaryObject, GenericObject, GroupObject, Layer, LayoutObject, RawTag, TableRecordBase, XData, XDataItem, XRecordObject } from '../../core/model';
 import { normalizeHandle, tableKey } from '../../core/model';
 import type { EditOp } from '../session';
@@ -347,7 +348,9 @@ export function objectGroups(it: Interp, doc: CadDocument, h: string): Pair[] | 
     }
     case 'XRECORD': {
       const x = o as XRecordObject;
-      out.push([100, 'AcDbXrecord'], [280, x.cloning ?? 1], ...rawToPairs(it, x.data));
+      // 자료 태그 수는 파일을 따른다(펼치지 않고 붙인다 — 110차)
+      out.push([100, 'AcDbXrecord'], [280, x.cloning ?? 1]);
+      pushAll(out, rawToPairs(it, x.data));
       break;
     }
     case 'GROUP': {
@@ -366,7 +369,7 @@ export function objectGroups(it: Interp, doc: CadDocument, h: string): Pair[] | 
     default: {
       // 해석하지 않은 객체는 원본 태그가 있으면 그대로
       const raw = (o as GenericObject).raw;
-      if (raw?.length) out.push(...rawToPairs(it, raw));
+      if (raw?.length) pushAll(out, rawToPairs(it, raw));
       break;
     }
   }

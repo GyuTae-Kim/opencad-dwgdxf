@@ -8,6 +8,7 @@
  *   결합한 기호의 `참조|이름` 레코드는 지운다(AutoCAD처럼 다음에 참조를 다시 로드할 때 되살아난다).
  * - BLOCKTOXREF: 블록의 모든 참조를 고른 도면의 외부 참조로 바꾼다(속성은 빠진다).
  */
+import { pushAll } from '../../core/arrays';
 import type { BlockDef, BlockRecord, CadDocument, DimStyle, Entity, EntityBase, InsertEntity, Layer, Linetype, TextStyle, Vec3 } from '../../core/model';
 import { createDocument, entityDefaults, tableKey } from '../../core/model';
 import type { EditOp } from '../session';
@@ -287,7 +288,8 @@ export function xbindOps(host: CadDocument, xname: string, items: readonly { kin
     } else continue;
     removed.set(`${d.kind}:${dk}`, d.to);
   }
-  if (removed.size) res.ops.push(...remapOps(host, removed));
+  // 결합한 이름을 쓰는 객체 수를 따른다(펼치지 않고 붙인다 — 110차)
+  if (removed.size) pushAll(res.ops, remapOps(host, removed));
   return res;
 }
 

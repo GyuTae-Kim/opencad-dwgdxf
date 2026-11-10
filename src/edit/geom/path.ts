@@ -18,6 +18,7 @@ import type {
   Vec3,
   XLineEntity,
 } from '../../core/model';
+import { pushAll } from '../../core/arrays';
 import { cloneData, cloneDataExcept } from '../../core/clone';
 import { lwCount, packLw } from '../../core/lwpoly';
 import { packPoly, polyVertices } from '../../core/polyverts';
@@ -378,10 +379,11 @@ export function pieceNurbs(p: Piece, z = 0): Nurbs | null {
 
 /** 이어진 조각들 → NURBS 하나 */
 export function piecesNurbs(pieces: readonly Piece[], z = 0): Nurbs | null {
-  const segs = [];
+  // 조각 하나(큰 스플라인)의 베지어 조각도 정점 수를 따른다(펼치지 않고 붙인다 — 110차)
+  const segs: ReturnType<typeof toBezier> = [];
   for (const p of pieces) {
     const n = pieceNurbs(p, z);
-    if (n) segs.push(...toBezier(n));
+    if (n) pushAll(segs, toBezier(n));
   }
   return beziersToNurbs(segs);
 }

@@ -3,6 +3,7 @@
  * R2010+는 표 내용(AcDbTableContent, 사양 20.4.97~20.4.101)이 도형 자료 안에 들어 있고,
  * R2007까지는 옛 셀 구조(사양 20.4.96.1)다. 행·열 크기와 셀 문자만 꺼낸다.
  */
+import { charsOf } from '../../../core/arrays';
 import type { TableEntity } from '../../../core/model';
 import { type BitReader, DwgFormatError } from '../bitstream';
 import { R2007, R2010, R2013 } from '../version';
@@ -35,7 +36,8 @@ function readValue(or: ObjectReader): string | undefined {
           if (n & 1) r.RC();
           let len = codes.length;
           while (len > 0 && codes[len - 1] === 0) len--;
-          out = String.fromCharCode(...codes.slice(0, len));
+          // 셀 글자 수는 파일을 따른다(조각으로 나눠 푼다 — 110차)
+          out = charsOf(codes, len);
         }
         break;
       case 8:

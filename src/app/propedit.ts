@@ -2,6 +2,7 @@
  * 특성 팔레트에서 고칠 수 있는 항목.
  * 항목마다 값을 읽고(get) 복사본에 쓰는(set) 함수를 가진다. 여러 객체에 한 번에 적용한다.
  */
+import { pushAll, unshiftAll } from '../core/arrays';
 import type { AttribEntity, CadColor, CadDocument, DimensionEntity, Entity, InsertEntity, LwPolylineEntity, MLeaderEntity, MLeaderStyleObject, ToleranceEntity, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatAngle, formatLength, parseAngle, parseLength, type UnitSettings } from '../core/units';
@@ -595,11 +596,12 @@ export function applyField(app: App, handles: string[], field: Field, value: unk
       app.cmd.print(cs.message!, 'err');
       return 0;
     }
-    ops.push(...cs.extra);
+    // 따라오는 객체·연관 치수·치수 블록 변경은 고른 객체 수를 따른다 — 펼쳐 넘기지 않는다(110차)
+    pushAll(ops, cs.extra);
     // 형상을 바꾸면 연관 치수가 따라간다
     const f = followOps(st, new Map(ops.flatMap((o) => (o.kind === 'modify' ? [[o.before.handle, o.after] as const] : []))));
     for (const o of ops) if (o.kind === 'modify') o.after = f.patched.get(o.before.handle) ?? o.after;
-    ops.push(...f.ops);
+    pushAll(ops, f.ops);
     // 치수 모양을 바꾸는 값: 치수 블록을 치수 생성기로 다시 만든다(블록 작업이 먼저)
     if (field.regen) {
       const extra = new Set<string>();
@@ -612,7 +614,7 @@ export function applyField(app: App, handles: string[], field: Field, value: unk
           /* 생성기가 못 다루는 치수는 정의만 바꾼다 */
         }
       }
-      ops.unshift(...blockOps);
+      unshiftAll(ops, blockOps);
     }
     st.session.commit({ label: 'PROPERTIES', ops });
   }

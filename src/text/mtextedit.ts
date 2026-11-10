@@ -9,6 +9,7 @@
  *   편집기가 원래 문자열을 그대로 돌려준다(serializeRich를 쓰지 않는다).
  * - 필드 템플릿(%<\…>%)과 치수 측정값 자리(<>)는 한 글자 같은 조각으로 다룬다.
  */
+import { codePointsOf, insertAll, pushAll } from '../core/arrays';
 import { decodePercent, parseMText } from './mtext';
 
 // ---------------------------------------------------------------------------
@@ -549,7 +550,8 @@ function serializeText(doc: RichDoc): string {
   const all: Item[] = [];
   doc.paras.forEach((p, k) => {
     if (k > 0) all.push({ k: 'ch', c: ' ', f: p.items[0]?.f ?? {} });
-    all.push(...p.items);
+    // 문단 하나의 글자 수는 문자 내용을 따른다(펼치지 않고 붙인다 — 110차)
+    pushAll(all, p.items);
   });
   all.forEach((it, i) => {
     for (const key of ['underline', 'overline', 'strike'] as const) {
@@ -638,7 +640,8 @@ export function deleteRange(doc: RichDoc, a: number, b: number): number {
 /** 조각들을 off에 넣고 그 뒤 위치를 돌려준다 */
 export function insertItems(doc: RichDoc, off: number, items: Item[]): number {
   const at = toPos(doc, off);
-  doc.paras[at.p]!.items.splice(at.i, 0, ...items);
+  // 붙여 넣은 글자 수만큼(펼치지 않고 넣는다 — 110차)
+  insertAll(doc.paras[at.p]!.items, at.i, items);
   return off + items.length;
 }
 
@@ -679,7 +682,7 @@ export function itemsIn(doc: RichDoc, a: number, b: number): Item[] {
   const e = toPos(doc, hi);
   for (let p = s.p; p <= e.p; p++) {
     const items = doc.paras[p]!.items;
-    out.push(...items.slice(p === s.p ? s.i : 0, p === e.p ? e.i : items.length));
+    pushAll(out, items.slice(p === s.p ? s.i : 0, p === e.p ? e.i : items.length));
   }
   return out;
 }
@@ -866,10 +869,11 @@ export function mtextMeaning(src: string, baseHeight = 1, attachment = 1): unkno
     for (const run of p.runs) {
       const s = run.style;
       const style = JSON.stringify([s.font, s.font ? s.ttf : null, r6(s.height), r6(s.widthFactor), r6(s.oblique), r6(s.tracking), s.color, s.underline, s.overline, s.strike, s.valign]);
-      if (run.stack) runs.push({ kind: 'stack', style, text: `${String.fromCodePoint(...run.stack.top)}${run.stack.type}${String.fromCodePoint(...run.stack.bottom)}` });
+      if (run.stack) runs.push({ kind: 'stack', style, text: `${codePointsOf(run.stack.top)}${run.stack.type}${codePointsOf(run.stack.bottom)}` });
       else if (run.tab) runs.push({ kind: 'tab', style, text: '' });
       else {
-        const text = String.fromCodePoint(...run.text);
+        // 같은 서식의 이어진 글자(문자 내용을 따른다 — 110차, 조각으로 나눠 푼다)
+        const text = codePointsOf(run.text);
         const prev = runs[runs.length - 1];
         if (prev && prev.kind === 'text' && prev.style === style) prev.text += text;
         else if (text) runs.push({ kind: 'text', style, text });

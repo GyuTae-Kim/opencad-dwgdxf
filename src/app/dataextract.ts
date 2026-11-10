@@ -12,10 +12,14 @@ import { currentProps } from './draw';
 import { baseName, download } from './export';
 import { form } from './ui/dom';
 
-/** 글자 수로 어림한 열 폭 */
-function colWidths(r: ExtractResult, height: number, margin: number): number[] {
+/** 글자 수로 어림한 열 폭. 행은 객체마다 하나일 수 있어(묶지 않은 추출) 펼쳐 넘기지 않는다(110차) */
+export function colWidths(r: ExtractResult, height: number, margin: number): number[] {
   const width = (s: string) => [...s].reduce((w, ch) => w + (/[ᄀ-ᇿ㄰-㆏가-힣一-鿿]/.test(ch) ? 1 : 0.62), 0) * height;
-  return r.columns.map((c, i) => Math.max(width(c), ...r.rows.map((row) => width(row[i] ?? '')), height * 3) + margin * 2);
+  return r.columns.map((c, i) => {
+    let m = Math.max(width(c), height * 3);
+    for (const row of r.rows) m = Math.max(m, width(row[i] ?? ''));
+    return m + margin * 2;
+  });
 }
 
 export function registerDataExtractCommands(app: App): void {

@@ -4,6 +4,7 @@
  * 구역: HEADER, CLASSES(R2000+), TABLES, BLOCKS, ENTITIES, OBJECTS(R2000+), 그리고 모델이 해석하지 않은 구역(THUMBNAILIMAGE,
  * ACDSDATA 등, 그 구역을 담을 수 있는 버전일 때). 무엇을 어떻게 쓰는지는 WRITER_NOTES.md에 정리했다.
  */
+import { pushAll } from '../../core/arrays';
 import type { BlockDef, CadDocument, HeaderValue, RawTag, ReadWarning, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { STANDARD_CLASSES } from './classes';
@@ -288,7 +289,8 @@ function liveAcdsTags(tags: RawTag[], ctx: WriteContext): RawTag[] {
   const flush = () => {
     const isAsm = rec[0]?.code === 0 && rec[0].value === 'ACDSRECORD' && rec.some((t) => t.code === 2 && t.value === 'ASM_Data');
     const h = rec.find((t) => t.code === 320);
-    if (!isAsm || (h && ctx.acisLive.has(String(h.value).trim().toUpperCase()))) out.push(...rec);
+    // 레코드 하나가 큰 ACIS 자료(310 조각)면 태그가 수십만 개다 — 펼치지 않고 붙인다(110차)
+    if (!isAsm || (h && ctx.acisLive.has(String(h.value).trim().toUpperCase()))) pushAll(out, rec);
     rec = [];
   };
   for (const t of tags) {

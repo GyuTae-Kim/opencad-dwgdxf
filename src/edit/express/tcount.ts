@@ -4,6 +4,7 @@
  * 번호: 시작 번호와 증분(소수 가능 — 입력의 소수 자리 수를 따른다).
  * 넣는 자리: 덮어쓰기(문자 전체를 번호로), 접두어("번호 문자"), 접미어("문자 번호"), 찾아 바꾸기(찾는 문자열을 번호로).
  */
+import { maxOf } from '../../core/arrays';
 import type { CadDocument, Entity, MTextEntity, TextEntity, Vec2 } from '../../core/model';
 import { cloneEntity } from '../geom/path';
 import { textBox } from './textbox';
@@ -34,7 +35,8 @@ export function countPoint(e: Entity, doc: CadDocument): Vec2 {
  */
 export function sortForCount(items: readonly { handle: string; p: Vec2 }[], sort: CountSort, tol?: number): string[] {
   if (sort === 'S') return items.map((i) => i.handle);
-  const t = tol ?? Math.max(1e-9, ...items.map((i) => Math.max(Math.abs(i.p.x), Math.abs(i.p.y)) * 1e-9));
+  // 고른 문자 수를 따른다(펼쳐 넘기지 않는다 — 110차)
+  const t = tol ?? Math.max(1e-9, maxOf(items.map((i) => Math.max(Math.abs(i.p.x), Math.abs(i.p.y)) * 1e-9)));
   const cmp = (a: number, b: number) => (Math.abs(a - b) <= t ? 0 : a < b ? -1 : 1);
   const order = items.map((it, i) => ({ ...it, i }));
   order.sort((a, b) => {

@@ -3,6 +3,7 @@
  * FLATTEN(평면화), CDORDER(색상별 그리기 순서), MKLTYPE(선종류 만들기), SHOWURLS(하이퍼링크 목록), REDIR(경로 바꾸기).
  * 계산은 src/edit/express/*.ts. 각 명령은 한 번의 명령 취소로 되돌린다.
  */
+import { pushAll } from '../core/arrays';
 import type { Entity } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
@@ -383,7 +384,8 @@ async function runCdorder(app: App, ctx: CommandContext): Promise<void> {
     const visual = cdorderList(drawOrder(doc, bk), sel, (e) => displayColorKey(e, doc), v.order, v.place);
     const tableOp = visual ? sortentsOp(doc, bk, visual) : null;
     if (!next && !tableOp) continue;
-    if (next) ops.push(...reorderOps(bk, block.entities, sel, next, v.place));
+    // 고른 객체마다 지우기·넣기 둘이다(펼치지 않고 붙인다 — 110차)
+    if (next) pushAll(ops, reorderOps(bk, block.entities, sel, next, v.place));
     if (tableOp) ops.push(tableOp);
     moved += block.entities.filter((e) => sel.has(e.handle)).length;
   }

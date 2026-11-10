@@ -1064,4 +1064,25 @@ export function cloneEntity<T extends Entity>(e: T): T {
   return cloneData(e);
 }
 
+/**
+ * 얕은 사본으로 고친 객체 c(원본 e의 바꿀 칸만 새 값 — 110차)에서 원본 본문(dwgRaw)을 뺀다. 블록 참조면 모든 속성에서도 뺀다:
+ * 원본과 함께 쓰는 속성은 얕게 베껴서 빼고 원본은 그대로 둔다. 깊은 복사(cloneEntity)의 객체·모든 속성에서 지우던 것과 같은 값이다.
+ * 확정한 문서 객체는 제자리에서 고치지 않으므로(편집은 늘 사본을 고친다) 바뀌지 않은 칸을 원본과 함께 써도 된다
+ */
+export function dropRawCopy(c: Entity, e: Entity): void {
+  delete c.dwgRaw;
+  if (c.type !== 'INSERT' || e.type !== 'INSERT') return;
+  const from = e.attribs;
+  let list: typeof from | null = null;
+  for (let i = 0; i < c.attribs.length; i++) {
+    const a = c.attribs[i]!;
+    if (!('dwgRaw' in a)) continue;
+    list ??= c.attribs === from ? c.attribs.slice() : c.attribs;
+    const x = a === from[i] ? { ...a } : a;
+    delete x.dwgRaw;
+    list[i] = x;
+  }
+  if (list) c.attribs = list;
+}
+
 export { tableKey };

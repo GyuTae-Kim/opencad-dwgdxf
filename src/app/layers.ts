@@ -6,7 +6,7 @@ import type { Entity, Layer } from '../core/model';
 import { tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { dropLayerFromFiltersOps } from '../edit/layerfilter/store';
-import { cloneEntity, hintOnce, modifyOp } from '../edit/session';
+import { hintOnce, modifyOp } from '../edit/session';
 import type { App } from './app';
 import { ft } from './filetext';
 
@@ -168,12 +168,14 @@ export function renameLayer(app: App, key: string, name: string): boolean {
   const ops: EditOp[] = [];
   if (nk === k) ops.push({ kind: 'layer', key: k, before, after });
   else ops.push({ kind: 'layer', key: k, before, after: null }, { kind: 'layer', key: nk, before: null, after });
+  // 바뀌는 칸만 새 객체로(110차 — 깊은 복사 없이. 확정한 문서 객체는 제자리에서 고치지 않아 나머지 칸은 원본과 함께 쓴다)
   const fix = (e: Entity): Entity | null => {
-    const hit = tableKey(e.layer) === k || (e.type === 'INSERT' && e.attribs.some((a) => tableKey(a.layer) === k));
-    if (!hit) return null;
-    const c = cloneEntity(e);
-    if (tableKey(c.layer) === k) c.layer = after.name;
-    if (c.type === 'INSERT') for (const a of c.attribs) if (tableKey(a.layer) === k) a.layer = after.name;
+    const top = tableKey(e.layer) === k;
+    const inAttribs = e.type === 'INSERT' && e.attribs.some((a) => tableKey(a.layer) === k);
+    if (!top && !inAttribs) return null;
+    const c = { ...e };
+    if (top) c.layer = after.name;
+    if (inAttribs && c.type === 'INSERT') c.attribs = c.attribs.map((a) => (tableKey(a.layer) === k ? { ...a, layer: after.name } : a));
     return c;
   };
   // 훑은 자리를 자리 짐작으로 단다(109차 — 핸들이 하나씩인 문서만, EditSession.scanHints. 적용이 큰 블록의 자리 표를 만들지 않게.
