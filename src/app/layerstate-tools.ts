@@ -206,7 +206,7 @@ export function registerLayerToolCommands(app: App): void {
         })
         .filter((x): x is NonNullable<typeof x> => !!x);
       // 블록 정의 안 객체는 훑은 자리를 짐작으로(109차 — 핸들이 하나씩인 문서만)
-      const res = setByLayerOps(st.doc, targets, { mode, byBlock, includeBlocks: blocks, blockHints: blocks && st.session.scanHints() });
+      const res = setByLayerOps(st.doc, targets, { mode, byBlock, includeBlocks: blocks, blockHints: () => st.session.scanHints() });
       if (res.ops.length) st.session.commit({ label: 'SETBYLAYER', ops: res.ops, group: ctx.group });
       ctx.print(`${res.changed}개의 객체가 수정되었습니다.${res.blocks ? ` 블록 정의 ${res.blocks}개 안의 객체 ${res.nested}개도 수정했습니다.` : ''}`);
     },

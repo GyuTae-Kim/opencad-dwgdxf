@@ -1045,6 +1045,19 @@ export function modifyOp(block: string, before: Entity, after: Entity, at?: numb
   return at === undefined ? { kind: 'modify', block, before, after } : { kind: 'modify', block, before, after, index: at };
 }
 
+/** 블록 훑기 자리 짐작을 달지(109차): 참·거짓, 또는 처음 바꾸기 변경을 만들 때 한 번 물을 판정(() => session.scanHints()) */
+export type ScanHint = boolean | (() => boolean);
+
+/**
+ * ScanHint를 처음 물을 때 한 번만 푼다 — 바꿀 객체가 없으면 판정(소유 블록 표 만들기)을 하지 않는다
+ * (109차 — 객체를 바꾸지 않는 이름 바꾸기·CONVERTPSTYLES가 큰 도면에서 표만 만들지 않게)
+ */
+export function hintOnce(hint: ScanHint): () => boolean {
+  if (typeof hint === 'boolean') return () => hint;
+  let v: boolean | undefined;
+  return () => (v ??= hint());
+}
+
 /** 객체를 깊이 복사한다(편집 전 상태 보관용) */
 export function cloneEntity<T extends Entity>(e: T): T {
   // 평탄 좌표는 형식 배열이라 그대로 옮긴다(수 배열처럼 수를 하나씩 상자에 담지 않는다). structuredClone보다 빠른 복사(97차 — core/clone.ts)

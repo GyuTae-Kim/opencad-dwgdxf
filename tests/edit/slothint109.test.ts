@@ -121,7 +121,7 @@ async function run(cmd: Cmd, opt: { noHint?: boolean; dup?: boolean } = {}) {
 
 const layerDef = (name: string, aci: number): Layer => ({ name, handle: '0', flags: 0, color: { aci }, off: false, frozen: false, locked: false, linetype: 'Continuous', lineweight: -3, plot: true, transparency: 255 });
 const toNamed = (h: Harness) => {
-  const r = convertToNamedOps(h.doc, () => h.st.session.newHandle(), undefined, h.st.session.scanHints())!;
+  const r = convertToNamedOps(h.doc, () => h.st.session.newHandle(), undefined, () => h.st.session.scanHints())!;
   h.st.session.commit({ label: 'CONVERTPSTYLES', ops: r.ops });
 };
 
@@ -138,7 +138,7 @@ const CASES: [string, Cmd, boolean][] = [
   [
     '도면층 변환기',
     (h) => {
-      const r = translateLayersOps(h.doc, [{ from: 'L1', to: layerDef('L7', 4) }], { forceColor: true, forceLinetype: true, forceTransparency: false, blocks: true, purge: true }, () => h.st.session.newHandle(), undefined, h.st.session.scanHints());
+      const r = translateLayersOps(h.doc, [{ from: 'L1', to: layerDef('L7', 4) }], { forceColor: true, forceLinetype: true, forceTransparency: false, blocks: true, purge: true }, () => h.st.session.newHandle(), undefined, () => h.st.session.scanHints());
       h.st.session.commit({ label: 'LAYTRANS', ops: r.ops });
     },
     true,
@@ -192,5 +192,24 @@ describe('블록을 훑으며 바꾸는 길에도 자리 짐작(109차)', () => 
       expect(r.ops.every((op) => !('index' in op))).toBe(true);
       expect(r.after).toEqual(plain.after);
     }
+  });
+
+  it('바꿀 객체가 없으면 판정(소유 블록 표 만들기)을 하지 않는다', async () => {
+    const h = perCommandGroups(makeHarness((doc) => fill(doc, false)));
+    registerUtil2MiscCommands(Object.assign(h.app, { findCommand: () => undefined }));
+    (h.app as unknown as { ui: { refreshLayouts?: () => void } }).ui.refreshLayouts ??= () => {};
+    const s = h.st.session;
+    let asked = 0;
+    const scan = s.scanHints.bind(s);
+    s.scanHints = () => (asked++, scan());
+    // 객체가 없는 도면층 이름 바꾸기
+    h.doc.layers.set('EMPTY', { ...h.doc.layers.get('L2')!, name: 'EMPTY', handle: 'B08' });
+    await runWith(h, '-RENAME', ['LA', 'EMPTY', 'EMPTY2']);
+    expect(h.doc.layers.has('EMPTY2')).toBe(true);
+    expect(asked).toBe(0);
+    // 객체를 바꾸면 한 번만 묻는다
+    await runWith(h, '-RENAME', ['LA', 'L1', 'L9']);
+    expect(asked).toBe(1);
+    expect(s.undoTop()!.ops.filter((o) => o.kind === 'modify').every((o) => o.kind === 'modify' && o.index !== undefined)).toBe(true);
   });
 });

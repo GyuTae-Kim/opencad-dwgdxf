@@ -6,7 +6,7 @@ import type { Entity } from '../core/model';
 import { pushAll } from '../core/arrays';
 import { tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
-import { modifyOp } from '../edit/session';
+import { hintOnce, modifyOp } from '../edit/session';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { currentLayer, patchLayers, setCurrentLayer } from './layers';
@@ -36,7 +36,7 @@ async function pickLayer(app: App, ctx: CommandContext, prompt: string, allowNam
  */
 function relayerOps(st: DocState, pred: (e: Entity) => boolean, layer: string): EditOp[] {
   const ops: EditOp[] = [];
-  const hint = st.session.scanHints();
+  const hint = hintOnce(() => st.session.scanHints());
   for (const [key, b] of st.doc.blocks) {
     const list = b.entities;
     for (let i = 0; i < list.length; i++) {
@@ -44,7 +44,7 @@ function relayerOps(st: DocState, pred: (e: Entity) => boolean, layer: string): 
       if (!pred(e)) continue;
       const after = { ...e, layer } as Entity;
       if (after.type === 'INSERT') after.attribs = after.attribs.map((a) => (pred(a as Entity) ? { ...a, layer } : a));
-      ops.push(modifyOp(key, e, after, hint ? i : undefined));
+      ops.push(modifyOp(key, e, after, hint() ? i : undefined));
     }
   }
   return ops;

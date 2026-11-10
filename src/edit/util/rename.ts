@@ -6,8 +6,8 @@
 import type { CadDocument, DictionaryObject, DimStyle, Entity, GenericObject, HeaderValue, Layer, Layout, MLineStyleObject } from '../../core/model';
 import { MODEL_SPACE, tableKey } from '../../core/model';
 import { pushAll } from '../../core/arrays';
-import type { EditOp } from '../session';
-import { cloneEntity, isLayoutBlock, modifyOp } from '../session';
+import type { EditOp, ScanHint } from '../session';
+import { cloneEntity, hintOnce, isLayoutBlock, modifyOp } from '../session';
 import { mapTableTextStyles } from '../table/entity';
 
 export type RenameKind = 'block' | 'dimStyle' | 'layer' | 'linetype' | 'textStyle' | 'layout';
@@ -127,8 +127,9 @@ const same = (a: string | undefined, k: string) => typeof a === 'string' && tabl
  * 블록마다 객체를 고쳐 modify 작업을 만든다(fix가 null이면 그대로). hint면 훑은 자리를 자리 짐작으로 단다
  * (109차 — EditSession.scanHints: 핸들이 하나씩인 문서만. 적용이 큰 블록의 자리 표를 만들지 않게)
  */
-function entityOps(doc: CadDocument, fix: (c: Entity) => boolean, hint: boolean): EditOp[] {
+function entityOps(doc: CadDocument, fix: (c: Entity) => boolean, hint: ScanHint): EditOp[] {
   const ops: EditOp[] = [];
+  const useHint = hintOnce(hint);
   for (const [bk, b] of doc.blocks) {
     const list = b.entities;
     for (let i = 0; i < list.length; i++) {
@@ -137,7 +138,7 @@ function entityOps(doc: CadDocument, fix: (c: Entity) => boolean, hint: boolean)
       if (!fix(c)) continue;
       delete c.dwgRaw;
       if (c.type === 'INSERT') for (const a of c.attribs) delete a.dwgRaw;
-      ops.push(modifyOp(bk, e, c, hint ? i : undefined));
+      ops.push(modifyOp(bk, e, c, useHint() ? i : undefined));
     }
   }
   return ops;
@@ -170,9 +171,9 @@ function dimStyleVarOps(doc: CadDocument, vars: string[], k: string, newName: st
 
 /**
  * 이름 바꾸기 작업. 순서대로 한 트랜잭션으로 적용한다(앞 작업이 옛 이름의 표 키를 쓴다).
- * 바꿀 수 없으면 빈 배열. hint면 객체 바꾸기에 훑은 자리를 자리 짐작으로 단다(EditSession.scanHints() — 109차)
+ * 바꿀 수 없으면 빈 배열. hint면 객체 바꾸기에 훑은 자리를 자리 짐작으로 단다(() => EditSession.scanHints() — 109차, 바꿀 객체가 있을 때만 묻는다)
  */
-export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, newName: string, hint = false): EditOp[] {
+export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, newName: string, hint: ScanHint = false): EditOp[] {
   if (renameProblem(doc, kind, oldName, newName)) return [];
   const k = tableKey(oldName);
   const nk = tableKey(newName);

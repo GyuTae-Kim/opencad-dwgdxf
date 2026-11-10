@@ -170,7 +170,7 @@ export function registerFilePlotCommands(app: App, reg: (c: Command) => void): v
           },
         ]);
         if (!v) return;
-        const r = convertToColorOps(doc, String(v.ctb) || undefined, st.session.scanHints());
+        const r = convertToColorOps(doc, String(v.ctb) || undefined, () => st.session.scanHints());
         st.session.commit({ label: 'CONVERTPSTYLES', ops: r.ops, group: ctx.group });
         ctx.print(`도면이 이름 있는 플롯 스타일 모드에서 색상 종속 모드로 변환되었습니다(도면층 ${r.layers}개, 객체 ${r.entities}개, 배치 ${r.layouts}개).`);
         return;
@@ -210,7 +210,7 @@ export function registerFilePlotCommands(app: App, reg: (c: Command) => void): v
         }
         stb = got[0]!.name;
       }
-      const r = convertToNamedOps(doc, () => st.session.newHandle(), stb || undefined, st.session.scanHints());
+      const r = convertToNamedOps(doc, () => st.session.newHandle(), stb || undefined, () => st.session.scanHints());
       if (!r) {
         ctx.print('이 도면에는 플롯 스타일 이름 사전(ACAD_PLOTSTYLENAME)이 없어 변환할 수 없습니다.', 'err');
         return;
