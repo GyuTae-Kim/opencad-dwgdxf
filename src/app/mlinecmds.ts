@@ -620,7 +620,7 @@ export function registerMLineCommands(app: App): void {
               '새 여러 줄 스타일 작성',
               [
                 { key: 'name', label: '새 스타일 이름', type: 'text', value: '' },
-                { key: 'from', label: '시작', type: 'select', value: s?.style.handle ?? '', options: entries.map((e) => ({ value: e.style.handle, label: e.name.toUpperCase() })) },
+                { key: 'from', label: '시작', type: 'select', value: s?.style.handle ?? '', options: entries.map((e) => ({ value: e.style.handle, label: ft(e.name.toUpperCase()) })) },
               ],
               {
                 ok: '계속',

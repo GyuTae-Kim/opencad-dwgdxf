@@ -585,7 +585,7 @@ async function editStyleDialog(app: App, s: MLeaderStyleObject, title: string): 
           { value: '0', label: '없음' },
         ],
       },
-      { key: 'textStyle', label: '문자 스타일', type: 'select', value: tstyles.find((t) => t.handle === s.textStyleHandle)?.handle ?? tstyles[0]?.handle ?? '', options: tstyles.map((t) => ({ value: t.handle, label: t.name })) },
+      { key: 'textStyle', label: '문자 스타일', type: 'select', value: tstyles.find((t) => t.handle === s.textStyleHandle)?.handle ?? tstyles[0]?.handle ?? '', options: tstyles.map((t) => ({ value: t.handle, label: ft(t.name) })) },
       { key: 'textHeight', label: '문자 높이', type: 'number', value: s.textHeight },
       { key: 'landingGap', label: '연결선 간격', type: 'number', value: s.landingGap },
       { key: 'scale', label: '축척', type: 'number', value: s.scale },
@@ -656,7 +656,7 @@ function mleaderStyleManager(app: App, ctx: CommandContext): Promise<void> {
       const all = styles(app);
       const v = await form('새 다중 지시선 스타일 작성', [
         { key: 'name', label: '새 스타일 이름', type: 'text', value: `${selected()?.name ?? 'Standard'}의 복사본` },
-        { key: 'base', label: '시작', type: 'select', value: selected()?.handle ?? all[0]?.handle ?? '', options: all.map((s) => ({ value: s.handle, label: s.name })) },
+        { key: 'base', label: '시작', type: 'select', value: selected()?.handle ?? all[0]?.handle ?? '', options: all.map((s) => ({ value: s.handle, label: ft(s.name) })) },
       ], {
         ok: '계속',
         validate: (x) => {

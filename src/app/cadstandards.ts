@@ -123,7 +123,7 @@ async function configureDialog(app: App, ctx: CommandContext, st: DocState): Pro
     }
     const d = f.doc;
     desc.replaceChildren(
-      h('div', {}, h('b', {}, f.name)),
+      h('div', {}, h('b', { translate: 'no' }, f.name)),
       h('div', {}, `도면층 ${d.layers.size}개, 선종류 ${d.linetypes.size}개, 문자 스타일 ${[...d.textStyles.values()].filter((x) => x.name).length}개, 치수 스타일 ${d.dimStyles.size}개`),
       h('div', {}, `형식: ${d.format.toUpperCase()} ${d.version}`),
     );

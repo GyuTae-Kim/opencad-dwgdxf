@@ -497,7 +497,7 @@ function tabPanel(st: DocState, vars: Vars, tab: VarField[], change: () => void)
         let v = String(cur);
         if (f.kind === 'arrow') {
           v = String(cur || (f.v !== 'DIMLDRBLK' ? (vars.DIMBLK ?? '') : '') || '').toUpperCase();
-          opts = ARROWS.some((a) => a.value === v) ? ARROWS : [...ARROWS, { value: v, label: `사용자 블록 ${v}` }];
+          opts = ARROWS.some((a) => a.value === v) ? ARROWS : [...ARROWS, { value: v, label: `사용자 블록 ${ft(v)}` }];
         } else if (f.kind === 'style') {
           opts = (styles.length ? styles : ['Standard']).map((n) => ({ value: n, label: n }));
           v = opts.find((o) => tableKey(o.value) === tableKey(v || 'Standard'))?.value ?? opts[0]!.value;
@@ -604,7 +604,8 @@ function compareDialog(app: App, first: string): void {
         'table',
         { class: 'grid' },
         h('thead', {}, h('tr', {}, h('th', {}, '설명'), h('th', {}, '변수'), h('th', { translate: 'no' }, a.value), ...(vb ? [h('th', { translate: 'no' }, b.value)] : []))),
-        h('tbody', {}, ...rows.map((r) => h('tr', {}, h('td', {}, r.label), h('td', { style: 'font-family:var(--mono)' }, r.name), h('td', {}, r.a), ...(vb ? [h('td', {}, r.b)] : [])))),
+        // 변수 값은 도면 글(109차 — 문자 스타일·화살촉 블록·선종류 이름이 든다)
+        h('tbody', {}, ...rows.map((r) => h('tr', {}, h('td', {}, r.label), h('td', { style: 'font-family:var(--mono)' }, r.name), h('td', { translate: 'no' }, r.a), ...(vb ? [h('td', { translate: 'no' }, r.b)] : [])))),
       ),
     );
   };

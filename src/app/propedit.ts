@@ -15,6 +15,7 @@ import { lwCount, lwVertices, tidyWidths } from '../core/lwpoly';
 import { rawDimVars } from '../edit/dim';
 import { DIM_VAR_BY_NAME, applyOverrides } from '../edit/annot/override';
 import { dimensionBlockOps } from './dimcmds';
+import { ft } from './filetext';
 
 export type FieldKind = 'length' | 'angle' | 'number' | 'text' | 'multiline' | 'select' | 'color' | 'bool';
 
@@ -418,7 +419,8 @@ export const MLEADER_FIELDS: Field[] = [
   {
     label: '다중 지시선 스타일',
     kind: 'select',
-    options: (doc) => mleaderStyles(doc).map((s) => ({ value: s.handle, label: s.name })),
+    // 스타일 이름은 도면 글(109차 — 값이 핸들이라 고르기 항목 지킴이 못 알아본다)
+    options: (doc) => mleaderStyles(doc).map((s) => ({ value: s.handle, label: ft(s.name) })),
     get: (e) => (e as MLeaderEntity).styleHandle ?? '',
     set: (e, v) => ((e as MLeaderEntity).styleHandle = String(v)),
   },

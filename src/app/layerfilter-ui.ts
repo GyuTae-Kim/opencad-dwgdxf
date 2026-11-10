@@ -322,7 +322,8 @@ export function layerFilterPanel(app: App, refresh: () => void): LayerFilterPane
         out.push({ separator: true }, { heading: '그룹 필터에 추가' });
         for (const g of groups.slice(0, 12)) {
           const has = g.layers.some((n) => tableKey(n) === tableKey(layerName));
-          out.push({ label: g.name, disabled: has, run: () => editGroupLayers(app, g.name, [layerName], 'add') });
+          // 필터 이름은 도면 글(109차)
+          out.push({ label: ft(g.name), disabled: has, run: () => editGroupLayers(app, g.name, [layerName], 'add') });
         }
       }
       return out;

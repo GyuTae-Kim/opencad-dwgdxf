@@ -33,6 +33,7 @@ import type { DocState } from './docstate';
 import { commitOwn, currentScaleName, ensureScaleList, envFor, isXrefScale, newGroup } from './annoscale-core';
 import { ask, form, h } from './ui/dom';
 import { button, ensureStyles, modal } from './util2-ui';
+import { ft } from './filetext';
 
 const CSS = `
 .as-wrap { display: grid; grid-template-columns: 1fr 150px; gap: 10px; }
@@ -68,7 +69,8 @@ function pickList(multi: boolean, onChange: () => void, onActivate?: (i: number)
   const render = () => {
     el.innerHTML = '';
     items.forEach((it, i) => {
-      const d = h('div', { class: `as-item${sel.has(i) ? ' sel' : ''}${it.dim ? ' dim' : ''}`, role: 'option', 'aria-selected': sel.has(i) ? 'true' : 'false', title: it.label }, it.label);
+      // 항목은 도면의 축척 이름(109차 — 화면 번역층이 옮기지 않는다. 현재 축척 표시 ▶는 기호)
+      const d = h('div', { class: `as-item${sel.has(i) ? ' sel' : ''}${it.dim ? ' dim' : ''}`, role: 'option', 'aria-selected': sel.has(i) ? 'true' : 'false', title: it.label, translate: 'no' }, it.label);
       d.addEventListener('click', (ev) => {
         if (multi && (ev.ctrlKey || ev.metaKey)) {
           if (sel.has(i)) sel.delete(i);
@@ -169,9 +171,9 @@ export async function scaleListDialog(app: App, st: DocState, group = newGroup()
   const btnReset = button('재설정(R)', () => void reset());
   const deleteBlock = (s: AnnoScale): string | null => {
     if (work.length <= 1) return '축척 리스트에는 축척이 하나 이상 있어야 합니다.';
-    if (s === current) return `${s.name}은(는) 현재 주석 축척이므로 삭제할 수 없습니다.`;
-    if (s.handle && isUsed(used, s)) return `${s.name}은(는) 주석 객체나 뷰포트가 쓰고 있어 삭제할 수 없습니다.`;
-    if (!s.handle && used.names.has(s.name.toUpperCase())) return `${s.name}은(는) 주석 객체가 쓰고 있어 삭제할 수 없습니다.`;
+    if (s === current) return `${ft(s.name)}은(는) 현재 주석 축척이므로 삭제할 수 없습니다.`;
+    if (s.handle && isUsed(used, s)) return `${ft(s.name)}은(는) 주석 객체나 뷰포트가 쓰고 있어 삭제할 수 없습니다.`;
+    if (!s.handle && used.names.has(s.name.toUpperCase())) return `${ft(s.name)}은(는) 주석 객체가 쓰고 있어 삭제할 수 없습니다.`;
     return null;
   };
   const refresh = (sel?: number) => {

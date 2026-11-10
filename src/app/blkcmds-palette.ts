@@ -198,7 +198,8 @@ class BlocksPalette {
   private fillLibraries(): void {
     const list = loadedDrawings();
     this.libSelect.innerHTML = '';
-    for (const d of list) this.libSelect.append(h('option', { value: String(d.serial) }, d.name));
+    // 파일 이름(109차 — 값이 번호라 고르기 항목 지킴이 못 알아본다)
+    for (const d of list) this.libSelect.append(h('option', { value: String(d.serial), translate: 'no' }, d.name));
     if (!list.length) this.libSelect.append(h('option', { value: '' }, '(고른 파일 없음)'));
     this.libSelect.value = this.library ? String(this.library.serial) : '';
   }
