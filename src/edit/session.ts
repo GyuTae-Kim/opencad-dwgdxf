@@ -717,6 +717,16 @@ export class EditSession {
     return this.ownerLegacy || this.ownerLast < 0 ? undefined : this.ownerLast;
   }
 
+  /**
+   * 바꾸기 변경(block = ownerOf(op.before.handle))에 자리 짐작(slotHint)을 달아 돌려준다(108차 — commitResults 밖의 바꾸기 길:
+   * CHPROP·CHANGE·특성 팔레트·MATCHPROP·FIND 바꾸기. 큰 선택의 특성 바꾸기가 적용 때 블록 전체의 자리 표를 만들지 않게). 짐작이 없으면 칸을 두지 않는다
+   */
+  hinted(op: Extract<EditOp, { kind: 'modify' }>): Extract<EditOp, { kind: 'modify' }> {
+    const i = this.slotHint(op.before.handle);
+    if (i !== undefined) op.index = i;
+    return op;
+  }
+
   /** 소유 블록 안의 자리(ownerOf가 확인한 값). 블록이 없으면 -1 */
   ownerIndex(handle: string): number {
     const k = this.ownerOf(handle);

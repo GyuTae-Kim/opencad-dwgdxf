@@ -582,7 +582,8 @@ export function applyField(app: App, handles: string[], field: Field, value: unk
     const c = cloneEntity(e);
     field.set(c, value, st.doc);
     if (JSON.stringify(c) === JSON.stringify(e)) continue;
-    ops.push({ kind: 'modify', block, before: e, after: c });
+    // 자리 짐작(108차 — 큰 선택의 특성 바꾸기가 적용 때 블록 전체의 자리 표를 만들지 않게)
+    ops.push(st.session.hinted({ kind: 'modify', block, before: e, after: c }));
   }
   if (skipped) app.cmd.print(`잠긴 도면층의 객체 ${skipped}개는 바꾸지 않았습니다.`);
   if (ops.length) {

@@ -128,8 +128,10 @@ export interface SetByLayerResult {
   blocks: number;
 }
 
-/** 고른 객체(공간 블록 키와 함께)를 ByLayer로 바꾸는 작업 */
-export function setByLayerOps(doc: CadDocument, targets: readonly { block: string; entity: Entity }[], o: SetByLayerOptions): SetByLayerResult {
+/**
+ * 고른 객체(공간 블록 키와 함께)를 ByLayer로 바꾸는 작업. index는 그 객체의 자리 짐작(EditSession.slotHint — 108차)이고 바꾸기 변경에 그대로 단다
+ */
+export function setByLayerOps(doc: CadDocument, targets: readonly { block: string; entity: Entity; index?: number }[], o: SetByLayerOptions): SetByLayerResult {
   const mats = materialNames(doc);
   const isBB = (h: string) => mats.get(normalizeHandle(h)) === 'BYBLOCK';
   const res: SetByLayerResult = { ops: [], changed: 0, nested: 0, blocks: 0 };
@@ -156,7 +158,7 @@ export function setByLayerOps(doc: CadDocument, targets: readonly { block: strin
     if (o.skipLayer?.(e.layer)) continue;
     const c = setByLayerEntity(e, o, isBB);
     if (c) {
-      res.ops.push({ kind: 'modify', block: t.block, before: e, after: c });
+      res.ops.push(t.index === undefined ? { kind: 'modify', block: t.block, before: e, after: c } : { kind: 'modify', block: t.block, before: e, after: c, index: t.index });
       res.changed++;
     }
     if (o.includeBlocks && e.type === 'INSERT') visitBlock(e.block);

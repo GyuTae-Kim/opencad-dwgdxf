@@ -213,7 +213,8 @@ export function replaceTargets(app: App, targets: readonly FindTarget[], q: Find
     const block = st.session.ownerOf(hd);
     if (!block || JSON.stringify(before) === JSON.stringify(e)) continue;
     if (e.type === 'DIMENSION') dims.push(e);
-    else ops.push({ kind: 'modify', block, before, after: e });
+    // 자리 짐작(108차 — 많은 문자를 바꿀 때 적용이 블록 전체의 자리 표를 만들지 않게)
+    else ops.push(st.session.hinted({ kind: 'modify', block, before, after: e }));
     sum.objects++;
   }
   if (ops.length) st.session.commit({ label: 'FIND', ops, group });

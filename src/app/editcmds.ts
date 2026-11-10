@@ -176,7 +176,8 @@ export function registerEditCommands(app: App): void {
             } catch {
               /* 생성기가 못 다루는 치수는 정의만 바꾼다 */
             }
-          ops.push({ kind: 'modify', block, before: e, after: c });
+          // 자리 짐작(108차 — 큰 선택의 특성 일치가 적용 때 블록 전체의 자리 표를 만들지 않게)
+          ops.push(st.session.hinted({ kind: 'modify', block, before: e, after: c }));
         }
         app.clearSelection();
         if (ops.length) st.session.commit({ label: 'MATCHPROP', ops: [...blockOps, ...ops], group: ctx.group });
