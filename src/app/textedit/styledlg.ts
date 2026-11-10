@@ -4,7 +4,7 @@
  * 목록의 오른쪽 클릭·F2·두 번 누르기로 이름 바꾸기, Delete로 삭제. 적용하지 않은 변경은 다른 스타일로 옮기거나 닫을 때 묻는다.
  * 항목 이름은 AutoCAD 2026 한국어판의 "문자 스타일" 대화상자를 따른다.
  */
-import type { CadDocument, Entity, TextStyle } from '../../core/model';
+import type { CadDocument, Entity, InsertEntity, TextStyle } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { annotativeFlag, withAnnotativeFlag } from '../../edit/annoscale/xdata';
 import type { EditOp } from '../../edit/session';
@@ -79,29 +79,25 @@ export function textStyleRenameOps(st: DocState, from: string, to: string): Edit
     { kind: 'textStyle', key: fk, before: s, after: null },
     { kind: 'textStyle', key: tableKey(to), before: null, after: { ...s, name: to } },
   ];
+  // 바뀌는 칸만 새 객체로(110차 — 전에는 모든 객체를 구조화 복제한 뒤 고칠 것이 있는지 보았다. 확정한 문서 객체는 제자리에서 고치지 않아
+  // 나머지 칸은 원본과 함께 쓴다)
+  type Styled = Entity & { style?: string; mtext?: { style: string } };
   const fix = (e: Entity): Entity | null => {
-    let changed = false;
-    const c = structuredClone(e) as Entity & { style?: string; mtext?: { style: string } };
-    if (typeof c.style === 'string' && tableKey(c.style) === fk) {
-      c.style = to;
-      changed = true;
-    }
-    if (c.mtext && tableKey(c.mtext.style) === fk) {
-      c.mtext.style = to;
-      changed = true;
-    }
-    if (c.type === 'INSERT')
-      for (const a of c.attribs) {
-        if (tableKey(a.style) === fk) {
-          a.style = to;
-          changed = true;
-        }
-        if (a.mtext && tableKey(a.mtext.style) === fk) {
-          a.mtext.style = to;
-          changed = true;
-        }
-      }
-    return changed ? c : null;
+    const x = e as Styled;
+    let c: Styled | null = null;
+    if (typeof x.style === 'string' && tableKey(x.style) === fk) (c = { ...x }).style = to;
+    if (x.mtext && tableKey(x.mtext.style) === fk) (c ??= { ...x }).mtext = { ...x.mtext, style: to };
+    if (e.type === 'INSERT' && e.attribs.some((a) => tableKey(a.style) === fk || (a.mtext && tableKey(a.mtext.style) === fk)))
+      ((c ??= { ...x }) as InsertEntity).attribs = e.attribs.map((a) => {
+        const s = tableKey(a.style) === fk;
+        const m = !!a.mtext && tableKey(a.mtext.style) === fk;
+        if (!s && !m) return a;
+        const y = { ...a };
+        if (s) y.style = to;
+        if (m) y.mtext = { ...a.mtext!, style: to };
+        return y;
+      });
+    return c;
   };
   // 훑은 자리를 자리 짐작으로 단다(109차 — 핸들이 하나씩인 문서만, EditSession.scanHints. 판정은 바꿀 객체가 있을 때만)
   const hint = hintOnce(() => st.session.scanHints());

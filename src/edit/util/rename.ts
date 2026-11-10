@@ -3,11 +3,11 @@
  * 종류: 블록, 치수 스타일, 도면층, 선종류, 문자 스타일, 배치.
  * (뷰·UCS는 편집 세션에 그 표를 바꾸는 작업이 없어 아직 바꿀 수 없다.)
  */
-import type { CadDocument, DictionaryObject, DimStyle, Entity, GenericObject, HeaderValue, Layer, Layout, MLineStyleObject } from '../../core/model';
+import type { AttribEntity, CadDocument, DictionaryObject, DimStyle, Entity, GenericObject, HeaderValue, InsertEntity, Layer, Layout, MLineStyleObject, ViewportEntity } from '../../core/model';
 import { MODEL_SPACE, tableKey } from '../../core/model';
 import { pushAll } from '../../core/arrays';
 import type { EditOp, ScanHint } from '../session';
-import { cloneEntity, hintOnce, isLayoutBlock, modifyOp } from '../session';
+import { dropRawCopy, hintOnce, isLayoutBlock, modifyOp } from '../session';
 import { mapTableTextStyles } from '../table/entity';
 
 export type RenameKind = 'block' | 'dimStyle' | 'layer' | 'linetype' | 'textStyle' | 'layout';
@@ -124,24 +124,44 @@ export function renameProblem(doc: CadDocument, kind: RenameKind, oldName: strin
 const same = (a: string | undefined, k: string) => typeof a === 'string' && tableKey(a) === k;
 
 /**
+ * 객체 하나의 이름 고치기: 바꿀 것이 없으면 null, 있으면 고친 사본. 사본은 바뀌는 칸만 새 객체이고 나머지 칸은 원본과 함께 쓴다(110차 —
+ * session.ts dropRawCopy). 전에는 모든 객체를 깊이 복사(cloneEntity)한 뒤 고칠 것이 있는지 보아, 객체 42만 개 도면의 -RENAME 도면층에서
+ * 변경 만들기 CPU 약 300ms 가운데 240~251ms가 그 복사였다. 고친 값과 칸 차례는 깊은 복사를 고치던 때와 같다(워커 묶음·지문·되돌리기가 같다)
+ */
+type Fix = (e: Entity) => Entity | null;
+
+/**
  * 블록마다 객체를 고쳐 modify 작업을 만든다(fix가 null이면 그대로). hint면 훑은 자리를 자리 짐작으로 단다
  * (109차 — EditSession.scanHints: 핸들이 하나씩인 문서만. 적용이 큰 블록의 자리 표를 만들지 않게)
  */
-function entityOps(doc: CadDocument, fix: (c: Entity) => boolean, hint: ScanHint): EditOp[] {
+function entityOps(doc: CadDocument, fix: Fix, hint: ScanHint): EditOp[] {
   const ops: EditOp[] = [];
   const useHint = hintOnce(hint);
   for (const [bk, b] of doc.blocks) {
     const list = b.entities;
     for (let i = 0; i < list.length; i++) {
       const e = list[i]!;
-      const c = cloneEntity(e);
-      if (!fix(c)) continue;
-      delete c.dwgRaw;
-      if (c.type === 'INSERT') for (const a of c.attribs) delete a.dwgRaw;
+      const c = fix(e);
+      if (!c) continue;
+      dropRawCopy(c, e);
       ops.push(modifyOp(bk, e, c, useHint() ? i : undefined));
     }
   }
   return ops;
+}
+
+/** 블록 참조의 속성 가운데 fix가 고친 것(얕은 사본)만 바꾼 새 목록. 고친 것이 없으면 null */
+function mapAttribs(e: Entity, fix: (a: AttribEntity) => AttribEntity | null): AttribEntity[] | null {
+  if (e.type !== 'INSERT') return null;
+  const from = e.attribs;
+  let out: AttribEntity[] | null = null;
+  for (let i = 0; i < from.length; i++) {
+    const x = fix(from[i]!);
+    if (!x) continue;
+    out ??= from.slice();
+    out[i] = x;
+  }
+  return out;
 }
 
 function headerOps(doc: CadDocument, names: string[], k: string, newName: string): EditOp[] {
@@ -185,23 +205,13 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
       delete (after as { dwgRaw?: unknown }).dwgRaw;
       pushAll(
         ops,
-        entityOps(doc, (c) => {
-          let hit = false;
-          if (same(c.layer, k)) {
-            c.layer = newName;
-            hit = true;
-          }
-          if (c.type === 'INSERT')
-            for (const a of c.attribs)
-              if (same(a.layer, k)) {
-                a.layer = newName;
-                hit = true;
-              }
-          if (c.type === 'VIEWPORT' && c.frozenLayers.some((l) => same(l, k))) {
-            c.frozenLayers = c.frozenLayers.map((l) => (same(l, k) ? newName : l));
-            hit = true;
-          }
-          return hit;
+        entityOps(doc, (e) => {
+          let c: Entity | null = null;
+          if (same(e.layer, k)) (c = { ...e }).layer = newName;
+          const at = mapAttribs(e, (a) => (same(a.layer, k) ? { ...a, layer: newName } : null));
+          if (at) ((c ??= { ...e }) as InsertEntity).attribs = at;
+          if (e.type === 'VIEWPORT' && e.frozenLayers.some((l) => same(l, k))) ((c ??= { ...e }) as ViewportEntity).frozenLayers = e.frozenLayers.map((l) => (same(l, k) ? newName : l));
+          return c;
         }, hint),
       );
       for (const [bk, b] of doc.blocks) if (same(b.layer, k)) ops.push({ kind: 'blockDef', key: bk, before: b, after: { ...b, layer: newName } });
@@ -214,19 +224,12 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
       const before = doc.linetypes.get(k)!;
       pushAll(
         ops,
-        entityOps(doc, (c) => {
-          let hit = false;
-          if (same(c.linetype, k)) {
-            c.linetype = newName;
-            hit = true;
-          }
-          if (c.type === 'INSERT')
-            for (const a of c.attribs)
-              if (same(a.linetype, k)) {
-                a.linetype = newName;
-                hit = true;
-              }
-          return hit;
+        entityOps(doc, (e) => {
+          let c: Entity | null = null;
+          if (same(e.linetype, k)) (c = { ...e }).linetype = newName;
+          const at = mapAttribs(e, (a) => (same(a.linetype, k) ? { ...a, linetype: newName } : null));
+          if (at) ((c ??= { ...e }) as InsertEntity).attribs = at;
+          return c;
         }, hint),
       );
       for (const [lk, l] of doc.layers) if (same(l.linetype, k)) ops.push({ kind: 'layer', key: lk, before: l, after: { ...l, linetype: newName } });
@@ -247,37 +250,30 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
       const before = doc.textStyles.get(k)!;
       pushAll(
         ops,
-        entityOps(doc, (c) => {
-          let hit = false;
-          const t = c as { style?: string };
-          if ((c.type === 'TEXT' || c.type === 'MTEXT' || c.type === 'ATTRIB' || c.type === 'ATTDEF') && same(t.style, k)) {
-            t.style = newName;
-            hit = true;
-          }
-          const am = (c as { mtext?: { style: string } }).mtext;
-          if ((c.type === 'ATTRIB' || c.type === 'ATTDEF') && am && same(am.style, k)) {
-            am.style = newName;
-            hit = true;
-          }
-          if (c.type === 'INSERT')
-            for (const a of c.attribs) {
-              if (same(a.style, k)) {
-                a.style = newName;
-                hit = true;
-              }
-              if (a.mtext && same(a.mtext.style, k)) {
-                a.mtext.style = newName;
-                hit = true;
-              }
-            }
-          // 33차: 표 셀의 문자 스타일 재지정(확장 자료)과 AutoCAD 표 원본 태그의 문자 스타일(7)
-          const tm = mapTableTextStyles(c, (n) => (same(n, k) ? newName : n));
+        entityOps(doc, (e) => {
+          let c: Entity | null = null;
+          type Styled = { style?: string; mtext?: { style: string } };
+          if ((e.type === 'TEXT' || e.type === 'MTEXT' || e.type === 'ATTRIB' || e.type === 'ATTDEF') && same((e as Styled).style, k)) ((c = { ...e }) as Styled).style = newName;
+          const am = (e as Styled).mtext;
+          if ((e.type === 'ATTRIB' || e.type === 'ATTDEF') && am && same(am.style, k)) ((c ??= { ...e }) as Styled).mtext = { ...am, style: newName };
+          const at = mapAttribs(e, (a) => {
+            const s = same(a.style, k);
+            const m = !!a.mtext && same(a.mtext.style, k);
+            if (!s && !m) return null;
+            const x = { ...a };
+            if (s) x.style = newName;
+            if (m) x.mtext = { ...a.mtext!, style: newName };
+            return x;
+          });
+          if (at) ((c ??= { ...e }) as InsertEntity).attribs = at;
+          // 33차: 표 셀의 문자 스타일 재지정(확장 자료)과 AutoCAD 표 원본 태그의 문자 스타일(7). 확장 자료·원본 태그만 읽고 새 값을 만든다
+          const tm = mapTableTextStyles(e, (n) => (same(n, k) ? newName : n));
           if (tm) {
-            c.xdata = tm.xdata;
-            if (c.type === 'ACAD_TABLE' && tm.type === 'ACAD_TABLE') c.raw = tm.raw;
-            hit = true;
+            const x = (c ??= { ...e });
+            x.xdata = tm.xdata;
+            if (x.type === 'ACAD_TABLE' && tm.type === 'ACAD_TABLE') x.raw = tm.raw;
           }
-          return hit;
+          return c;
         }, hint),
       );
       ops.push(...dimStyleVarOps(doc, ['DIMTXSTY'], k, newName));
@@ -305,13 +301,7 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
       const map = new Map(family);
       pushAll(
         ops,
-        entityOps(doc, (c) => {
-          if ((c.type === 'DIMENSION' || c.type === 'LEADER' || c.type === 'TOLERANCE') && map.has(tableKey(c.dimStyle))) {
-            c.dimStyle = map.get(tableKey(c.dimStyle))!;
-            return true;
-          }
-          return false;
-        }, hint),
+        entityOps(doc, (e) => ((e.type === 'DIMENSION' || e.type === 'LEADER' || e.type === 'TOLERANCE') && map.has(tableKey(e.dimStyle)) ? { ...e, dimStyle: map.get(tableKey(e.dimStyle))! } : null), hint),
       );
       for (const [ok, nn] of family) {
         const before = doc.dimStyles.get(ok)!;
@@ -327,13 +317,7 @@ export function renameOps(doc: CadDocument, kind: RenameKind, oldName: string, n
       const def = doc.blocks.get(k)!;
       pushAll(
         ops,
-        entityOps(doc, (c) => {
-          if (c.type === 'INSERT' && same(c.block, k)) {
-            c.block = newName;
-            return true;
-          }
-          return false;
-        }, hint).filter((o) => !(o.kind === 'modify' && o.block === k)),
+        entityOps(doc, (e) => (e.type === 'INSERT' && same(e.block, k) ? { ...e, block: newName } : null), hint).filter((o) => !(o.kind === 'modify' && o.block === k)),
       );
       ops.push(...dimStyleVarOps(doc, ['DIMBLK', 'DIMBLK1', 'DIMBLK2', 'DIMLDRBLK'], k, newName));
       const rec = doc.blockRecords.get(k);
