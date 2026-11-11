@@ -180,6 +180,13 @@ describe('언어 사전 동음이의(자르기·명령 취소)', () => {
     expect([de['작업 세트'], ja['작업 세트'], zh['작업 세트']]).toEqual(['Arbeitssatz', '作業セット', '工作集']);
     expect(de[ref]).toContain('Arbeitssatz');
     expect(zh[ref]).toContain('在位编辑');
+    // SELECTIONCYCLING 도움말: en Selection Cycling, de Auswahlwechsel, zh 选择循环
+    const cyc = ['선택 순환', '선택 순환 — {0}개 겹침', '선택 순환 목록을 쓰지 않습니다.'];
+    for (const k of cyc) {
+      expect(en[k]).toMatch(/selection cycling/i);
+      expect(de[k]).toContain('Auswahlwechsel');
+      expect(zh[k]).toContain('选择循环');
+    }
   });
 
   it('XCLIP·IMAGECLIP의 자르기는 클립(Crop·Cut·トリミング이 아니다)', () => {
