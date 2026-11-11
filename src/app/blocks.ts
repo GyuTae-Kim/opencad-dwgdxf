@@ -5,6 +5,8 @@ import type { AttribEntity, BlockDef, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { cloneEntity } from '../edit/session';
 import { isDynamicDefinition } from '../edit/dynblock';
+import { ScaleIndex, attribHeightK, factorOf } from '../edit/annoscale';
+import { scaleForSpace } from './annoscale-core';
 import type { App, CommandContext } from './app';
 import { ask, form } from './ui/dom';
 import { ft } from './filetext';
@@ -28,11 +30,16 @@ function insertTransform(b: BlockDef, ins: Vec3, scale: Vec3, rot: number): (p: 
   };
 }
 
-/** 블록 정의의 속성 정의(ATTDEF)로 블록 참조의 속성(ATTRIB)을 만든다 */
+/**
+ * 블록 정의의 속성 정의(ATTDEF)로 블록 참조의 속성(ATTRIB)을 만든다.
+ * 속성은 정의의 확장 사전·반응자를 갖지 않는다(119차 — 예전에는 정의의 필드·주석 축척 사전을 함께 가리켰다).
+ * 주석 속성 정의(주석이 아닌 블록)는 높이 = 용지 높이 × 지금 공간의 주석 축척 × |Y 축척|(축척 레코드는 확정 고리 — annoscale-core.ts)
+ */
 export function makeAttribs(app: App, b: BlockDef, ins: Vec3, scale: Vec3, rot: number, values: Map<string, string>, insertHandle: string): AttribEntity[] {
   const st = app.active!;
   const tf = insertTransform(b, ins, scale, rot);
   const out: AttribEntity[] = [];
+  let heightK: ((d: AttribEntity) => number) | null = null;
   for (const e of b.entities) {
     if (e.type !== 'ATTDEF') continue;
     const d = e as AttribEntity;
@@ -41,9 +48,15 @@ export function makeAttribs(app: App, b: BlockDef, ins: Vec3, scale: Vec3, rot: 
     a.type = 'ATTRIB';
     a.handle = st.session.newHandle();
     a.owner = insertHandle;
+    delete a.xdict;
+    delete a.reactors;
     a.insert = tf(d.insert);
     if (d.alignPoint) a.alignPoint = tf(d.alignPoint);
-    a.height = d.height * Math.abs(scale.y);
+    if ((d.xdata || d.xdict) && !heightK) {
+      const s = scaleForSpace(app, st, st.space);
+      heightK = attribHeightK(st.doc, b, new ScaleIndex(st.doc), s ? factorOf(s) : undefined);
+    }
+    a.height = d.height * Math.abs(scale.y) * (heightK?.(d) ?? 1);
     a.rotation = d.rotation + rot;
     a.text = values.get(d.tag) ?? d.text;
     a.prompt = undefined;

@@ -8,3 +8,4 @@ export * from './edit';
 export * from './view';
 export * from './used';
 export * from './textscale';
+export * from './attrib';

@@ -64,6 +64,7 @@ import { ft } from '../../app/filetext';
 import { type AnnoState, type ScaleIndex, type Similarity, annoKindOf, annoState, representation, scaleLines, scaleMLeader, simApply } from './represent';
 import { type AnnoScale, changed, dictOf, factorOf, newDict, pendingObject, upper } from './scales';
 import { annotativeFlag, blockAnnotative, dimStyleAnnotative, mleaderStyleAnnotative, ownRecord, textStyleAnnotative, withAnnotativeFlag, withOwnRecord } from './xdata';
+import { attAnno } from './attrib';
 
 export interface EditEnv {
   doc: CadDocument;
@@ -962,6 +963,59 @@ export function followEdit(env: EditEnv, before: Entity, after: Entity): Edited 
     return { entity: after, ops };
   }
   return { entity: after, ops };
+}
+
+/** 주석이 아닌 블록 참조에 주석 속성(레코드를 다룰 수 있는 한 줄 속성)이 있는지 — 확정 고리가 먼저 거르는 값싼 검사 */
+export function hasPlainAnnoAttribs(doc: CadDocument, e: Entity): e is InsertEntity {
+  if (e.type !== 'INSERT' || !e.attribs.length) return false;
+  if (!e.attribs.some((a) => !a.mtext && (a.xdict || annotativeFlag(a.xdata) === true))) return false;
+  return !blockAnnotative(doc, e.block) && annotativeFlag(e.xdata) !== true;
+}
+
+/**
+ * 주석이 아닌 블록 참조의 주석 속성(119차, attrib.ts). 주석 블록의 참조는 블록을 따른다(followEdit·writeFirstRecords).
+ * - 레코드가 없는 주석 속성(새로 넣은 참조·복사본·동기화로 새로 생긴 속성): 지금 데이터(크기 그대로)로 축척 scaleName의 레코드를 준다.
+ * - 자기 레코드가 있는 속성: 편집(이동·회전·축척·동기화)을 따라 보이는 축척의 레코드는 after의 데이터로, 다른 축척은
+ *   before → after의 닮음 변환으로 옮긴다. before는 같은 핸들의 속성. 자리·높이·회전·자리맞추기가 같으면 그대로.
+ */
+export function followPlainAttribs(env: EditEnv, before: InsertEntity | null, after: InsertEntity, scaleName: string | undefined): Edited {
+  const ops: EditOp[] = [];
+  let list: AttribEntity[] | null = null;
+  const ver = classVersion(env.doc);
+  after.attribs.forEach((a, i) => {
+    if (a.mtext) return;
+    // 다른 객체의 사전을 가리키는 속성(예전 빌드가 속성 정의의 사전을 함께 가리키게 저장한 것)은 건드리지 않는다
+    if (a.xdict && upper(dictOf(env.doc, a.xdict)?.owner) !== upper(a.handle)) return;
+    const st = attAnno(env.doc, a, env.idx);
+    if (!st.annotative) return;
+    if (!st.records.length) {
+      const s = scaleName ? env.idx.name(scaleName) : undefined;
+      if (!s?.handle) return;
+      const ac = ensureChain(env.doc, a, env.alloc, ops);
+      addRecordOps(env.doc, ac.scales, CLASS_ATTRIB, textRecordRaw(ver, true, upper(s.handle), textFieldsOf(a), true), env.alloc, ops);
+      if (ac.newXdict) {
+        list ??= after.attribs.slice();
+        list[i] = { ...a, xdict: ac.newXdict };
+      }
+      return;
+    }
+    const b = before?.attribs.find((x) => x.handle === a.handle);
+    if (!b || b === a || upper(b.xdict) !== upper(a.xdict)) return;
+    const fa = textFieldsOf(a);
+    const fb = textFieldsOf(b);
+    if (a.height === b.height && JSON.stringify(fa) === JSON.stringify(fb)) return;
+    const cur = st.records.find((r) => r.isDefault) ?? st.records[0]!;
+    const sim = similarityBetween(b, a);
+    for (const r of st.records) {
+      if (r === cur) {
+        rewriteRecordOps(env.doc, r, textRecordRaw(ver, r.isDefault, upper(r.scale), fa, true), ops);
+        continue;
+      }
+      const f = sim ? textFields(r) : null;
+      if (sim && f && !f.multiline) rewriteRecordOps(env.doc, r, textRecordRaw(ver, r.isDefault, upper(r.scale), moveTextRecord(f, sim), true), ops);
+    }
+  });
+  return { entity: list ? { ...after, attribs: list } : after, ops };
 }
 
 /**

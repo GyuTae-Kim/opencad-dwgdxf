@@ -16,6 +16,8 @@ import { transformEntity } from '../geom/transform';
 import { type Affine, affInv, affMul, affRotate, affScale, affTranslate } from '../geom/math';
 import { allocBlockName } from '../geom/types';
 import { attribValues, buildAttribs } from '../util/blockutil';
+import { attribHeightK, spaceAnnoFactor } from '../annoscale/attrib';
+import { ScaleIndex } from '../annoscale/represent';
 import { BTAG_APP, ETAG_APP, readDefinition } from './definition';
 import type { DynEval } from './evaluate';
 import { type DynRef, definitionKeyOfInsert, readCache, readReference, splitRecord } from './reference';
@@ -510,7 +512,8 @@ export function buildResetOps(doc: CadDocument, ins: InsertEntity, newHandle: ()
   const reuse = new Map<string, string>();
   for (const a of ins.attribs) if (a.handle && !reuse.has(a.tag.toUpperCase())) reuse.set(a.tag.toUpperCase(), a.handle);
   if (ins.attribs.length) {
-    const rebuilt = buildAttribs(ref.defBlock, ins, attribValues(ins), newHandle, reuse);
+    const idx = new ScaleIndex(doc);
+    const rebuilt = buildAttribs(ref.defBlock, ins, attribValues(ins), newHandle, reuse, { old: ins.attribs, heightK: attribHeightK(doc, ref.defBlock, idx, spaceAnnoFactor(doc, owner, idx)) });
     // 정의에 없는 태그의 속성은 그대로 둔다
     const tags = new Set(rebuilt.map((a) => a.tag.toUpperCase()));
     after.attribs = [...rebuilt, ...ins.attribs.filter((a) => !tags.has(a.tag.toUpperCase())).map((a) => cloneEntity(a))];

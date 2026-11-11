@@ -22,7 +22,9 @@ import {
   withAttdefs,
 } from '../edit/util/blockutil';
 import { buildWblockDocument, type WblockSource } from '../edit/util/wblock';
+import { ScaleIndex, attribHeightK, factorOf } from '../edit/annoscale';
 import type { App, CommandContext } from './app';
+import { scaleForSpace } from './annoscale-core';
 import { userBlocks } from './blocks';
 import { addEntities, currentProps } from './draw';
 import { baseName, download } from './export';
@@ -591,7 +593,8 @@ export function registerUtil2BlockCommands(app: App): void {
         rowSpacing: rowSp,
         attribs: [],
       };
-      e.attribs = buildAttribs(bd, e, values, () => st.session.newHandle());
+      const sc = scaleForSpace(app, st, st.space);
+      e.attribs = buildAttribs(bd, e, values, () => st.session.newHandle(), undefined, { heightK: attribHeightK(st.doc, bd, new ScaleIndex(st.doc), sc ? factorOf(sc) : undefined) });
       addEntities(app, ctx, [e], 'MINSERT');
       ctx.print(`블록 ${ft(bd.name)}을(를) ${rows}행 × ${cols}열로 넣었습니다.`);
     },
