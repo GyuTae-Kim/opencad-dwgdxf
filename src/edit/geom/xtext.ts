@@ -4,14 +4,14 @@
  * 문자 상자는 거울상 자리에 두고, 글자 방향은 원래 기준선과 가까운 쪽으로 뒤집지 않는다.
  */
 import type { AttribEntity, CadDocument, MTextEntity, ShapeEntity, TextEntity, ToleranceEntity, Vec2, Vec3 } from '../../core/model';
-import { tableKey } from '../../core/model';
+import { normalizeHandle, tableKey } from '../../core/model';
 import { TextEngine } from '../../text/layout';
 import { dimVars } from '../../app/inquiry';
 import { cloneEntity } from './path';
 import { type Affine, add, affApply, affApply3, affDet, affLin, affLin3, affMul, cross, cross3, dot, len, len3, mul, norm, norm3, normAngle, rot90, sub } from './math';
 import { frameOf, isNaturalExt, isPlanarExt, planProj, planZ, planeMap } from './ocs';
 import type { TransformOptions } from './types';
-import { scaleColumnXData } from '../util/mtextcols';
+import { columnGroupBoxes, scaleColumnXData } from '../util/mtextcols';
 
 let engine: TextEngine | null = null;
 
@@ -186,6 +186,11 @@ export function mtextLocalBox(e: MTextEntity, doc: CadDocument): { minX: number;
   return lay;
 }
 
+/** 대칭할 객체 가운데 묶음째 고른 여러 단 MTEXT의 묶음 전체 상자(`TransformOptions.columnBoxes`). 단은 단 폭으로 줄을 나눠 잰다 */
+export function mirrorColumnBoxes(doc: CadDocument, handles: readonly string[]): TransformOptions['columnBoxes'] {
+  return columnGroupBoxes(doc, handles, (m, width) => mtextLocalBox({ ...m, width }, doc));
+}
+
 export function xformMText(e: MTextEntity, m: Affine, opt: TransformOptions, doc: CadDocument): MTextEntity {
   const out = cloneEntity(e);
   const n = norm3(e.extrusion ?? { x: 0, y: 0, z: 1 });
@@ -219,7 +224,7 @@ export function xformMText(e: MTextEntity, m: Affine, opt: TransformOptions, doc
       const lx = len(Fx.gx);
       kx = lx / h0;
       ky = Math.abs(cross(Fx.gx, Fx.gy)) / (lx * h0);
-      const b = mtextLocalBox(e, doc);
+      const b = opt.columnBoxes?.get(normalizeHandle(e.handle)) ?? mtextLocalBox(e, doc);
       const cq = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
       const cw = affApply(m, add({ x: e.insert.x, y: e.insert.y }, add(mul(u, cq.x), mul(v, cq.y))));
       const du = norm(Fx.gx);

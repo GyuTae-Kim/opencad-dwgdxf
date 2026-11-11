@@ -5,7 +5,8 @@ import type { CadDocument, Entity, LineEntity } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
 import { type EditResult, copyEntity, transformEntity } from '../edit/geom';
-import type { Affine } from '../edit/geom/math';
+import { type Affine, affDet } from '../edit/geom/math';
+import { mirrorColumnBoxes } from '../edit/geom/xtext';
 import type { App, CommandContext, Keyword } from './app';
 import type { DocState } from './docstate';
 import { currentProps } from './draw';
@@ -114,10 +115,12 @@ export function transformList(st: DocState, hs: readonly string[], m: Affine, co
   const mirrorText = hnum(doc, '$MIRRTEXT', 0) === 1;
   const mirrorHatch = hnum(doc, '$MIRRHATCH', 0) === 1;
   const out: EditResult[] = [];
+  // ALIGN의 뒤집기 등 대칭이면 묶음째 고른 여러 단 MTEXT는 묶음 전체 상자로
+  const columnBoxes = affDet(m) < 0 ? mirrorColumnBoxes(doc, hs) : undefined;
   for (const h of hs) {
     const e = doc.entityIndex.get(h);
     if (!e) continue;
-    out.push(copy ? copyEntity(e, m, doc, { mirrorText, mirrorHatch }) : transformEntity(e, m, doc, { mirrorText, mirrorHatch }));
+    out.push(copy ? copyEntity(e, m, doc, { mirrorText, mirrorHatch, columnBoxes }) : transformEntity(e, m, doc, { mirrorText, mirrorHatch, columnBoxes }));
   }
   return out;
 }

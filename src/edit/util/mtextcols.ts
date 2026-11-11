@@ -465,6 +465,52 @@ export function columnLayoutFits(head: MTextEntity, members: readonly MTextEntit
   return true;
 }
 
+/**
+ * 고른 객체에 묶음의 첫 단과 다른 단이 모두 들어 있고 배치가 맞는 묶음마다: 단 핸들 → 묶음 전체 상자(그 단의 삽입점 기준 글자 좌표).
+ * 글자를 읽을 수 있게 두는 대칭은 글 상자를 거울상 자리에 두는데, R2018 꼴(객체 하나)은 묶음 전체가 한 상자이므로 단마다 객체인 꼴도 같은 상자로 옮겨야
+ * 단 차례가 그대로이고 저장하면 첫 단 자리에서 다시 뻗어 나가지 않는다. 일부만 고르거나 배치가 어긋나면 넣지 않는다(지금처럼 제 상자).
+ * measure는 단 폭으로 줄을 나눈 글 상자(단 삽입점 기준)를 돌려준다
+ */
+export function columnGroupBoxes(
+  doc: CadDocument,
+  handles: readonly string[],
+  measure: (m: MTextEntity, width: number) => { minX: number; minY: number; maxX: number; maxY: number },
+): Map<string, { minX: number; minY: number; maxX: number; maxY: number }> | undefined {
+  let out: Map<string, { minX: number; minY: number; maxX: number; maxY: number }> | undefined;
+  let selected: Set<string> | null = null;
+  for (const h of handles) {
+    const head = doc.entityIndex.get(h);
+    if (head?.type !== 'MTEXT' || !head.xdata) continue;
+    const c = readColumnXData(head);
+    if (!c?.links?.handles.length || !c.info) continue;
+    selected ??= new Set(handles.map(normalizeHandle));
+    if (!c.links.handles.every((x) => selected!.has(x))) continue;
+    const members = c.links.handles.map((x) => doc.entityIndex.get(x));
+    if (!members.every((m): m is MTextEntity => m?.type === 'MTEXT') || !columnLayoutFits(head, members, c.info)) continue;
+    const f = textFrame(head);
+    if (!f) continue;
+    const cols = [head, ...members];
+    const at = cols.map((m) => {
+      const d = sub3(m.insert, head.insert);
+      return { u: dot3(d, f.u), v: dot3(d, f.v) };
+    });
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    cols.forEach((m, i) => {
+      const b = measure(m, c.info!.width);
+      minX = Math.min(minX, b.minX + at[i]!.u);
+      maxX = Math.max(maxX, b.maxX + at[i]!.u);
+      minY = Math.min(minY, b.minY + at[i]!.v);
+      maxY = Math.max(maxY, b.maxY + at[i]!.v);
+    });
+    out ??= new Map();
+    cols.forEach((m, i) => out!.set(normalizeHandle(m.handle), { minX: minX - at[i]!.u, minY: minY - at[i]!.v, maxX: maxX - at[i]!.u, maxY: maxY - at[i]!.v }));
+  }
+  return out;
+}
+
 /** 단 목록의 핸들(1005)만 차례대로 바꾼 확장 자료(다른 항목은 그대로) */
 function relinked(xdata: readonly XData[], handles: readonly string[]): XData[] {
   let j = 0;
