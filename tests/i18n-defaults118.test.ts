@@ -101,6 +101,7 @@ describe('SCALETEXT·치수 스타일·GRID·주 뷰포트·가리기 프레임 
   it('치수 스타일 탭: 1차 단위·대체 단위(Primary·Alternate Units, Primär·Sekundäreinheiten, 基本·変換単位, 主·换算单位)', () => {
     expect(LANGS.map((l) => translate('1차 단위', l))).toEqual(['Primary Units', 'Primäreinheiten', '基本単位', '主单位']);
     expect(LANGS.map((l) => translate('대체 단위', l))).toEqual(['Alternate Units', 'Sekundäreinheiten', '変換単位', '换算单位']);
+    expect(LANGS.map((l) => translate('기호 및 화살표', l))).toEqual(['Symbols and Arrows', 'Symbole und Pfeile', 'シンボルと矢印', '符号和箭头']);
     for (const k of ['대체 단위 표시', '대체 단위 승수', '대체 단위 정밀도', '대체 단위 머리말·꼬리말([]가 값 자리)']) {
       expect(translate(k, 'ja')).toContain('変換単位');
       expect(translate(k, 'zh-CN')).toContain('换算单位');
