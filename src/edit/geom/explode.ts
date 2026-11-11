@@ -146,7 +146,7 @@ function regionCurves(e: AcisEntity): Entity[] | null {
     else if (c.k === 'ell') {
       if (Math.abs(c.u.z) > 1e-9 * Math.hypot(c.u.x, c.u.y) || Math.abs(c.v.z) > 1e-9 * Math.hypot(c.v.x, c.v.y)) return null;
       zs.push(c.c.z);
-    } else zs.push(...c.ctrl.map((p) => p.z));
+    } else for (const p of c.ctrl) zs.push(p.z); // 조정점 수는 곡선을 따른다(펼치지 않는다 — 111차)
   }
   const z = zs[0] ?? 0;
   if (zs.some((v) => Math.abs(v - z) > 1e-9 * Math.max(1, Math.abs(z)))) return null;
