@@ -116,6 +116,82 @@ describe('언어 사전 동음이의(자르기·명령 취소)', () => {
     expect(zh['자르기(T)']).toBe('修剪(T)');
   });
 
+  it('CLIP 리본 단추·명령 이름: 한국어 글은 TRIM과 같은 "자르기", 다른 언어는 CLIP 이름(116차)', async () => {
+    const { registerImageClipCommands } = await import('../src/app/imageclip');
+    const { translate } = await import('../site/i18n.mjs');
+    const titles = new Map<string, string>();
+    registerImageClipCommands({ register: (c: { name: string; title: string }) => titles.set(c.name, c.title) } as never);
+    const clip = titles.get('CLIP')!;
+    const ribbon = readFileSync(new URL('../src/app/ui/shell.ts', import.meta.url), 'utf8').match(/cmd: 'CLIP', label: '([^']*)'/)?.[1];
+    // 소스는 보이는 이스케이프로 쓴다(보이지 않는 글자를 그대로 두지 않는다) — 이스케이프를 글자로 풀어 견준다
+    const WJ = String.fromCodePoint(0x2060);
+    expect(ribbon).toBe(String.raw`자르기\u{2060}`);
+    expect(ribbon!.replace(String.raw`\u{2060}`, WJ)).toBe(clip);
+    // 화면 글은 보이지 않는 글자(U+2060) 하나만 다르다
+    expect(clip).not.toBe('자르기');
+    expect(clip).toBe('자르기' + WJ);
+    expect(readFileSync(new URL('../src/app/imageclip.ts', import.meta.url), 'utf8')).not.toContain(String.fromCharCode(0x2060));
+    expect(translate(clip, 'ko')).toBe(clip);
+    // Autodesk 도움말: en "Use the generic CLIP command to clip …", de ZUSCHNEIDEN (Befehl), ja CLIP[クリップ] (コマンド), zh 可使用常规 CLIP 命令剪裁…
+    expect(['en', 'de', 'ja', 'zh-CN'].map((l) => translate(clip, l))).toEqual(['Clip', 'Zuschneiden', 'クリップ', '剪裁']);
+    expect(['en', 'de', 'ja', 'zh-CN'].map((l) => translate('자르기', l))).toEqual(['Trim', 'Stutzen', 'トリム', '修剪']);
+    expect([en, de, ja, zh].map((d) => d[clip])).toEqual(['Clip', 'Zuschneiden', 'クリップ', '剪裁']);
+  });
+
+  it('쓰다: 소스에서 "사용"인 줄은 write로, "파일에 씀"인 줄은 use로 옮기지 않는다(116차)', () => {
+    const write = [/writ|wrote/i, /schreib|geschrieben/i, /書/, /写/];
+    const used = [/\bused?\b/i, /verwend/i, /使用/, /使用|改用|用作/];
+    const dicts = [en, de, ja, zh];
+    // 이름·명령·옵션·파일을 "쓰는"(사용) 줄 — 각 줄의 소스 자리: 계산기 단위, 필터·별칭·함수 이름 검사, 파일 이름 찾기, TEXTMASK, 이미지 부착 안내,
+    // SELECT 안내, 주석 축척 삭제, REFEDIT, LAYVPI, WBLOCK 블록 이름, 색상표, SELECTIONCYCLING, 외부 참조 목록, 블록 편집기 안 막기
+    const use = [
+      '"{0}"은(는) 기본 필터 이름이라 쓸 수 없습니다.',
+      '"{0}"은(는) 명령 이름이라 별칭으로 쓸 수 없습니다.',
+      '"{0}"은(는) 함수·상수·단위 이름이라 쓸 수 없습니다.',
+      '3D 면 가리기는 숨기기(HIDE) 표시가 필요해 이 웹 버전에서 쓸 수 없습니다. 가리기(W)나 솔리드(S)를 쓰십시오.',
+      '{0} × {1} 화소. 해상도 정보를 쓰지 않으므로 축척 1 = 폭 1 도면 단위입니다(AutoCAD와 같다).',
+      '{0}개를 선택했습니다. 다음 명령에서 이전(P)으로 쓸 수 있습니다.',
+      '{0}은(는) 주석 객체가 쓰고 있어 삭제할 수 없습니다.',
+      '{0}은(는) 주석 객체나 뷰포트가 쓰고 있어 삭제할 수 없습니다.',
+      '{0}을(를) 내부 편집합니다. 작업 세트 {1}개(나머지는 XFADECTL {2}%로 흐리게). 끝내려면 REFCLOSE 또는 띠의 "변경 사항 저장"·"변경 사항 취소"를 쓰십시오.',
+      '뷰포트에 들어간 모형 공간(MSPACE)에서 쓰십시오.',
+      '블록 이름 "{0}"을(를) 쓸 수 없거나 이미 있어 객체를 그대로 두었습니다.',
+      '블록 편집기에서는 쓸 수 없습니다.',
+      '색상표(색상 책)는 이 웹 버전에서 쓸 수 없습니다. 색 번호나 트루 컬러(T)를 쓰십시오.',
+      '선택 순환 목록을 쓰지 않습니다.',
+      '이 도면은 외부 파일을 쓰지 않습니다.',
+    ];
+    const bad: string[] = [];
+    for (const k of use) dicts.forEach((d, i) => {
+      if (!d[k]) bad.push(`${i}: 없음 ${k}`);
+      else if (write[i]!.test(d[k]!)) bad.push(`${i}: ${k} => ${d[k]}`);
+    });
+    // 저장(DWG·DXF 쓰기)의 경고 — 버전·ACIS 자료를 "쓸 수 없어 …로 썼다"
+    for (const k of ['ACIS 자료를 쓸 수 없어 ACIS 객체를 와이어(3D 폴리선)로 썼습니다.', '{0}은 쓸 수 없어 AC1015(R2000)로 썼습니다.', '{0}은 쓸 수 없어 AC1032(R2018)로 썼습니다.'])
+      dicts.forEach((d, i) => {
+        if (used[i]!.test(d[k]!) || !write[i]!.test(d[k]!)) bad.push(`${i}: ${k} => ${d[k]}`);
+      });
+    expect(bad).toEqual([]);
+    // 면(face)·띠(bar)·작업 세트 개수
+    expect(de['3D 면 가리기는 숨기기(HIDE) 표시가 필요해 이 웹 버전에서 쓸 수 없습니다. 가리기(W)나 솔리드(S)를 쓰십시오.']).toContain('3D-Flächen');
+    expect(zh['3D 면 가리기는 숨기기(HIDE) 표시가 필요해 이 웹 버전에서 쓸 수 없습니다. 가리기(W)나 솔리드(S)를 쓰십시오.']).toContain('三维面');
+    expect(zh['ACIS 자료를 쓸 수 없어 ACIS 객체를 와이어(3D 폴리선)로 썼습니다.']).not.toContain('电线');
+    const ref = use[8]!;
+    expect(en[ref]).toContain('{1} objects in the working set');
+    expect(zh[ref]).not.toContain('波段');
+    // REFSET 도움말: de Arbeitssatz·abgeblendet, ja 作業セット·暗く表示, zh 工作集·在位编辑·淡入显示
+    expect([de['작업 세트'], ja['작업 세트'], zh['작업 세트']]).toEqual(['Arbeitssatz', '作業セット', '工作集']);
+    expect(de[ref]).toContain('Arbeitssatz');
+    expect(zh[ref]).toContain('在位编辑');
+    // SELECTIONCYCLING 도움말: en Selection Cycling, de Auswahlwechsel, zh 选择循环
+    const cyc = ['선택 순환', '선택 순환 — {0}개 겹침', '선택 순환 목록을 쓰지 않습니다.'];
+    for (const k of cyc) {
+      expect(en[k]).toMatch(/selection cycling/i);
+      expect(de[k]).toContain('Auswahlwechsel');
+      expect(zh[k]).toContain('选择循环');
+    }
+  });
+
   it('XCLIP·IMAGECLIP의 자르기는 클립(Crop·Cut·トリミング이 아니다)', () => {
     const keys = ['반전 자르기', '반전 자르기(I)', '블록 자르기', '선택한 블록에 자르기 경계가 없습니다.'];
     expect(en['반전 자르기(I)']).toBe('Invert clip (I)');
