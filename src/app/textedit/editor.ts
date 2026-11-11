@@ -1134,7 +1134,8 @@ export class TextEditor {
           },
           { key: 'count', label: '열 수(정적)', type: 'number', value: c?.count ?? 2 },
           { key: 'height', label: '높이', type: 'number', value: +(c?.heights[0] ?? Math.max(p.height * 2, totalH / 2)).toFixed(4) },
-          { key: 'width', label: '열 폭', type: 'number', value: +(c?.width ?? (p.width || p.height * 20)).toFixed(4) },
+          // 여러 줄 문자 단의 폭(119차): 한국어 글은 표의 "열 폭"과 같아 끝에 보이지 않는 U+2060으로 사전 열쇠를 가른다(일본어 段の幅·중국어 栏宽 — 표는 列幅·列宽)
+          { key: 'width', label: '열 폭\u{2060}', type: 'number', value: +(c?.width ?? (p.width || p.height * 20)).toFixed(4) },
           { key: 'gutter', label: '거터', type: 'number', value: +(c?.gutter ?? gutter).toFixed(4) },
         ],
         { ok: '확인', validate: (x) => (Number(x.width) > 0 && Number(x.height) > 0 && Number(x.gutter) >= 0 && Number(x.count) >= 1 ? null : '값이 올바르지 않습니다.') },
