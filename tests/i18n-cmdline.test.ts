@@ -76,6 +76,35 @@ describe('명령행 DOM(jsdom) — 프롬프트 키워드와 기록 복사', () 
     expect(cmd.prompt).toBe('Delete layer [Yes/No] <No>:');
   });
 
+  it('CLIP과 TRIM의 같은 한국어 이름 "자르기"가 명령 권하기·리본 단추에서 각자 이름으로 옮겨진다(116차)', async () => {
+    const { registerImageClipCommands } = await import('../src/app/imageclip');
+    const titles = new Map<string, string>();
+    registerImageClipCommands({ register: (c: { name: string; title: string }) => titles.set(c.name, c.title) } as never);
+    const clip = titles.get('CLIP')!;
+    await setup('https://gyutae-kim.github.io/opencad-dwgdxf/de/');
+    const cmd = new CommandLine(document.getElementById('cmd')!, {
+      submit() {},
+      cancel() {},
+      suggest: () => [
+        { name: 'CLIP', title: clip },
+        { name: 'TR', title: 'TRIM · 자르기' },
+      ],
+      keyword() {},
+      repeat() {},
+    });
+    cmd.typeChar('C');
+    const ribbon = document.createElement('button');
+    ribbon.setAttribute('data-cmd', 'CLIP');
+    ribbon.append(clip);
+    const trim = document.createElement('button');
+    trim.setAttribute('data-cmd', 'TRIM');
+    trim.append('자르기');
+    document.getElementById('app')!.append(ribbon, trim);
+    await tick();
+    expect([...document.querySelectorAll('.cmd-suggest small')].map((s) => s.textContent)).toEqual(['Zuschneiden', 'TRIM · Stutzen']);
+    expect([ribbon.textContent, trim.textContent]).toEqual(['Zuschneiden', 'Stutzen']);
+  });
+
   it('기록 줄의 표시는 화면과 기록 복사에서 모두 빠진다', async () => {
     await setup('https://gyutae-kim.github.io/opencad-dwgdxf/en/');
     const cmd = new CommandLine(document.getElementById('cmd')!, { submit() {}, cancel() {}, suggest: () => [], keyword() {}, repeat() {} });
