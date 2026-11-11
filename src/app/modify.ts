@@ -34,6 +34,8 @@ import {
   trimEntity,
 } from '../edit/geom';
 import { entityPath } from '../edit/geom/path';
+import { affDet } from '../edit/geom/math';
+import { mirrorColumnBoxes } from '../edit/geom/xtext';
 import { associatedHatches, boundaryEntitiesOf, dissociate, reactorUnlinks, rebuildAssociative } from '../edit/hatch';
 import { pathLength } from '../edit/geom/curve';
 import { dimensionBlockOps } from './dimcmds';
@@ -626,7 +628,8 @@ function transformAll(st: DocState, hs: readonly string[], m: Affine, copy: bool
   const mirrorText = Number(doc.header.get('$MIRRTEXT') ?? 0) === 1;
   const mirrorHatch = Number(doc.header.get('$MIRRHATCH') ?? 0) === 1;
   // 치수 블록 내용은 commitResults가 블록을 다시 만들지 못할 때만 옮긴다
-  const opts = { mirrorText, mirrorHatch, deferDimBlocks: true };
+  // 대칭이면 묶음째 고른 여러 단 MTEXT는 묶음 전체 상자로
+  const opts = { mirrorText, mirrorHatch, deferDimBlocks: true, columnBoxes: affDet(m) < 0 ? mirrorColumnBoxes(doc, hs) : undefined };
   const out: EditResult[] = [];
   for (const h of hs) {
     const e = doc.entityIndex.get(h);

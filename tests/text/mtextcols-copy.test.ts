@@ -120,11 +120,12 @@ describe('여러 단 MTEXT 묶음의 복사본', () => {
     }
   });
 
-  it('대칭 복사: 여러 줄 문자는 글자를 읽을 수 있게 두어 단마다 제 상자로 뒤집히므로(단 차례가 어긋난다) 사본을 잇지 않는다', async () => {
+  it('대칭 복사: 글자를 읽을 수 있게 둔 사본도 묶음 전체 상자로 옮겨 단 차례가 그대로이고 새 단끼리 잇는다(113차)', async () => {
     const h = harness();
     await run(h, [['MIRROR', [{ sel: ['A0', 'A1', 'A2'] }, '-10,0', '-10,10', 'N']]]);
-    expect(groups(h.doc).size).toBe(1);
-    expect(model(h.doc).filter((e) => e.type === 'MTEXT' && !e.xdata).length).toBe(3);
+    expect(groups(h.doc).size).toBe(2);
+    const { head, members } = newGroup(h.doc);
+    expect(members.map((m) => m.insert.x - head.insert.x)).toEqual([25, 50]);
   });
 
   it('회전·축척한 복사본도 묶음이다(단 폭·간격·정한 높이가 축척을 따른다)', async () => {

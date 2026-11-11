@@ -37,6 +37,11 @@ export interface TransformOptions {
    * 다시 만들지 못한 치수의 블록만 fillDeferredBlock으로 채운다
    */
   deferDimBlocks?: boolean;
+  /**
+   * 내부용(글자를 읽을 수 있게 두는 대칭): 여러 단 MTEXT 묶음을 통째로 옮길 때 단 핸들 → 묶음 전체 상자(그 단 삽입점 기준 글자 좌표).
+   * 있으면 제 상자 대신 이 상자를 거울상 자리에 둬 단 차례가 뒤집히지 않는다(R2018 꼴 객체 하나와 같은 결과)
+   */
+  columnBoxes?: ReadonlyMap<string, { minX: number; minY: number; maxX: number; maxY: number }>;
 }
 
 export const MSG = {
