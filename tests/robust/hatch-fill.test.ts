@@ -762,9 +762,9 @@ describe('변을 함께 쓰는 고리의 포함 판정(94차)', () => {
       const top = [outer, topHole].map((l) => rotate(l, deg, 5, 5));
       expect([...loopNesting(top)!.depth]).toEqual([0, 1]);
       expect(loopNesting(top)!.holesOf[0]).toEqual([1]);
+      // earcut은 바깥 고리와 변을 통째로 함께 쓰는 구멍을 돌린 꼴에서 덮기도 해 넓이 검사에 걸린다 — 겹친 변을 지워 맞춘다(112차)
+      expectEvenOdd(top, triangulateLoops(top), 100 - 24);
     }
-    // earcut은 바깥 고리와 변을 통째로 함께 쓰는 구멍을 돌린 꼴에서 덮기도 해(넓이 검사에 걸린다) 돌리지 않은 꼴만 영역을 본다
-    expectEvenOdd([outer, topHole], triangulateLoops([outer, topHole]), 100 - 24);
   });
 
   it('벽돌 쌓기와 바둑판(고리 16개 넘게 — 상자 격자·변 훑기·찾기 훑기)도 모두 채우고 세 길의 깊이·구멍이 기준 식과 같다', () => {
@@ -806,7 +806,22 @@ describe('변을 함께 쓰는 고리의 포함 판정(94차)', () => {
         expect([...got.depth]).toEqual(want.depth);
         expect(got.holesOf).toEqual(want.holesOf);
       }
-      expect(triangulateLoops(loops)).toEqual(before(loops));
+      const tr = triangulateLoops(loops);
+      const old = before(loops);
+      // 이 묶음에는 칸과 작은 사각형이 엇갈린 입력(모두 맞을 수는 없다)도 섞여 있다. 바뀐 꼴은 겹친 변을 지워 다시 채운 것(112차)뿐이고, 홀짝 영역에서 어긋난 점이 줄어야 한다
+      if (tr.length !== old.length || tr.some((v, i) => !Object.is(v, old[i]))) {
+        const [x0, y0, x1, y1] = boxOf(loops.flat());
+        const miss = (t: number[]): number => {
+          let c = 0;
+          for (let i = 0; i < 30; i++)
+            for (let j = 0; j < 30; j++) {
+              const [x, y] = [x0 + ((x1 - x0) * (i + 0.37)) / 30, y0 + ((y1 - y0) * (j + 0.41)) / 30];
+              if ((cover(t, x, y) === 1) !== evenOdd(loops, x, y)) c++;
+            }
+          return c;
+        };
+        expect(miss(tr)).toBeLessThan(miss(old));
+      }
     }
   });
 
@@ -867,9 +882,10 @@ const pairedBars = (deg: number): number[][] => {
 
 describe('칸 조각 안의 고리 포함 관계(95차)', () => {
   it('구멍이 64개 넘게 서로 덮어 칸으로 자르는 해치에서 바깥 변에 닿은 구멍이 칸 안에서도 구멍이다(예전 17·60·120·150·300도에서 넓이 +1~21%)', () => {
-    // [각도, 위쪽 변]: 앞 여섯은 예전에 칸 안에서 구멍이 채워졌고 뒤 넷은 예전에도 맞았다.
-    // 17도 위쪽·45도 위쪽·135도 위쪽·333도 아래쪽은 칸 안 earcut이 바깥 고리와 변을 함께 쓰는 구멍을 덮어(포함 관계는 맞고 넓이 검사에 걸린다) 아직 맞지 않는다
-    const cases: [number, boolean][] = [[17, false], [60, false], [120, true], [120, false], [150, false], [300, false], [0, true], [0, false], [90, true], [271, false]];
+    // [각도, 위쪽 변]: 앞 여섯은 예전에 칸 안에서 구멍이 채워졌고 그다음 넷은 예전에도 맞았다.
+    // 뒤 여덟은 칸 안 earcut이 바깥 고리와 변을 함께 쓰는 구멍을 덮어(포함 관계는 맞고 넓이 검사에 걸린다) 112차까지 넓이가 0.03~44% 많았다
+    const cases: [number, boolean][] = [[17, false], [60, false], [120, true], [120, false], [150, false], [300, false], [0, true], [0, false], [90, true], [271, false],
+      [17, true], [45, true], [135, true], [200, true], [300, true], [30, false], [333, false], [225, true]];
     for (const [deg, top] of cases) {
       const loops = touchBars(70, top, deg);
       // 맨 위 포함 관계(94차)는 막대 70개 모두 구멍이다
@@ -894,6 +910,120 @@ describe('칸 조각 안의 고리 포함 관계(95차)', () => {
     expect(w.limited).toBeFalsy();
     expect(t.length).toBeGreaterThan(0);
     expect(w.n).toBeLessThan(hatchFillWorkLimit(verts) / 2);
+  });
+});
+
+describe('바깥 고리와 변을 함께 쓰는 구멍(112차)', () => {
+  const degs = [0, 0.19, 17, 30, 45, 60, 90, 120, 135, 150, 180, 200, 225, 271, 300, 333];
+  const outer = [0, 0, 10, 0, 10, 10, 0, 10];
+  const turned = (loops: number[][], deg: number): number[][] => loops.map((l) => rotate(l, deg, 5, 5));
+  /** 고리 묶음을 돌린 꼴마다 채워 넓이·점 표본을 보고, 넓이 검사에 걸린 각도 수를 돌려준다 */
+  const allAngles = (loops: number[][], want: number): number => {
+    let caught = 0;
+    for (const deg of degs) {
+      const L = turned(loops, deg);
+      const w: LoopWork = { n: 0 };
+      expectEvenOdd(L, triangulateLoops(L, w), want);
+      if (w.mismatched) {
+        caught++;
+        expect(w.refilled).toBeGreaterThanOrEqual(1);
+      }
+    }
+    return caught;
+  };
+
+  it('막대 하나를 돌린 꼴의 넓이가 맞다(예전 0.19·300도 위쪽 +17%, 120도 아래쪽 +19%)', () => {
+    let caught = 0;
+    for (const top of [true, false])
+      for (const deg of degs) {
+        const L = touchBars(1, top, deg);
+        const w: LoopWork = { n: 0 };
+        expectRegion(L, triangulateLoops(L, w));
+        if (w.mismatched) caught++;
+      }
+    expect(caught).toBeGreaterThanOrEqual(10);
+  });
+
+  it('바깥 변에 닿은 네모 구멍을 돌린 꼴의 넓이가 맞다(예전 최대 +60%)', () => {
+    expect(allAngles([outer, [8, 10, 2, 10, 2, 6, 8, 6]], 76)).toBeGreaterThanOrEqual(7);
+    // 구멍을 반시계로 적어도 같다
+    allAngles([outer, [2, 10, 8, 10, 8, 6, 2, 6]], 76);
+  });
+
+  it('구멍이 바깥 고리를 둘로 가르면 두 쪽을 따로 채운다', () => {
+    allAngles([outer, [4, 0, 6, 0, 6, 10, 4, 10]], 80);
+  });
+
+  it('구멍끼리 변을 함께 쓰고 바깥 변에도 닿아도, 떨어진 구멍이 함께 있어도 맞다', () => {
+    allAngles([outer, [2, 0, 5, 0, 5, 4, 2, 4], [5, 0, 8, 0, 8, 4, 5, 4]], 100 - 24);
+    allAngles([outer, [2, 0, 5, 0, 5, 4, 2, 4], [5, 1, 8, 1, 8, 3, 5, 3]], 100 - 12 - 6);
+    allAngles([outer, [2, 0, 8, 0, 8, 4, 2, 4], [2, 6, 8, 6, 8, 8, 2, 8]], 100 - 24 - 12);
+  });
+
+  it('바깥 고리 변이나 구멍 변에 중간 정점이 있어도 맞다(겹친 변을 상대 정점에서 나눈다)', () => {
+    allAngles([[0, 0, 5, 0, 10, 0, 10, 10, 0, 10], [2, 0, 8, 0, 8, 4, 2, 4]], 76);
+    allAngles([outer, [2, 0, 4, 0, 8, 0, 8, 4, 2, 4]], 76);
+    // 닫힘 정점을 한 번 더 적어도
+    const closed = (l: number[]): number[] => [...l, l[0]!, l[1]!];
+    allAngles([closed(outer), closed([2, 0, 8, 0, 8, 4, 2, 4])], 76);
+  });
+
+  it('정점이 바깥 고리 꼭짓점에 닿은 구멍(구석을 덜어 낸 꼴)도 맞다', () => {
+    allAngles([outer, [0, 0, 4, 0, 4, 4, 0, 4]], 84);
+    allAngles([outer, [6, 6, 10, 6, 10, 10, 6, 10]], 84);
+  });
+
+  it('좌표가 커도(가운데 100만 + 돌림) 넓이가 맞는다', () => {
+    for (const deg of degs) {
+      const L = turned([outer, [8, 10, 2, 10, 2, 6, 8, 6]], deg).map((l) => l.map((v, i) => v + (i % 2 ? 2e6 : 1e6)));
+      expect(Math.abs(area(triangulateLoops(L)) - 76) / 76).toBeLessThan(1e-6);
+    }
+  });
+
+  it('무작위 볼록 바깥 고리와 변 일부를 함께 쓰는 구멍(영역이 원래 홀짝 영역과 같다)', () => {
+    let seed = 1120;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    let caught = 0;
+    for (let t = 0; t < 300; t++) {
+      const n = 3 + Math.floor(rnd() * 10);
+      const r = 1 + rnd() * 99;
+      const a0 = rnd() * 7;
+      const out: number[] = [];
+      for (let i = 0; i < n; i++) out.push(r * Math.cos(a0 + (i / n) * 2 * Math.PI), r * Math.sin(a0 + (i / n) * 2 * Math.PI));
+      // 변 하나의 안쪽 구간을 밑변으로 안쪽으로 튀어나온 사다리꼴(볼록이라 바깥 고리 안)
+      const e = Math.floor(rnd() * n);
+      const [ax, ay, bx, by] = [out[e * 2]!, out[e * 2 + 1]!, out[((e + 1) % n) * 2]!, out[((e + 1) % n) * 2 + 1]!];
+      const [t0, t1] = [0.1 + rnd() * 0.3, 0.6 + rnd() * 0.3];
+      const pt = (s: number): [number, number] => [ax + (bx - ax) * s, ay + (by - ay) * s];
+      const k = 0.3 + rnd() * 0.5;
+      const near = ([x, y]: [number, number]): [number, number] => [x * (1 - k), y * (1 - k)];
+      const [p0, p1] = [pt(t0), pt(t1)];
+      const hole = [...p1, ...p0, ...near(p0), ...near(p1)];
+      const loops = [out, hole];
+      const w: LoopWork = { n: 0 };
+      const tris = triangulateLoops(loops, w);
+      if (w.mismatched) caught++;
+      expectRegion(loops, tris);
+    }
+    expect(caught).toBeGreaterThan(0);
+  });
+
+  it('겹친 변이 없는 꼴은 지금까지와 같다(지울 변이 없으면 예전 길)', () => {
+    for (const loops of [gridHoles(6), rotatedGrid(12), [circle(40, 10)]]) expect(triangulateLoops(loops)).toEqual(triangulateLoops(loops.map((l) => [...l])));
+    // 넓이 검사에 걸렸지만 겹친 변이 없는 꼴: 칸으로 다시 채운 결과 그대로
+    const loops = rotatedGrid(22);
+    const w: LoopWork = { n: 0 };
+    expectRegion(loops, triangulateLoops(loops, w));
+    expect(w.refilled).toBeGreaterThanOrEqual(1);
+  });
+
+  it('겹친 변을 지우는 일은 입력 크기에 묶인다(구멍이 많아도 몫 안에서 멈추고 earcut 결과로 돌아간다)', () => {
+    const big = touchBars(400, true, 17);
+    const verts = big.reduce((a, l) => a + (l.length >> 1), 0);
+    const w: LoopWork = { n: 0, limit: hatchFillWorkLimit(verts) };
+    const t = within2s(() => triangulateLoops(big, w));
+    expect(t.length).toBeGreaterThan(0);
+    expect(w.limited).toBeFalsy();
   });
 });
 

@@ -1397,9 +1397,10 @@ export function triangulateLoops(loops: number[][], work?: LoopWork): number[] {
  * split이면 구멍이 STRIP_HOLES개 넘는 바깥 고리와 구멍 상자가 서로 겹쳐 덮는 바깥 고리(wrapped)를 칸으로 나눠 채운다(칸 하나를 채울 때는 나누지 않는다).
  * cap은 지금 채우는 칸의 정점 수 상한이다(넓이 검사에 걸리면 이보다 작은 칸으로 다시 채운다).
  * 맞닿은 고리 찾기(94차)는 맨 위(split)에서만 한다: 칸 조각(cellFill)마다 찾으면 기운 막대 4,000개의 채우기 일이 2,380만에서 7,550만으로 늘어 한도를 넘었다.
- * 칸 조각(hole이 있으면 — cellFill이 자른 바깥 고리 하나와 그 구멍들)은 고리가 원래 역할을 물려받는다(cellNesting, 95차)
+ * 칸 조각(hole이 있으면 — cellFill이 자른 바깥 고리 하나와 그 구멍들)은 고리가 원래 역할을 물려받는다(cellNesting, 95차).
+ * merge가 거짓이면 넓이 검사에 걸려도 겹친 변을 다시 지우지 않는다(이미 지운 고리를 채울 때 — 112차)
  */
-function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined, split: boolean, cap = Infinity, hole?: ReadonlySet<readonly number[]>): boolean {
+function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined, split: boolean, cap = Infinity, hole?: ReadonlySet<readonly number[]>, merge = true): boolean {
   const nest = hole ? cellNesting(loops, hole, work) : loopNesting(loops, work, 'auto', split);
   if (!nest) return false;
   const { depth, holesOf } = nest;
@@ -1419,7 +1420,7 @@ function fillLoops(loops: number[][], out: number[], work: LoopWork | undefined,
       starts.push(flat.length / 2);
       pushAll(flat, loops[j]!);
     }
-    if (!earcutFill(flat, starts, out, work, cap)) return false;
+    if (!earcutFill(flat, starts, out, work, cap, merge)) return false;
   }
   return true;
 }
@@ -1448,9 +1449,10 @@ function wrapped(outer: readonly number[], holes: readonly (readonly number[])[]
 
 /**
  * earcut 한 번과 넓이 검사(일 = 정점 수 + 구멍 수의 제곱 + 검사의 정점 수 + 삼각형 수 상한 — 삼각형은 정점 수 + 구멍 수 × 2개를 넘지 않는다).
- * 검사에 걸리면(fillMismatch) 정점이 cap보다 적은 칸으로 잘라 다시 채우고(refill), 그 넓이가 맞을 때만 바꾼다. 아니면 earcut 결과 그대로
+ * 검사에 걸리면(fillMismatch) 정점이 cap보다 적은 칸으로 잘라 다시 채우고(refill), 안 되면 고리끼리 겹친 변을 지워 다시 잇고 채운다(mergeShared — 112차).
+ * 그 넓이가 맞을 때만 바꾼다. 아니면 earcut 결과 그대로
  */
-function earcutFill(flat: number[], holes: number[], out: number[], work?: LoopWork, cap = Infinity): boolean {
+function earcutFill(flat: number[], holes: number[], out: number[], work?: LoopWork, cap = Infinity, merge = true): boolean {
   const n = flat.length >> 1;
   const cost = n + holes.length * holes.length + 2 * (n + holes.length);
   if (over(work, cost)) return false;
@@ -1459,7 +1461,13 @@ function earcutFill(flat: number[], holes: number[], out: number[], work?: LoopW
   const want = fillMismatch(flat, holes, idx);
   if (want) {
     if (work) work.mismatched = (work.mismatched ?? 0) + 1;
-    if (refill(flat, holes, want, out, work, Math.min(cap, CELL_VERTS, n) >> 1)) {
+    const c = Math.min(cap, CELL_VERTS, n) >> 1;
+    const cells = (ls: number[][], pieces: number[], sub: LoopWork): boolean => c >= REFILL_MIN && cellFill(ls, pieces, sub, c) === 'ok';
+    const merged = (ls: number[][], pieces: number[], sub: LoopWork): boolean => {
+      const rings = mergeShared(ls, sub);
+      return !!rings && fillLoops(rings, pieces, sub, false, cap, undefined, false);
+    };
+    if (refill(flat, holes, want, out, work, cells) || (merge && refill(flat, holes, want, out, work, merged))) {
       if (work) work.refilled = (work.refilled ?? 0) + 1;
       return true;
     }
@@ -1524,28 +1532,232 @@ function fillMismatch(flat: readonly number[], holes: readonly number[], idx: re
 }
 
 /**
- * 넓이 검사에 걸린 바깥 고리와 구멍(earcut 입력)을 정점 cap개 이하 칸으로 잘라(cellFill) 다시 채운다. 칸마다 다시 넓이를 검사하고(걸리면 더 작은 칸으로 —
+ * 넓이 검사에 걸린 바깥 고리와 구멍(earcut 입력)을 다시 채운다(fill: 칸으로 자르기 또는 겹친 변 지우기). 칸마다 다시 넓이를 검사하고(걸리면 더 작은 칸으로 —
  * cap이 반씩 줄어 끝난다), 다시 채운 넓이가 홀짝 넓이와 맞으면 out에 더하고 true.
- * cap이 REFILL_MIN보다 작거나, 넓이가 여전히 다르거나(고리가 스스로 엇갈리거나 구멍끼리 겹쳐 홀짝 넓이가 신발끈 식과 다른 꼴), 좌표가 너무 크거나,
+ * 칸 cap이 REFILL_MIN보다 작거나, 넓이가 여전히 다르거나(고리가 스스로 엇갈리거나 구멍끼리 겹쳐 홀짝 넓이가 신발끈 식과 다른 꼴), 좌표가 너무 크거나,
  * 일 몫(정점 수 × REFILL_WORK와 남은 한도 가운데 작은 것) 안에서 끝나지 않으면 false(부른 쪽이 earcut 결과를 쓴다 — 예전과 같다). 든 일은 work에 더한다
  */
-function refill(flat: readonly number[], holes: readonly number[], [want, box]: [number, number], out: number[], work: LoopWork | undefined, cap: number): boolean {
-  if (cap < REFILL_MIN) return false;
+function refill(flat: readonly number[], holes: readonly number[], [want, box]: [number, number], out: number[], work: LoopWork | undefined, fill: (loops: number[][], pieces: number[], sub: LoopWork) => boolean): boolean {
   const budget = REFILL_WORK * (flat.length >> 1);
   const sub: LoopWork = { n: 0, limit: work?.limit === undefined ? budget : Math.min(budget, work.limit - work.n) };
   if (sub.limit! <= 0) return false;
   const loops: number[][] = [];
   for (let k = 0; k <= holes.length; k++) loops.push(flat.slice(k ? holes[k - 1]! * 2 : 0, k < holes.length ? holes[k]! * 2 : flat.length));
   const pieces: number[] = [];
-  const r = cellFill(loops, pieces, sub, cap);
+  const ok = fill(loops, pieces, sub);
   if (work) {
     work.n += sub.n;
     if (sub.mismatched) work.mismatched = (work.mismatched ?? 0) + sub.mismatched;
     if (sub.refilled) work.refilled = (work.refilled ?? 0) + sub.refilled;
   }
-  if (r !== 'ok' || !(Math.abs(trisArea(pieces) - want) <= areaTol(want, flat.length >> 1, pieces.length / 6, box))) return false;
+  if (!ok || !(Math.abs(trisArea(pieces) - want) <= areaTol(want, flat.length >> 1, pieces.length / 6, box))) return false;
   pushAll(out, pieces);
   return true;
+}
+
+/** 방향 (dx, dy)·길이 L인 직선의 두 점(상대 좌표)이 여유 tol 넘게 서로 반대쪽인지 */
+function apart(dx: number, dy: number, ax: number, ay: number, bx: number, by: number, L: number, tol: number): boolean {
+  const a = (dx * ay - dy * ax) / L;
+  const b = (dx * by - dy * bx) / L;
+  return (a > tol && b < -tol) || (a < -tol && b > tol);
+}
+
+/**
+ * 고리들의 겹친 변을 지우고 남은 변을 다시 이은 고리(112차). loops는 [바깥 고리, 구멍…]이다.
+ * earcut은 구멍을 다리로 바깥 고리에 잇는데, 구멍이 바깥 고리와 변 일부를 함께 쓰면 잇는 자리의 변이 겹쳐 돌린 꼴에서 구멍을 덮는다(막대 하나 +17%).
+ * 칸으로 잘라도 조각마다 함께 쓰는 변이 남아 맞지 않는다. 그런데 바깥 고리를 반시계, 구멍을 시계로 놓으면 영역이 늘 진행 방향 왼쪽이고,
+ * 함께 쓰는 부분은 양쪽 모두 영역 밖이라 두 변이 서로 반대 방향이다. 그 부분을 빼고 남은 변을 이으면 구멍은 바깥 고리의 오목한 자리가 되어 같은 영역의 경계가 된다
+ * (구멍끼리 함께 쓰는 변도 같아 구멍 둘이 하나로 합쳐진다. 구멍 하나가 바깥 고리를 둘로 가르면 고리가 둘 나온다).
+ * 정점끼리는 여유(TOUCH_REL × 좌표 크기) 안이면 같은 점으로 보고, 변 위에 놓인 상대 정점에서 변을 나눠 나뉜 끝이 정확히 같은 수가 되게 한다(돌린 꼴의 반올림 차이).
+ * 정점이 여러 변을 낳으면 들어온 변을 뒤집은 방향에서 시계 방향으로 처음 만나는 변으로 나간다(영역을 왼쪽에 둔 채 가장 작은 고리 — 한 점에서만 닿은 고리가 엉키지 않는다).
+ * 변을 작은 x 순으로 훑어 상자가 겹치는 쌍만 본다. 겹친 변이 없거나, 서로 가로지르는 변이 있거나, 좌표가 safe가 아니거나, 고리를 닫지 못하거나, 일이 몫을 넘으면 null(부른 쪽의 넓이 검사가 마지막 안전장치다)
+ */
+function mergeShared(loops: readonly number[][], w: LoopWork): number[][] | null {
+  const stop = w.limit ?? Infinity;
+  let total = 0;
+  for (const l of loops) {
+    if (l.length < 6 || l.length % 2) return null;
+    total += l.length >> 1;
+  }
+  w.n += total;
+  const xs = new Float64Array(total);
+  const ys = new Float64Array(total);
+  /** 정점 i에서 나가는 변의 끝 정점 */
+  const next = new Int32Array(total);
+  let p = 0;
+  let m = 0;
+  for (let k = 0; k < loops.length; k++) {
+    const l = loops[k]!;
+    const n = l.length >> 1;
+    let a = 0;
+    for (let i = 0, j = l.length - 2; i < l.length; j = i, i += 2) a += (l[j]! - l[0]!) * (l[i + 1]! - l[1]!) - (l[i]! - l[0]!) * (l[j + 1]! - l[1]!);
+    const flip = k === 0 ? a < 0 : a > 0;
+    for (let i = 0; i < n; i++) {
+      const v = flip ? n - 1 - i : i;
+      const x = l[v * 2]!;
+      const y = l[v * 2 + 1]!;
+      if (!safe(x) || !safe(y)) return null;
+      m = Math.max(m, Math.abs(x) + Math.abs(y));
+      xs[p + i] = x;
+      ys[p + i] = y;
+      next[p + i] = p + ((i + 1) % n);
+    }
+    p += n;
+  }
+  const tol = 2 * TOUCH_REL * m;
+  const root = new Int32Array(total);
+  for (let i = 0; i < total; i++) root[i] = i;
+  const find = (v: number): number => {
+    while (root[v] !== v) v = root[v] = root[root[v]!]!;
+    return v;
+  };
+  /** 작은 번호(바깥 고리 쪽)를 대표로 둔다 — 대표 좌표를 정점 좌표로 쓴다 */
+  const unite = (a: number, b: number): void => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra < rb) root[rb] = ra;
+    else root[ra] = rb;
+  };
+  const len = new Float64Array(total);
+  const edges: number[] = [];
+  for (let i = 0; i < total; i++) {
+    const L = Math.hypot(xs[next[i]!]! - xs[i]!, ys[next[i]!]! - ys[i]!);
+    len[i] = L;
+    if (L > tol) edges.push(i);
+    else unite(i, next[i]!);
+  }
+  const lowX = (i: number): number => Math.min(xs[i]!, xs[next[i]!]!);
+  edges.sort((a, b) => lowX(a) - lowX(b));
+  /** 변마다 나눌 자리 [변 시작에서 거리, 정점] */
+  const cuts = new Map<number, [number, number][]>();
+  const cut = (e: number, v: number, t: number): void => {
+    if (t < -tol || t > len[e]! + tol) return;
+    if (t <= tol) unite(v, e);
+    else if (t >= len[e]! - tol) unite(v, next[e]!);
+    else {
+      let c = cuts.get(e);
+      if (!c) cuts.set(e, (c = []));
+      c.push([t, v]);
+    }
+  };
+  let shared = 0;
+  for (let a = 0; a < edges.length; a++) {
+    const i = edges[a]!;
+    const ni = next[i]!;
+    const reach = Math.max(xs[i]!, xs[ni]!) + tol;
+    const y0 = Math.min(ys[i]!, ys[ni]!) - tol;
+    const y1 = Math.max(ys[i]!, ys[ni]!) + tol;
+    const ix = xs[ni]! - xs[i]!;
+    const iy = ys[ni]! - ys[i]!;
+    for (let b = a + 1; b < edges.length; b++) {
+      const j = edges[b]!;
+      if (lowX(j) > reach) break;
+      if (++w.n > stop) return null;
+      const nj = next[j]!;
+      if (Math.max(ys[j]!, ys[nj]!) < y0 || Math.min(ys[j]!, ys[nj]!) > y1) continue;
+      const jx = xs[nj]! - xs[j]!;
+      const jy = ys[nj]! - ys[j]!;
+      // 두 변이 서로를 가로지르면 엇갈린 고리다(홀짝 넓이가 신발끈 식과 달라 지워도 맞지 않는다 — 예전 그대로)
+      if (apart(ix, iy, xs[j]! - xs[i]!, ys[j]! - ys[i]!, xs[nj]! - xs[i]!, ys[nj]! - ys[i]!, len[i]!, tol) && apart(jx, jy, xs[i]! - xs[j]!, ys[i]! - ys[j]!, xs[ni]! - xs[j]!, ys[ni]! - ys[j]!, len[j]!, tol)) return null;
+      if (ix * jx + iy * jy >= 0) continue;
+      const [l, s] = len[i]! >= len[j]! ? [i, j] : [j, i];
+      const ns = next[s]!;
+      const L = len[l]!;
+      const ux = (xs[next[l]!]! - xs[l]!) / L;
+      const uy = (ys[next[l]!]! - ys[l]!) / L;
+      const sx = xs[s]! - xs[l]!;
+      const sy = ys[s]! - ys[l]!;
+      const ex = xs[ns]! - xs[l]!;
+      const ey = ys[ns]! - ys[l]!;
+      if (Math.abs(sx * uy - sy * ux) > tol || Math.abs(ex * uy - ey * ux) > tol) continue;
+      const t0 = sx * ux + sy * uy;
+      const t1 = ex * ux + ey * uy;
+      if (Math.min(L, Math.max(t0, t1)) - Math.max(0, Math.min(t0, t1)) <= tol) continue;
+      shared++;
+      cut(l, s, t0);
+      cut(l, ns, t1);
+      // 짧은 변은 긴 변과 반대 방향이라 긴 변의 자리 q는 짧은 변의 자리 t0 - q다
+      cut(s, l, t0);
+      cut(s, next[l]!, t0 - L);
+    }
+  }
+  if (!shared) return null;
+  // 나눈 변(from → to)을 만들며 반대 방향 짝을 지운다
+  const from: number[] = [];
+  const to: number[] = [];
+  const dead: number[] = [];
+  const open = new Map<number, number[]>();
+  const add = (u: number, v: number): void => {
+    if (u === v) return;
+    const back = open.get(v * total + u);
+    if (back && back.length) {
+      dead[back.pop()!] = 1;
+      return;
+    }
+    let mine = open.get(u * total + v);
+    if (!mine) open.set(u * total + v, (mine = []));
+    mine.push(from.length);
+    from.push(u);
+    to.push(v);
+    dead.push(0);
+  };
+  for (const e of edges) {
+    let at = find(e);
+    const c = cuts.get(e);
+    if (c) {
+      c.sort((q, r) => q[0] - r[0]);
+      for (const [, v] of c) {
+        const fv = find(v);
+        add(at, fv);
+        at = fv;
+      }
+    }
+    add(at, find(next[e]!));
+  }
+  w.n += from.length;
+  if (w.n > stop) return null;
+  const out = new Map<number, number[]>();
+  for (let e = 0; e < from.length; e++) {
+    if (dead[e]) continue;
+    let o = out.get(from[e]!);
+    if (!o) out.set(from[e]!, (o = []));
+    o.push(e);
+  }
+  /** e 다음 변: 끝 정점에서 나가는 변이 여럿이면 e를 뒤집은 방향에서 시계 방향으로 처음 만나는 변 */
+  const after = (e: number): number => {
+    const v = to[e]!;
+    const o = out.get(v);
+    if (!o) return -1;
+    if (o.length === 1) return o[0]!;
+    const back = Math.atan2(ys[from[e]!]! - ys[v]!, xs[from[e]!]! - xs[v]!);
+    let best = -1;
+    let turn = Infinity;
+    for (const f of o) {
+      let d = back - Math.atan2(ys[to[f]!]! - ys[v]!, xs[to[f]!]! - xs[v]!);
+      if (d <= 0) d += 2 * Math.PI;
+      if (d < turn) {
+        turn = d;
+        best = f;
+      }
+    }
+    return best;
+  };
+  const rings: number[][] = [];
+  const used = new Uint8Array(from.length);
+  for (let start = 0; start < from.length; start++) {
+    if (dead[start] || used[start]) continue;
+    const ring: number[] = [];
+    let e = start;
+    do {
+      if (used[e]) return null;
+      used[e] = 1;
+      ring.push(xs[from[e]!]!, ys[from[e]!]!);
+      e = after(e);
+      if (e < 0) return null;
+    } while (e !== start);
+    if (ring.length >= 6) rings.push(ring);
+  }
+  return rings;
 }
 
 /**
