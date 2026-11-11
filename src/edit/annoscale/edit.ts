@@ -517,10 +517,21 @@ export function adoptRecords(env: EditEnv, e: Entity, scaleName: string): Edited
 }
 
 /**
+ * ANNOUPDATE가 주석이 아닌 문자를 주석 스타일대로 주석으로 바꿀 때의 크기 배율(119차, Autodesk ANNOUPDATE 도움말):
+ * 문자 스타일에 고정 용지 높이가 있으면 그 높이(그려지는 높이 = 용지 높이 × 축척 배율 f), 0이면 크기 그대로(용지 높이 = 모형 높이 ÷ f).
+ * 예전에는 makeAnnotative처럼 늘 지금 크기를 용지 크기로 보아 f배로 키웠다(1:50이면 50배).
+ */
+export function annoUpdateScale(doc: CadDocument, e: TextEntity | MTextEntity, f: number): number {
+  const sh = doc.textStyles.get(tableKey(e.style))?.height ?? 0;
+  return sh > 0 && e.height > 0 && f > 0 ? (sh * f) / e.height : 1;
+}
+
+/**
  * 주석으로: 지금 크기가 용지 크기가 되고 모형 크기는 그 축척의 배율만큼 커진다(상태 = 그 축척 하나).
  * 블록 참조는 주석 블록일 때만(새로 넣은 참조). 이미 주석이면 그대로.
+ * opt.k: TEXT·MTEXT의 크기 배율을 따로 준다(ANNOUPDATE — annoUpdateScale)
  */
-export function makeAnnotative(env: EditEnv, e: Entity, scaleName: string, opt: { creating?: boolean } = {}): Edited {
+export function makeAnnotative(env: EditEnv, e: Entity, scaleName: string, opt: { creating?: boolean; k?: number } = {}): Edited {
   const ops: EditOp[] = [];
   const st = annoState(env.doc, e, env.idx);
   // 이미 주석이면 그대로(표지만 있고 레코드가 하나도 없는 것 — 새 주석 블록 참조 등 — 은 레코드를 만든다)
@@ -532,7 +543,7 @@ export function makeAnnotative(env: EditEnv, e: Entity, scaleName: string, opt: 
     case 'TEXT':
     case 'MTEXT': {
       // 새로 만든 여러 줄 문자의 폭은 모형에서 그린 사각형이므로 높이만 키운다
-      const sc: Entity = opt.creating && e.type === 'MTEXT' ? { ...e, height: e.height * f } : scaledInPlace(e, f);
+      const sc: Entity = opt.creating && e.type === 'MTEXT' ? { ...e, height: e.height * f } : scaledInPlace(e, opt.k ?? f);
       const out = writeFirstRecords(env, { ...sc, xdata: withAnnotativeFlag(sc.xdata, true) }, name, ops);
       return { entity: out, ops };
     }
