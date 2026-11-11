@@ -1,7 +1,7 @@
 /**
  * 113차: 글자를 읽을 수 있게 두는 대칭(MIRRTEXT 0)은 여러 단 MTEXT 묶음을 묶음 전체 상자로 옮긴다.
  * R2018 꼴(객체 하나)은 전부터 전체 상자로 뒤집혔고, R2000~R2013 꼴(단마다 객체)은 단마다 제 상자로 뒤집혀
- * 단 차례가 거꾸로 되고(읽는 차례가 틀림) R2018로 저장하면 첫 단이던 맨 오른쪽 자리에서 단이 다시 뻗어 나갔다.
+ * 단 차례가 거꾸로 되고(읽는 차례가 틀림) 다른 단이 묶음 상자 밖으로 나갔다. R2018로 합친 첫 단 자리도 첫 단 41이 전체 폭이 아니면 어긋났다.
  * 같은 글이 저장 형식에 따라 다르게 옮겨지면 안 되므로 묶음 전체 상자 기준으로 맞춘다.
  */
 import { describe, expect, it } from 'vitest';
@@ -120,6 +120,24 @@ describe('여러 단 MTEXT 묶음의 글자를 읽을 수 있게 두는 대칭',
     expect(saved[0]!.columns?.count).toBe(3);
     expect(saved[0]!.insert.x).toBeCloseTo(one.insert.x, 6);
     expect(saved[0]!.insert.y).toBeCloseTo(one.insert.y, 6);
+  });
+
+  it('R2018 저장: 첫 단 41이 단 폭이어도 합친 자리가 객체 하나를 대칭한 자리와 같다(예전에는 50 어긋났다)', async () => {
+    const make = () =>
+      makeDoc(0, 0, () => {
+        const g = columnGroup();
+        g[0]!.width = 20;
+        return g;
+      });
+    const h = harness(make);
+    const g0 = groupOf(h.doc, 'A0');
+    const merged = mergeColumnGroup(g0[0]!, readColumnXData(g0[0]!)!, g0.slice(1));
+    const one = transformEntity(merged, affMirror({ x: -10, y: 0 }, { x: -10, y: 10 }), h.doc, {}).replace![0] as MTextEntity;
+    await runWith(h, 'MIRROR', [{ sel: ['A0', 'A1', 'A2'] }, '-10,0', '-10,10', 'Y']);
+    const back = readDxf(writeDxf(h.doc, { version: 'AC1032' }).data);
+    const saved = back.blocks.get(MODEL_SPACE)!.entities.filter((e: Entity) => e.type === 'MTEXT') as MTextEntity[];
+    expect(saved.length).toBe(1);
+    expect(saved[0]!.insert.x).toBeCloseTo(one.insert.x, 6);
   });
 
   it('돌린 묶음을 기운 축으로 대칭해도 글자 방향으로 단 폭 + 간격씩이고 상자는 거울상 자리다', async () => {
