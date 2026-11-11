@@ -449,7 +449,7 @@ function textFrame(e: MTextEntity): { u: Vec3; v: Vec3 } | null {
 
 /**
  * 첫 단에서 다른 단이 단 폭 + 간격씩 문자 방향으로 늘어섰는지(AutoCAD가 쓴 묶음의 배치 — 짝 도면의 단 삽입점이 모두 이렇다).
- * 글자를 읽을 수 있게 둔 대칭 복사(단 차례가 뒤집힌다)처럼 어긋난 복사본은 잇지 않는다
+ * 묶음 일부만 대칭한 단처럼 어긋난 복사본은 잇지 않는다(묶음째 대칭하면 columnGroupBoxes로 단 차례가 그대로라 잇는다)
  */
 export function columnLayoutFits(head: MTextEntity, members: readonly MTextEntity[], info: MTextColumns | undefined): boolean {
   if (!info || !(info.width > 0)) return false;
