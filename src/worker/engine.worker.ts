@@ -45,7 +45,7 @@ const hiddenByDoc = new Map<number, ReadonlySet<string>>();
 const outOfSync = new Set<number>();
 /** 문서별로 이번 세션에 지운 치수의 *D 블록 열쇠(114차 — 저장할 때 아무도 쓰지 않는 것만 뺀다, edit/dim/savedrop.ts) */
 const erasedDims = new Map<number, Set<string>>();
-const OUT_OF_SYNC ='도면 처리 모듈의 문서를 다시 맞추는 중입니다. 잠시 뒤 다시 저장하십시오.';
+const OUT_OF_SYNC = '도면 처리 모듈의 문서를 다시 맞추는 중입니다. 잠시 뒤 다시 저장하십시오.';
 
 function makeScene(
   doc: CadDocument,
