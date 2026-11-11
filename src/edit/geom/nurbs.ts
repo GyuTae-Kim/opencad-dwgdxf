@@ -261,9 +261,83 @@ export function subNurbs(c: Nurbs, u0: number, u1: number): Nurbs {
 // 베지어 분해·차수 올리기·잇기
 // ---------------------------------------------------------------------------
 
-/** 고정 매듭 곡선을 베지어 조각(동차 좌표)으로 */
+/**
+ * 안쪽 매듭 무리의 [첫 번호, 마지막 번호](KEPS 안으로 같은 매듭은 한 무리). 정상 꼴이 아니면 null:
+ * 매듭이 줄지 않게 놓여 있고 정의역 길이가 있고, 무리마다 겹침이 차수 이하이며, 무리끼리·정의역 끝과 KEPS 넘게 떨어져야 한다
+ */
+function knotGroups(U: readonly number[], p: number, n: number): number[] | null {
+  const a = U[p]!;
+  const b = U[n + 1]!;
+  if (!(b > a)) return null;
+  for (let i = 1; i < U.length; i++) if (!(U[i]! >= U[i - 1]!)) return null;
+  const groups: number[] = [];
+  const near = (x: number, y: number): boolean => Math.abs(x - y) <= KEPS * Math.max(1, Math.abs(y));
+  let last = p;
+  let i = p + 1;
+  while (i <= n) {
+    const u = U[i]!;
+    if (near(u, a) || near(u, b) || near(u, U[last]!)) return null;
+    let j = i;
+    while (j < n && near(U[j + 1]!, u)) j++;
+    if (j - i + 1 > p) return null;
+    groups.push(i, j);
+    last = j;
+    i = j + 1;
+  }
+  return groups;
+}
+
+/**
+ * 고정 매듭 곡선을 베지어 조각(동차 좌표)으로. 안쪽 매듭 무리를 왼쪽부터 한 번 훑으며 조각 하나마다 조정점을 깎는다
+ * (The NURBS Book A5.6) — 일은 조각 수 × 차수의 제곱이다(112차: 매듭마다 insertKnot가 배열을 새로 만들어 조각 수의 제곱이었다. 조각 2만 개 수 초, 20만 개는 끝나지 않았다).
+ * 뜻이 애매한 매듭(겹침이 차수보다 많음·순서가 틀림·정의역 끝과 거의 같음)은 예전처럼 매듭마다 넣는다
+ */
 export function toBezier(c0: Nurbs): H[][] {
-  let c = clampNurbs(c0);
+  const c = clampNurbs(c0);
+  const p = c.degree;
+  const U = c.knots;
+  const groups = knotGroups(U, p, c.ctrl.length - 1);
+  if (!groups) return insertAll(c);
+  const Pw = homog(c);
+  const segs: H[][] = [];
+  const alphas = new Array<number>(p);
+  /** 지금 조각의 왼쪽 매듭 번호 */
+  let left = p;
+  /** 지금 조각: 앞 무리에서 물려받은 p - s개 뒤로 원래 조정점을 채워 둔다 */
+  let cur: H[] = Pw.slice(0, p + 1).map((h) => [...h] as H);
+  for (let g = 0; g < groups.length; g += 2) {
+    const first = groups[g]!;
+    const end = groups[g + 1]!;
+    const mult = end - first + 1;
+    const u = U[first]!;
+    const next: H[] = new Array(p + 1);
+    if (mult < p) {
+      const numer = u - U[left]!;
+      for (let j = p; j > mult; j--) alphas[j - mult - 1] = numer / (U[left + j]! - U[left]!);
+      const r = p - mult;
+      for (let j = 1; j <= r; j++) {
+        const s = mult + j;
+        for (let k = p; k >= s; k--) {
+          const t = alphas[k - s]!;
+          const q = cur[k]!;
+          const o = cur[k - 1]!;
+          cur[k] = [t * q[0] + (1 - t) * o[0], t * q[1] + (1 - t) * o[1], t * q[2] + (1 - t) * o[2], t * q[3] + (1 - t) * o[3]];
+        }
+        next[r - j] = [...cur[p]!] as H;
+      }
+    }
+    segs.push(cur);
+    for (let i = p - mult; i <= p; i++) next[i] = [...Pw[end - p + i]!] as H;
+    cur = next;
+    left = end;
+  }
+  segs.push(cur);
+  return segs;
+}
+
+/** 안쪽 매듭마다 차수만큼 넣어 p개씩 자른다(뜻이 애매한 매듭 — 매듭마다 배열을 새로 만들어 매듭 수의 제곱이다) */
+function insertAll(c0: Nurbs): H[][] {
+  let c = c0;
   const p = c.degree;
   const [a, b] = domain(c);
   const inner = [...new Set(c.knots.filter((k) => k > a && k < b))];

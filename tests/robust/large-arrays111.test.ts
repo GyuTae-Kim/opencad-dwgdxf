@@ -3,7 +3,7 @@
  * 111차: 110차가 펼침 호출을 고친 42곳 가운데 20만 개 꼴 시험이 없던 곳(large-arrays110.test.ts는 19곳만 시험했다)과
  * 그 차수에 남긴 ACIS 곡선 조정점 z 모으기, 쌓기 글자 풀기(decodeStack).
  * 고치기 전 꼴(push(...)·unshift(...)·Math.max(...)·String.fromCharCode(...))이면 인자가 Node 한도(약 15만 개)를 넘어 모두 RangeError로 죽는다.
- * 실제 길로 닿으면 실제 길로 재고, 앞 단계가 값비싼 곳(연관 치수 20만 개를 푸는 생성기, 조각 20만 개인 스플라인의 베지어 분해)만 그 앞 함수를 가짜로 바꾼다.
+ * 실제 길로 닿으면 실제 길로 재고, 앞 단계가 값비싼 곳(연관 치수 20만 개를 푸는 생성기)만 그 앞 함수를 가짜로 바꾼다.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +13,6 @@ const { fake, formAnswers } = vi.hoisted(() => ({
     extra: null as unknown[] | null,
     follow: null as { ops: unknown[]; patched: Map<string, unknown> } | null,
     dimBlock: null as unknown[] | null,
-    bezier: null as number[][][] | null,
   },
 }));
 vi.mock('../../src/app/ui/dom', async (orig) => ({
@@ -31,10 +30,6 @@ vi.mock('../../src/app/dimassoc', async (orig) => {
 vi.mock('../../src/app/dimcmds', async (orig) => {
   const m = await orig<typeof import('../../src/app/dimcmds')>();
   return { ...m, dimensionBlockOps: ((...a: Parameters<typeof m.dimensionBlockOps>) => fake.dimBlock ?? m.dimensionBlockOps(...a)) as typeof m.dimensionBlockOps };
-});
-vi.mock('../../src/edit/geom/nurbs', async (orig) => {
-  const m = await orig<typeof import('../../src/edit/geom/nurbs')>();
-  return { ...m, toBezier: ((c: Parameters<typeof m.toBezier>[0]) => fake.bezier ?? m.toBezier(c)) as typeof m.toBezier };
 });
 
 import type { AttribEntity, CadDocument, DictionaryObject, DimensionEntity, Entity, GenericObject, InsertEntity, LineEntity, RawTag, TableEntity } from '../../src/core/model';
@@ -77,7 +72,7 @@ const put = (doc: CadDocument, e: Entity, block = MODEL_SPACE) => {
 };
 
 afterEach(() => {
-  fake.extra = fake.follow = fake.dimBlock = fake.bezier = null;
+  fake.extra = fake.follow = fake.dimBlock = null;
   document.body.replaceChildren();
 });
 
@@ -291,12 +286,10 @@ describe('비교 서명·곡선(111차)', () => {
     expect(n.ctrl.length).toBe(N + 1);
   });
 
-  it('piecesNurbs: 조각 하나의 베지어 조각 20만 개', () => {
-    fake.bezier = Array.from({ length: N }, (_, i) => [
-      [i, 0, 0, 1],
-      [i + 1, 0, 0, 1],
-    ]);
-    expect(piecesNurbs([{ k: 'line', a: { x: 0, y: 0 }, b: { x: N, y: 0 } }])!.ctrl.length).toBe(N + 1);
+  it('piecesNurbs: 조각 하나의 베지어 조각 20만 개(3차 스플라인, 실제 분해 — 112차까지는 분해가 제곱이라 가짜를 썼다)', () => {
+    const inner = Array.from({ length: N - 1 }, (_, i) => i + 1);
+    const n: Nurbs = { degree: 3, knots: [0, 0, 0, 0, ...inner, N, N, N, N], ctrl: Array.from({ length: N + 3 }, (_, i) => P(i, Math.sin(i))) };
+    expect(piecesNurbs([{ k: 'nurbs', n, u0: 0, u1: N }])!.ctrl.length).toBe(3 * N + 1);
   });
 
   it('EXPLODE REGION: 조정점 20만 개인 곡선 모서리(z 모으기)', () => {
