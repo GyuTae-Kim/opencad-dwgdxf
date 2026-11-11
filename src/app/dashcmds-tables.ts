@@ -155,7 +155,11 @@ async function runDashPurge(app: App, ctx: CommandContext): Promise<void> {
     if (!keep.length) continue;
     // 수십만 개로 불어난 등록된 응용프로그램도 펼치지 않고 붙인다(110차)
     if (kind === 'regApps') pushAll(ops, purgeRegAppOps(doc, keep));
-    else pushAll(ops, purgeNamedOps(doc, named![kind].filter((it) => keep.includes(it.handle))));
+    else {
+      // 항목마다 목록을 훑지 않는다(111차 — 빈 그룹 20만 개면 비교만 200억 번이다)
+      const picked = new Set(keep);
+      pushAll(ops, purgeNamedOps(doc, named![kind].filter((it) => picked.has(it.handle))));
+    }
     ctx.print(`${noun} ${keep.length}개가 삭제되었습니다.`);
     total += keep.length;
   }

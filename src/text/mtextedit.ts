@@ -575,7 +575,8 @@ function serializeText(doc: RichDoc): string {
 
 /** 쌓기 원문(\로 이스케이프) → 보이는 글자 */
 export function decodeStack(raw: string): string {
-  return String.fromCodePoint(...decodePercent(raw.replace(/\\(.)/g, '$1')).filter((c) => c >= 0));
+  // 쌓기 글자 수는 문자 내용을 따른다(조각으로 나눠 푼다 — 111차)
+  return codePointsOf(decodePercent(raw.replace(/\\(.)/g, '$1')).filter((c) => c >= 0));
 }
 
 /** 보이는 글자 → 쌓기 원문(/ # ^ ; \ 는 \로) */
