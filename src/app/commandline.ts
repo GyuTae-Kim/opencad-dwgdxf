@@ -200,6 +200,7 @@ export class CommandLine {
     this.promptShown = text;
     for (const w of this.watchers) w.prompt?.(text);
     this.promptEl.textContent = '';
+    delete this.promptEl.dataset.kw;
     if (!text) {
       this.promptEl.hidden = true;
       this.input.placeholder = '명령 입력';
@@ -213,6 +214,8 @@ export class CommandLine {
       return;
     }
     const parts = m[2]!.split('/');
+    // 번역층이 뒤 글의 기본값(" <예>:")을 옵션 번역으로 옮기도록 옵션 목록을 남긴다(fileguard.ts defaultWord — 118차)
+    this.promptEl.dataset.kw = parts.map(unmark).join('/');
     // 글 마디(앞 글·키워드·/·뒤 글)마다 도면 글 표시(ft)를 닫고 다시 연다 — 번역층은 마디 단위로 지킨다
     const shown = balanceMarks([m[1] + '[', ...parts.flatMap((p, i) => (i < parts.length - 1 ? [p, '/'] : [p])), ']' + m[3]]);
     this.promptEl.append(document.createTextNode(shown[0]!));

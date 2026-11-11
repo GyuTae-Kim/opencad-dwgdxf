@@ -797,7 +797,8 @@ export function registerModify2Commands(app: App): void {
           return;
         }
         st.session.commit({ label: 'WIPEOUT', ops, group: ctx.group });
-        ctx.print(`가리기 프레임 = ${v === 0 ? '끄기' : v === 2 ? '표시하지만 플롯 안 함' : '켜기'}`);
+        // 끼운 값은 번역층이 옮기지 않아(틀 {0}) 줄마다 통째 글로 쓴다(118차)
+        ctx.print(v === 0 ? '가리기 프레임 = 끄기' : v === 2 ? '가리기 프레임 = 표시하지만 플롯 안 함' : '가리기 프레임 = 켜기');
         return;
       }
       if ('enter' in r || 'keyword' in r) {

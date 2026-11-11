@@ -27,6 +27,40 @@ const edge = (s: string, re: RegExp): string => s.match(re)?.[0] ?? '';
 const hangul = (s: string): number => s.match(/[가-힣]/g)?.length ?? 0;
 /** 프롬프트 본문 · 기본값 꼬리(" <값>:") · 기록 줄이면 뒤에 친 입력 */
 const TAIL = /^(.*?\S)(\s*<[^<>\n]*>:)([ \t][^\n]*)?$/;
+/** 본문의 옵션 목록([…]) */
+const OPTS = /\[([^[\]\n]*)\]/;
+/** 옵션 하나: 이름과 고를 글자("예(Y)" → 예, Y) */
+const OPT = /^(.*?\S)\s*\(([^()]+)\)$/;
+/** 번역 끝의 고를 글자("Yes (Y)"·"はい(Y)") */
+const OPT_KEY = /\s*[(（][A-Za-z0-9]{1,8}[)）]$/;
+
+/**
+ * 기본값이 옵션 이름인 꼬리(118차): "… [예(Y)/아니오(N)] <예>:"·"<켜기>"처럼 도우미가 옵션 이름을 기본값으로 끼우면
+ * 그 글이 네 언어 모두 한국어로 남았다(틀 {0}은 옮기지 않는다). 기본값이 옵션 목록의 이름(또는 옵션 그대로)과 같으면
+ * 그 옵션의 번역에서 고를 글자를 뗀 글로 옮긴다("Yes (Y)" → Yes, "ON"은 그대로) — 버튼에 보이는 옵션 번역과 같은 낱말이다.
+ * 옵션이 아닌 기본값(수·도면 글)이나 옵션 번역이 한국어로 남으면 null
+ */
+export function defaultWord(tail: string, opts: readonly string[], tr: (s: string) => string): { from: string; to: string } | null {
+  const m = /<([^<>\n]*)>/.exec(tail);
+  const want = m ? unmark(m[1]!).trim() : '';
+  if (!want || !hangul(want) || want !== m![1]) return null;
+  for (const o of opts) {
+    const p = unmark(o).trim();
+    const om = OPT.exec(p);
+    if (want !== p && want !== om?.[1]) continue;
+    const t = tr(p).trim();
+    if (!t || hangul(t)) return null;
+    const to = want === p ? t : t.replace(OPT_KEY, '').trim() || t;
+    return { from: want, to };
+  }
+  return null;
+}
+
+/** s의 마지막 <from>을 <to>로 */
+const swapDefault = (s: string, d: { from: string; to: string }): string => {
+  const i = s.lastIndexOf(`<${d.from}>`);
+  return i < 0 ? s : s.slice(0, i) + `<${d.to}>` + s.slice(i + d.from.length + 2);
+};
 
 /**
  * 기본값을 붙인 프롬프트(117차): 도우미가 "간격 거리 지정"에 " <1>:"을 붙이면 그 꼴의 사전 열쇠가 없어 일반 틀("{0} 입력 <{1}>:")에
@@ -42,6 +76,10 @@ export function translateTail(text: string, whole: string, tr: (s: string) => st
   const rest = m[3] ? unmark(m[3]) : '';
   // 기록 줄(프롬프트 + 친 입력)은 프롬프트 통째 열쇠를 먼저 본다
   const tries = m[3] ? [tr(body + tail) + rest, tr(body) + unmark(tail) + rest] : [tr(body) + unmark(tail)];
+  // 기본값이 옵션 이름이면 그 옵션의 번역으로(통째 번역의 문장을 먼저 — 118차)
+  const opts = OPTS.exec(unmark(body))?.[1]?.split('/');
+  const dw = opts ? defaultWord(tail, opts, tr) : null;
+  if (dw) tries.unshift(swapDefault(whole, dw), ...tries.map((c) => swapDefault(c, dw)));
   let best = whole;
   for (const c of tries) if (hangul(c) < hangul(best)) best = c;
   return best;
@@ -122,7 +160,14 @@ export function installFileGuard(src: NameSource): void {
     if (!log || language === 'ko') return r;
     // 명령행·휴대폰 카드의 기본값 붙은 프롬프트(117차): 통째 번역이 한국어를 남기면 본문만 옮긴다
     const whole = r ?? translate(text, language, ui);
-    const out = translateTail(text, whole, (s) => guardedTranslate(s, language, isName, ui) ?? translate(s, language, ui));
+    const tr = (s: string) => guardedTranslate(s, language, isName, ui) ?? translate(s, language, ui);
+    const out = translateTail(text, whole, tr);
+    // 명령행 프롬프트의 마지막 조각("] <예>:")은 옵션이 다른 마디라, 명령행이 적어 둔 옵션 목록(data-kw)으로 기본값을 옮긴다(118차)
+    const kw = el.getAttribute('data-kw');
+    if (kw && t.startsWith(']')) {
+      const dw = defaultWord(text, kw.split('/'), tr);
+      if (dw) return swapDefault(out, dw);
+    }
     return out === whole ? r : out;
   };
 }
