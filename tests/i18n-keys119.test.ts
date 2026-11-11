@@ -41,6 +41,19 @@ describe('맞춤 탭·단의 열 폭 열쇠', () => {
     expect(translate('열 설정', 'zh-CN')).toContain('栏');
   });
 
+  it('주석 축척·주석 객체는 Autodesk 낱말(주석 객체 축척 대화 상자: Beschriftungsobjekt-Maßstab·異尺度対応オブジェクトの尺度·注释性对象比例)', () => {
+    // 주석 축척을 Kommentarskala(주석 눈금)·评论评分(댓글 평점)로, 주석 객체를 コメント(댓글) 객체로 옮기던 줄
+    expect(LANGS.map((l) => translate('주석 축척', l))).toEqual(['Annotation scale', 'Beschriftungsmaßstab', '注釈尺度', '注释比例']);
+    expect(LANGS.map((l) => translate('주석 객체 축척', l))).toEqual(['Annotative Object Scale', 'Beschriftungsobjekt-Maßstab', '異尺度対応オブジェクトの尺度', '注释性对象比例']);
+    for (const k of ['주석 축척', '주석 축척 "{0}"을(를) 찾을 수 없습니다.', '주석 객체 축척', '{0}개는 주석 객체가 아닙니다.', '고른 객체 가운데 주석 객체가 없습니다.', '주석 블록 작성 [예(Y)/아니오(N)] <예>:', '주석 업데이트', '주석 위치 재설정']) {
+      expect(translate(k, 'de'), k).not.toMatch(/Kommentar|Anmerkung/);
+      expect(translate(k, 'ja'), k).not.toMatch(/コメント|注記/);
+      expect(translate(k, 'zh-CN'), k).not.toMatch(/评论|评分|相等|缩放/);
+    }
+    expect(translate('주석 문자 스타일을 작성하시겠습니까?', 'zh-CN')).toBe('是否创建注释性文字样式？');
+    expect(translate('주석 객체는 주석 축척마다 크기(용지 크기 × 축척)가 다른 표현을 가집니다', 'de')).not.toMatch(/Skala$/);
+  });
+
   it('명령행 옵션 이름(한국어 입력으로 고르는 글)은 가르지 않는다', () => {
     // 스플라인 메서드·MVIEW·복사 배열 맞춤 옵션은 그대로 "맞춤" — 한국어로 "맞춤"을 쳐서 고른다
     expect(src('app/draw.ts')).toContain(`{ key: 'F', label: '맞춤' }`);
