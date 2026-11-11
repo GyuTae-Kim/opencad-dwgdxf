@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { MODEL_SPACE, tableKey, type CadDocument, type DimensionEntity, type GenericObject } from '../../src/core/model';
+import { MODEL_SPACE, tableKey, type BlockDef, type CadDocument, type DimensionEntity, type GenericObject } from '../../src/core/model';
 import { dimensionBlockOps } from '../../src/app/dimcmds';
 import { registerDrawCommands } from '../../src/app/draw';
 import { registerModifyCommands } from '../../src/app/modify';
@@ -95,6 +95,103 @@ describe('지운 치수의 *D 블록(문서 함수)', () => {
     const out = withoutErasedDimBlocks(doc, new Set([tableKey(a!.block)]));
     expect(out.blocks.has(tableKey(a!.block))).toBe(false);
     expect(out.blocks.has(tableKey(b!.block))).toBe(true);
+  });
+});
+
+describe('지운 치수가 소유한 객체(115차)', () => {
+  /** 치수 하나에 확장 사전 → 관리자 사전 → 주석 축척 레코드를 달아 준다 */
+  const attach = (doc: CadDocument, dim: DimensionEntity, n: number) => {
+    const xdict = `AA${n}0`;
+    const mgr = `AA${n}1`;
+    const rec = `AA${n}2`;
+    dim.xdict = xdict;
+    const dict = (handle: string, owner: string, entries: [string, string][]) => ({ type: 'DICTIONARY', handle, owner, entries: new Map(entries), hardOwner: false, cloning: 1 }) as unknown as GenericObject;
+    doc.objects.set(xdict, dict(xdict, dim.handle, [['AcDbContextDataManager', mgr]]));
+    doc.objects.set(mgr, dict(mgr, xdict, [['*A1', rec]]));
+    doc.objects.set(rec, { type: 'ACDB_ALDIMOBJECTCONTEXTDATA_CLASS', handle: rec, owner: mgr, raw: [{ code: 2, value: dim.block }] } as unknown as GenericObject);
+    return [xdict, mgr, rec];
+  };
+  const erase = (doc: CadDocument, dim: DimensionEntity) => {
+    const list = doc.blocks.get(MODEL_SPACE)!.entities;
+    list.splice(list.indexOf(dim), 1);
+    doc.entityIndex.delete(dim.handle);
+  };
+
+  it('지운 치수의 확장 사전과 그 아래 레코드를 빼고, 그 레코드만 쓰던 블록도 뺀다', () => {
+    const doc = load();
+    const [a] = dimsOf(doc);
+    const handles = attach(doc, a!, 1);
+    const key = tableKey(a!.block);
+    const size = doc.objects.size;
+    erase(doc, a!);
+    const out = withoutErasedDimBlocks(doc, new Set([key]), new Set([a!.handle]));
+    for (const h of handles) expect(out.objects.has(h)).toBe(false);
+    expect(out.objects.size).toBe(size - 3);
+    expect(out.blocks.has(key)).toBe(false);
+    // 원래 문서는 그대로(명령 취소·OOPS가 쓴다)
+    for (const h of handles) expect(doc.objects.has(h)).toBe(true);
+    expect(doc.blocks.has(key)).toBe(true);
+  });
+
+  it('치수 핸들을 주지 않으면 레코드가 쓰는 블록은 전처럼 남긴다', () => {
+    const doc = load();
+    const [a] = dimsOf(doc);
+    attach(doc, a!, 2);
+    erase(doc, a!);
+    expect(withoutErasedDimBlocks(doc, new Set([tableKey(a!.block)]))).toBe(doc);
+  });
+
+  it('되살아난 치수의 객체와 블록은 빼지 않는다', () => {
+    const doc = load();
+    const [a] = dimsOf(doc);
+    const handles = attach(doc, a!, 3);
+    const out = withoutErasedDimBlocks(doc, new Set([tableKey(a!.block)]), new Set([a!.handle]));
+    expect(out).toBe(doc);
+    for (const h of handles) expect(out.objects.has(h)).toBe(true);
+  });
+
+  it('살아 있는 치수의 레코드가 같은 블록을 쓰면 블록은 남기고 지운 치수의 객체만 뺀다', () => {
+    const doc = load();
+    const [a, b] = dimsOf(doc);
+    const gone = attach(doc, a!, 4);
+    const kept = attach(doc, b!, 5);
+    (doc.objects.get(kept[2]!) as GenericObject).raw = [{ code: 2, value: a!.block }];
+    const key = tableKey(a!.block);
+    erase(doc, a!);
+    const out = withoutErasedDimBlocks(doc, new Set([key]), new Set([a!.handle]));
+    for (const h of gone) expect(out.objects.has(h)).toBe(false);
+    for (const h of kept) expect(out.objects.has(h)).toBe(true);
+    expect(out.blocks.has(key)).toBe(true);
+  });
+
+  it('다른 사전의 항목이면 소유자가 지워져도 빼지 않는다(DXF 쓰기와 같다)', () => {
+    const doc = load();
+    const [a] = dimsOf(doc);
+    const [xdict] = attach(doc, a!, 6);
+    doc.objects.set('AA7F', { type: 'DICTIONARY', handle: 'AA7F', owner: '0', entries: new Map([['X', xdict!]]), hardOwner: false, cloning: 1 } as unknown as GenericObject);
+    erase(doc, a!);
+    const out = withoutErasedDimBlocks(doc, new Set(), new Set([a!.handle]));
+    expect(out).toBe(doc);
+  });
+
+  it('블록 정의를 통째로 지우면 그 안 치수의 *D와 핸들도 모은다(워커로 온 before는 핸들만)', () => {
+    const doc = load();
+    const dims = dimsOf(doc);
+    const [a] = dims;
+    const inner: BlockDef = { ...doc.blocks.get(MODEL_SPACE)!, name: 'WITHDIM', entities: [a!] };
+    doc.blocks.set('WITHDIM', inner);
+    const list = doc.blocks.get(MODEL_SPACE)!.entities;
+    list.splice(list.indexOf(a!), 1);
+    const stub = { entities: [{ handle: a!.handle }] } as unknown as BlockDef;
+    const erased = new Set<string>();
+    const handles = new Set<string>();
+    noteRemovedDims(doc, [{ kind: 'blockDef', key: 'WITHDIM', before: stub, after: null }], erased, handles);
+    expect([...erased]).toEqual([tableKey(a!.block)]);
+    expect([...handles]).toEqual([a!.handle]);
+    // 바꾸는 작업(after가 있음)은 세지 않는다
+    const none = new Set<string>();
+    noteRemovedDims(doc, [{ kind: 'blockDef', key: 'WITHDIM', before: stub, after: inner }], none);
+    expect(none.size).toBe(0);
   });
 });
 
@@ -193,6 +290,29 @@ describe('워커 저장', () => {
     const back = readDwg(new Uint8Array(emptied.data));
     expect(starD(back)).toEqual([]);
     expect(emptied.data.byteLength).toBeLessThan(whole.data.byteLength);
+  });
+
+  it('주석 축척 치수를 지운 DWG에는 확장 사전·레코드가 남지 않고, 명령 취소하면 다시 쓴다(115차)', async () => {
+    const doc = load();
+    const [a] = dimsOf(doc);
+    const xdict = 'AB10';
+    const mgr = 'AB11';
+    a!.xdict = xdict;
+    const dict = (handle: string, owner: string, entries: [string, string][]) => ({ type: 'DICTIONARY', handle, owner, entries: new Map(entries), hardOwner: false, cloning: 1 }) as unknown as GenericObject;
+    doc.objects.set(xdict, dict(xdict, a!.handle, [['AcDbContextDataManager', mgr]]));
+    doc.objects.set(mgr, dict(mgr, xdict, []));
+    const docId = await adopt(40, doc);
+    const { readDwg } = await import('../../src/io/dwg/index');
+    const before = readDwg(new Uint8Array((await save(docId, 41, 'dwg')).data));
+    expect(before.objects.has(xdict)).toBe(true);
+    const ops = removeOps(doc, [a!]);
+    await send({ type: 'edit', docId, ops: packOps(ops) });
+    const after = readDwg(new Uint8Array((await save(docId, 42, 'dwg')).data));
+    expect(after.objects.has(xdict)).toBe(false);
+    expect(after.objects.has(mgr)).toBe(false);
+    await send({ type: 'edit', docId, ops: packOps(inverseTransaction({ label: 'ERASE', ops }).ops) });
+    const undone = readDwg(new Uint8Array((await save(docId, 43, 'dwg')).data));
+    expect(undone.objects.has(xdict)).toBe(true);
   });
 
   it('문서를 다시 받으면(replace) 기억을 버려 파일에서 온 블록을 빼지 않는다', async () => {

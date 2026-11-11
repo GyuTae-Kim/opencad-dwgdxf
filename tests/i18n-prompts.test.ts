@@ -79,3 +79,73 @@ describe('언어 사전 프롬프트', () => {
     expect(Object.values(zh).filter((v) => v.includes('此处填写'))).toEqual([]);
   });
 });
+
+/** 115차: 동음이의 "자르기"(TRIM·CLIP·CUTCLIP·다중선 절단)와 명령 취소(UNDO). 값은 Autodesk 언어별 도움말의 명령·옵션 이름이다 */
+describe('언어 사전 동음이의(자르기·명령 취소)', () => {
+  const [en, de, ja, zh] = ['en', 'de', 'ja', 'zh-CN'].map(load) as [Record<string, string>, Record<string, string>, Record<string, string>, Record<string, string>];
+  const tr = (d: Record<string, string>, keys: string[]) => keys.map((k) => d[k]);
+
+  it('MLEDIT 도구 이름(Multilines Edit Tools 대화 상자)', () => {
+    const tools = ['단일 자르기', '전체 자르기', '전체 용접'];
+    expect(tr(en, tools)).toEqual(['Cut Single', 'Cut All', 'Weld All']);
+    expect(tr(de, tools)).toEqual(['Einfach schneiden', 'Alles schneiden', 'Alles verbinden']);
+    expect(tr(ja, tools)).toEqual(['1 つを切断', 'すべてを切断', 'すべてを接続']);
+    expect(tr(zh, tools)).toEqual(['单个剪切', '全部剪切', '全部接合']);
+    expect(en['병합된 십자형']).toBe('Merged Cross');
+    expect(de['병합된 십자형']).toBe('Integriertes Kreuz');
+    expect(de['열린 T자형']).toBe('Offenes T');
+    expect(zh['열린 십자형']).toBe('十字打开');
+    expect(zh['여러 줄 편집 도구']).toBe('多线编辑工具');
+  });
+
+  it('EXTRIM은 경계의 한쪽을 자른다("양쪽"이 아니다)', () => {
+    const k = '경계 한쪽 모두 자르기';
+    expect(en[k]).toMatch(/one side/i);
+    expect(de[k]).toContain('einer Seite');
+    expect(ja[k]).toContain('片側');
+    expect(zh[k]).toContain('一侧');
+    for (const d of [en, ja, zh]) expect(d[k]).not.toMatch(/both|両方|两侧/);
+    expect(en['닫힌 경계 안·밖을 자름 (EXTRIM)']).toContain('inside or outside');
+    expect(de['닫힌 경계 안·밖을 자름 (EXTRIM)']).toContain('oder');
+  });
+
+  it('TRIM은 Trim·Stutzen·トリム·修剪(FILLET·CHAMFER의 자르기 옵션 포함)', () => {
+    expect(tr(en, ['자르기 (TR)'])).toEqual(['Trim (TR)']);
+    expect(tr(de, ['자르기 (TR)', '자르기(T)'])).toEqual(['Stutzen (TR)', 'Stutzen (T)']);
+    expect(tr(ja, ['자르기 (TR)', '자르기(T)'])).toEqual(['トリム (TR)', 'トリム(T)']);
+    expect(zh['자르기(T)']).toBe('修剪(T)');
+  });
+
+  it('XCLIP·IMAGECLIP의 자르기는 클립(Crop·Cut·トリミング이 아니다)', () => {
+    const keys = ['반전 자르기', '반전 자르기(I)', '블록 자르기', '선택한 블록에 자르기 경계가 없습니다.'];
+    expect(en['반전 자르기(I)']).toBe('Invert clip (I)');
+    expect(de['반전 자르기(I)']).toBe('Schnitt invertieren (I)');
+    expect(ja['반전 자르기(I)']).toBe('クリップを反転(I)');
+    expect(zh['반전 자르기(I)']).toBe('反向剪裁(I)');
+    for (const k of keys) {
+      expect(en[k]).not.toMatch(/crop|cut/i);
+      expect(ja[k]).not.toMatch(/トリミング|切り取り/);
+    }
+    const jaClip = Object.entries(ja).filter(([k, v]) => /^자르기 (옵션|객체|경계)|^이미지 자르기$|^PDF (언더레이 )?자르기$/.test(k) && /トリミング|切り取り/.test(v)).map(([k, v]) => `${k} => ${v}`);
+    expect(jaClip).toEqual([]);
+  });
+
+  it('CUTCLIP의 잘라내기는 Cut·Ausschneiden·切り取り·剪切', () => {
+    expect(tr(en, ['잘라내기'])).toEqual(['Cut']);
+    expect(tr(de, ['잘라내기'])).toEqual(['Ausschneiden']);
+    expect(tr(ja, ['잘라내기'])).toEqual(['切り取り']);
+    expect(tr(zh, ['잘라내기'])).toEqual(['剪切']);
+  });
+
+  it('명령 취소는 UNDO다: 영어 Cancel·독일어 Abbrechen으로 옮기지 않는다(Esc 안내는 진짜 취소라 뺀다)', () => {
+    const undo = (d: Record<string, string>, bad: RegExp) =>
+      Object.entries(d)
+        .filter(([k, v]) => k.includes('명령 취소') && k !== '명령 취소, 선택 해제' && bad.test(v))
+        .map(([k, v]) => `${k} => ${v}`);
+    expect(undo(en, /cancel/i)).toEqual([]);
+    expect(undo(de, /abbrechen/i)).toEqual([]);
+    expect(en['명령 취소']).toBe('Undo');
+    expect(de['명령 취소']).toBe('Rückgängig');
+    expect(en['명령 취소, 선택 해제']).toMatch(/cancel/i);
+  });
+});

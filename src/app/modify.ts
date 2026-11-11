@@ -2307,7 +2307,7 @@ export function registerModifyCommands(app: App): void {
       commitResults(app, ctx, [{ remove: hs }], 'CUTCLIP');
       app.refreshSelectionOverlay();
     }
-    ctx.print(`${hs.length}개를 클립보드에 ${cut ? '잘라' : '복사해'} 두었습니다.`);
+    ctx.print(cut ? `${hs.length}개를 클립보드에 잘라 두었습니다.` : `${hs.length}개를 클립보드에 복사해 두었습니다.`);
   };
   app.register({ name: 'COPYCLIP', title: '클립보드로 복사', run: (ctx) => copyClip(ctx, false, false) });
   app.register({ name: 'CUTCLIP', title: '클립보드로 잘라내기', run: (ctx) => copyClip(ctx, true, false) });
