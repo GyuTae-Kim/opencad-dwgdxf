@@ -3121,7 +3121,7 @@ export class App {
         void import('./util2-select').then((m) => {
           const v = m.pickstyle() ^ 1;
           m.setPickstyle(v);
-          this.cmd.print(`<그룹 ${v & 1 ? '켜기' : '끄기'}>`);
+          this.cmd.print(v & 1 ? '<그룹 켜기>' : '<그룹 끄기>');
         });
         return;
     }
@@ -3326,20 +3326,21 @@ export class App {
 
   toggleOsnap(): void {
     this.osnapOn = !this.osnapOn;
-    this.cmd.print(`<객체 스냅 ${this.osnapOn ? '켜기' : '끄기'}>`);
+    // 켜기·끄기를 끼우면 번역층이 옮기지 않아(틀 {0}) 통째 글로 쓴다(118차 — 아래 토글도 같다)
+    this.cmd.print(this.osnapOn ? '<객체 스냅 켜기>' : '<객체 스냅 끄기>');
     this.ui.refreshStatus();
   }
 
   toggleGrid(on = !this.gridOn): void {
     this.gridOn = on;
-    this.cmd.print(`<격자 ${this.gridOn ? '켜기' : '끄기'}>`);
+    this.cmd.print(this.gridOn ? '<격자 켜기>' : '<격자 끄기>');
     this.view.requestOverlay();
     this.ui.refreshStatus();
   }
 
   toggleSnap(on = !this.snapOn): void {
     this.snapOn = on;
-    this.cmd.print(`<스냅 ${this.snapOn ? '켜기' : '끄기'}>`);
+    this.cmd.print(this.snapOn ? '<스냅 켜기>' : '<스냅 끄기>');
     this.ui.refreshStatus();
   }
 
@@ -3356,14 +3357,14 @@ export class App {
   toggleOrtho(): void {
     // 직교와 극좌표 추적은 함께 켤 수 없다(켜면 극좌표 추적 — AUTOSNAP 8 — 을 끈다)
     this.orthoOn = !this.orthoOn;
-    this.cmd.print(`<직교 ${this.orthoOn ? '켜기' : '끄기'}>`);
+    this.cmd.print(this.orthoOn ? '<직교 켜기>' : '<직교 끄기>');
     this.ui.refreshStatus();
   }
 
   /** F10·Ctrl+U·상태 막대 단추: AUTOSNAP 8을 뒤집는다(켜면 직교를 끈다) */
   togglePolar(): void {
     this.polarOn = !this.polarOn;
-    this.cmd.print(`<극좌표 ${this.polarOn ? '켜기' : '끄기'}>`);
+    this.cmd.print(this.polarOn ? '<극좌표 켜기>' : '<극좌표 끄기>');
     this.ui.refreshStatus();
   }
 
@@ -3374,14 +3375,14 @@ export class App {
       this.view.overlay.dynFields = null;
       this.view.requestOverlay();
     }
-    this.cmd.print(`<동적 입력 ${this.dynOn ? '켜기' : '끄기'}>`);
+    this.cmd.print(this.dynOn ? '<동적 입력 켜기>' : '<동적 입력 끄기>');
     this.ui.refreshStatus();
   }
 
   /** F11·상태 막대 단추: AUTOSNAP 16을 뒤집는다(끄면 획득점을 지운다 — applySettings) */
   toggleOtrack(): void {
     this.otrackOn = !this.otrackOn;
-    this.cmd.print(`<객체 스냅 추적 ${this.otrackOn ? '켜기' : '끄기'}>`);
+    this.cmd.print(this.otrackOn ? '<객체 스냅 추적 켜기>' : '<객체 스냅 추적 끄기>');
     this.ui.refreshStatus();
   }
 

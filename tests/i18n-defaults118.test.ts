@@ -130,6 +130,34 @@ describe('SCALETEXT·치수 스타일·GRID·주 뷰포트·가리기 프레임 
     expect(translate('열 폭', 'zh-CN')).toBe('列宽');
   });
 
+  it('F키 켜기·끄기 줄(<객체 스냅 켜기> 등)과 등각평면 줄이 통째 열쇠로 옮겨진다(끼운 켜기·끄기·왼쪽이 한국어로 남지 않음)', () => {
+    const toggles = ['그룹', '객체 스냅', '격자', '스냅', '직교', '극좌표', '동적 입력', '객체 스냅 추적'];
+    for (const l of LANGS) {
+      for (const t of toggles) for (const v of ['켜기', '끄기']) expect(translate(`<${t} ${v}>`, l), `${l} ${t} ${v}`).not.toMatch(HANGUL);
+      for (const p of ['왼쪽', '위', '오른쪽']) {
+        expect(translate(`<등각평면 ${p}>`, l)).not.toMatch(HANGUL);
+        expect(translate(`현재 등각평면: ${p}`, l)).not.toMatch(HANGUL);
+      }
+      for (const v of ['켜기', '끄기']) expect(translate(`선가중치 표시 ${v}`, l)).not.toMatch(HANGUL);
+    }
+    expect(translate('<객체 스냅 켜기>', 'en')).toBe('<Osnap on>');
+    expect(translate('<동적 입력 켜기>', 'de')).toBe('<Dynamische Eingabe ein>');
+    // 등각평면(isoplane)을 등각(conformal)으로 옮기지 않는다(ISOPLANE 도움말: Isoplane·isometrische Ebene·アイソメ平面·等轴测平面)
+    expect(translate('<등각평면 위>', 'en')).toBe('<Isoplane Top>');
+    for (const k of ['등각평면', '등각평면 {0}', '<등각평면 {0}>']) for (const l of LANGS) expect(translate(k, l)).not.toMatch(/Conformal|Konforme|共形/);
+    expect(translate('<선택 세트: {0}>', 'zh-CN')).toBe('<选择集：{0}>');
+    expect(translate('선가중치 표시 켜기·끄기', 'zh-CN')).not.toContain('旋转');
+  });
+
+  it('맞춤(fit)·맞춤점(fit point)을 사용자 지정(Custom·Benutzerdefiniert·配合)이나 정렬(Ausrichten·对齐)로 옮기지 않는다(SPLINE·SPLINEDIT 도움말: Anpassen·Anpassungspunkt·拟合·拟合点)', () => {
+    expect(LANGS.map((l) => translate('맞춤', l))).toEqual(['Fit', 'Anpassen', 'フィット', '拟合']);
+    for (const k of ['맞춤(F)', '맞춤 데이터', '맞춤점 추가', '맞춤점 제거', '맞춤점 지정 <종료>:', '맞춤점을 추가할 수 없습니다.', '스플라인 작성 메서드 입력 [맞춤(F)/CV(C)] <{0}>:', '스플라인에서 기존 맞춤점 지정 <종료>:', '현재 설정: 메서드=맞춤 매듭={0}']) {
+      expect(translate(k, 'en'), k).not.toMatch(/custom|align/i);
+      expect(translate(k, 'de'), k).not.toMatch(/Benutzerdefin|Ausricht/);
+      expect(translate(k, 'zh-CN'), k).not.toMatch(/配合|对齐|自定义/);
+    }
+  });
+
   it('가리기 프레임 줄의 켜기·끄기가 한국어로 남지 않는다', () => {
     for (const l of LANGS) for (const v of ['끄기', '켜기', '표시하지만 플롯 안 함']) expect(translate(`가리기 프레임 = ${v}`, l)).not.toMatch(HANGUL);
   });

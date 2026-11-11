@@ -107,13 +107,19 @@ export function setIso(app: App, st: DocState, patch: Partial<IsoState>): void {
   for (const f of listeners) f();
 }
 
+/**
+ * 등각평면 줄(SNAPISOPAIR 0·1·2). 평면 이름을 끼우면 번역층이 옮기지 않아(틀 {0}) 줄마다 통째 글로 쓴다(118차)
+ */
+const PLANE_LINE = ['<등각평면 왼쪽>', '<등각평면 위>', '<등각평면 오른쪽>'] as const;
+const PLANE_CURRENT = ['현재 등각평면: 왼쪽', '현재 등각평면: 위', '현재 등각평면: 오른쪽'] as const;
+
 /** F5·Ctrl+E: 다음 등각평면(`<등각평면 위>`). 리더가 app.ts 키 처리에서 부른다 */
 export function cycleIsoPlane(app: App): void {
   const st = app.active;
   if (!st) return;
   const p = nextIsoPlane(isoState(st).pair);
   setIso(app, st, { pair: p });
-  app.cmd.print(`<등각평면 ${ISO_PLANE_NAMES[p]}>`);
+  app.cmd.print(PLANE_LINE[p]);
 }
 
 // ---------------------------------------------------------------------------
@@ -376,7 +382,7 @@ export function registerIsoCommands(app: App): void {
       }
       const p = planeOfKey(k);
       setIso(app, st, { style: 1, pair: p });
-      ctx.print(`<등각평면 ${ISO_PLANE_NAMES[p]}>`);
+      ctx.print(PLANE_LINE[p]);
     },
   });
 
@@ -388,7 +394,7 @@ export function registerIsoCommands(app: App): void {
       const st = app.active!;
       const s = isoState(st);
       const next = nextIsoPlane(s.pair);
-      ctx.print(`현재 등각평면: ${ISO_PLANE_NAMES[s.pair]}`);
+      ctx.print(PLANE_CURRENT[s.pair]);
       let k = arg?.trim().toUpperCase();
       if (k === undefined) {
         const r = await ctx.getPoint(`등각평면 설정 입력 [왼쪽(L)/위(T)/오른쪽(R)] <${ISO_PLANE_NAMES[next]}>:`, { keywords: PLANE_KWS });
@@ -403,7 +409,7 @@ export function registerIsoCommands(app: App): void {
       }
       const p = planeOfKey(k);
       setIso(app, st, { pair: p });
-      ctx.print(`현재 등각평면: ${ISO_PLANE_NAMES[p]}`);
+      ctx.print(PLANE_CURRENT[p]);
       if (s.style !== 1) ctx.print('참고: 등각투영 제도(SNAPSTYL)가 꺼져 있어 십자선·스냅은 그대로입니다. ISODRAFT로 켜십시오.');
     },
   });

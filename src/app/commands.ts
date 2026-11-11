@@ -559,7 +559,7 @@ export function registerCommands(app: App): void {
       for (const d of app.docs) d.touchLayers();
       app.view.requestRender();
       app.ui.refreshStatus();
-      ctx.print(`선가중치 표시 ${app.view.lwDisplay ? '켜기' : '끄기'}`);
+      ctx.print(app.view.lwDisplay ? '선가중치 표시 켜기' : '선가중치 표시 끄기');
     },
   });
   app.register({

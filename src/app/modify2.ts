@@ -956,9 +956,10 @@ export function registerModify2Commands(app: App): void {
       const res: EditResult[] = [];
       const skipped: Record<TextScaleSkip, number> = { annotative: 0, nonAnnotative: 0, unknownScale: 0 };
       for (const e of list) {
+        // 높이를 잴 수 없는 문자는 축척 비율만(예전과 같다 — 높이 옵션은 배율을 낼 수 없다)
         const h = textHeightOf(e, doc);
-        if (!h) continue;
-        const r = textScaleFactor(doc, e, h, mode, idx);
+        if (!h && mode.kind !== 'factor') continue;
+        const r = textScaleFactor(doc, e, h || 1, mode, idx);
         if ('skip' in r) {
           skipped[r.skip]++;
           continue;

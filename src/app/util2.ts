@@ -36,7 +36,7 @@ export function registerUtil2Commands(app: App): void {
       ev.preventDefault();
       const v = pickstyle() ^ 1;
       setPickstyle(v);
-      app.cmd.print(`<그룹 ${v & 1 ? '켜기' : '끄기'}>`);
+      app.cmd.print(v & 1 ? '<그룹 켜기>' : '<그룹 끄기>');
     });
   }
 }
