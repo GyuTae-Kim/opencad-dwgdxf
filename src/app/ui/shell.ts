@@ -378,7 +378,7 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
         cols: [
           [
             // 끝의 U+2060: TRIM의 "자르기"와 사전 열쇠를 가른다(imageclip.ts의 CLIP 이름과 같다 — 116차)
-            { cmd: 'CLIP', label: '자르기⁠', icon: 'trim', tip: '블록·외부 참조·이미지·언더레이·뷰포트를 경계로 자르기 (CLIP)' },
+            { cmd: 'CLIP', label: '자르기\u{2060}', icon: 'trim', tip: '블록·외부 참조·이미지·언더레이·뷰포트를 경계로 자르기 (CLIP)' },
             { cmd: 'IMAGECLIP', label: '이미지 자르기', icon: 'trim', tip: '래스터 이미지 자르기 (ICL)' },
             { cmd: 'PDFCLIP', label: 'PDF 자르기', icon: 'trim', tip: 'PDF 언더레이 자르기' },
           ],

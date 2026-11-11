@@ -130,7 +130,7 @@ export function registerImageClipCommands(app: App): void {
   app.register({
     name: 'CLIP',
     // 한국어판 이름은 TRIM과 같은 "자르기"다. 끝의 U+2060(보이지 않는 글자)은 언어 사전에서 CLIP의 이름(Clip·Zuschneiden·クリップ·剪裁)을 따로 찾는 열쇠다(116차)
-    title: '자르기⁠',
+    title: '자르기\u{2060}',
     async run(ctx) {
       const st = app.active!;
       const r = await ctx.getEntity('자를 객체 선택:');

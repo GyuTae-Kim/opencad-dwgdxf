@@ -123,11 +123,14 @@ describe('언어 사전 동음이의(자르기·명령 취소)', () => {
     registerImageClipCommands({ register: (c: { name: string; title: string }) => titles.set(c.name, c.title) } as never);
     const clip = titles.get('CLIP')!;
     const ribbon = readFileSync(new URL('../src/app/ui/shell.ts', import.meta.url), 'utf8').match(/cmd: 'CLIP', label: '([^']*)'/)?.[1];
-    // 소스의 이스케이프(⁠)를 글자로
-    expect(ribbon && JSON.parse(`"${ribbon}"`)).toBe(clip);
+    // 소스는 보이는 이스케이프로 쓴다(보이지 않는 글자를 그대로 두지 않는다) — 이스케이프를 글자로 풀어 견준다
+    const WJ = String.fromCodePoint(0x2060);
+    expect(ribbon).toBe(String.raw`자르기\u{2060}`);
+    expect(ribbon!.replace(String.raw`\u{2060}`, WJ)).toBe(clip);
     // 화면 글은 보이지 않는 글자(U+2060) 하나만 다르다
     expect(clip).not.toBe('자르기');
-    expect(clip.replace(/⁠/g, '')).toBe('자르기');
+    expect(clip).toBe('자르기' + WJ);
+    expect(readFileSync(new URL('../src/app/imageclip.ts', import.meta.url), 'utf8')).not.toContain(String.fromCharCode(0x2060));
     expect(translate(clip, 'ko')).toBe(clip);
     // Autodesk 도움말: en "Use the generic CLIP command to clip …", de ZUSCHNEIDEN (Befehl), ja CLIP[クリップ] (コマンド), zh 可使用常规 CLIP 命令剪裁…
     expect(['en', 'de', 'ja', 'zh-CN'].map((l) => translate(clip, l))).toEqual(['Clip', 'Zuschneiden', 'クリップ', '剪裁']);
