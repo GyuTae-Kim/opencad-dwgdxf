@@ -9,7 +9,9 @@ import {
   type AnnoScale,
   ScaleIndex,
   annoState,
+  annoUpdateScale,
   defaultScales,
+  factorOf,
   findScale,
   fmtNum,
   isMetric,
@@ -338,7 +340,8 @@ export function registerAnnoScaleCommands(app: App): void {
         const want = textStyleAnnotative(st.doc, e.style);
         const is = !!annoState(st.doc, e, env.idx);
         if (want === is || (want && !s)) continue;
-        const r = want ? makeAnnotative(env, e, s!.name) : makeNonAnnotative(env, e);
+        // 주석으로: 스타일의 고정 용지 높이가 있으면 그 높이, 없으면 크기 그대로(119차 — Autodesk ANNOUPDATE 도움말)
+        const r = want ? makeAnnotative(env, e, s!.name, { k: annoUpdateScale(st.doc, e, factorOf(s!)) }) : makeNonAnnotative(env, e);
         if (r.entity === e && !r.ops.length) continue;
         ops.push(...r.ops);
         if (r.entity !== e) ops.push({ kind: 'modify', block: st.session.ownerOf(e.handle) ?? st.space, before: e, after: r.entity });

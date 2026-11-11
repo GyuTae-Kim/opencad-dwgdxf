@@ -6,8 +6,10 @@
  * - 객체 일치(M): 고른 객체와 같은 꼴(주석·주석 아님)에만. 주석이면 용지 높이를 맞춘다.
  * - 축척 비율: 모두.
  * 예전에는 셋 다 모든 문자에 같은 모형 높이를 주어, 1:50 주석 문자에 도면 높이 2.5를 주면 그려지는 높이가 125가 아니라 2.5가 됐다.
+ * 속성 정의·속성(119차)은 자기 표지·레코드로 주석을 가린다(attrib.ts — 예전에는 주석 속성 정의도 주석이 아닌 문자로 축척했다).
  */
 import type { CadDocument, Entity } from '../../core/model';
+import { attAnno } from './attrib';
 import { type ScaleIndex, annoState } from './represent';
 
 /** 높이 옵션 */
@@ -19,6 +21,10 @@ export type TextScaleMode =
 
 /** 문자의 주석 꼴: 주석이면 보이는 축척의 배율(축척을 읽을 수 없는 주석 객체는 null) */
 export function textAnnoFactor(doc: CadDocument, e: Entity, idx: ScaleIndex): { annotative: false } | { annotative: true; factor: number | null } {
+  if (e.type === 'ATTDEF' || e.type === 'ATTRIB') {
+    const a = attAnno(doc, e, idx);
+    return a.annotative ? { annotative: true, factor: a.factor } : { annotative: false };
+  }
   const st = annoState(doc, e, idx);
   if (!st) return { annotative: false };
   if (st.foreign || !st.current) return { annotative: true, factor: null };

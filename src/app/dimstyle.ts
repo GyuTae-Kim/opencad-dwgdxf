@@ -53,6 +53,12 @@ const ARROWS: Opt[] = [
   { value: '_NONE', label: '없음' },
 ];
 
+/**
+ * 맞춤 탭 이름(119차): 한국어 글은 스플라인·폴리선 맞춤과 같은 "맞춤"이지만 중국어판 탭 이름이 调整(스플라인 맞춤은 拟合)이라
+ * 끝에 보이지 않는 U+2060을 붙여 언어 사전 열쇠를 가른다(116차 CLIP "자르기"와 같은 방식 — 한국어 화면 글은 그대로)
+ */
+const FIT_TAB = '맞춤\u{2060}';
+
 const TABS: [string, VarField[]][] = [
   [
     '선',
@@ -142,7 +148,7 @@ const TABS: [string, VarField[]][] = [
     ],
   ],
   [
-    '맞춤',
+    FIT_TAB,
     [
       {
         v: 'DIMATFIT',
@@ -558,7 +564,7 @@ function editDialog(app: App, title: string, base: DimStyle | undefined, start: 
       );
       const fields = TABS.find(([t]) => t === name)![1];
       const p = tabPanel(st, vars, fields, redraw);
-      if (name === '맞춤') {
+      if (name === FIT_TAB) {
         // 치수 피쳐 축척의 "주석"(AcadAnnotative)
         const c = h('input', { type: 'checkbox', 'aria-label': '주석' }) as HTMLInputElement;
         c.checked = !!anno;

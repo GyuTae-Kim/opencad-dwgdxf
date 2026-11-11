@@ -28,6 +28,8 @@ import {
   findScale,
   ownRecord,
   followEdit,
+  followPlainAttribs,
+  hasPlainAnnoAttribs,
   isMetric,
   makeAnnotative,
   readScaleList,
@@ -363,6 +365,7 @@ export function tabAllVisible(st: DocState): boolean {
  *   다중 지시선은 그 공간의 현재 주석 축척(모형 = CANNOSCALE·활성 뷰포트, 배치 = 1:1)으로 주석 객체가 된다.
  * - 복사본(다른 객체의 확장 사전을 가리키는 새 객체): 자기 사전과 레코드를 얻는다.
  * - 바뀐 주석 객체: 레코드가 따라간다(이동·회전·축척은 모든 축척 표현이 같이 움직인다).
+ * - 주석이 아닌 블록 참조의 주석 속성(119차): 레코드가 없으면 그 공간의 주석 축척 레코드를 얻고, 있으면 편집을 따라간다.
  */
 export function annotateTransaction(app: App, st: DocState, tx: Transaction): Transaction {
   if (ownTx.has(tx) || !tx.ops.some((o) => (o.kind === 'add' || o.kind === 'modify') && isLayoutBlock(o.block))) return tx;
@@ -452,6 +455,23 @@ export function annotateTransaction(app: App, st: DocState, tx: Transaction): Tr
       console.warn('주석 축척 처리 실패', err);
     }
     out.push(op);
+  }
+  // 주석이 아닌 블록 참조의 주석 속성(119차): 레코드가 없으면 그 공간의 주석 축척 레코드(크기 그대로), 있으면 편집을 따라간다
+  for (let i = 0; i < out.length; i++) {
+    const op = out[i]!;
+    if ((op.kind !== 'add' && op.kind !== 'modify') || !isLayoutBlock(op.block)) continue;
+    const e = op.kind === 'add' ? op.entity : op.after;
+    if (!hasPlainAnnoAttribs(doc, e)) continue;
+    try {
+      const before = op.kind === 'modify' && op.before.type === 'INSERT' ? op.before : null;
+      const en = e.attribs.some((a) => !a.mtext && annotativeFlag(a.xdata) === true) ? withList() : getEnv();
+      const r = followPlainAttribs(en, before, e, scaleForSpace(app, st, op.block)?.name);
+      if (!r.ops.length) continue;
+      extra.push(...r.ops);
+      out[i] = op.kind === 'add' ? { ...op, entity: r.entity } : { ...op, after: r.entity };
+    } catch (err) {
+      console.warn('주석 속성 처리 실패', err);
+    }
   }
   if (!extra.length && !dropBlocks.size && out.every((o, i) => o === tx.ops[i])) return tx;
   const ops = out.filter((o) => !((o.kind === 'blockDef' || o.kind === 'blockRecord') && o.before === null && dropBlocks.has(o.key)));

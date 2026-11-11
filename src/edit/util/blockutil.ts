@@ -8,6 +8,8 @@ import type { EditOp } from '../session';
 import { cloneEntity, isLayoutBlock } from '../session';
 import { explodeEntity } from '../geom/explode';
 import type { EditResult } from '../geom/types';
+import { attribHeightK, spaceAnnoFactor } from '../annoscale/attrib';
+import { ScaleIndex } from '../annoscale/represent';
 
 /** 블록 좌표 → 도면 좌표(축척·회전만, 2D) */
 export function insertTransform(def: BlockDef, ins: Pick<InsertEntity, 'insert' | 'scale' | 'rotation'>): (p: Vec3) => Vec3 {
@@ -30,9 +32,17 @@ export function allAttdefs(def: BlockDef): AttribEntity[] {
   return def.entities.filter((e): e is AttribEntity => e.type === 'ATTDEF');
 }
 
+export interface BuildAttribOptions {
+  /** 지금 속성: 핸들을 지키는 속성은 자기 확장 사전·반응자도 지킨다(그 속성의 축척 레코드·필드) */
+  old?: readonly AttribEntity[];
+  /** 높이 배율(주석 속성 정의 — annoscale/attrib.ts attribHeightK). 없으면 1 */
+  heightK?: (d: AttribEntity, old?: AttribEntity) => number;
+}
+
 /**
  * 정의의 속성 정의로 참조의 속성을 만든다.
  * values: 태그(대문자) → 값. reuse: 태그(대문자) → 지킬 핸들(동기화할 때 같은 속성은 핸들을 유지한다)
+ * 속성은 정의의 확장 사전·반응자를 갖지 않는다(119차 — 예전에는 통째로 베껴 정의의 필드·주석 축척 사전을 함께 가리켰다)
  */
 export function buildAttribs(
   def: BlockDef,
@@ -40,6 +50,7 @@ export function buildAttribs(
   values: Map<string, string>,
   newHandle: () => string,
   reuse: Map<string, string> = new Map(),
+  opt: BuildAttribOptions = {},
 ): AttribEntity[] {
   const tf = insertTransform(def, ins);
   const out: AttribEntity[] = [];
@@ -51,10 +62,13 @@ export function buildAttribs(
     const keep = reuse.get(tag);
     a.handle = keep && !used.has(keep) ? keep : newHandle();
     used.add(a.handle);
+    const prev = a.handle === keep ? opt.old?.find((o) => o.handle === keep) : undefined;
+    delete a.xdict;
+    delete a.reactors;
     a.owner = ins.handle;
     a.insert = tf(d.insert);
     if (d.alignPoint) a.alignPoint = tf(d.alignPoint);
-    a.height = d.height * Math.abs(ins.scale.y);
+    a.height = d.height * Math.abs(ins.scale.y) * (opt.heightK?.(d, prev) ?? 1);
     a.rotation = d.rotation + ins.rotation;
     a.text = values.get(tag) ?? d.text;
     a.prompt = undefined;
@@ -67,6 +81,8 @@ export function buildAttribs(
       a.mtext.text = values.get(tag) ?? a.mtext.text;
       a.mtext.handle = '';
     }
+    if (prev?.xdict) a.xdict = prev.xdict;
+    if (prev?.reactors?.length) a.reactors = [...prev.reactors];
     out.push(a);
   }
   return out;
@@ -82,12 +98,15 @@ export function attribValues(ins: InsertEntity): Map<string, string> {
   return m;
 }
 
-/** ATTSYNC: 정의대로 속성을 다시 만들고 값(태그로)과 핸들은 지킨다. 바뀐 것이 없으면 null */
-export function syncedInsert(def: BlockDef, ins: InsertEntity, newHandle: () => string): InsertEntity | null {
+/**
+ * ATTSYNC: 정의대로 속성을 다시 만들고 값(태그로)과 핸들·자기 확장 사전은 지킨다. 바뀐 것이 없으면 null.
+ * heightK: 주석 속성 정의의 높이 배율(annoscale/attrib.ts — 지킨 주석 속성은 자기 보이는 축척)
+ */
+export function syncedInsert(def: BlockDef, ins: InsertEntity, newHandle: () => string, heightK?: BuildAttribOptions['heightK']): InsertEntity | null {
   const reuse = new Map<string, string>();
   for (const a of ins.attribs) if (!reuse.has(a.tag.toUpperCase()) && a.handle) reuse.set(a.tag.toUpperCase(), a.handle);
   const out = cloneEntity(ins);
-  out.attribs = buildAttribs(def, ins, attribValues(ins), newHandle, reuse);
+  out.attribs = buildAttribs(def, ins, attribValues(ins), newHandle, reuse, { old: ins.attribs, heightK });
   delete out.dwgRaw;
   return JSON.stringify(stripRaw(out.attribs)) === JSON.stringify(stripRaw(ins.attribs)) ? null : out;
 }
@@ -198,6 +217,7 @@ export function replaceBlockOps(doc: CadDocument, from: string, to: string, newH
   let count = 0;
   let skipped = 0;
   if (!toDef || tableKey(from) === tableKey(to)) return { ops, count, skipped };
+  const idx = new ScaleIndex(doc);
   for (const { block, entity } of insertsOf(doc, from)) {
     if (!isLayoutBlock(block) && blockReaches(doc, to, block)) {
       skipped++;
@@ -208,7 +228,7 @@ export function replaceBlockOps(doc: CadDocument, from: string, to: string, newH
     delete after.dwgRaw;
     const reuse = new Map<string, string>();
     for (const a of entity.attribs) if (a.handle && !reuse.has(a.tag.toUpperCase())) reuse.set(a.tag.toUpperCase(), a.handle);
-    after.attribs = buildAttribs(toDef, entity, attribValues(entity), newHandle, reuse);
+    after.attribs = buildAttribs(toDef, entity, attribValues(entity), newHandle, reuse, { old: entity.attribs, heightK: attribHeightK(doc, toDef, idx, spaceAnnoFactor(doc, block, idx)) });
     ops.push({ kind: 'modify', block, before: entity, after });
     count++;
   }
@@ -275,13 +295,14 @@ export function syncAllOps(doc: CadDocument, name: string, newHandle: () => stri
   let count = 0;
   let locked = 0;
   if (!def) return { ops, count, locked };
+  const idx = new ScaleIndex(doc);
   for (const { block, entity } of insertsOf(doc, name)) {
     if (doc.layers.get(tableKey(entity.layer))?.locked) {
       locked++;
       continue;
     }
     count++;
-    const after = syncedInsert(def, entity, newHandle);
+    const after = syncedInsert(def, entity, newHandle, attribHeightK(doc, def, idx, spaceAnnoFactor(doc, block, idx)));
     if (after) ops.push({ kind: 'modify', block, before: entity, after });
   }
   return { ops, count, locked };
