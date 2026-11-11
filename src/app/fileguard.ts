@@ -24,6 +24,28 @@ const QUOTED = /(["“「<])([^"”」<>\n]+)(["”」>])/g;
 const PIECES = /(\n| · | \| | — |, )/;
 
 const edge = (s: string, re: RegExp): string => s.match(re)?.[0] ?? '';
+const hangul = (s: string): number => s.match(/[가-힣]/g)?.length ?? 0;
+/** 프롬프트 본문 · 기본값 꼬리(" <값>:") · 기록 줄이면 뒤에 친 입력 */
+const TAIL = /^(.*?\S)(\s*<[^<>\n]*>:)([ \t][^\n]*)?$/;
+
+/**
+ * 기본값을 붙인 프롬프트(117차): 도우미가 "간격 거리 지정"에 " <1>:"을 붙이면 그 꼴의 사전 열쇠가 없어 일반 틀("{0} 입력 <{1}>:")에
+ * 걸리거나 통째로 한국어로 남았다. 통째 번역(whole)이 한국어를 남기면 프롬프트(본문 + 꼬리)나 본문만 옮기고 기본값·친 입력은 그대로 붙여,
+ * 한국어가 줄어들 때만 그것을 쓴다(사전·도면 이름 지킴은 tr이 한다).
+ */
+export function translateTail(text: string, whole: string, tr: (s: string) => string): string {
+  const k = hangul(whole);
+  const m = k ? TAIL.exec(text) : null;
+  if (!m) return whole;
+  const body = m[1]!;
+  const tail = m[2]!;
+  const rest = m[3] ? unmark(m[3]) : '';
+  // 기록 줄(프롬프트 + 친 입력)은 프롬프트 통째 열쇠를 먼저 본다
+  const tries = m[3] ? [tr(body + tail) + rest, tr(body) + unmark(tail) + rest] : [tr(body) + unmark(tail)];
+  let best = whole;
+  for (const c of tries) if (hangul(c) < hangul(best)) best = c;
+  return best;
+}
 
 /**
  * 도면 글 자리를 지켜 옮긴다. isName이 있으면 표시 없는 글에서도 이름 표에 있는 글을 찾아 지킨다.
@@ -80,7 +102,8 @@ let names: ((s: string) => boolean) | undefined;
  */
 export function uiTextGuarded(text: string): string {
   const language = currentLanguage(typeof location === 'undefined' ? '/' : location.href);
-  return guardedTranslate(text, language, names) ?? translate(text, language);
+  const tr = (s: string) => guardedTranslate(s, language, names) ?? translate(s, language);
+  return language === 'ko' ? tr(text) : translateTail(text, tr(text), tr);
 }
 
 /** 화면 번역층에 도면 글 지킴을 붙인다(편집기가 앱을 만든 뒤 한 번) */
@@ -94,6 +117,12 @@ export function installFileGuard(src: NameSource): void {
     if (el.tagName === 'OPTION' && t && el.getAttribute('value')?.toUpperCase() === t.toUpperCase()) return text;
     const log = !!el.closest(LOG);
     if (!log && !text.includes('⁨')) return undefined;
-    return guardedTranslate(text, language, log ? isName : undefined, !!el.closest('[data-i18n-ui-copy]'));
+    const ui = !!el.closest('[data-i18n-ui-copy]');
+    const r = guardedTranslate(text, language, log ? isName : undefined, ui);
+    if (!log || language === 'ko') return r;
+    // 명령행·휴대폰 카드의 기본값 붙은 프롬프트(117차): 통째 번역이 한국어를 남기면 본문만 옮긴다
+    const whole = r ?? translate(text, language, ui);
+    const out = translateTail(text, whole, (s) => guardedTranslate(s, language, isName, ui) ?? translate(s, language, ui));
+    return out === whole ? r : out;
   };
 }

@@ -105,6 +105,24 @@ describe('명령행 DOM(jsdom) — 프롬프트 키워드와 기록 복사', () 
     expect([ribbon.textContent, trim.textContent]).toEqual(['Zuschneiden', 'Stutzen']);
   });
 
+  it('도우미가 기본값을 붙인 프롬프트·기록 줄도 본문을 옮기고 기본값·친 입력은 그대로 둔다(117차)', async () => {
+    await setup('https://gyutae-kim.github.io/opencad-dwgdxf/de/');
+    const cmd = new CommandLine(document.getElementById('cmd')!, { submit() {}, cancel() {}, suggest: () => [], keyword() {}, repeat() {} });
+    cmd.setPrompt('간격 거리 지정 <1.5>:');
+    cmd.print('문자 높이에 대한 간격띄우기 비율 입력 <0.35>: 0.5');
+    cmd.print('축척 비율 지정 또는 [참조(R)] <1>: 2');
+    cmd.print(`현재로 설정할 배치 입력 <${ft('간격 거리 지정')}>: ${ft('간격 거리 지정')}`);
+    await tick();
+    expect(document.querySelector('.cmd-prompt')!.textContent).toBe('Spaltabstand angeben <1.5>:');
+    // 예전에는 "{0} 입력 <{1}>:" 틀에 걸려 "문자 높이에 대한 간격띄우기 비율 Eingabe <0.35>: 0.5"였다
+    expect([...document.querySelectorAll('.cmd-history div')].map((d) => d.textContent)).toEqual([
+      'Versatzverhältnis relativ zur Texthöhe eingeben <0.35>: 0.5',
+      'Maßstabsverhältnis angeben oder [Referenz (R)] <1>: 2',
+      // 기본값·친 입력이 도면 글(ft)이면 사전 열쇠와 같은 글이어도 옮기지 않는다
+      'Als aktuell festzulegendes Layout eingeben <간격 거리 지정>: 간격 거리 지정',
+    ]);
+  });
+
   it('기록 줄의 표시는 화면과 기록 복사에서 모두 빠진다', async () => {
     await setup('https://gyutae-kim.github.io/opencad-dwgdxf/en/');
     const cmd = new CommandLine(document.getElementById('cmd')!, { submit() {}, cancel() {}, suggest: () => [], keyword() {}, repeat() {} });
