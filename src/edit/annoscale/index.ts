@@ -7,3 +7,4 @@ export * from './represent';
 export * from './edit';
 export * from './view';
 export * from './used';
+export * from './textscale';

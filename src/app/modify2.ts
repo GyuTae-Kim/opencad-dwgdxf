@@ -24,6 +24,7 @@ import { entityPath, makeSpline } from '../edit/geom/path';
 import { MTEXT_ATTACH, TEXT_JUST, isTextLike, justifyText, scaleBasePoint, textHeightOf } from '../edit/geom/textjust';
 import type { HatchPath } from '../core/model';
 import { detectBoundary } from '../edit/hatch';
+import { ScaleIndex, type TextScaleMode, type TextScaleSkip, textAnnoFactor, textScaleFactor } from '../edit/annoscale';
 import type { App, CommandContext, Keyword } from './app';
 import { addEntities, currentProps } from './draw';
 import { Ghost, commitResults } from './modify';
@@ -892,9 +893,17 @@ export function registerModify2Commands(app: App): void {
       const key = await choose(ctx, `축척에 대한 기준점 옵션 입력 [${kwText(baseKws)}] <${String(m.stBaseLabel ?? '기존')}>:`, kwList(baseKws), String(m.stBase ?? 'E'));
       m.stBase = key;
       m.stBaseLabel = baseKws.find(([k]) => k === key)?.[1] ?? '기존';
-      let height: number | null = null;
-      let factor: number | null = null;
+      // 주석 문자(118차): 모형 높이는 주석이 아닌 객체에만, 도면 높이(P)는 주석 객체에만, 객체 일치는 같은 꼴에만(textscale.ts)
+      const idx = new ScaleIndex(doc);
+      let mode: TextScaleMode | null = null;
       const lastH = typeof m.stHeight === 'number' ? m.stHeight : (textHeightOf(list[0]!, doc) ?? 2.5);
+      // 도면 높이의 기본값: 지난번 값, 없으면 고른 첫 주석 문자의 용지 높이
+      const paperOf = (e: Entity): number | null => {
+        const a = textAnnoFactor(doc, e, idx);
+        const h = a.annotative && a.factor ? textHeightOf(e, doc) : null;
+        return h && a.annotative && a.factor ? h / a.factor : null;
+      };
+      const lastP = typeof m.stPaper === 'number' ? m.stPaper : (list.map(paperOf).find((v) => v !== null) ?? lastH);
       for (;;) {
         const r = await askNumber(ctx, '새 모형 높이 지정 또는 [도면 높이(P)/객체 일치(M)/축척 비율(S)]', lastH, {
           positive: true,
@@ -905,13 +914,15 @@ export function registerModify2Commands(app: App): void {
           ],
         });
         if (typeof r === 'number') {
-          height = r;
+          mode = { kind: 'model', height: r };
+          m.stHeight = r;
           break;
         }
         if (r.keyword === 'P') {
-          const h = await askNumber(ctx, '새 도면 높이 지정', lastH, { positive: true });
+          const h = await askNumber(ctx, '새 도면 높이 지정', lastP, { positive: true });
           if (typeof h !== 'number') continue;
-          height = h;
+          mode = { kind: 'paper', height: h };
+          m.stPaper = h;
           break;
         }
         if (r.keyword === 'M') {
@@ -924,12 +935,13 @@ export function registerModify2Commands(app: App): void {
             continue;
           }
           ctx.print(`높이=${fmtLen(app, h)}`);
-          height = h;
+          mode = { kind: 'match', source: e!, height: h };
+          m.stHeight = h;
           break;
         }
         const s = await askNumber(ctx, '축척 비율 지정 또는 [참조(R)]', typeof m.stFactor === 'number' ? m.stFactor : 2, { positive: true, keywords: [{ key: 'R', label: '참조' }], text: (v) => String(+v.toFixed(4)) });
         if (typeof s === 'number') {
-          factor = s;
+          mode = { kind: 'factor', factor: s };
           m.stFactor = s;
           break;
         }
@@ -937,14 +949,20 @@ export function registerModify2Commands(app: App): void {
         if (typeof ref !== 'number') continue;
         const nl = await askNumber(ctx, '새 길이 지정', null, { positive: true });
         if (typeof nl !== 'number') continue;
-        factor = nl / ref;
+        mode = { kind: 'factor', factor: nl / ref };
         break;
       }
-      if (height !== null) m.stHeight = height;
       const res: EditResult[] = [];
+      const skipped: Record<TextScaleSkip, number> = { annotative: 0, nonAnnotative: 0, unknownScale: 0 };
       for (const e of list) {
         const h = textHeightOf(e, doc);
-        const k = factor ?? (h ? height! / h : 1);
+        if (!h) continue;
+        const r = textScaleFactor(doc, e, h, mode, idx);
+        if ('skip' in r) {
+          skipped[r.skip]++;
+          continue;
+        }
+        const k = r.k;
         if (!(k > 0) || Math.abs(k - 1) < 1e-12) continue;
         const p = scaleBasePoint(e, key, doc);
         if (!p) continue;
@@ -953,6 +971,9 @@ export function registerModify2Commands(app: App): void {
       st.selection.clear();
       commitResults(app, ctx, res, 'SCALETEXT', { quiet: true });
       app.refreshSelectionOverlay();
+      if (skipped.annotative) ctx.print(mode.kind === 'match' ? `주석 객체 ${skipped.annotative}개는 주석이 아닌 객체에 맞추지 않았습니다.` : `주석 객체 ${skipped.annotative}개는 모형 높이로 축척하지 않았습니다(주석 객체는 도면 높이(P)).`);
+      if (skipped.nonAnnotative) ctx.print(mode.kind === 'match' ? `주석이 아닌 객체 ${skipped.nonAnnotative}개는 주석 객체에 맞추지 않았습니다.` : `주석이 아닌 객체 ${skipped.nonAnnotative}개는 도면 높이로 축척하지 않았습니다(도면 높이는 주석 객체에만).`);
+      if (skipped.unknownScale) ctx.print(`축척을 읽을 수 없는 주석 객체 ${skipped.unknownScale}개는 축척하지 않았습니다.`);
       ctx.print(`문자 객체 ${res.length}개를 축척했습니다.`);
     },
   });
