@@ -43,8 +43,8 @@ const hiddenByDoc = new Map<number, ReadonlySet<string>>();
  * 78차 결함처럼 반쯤 적용된 문서로 다시 그리거나 저장하면 화면·파일이 메인 문서와 어긋난다
  */
 const outOfSync = new Set<number>();
-/** 문서별로 이번 세션에 지운 치수의 *D 블록 열쇠(114차 — 저장할 때 아무도 쓰지 않는 것만 뺀다, edit/dim/savedrop.ts) */
-const erasedDims = new Map<number, Set<string>>();
+/** 문서별로 이번 세션에 지운 치수의 *D 블록 열쇠와 치수 핸들(114·115차 — 저장할 때 아무도 쓰지 않는 블록과 지운 치수가 소유한 객체를 뺀다, edit/dim/savedrop.ts) */
+const erasedDims = new Map<number, { blocks: Set<string>; dims: Set<string> }>();
 const OUT_OF_SYNC = '도면 처리 모듈의 문서를 다시 맞추는 중입니다. 잠시 뒤 다시 저장하십시오.';
 
 function makeScene(
@@ -184,8 +184,8 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
           if (msg.type === 'editEncoded') releaseEncoded(msg.enc);
           const ops = unpackOps(wire);
           let erased = erasedDims.get(msg.docId);
-          if (!erased) erasedDims.set(msg.docId, (erased = new Set()));
-          noteRemovedDims(doc, ops, erased);
+          if (!erased) erasedDims.set(msg.docId, (erased = { blocks: new Set(), dims: new Set() }));
+          noteRemovedDims(doc, ops, erased.blocks, erased.dims);
           applyOps(doc, ops);
         } catch (e) {
           // 반쯤 적용된 문서로 장면을 그리거나 저장하지 않게, 메인이 문서를 다시 보낼 때까지 이 문서의 편집·저장을 받지 않는다
@@ -236,7 +236,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
         const t0 = performance.now();
         let r: { data: Uint8Array; warnings: { code: string; message: string; count?: number; detail?: unknown }[] };
         const erased = erasedDims.get(msg.docId);
-        const out = erased ? withoutErasedDimBlocks(doc, erased) : doc;
+        const out = erased ? withoutErasedDimBlocks(doc, erased.blocks, erased.dims) : doc;
         // 여러 단 MTEXT를 R2018 전 단 객체로 나눌 때 화면과 같은 글꼴로 줄을 잰다
         if (msg.format === 'dwg') {
           const { writeDwg } = await import('../io/dwg/index');
