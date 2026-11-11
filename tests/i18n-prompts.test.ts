@@ -49,6 +49,32 @@ describe('언어 사전 프롬프트', () => {
     expect([zh['솔리드'], zh['솔리드 채우기'], zh['솔리드(S)']]).toEqual(['实体', '实体填充', '实体(S)']);
   });
 
+  it('zh-CN: 도면(문서)은 图形이고, 도면 영역만 绘图区域다(114차 — AutoCAD 도움말의 图形特性·图形单位·当前图形·图形文件·绘图区域)', () => {
+    expect([zh['도면'], zh['도면 특성'], zh['도면 파일 이름'], zh['새 도면(저장하지 않음)'], zh['{0} 용지 단위 = {1} 도면 단위']]).toEqual([
+      '图形',
+      '图形特性',
+      '图形文件名',
+      '新建图形（未保存）',
+      '{0} 纸张单位 = {1} 图形单位',
+    ]);
+    expect(zh['AutoCAD 도면 템플릿 (*.dwt)']).toContain('图形样板');
+    // 근거를 확인하지 못해 그대로 둔 줄(도면 영역 등)을 빼고 도면을 绘图로 옮긴 줄이 없다
+    const skip = /도면 영역|도면 높이|도면 방향|도면 번호|도면 틀|도면 범위|도면 한계|머리말|도면 폴더|도면 요소|그리/;
+    const bad = Object.entries(zh)
+      .filter(([k, v]) => k.includes('도면') && !k.startsWith('#version') && !skip.test(k) && v.includes('绘图'))
+      .map(([k, v]) => `${k} => ${v}`);
+    expect(bad).toEqual([]);
+  });
+
+  it('zh-CN: 입력 프롬프트의 Enter는 进入(들어가기)가 아니라 输入이고, 복사 모드는 复制(单个·多个)다', () => {
+    const bad = Object.entries(zh)
+      .filter(([k, v]) => /입력 \[/.test(k) && v.includes('进入'))
+      .map(([k, v]) => `${k} => ${v}`);
+    expect(bad).toEqual([]);
+    expect(zh['복사 모드 옵션 입력 [단일(S)/다중(M)] <{0}>:']).toBe('输入复制模式选项 [单个(S)/多个(M)] <{0}>:');
+    expect(Object.values(zh).filter((v) => v.includes('【'))).toEqual([]);
+  });
+
   it('zh-CN: 번역 틀 글이 남아 있지 않다', () => {
     expect(Object.values(zh).filter((v) => v.includes('此处填写'))).toEqual([]);
   });

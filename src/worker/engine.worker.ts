@@ -15,6 +15,7 @@ import { ShxLibrary } from '../text/shx';
 import { collectTextUsage } from '../text/collect';
 import type { FromWorker, PreviewView, SceneMessage, ToWorker } from './protocol';
 import { applyOps } from '../edit/session';
+import { noteRemovedDims, withoutErasedDimBlocks } from '../edit/dim/savedrop';
 import { decodeWire, unpackOps } from './editwire';
 import { releaseEncoded } from './codec';
 import { sendDocument } from './doctransfer';
@@ -42,6 +43,8 @@ const hiddenByDoc = new Map<number, ReadonlySet<string>>();
  * 78차 결함처럼 반쯤 적용된 문서로 다시 그리거나 저장하면 화면·파일이 메인 문서와 어긋난다
  */
 const outOfSync = new Set<number>();
+/** 문서별로 이번 세션에 지운 치수의 *D 블록 열쇠(114차 — 저장할 때 아무도 쓰지 않는 것만 뺀다, edit/dim/savedrop.ts) */
+const erasedDims = new Map<number, Set<string>>();
 const OUT_OF_SYNC = '도면 처리 모듈의 문서를 다시 맞추는 중입니다. 잠시 뒤 다시 저장하십시오.';
 
 function makeScene(
@@ -179,7 +182,11 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
           // 다 푼 묶음의 버퍼를 바로 놓아 준다(97차 — 메인의 DocAssembler와 같다. 바꾼 객체의 형식 배열은 제 버퍼로 복사돼 있다).
           // 그대로 두면 큰 편집(연관 도면 MOVE 약 23MiB)마다 다음 큰 GC까지 바깥 메모리로 남아 GC를 앞당긴다
           if (msg.type === 'editEncoded') releaseEncoded(msg.enc);
-          applyOps(doc, unpackOps(wire));
+          const ops = unpackOps(wire);
+          let erased = erasedDims.get(msg.docId);
+          if (!erased) erasedDims.set(msg.docId, (erased = new Set()));
+          noteRemovedDims(doc, ops, erased);
+          applyOps(doc, ops);
         } catch (e) {
           // 반쯤 적용된 문서로 장면을 그리거나 저장하지 않게, 메인이 문서를 다시 보낼 때까지 이 문서의 편집·저장을 받지 않는다
           outOfSync.add(msg.docId);
@@ -190,11 +197,13 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
       case 'replace':
         if (docs.has(msg.docId)) docs.set(msg.docId, msg.doc);
         outOfSync.delete(msg.docId);
+        erasedDims.delete(msg.docId);
         break;
       case 'close':
         docs.delete(msg.docId);
         hiddenByDoc.delete(msg.docId);
         outOfSync.delete(msg.docId);
+        erasedDims.delete(msg.docId);
         break;
       case 'hide':
         if (msg.handles.length) hiddenByDoc.set(msg.docId, new Set(msg.handles));
@@ -226,13 +235,15 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
         }
         const t0 = performance.now();
         let r: { data: Uint8Array; warnings: { code: string; message: string; count?: number; detail?: unknown }[] };
+        const erased = erasedDims.get(msg.docId);
+        const out = erased ? withoutErasedDimBlocks(doc, erased) : doc;
         // 여러 단 MTEXT를 R2018 전 단 객체로 나눌 때 화면과 같은 글꼴로 줄을 잰다
         if (msg.format === 'dwg') {
           const { writeDwg } = await import('../io/dwg/index');
-          r = writeDwg(doc, { version: msg.version as never, text });
+          r = writeDwg(out, { version: msg.version as never, text });
         } else {
           const { writeDxf } = await import('../io/dxf/writer');
-          r = writeDxf(doc, { version: msg.version as never, binary: msg.binary, text });
+          r = writeDxf(out, { version: msg.version as never, binary: msg.binary, text });
         }
         const data = r.data.buffer.slice(r.data.byteOffset, r.data.byteOffset + r.data.byteLength) as ArrayBuffer;
         post({ type: 'saved', id: msg.id, data, warnings: r.warnings.map((w) => ({ code: w.code, message: w.message, count: w.count, detail: plainDetail((w as { detail?: unknown }).detail) })), ms: performance.now() - t0 }, [data]);
