@@ -118,6 +118,18 @@ describe('SCALETEXT·치수 스타일·GRID·주 뷰포트·가리기 프레임 
     expect(translate(grid, 'zh-CN')).toContain('捕捉(S)');
   });
 
+  it('여러 줄 문자 단(열)은 단 설정·-MTEXT 도움말 낱말(栏·段組み), 거터는 Bundsteg·栏间距·段の間隔', () => {
+    for (const k of ['열 유형', '동적 열', '정적 열', '열 없음(N)', '열 설정', '열 높이 지정', '열 폭 지정', '열 수 지정', '열(C)', '열 유형 입력 [동적(D)/정적(S)/열 없음(N)] <동적(D)>:']) {
+      expect(translate(k, 'zh-CN'), k).toContain('栏');
+      expect(translate(k, 'zh-CN'), k).not.toContain('列');
+      expect(translate(k, 'ja'), k).toMatch(/段/);
+      expect(translate(k, 'ja'), k).not.toContain('列');
+    }
+    expect(LANGS.map((l) => translate('거터', l))).toEqual(['Gutter', 'Bundsteg', '段の間隔', '栏间距']);
+    // 표와 함께 쓰는 열쇠는 그대로(列)
+    expect(translate('열 폭', 'zh-CN')).toBe('列宽');
+  });
+
   it('가리기 프레임 줄의 켜기·끄기가 한국어로 남지 않는다', () => {
     for (const l of LANGS) for (const v of ['끄기', '켜기', '표시하지만 플롯 안 함']) expect(translate(`가리기 프레임 = ${v}`, l)).not.toMatch(HANGUL);
   });
