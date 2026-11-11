@@ -26,6 +26,12 @@ describe('맞춤 탭·단의 열 폭 열쇠', () => {
     expect(LANGS.map((l) => translate('맞춤', l))).toEqual(['Fit', 'Anpassen', 'フィット', '拟合']);
     expect(translate('맞춤 옵션(공간이 모자랄 때 밖으로)', 'de')).toContain('Einpassungsoption');
     expect(translate('맞춤 옵션(공간이 모자랄 때 밖으로)', 'zh-CN')).toContain('调整选项');
+    // 맞춤 탭의 칸(DIMSCALE·DIMSOXD·DIMTOFL·DIMTIX): 전체 축척을 Vollbildmodus(전체 화면)·全屏·Extents로, 화살표가 맞지 않음을 "잘못 정렬"로 옮기던 줄
+    expect(['en', 'de', 'zh-CN'].map((l) => translate('전체 축척 사용', l))).toEqual(['Use overall scale of', 'Globaler Skalierfaktor', '使用全局比例']);
+    expect(translate('화살표가 맞지 않으면 억제', 'de')).toBe('Pfeile unterdrücken, wenn sie nicht zwischen Hilfslinien passen');
+    expect(translate('화살표가 맞지 않으면 억제', 'zh-CN')).toBe('若不能放在尺寸界线内，则不显示箭头');
+    expect(translate('치수보조선 사이에 치수선 그리기', 'de')).toBe('Maßlinie zwischen Hilfslinien');
+    expect(translate('항상 치수보조선 사이에 문자 유지', 'de')).toBe('Text immer zwischen Hilfslinien anzeigen');
   });
 
   it('여러 줄 문자 단 설정의 열 폭은 段の幅·栏宽, 표의 열 폭은 列幅·列宽 그대로', () => {
