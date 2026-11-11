@@ -213,6 +213,61 @@ describe('언어 사전 동음이의(자르기·명령 취소)', () => {
     expect(tr(zh, ['잘라내기'])).toEqual(['剪切']);
   });
 
+  it('TEXTMASK·WIPEOUT의 가리기는 Wipeout 객체다(Hide·Ausblenden·隠す·隐藏가 아니다 — 117차)', () => {
+    // Autodesk 도움말: TEXTMASK 옵션 Wipeout/3dface/Solid(de Abdeckung·3D-Fläche, ja ワイプアウト·3D 面, zh 区域覆盖·三维面),
+    // WIPEOUT(de ABDECKEN·Abdeckungsobjekt, ja WIPEOUT[ワイプアウト], zh 区域覆盖对象), WIPEOUTFRAME(frames for wipeout objects·Rahmen für Abdeckungsobjekte·
+    // ワイプアウト オブジェクトのフレーム·区域覆盖对象的框架), TEXTUNMASK(removes the mask·Maske entfernen·マスクを除去·删除遮罩)
+    expect(tr(en, ['가리기', '가리기(W)', '3D 면(3)', '가리기 테두리', '가리기 유형', '가리기 해제'])).toEqual(['Wipeout', 'Wipeout (W)', '3D Face (3)', 'Wipeout frames', 'Mask type', 'Remove mask']);
+    expect(tr(de, ['가리기', '가리기(W)', '3D 면(3)', '가리기 테두리', '가리기 유형', '가리기 해제'])).toEqual(['Abdeckung', 'Abdeckung (W)', '3D-Fläche (3)', 'Abdeckungsrahmen', 'Maskentyp', 'Maske entfernen']);
+    expect(tr(ja, ['가리기', '가리기(W)', '3D 면(3)', '가리기 테두리', '가리기 유형', '가리기 해제'])).toEqual(['ワイプアウト', 'ワイプアウト(W)', '3D 面(3)', 'ワイプアウト フレーム', 'マスクタイプ', 'マスク除去']);
+    expect(tr(zh, ['가리기', '가리기(W)', '3D 면(3)', '가리기 테두리', '가리기 유형', '가리기 해제'])).toEqual(['区域覆盖', '区域覆盖(W)', '三维面(3)', '区域覆盖框架', '遮罩类型', '删除遮罩']);
+    // 가리기·가리개가 든 줄에 숨기기 낱말이 없다(HIDE 명령 이름·일본어 隠線処理는 뺀다)
+    const hide = [/\b(?:[Uu]n)?[Hh]id(?:e|es|ing|den)\b/, /ausblend|einblend/i, /隠す|隠し|隠蔽/, /隐藏|屏蔽|蒙版|掩码/];
+    const bad: string[] = [];
+    for (const k of Object.keys(en).filter((s) => /가리기|가리개|가릴|가린|가렸/.test(s)))
+      [en, de, ja, zh].forEach((d, i) => {
+        if (hide[i]!.test(d[k]!)) bad.push(`${i}: ${k} => ${d[k]}`);
+      });
+    expect(bad).toEqual([]);
+  });
+
+  it('TEXTMASK·TEXTUNMASK 명령행 글은 네 언어에서 한국어 없이 옮겨진다(유형 이름을 끼운 줄 포함 — 117차)', async () => {
+    const { MASK_LABEL } = await import('../src/edit/express/textmask');
+    const { translate } = await import('../site/i18n.mjs');
+    // express-text.ts가 찍는 꼴 그대로(명령행은 [ 앞 글·옵션·] 뒤 글 조각과 통째 프롬프트를 함께 옮긴다)
+    const lines: string[] = [];
+    for (const t of ['wipeout', 'solid'] as const) {
+      const label = MASK_LABEL[t];
+      lines.push(`현재 설정: 간격띄우기 비율 = 0.35, 가리기 유형 = ${label}${t === 'solid' ? ' (색상 1)' : ''}`);
+      lines.push(`가리기에 사용할 객체 유형 지정 [가리기(W)/3D 면(3)/솔리드(S)] <${label}>:`, `] <${label}>:`, `문자 3개를 ${label}(으)로 가렸습니다.`);
+    }
+    lines.push(
+      '가릴 문자 객체 선택 또는 [가리기 유형(M)/간격띄우기(O)]:',
+      '가릴 문자 객체 선택 또는 [',
+      '가리기 유형(M)',
+      '가리기에 사용할 객체 유형 지정 [',
+      '가리기(W)',
+      '3D 면(3)',
+      '솔리드(S)',
+      '3D 면 가리기는 숨기기(HIDE) 표시가 필요해 이 웹 버전에서 쓸 수 없습니다. 가리기(W)나 솔리드(S)를 쓰십시오.',
+      '배경 가리기 색상 번호 입력 <1>:',
+      '문자 높이에 대한 간격띄우기 비율 입력',
+      '가릴 수 있는 문자가 없습니다(빈 문자).',
+      '이 도면에는 이름 있는 객체 사전이 없어 문자와 가리개를 그룹으로 묶지 못했습니다.',
+      '가리기를 지울 문자 또는 여러 줄 문자 객체 선택:',
+      '가린 문자를 고르지 않았습니다.',
+      '문자 3개의 가리기를 지웠습니다.',
+      '문자 가리기',
+      '문자 가리기 지우기',
+      '문자 뒤에 가리개 (TEXTMASK)',
+      '문자 가리개 지우기 (TEXTUNMASK)',
+    );
+    const left = ['en', 'de', 'ja', 'zh-CN'].flatMap((l) => lines.map((s) => `${l}: ${translate(s, l)}`)).filter((s) => /[가-힣]/.test(s));
+    expect(left).toEqual([]);
+    expect(translate('현재 설정: 간격띄우기 비율 = 0.35, 가리기 유형 = 솔리드 (색상 1)', 'de')).toBe('Aktuelle Einstellungen: Versatzverhältnis = 0.35, Maskentyp = Vollflächig (Farbe 1)');
+    expect(translate('가리기에 사용할 객체 유형 지정 [가리기(W)/3D 면(3)/솔리드(S)] <가리기>:', 'ja')).toBe('マスクに使用するオブジェクトタイプを指定 [ワイプアウト(W)/3D 面(3)/ソリッド(S)] <ワイプアウト>:');
+  });
+
   it('명령 취소는 UNDO다: 영어 Cancel·독일어 Abbrechen으로 옮기지 않는다(Esc 안내는 진짜 취소라 뺀다)', () => {
     const undo = (d: Record<string, string>, bad: RegExp) =>
       Object.entries(d)
