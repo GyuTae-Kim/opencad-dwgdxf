@@ -68,6 +68,8 @@ import { MSG } from '../edit/geom/types';
 import { relinkClonedColumns, relinkColumnCopies } from '../edit/util/mtextcols';
 import { columnGripEdit } from './mtextcols-grips';
 import { ft } from './filetext';
+import { ScaleIndex, explodeView } from '../edit/annoscale/represent';
+import { scaleForSpace } from './annoscale-core';
 
 // ---------------------------------------------------------------------------
 // 변환 행렬(x' = a·x + c·y + e, y' = b·x + d·y + f)
@@ -1554,9 +1556,13 @@ export function registerModifyCommands(app: App): void {
       const results: EditResult[] = [];
       let fail = 0;
       const reasons = new Set<string>();
+      // 주석 객체는 지금 공간의 주석 축척 표현을 분해한다(120차 — 결과는 주석이 아니다: explodeEntity)
+      const scale = st.blockEdit ? undefined : scaleForSpace(app, st, st.space)?.name;
+      const idx = scale ? new ScaleIndex(st.doc) : null;
       for (const h of hs) {
-        const e = st.doc.entityIndex.get(h);
-        if (!e) continue;
+        const e0 = st.doc.entityIndex.get(h);
+        if (!e0) continue;
+        const e = idx ? explodeView(st.doc, e0, scale, idx) : e0;
         const r = explodeEntity(e, st.doc);
         if (!r.add?.length && !r.remove?.length && !r.replace?.length) {
           fail++;

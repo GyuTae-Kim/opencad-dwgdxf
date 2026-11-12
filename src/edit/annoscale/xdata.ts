@@ -8,7 +8,7 @@
  *   레코드로 쓴다 — edit.ts). `1070 1`(판), `1000 보이는 축척 이름`, `1002 {`, 축척마다 `1000 이름`, `1002 }`.
  *   읽기는 계속하고, 그 객체를 편집하거나 앱이 도면을 열 때(upgradeOwnRecords) AutoCAD 레코드로 바꾼다.
  */
-import type { CadDocument, MLeaderStyleObject, XData } from '../../core/model';
+import type { CadDocument, Entity, MLeaderStyleObject, XData } from '../../core/model';
 import { tableKey } from '../../core/model';
 import type { EditOp } from '../session';
 import { upper } from './scales';
@@ -115,6 +115,64 @@ export function mleaderStyleAnnotative(doc: CadDocument, handle: string | undefi
 export function blockAnnotative(doc: CadDocument, name: string | undefined): boolean {
   if (!name) return false;
   return annotativeFlag(doc.blockRecords.get(tableKey(name))?.xdata) === true;
+}
+
+/**
+ * 분해(EXPLODE·BURST·분해해 넣기)할 객체가 주석 객체인지 — 값싼 표지 검사(레코드는 읽지 않는다): 주석 블록의 참조,
+ * 다중 지시선은 AcadAnnotative가 없으면 293, 그 밖에는 AcadAnnotative 1
+ */
+export function annotativeSource(doc: CadDocument, e: Entity): boolean {
+  if (e.type === 'INSERT') return blockAnnotative(doc, e.block) || annotativeFlag(e.xdata) === true;
+  const f = annotativeFlag(e.xdata);
+  if (e.type === 'MULTILEADER' && f === undefined) return Number(e.props?.[293]) === 1;
+  return f === true;
+}
+
+/**
+ * 분해 결과를 주석이 아닌 객체로 남긴다(120차, Autodesk EXPLODE 도움말 — 주석 객체는 지금 축척 표현을 분해하고 그 결과는
+ * 주석이 아니다). 결과는 확정 고리가 새 객체로 보므로, 주석 문자 스타일의 문자는 표지가 없으면 주석 문자로, 원본에서
+ * 이어받은 표지 1은 지금 축척 레코드를 붙여 주석으로 남겼다(실도면 841개: 주석 MTEXT 7,011, 그림 문자가 주석 스타일이고
+ * 표지가 없는 주석 치수 4,364, 주석 문자 스타일의 주석 다중 지시선 3,831 — 치수·다중 지시선의 문자는 축척 배율만큼 커졌다).
+ * - TEXT·MTEXT: 표지 없이 주석 문자 스타일이면 `{1, 0}`(주석 아님 — makeNonAnnotative와 같은 꼴. AutoCAD가 쓴 주석 스타일의
+ *   주석 아닌 문자는 표지 0과 표지 없음이 둘 다 있다 — TEXT 51·153, MTEXT 16·106). 원본이 주석이면 표지 1도 `{1, 0}`.
+ * - 원본이 주석이면 다른 객체도 이어받은 표지를 끈다: 치수·해치는 `{1, 0}`, 다중 지시선은 293 = 0, 나머지는 AcadAnnotative를 뺀다.
+ *   주석 블록의 참조는 블록 정의가 정하므로 그대로 둔다. 주석이 아닌 블록 안의 주석 객체(표지 1)는 주석으로 남긴다(전과 같다).
+ * 객체를 제자리에서 고친다(분해가 막 만든 새 객체).
+ */
+export function plainExplodedParts(doc: CadDocument, parts: readonly Entity[], fromAnno: boolean): void {
+  // 한 블록의 문자는 대개 스타일 몇 개를 함께 쓴다: 스타일 이름마다 한 번만 찾는다
+  let styles: Map<string, boolean> | undefined;
+  const annoStyle = (name: string): boolean => {
+    let v = (styles ??= new Map()).get(name);
+    if (v === undefined) styles.set(name, (v = textStyleAnnotative(doc, name)));
+    return v;
+  };
+  for (const p of parts) {
+    if (!p.xdata && !fromAnno && p.type !== 'TEXT' && p.type !== 'MTEXT') continue;
+    const f = annotativeFlag(p.xdata);
+    switch (p.type) {
+      case 'TEXT':
+      case 'MTEXT':
+        if ((fromAnno && f === true) || (f === undefined && annoStyle(p.style))) p.xdata = withAnnotativeFlag(p.xdata, false);
+        break;
+      case 'DIMENSION':
+      case 'HATCH':
+        if (fromAnno && f === true) p.xdata = withAnnotativeFlag(p.xdata, false);
+        break;
+      case 'MULTILEADER':
+        if (fromAnno && f === true) p.xdata = withAnnotativeFlag(p.xdata, false);
+        if (fromAnno && Number(p.props?.[293]) === 1) p.props = { ...p.props, 293: 0 };
+        break;
+      case 'INSERT':
+        break;
+      default:
+        if (fromAnno && p.xdata?.some((d) => d.app.toUpperCase() === 'ACADANNOTATIVE')) {
+          const x = withoutApp(p.xdata, ANNO_APP);
+          if (x) p.xdata = x;
+          else delete p.xdata;
+        }
+    }
+  }
 }
 
 /** 블록 방향을 배치에 일치(AcadAnnoPO) */

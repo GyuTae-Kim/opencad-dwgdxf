@@ -18,6 +18,8 @@ ezdxf(MIT)는 DXF 값의 뜻을 확인할 때만 참고했다.
 | `message` | 결과가 없거나 근사했을 때의 안내(`객체가 모서리와 교차하지 않습니다.` 등, `types.ts`의 `MSG`) |
 
 새 객체(`add`, 새 블록 안 객체)에는 원본의 핸들·확장 사전·반응자·DWG 원본 본문(`dwgRaw`)을 남기지 않는다(`freshEntity`).
+분해 결과는 주석 객체가 아니다(120차, Autodesk EXPLODE 도움말): 주석 원본에서 이어받은 표지를 끄고, 표지 없는 주석 스타일 문자는 표지 `{1, 0}`으로 둔다
+(`src/edit/annoscale/xdata.ts` `plainExplodedParts` — 편집 고리가 새 주석 문자로 보아 축척 배율만큼 키우지 않게). 주석 객체의 어느 축척 표현을 분해할지는 명령이 고른다(`explodeView`).
 복사(COPY·ARRAY)는 `copyEntity`를 쓴다 — `transformEntity` 결과를 새 객체로 바꾼 것이다.
 
 ## 좌표

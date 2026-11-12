@@ -46,6 +46,7 @@ import { type Nurbs, domain, normalizeNurbs, subNurbs } from './nurbs';
 import { explodeArcText } from '../textools/arctext';
 import { meshFaces, meshVertices } from '../../core/meshdata';
 import { leaderVertices } from '../../core/flat3';
+import { annotativeSource, plainExplodedParts } from '../annoscale/xdata';
 
 /**
  * 한 단계 분해가 만드는 객체 수의 어림(펼침 몫을 미리 셀 때): 블록 참조는 블록 내용 × 칸 + 속성, 치수·표는 블록 내용.
@@ -62,8 +63,23 @@ export function explodeCost(e: Entity, doc: CadDocument): number {
 /**
  * 객체를 한 단계 분해한다. partial은 도면을 바꾸지 않는 조회(범위, 모서리)용으로, 다중 삽입이 칸 한도를 넘어도 한도까지 펼친다.
  * 편집은 잘린 칸을 잃으므로 거부하고 원본을 남긴다.
+ * 결과는 주석 객체가 아니다(120차 — plainExplodedParts). 주석 객체의 어느 축척 표현을 분해할지는 부르는 쪽이 고른다(explodeView).
  */
 export function explodeEntity(e: Entity, doc: CadDocument, partial = false): EditResult {
+  const r = explodeOnce(e, doc, partial);
+  if (partial || !r.add?.length) return r;
+  // 문자가 나올 수 없는 원본(폴리선·메시·해치 무늬·여러 줄 …)은 이어받은 주석 표지만 보면 된다 — 표지는 확장 데이터에 있다
+  // (큰 도면 EXPLODE의 조각 대부분이 폴리선 조각이라 조각마다 보지 않는다)
+  const text = TEXT_SOURCES.has(e.type);
+  const anno = (text || !!e.xdata) && annotativeSource(doc, e);
+  if (text || anno) plainExplodedParts(doc, r.add, anno);
+  return r;
+}
+
+/** 분해 결과에 문자(TEXT·MTEXT·속성 문자)가 나올 수 있는 종류 */
+const TEXT_SOURCES = new Set(['INSERT', 'DIMENSION', 'ACAD_TABLE', 'MTEXT', 'MULTILEADER', 'TOLERANCE', 'ARCALIGNEDTEXT']);
+
+function explodeOnce(e: Entity, doc: CadDocument, partial: boolean): EditResult {
   const done = (add: Entity[], extra: Partial<EditResult> = {}): EditResult => (add.length ? { remove: e.handle ? [e.handle] : [], add, ...extra } : { message: MSG.cannotExplode });
   switch (e.type) {
     case 'INSERT':

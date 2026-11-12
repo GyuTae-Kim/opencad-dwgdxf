@@ -529,7 +529,7 @@ export function annoUpdateScale(doc: CadDocument, e: TextEntity | MTextEntity, f
 /**
  * 주석으로: 지금 크기가 용지 크기가 되고 모형 크기는 그 축척의 배율만큼 커진다(상태 = 그 축척 하나).
  * 블록 참조는 주석 블록일 때만(새로 넣은 참조). 이미 주석이면 그대로.
- * opt.k: TEXT·MTEXT의 크기 배율을 따로 준다(ANNOUPDATE — annoUpdateScale)
+ * opt.k: TEXT·MTEXT·다중 지시선의 크기 배율을 따로 준다(ANNOUPDATE — annoUpdateScale, MATCHPROP — 120차)
  */
 export function makeAnnotative(env: EditEnv, e: Entity, scaleName: string, opt: { creating?: boolean; k?: number } = {}): Edited {
   const ops: EditOp[] = [];
@@ -554,11 +554,14 @@ export function makeAnnotative(env: EditEnv, e: Entity, scaleName: string, opt: 
     }
     case 'DIMENSION': {
       const out = markPart(regenerateDimension(env, e, f, ops));
+      // 도면에 있던 치수(특성 팔레트·MATCHPROP)가 쓰던 그림 블록은 다른 치수·레코드가 쓰지 않으면 지운다(120차 — 쓰이지 않는 *D가 남았다).
+      // 새로 만드는 치수(creating)의 블록은 아직 문서에 없거나 복사한 원본과 함께 쓸 수 있어 두고, 확정 고리가 따로 뺀다
+      if (!opt.creating && out.block !== e.block) moveDimBlockRef(env, e.block, '', [out.block], ops);
       return { entity: writeFirstRecords(env, out, name, ops), ops };
     }
     case 'HATCH':
     case 'MULTILEADER': {
-      const out = markPart(scaledInPlace(e, f));
+      const out = markPart(scaledInPlace(e, e.type === 'MULTILEADER' ? (opt.k ?? f) : f));
       return { entity: writeFirstRecords(env, out, name, ops), ops };
     }
     default:
@@ -566,8 +569,11 @@ export function makeAnnotative(env: EditEnv, e: Entity, scaleName: string, opt: 
   }
 }
 
-/** 주석 아님: 용지 크기로 돌아가고 레코드·자체 기록을 지운다(TEXT·MTEXT는 `{1, 0}`으로 남긴다) */
-export function makeNonAnnotative(env: EditEnv, e: Entity): Edited {
+/**
+ * 주석 아님: 용지 크기로 돌아가고 레코드·자체 기록을 지운다(TEXT·MTEXT는 `{1, 0}`으로 남긴다).
+ * opt.regen이 거짓이면 치수 그림을 다시 그리지 않는다(재지정 그대로 — 부르는 쪽이 다시 그린다: MATCHPROP, 120차)
+ */
+export function makeNonAnnotative(env: EditEnv, e: Entity, opt: { regen?: boolean } = {}): Edited {
   const ops: EditOp[] = [];
   const st = annoState(env.doc, e, env.idx);
   if (!st || st.foreign) return { entity: e, ops };
@@ -595,7 +601,7 @@ export function makeNonAnnotative(env: EditEnv, e: Entity): Edited {
       }
       break;
     case 'DIMENSION': {
-      const d = regenerateDimension(env, e, null, ops);
+      const d = opt.regen === false ? e : regenerateDimension(env, e, null, ops);
       out = { ...d, xdata: withOwnRecord(annotativeFlag(e.xdata) === undefined ? d.xdata : withAnnotativeFlag(d.xdata, false), null) };
       break;
     }

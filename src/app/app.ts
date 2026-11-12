@@ -75,6 +75,7 @@ import {
 import { browserSysvar, browserSysvarText, onSysvarChange, setBrowserSysvar } from './sysvars';
 import { COORDS_NOTE, coordsMode, coordsText, nextCoordsMode } from './coords';
 import { optionValue } from './options';
+import { keywordLabelIs } from './dashcmds-ask';
 
 export class CancelError extends Error {
   constructor() {
@@ -1025,7 +1026,7 @@ export class App {
         this.cmd.setPrompt(r.prompt);
         return;
       }
-      const kw = r.keywords.find((k) => k.key.toUpperCase() === up || k.label === t);
+      const kw = r.keywords.find((k) => k.key.toUpperCase() === up || keywordLabelIs(k.label, t));
       if (kw) {
         r.resolve({ keyword: kw.key });
         return;
@@ -1053,7 +1054,7 @@ export class App {
       return;
     }
     const up = t.toUpperCase();
-    const kw = r.keywords.find((k) => k.key.toUpperCase() === up || k.label === t);
+    const kw = r.keywords.find((k) => k.key.toUpperCase() === up || keywordLabelIs(k.label, t));
     if (kw) {
       this.cmd.print(`${this.promptOf(r)} ${t}`);
       r.resolve({ keyword: kw.key });
