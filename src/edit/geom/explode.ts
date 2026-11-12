@@ -67,9 +67,17 @@ export function explodeCost(e: Entity, doc: CadDocument): number {
  */
 export function explodeEntity(e: Entity, doc: CadDocument, partial = false): EditResult {
   const r = explodeOnce(e, doc, partial);
-  if (!partial && r.add?.length) plainExplodedParts(doc, r.add, annotativeSource(doc, e));
+  if (partial || !r.add?.length) return r;
+  // 문자가 나올 수 없는 원본(폴리선·메시·해치 무늬·여러 줄 …)은 이어받은 주석 표지만 보면 된다 — 표지는 확장 데이터에 있다
+  // (큰 도면 EXPLODE의 조각 대부분이 폴리선 조각이라 조각마다 보지 않는다)
+  const text = TEXT_SOURCES.has(e.type);
+  const anno = (text || !!e.xdata) && annotativeSource(doc, e);
+  if (text || anno) plainExplodedParts(doc, r.add, anno);
   return r;
 }
+
+/** 분해 결과에 문자(TEXT·MTEXT·속성 문자)가 나올 수 있는 종류 */
+const TEXT_SOURCES = new Set(['INSERT', 'DIMENSION', 'ACAD_TABLE', 'MTEXT', 'MULTILEADER', 'TOLERANCE', 'ARCALIGNEDTEXT']);
 
 function explodeOnce(e: Entity, doc: CadDocument, partial: boolean): EditResult {
   const done = (add: Entity[], extra: Partial<EditResult> = {}): EditResult => (add.length ? { remove: e.handle ? [e.handle] : [], add, ...extra } : { message: MSG.cannotExplode });

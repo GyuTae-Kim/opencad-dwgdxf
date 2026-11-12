@@ -140,13 +140,20 @@ export function annotativeSource(doc: CadDocument, e: Entity): boolean {
  * 객체를 제자리에서 고친다(분해가 막 만든 새 객체).
  */
 export function plainExplodedParts(doc: CadDocument, parts: readonly Entity[], fromAnno: boolean): void {
+  // 한 블록의 문자는 대개 스타일 몇 개를 함께 쓴다: 스타일 이름마다 한 번만 찾는다
+  let styles: Map<string, boolean> | undefined;
+  const annoStyle = (name: string): boolean => {
+    let v = (styles ??= new Map()).get(name);
+    if (v === undefined) styles.set(name, (v = textStyleAnnotative(doc, name)));
+    return v;
+  };
   for (const p of parts) {
     if (!p.xdata && !fromAnno && p.type !== 'TEXT' && p.type !== 'MTEXT') continue;
     const f = annotativeFlag(p.xdata);
     switch (p.type) {
       case 'TEXT':
       case 'MTEXT':
-        if ((fromAnno && f === true) || (f === undefined && textStyleAnnotative(doc, p.style))) p.xdata = withAnnotativeFlag(p.xdata, false);
+        if ((fromAnno && f === true) || (f === undefined && annoStyle(p.style))) p.xdata = withAnnotativeFlag(p.xdata, false);
         break;
       case 'DIMENSION':
       case 'HATCH':
