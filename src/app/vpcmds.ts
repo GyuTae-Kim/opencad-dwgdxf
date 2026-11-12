@@ -73,6 +73,12 @@ function makeViewport(st: DocState, r: Rect): ViewportEntity {
   return vp;
 }
 
+/**
+ * MVIEW 맞춤(F) 옵션 이름(120차): 스플라인·폴리선 맞춤(곡선 맞춤 — 중국어 拟合)과 언어 사전 열쇠를 가르려고 끝에 보이지 않는 U+2060을 붙인다
+ * (치수 스타일 맞춤 탭과 같은 열쇠 — MVIEW 도움말 옵션 제목 Fit·Anpassen·フィット·调整). 한국어 화면 글은 그대로이고 "맞춤"을 쳐도 고른다(keywordLabelIs)
+ */
+const FIT_OPT = '맞춤\u{2060}';
+
 /** 맞춤(F): 인쇄 가능 영역(없으면 용지) */
 function fitRect(st: DocState): Rect | null {
   const lay = st.layoutFor(st.space);
@@ -110,7 +116,7 @@ function split(r: Rect, n: number, how: string): Rect[] {
 }
 
 async function pickRect(ctx: CommandContext, prompt: string, allowFit: boolean, fallback: Rect | null): Promise<Rect | null> {
-  const r = await ctx.getPoint(prompt, { keywords: allowFit ? [{ key: 'F', label: '맞춤' }] : [] });
+  const r = await ctx.getPoint(prompt, { keywords: allowFit ? [{ key: 'F', label: FIT_OPT }] : [] });
   if ('enter' in r || ('keyword' in r && r.keyword === 'F')) return fallback;
   if (!('point' in r)) return null;
   const a = r.point;
@@ -496,11 +502,11 @@ export function registerViewportCommands(app: App): void {
       }
       await app.ensureScene(st, MODEL_SPACE);
       const fit = fitRect(st);
-      const r = await ctx.getPoint('뷰포트 구석 지정 또는 [켜기(ON)/끄기(OFF)/맞춤(F)/잠금(L)/객체(O)/폴리곤(P)/2/3/4] <맞춤>:', {
+      const r = await ctx.getPoint('뷰포트 구석 지정 또는 [켜기(ON)/끄기(OFF)/맞춤\u{2060}(F)/잠금(L)/객체(O)/폴리곤(P)/2/3/4] <맞춤\u{2060}>:', {
         keywords: [
           { key: 'ON', label: '켜기' },
           { key: 'OFF', label: '끄기' },
-          { key: 'F', label: '맞춤' },
+          { key: 'F', label: FIT_OPT },
           { key: 'L', label: '잠금' },
           { key: 'O', label: '객체' },
           { key: 'P', label: '폴리곤' },
@@ -614,7 +620,7 @@ export function registerViewportCommands(app: App): void {
             });
             how = 'keyword' in s ? s.keyword : 'R';
           }
-          const rr = await pickRect(ctx, '첫 번째 구석 지정 또는 [맞춤(F)] <맞춤>:', true, fit);
+          const rr = await pickRect(ctx, '첫 번째 구석 지정 또는 [맞춤\u{2060}(F)] <맞춤\u{2060}>:', true, fit);
           if (!rr) return;
           const vps: ViewportEntity[] = [];
           for (const part of split(rr, n, how)) {

@@ -7,6 +7,7 @@ import { tableKey } from '../core/model';
 import type { App, CommandContext, Keyword } from './app';
 import type { DocState } from './docstate';
 import { dialog, h } from './ui/dom';
+import { keywordLabelIs } from './dashcmds-ask';
 
 const CSS = `
 .dialog.u2-wide { width: min(760px, 100%); }
@@ -179,7 +180,7 @@ export async function askKeyword(ctx: CommandContext, prompt: string, keywords: 
     if ('enter' in r) return def ?? null;
     if ('text' in r) {
       const t = r.text.trim();
-      const k = keywords.find((x) => x.key.toUpperCase() === t.toUpperCase() || x.label === t);
+      const k = keywords.find((x) => x.key.toUpperCase() === t.toUpperCase() || keywordLabelIs(x.label, t));
       if (k) return k.key;
       return { text: t };
     }

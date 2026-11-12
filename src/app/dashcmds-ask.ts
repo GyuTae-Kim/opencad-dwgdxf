@@ -46,11 +46,19 @@ export async function askOption(ctx: CommandContext, prompt: string, keywords: K
   }
 }
 
+/**
+ * 친 글이 옵션 이름인지(120차): 언어 사전 열쇠를 가르려고 이름 끝에 붙인 보이지 않는 U+2060(MVIEW 맞춤 등 — 한국어 화면 글은 그대로)은
+ * 빼고 견준다. 한국어로 "맞춤"을 쳐도 그 옵션을 고른다
+ */
+export function keywordLabelIs(label: string, text: string): boolean {
+  return label === text || (label.includes('\u{2060}') && label.replace(/\u{2060}/gu, '') === text);
+}
+
 /** 입력 → 키워드 열쇠(열쇠·이름, 앞의 _는 뗀다) */
 export function matchKeyword(text: string, keywords: readonly Keyword[]): string | null {
   const t = text.trim().replace(/^_/, '');
   const up = t.toUpperCase();
-  return keywords.find((k) => k.key.toUpperCase() === up || k.label === t)?.key ?? null;
+  return keywords.find((k) => k.key.toUpperCase() === up || keywordLabelIs(k.label, t))?.key ?? null;
 }
 
 /** 예/아니오(Enter = def) */
