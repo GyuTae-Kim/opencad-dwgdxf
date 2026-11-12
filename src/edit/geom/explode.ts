@@ -46,6 +46,7 @@ import { type Nurbs, domain, normalizeNurbs, subNurbs } from './nurbs';
 import { explodeArcText } from '../textools/arctext';
 import { meshFaces, meshVertices } from '../../core/meshdata';
 import { leaderVertices } from '../../core/flat3';
+import { annotativeSource, plainExplodedParts } from '../annoscale/xdata';
 
 /**
  * 한 단계 분해가 만드는 객체 수의 어림(펼침 몫을 미리 셀 때): 블록 참조는 블록 내용 × 칸 + 속성, 치수·표는 블록 내용.
@@ -62,8 +63,15 @@ export function explodeCost(e: Entity, doc: CadDocument): number {
 /**
  * 객체를 한 단계 분해한다. partial은 도면을 바꾸지 않는 조회(범위, 모서리)용으로, 다중 삽입이 칸 한도를 넘어도 한도까지 펼친다.
  * 편집은 잘린 칸을 잃으므로 거부하고 원본을 남긴다.
+ * 결과는 주석 객체가 아니다(120차 — plainExplodedParts). 주석 객체의 어느 축척 표현을 분해할지는 부르는 쪽이 고른다(explodeView).
  */
 export function explodeEntity(e: Entity, doc: CadDocument, partial = false): EditResult {
+  const r = explodeOnce(e, doc, partial);
+  if (!partial && r.add?.length) plainExplodedParts(doc, r.add, annotativeSource(doc, e));
+  return r;
+}
+
+function explodeOnce(e: Entity, doc: CadDocument, partial: boolean): EditResult {
   const done = (add: Entity[], extra: Partial<EditResult> = {}): EditResult => (add.length ? { remove: e.handle ? [e.handle] : [], add, ...extra } : { message: MSG.cannotExplode });
   switch (e.type) {
     case 'INSERT':

@@ -22,7 +22,7 @@ import {
   withAttdefs,
 } from '../edit/util/blockutil';
 import { buildWblockDocument, type WblockSource } from '../edit/util/wblock';
-import { ScaleIndex, attribHeightK, factorOf } from '../edit/annoscale';
+import { ScaleIndex, attribHeightK, explodeView, factorOf } from '../edit/annoscale';
 import type { App, CommandContext } from './app';
 import { scaleForSpace } from './annoscale-core';
 import { userBlocks } from './blocks';
@@ -363,12 +363,16 @@ export function registerUtil2BlockCommands(app: App): void {
       const results: EditResult[] = [];
       let notBlock = 0;
       let fail = 0;
+      // 주석 블록의 참조는 지금 공간의 주석 축척 표현을 분해한다(120차 — EXPLODE와 같다)
+      const scale = st.blockEdit ? undefined : scaleForSpace(app, st, st.space)?.name;
+      const idx = scale ? new ScaleIndex(st.doc) : null;
       for (const x of hs) {
-        const e = st.doc.entityIndex.get(x);
-        if (e?.type !== 'INSERT') {
+        const e0 = st.doc.entityIndex.get(x);
+        if (e0?.type !== 'INSERT') {
           notBlock++;
           continue;
         }
+        const e = idx ? (explodeView(st.doc, e0, scale, idx) as InsertEntity) : e0;
         const r = burstInsert(e, st.doc);
         if (!r.add?.length) {
           fail++;

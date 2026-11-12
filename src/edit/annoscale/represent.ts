@@ -386,6 +386,21 @@ export function viewAt(doc: CadDocument, e: Entity, k: string | null, allVisible
   return representation(doc, e, st, name, idx);
 }
 
+/**
+ * EXPLODE가 분해할 표현(120차, Autodesk EXPLODE 도움말 — 주석 객체는 지금 축척 표현을 분해하고 다른 축척 표현은 버린다):
+ * 그 공간의 주석 축척 scale(모형 = CANNOSCALE·활성 뷰포트, 도면 공간 = 1:1)을 지원하면 그 표현, 아니면 객체 그대로
+ * (ANNOALLVISIBLE 1에서 보이는 모양). 그 축척의 치수 그림을 다시 그려야 하는 표현(레코드에 그림 블록이 없다)은 객체 그대로.
+ * 주석이 아니거나 이미 그 축척이면 같은 객체.
+ */
+export function explodeView(doc: CadDocument, e: Entity, scale: string | undefined, idx: ScaleIndex): Entity {
+  if (!scale || !annoKindOf(e)) return e;
+  const st = annoState(doc, e, idx);
+  const name = scale.toUpperCase();
+  if (!st || st.foreign || name === st.current || !st.byScale.has(name)) return e;
+  const v = representation(doc, e, st, name, idx);
+  return v.blocks?.length ? e : v.entity;
+}
+
 /** 객체를 주석 객체로 다룰 수 있는지(주석 표지가 있거나 레코드·자체 기록이 있다) */
 export function isAnnotative(doc: CadDocument, e: Entity, idx?: ScaleIndex): boolean {
   return !!annoState(doc, e, idx);
