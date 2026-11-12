@@ -23,6 +23,9 @@ import { uiText } from './i18n-text';
 import { dimensionBlockOps } from './dimcmds';
 import { applyOverrides } from '../edit/annot/override';
 import { updateTableOps } from '../edit/table/ops';
+import type { EditEnv } from '../edit/annoscale';
+import { commitOwn, envFor } from './annoscale-core';
+import { matchAnnotative } from './annoscale-match';
 
 /** MATCHPROP 설정(S): AutoCAD 특성 설정 대화상자의 항목. 끈 것은 옮기지 않는다 */
 export const MATCH_SETTINGS: { key: string; label: string; short: string }[] = [
@@ -143,13 +146,29 @@ export function registerEditCommands(app: App): void {
         if (!hs.length) break;
         const ops: EditOp[] = [];
         const blockOps: EditOp[] = [];
+        // 주석 여부가 바뀌는 대상(120차): 레코드 작업까지 이 모듈이 다루므로 확정 고리를 거치지 않는 변경으로 따로 확정한다(같은 명령 취소 단계)
+        const annoOps: EditOp[] = [];
         const extra = new Set<string>();
         const taken = new Set<string>();
+        // 주석 길의 치수 그림 이름도 extra로 겹치지 않게 고른다
+        let env: EditEnv | null = null;
         for (const h of hs) {
           if (h === src.handle) continue;
           const e = st.doc.entityIndex.get(h);
           const block = st.session.ownerOf(h);
           if (!e || !block) continue;
+          const am = matchAnnotative(app, st, (env ??= { ...envFor(st), taken: extra }), block, src, e, on, (s, d) => matchProps(s, d, on));
+          if (am) {
+            pushAll(annoOps, am.ops);
+            if (am.after.type === 'DIMENSION' && !am.drawn)
+              try {
+                pushAll(annoOps, dimensionBlockOps(st, am.after, true, extra));
+              } catch {
+                /* 생성기가 못 다루는 치수는 정의만 바꾼다 */
+              }
+            annoOps.push(st.session.hinted({ kind: 'modify', block, before: e, after: am.after }));
+            continue;
+          }
           let c = matchProps(src, e, on);
           if (JSON.stringify(c) === JSON.stringify(e)) continue;
           // 표 스타일이 바뀐 표는 표 그림 블록을 새 스타일로 다시 만든다(스타일을 고쳤을 때 restyleTablesOps와 같게 — 72차, 전에는 옛 그림이 남았다)
@@ -180,6 +199,7 @@ export function registerEditCommands(app: App): void {
           ops.push(st.session.hinted({ kind: 'modify', block, before: e, after: c }));
         }
         app.clearSelection();
+        commitOwn(st, 'MATCHPROP', annoOps, ctx.group);
         if (ops.length) st.session.commit({ label: 'MATCHPROP', ops: [...blockOps, ...ops], group: ctx.group });
       }
     },
