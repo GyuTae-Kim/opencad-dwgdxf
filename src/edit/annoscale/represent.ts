@@ -393,7 +393,8 @@ export function viewAt(doc: CadDocument, e: Entity, k: string | null, allVisible
  * 주석이 아니거나 이미 그 축척이면 같은 객체.
  */
 export function explodeView(doc: CadDocument, e: Entity, scale: string | undefined, idx: ScaleIndex): Entity {
-  if (!scale || !annoKindOf(e)) return e;
+  // 축척 표현은 확장 사전의 레코드나 확장 데이터의 자체 기록에만 있다 — 둘 다 없는 객체(대부분)는 상태를 읽지 않는다
+  if (!scale || (!e.xdict && !e.xdata) || !annoKindOf(e)) return e;
   const st = annoState(doc, e, idx);
   const name = scale.toUpperCase();
   if (!st || st.foreign || name === st.current || !st.byScale.has(name)) return e;
