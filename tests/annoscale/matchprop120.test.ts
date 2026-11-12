@@ -10,12 +10,13 @@ import { MODEL_SPACE, tableKey } from '../../src/core/model';
 import { createNewDocument } from '../../src/core/newdoc';
 import { commitOwn, installAnnoHooks, setCannoscale } from '../../src/app/annoscale-core';
 import { registerEditCommands, setMatchSettings, MATCH_SETTINGS } from '../../src/app/editcmds';
+import { setAnnotativeFor } from '../../src/app/annoscale-palette';
 import { annoState, annotativeFlag, contextRecords, regenerateDimension, withAnnotativeFlag } from '../../src/edit/annoscale';
 import { createLinearDimension } from '../../src/edit/dim/create';
 import type { EditOp } from '../../src/edit/session';
 import { makeHarness } from '../cmds2/harness';
 import { runWith } from '../drawmod/ctx';
-import { mtext, text } from './helpers';
+import { envOf, mtext, text } from './helpers';
 import { annotate, mleader } from './ctxfix';
 
 /** 묶음 번호 감싸기(perCommandGroups)는 쓰지 않는다 — 감싼 commit이 새 변경 객체를 만들어 이 모듈의 변경(commitOwn)을 고리가 다시 다룬다 */
@@ -100,7 +101,7 @@ describe('MATCHPROP이 문자·치수·다중 지시선의 주석 특성을 옮�
     const mk = (y: number, style: string): DimensionEntity => {
       const d0 = createLinearDimension(h.doc, { x: 0, y, z: 0 }, { x: 100, y, z: 0 }, { x: 50, y: y + 10, z: 0 }, { style });
       const ops: EditOp[] = [];
-      const d = regenerateDimension({ doc: h.doc, alloc: () => h.st.session.newHandle(), idx: undefined as never }, d0, null, ops);
+      const d = regenerateDimension(envOf(h.doc, h.st.session), d0, null, ops);
       d.handle = h.st.session.newHandle();
       d.owner = h.doc.blocks.get(MODEL_SPACE)!.recordHandle;
       h.st.session.commit({ label: 'DIM', ops: [...ops, { kind: 'add', block: MODEL_SPACE, entity: d }] });
@@ -110,15 +111,27 @@ describe('MATCHPROP이 문자·치수·다중 지시선의 주석 특성을 옮�
     const a = mk(0, 'Anno');
     const p = mk(100, 'Standard');
     expect([annoState(h.doc, a)?.scales, drawn(a.handle)]).toEqual([['1:20'], expect.closeTo(50)]);
+    const oldBlock = p.block;
     await match(h, a.handle, [p.handle]);
     const p2 = get<DimensionEntity>(h, p.handle);
     expect([p2.dimStyle, annoState(h.doc, p2)?.scales, p2.overrides?.[40], drawn(p.handle)]).toEqual(['Anno', ['1:20'], 20, expect.closeTo(50)]);
+    // 축척 배율로 다시 그린 새 그림을 쓰고, 이 치수만 쓰던 옛 그림 블록은 지운다(명령 취소로 돌아온다)
+    expect([p2.block !== oldBlock, h.doc.blocks.has(tableKey(oldBlock)), h.doc.blockRecords.has(tableKey(oldBlock))]).toEqual([true, false, false]);
+    h.st.session.undo();
+    expect([get<DimensionEntity>(h, p.handle).block, h.doc.blocks.has(tableKey(oldBlock)), annoState(h.doc, get(h, p.handle))]).toEqual([oldBlock, true, null]);
+    h.st.session.redo();
+    expect(annoState(h.doc, get(h, p.handle))?.scales).toEqual(['1:20']);
     // 반대: 보통 치수(새로) → 주석 치수 a
     const q = mk(200, 'Standard');
     const qDrawn = drawn(q.handle);
     await match(h, q.handle, [a.handle]);
     const a2 = get<DimensionEntity>(h, a.handle);
     expect([a2.dimStyle, annoState(h.doc, a2), recs(h, a.handle), a2.overrides?.[40], drawn(a.handle)]).toEqual(['Standard', null, 0, undefined, expect.closeTo(qDrawn)]);
+    // 특성 팔레트로 주석을 켜도 이 치수만 쓰던 옛 그림 블록을 지운다(같은 makeAnnotative 길)
+    const r = mk(300, 'Standard');
+    const rOld = r.block;
+    expect(setAnnotativeFor(h.app, [r.handle], true)).toBe(1);
+    expect([annoState(h.doc, get(h, r.handle))?.scales, h.doc.blocks.has(tableKey(rOld))]).toEqual([['1:20'], false]);
   });
 
   it('다중 지시선: 주석 다중 지시선 → 보통 다중 지시선은 전체 축척 = 배율의 주석 다중 지시선, 반대는 용지 크기로', async () => {

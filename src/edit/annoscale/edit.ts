@@ -554,6 +554,9 @@ export function makeAnnotative(env: EditEnv, e: Entity, scaleName: string, opt: 
     }
     case 'DIMENSION': {
       const out = markPart(regenerateDimension(env, e, f, ops));
+      // 도면에 있던 치수(특성 팔레트·MATCHPROP)가 쓰던 그림 블록은 다른 치수·레코드가 쓰지 않으면 지운다(120차 — 쓰이지 않는 *D가 남았다).
+      // 새로 만드는 치수(creating)의 블록은 아직 문서에 없거나 복사한 원본과 함께 쓸 수 있어 두고, 확정 고리가 따로 뺀다
+      if (!opt.creating && out.block !== e.block) moveDimBlockRef(env, e.block, '', [out.block], ops);
       return { entity: writeFirstRecords(env, out, name, ops), ops };
     }
     case 'HATCH':
