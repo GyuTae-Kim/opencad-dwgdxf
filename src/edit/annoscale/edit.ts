@@ -529,7 +529,7 @@ export function annoUpdateScale(doc: CadDocument, e: TextEntity | MTextEntity, f
 /**
  * 주석으로: 지금 크기가 용지 크기가 되고 모형 크기는 그 축척의 배율만큼 커진다(상태 = 그 축척 하나).
  * 블록 참조는 주석 블록일 때만(새로 넣은 참조). 이미 주석이면 그대로.
- * opt.k: TEXT·MTEXT·다중 지시선의 크기 배율을 따로 준다(ANNOUPDATE — annoUpdateScale, MATCHPROP — 120차)
+ * opt.k: TEXT·MTEXT·다중 지시선·해치의 크기 배율을 따로 준다(ANNOUPDATE — annoUpdateScale, MATCHPROP — 120차, 해치는 121차)
  */
 export function makeAnnotative(env: EditEnv, e: Entity, scaleName: string, opt: { creating?: boolean; k?: number } = {}): Edited {
   const ops: EditOp[] = [];
@@ -561,7 +561,7 @@ export function makeAnnotative(env: EditEnv, e: Entity, scaleName: string, opt: 
     }
     case 'HATCH':
     case 'MULTILEADER': {
-      const out = markPart(scaledInPlace(e, e.type === 'MULTILEADER' ? (opt.k ?? f) : f));
+      const out = markPart(scaledInPlace(e, opt.k ?? f));
       return { entity: writeFirstRecords(env, out, name, ops), ops };
     }
     default:
