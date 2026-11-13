@@ -1,7 +1,8 @@
 /**
  * EXPLODE: 한 단계 분해.
  * - INSERT(MINSERT 격자 포함): 블록 내용을 참조 변환으로 옮긴다. 도면층 0·ByBlock 특성은 그대로 둔다(AutoCAD와 같다).
- *   속성은 현재 값을 담은 TEXT(여러 줄 속성은 MTEXT)가 된다. 상수가 아닌 ATTDEF는 버린다.
+ *   속성은 ExplodeAttribs가 정한다 — EXPLODE는 속성 값을 지우고 블록 정의의 ATTDEF를 다시 보이고, BURST·조회는 현재 값을 담은
+ *   TEXT(여러 줄 속성은 MTEXT)로 남기며 상수가 아닌 ATTDEF는 버린다.
  * - LWPOLYLINE·2D POLYLINE → LINE·ARC(폭은 버리고 OCS는 그대로), 3D POLYLINE → LINE, 메시·폴리페이스·MESH → 3DFACE.
  * - DIMENSION·ACAD_TABLE → 블록 그림, LEADER·MULTILEADER → 선·화살촉·문자·블록, MTEXT → 줄마다 TEXT,
  *   무늬 HATCH → LINE, MLINE → LINE, TOLERANCE → 틀 선 + MTEXT.
@@ -61,12 +62,21 @@ export function explodeCost(e: Entity, doc: CadDocument): number {
 }
 
 /**
+ * 블록 참조의 속성을 분해 결과에 어떻게 남길지(123차).
+ * - `definitions`: EXPLODE와 분해해 넣기 — Autodesk EXPLODE 도움말 "속성이 든 블록을 분해하면 속성 값을 지우고 속성 정의를 다시 보인다",
+ *   블록 팔레트의 분해 옵션은 넣을 때 그 구성 요소로 분해한다. 블록 정의의 ATTDEF(상수 포함)를 참조 변환으로 옮기고 참조의 속성은 버린다.
+ * - `values`: BURST(Express Tools 도움말 — 속성 값을 문자로)와 도면을 바꾸지 않는 조회(범위·모서리 — 보이는 그림) — 속성은 현재 값의 문자,
+ *   상수 ATTDEF는 문자, 상수가 아닌 ATTDEF는 버린다(122차까지 EXPLODE도 이 꼴이었다).
+ */
+export type ExplodeAttribs = 'definitions' | 'values';
+
+/**
  * 객체를 한 단계 분해한다. partial은 도면을 바꾸지 않는 조회(범위, 모서리)용으로, 다중 삽입이 칸 한도를 넘어도 한도까지 펼친다.
  * 편집은 잘린 칸을 잃으므로 거부하고 원본을 남긴다.
  * 결과는 주석 객체가 아니다(120차 — plainExplodedParts). 주석 객체의 어느 축척 표현을 분해할지는 부르는 쪽이 고른다(explodeView).
  */
-export function explodeEntity(e: Entity, doc: CadDocument, partial = false): EditResult {
-  const r = explodeOnce(e, doc, partial);
+export function explodeEntity(e: Entity, doc: CadDocument, partial = false, attribs: ExplodeAttribs = 'values'): EditResult {
+  const r = explodeOnce(e, doc, partial, attribs);
   if (partial || !r.add?.length) return r;
   // 문자가 나올 수 없는 원본(폴리선·메시·해치 무늬·여러 줄 …)은 이어받은 주석 표지만 보면 된다 — 표지는 확장 데이터에 있다
   // (큰 도면 EXPLODE의 조각 대부분이 폴리선 조각이라 조각마다 보지 않는다)
@@ -79,11 +89,11 @@ export function explodeEntity(e: Entity, doc: CadDocument, partial = false): Edi
 /** 분해 결과에 문자(TEXT·MTEXT·속성 문자)가 나올 수 있는 종류 */
 const TEXT_SOURCES = new Set(['INSERT', 'DIMENSION', 'ACAD_TABLE', 'MTEXT', 'MULTILEADER', 'TOLERANCE', 'ARCALIGNEDTEXT']);
 
-function explodeOnce(e: Entity, doc: CadDocument, partial: boolean): EditResult {
+function explodeOnce(e: Entity, doc: CadDocument, partial: boolean, attribs: ExplodeAttribs): EditResult {
   const done = (add: Entity[], extra: Partial<EditResult> = {}): EditResult => (add.length ? { remove: e.handle ? [e.handle] : [], add, ...extra } : { message: MSG.cannotExplode });
   switch (e.type) {
     case 'INSERT':
-      return explodeInsert(e, doc, partial);
+      return explodeInsert(e, doc, partial, attribs);
     case 'LWPOLYLINE':
       return done(explodeBulges(e, e.verts, lwCount(e), e.closed, e.elevation));
     case 'POLYLINE':
@@ -218,7 +228,7 @@ function line3(src: Entity, a: Vec3, b: Vec3): Entity {
 // 블록 참조
 // ---------------------------------------------------------------------------
 
-function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean): EditResult {
+function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean, attribs: ExplodeAttribs): EditResult {
   const b = doc.blocks.get(tableKey(e.block));
   if (!b) return { message: '블록 정의를 찾을 수 없습니다.' };
   if (b.flags & 4) return { message: '외부 참조는 분해할 수 없습니다.' };
@@ -232,7 +242,9 @@ function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean): Edi
   if (cut && !partial) return { message: '칸이 너무 많은 다중 삽입은 분해하지 않았습니다(원본은 그대로입니다).' };
   // 동적 블록 표현(*U)에서 가시성 상태로 숨은(60) 객체는 분해 결과에 넣지 않는다(AutoCAD와 같다)
   const dynRep = /^\*U/i.test(e.block);
-  const content = b.entities.filter((c) => !(c.type === 'ATTDEF' && !((c as AttribEntity).attFlags & 2)) && !(dynRep && c.invisible));
+  // EXPLODE(definitions)는 블록 정의의 ATTDEF를 모두 그대로 옮긴다(상수·숨김 깃발 포함 — 정의는 태그로 보인다)
+  const defs = attribs === 'definitions';
+  const content = b.entities.filter((c) => (defs || !(c.type === 'ATTDEF' && !((c as AttribEntity).attFlags & 2))) && !(dynRep && c.invisible));
   const out: Entity[] = [];
   const blocks: NonNullable<EditResult['blocks']> = [];
   let message: string | undefined;
@@ -245,7 +257,7 @@ function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean): Edi
       const A = affMul(P, local);
       const opt: TransformOptions = { mirrorText: true, exact: true, mirrorHatch: true, dz: planZ(e.extrusion, e.insert.z) - b.basePoint.z * sz };
       const res = mapBlockContents(
-        content.map((x) => (x.type === 'ATTDEF' ? attdefAsText(x as AttribEntity) : x)),
+        defs ? content : content.map((x) => (x.type === 'ATTDEF' ? attdefAsText(x as AttribEntity) : x)),
         A,
         doc,
         opt,
@@ -255,15 +267,16 @@ function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean): Edi
       pushAll(blocks, res.blocks);
       if (res.message && !message) message = res.message;
     }
-  // 속성 → 현재 값의 문자
-  for (const a of e.attribs) {
-    if (a.attFlags & 1 || (dynRep && a.invisible)) continue;
-    if (a.mtext) {
-      out.push(freshEntity({ ...cloneEntity(a.mtext), ...inherit(a), type: 'MTEXT' } as MTextEntity));
-      continue;
+  // 속성 → 현재 값의 문자(EXPLODE는 값을 지운다)
+  if (!defs)
+    for (const a of e.attribs) {
+      if (a.attFlags & 1 || (dynRep && a.invisible)) continue;
+      if (a.mtext) {
+        out.push(freshEntity({ ...cloneEntity(a.mtext), ...inherit(a), type: 'MTEXT' } as MTextEntity));
+        continue;
+      }
+      out.push(attribAsText(a));
     }
-    out.push(attribAsText(a));
-  }
   const res: EditResult = { remove: e.handle ? [e.handle] : [], add: out };
   if (blocks.length) res.blocks = blocks;
   if (message) res.message = message;
