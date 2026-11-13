@@ -71,6 +71,9 @@ export class ByteOut {
   }
 }
 
+/** 핸들 자리 표로 고를 때 가장 큰 핸들의 상한(표는 많아야 128 MiB — 실제로는 객체 수의 4배 안팎에서만 쓴다) */
+const DENSE_HANDLES = 1 << 25;
+
 /** 핸들 순으로 늘어놓은 객체들(핸들과 바이트를 같은 자리에) */
 export interface ObjectList {
   hs: number[];
@@ -97,7 +100,28 @@ export class ObjectStore {
     const bs = this.bs;
     const n = hs.length;
     let asc = true;
-    for (let i = 1; i < n && asc; i++) if (!(hs[i - 1]! < hs[i]!)) asc = false;
+    let max = 0;
+    let ints = true;
+    for (let i = 0; i < n; i++) {
+      const h = hs[i]!;
+      if (i > 0 && !(hs[i - 1]! < h)) asc = false;
+      if (h > max) max = h;
+      if (!(h >= 0 && (h | 0) === h)) ints = false;
+    }
+    // 126차: 핸들이 조밀하면(가장 큰 핸들이 객체 수의 4배 안팎) 정렬하지 않고 핸들 자리 표로 고른다 — 폴리선 머리(문서 핸들)와 정점(새 핸들)이
+    // 엇갈려 들어와 객체 700만 개 도면에서 정렬이 저장 CPU의 약 3%였다. 표(4바이트 × 가장 큰 핸들)는 정렬 차례 배열·임시 배열과 비슷한 크기다
+    if (!asc && ints && max < DENSE_HANDLES && max <= 4 * n + 0x10000) {
+      const at = new Int32Array(max + 1).fill(-1);
+      for (let i = 0; i < n; i++) at[hs[i]!] = i; // 같은 핸들은 마지막에 넣은 것
+      const out: ObjectList = { hs: [], bs: [] };
+      for (let h = 0; h <= max; h++) {
+        const i = at[h]!;
+        if (i < 0 || !live.has(h)) continue;
+        out.hs.push(h);
+        out.bs.push(bs[i]!);
+      }
+      return out;
+    }
     let order: number[] | null = null;
     if (!asc) {
       order = [];

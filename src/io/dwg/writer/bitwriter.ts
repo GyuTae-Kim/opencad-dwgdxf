@@ -7,6 +7,11 @@ import { R2000, R2004, R2007, R2010 } from '../version';
 import type { TextEncoderCp } from './codepage';
 
 const scratch = new DataView(new ArrayBuffer(8));
+/** DD가 견주는 값·기본값의 바이트 */
+const ddVb = new Uint8Array(8);
+const ddDb = new Uint8Array(8);
+const ddV = new DataView(ddVb.buffer);
+const ddD = new DataView(ddDb.buffer);
 /** 핸들 값의 바이트(낮은 바이트부터 — 유한한 수는 128바이트 안이다) */
 const handleBytes = new Float64Array(128);
 
@@ -223,10 +228,11 @@ export class BitWriter {
       this.BB(0);
       return;
     }
-    scratch.setFloat64(0, v, true);
-    const vb = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => scratch.getUint8(k));
-    scratch.setFloat64(0, def, true);
-    const db = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => scratch.getUint8(k));
+    // 두 값의 바이트(126차: 부를 때마다 배열 둘을 만들지 않는다 — LWPOLYLINE 정점마다 부른다)
+    ddV.setFloat64(0, v, true);
+    ddD.setFloat64(0, def, true);
+    const vb = ddVb;
+    const db = ddDb;
     if (vb[4] === db[4] && vb[5] === db[5] && vb[6] === db[6] && vb[7] === db[7]) {
       this.BB(1);
       for (let k = 0; k < 4; k++) this.RC(vb[k]);
