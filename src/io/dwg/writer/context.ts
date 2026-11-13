@@ -44,6 +44,7 @@ import { R2000, R2004, R2007, R2018 } from '../version';
 import { dxfSatText, encodeSatBytes, satVersion } from '../../acis';
 import { ClassTable } from './classes';
 import { type TextEncoderCp, encoderFor } from './codepage';
+import { HandleSet } from '../../../core/handleset';
 import { parseHandle, warnOnce } from './util';
 import { CTX_TYPES } from '../ctxcodec';
 import { DYN_TYPES } from '../dyncodec';
@@ -265,10 +266,13 @@ export class WCtx {
   readonly cpNum: number;
   readonly classes: ClassTable;
 
-  private used = new Set<number>();
+  /** 쓴 핸들(문서 핸들로 받은 것과 새로 준 것) — 126차부터 비트 표 핸들 모음 */
+  private used = new HandleSet();
+  /** 문서 핸들로 받은 핸들 중 가장 큰 값(새로 준 핸들은 모두 nextH 아래다) */
+  private takenMax = 0;
   private nextH = 1;
   /** 쓸 객체 핸들 */
-  readonly live = new Set<number>();
+  readonly live = new HandleSet();
   /** 경고 없이 뺀 빈 객체 */
   readonly silent = new Set<number>();
 
@@ -355,6 +359,7 @@ export class WCtx {
     const h = parseHandle(s);
     if (h > 0 && !this.used.has(h)) {
       this.used.add(h);
+      if (h > this.takenMax) this.takenMax = h;
       return h;
     }
     return this.alloc();
@@ -367,10 +372,9 @@ export class WCtx {
     return h;
   }
 
+  /** 쓴 핸들 중 가장 큰 값 + 1(새로 준 핸들은 nextH 아래라 문서 핸들로 받은 것만 견준다) */
   get handseed(): number {
-    let m = this.nextH;
-    for (const h of this.used) if (h >= m) m = h + 1;
-    return m;
+    return Math.max(this.nextH, this.takenMax + 1);
   }
 
   /** 다른 객체를 가리키는 핸들(쓰지 않는 객체면 0) */
@@ -413,14 +417,20 @@ export class WCtx {
 
   /** 도형 선종류: [플래그, 핸들] */
   linetype(name: string | undefined): [number, number] {
+    const r = this.linetypeOf(name);
+    if (r) return r;
+    this.warn('dwg.write_missing_linetype', '없는 선종류를 ByLayer로 썼습니다.');
+    return [0, 0];
+  }
+
+  /** linetype과 같되 없는 선종류면 경고 없이 undefined */
+  linetypeOf(name: string | undefined): [number, number] | undefined {
     const k = tableKey(name || 'ByLayer');
     if (k === 'BYLAYER') return [0, 0];
     if (k === 'BYBLOCK') return [1, 0];
     if (k === 'CONTINUOUS') return [2, 0];
     const h = this.ltypeH.get(k);
-    if (h) return [3, h];
-    this.warn('dwg.write_missing_linetype', '없는 선종류를 ByLayer로 썼습니다.');
-    return [0, 0];
+    return h ? [3, h] : undefined;
   }
 
   ltypeHandle(name: string | undefined): number {

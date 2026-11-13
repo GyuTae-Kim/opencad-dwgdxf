@@ -13,9 +13,25 @@ export function lwIndex(v: number): number {
   return best;
 }
 
-/** "1F" → 0x1F. 잘못된 값은 0 */
+/**
+ * "1F" → 0x1F. 잘못된 값은 0.
+ * 126차: 흔한 꼴(앞뒤 공백 없는 16진 1~13자)은 trim·정규식·parseInt 없이 바로 센다(13자 = 52비트라 정확하다) — 결과는 아래 길과 같다.
+ * 도형마다 핸들을 받고 그리기 순서 표 항목마다 세 번 부르는데, 객체 42만 개 도면 저장 CPU의 약 10%였다
+ */
 export function parseHandle(h: string | undefined): number {
   if (!h) return 0;
+  const n = h.length;
+  if (n <= 13) {
+    let v = 0;
+    let i = 0;
+    for (; i < n; i++) {
+      const c = h.charCodeAt(i);
+      const d = c >= 48 && c <= 57 ? c - 48 : c >= 65 && c <= 70 ? c - 55 : c >= 97 && c <= 102 ? c - 87 : -1;
+      if (d < 0) break;
+      v = v * 16 + d;
+    }
+    if (i === n) return v;
+  }
   const t = h.trim();
   if (!/^[0-9A-Fa-f]{1,13}$/.test(t)) return 0;
   return parseInt(t, 16);

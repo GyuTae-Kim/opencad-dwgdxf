@@ -33,6 +33,9 @@ createNewDocument('metric' | 'imperial'): CadDocument               // src/core/
   문서 값이나 AutoCAD 관례 핸들(BLOCK_RECORD 1, LAYER 2, STYLE 3, LTYPE 5, VIEW 6, UCS 7, VPORT 8, APPID 9, DIMSTYLE A)을
   쓰되, 관례 핸들을 문서의 다른 객체가 쓰고 있으면 새로 붙인다.
 - `$HANDSEED`는 문서 안 모든 핸들(원본 태그·확장 자료의 핸들 포함)과 쓰는 동안 붙인 핸들(VERTEX·SEQEND 등)보다 크다.
+- 쓴 핸들(126차): 정규 꼴(앞 0 없는 대문자 16진) 13자 이하(2^52 아래)는 값으로 `HandleSet`(`src/core/handleset.ts`)에, 앞에 0이 붙은 것·14~16자는
+  문자열로 둔다(정규 꼴 문자열과 값이 일대일이라 "그 문자열이 쓰였는지"가 그대로다). 다음 새 핸들은 2^52 아래면 수로 센다. 헤더 `$HANDSEED`가 아주 큰
+  R12 도면처럼 새 핸들이 2^52 위면 처음 그 위에서 줄 때의 다음 핸들을 기준으로 두고 기준과의 차를 수로 센다(기준 위 2^52 안의 정규 꼴 핸들도 차로 본다).
 - 다른 객체를 가리키는 핸들(330·340·350·360·390 …)은 그 객체를 실제로 쓸 때만 쓴다. 원본 태그(XRECORD·모르는 객체)의
   320~369·390~399·480·481 핸들이 쓰지 않는 객체를 가리키면 `0`으로 쓴다. 확장 자료의 1005는 손대지 않는다.
 - 객체(OBJECTS)는 소유자를 따라 쓸지 정한다. 소유자를 쓰지 않으면(뺀 도형의 확장 사전 등) 그 객체도 뺀다
@@ -173,6 +176,8 @@ AutoCAD 기본 서식과 같은 뼈대: 도면층 0, 선종류 ByBlock·ByLayer�
   (아래 허용 항목 제외), ezdxf 요약 = 우리 요약.
 - `writer.dwg.test.ts`: DWG 비교 도면(samples·all-samples·templates) → AC1032·AC1015·원본 버전: 왕복 요약·구조·ezdxf.
 - `writer.newdoc.test.ts`: 새 도면(미터·인치, 빈 도면·표본 객체를 넣은 도면) × AC1009…AC1032: 왕복·구조·ezdxf(고친 항목 없음).
+- `dxfsave126.test.ts`: 앞 0·겹친·핸들 없는 도형·폴리선, 2^53을 넘는 핸들, 16진 16자 `$HANDSEED` 문서의 바이트·경고가 125차 판과 같은지(네 판 × ASCII·이진),
+  새 핸들·핸들 정하기를 125차 길(문자열 `Set`·`BigInt`)과 무작위로 견줌(2^52 경계, 16자 씨앗 포함).
 
 왕복 비교에서 맞추는 의도된 차이(`writer.helpers.ts`): R2004 이전 트루컬러 없음, 정렬된 TEXT의 11, R2007 이전 `\U+`,
 `$DWGCODEPAGE`·`$INSUNITS`를 늘 씀. ezdxf 비교에서 맞추는 표기 차이: `\U+`(ezdxf는 문자열만,

@@ -173,6 +173,11 @@ export class EntityWriter {
   }
 
   private common(e: Entity | MTextEntity, l: Links, dataStore = false, graphics?: Uint8Array): void {
+    this.ow.commonEntity(this.commonOut(e, l, dataStore, graphics));
+  }
+
+  /** 도형 공통 자료를 구한다(쓰지 않는다) */
+  private commonOut(e: Entity | MTextEntity, l: Links, dataStore = false, graphics?: Uint8Array): EntCommonOut {
     const ctx = this.ctx;
     const [ltFlags, lt] = ctx.linetype(e.linetype);
     const ps = ctx.ref(e.plotStyle);
@@ -196,7 +201,18 @@ export class EntityWriter {
       material: ctx.ref(e.material),
       dataStore,
     };
-    this.ow.commonEntity(c);
+    return c;
+  }
+
+  /** 정점 공통 자료: 폴리선마다 한 번 구한 것(vc)이 있으면 앞뒤 연결만 바꿔 쓴다 */
+  private vertexCommon(base: Entity, l: Links, vc: EntCommonOut | undefined): void {
+    if (!vc) {
+      this.common(base, l);
+      return;
+    }
+    vc.prev = l.prev;
+    vc.next = l.next;
+    this.ow.commonEntity(vc);
   }
 
   private done(h: number): void {
@@ -928,9 +944,12 @@ export class EntityWriter {
     this.done(pe.h);
   }
 
-  private seqend(parent: Entity, h: number, owner: number, prev: number): void {
+  /** SEQEND. vc는 폴리선 정점의 공통 자료(같은 값 — 부모에서 확장 자료·사전·반응자를 빼고 소유자는 부모) */
+  private seqend(parent: Entity, h: number, owner: number, prev: number, vc?: EntCommonOut): void {
     this.ow.begin(T.SEQEND, h, null);
-    this.common({ ...parent, xdata: undefined, xdict: undefined, reactors: undefined } as Entity, { owner, mode: 0, prev, next: 0 });
+    const l: Links = { owner, mode: 0, prev, next: 0 };
+    if (vc) this.vertexCommon(parent, l, vc);
+    else this.common({ ...parent, xdata: undefined, xdict: undefined, reactors: undefined } as Entity, l);
     this.done(h);
   }
 
@@ -982,24 +1001,27 @@ export class EntityWriter {
     } else for (const v of vs) hd.H(HARD_OWNER, v);
     hd.H(HARD_OWNER, pe.seqend!);
     this.done(h);
-    // 정점의 공통 자료는 폴리선 것(확장 자료·사전·반응자 빼고) — 정점마다 폴리선을 펼쳐 복사하지 않는다(125차)
+    // 정점의 공통 자료는 폴리선 것(확장 자료·사전·반응자 빼고) — 정점마다 폴리선을 펼쳐 복사하지 않는다(125차).
+    // 126차: 소유자까지 정점·SEQEND마다 같으므로 한 번 구하고 앞뒤 연결만 바꿔 쓴다(정점마다 도면층·선종류 이름을 대문자로 바꿔 찾았다).
+    // 없는 선종류는 쓸 때마다 경고 개수를 세므로 예전처럼 정점마다 구한다
     const base = vs.length ? ({ ...e, xdata: undefined, xdict: undefined, reactors: undefined } as Entity) : e;
+    const vc = vs.length && this.ctx.linetypeOf(base.linetype) ? this.commonOut(base, { owner: h, mode: 0, prev: 0, next: 0 }) : undefined;
     for (let i = 0; i < vs.length; i++) {
       const prev = ver < R2004 && i > 0 ? vs[i - 1] : 0;
       const next = ver < R2004 ? (i + 1 < vs.length ? vs[i + 1] : pe.seqend!) : 0;
-      this.vertex(e, base, i, vs[i], { owner: h, mode: 0, prev, next });
+      this.vertex(e, base, i, vs[i], { owner: h, mode: 0, prev, next }, vc);
     }
-    this.seqend(e, pe.seqend!, h, ver < R2004 ? (vs[vs.length - 1] ?? 0) : 0);
+    this.seqend(e, pe.seqend!, h, ver < R2004 ? (vs[vs.length - 1] ?? 0) : 0, vc);
   }
 
-  /** 정점 i(평탄 좌표에서 바로 읽는다). base는 정점의 공통 자료(폴리선에서 확장 자료·사전·반응자를 뺀 것) */
-  private vertex(p: PolylineEntity, base: Entity, i: number, h: number, l: Links): void {
+  /** 정점 i(평탄 좌표에서 바로 읽는다). base는 정점의 공통 자료(폴리선에서 확장 자료·사전·반응자를 뺀 것), vc는 폴리선마다 한 번 구한 그 공통 자료 */
+  private vertex(p: PolylineEntity, base: Entity, i: number, h: number, l: Links, vc: EntCommonOut | undefined): void {
     const d = this.ow.dat;
     const flags = polyFlags(p, i);
     const face = p.kind === 'polyface' ? polyFace(p, i) : undefined;
     if (p.kind === '2d') {
       this.ow.begin(T.VERTEX_2D, h, null);
-      this.common(base, l);
+      this.vertexCommon(base, l, vc);
       d.RC(flags & 0xff);
       d.BD3(polyLoc(p, i));
       const sw = polyStartWidth(p, i);
@@ -1014,11 +1036,11 @@ export class EntityWriter {
       d.BD(polyTangent(p, i) ?? 0);
     } else if (face) {
       this.ow.begin(T.VERTEX_PFACE_FACE, h, null);
-      this.common(base, l);
+      this.vertexCommon(base, l, vc);
       for (let k = 0; k < 4; k++) d.BS(face[k] ?? 0);
     } else {
       this.ow.begin(p.kind === '3d' ? T.VERTEX_3D : p.kind === 'mesh' ? T.VERTEX_MESH : T.VERTEX_PFACE, h, null);
-      this.common(base, l);
+      this.vertexCommon(base, l, vc);
       d.RC(flags & 0xff);
       d.BD3(polyLoc(p, i));
     }
