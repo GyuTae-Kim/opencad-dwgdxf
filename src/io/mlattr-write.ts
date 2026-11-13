@@ -10,8 +10,7 @@
 import type { AttribEntity, CadDocument, DictionaryObject, Entity, InsertEntity, RawTag, XRecordObject } from '../core/model';
 import { tableKey } from '../core/model';
 import { EMBEDDED_OBJECT, MATT_HEIGHT, MLATT_KEY, ROUNDTRIP_KEY, withoutRoundtripSection } from './mlattr';
-import { mtextPlainLines } from './dxf/wconvert';
-import { textChunks } from './dxf/wentities';
+import { mtextPlainLines, textChunks } from './mtextplain';
 
 function hexValue(h: string | undefined): number {
   if (!h) return 0;
