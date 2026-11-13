@@ -194,7 +194,7 @@ AC1012·AC1014는 AC1015로 쓰고 `dwg.write_version` 경고를 남긴다(R2007
 | `bitwriter.ts` | 비트 단위 쓰기(읽기의 짝, 값마다 가장 짧은 형식) |
 | `codepage.ts` | R2007 이전 코드 페이지 문자열(TextDecoder로 만든 역표, 없는 글자는 `\U+XXXX`) |
 | `lz77enc.ts` | R2004 압축(3바이트 해시 탐욕 방식, 먼 거리 명령은 쓰지 않음). 쪽마다 불리므로 해시 표·출력 버퍼는 모듈에 하나 두고 다시 쓴다(125차, 바이트는 그대로) |
-| `context.ts` | 쓰기 계획: 핸들 정하기, 필수 항목 만들기, 쓸 객체(live), 원본 본문 사용 여부 |
+| `context.ts` | 쓰기 계획: 핸들 정하기, 필수 항목 만들기, 쓸 객체(live), 원본 본문 사용 여부. 쓴 핸들·쓸 객체는 비트 표 핸들 모음(`src/core/handleset.ts` `HandleSet`, 126차) |
 | `objwriter.ts` | 객체 틀: 종류·핸들·EED·공통 자료·공통 핸들, 크기(MS·RL/UMC)·문자열 흐름·CRC |
 | `tables.ts`, `entities.ts`, `objects.ts` | 표 레코드·블록 레코드, 도형, 비도형 객체 |
 | `header.ts`, `classes.ts` | AcDb:Header(헤더 변수, 이름 → 핸들), AcDb:Classes |
@@ -263,6 +263,8 @@ R2007 이전으로 쓸 때 도면 코드 페이지로 못 쓰는 글자가 있�
 
 - `tests/dwg/lz77enc125.test.ts`: 압축기가 124차 구현(시험 안에 옮겨 둠)과 같은 바이트를 내는지(짧은·긴 입력, 거리 경계, 첫 묶음 규칙, 잇단 호출).
   `tests/dwg/dwgsave125.test.ts`: `ObjectStore`가 `Map` 길과 같은지, `objectMapOf`, 쓰다 실패한 도형(먼저 넣은 머리·정점 포함)이 판마다 빠지는지.
+  `tests/dwg/dwgsave126.test.ts`: `HandleSet`이 `Set`과 같은지, 조밀·성긴 핸들의 `ObjectStore`, `parseHandle`·`DD`가 예전 길과 같은지,
+  폴리선 문서 다섯 판의 바이트가 125차 판과 같은지(sha256 앞 16자 — 정점·SEQEND 공통 자료를 폴리선마다 한 번 구한 뒤), 비트 표를 넘는 핸들의 HANDSEED.
 - `tests/dwg/writer.test.ts`: 비트 쓰기↔읽기(모든 버전), LZ77 압축↔풀기, 객체 지도, 버전 대응·진행률, 새 도면(미터·인치)·
   여러 도형 도면 × 5버전, 원본 본문 사용 조건, 표본 DWG 34개 × 5버전, DXF 원본 53개(표본 DXF 7, 생성 11, 엔진 DXF 34, 앱 예제 1) × 5버전.
   요약(`summarizeDocument`) + 객체 단위 비교(`tests/dwg/writer-compare.ts`, 알려진 손실은 머리말에 근거).
