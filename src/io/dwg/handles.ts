@@ -1,10 +1,12 @@
 /** AcDb:Handles — 객체 지도(사양 23장): 핸들 → 객체 자료 안의 위치 */
+import { HandleMap } from '../../core/handlemap';
 import { warn, type DwgSections } from './container/types';
 import { crc8 } from './crc';
 
-export function readObjectMap(sec: DwgSections): Map<number, number> {
+/** 핸들 → 위치(Map처럼 같은 핸들이 다시 나오면 처음 자리에 나중 위치 — 127차부터 HandleMap) */
+export function readObjectMap(sec: DwgSections): HandleMap<number> {
   const data = sec.handles;
-  const map = new Map<number, number>();
+  const map = new HandleMap<number>();
   let p = 0;
   let crcBad = 0;
   while (p + 2 <= data.length) {

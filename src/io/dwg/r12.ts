@@ -14,6 +14,41 @@ import { RecordStream, type TagReader, type TagValue } from '../dxf/records';
 
 const DEG = 180 / Math.PI;
 
+/** 바이트 → 대문자 16진 두 글자 */
+const HEX_BYTE: readonly string[] = Array.from({ length: 256 }, (_, b) => b.toString(16).padStart(2, '0').toUpperCase());
+
+/**
+ * 객체 핸들(높은 자리부터 n바이트) → 앞 0을 뺀 대문자 16진(한 글자는 남긴다). 127차 — 바이트마다 toString·padStart 뒤
+ * `replace(/^0+(?=.)/, '').toUpperCase()` 하던 것과 같은 글을 표와 글자 비교로 만든다(객체 수백만 개 R12 도면 읽기 프로필의 7.2%였다)
+ */
+export function handleHex(data: Uint8Array, q: number, n: number): string {
+  let s = '';
+  for (let i = 0; i < n; i++) s += HEX_BYTE[data[q + i]!];
+  let z = 0;
+  while (z < s.length - 1 && s.charCodeAt(z) === 48) z++;
+  return z === 0 ? s : s.slice(z);
+}
+
+/** 레코드를 이만큼(태그 수) 쌓은 뒤에 읽개에 넘긴다(127차 — 레코드마다 생성기 두 겹을 다시 잇던 것이 R12 큰 도면 읽기 프로필의 19.1%였다) */
+const BATCH_TAGS = 4096;
+
+/** 읽은 객체 자리(파일 바이트 위치) 모음: 파일 길이만큼의 비트 표(그 밖의 값은 Set — 127차, 전에는 모두 Set). 시험이 Set과 견주려고 내보낸다 */
+export class PosSet {
+  private readonly bits: Uint8Array;
+  private other: Set<number> | undefined;
+  constructor(length: number) {
+    this.bits = new Uint8Array((length >>> 3) + 1);
+  }
+  has(p: number): boolean {
+    if (p >= 0 && (p | 0) === p && p >>> 3 < this.bits.length) return (this.bits[p >>> 3]! & (1 << (p & 7))) !== 0;
+    return this.other !== undefined && this.other.has(p);
+  }
+  add(p: number): void {
+    if (p >= 0 && (p | 0) === p && p >>> 3 < this.bits.length) this.bits[p >>> 3] = this.bits[p >>> 3]! | (1 << (p & 7));
+    else (this.other ??= new Set()).add(p);
+  }
+}
+
 /** 표 머리(10바이트): 레코드 크기, 개수, (모름), 시작 위치 */
 interface TableDesc {
   size: number;
@@ -262,71 +297,67 @@ class R12File {
     h.f3 = data[p + 7]!;
     let q = p + 8;
     let xf = 0;
-    // 칸이 객체 끝(CRC 앞)을 넘으면 이 객체만 버린다
-    const has = (n: number) => {
-      if (q + n <= h.end - this.tail) return true;
-      h.bad = true;
-      return false;
-    };
-    const extra = () => {
-      if (this.pre11 || !(mode & 0x40) || !has(1)) return;
+    // 칸이 객체 끝(CRC 앞)을 넘으면 이 객체만 버린다(fits가 h.bad를 세운다). 127차: 객체마다 닫힘 다섯을 만들지 않게 차례대로 풀어 썼다(읽는 차례는 그대로)
+    // 정점도 추가 플래그가 먼저다(형식 설명은 정점만 색·고도를 앞에 두지만, 에스토니아 블록의 정점 바이트는 추가 플래그 → 고도 → 핸들 → 뷰포트다)
+    // 추가 플래그와 확장 자료(R11부터)
+    if (!this.pre11 && mode & 0x40 && this.fits(h, q, 1)) {
       xf = data[q++]!;
-      if (xf & 2 && has(2)) {
+      if (xf & 2 && this.fits(h, q, 2)) {
         const n = dv.getUint16(q, true);
         q += 2;
-        if (has(n)) h.eed = this.eed(q, q + n);
+        if (this.fits(h, q, n)) h.eed = this.eed(q, q + n);
         q += n;
       }
-    };
-    const props = (elevFirst: boolean) => {
-      if (mode & 1 && has(1)) h.color = data[q++]!;
-      if (this.pre11) {
-        if (mode & 2 && has(1)) h.ltype = this.ltypeName(data[q++]!);
-      } else if (mode & 2 && has(2)) {
-        h.ltype = this.ltypeName(dv.getInt16(q, true));
-        q += 2;
+    }
+    // 색·선종류
+    if (mode & 1 && this.fits(h, q, 1)) h.color = data[q++]!;
+    if (this.pre11) {
+      if (mode & 2 && this.fits(h, q, 1)) h.ltype = this.ltypeName(data[q++]!);
+    } else if (mode & 2 && this.fits(h, q, 2)) {
+      h.ltype = this.ltypeName(dv.getInt16(q, true));
+      q += 2;
+    }
+    // 두께·고도(R11 이전과 블록 참조는 고도가 먼저). 선·점·3D 면은 고도 칸이 없고, 이 비트가 Z 좌표를 빼는 뜻이다(R9는 고도 칸이 있다)
+    const elev = (mode & 4) !== 0 && (this.pre10 || (type !== 1 && type !== 2 && type !== 22));
+    if (this.pre11 || type === 14) {
+      if (elev && this.fits(h, q, 8)) {
+        h.elevation = dv.getFloat64(q, true);
+        q += 8;
       }
-      const thick = () => {
-        if (mode & 8 && has(8)) {
-          h.thickness = dv.getFloat64(q, true);
-          q += 8;
-        }
-      };
-      const elev = () => {
-        // 선·점·3D 면은 고도 칸이 없고, 이 비트가 Z 좌표를 빼는 뜻이다(R9는 고도 칸이 있다)
-        if (mode & 4 && (this.pre10 || (type !== 1 && type !== 2 && type !== 22)) && has(8)) {
-          h.elevation = dv.getFloat64(q, true);
-          q += 8;
-        }
-      };
-      if (elevFirst) {
-        elev();
-        thick();
-      } else {
-        thick();
-        elev();
+      if (mode & 8 && this.fits(h, q, 8)) {
+        h.thickness = dv.getFloat64(q, true);
+        q += 8;
       }
-    };
-    // 정점도 추가 플래그가 먼저다(형식 설명은 정점만 색·고도를 앞에 두지만, 에스토니아 블록의 정점 바이트는 추가 플래그 → 고도 → 핸들 → 뷰포트다)
-    extra();
-    props(this.pre11 || type === 14);
+    } else {
+      if (mode & 8 && this.fits(h, q, 8)) {
+        h.thickness = dv.getFloat64(q, true);
+        q += 8;
+      }
+      if (elev && this.fits(h, q, 8)) {
+        h.elevation = dv.getFloat64(q, true);
+        q += 8;
+      }
+    }
     // R9에는 핸들이 없다
-    if (!this.pre10 && mode & 0x20 && has(1)) {
+    if (!this.pre10 && mode & 0x20 && this.fits(h, q, 1)) {
       const n = data[q++]!;
-      if (has(n)) {
-        let hex = '';
-        for (let i = 0; i < n; i++) hex += data[q + i]!.toString(16).padStart(2, '0');
-        h.handle = hex.replace(/^0+(?=.)/, '').toUpperCase();
-      }
+      if (this.fits(h, q, n)) h.handle = handleHex(data, q, n);
       q += n;
     }
-    if (!this.pre11 && mode & 0x40 && xf & 4 && has(2)) {
+    if (!this.pre11 && mode & 0x40 && xf & 4 && this.fits(h, q, 2)) {
       // 도면 공간 뷰포트 번호: 최상위 객체에 있으면 도면 공간 객체다(R11 표본: TILEMODE 0, 모든 객체가 1)
       h.paper = top;
       q += 2;
     }
     h.p = q;
     return h;
+  }
+
+  /** 칸 n바이트가 객체 끝(CRC 앞) 안에 드는지. 넘으면 이 객체만 버리게 h.bad를 세운다 */
+  private fits(h: Head, q: number, n: number): boolean {
+    if (q + n <= h.end - this.tail) return true;
+    h.bad = true;
+    return false;
   }
 
   /** 확장 자료: 구분 바이트(그룹 코드 - 1000) + 값. 모르는 구분이 나오면 거기서 멈춘다 */
@@ -1003,7 +1034,7 @@ function* records(f: R12File, o: Out, warn: (code: string) => void): Generator<v
   o.t(2, 'ENTITIES');
   yield;
   // 객체 구역을 JUMP를 따라 읽고, 추가 구역에서 JUMP로 닿지 않은 객체를 뒤에 읽는다
-  const seen = new Set<number>();
+  const seen = new PosSet(f.data.length);
   yield* section(f, o, f.ent, true, warn, seen);
   yield* section(f, o, f.extra, true, warn, seen);
   o.t(0, 'ENDSEC');
@@ -1016,8 +1047,9 @@ function* records(f: R12File, o: Out, warn: (code: string) => void): Generator<v
  * 구역의 객체를 차례로 낸다. seen이 있으면 JUMP(18)를 따라간다: 주소(아래 24비트)로 가서 읽다가 그 구역 끝에 닿으면 JUMP 다음으로 돌아온다.
  * 한 번 읽은 자리는 다시 읽지 않는다(82차 — R10 표본: 객체 구역의 JUMP가 추가 구역의 폴리선 머리로 가고, 거기서 JUMP로 객체 구역의 정점으로 돌아온다.
  * 전에는 JUMP를 건너뛰어 정점이 폴리선 없이 남았다)
+ * 레코드는 태그가 BATCH_TAGS개 넘게 쌓일 때마다 넘긴다(127차 — 전에는 레코드마다. 읽개는 쌓인 차례대로 읽으므로 태그 차례는 같다)
  */
-function* section(f: R12File, o: Out, range: [number, number], top: boolean, warn: (code: string) => void, seen?: Set<number>): Generator<void> {
+function* section(f: R12File, o: Out, range: [number, number], top: boolean, warn: (code: string) => void, seen?: PosSet): Generator<void> {
   let inBlock = false;
   let [, end] = range;
   const back: [number, number][] = [];
@@ -1072,7 +1104,7 @@ function* section(f: R12File, o: Out, range: [number, number], top: boolean, war
       else warn('dwg.object_skipped');
       continue;
     }
-    yield;
+    if (o.codes.length >= BATCH_TAGS) yield;
   }
 }
 

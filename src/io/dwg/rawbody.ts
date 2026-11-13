@@ -30,15 +30,55 @@ const COMMON = new Set([
   'graphics',
 ]);
 
+/** 지문의 빠른 길이 훑는 값의 상한(넘으면 예전 길 — 순환 참조도 예전 길이 같은 오류를 낸다) */
+const PLAIN_SCAN_LIMIT = 1 << 16;
+
+/**
+ * 공통 속성을 뺀 값들 안에 바이트 배열·평탄 좌표·Map·toJSON이 없으면 그 값들만 담은 새 객체(같은 키 차례)를, 있으면 null.
+ * 그때는 바꾸개(replacer) 없이 JSON.stringify해도 바꾸개를 쓴 글과 같다(바꾸개가 바꾸는 값이 없다). 해석하지 않는 객체마다 지문을 남기는데,
+ * 실제 작은 도면 820개 읽기 프로필에서 지문이 10.4%(바꾸개를 쓴 JSON.stringify 줄 8.2%)였다(127차)
+ */
+function plainCopy(o: object): Record<string, unknown> | null {
+  if (Array.isArray(o) || ArrayBuffer.isView(o) || o instanceof Map || typeof (o as { toJSON?: unknown }).toJSON === 'function') return null;
+  const top: Record<string, unknown> = {};
+  const stack: unknown[] = [];
+  for (const k of Object.keys(o)) {
+    if (COMMON.has(k)) continue;
+    if (k === '__proto__') return null;
+    const v = (o as Record<string, unknown>)[k];
+    top[k] = v;
+    stack.push(v);
+  }
+  let budget = PLAIN_SCAN_LIMIT;
+  while (stack.length) {
+    const v = stack.pop();
+    if (typeof v !== 'object' || v === null) continue;
+    if (--budget < 0) return null;
+    if (v instanceof Uint8Array || v instanceof Float64Array || v instanceof Map) return null;
+    if (ArrayBuffer.isView(v)) continue;
+    if (Array.isArray(v)) {
+      for (let i = 0; i < v.length; i++) stack.push(v[i]);
+      continue;
+    }
+    if (typeof (v as { toJSON?: unknown }).toJSON === 'function') return null;
+    for (const k of Object.keys(v)) stack.push((v as Record<string, unknown>)[k]);
+  }
+  return top;
+}
+
 /** 모델 값의 지문(FNV-1a 32비트 16진) */
 export function fingerprint(o: object): string {
-  const s = JSON.stringify(o, function (this: unknown, k: string, v: unknown) {
-    if (this === o && COMMON.has(k)) return undefined;
-    // 바이트 배열과 평탄 좌표(Float64Array)는 수 배열로(형식 배열은 JSON에서 {"0": …} 객체가 된다)
-    if (v instanceof Uint8Array || v instanceof Float64Array) return Array.from(v);
-    if (v instanceof Map) return [...v];
-    return v;
-  });
+  const plain = plainCopy(o);
+  const s =
+    plain !== null
+      ? JSON.stringify(plain)
+      : JSON.stringify(o, function (this: unknown, k: string, v: unknown) {
+          if (this === o && COMMON.has(k)) return undefined;
+          // 바이트 배열과 평탄 좌표(Float64Array)는 수 배열로(형식 배열은 JSON에서 {"0": …} 객체가 된다)
+          if (v instanceof Uint8Array || v instanceof Float64Array) return Array.from(v);
+          if (v instanceof Map) return [...v];
+          return v;
+        });
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);

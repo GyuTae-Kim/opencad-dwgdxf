@@ -25,6 +25,9 @@ import type { ObjectReader } from './reader';
 
 export const hex = (h: number): string => (h > 0 ? h.toString(16).toUpperCase() : '');
 
+/** 바이트 → 대문자 16진 두 글자(127차 — 바이트마다 toString·padStart·끝에 toUpperCase 하던 것과 같은 글) */
+const HEX_BYTE: readonly string[] = Array.from({ length: 256 }, (_, b) => b.toString(16).padStart(2, '0').toUpperCase());
+
 /** 배치 객체 원본(블록 레코드 이름은 나중에 푼다) */
 export interface LayoutRaw {
   handle: number;
@@ -426,8 +429,8 @@ function readTagValue(r: BitReader, code: number, ver: number): string | number 
   if ((code >= 310 && code <= 319) || code === 1004) {
     const len = r.RC();
     let s = '';
-    for (let i = 0; i < len; i++) s += r.RC().toString(16).padStart(2, '0');
-    return s.toUpperCase();
+    for (let i = 0; i < len; i++) s += HEX_BYTE[r.RC()];
+    return s;
   }
   throw new DwgFormatError(`XRECORD 그룹 코드 ${code}`);
 }

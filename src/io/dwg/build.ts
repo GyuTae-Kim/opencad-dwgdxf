@@ -27,6 +27,8 @@ import {
   tableKey,
 } from '../../core/model';
 import { finalizeDocument } from '../../core/finalize';
+import { HandleMap } from '../../core/handlemap';
+import { HandleSet } from '../../core/handleset';
 import { PolyAccum } from '../../core/polyverts';
 import { attachAcisWires } from '../acis';
 import { acdsRecords } from './acds';
@@ -113,14 +115,17 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   const or = new ObjectReader(sec.objects, ver, decoder, doc.classes);
   opts.onProgress?.(0.05);
 
-  // 1단계: 종류 훑기
+  // 1단계: 종류 훑기(핸들 열쇠 모음은 HandleMap·HandleSet — 객체 수백만 개 도면에서 Map·Set 넣기가 읽기의 큰 몫이었다, 127차)
   const entityHandles: number[] = [];
   const objectHandles: number[] = [];
-  const typeOf = new Map<number, string>();
-  for (const [h, off] of map) {
+  const typeOf = new HandleMap<string>();
+  const mapKeys = map.keys;
+  const mapOffs = map.vals;
+  for (let k = 0; k < mapKeys.length; k++) {
+    const h = mapKeys[k]!;
     let info;
     try {
-      info = or.peekType(off);
+      info = or.peekType(mapOffs[k]!);
     } catch {
       info = null;
     }
@@ -557,7 +562,7 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   }
 
   // 3단계: 도형
-  const parsed = new Map<number, ParsedEntity>();
+  const parsed = new HandleMap<ParsedEntity>();
   const maxEnt = opts.maxEntities ?? Infinity;
   let entCount = 0;
   for (const h of entityHandles) {
@@ -641,7 +646,7 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   }
 
   // 4단계: 블록
-  const used = new Set<number>();
+  const used = new HandleSet();
   const childList = (p: ParsedEntity): number[] => {
     if (p.children) return p.children;
     const out: number[] = [];
@@ -689,7 +694,7 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   let vpCounter = 0;
   // 블록에 넣은 도형. 블록 목록이 같은 도형을 되풀이해 가리키면(같은 블록이든 다른 블록이든) 처음 한 번만 넣는다:
   // 되풀이마다 폴리선 정점을 다시 모으고 같은 객체를 다시 그려 되풀이 수 × 정점 수였다(DWG 36KB가 선분 400만 개)
-  const placed = new Set<number>();
+  const placed = new HandleSet();
   let repeated = 0;
   for (const bh of blockOrder) {
     const rec = blockHeaders.get(bh)!;
@@ -772,7 +777,9 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
     const d = doc.blocks.get(tableKey(rec.name));
     if (d) byHandle.set(bh, d);
   }
-  for (const [h, p] of parsed) {
+  for (let k = 0; k < parsed.keys.length; k++) {
+    const h = parsed.keys[k]!;
+    const p = parsed.vals[k]!;
     if (used.has(h) || p.kind !== 'entity' || !p.entity) continue;
     const d = byHandle.get(p.owner);
     if (d && sec.ver < R2004) {
