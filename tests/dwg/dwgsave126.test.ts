@@ -11,7 +11,8 @@ import { readDwg, writeDwg } from '../../src/io/dwg';
 import { BitWriter } from '../../src/io/dwg/writer/bitwriter';
 import { encoderFor } from '../../src/io/dwg/writer/codepage';
 import { ObjectStore } from '../../src/io/dwg/writer/container';
-import { HandleSet, parseHandle } from '../../src/io/dwg/writer/util';
+import { HandleSet } from '../../src/core/handleset';
+import { parseHandle } from '../../src/io/dwg/writer/util';
 
 let seed = 2126;
 const rand = (): number => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 0x100000000;
