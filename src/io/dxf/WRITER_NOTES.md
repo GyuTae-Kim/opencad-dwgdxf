@@ -84,7 +84,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 | POLYLINE | 2D·3D·폴리곤 메시·폴리페이스 메시 → POLYLINE + VERTEX(필수 플래그 32·64·128·192 붙임) + SEQEND |
 | SPLINE·HELIX | 매듭 수가 맞지 않으면 고른 매듭으로 다시 만든다(`spline.knots_fixed`). HELIX는 R2007+ |
 | TEXT | 정렬(72·73)이 있으면 11을 늘 쓴다(없으면 삽입점). 73은 두 번째 AcDbText 뒤 |
-| ATTRIB·ATTDEF | R2010+ 버전 280, 잠금 280(R2007+), 74 세로 정렬. 여러 줄 속성(R2018)은 101 Embedded Object MTEXT, 그 전 버전은 한 줄 문자로 |
+| ATTRIB·ATTDEF | R2010+ 버전 280, 잠금 280(R2007+), 74 세로 정렬. 여러 줄 속성(R2018)은 101 Embedded Object MTEXT. 그 전 버전은 AutoCAD처럼 한 줄 속성(글 = MTEXT 평문)과 확장 사전의 ACAD_MLATT·ACAD_XREC_ROUNDTRIP XRECORD(R2000+, `io/mlattr-write.ts` — DWG 쓰기도 같다) |
 | MTEXT | 250자 조각, 46 정의 높이(R2007+, 값이 있을 때), 배경(R2004+), 단(R2018 101 Embedded Object — R2000~R2013 꼴 단 묶음은 첫 단 자리의 한 객체로 합친다. R2013 이하는 단 정보를 ACAD 확장 자료로, 단이 둘 이상이면 단 객체로 나눈다 — `io/mtextcols.ts`. 나눌 근거가 없는 꼴은 `mtext.columns_dropped`) |
 | INSERT·MINSERT | 66·ATTRIB들·SEQEND. 행·열이 있으면 AcDbMInsertBlock |
 | DIMENSION | 종류별 하위 클래스(회전·정렬·2선 각도·지름·반지름·3점 각도·세로좌표), ARC_DIMENSION(AcDbArcDimension, 70 종류 값은 모든 버전에서 5 — AutoCAD 2026이 쓴 R2018 DXF로 확인, 다른 프로그램이 쓴 8은 읽을 때 5로), LARGE_RADIAL_DIMENSION(70 종류 값 9, 모델은 & 7로 가리는 4). 재지정(`overrides`)은 ACAD DSTYLE 확장 자료로(원래 확장 자료와 같으면 원래 순서 그대로) |
@@ -110,7 +110,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 | R2007 미만 | MULTILEADER → 3D 폴리선(지시선)·선(걸이)·MTEXT·INSERT로 분해(`entity.mleader_exploded`). HELIX → SPLINE |
 | R2004 미만 | ACAD_TABLE·ARC_DIMENSION·LARGE_RADIAL_DIMENSION → 그림 블록의 INSERT(블록이 없으면 뺀다). 트루컬러·투명도·그라데이션·MTEXT 배경은 쓰지 않는다 |
 | R2010 미만 | MESH → 폴리페이스 POLYLINE(면이 4점보다 많으면 부채꼴 삼각형). PDFUNDERLAY 빠짐 |
-| R2018 미만 | MTEXT 단·여러 줄 속성 정보 빠짐(문자는 남김) |
+| R2018 미만 | MTEXT 단은 단 객체·확장 자료로(`io/mtextcols.ts` — 나눌 근거가 없는 꼴은 단 정보 빠짐), 여러 줄 속성은 한 줄 속성 + ACAD_MLATT 기록으로(`io/mlattr-write.ts`) |
 | R12 | LWPOLYLINE → POLYLINE, ELLIPSE·SPLINE → 2D/3D 폴리선 근사, MTEXT → 줄마다 TEXT, LEADER → 3D 폴리선, 위 변환 모두. XLINE·RAY·HATCH·MPOLYGON·TOLERANCE·MLINE·IMAGE·WIPEOUT 등은 뺀다(`r12.unsupported`). 배치는 하나(*Paper_Space)만, 블록 이름 $MODEL_SPACE·$PAPER_SPACE, 선종류 표에 ByBlock·ByLayer 없음, 하위 클래스 표지·소유자·OBJECTS·CLASSES·BLOCK_RECORD 없음, 확장 자료 1071 → 1070/1040 |
 
 바꾼 첫 객체는 원래 핸들을 이어받는다(그룹·정렬 표가 계속 가리키게). `WriteContext.converted`에 문서 객체 → 쓴 객체들을 남긴다.
