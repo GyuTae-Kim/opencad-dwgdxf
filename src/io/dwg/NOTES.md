@@ -8,12 +8,12 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
 | 파일 | 내용 |
 | --- | --- |
 | `bitstream.ts` | 비트 단위 읽기(B·BB·3B·BS·BL·BLL·BD·DD·RC·RS·RL·RD·MC·MS·H·T·TU·TV·CMC·ENC·BE·BT·OT) |
-| `crc.ts` | CRC8(16비트 표)·CRC32·R2004 페이지 체크섬 |
-| `lz77.ts`, `lz77r21.ts` | R2004 압축, R2007 압축 풀기 |
+| `crc.ts` | CRC8(16비트 표 — 127차부터 8바이트씩 셈하는 표 여덟 개, 바이트씩과 같은 값)·CRC32·R2004 페이지 체크섬 |
+| `lz77.ts`, `lz77r21.ts` | R2004 압축, R2007 압축 풀기(R2004 풀기는 127차부터 닫힘 없이, 짧은 글자 줄은 바이트씩·겹치지 않는 긴 되풀이는 `copyWithin`) |
 | `container/r2000.ts` | R13~R2000 파일 머리·섹션 위치 |
 | `container/r2004.ts` | R2004·R2010·R2013·R2018: 0x6C 헤더 XOR, 페이지 지도, 섹션 지도, 페이지 머리 마스크 |
 | `container/r2007.ts` | R2007: Reed–Solomon 블록 풀기(끼워 짠 바이트만 꺼내고 오류 정정은 하지 않음), 페이지·섹션 지도 |
-| `header.ts`, `classes.ts`, `handles.ts` | 헤더 변수, 클래스, 객체 지도 |
+| `header.ts`, `classes.ts`, `handles.ts` | 헤더 변수, 클래스, 객체 지도(127차부터 `HandleMap` — `src/core/handlemap.ts`, 조밀한 핸들은 자리 표) |
 | `streams.ts` | R2007+ 문자열 흐름 위치 |
 | `objects/reader.ts` | 객체 머리·공통 자료·공통 핸들·EED |
 | `objects/tables.ts`, `objects/nonentities.ts`, `objects/entities.ts` | 객체별 해석 |
@@ -24,8 +24,8 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
 | `objects/field.ts`, `objects/rawtags.ts` | FIELD·FIELDLIST, 그리고 DXF 원본 태그로 푸는 객체(DIMASSOC, 주석 축척 자료, 동적 블록 객체) |
 | `dyncodec.ts` | 동적 블록 객체 본문 ↔ DXF 원본 태그(읽기·쓰기, 아래 "동적 블록 객체") |
 | `ctxcodec.ts` | 주석 축척 컨텍스트 데이터 14종 본문 ↔ DXF 원본 태그(읽기·쓰기, 아래 "주석 축척 컨텍스트 데이터") |
-| `build.ts` | 문서 조립(표 → 도형 → 블록 순서·속성·정점·배치·헤더 이름 풀기) |
-| `rawbody.ts` | 모델이 일부만 담는 객체의 원본 본문 보관(`dwgRaw`)과 지문 |
+| `build.ts` | 문서 조립(표 → 도형 → 블록 순서·속성·정점·배치·헤더 이름 풀기). 종류·읽은 도형은 `HandleMap`, 넣은 도형은 `HandleSet`(127차) |
+| `rawbody.ts` | 모델이 일부만 담는 객체의 원본 본문 보관(`dwgRaw`)과 지문(127차부터 바꾸개가 바꿀 값이 없으면 바꾸개 없이 같은 글로 셈) |
 | `r12.ts` | R12(AC1009)·R10(AC1006)·R9(AC1004)·R2.6(AC1003)·R2.10(AC2.10) 읽기: 바이트 단위 고정 배치(머리 변수·표·객체·블록 구역)를 R12 DXF 태그로 바꾼다 |
 | `writer/*` | DWG 쓰기(아래 "쓰기" 절) |
 
@@ -265,6 +265,8 @@ R2007 이전으로 쓸 때 도면 코드 페이지로 못 쓰는 글자가 있�
   `tests/dwg/dwgsave125.test.ts`: `ObjectStore`가 `Map` 길과 같은지, `objectMapOf`, 쓰다 실패한 도형(먼저 넣은 머리·정점 포함)이 판마다 빠지는지.
   `tests/dwg/dwgsave126.test.ts`: `HandleSet`이 `Set`과 같은지, 조밀·성긴 핸들의 `ObjectStore`, `parseHandle`·`DD`가 예전 길과 같은지,
   폴리선 문서 다섯 판의 바이트가 125차 판과 같은지(sha256 앞 16자 — 정점·SEQEND 공통 자료를 폴리선마다 한 번 구한 뒤), 비트 표를 넘는 핸들의 HANDSEED.
+  `tests/dwg/dwgread127.test.ts`(읽기): `crc8`이 바이트씩 셈과, R2004 풀기가 126차 길(시험 안에 옮김)과 같은지(압축기 출력·남의 버퍼·망가진 자료의 오류까지),
+  지문이 126차 바꾸개 길과 같은지(특이 값·무작위), `HandleMap`이 `Map`과 같은지(조밀·성긴·아주 큰 핸들, 표 밖에 둔 열쇠).
 - `tests/dwg/writer.test.ts`: 비트 쓰기↔읽기(모든 버전), LZ77 압축↔풀기, 객체 지도, 버전 대응·진행률, 새 도면(미터·인치)·
   여러 도형 도면 × 5버전, 원본 본문 사용 조건, 표본 DWG 34개 × 5버전, DXF 원본 53개(표본 DXF 7, 생성 11, 엔진 DXF 34, 앱 예제 1) × 5버전.
   요약(`summarizeDocument`) + 객체 단위 비교(`tests/dwg/writer-compare.ts`, 알려진 손실은 머리말에 근거).

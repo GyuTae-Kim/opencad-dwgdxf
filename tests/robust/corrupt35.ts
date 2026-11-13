@@ -8,6 +8,7 @@ import { createNewDocument } from '../../src/core/newdoc';
 import { readR2000Container } from '../../src/io/dwg/container/r2000';
 import { readR2004Container } from '../../src/io/dwg/container/r2004';
 import type { DwgSections } from '../../src/io/dwg/container/types';
+import type { HandleMap } from '../../src/core/handlemap';
 import { readObjectMap } from '../../src/io/dwg/handles';
 import { decompressR18 } from '../../src/io/dwg/lz77';
 import { R2000, R2004 } from '../../src/io/dwg/version';
@@ -413,7 +414,7 @@ export function objectHead(w: BitWriter, ver: number): void {
 }
 
 /** 쓰기로 만든 파일의 섹션과 객체 지도(핸들 → 객체 시작 위치) */
-export function sectionsOf(data: Uint8Array, ver: number): { sec: DwgSections; map: Map<number, number> } {
+export function sectionsOf(data: Uint8Array, ver: number): { sec: DwgSections; map: HandleMap<number> } {
   const sec = ver === R2000 ? readR2000Container(data, ver) : readR2004Container(data, ver);
   return { sec, map: readObjectMap(sec) };
 }

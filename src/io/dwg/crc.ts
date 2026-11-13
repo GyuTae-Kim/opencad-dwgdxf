@@ -19,10 +19,45 @@ const CRC16_TABLE = new Uint16Array([
   0x4400, 0x84c1, 0x8581, 0x4540, 0x8701, 0x47c0, 0x4680, 0x8641, 0x8201, 0x42c0, 0x4380, 0x8341, 0x4100, 0x81c1, 0x8081, 0x4040,
 ]);
 
-/** 사양의 "8-bit CRC"(결과 16비트) */
+/**
+ * 8바이트씩 한꺼번에 셈하는 표(127차): CRC_k[v] = 바이트 v를 넣고 0을 k바이트 더 넣은 뒤의 값(CRC_0 = CRC16_TABLE).
+ * 바이트마다 앞 값을 기다리는 사슬 대신 서로 기대지 않는 표 찾기 여덟 번으로 같은 값을 낸다
+ */
+function sliceTable(prev: Uint16Array): Uint16Array {
+  const t = new Uint16Array(256);
+  for (let v = 0; v < 256; v++) t[v] = (prev[v]! >>> 8) ^ CRC16_TABLE[prev[v]! & 0xff]!;
+  return t;
+}
+const CRC_1 = sliceTable(CRC16_TABLE);
+const CRC_2 = sliceTable(CRC_1);
+const CRC_3 = sliceTable(CRC_2);
+const CRC_4 = sliceTable(CRC_3);
+const CRC_5 = sliceTable(CRC_4);
+const CRC_6 = sliceTable(CRC_5);
+const CRC_7 = sliceTable(CRC_6);
+
+/**
+ * 사양의 "8-bit CRC"(결과 16비트). 읽기는 객체마다 본문 전체를 셈한다(127차 — 실제 작은 도면 820개 읽기 프로필에서 이 셈이 들어간
+ * 객체 머리 읽기의 자기 시간이 13.4%였고, 8바이트씩 바꾼 뒤 crc8 4.9%·머리 읽기 1.4%).
+ * 8바이트씩: 지금 값의 아래·위 바이트를 앞 두 바이트에 섞어 넣고 바이트마다 남은 자리 수만큼 0을 더 넣은 표를 찾아 모두 XOR한다
+ * (바이트씩 셈한 것과 같은 값 — tests/dwg/dwgread127.test.ts)
+ */
 export function crc8(seed: number, data: Uint8Array, start: number, end: number): number {
   let dx = seed & 0xffff;
-  for (let i = start; i < end; i++) {
+  let i = start;
+  for (const stop = end - 7; i < stop; i += 8) {
+    const x = dx ^ (data[i]! | (data[i + 1]! << 8));
+    dx =
+      CRC_7[x & 0xff]! ^
+      CRC_6[x >>> 8]! ^
+      CRC_5[data[i + 2]!]! ^
+      CRC_4[data[i + 3]!]! ^
+      CRC_3[data[i + 4]!]! ^
+      CRC_2[data[i + 5]!]! ^
+      CRC_1[data[i + 6]!]! ^
+      CRC16_TABLE[data[i + 7]!]!;
+  }
+  for (; i < end; i++) {
     const al = (data[i] ^ dx) & 0xff;
     dx = (dx >>> 8) ^ CRC16_TABLE[al];
   }
