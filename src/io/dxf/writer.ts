@@ -15,6 +15,7 @@ import { TagOut, writeEntity } from './wentities';
 import { writeObjects } from './wobjects';
 import { writeTables } from './wtables';
 import { arcTextsForWrite } from '../arctext';
+import { multilineAttribsForWrite } from '../mlattr-write';
 import { activeVport, vportSnap } from '../vportsnap';
 import { drawingProps } from '../dwgprops';
 
@@ -335,7 +336,7 @@ export function writeDxf(doc: CadDocument, options: DxfWriteOptions = {}): DxfWr
   const codepage = (options.codepage ?? docCp).toUpperCase();
   const escapeNonAscii = options.escapeNonAscii ?? !options.codepage;
   const arc = arcTextsForWrite(doc, 'dxf', version);
-  const res = serialize(arc.doc, { ...options, version, escapeNonAscii }, codepage);
+  const res = serialize(multilineAttribsForWrite(arc.doc, version), { ...options, version, escapeNonAscii }, codepage);
   res.warnings.push(...arc.warnings);
   if (asked && asked !== version) res.warnings.push({ code: 'version.changed', message: `${asked}로는 쓸 수 없어 ${version}로 썼습니다.`, detail: { from: asked, to: version } });
   if (res.unencodable.size && !escapeNonAscii) {

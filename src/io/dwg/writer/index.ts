@@ -15,6 +15,7 @@ import { writeClasses } from './classes';
 import { ByteOut, type R2004Section, auxHeader, emptyPreview, objectMap, templateData, writeR2000, writeR2004 } from './container';
 import { parseHandle } from './util';
 import { arcTextsForWrite } from '../../arctext';
+import { multilineAttribsForWrite } from '../../mlattr-write';
 import { encodeSummaryInfo, summaryFromDoc } from '../../dwgprops';
 import type { TextEngine } from '../../../text/layout';
 
@@ -56,7 +57,7 @@ export function writeDwg(doc: CadDocument, options: DwgWriteOptions = {}): DwgWr
     ver = R2018;
   }
   const arc = arcTextsForWrite(doc, 'dwg', options.version ?? 'AC1032');
-  doc = arc.doc;
+  doc = multilineAttribsForWrite(arc.doc, `AC${ver}`);
   warnings.push(...arc.warnings);
   const progress = options.onProgress;
   progress?.(0);
