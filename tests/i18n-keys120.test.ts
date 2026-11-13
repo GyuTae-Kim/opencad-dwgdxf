@@ -47,9 +47,8 @@ describe('MVIEW 맞춤 옵션 열쇠', () => {
     expect(translate(MVIEW, 'de')).toMatch(/\/Anpassen \(F\)\/.*<Anpassen>:$/);
     expect(translate(FIRST, 'ja')).toBe('最初の角を指定、または [フィット(F)] <フィット>:');
     for (const l of LANGS) expect(translate(MVIEW, l), l).not.toMatch(/[가-힣]/);
-    // 스플라인 맞춤·복사 배열 맞춤은 그대로
+    // 스플라인 맞춤은 그대로(복사 배열 맞춤은 121차에 같은 열쇠로 — tests/i18n-keys121.test.ts)
     expect(translate('맞춤(F)', 'zh-CN')).toBe('拟合(F)');
-    expect(translate('두 번째 점 지정 또는 [맞춤(F)]:', 'zh-CN')).toBe('指定第二个点或 [布满(F)]：');
   });
 
   it('한국어로 "맞춤"을 쳐도 그 옵션을 고른다(U+2060을 빼고 견줌)', () => {

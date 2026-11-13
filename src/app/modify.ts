@@ -809,7 +809,9 @@ export function registerModifyCommands(app: App): void {
                 for (let i = 1; i < n && i < 50; i++) out.push(...ghost.at(translate(fit ? (dx * i) / (n - 1) : dx * i, fit ? (dy * i) / (n - 1) : dy * i)));
                 return out;
               };
-              let q = await ctx.getPoint('두 번째 점 지정 또는 [맞춤(F)]:', { base, keywords: [{ key: 'F', label: '맞춤' }], ghost: ghostN });
+              // 배열 맞춤(121차): COPY 도움말의 옵션 이름이 Fit·Anpassen·フィット·调整이라 MVIEW·치수 스타일 맞춤 탭과 같은 열쇠
+              // (끝에 보이지 않는 U+2060 — 스플라인 맞춤 拟合과 가른다. 한국어로 "맞춤"을 쳐도 고른다: keywordLabelIs)
+              let q = await ctx.getPoint('두 번째 점 지정 또는 [맞춤\u{2060}(F)]:', { base, keywords: [{ key: 'F', label: '맞춤\u{2060}' }], ghost: ghostN });
               if ('keyword' in q && q.keyword === 'F') {
                 fit = true;
                 q = await ctx.getPoint('두 번째 점 지정:', { base, ghost: ghostN });

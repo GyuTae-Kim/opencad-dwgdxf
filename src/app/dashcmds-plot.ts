@@ -54,9 +54,12 @@ export function paperKeyOf(text: string): string | null {
   return null;
 }
 
+/** -PLOT 축척의 맞춤(F) 옵션 이름(121차 — 언어 사전에서 Einpassen·布满으로 옮기는 열쇠, 화면 글은 "맞춤") */
+export const PLOT_FIT = '맞춤\u{2060}\u{2060}';
+
 /** 플롯 축척 "1=100"·"1:100"·숫자 → 용지 길이(용지 단위)·도면 단위. 맞춤(F)이면 'fit'. 모르면 null */
 export function parsePlotScale(text: string): 'fit' | { paper: number; units: number } | null {
-  const t = text.trim();
+  const t = text.trim().replace(/\u{2060}/gu, '');
   if (/^(f|fit|맞춤)$/i.test(t)) return 'fit';
   const m = /^([\d.]+)\s*[=:]\s*([\d.]+)$/.exec(t);
   if (m) {
@@ -294,7 +297,9 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
     }
     // 축척
     for (;;) {
-      const t = await askWord(ctx, `플롯 축척 입력 (출력 ${inches ? '인치' : '밀리미터'}=도면 단위)또는 [맞춤(F)] <${model ? (s.scale === 'fit' ? '맞춤' : s.scale.replace(':', '=')) : '1=1'}>:`, [{ key: 'F', label: '맞춤' }]);
+      // 맞춤(121차): -PLOT 도움말 옵션 이름이 Fit·Einpassen·フィット·布满이라 MVIEW·COPY 맞춤(U+2060 하나 — Anpassen·调整)과도 스플라인 맞춤과도
+      // 다른 열쇠(끝에 보이지 않는 U+2060 둘). 한국어 화면 글은 그대로이고 "맞춤"을 쳐도 고른다(keywordLabelIs·parsePlotScale)
+      const t = await askWord(ctx, `플롯 축척 입력 (출력 ${inches ? '인치' : '밀리미터'}=도면 단위)또는 [${PLOT_FIT}(F)] <${model ? (s.scale === 'fit' ? PLOT_FIT : s.scale.replace(':', '=')) : '1=1'}>:`, [{ key: 'F', label: PLOT_FIT }]);
       if (t === null) break;
       const v = parsePlotScale(t);
       if (!v) {
