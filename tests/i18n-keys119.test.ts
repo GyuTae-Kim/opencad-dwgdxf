@@ -60,10 +60,9 @@ describe('맞춤 탭·단의 열 폭 열쇠', () => {
     expect(translate('주석 객체는 주석 축척마다 크기(용지 크기 × 축척)가 다른 표현을 가집니다', 'de')).not.toMatch(/Skala$/);
   });
 
-  it('명령행 옵션 이름(한국어 입력으로 고르는 글)은 가르지 않는다(120차에 MVIEW만 갈랐다 — tests/i18n-keys120.test.ts)', () => {
-    // 스플라인 메서드·복사 배열 맞춤 옵션은 그대로 "맞춤" — 한국어로 "맞춤"을 쳐서 고른다
+  it('명령행 옵션 이름(한국어 입력으로 고르는 글)은 도움말 낱말을 확인한 것만 가른다(120차 MVIEW, 121차 COPY 배열·TEXT·-PLOT·LEADER — tests/i18n-keys120·121)', () => {
+    // 스플라인 메서드 맞춤 옵션은 그대로 "맞춤" — 한국어로 "맞춤"을 쳐서 고른다
     expect(src('app/draw.ts')).toContain(`{ key: 'F', label: '맞춤' }`);
-    expect(src('app/modify.ts')).toContain(`keywords: [{ key: 'F', label: '맞춤' }]`);
-    for (const f of ['app/draw.ts', 'app/modify.ts', 'app/modify2.ts', 'app/tablecmds.ts']) expect(src(f)).not.toMatch(/label: '(맞춤|열 폭)\\u\{2060\}'/);
+    for (const f of ['app/draw.ts', 'app/modify2.ts', 'app/tablecmds.ts']) expect(src(f)).not.toMatch(/label: '(맞춤|열 폭)\\u\{2060\}'/);
   });
 });

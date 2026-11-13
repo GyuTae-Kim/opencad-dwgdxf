@@ -115,7 +115,12 @@ export const TEXT_JUSTIFY: [string, string, TextHAlign, TextVAlign, string][] = 
   ['BR', '맨 아래 오른쪽', 2, 1, '문자의 맨 아래 오른쪽 점 지정:'],
 ];
 
-const JUSTIFY_PROMPT = `옵션 입력 [${TEXT_JUSTIFY.map(([k, l]) => `${l}(${k})`).join('/')}]:`;
+/**
+ * TEXT 명령행의 자리맞추기 옵션 이름(121차): 맞춤(F)은 TEXT 도움말 옵션 이름이 Fit·Anpassen·フィット·调整이라 MVIEW·COPY 배열 맞춤과 같은
+ * 열쇠(끝에 보이지 않는 U+2060 — 스플라인 맞춤 拟合과 가른다). 대화 상자 목록(TEXT_JUSTIFY 이름)과 JUSTIFYTEXT(도움말 拟合)는 그대로
+ */
+const justifyOpt = ([k, l]: (typeof TEXT_JUSTIFY)[number]) => (k === 'F' ? '맞춤\u{2060}' : l);
+export const JUSTIFY_PROMPT = `옵션 입력 [${TEXT_JUSTIFY.map((j) => `${justifyOpt(j)}(${j[0]})`).join('/')}]:`;
 
 /** 단일 행 문자의 한 줄(자리맞추기에 맞게 삽입점·정렬점) */
 export function makeTextLine(base: Omit<TextEntity, 'type' | 'handle' | 'insert' | 'text' | 'halign' | 'valign' | 'alignPoint'>, text: string, just: { h: TextHAlign; v: TextVAlign }, p1: Pt, p2?: Pt): TextEntity {
@@ -204,7 +209,7 @@ export function registerTextCommands(app: App): void {
           styleLine(d, styleName, ctx);
           continue;
         }
-        const j = await ctx.getPoint(JUSTIFY_PROMPT, { keywords: TEXT_JUSTIFY.map(([key, label]) => ({ key, label })) });
+        const j = await ctx.getPoint(JUSTIFY_PROMPT, { keywords: TEXT_JUSTIFY.map((x) => ({ key: x[0], label: justifyOpt(x) })) });
         if (!('keyword' in j)) continue;
         const def = TEXT_JUSTIFY.find(([k]) => k === j.keyword)!;
         just = { h: def[2], v: def[3] };

@@ -73,8 +73,10 @@ export function registerLeaderCommand(app: App): void {
       const pts: Pt[] = [s0.point];
       let fmt: LeaderFormat = { spline: false, arrow: true };
       const rubber = (p: Pt) => [{ pts: [...pts, p].flatMap((q) => [q.x, q.y]) }];
+      // 주석(A)(121차): LEADER 도움말 옵션 이름이 Annotation·Maßtext·注釈·注释라 주석 특성(Annotative — Beschriftung·異尺度対応)의 "주석"과
+      // 가른다(끝에 보이지 않는 U+2060). 한국어 화면 글은 그대로이고 "주석"을 쳐도 고른다(keywordLabelIs)
       const kws: Keyword[] = [
-        { key: 'A', label: '주석' },
+        { key: 'A', label: '주석\u{2060}' },
         { key: 'F', label: '형식' },
         { key: 'U', label: '명령 취소' },
       ];
@@ -86,7 +88,7 @@ export function registerLeaderCommand(app: App): void {
           pts.push(r.point);
           continue;
         }
-        const r = await ctx.getPoint('다음 점 지정 또는 [주석(A)/형식(F)/명령 취소(U)] <주석>:', { base: last, rubber, keywords: kws });
+        const r = await ctx.getPoint('다음 점 지정 또는 [주석\u{2060}(A)/형식(F)/명령 취소(U)] <주석\u{2060}>:', { base: last, rubber, keywords: kws });
         if ('point' in r) {
           pts.push(r.point);
           continue;
