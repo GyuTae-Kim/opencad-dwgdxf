@@ -521,13 +521,16 @@ export interface HatchRecord {
   factor: number;
   /** 패턴 각도(라디안) — 레코드의 10은 이 각도의 단위 벡터 */
   angle: number;
-  /** 루프마다 종류(경계 플래그에서 폴리선 비트 2를 뺀 것) */
+  /** 루프마다 종류(hatchLoopKind) */
   loops: number[];
 }
 
-/** 해치 루프 종류: AutoCAD는 폴리선 비트(2)를 쓰지 않는다 */
-export function hatchLoopKind(flags: number): number {
-  return flags & ~2;
+/**
+ * 해치 루프 종류: 경계 경로 플래그 그대로(폴리선이면 비트 2, 모서리면 비트 2 없음). 공개 도면 DWG의 AutoCAD 레코드 루프 2,028개
+ * (축척·뷰 레코드)가 모두 해치 본문 같은 번호 경로의 플래그와 같거나 512·1024 비트만 다르고, 폴리선 루프 1,171개 모두 비트 2가 있다.
+ */
+export function hatchLoopKind(p: { flags: number; polyline?: unknown }): number {
+  return p.polyline ? p.flags | 2 : p.flags & ~2;
 }
 
 export function hatchRecordRaw(ver: number, isDefault: boolean, scale: string, f: HatchRecord): RawTag[] {

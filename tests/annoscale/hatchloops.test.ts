@@ -9,7 +9,8 @@
 import { describe, expect, it } from 'vitest';
 import type { DictionaryObject, Entity, GenericObject, HatchEntity, RawTag } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
-import { ScaleIndex, annoState, contextRecords, findScale, readScaleList, withAnnotativeFlag } from '../../src/edit/annoscale';
+import { ScaleIndex, annoState, contextRecords, findScale, makeAnnotative, readScaleList, withAnnotativeFlag } from '../../src/edit/annoscale';
+import { EDGE_LINE } from '../../src/core/hatchedges';
 import { BitReader } from '../../src/io/dwg/bitstream';
 import { decodeCtx, encodeCtx, writeCtxOps } from '../../src/io/dwg/ctxcodec';
 import { writeDwg } from '../../src/io/dwg';
@@ -17,7 +18,7 @@ import { BitWriter } from '../../src/io/dwg/writer/bitwriter';
 import { encoderFor } from '../../src/io/dwg/writer/codepage';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { readCadFile } from '../../src/io/index';
-import { addModel, commit, hatch, newDoc } from './helpers';
+import { addModel, commit, envOf, hatch, newDoc } from './helpers';
 
 const HATCH = 'ACDB_HATCHSCALECONTEXTDATA_CLASS';
 
@@ -239,6 +240,27 @@ function attach(doc: ReturnType<typeof newDoc>['doc'], session: ReturnType<typeo
   ]);
   return doc.entityIndex.get(e.handle)!;
 }
+
+describe('만드는 해치 레코드의 루프 종류', () => {
+  it('경로 플래그 그대로: 폴리선 경로는 비트 2를 두고 모서리 경로는 뺀다, 경계는 해치에서(290 = 1)', () => {
+    const { doc, session } = newDoc();
+    const e = hatch();
+    e.paths[0]!.flags = 519;
+    e.paths.push({ flags: 3, edgeData: [EDGE_LINE, 40, 40, 60, 40, EDGE_LINE, 60, 40, 60, 60, EDGE_LINE, 60, 60, 40, 40] });
+    const h = addModel(doc, session, e) as Entity;
+    const r = makeAnnotative(envOf(doc, session), h, '1:1');
+    commit(session, [...r.ops, { kind: 'modify', block: MODEL_SPACE, before: h, after: r.entity }]);
+    const rec = contextRecords(doc, doc.entityIndex.get(h.handle)!)[0]!;
+    const i40 = rec.body.findIndex((t) => t.code === 40);
+    expect(rec.body.slice(i40 + 4)).toEqual([
+      { code: 90, value: 2 },
+      { code: 90, value: 519 },
+      { code: 290, value: 1 },
+      { code: 90, value: 1 },
+      { code: 290, value: 1 },
+    ]);
+  });
+});
 
 describe('해치 레코드 루프 경계: 도면 왕복', () => {
   const { doc, session } = newDoc();

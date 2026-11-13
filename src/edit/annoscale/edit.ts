@@ -190,7 +190,7 @@ function recordRawOf(env: EditEnv, e: Entity, scaleH: string, isDefault: boolean
       const s = env.idx.handle(scaleH);
       return {
         type: CLASS_HATCH,
-        raw: hatchRecordRaw(ver, isDefault, scaleH, { lines: e.solid ? [] : e.patternLines, factor: s ? factorOf(s) : 1, angle: e.patternAngle || 0, loops: e.paths.map((p) => hatchLoopKind(p.flags)) }),
+        raw: hatchRecordRaw(ver, isDefault, scaleH, { lines: e.solid ? [] : e.patternLines, factor: s ? factorOf(s) : 1, angle: e.patternAngle || 0, loops: e.paths.map(hatchLoopKind) }),
       };
     }
     case 'MULTILEADER':
