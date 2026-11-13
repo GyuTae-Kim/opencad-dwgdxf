@@ -1,6 +1,8 @@
 /**
  * 127차: DWG 읽기에서 객체 CRC를 8바이트씩 표로 셈하고, R2004 계열 압축 풀기를 닫힘 없이 바꾸고(짧은 글자 줄은 바이트씩, 겹치지 않는 긴 되풀이는 copyWithin),
- * 객체 지도·종류·읽은 도형을 핸들 자리 표(HandleMap)에 둔 뒤에도 결과가 전과 같은지. 예전 길은 이 파일에 그대로 옮겨 두고 견준다.
+ * 객체 지도·종류·읽은 도형을 핸들 자리 표(HandleMap)에 두고, 원본 본문 지문을 바꾸개 없이 셀 수 있으면 그렇게 하고,
+ * R12 읽기의 핸들 글을 표로 만들고 읽은 자리를 비트 표에 둔 뒤에도 결과가 전과 같은지. 예전 길은 이 파일에 그대로 옮겨 두고 견준다
+ * (R12 태그를 묶어 넘기기는 tests/dwg/r12.test.ts가 실제 읽기로 본다).
  */
 import { describe, expect, it } from 'vitest';
 import { HandleMap } from '../../src/core/handlemap';
@@ -8,6 +10,7 @@ import { crc8 } from '../../src/io/dwg/crc';
 import { DwgFormatError } from '../../src/io/dwg/bitstream';
 import { decompressR18 } from '../../src/io/dwg/lz77';
 import { fingerprint } from '../../src/io/dwg/rawbody';
+import { PosSet, handleHex } from '../../src/io/dwg/r12';
 import { compressR18 } from '../../src/io/dwg/writer/lz77enc';
 
 let seed = 2127;
@@ -303,6 +306,42 @@ describe('원본 본문 지문(fingerprint) 빠른 길', () => {
       if (typeof o !== 'object') continue;
       const [a, b] = fpBoth(o);
       expect(a).toBe(b);
+    }
+  });
+});
+
+describe('R12 읽기의 핸들 글·읽은 자리 모음', () => {
+  it('핸들 글이 126차 길(16진 두 글자 → 정규식으로 앞 0 빼기 → 대문자)과 같다', () => {
+    const old = (d: Uint8Array, q: number, n: number): string => {
+      let hex = '';
+      for (let i = 0; i < n; i++) hex += d[q + i]!.toString(16).padStart(2, '0');
+      return hex.replace(/^0+(?=.)/, '').toUpperCase();
+    };
+    const d = new Uint8Array(64);
+    for (let k = 0; k < 3000; k++) {
+      for (let i = 0; i < d.length; i++) d[i] = rand() < 0.4 ? 0 : rand() < 0.1 ? Math.floor(rand() * 16) : Math.floor(rand() * 256);
+      const n = Math.floor(rand() * 10);
+      const q = Math.floor(rand() * (d.length - n));
+      expect(handleHex(d, q, n)).toBe(old(d, q, n));
+    }
+    for (const bytes of [[], [0], [0, 0], [0, 0, 0, 1], [0, 0x0a], [0x0a, 0], [0xff, 0xff], [0, 0, 0, 0, 0, 0, 0, 0]]) {
+      const a = new Uint8Array(bytes);
+      expect(handleHex(a, 0, a.length)).toBe(old(a, 0, a.length));
+    }
+  });
+
+  it('읽은 자리 모음이 Set<number>와 같다(파일 길이 경계·밖·음수·소수)', () => {
+    for (const len of [0, 1, 7, 8, 9, 1000, 65537]) {
+      const ps = new PosSet(len);
+      const ref = new Set<number>();
+      for (let i = 0; i < 5000; i++) {
+        const v = rand() < 0.1 ? pick([-1, 0.5, len, len + 1, len + 9, 2 ** 31, 2 ** 31 - 1, NaN]) : Math.floor(rand() * (len + 1));
+        if (rand() < 0.5) {
+          ps.add(v);
+          ref.add(v);
+        } else expect(ps.has(v)).toBe(ref.has(v));
+      }
+      for (const v of [...ref, 0, len, len + 1, -1]) expect(ps.has(v)).toBe(ref.has(v));
     }
   });
 });

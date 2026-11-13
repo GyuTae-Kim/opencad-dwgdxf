@@ -465,4 +465,54 @@ describe('R12 뷰포트의 보기 정보(ACAD MVIEW 확장 자료)', () => {
     expect(got.viewHeight).toBe(12);
     expect(got.frozenLayers).toEqual(['HIDDEN']);
   });
+
+  it('객체가 많아 태그를 여러 번에 나눠 넘겨도(127차) 차례·좌표·핸들(앞 0 바이트)·정점·건너뛴 객체와 경고가 그대로다', () => {
+    const entities: number[][] = [];
+    const want: { type: string; x: number; handle?: string; verts?: number[] }[] = [];
+    // 126차까지의 핸들 글(바이트마다 16진 두 글자 → 앞 0 빼기 → 대문자)
+    const oldHex = (bytes: number[]) =>
+      bytes
+        .map((x) => x.toString(16).padStart(2, '0'))
+        .join('')
+        .replace(/^0+(?=.)/, '')
+        .toUpperCase();
+    let unknown = 0;
+    let short = 0;
+    for (let i = 1; i <= 3000; i++) {
+      if (i % 97 === 5) entities.push(ent(1, line3, { deleted: true }));
+      if (i % 113 === 7) {
+        entities.push(ent(21, line3));
+        unknown++;
+      }
+      if (i % 131 === 9) {
+        // 본문이 모자란 선: 태그를 쌓다 실패해 그 객체 태그만 지우고 건너뛴다
+        entities.push(ent(1, (b) => b.f64(1).f64(2)));
+        short++;
+      }
+      if (i % 251 === 3) {
+        entities.push(ent(19, (b) => b.u8(0)), ent(20, xy(i, 0)), ent(20, xy(i, 1)), ent(20, xy(i, 2)), ent(17, (b) => b.u32(0)));
+        want.push({ type: 'POLYLINE', x: i, verts: [i, 0, 0, i, 1, 0, i, 2, 0] });
+      }
+      const hb = [(i >> 8) & 0xff, i & 0xff];
+      if (i % 7 === 0) hb.unshift(0);
+      if (i % 11 === 0) hb.unshift(0, 0);
+      entities.push(ent(1, (b) => b.f64(i).f64(2).f64(0).f64(i + 1).f64(3).f64(0), { handle: hb, color: i % 5 }));
+      want.push({ type: 'LINE', x: i, handle: oldHex(hb) });
+    }
+    const doc = readDwg(r12({ layers: LAYERS, entities }));
+    const got = ms(doc);
+    expect(got.map((e) => e.type)).toEqual(want.map((w) => w.type));
+    got.forEach((e, k) => {
+      const w = want[k]!;
+      if (w.type === 'LINE') {
+        expect((e as LineEntity).start.x).toBe(w.x);
+        expect((e as LineEntity).end.x).toBe(w.x + 1);
+        expect(e.handle).toBe(w.handle);
+      } else expect([...(e as PolylineEntity).verts]).toEqual(w.verts);
+    });
+    const count = (code: string) => doc.warnings.find((w) => w.code === code)?.count;
+    expect(count('entity.r12_unknown')).toBe(unknown);
+    expect(count('dwg.object_skipped')).toBe(short);
+    expect(short).toBeGreaterThan(10);
+  });
 });
