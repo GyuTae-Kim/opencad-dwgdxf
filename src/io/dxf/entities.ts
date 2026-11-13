@@ -45,7 +45,7 @@ import type {
   ViewportEntity,
   XLineEntity,
 } from '../../core/model';
-import { BYLAYER, SHARED_BYLAYER_COLOR, entityDefaults, shareUnitScale, shareXDirection } from '../../core/model';
+import { BYLAYER, LW_BYLAYER, SHARED_BYLAYER_COLOR, TRANSPARENCY_BYLAYER, shareUnitScale, shareXDirection } from '../../core/model';
 import type { PolyAccum } from '../../core/polyverts';
 import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../core/hatchedges';
 import { f64Of } from '../../core/f64pool';
@@ -68,11 +68,28 @@ interface Common {
   raw?: RawTag[];
 }
 
+/**
+ * `{ type, ...entityDefaults() }`와 같은 키 차례·값의 공통 속성(색은 splitCommon 끝에서 늘 다시 정한다).
+ * 앞에 키가 있는 펼치기는 V8이 빠른 복제를 쓰지 못해, 객체 92만 7천 개 R12 도면 읽기에서 이 줄이 11.9%였다(128차)
+ */
+export function newEntityBase(type: string): EntityBase {
+  return {
+    type,
+    handle: '',
+    layer: '0',
+    linetype: 'ByLayer',
+    color: SHARED_BYLAYER_COLOR,
+    lineweight: LW_BYLAYER,
+    ltscale: 1,
+    transparency: TRANSPARENCY_BYLAYER,
+  };
+}
+
 /** 공통 속성(AcDbEntity까지)과 객체 고유 태그를 나눈다. */
 function splitCommon(rec: DxfRecord, keepRaw = false): Common {
   const codes = rec.codes;
   const values = rec.values;
-  const base: EntityBase = { type: rec.type, ...entityDefaults() };
+  const base = newEntityBase(rec.type);
   const sc: number[] = [];
   const sv: TagValue[] = [];
   const ss: string[] = [];
@@ -355,23 +372,6 @@ function polylineHead(c: Common): PolylineEntity {
   } as PolylineEntity;
   ocs(t, e);
   return e;
-}
-
-/** VERTEX 하나를 평탄 정점 자료에 더한다(정점 객체를 만들지 않는다) */
-function vertex(c: Common, acc: PolyAccum, defaults?: { startWidth: number; endWidth: number }): void {
-  const t = c.tags;
-  const flags = t.int(70);
-  const p = t.point(10);
-  // 폭이 적히지 않은 정점은 POLYLINE의 기본 폭을 쓴다
-  const startWidth = t.has(40) ? t.num(40) : (defaults?.startWidth ?? 0);
-  const endWidth = t.has(41) ? t.num(41) : (defaults?.endWidth ?? 0);
-  const tangent = flags & 2 && t.has(50) ? t.num(50) * DEG : undefined;
-  let face: number[] | undefined;
-  if (t.has(71)) {
-    face = [t.int(71), t.int(72), t.int(73), t.int(74)];
-    while (face.length && face[face.length - 1] === 0) face.pop();
-  }
-  acc.add(p.x, p.y, p.z, t.num(42), startWidth, endWidth, flags, tangent, face);
 }
 
 function spline(c: Common): SplineEntity {
@@ -1856,7 +1856,143 @@ export function parseEntity(rec: DxfRecord, ctx: EntityContext): Entity | null {
   }
 }
 
-/** VERTEX 레코드 → 평탄 정점 자료에 더하기 */
+/**
+ * VERTEX 레코드 → 평탄 정점 자료에 더하기(정점 객체를 만들지 않는다).
+ * splitCommon으로 나눈 객체 고유 태그(공통 속성·하위 클래스 표지·102 묶음·확장 자료를 뺀 차례)에서 코드마다 첫 값을 읽는 것과 같은 값이다.
+ * 정점에는 공통 속성이 남지 않으므로 공통 속성 객체·태그 배열을 만들지 않고 한 번 훑으며 쓸 태그의 자리만 적는다
+ * (10은 뒤따르는 남긴 태그 둘이 20·30인지 — Tags.pointAt과 같다). 객체 92만 7천 개 R12 도면 읽기 프로필에서 정점 읽기가 39.5%였다(128차)
+ */
 export function parseVertex(rec: DxfRecord, acc: PolyAccum, defaults?: { startWidth: number; endWidth: number }): void {
-  vertex(splitCommon(rec), acc, defaults);
+  const codes = rec.codes;
+  const values = rec.values;
+  let sub = '';
+  let gfx = false;
+  // 남긴 태그 수, 첫 10의 남긴 차례와 그 뒤 남긴 태그 둘의 자리(원래 배열 자리)
+  let kept = 0;
+  let k10 = -1;
+  let a1 = -1;
+  let a2 = -1;
+  let f10 = -1;
+  let f70 = -1;
+  let f40 = -1;
+  let f41 = -1;
+  let f42 = -1;
+  let f50 = -1;
+  let f71 = -1;
+  let f72 = -1;
+  let f73 = -1;
+  let f74 = -1;
+  for (let i = 0; i < codes.length; i++) {
+    const c = codes[i]!;
+    if (c >= 1000) break;
+    if (c === 100) {
+      sub = str(values[i]).trim();
+      continue;
+    }
+    if (c === 101) {
+      sub = 'Embedded:' + str(values[i]).trim();
+      continue;
+    }
+    if (c === 102) {
+      if (str(values[i]).trim().startsWith('{')) {
+        let j = i + 1;
+        while (j < codes.length && codes[j] !== 102) j++;
+        i = j;
+      }
+      continue;
+    }
+    if (sub === '' || sub === 'AcDbEntity') {
+      switch (c) {
+        case 5:
+        case 330:
+        case 8:
+        case 6:
+        case 62:
+        case 420:
+        case 430:
+        case 370:
+        case 48:
+        case 60:
+        case 67:
+        case 440:
+        case 390:
+        case 410:
+        case 347:
+        case 348:
+        case 284:
+          continue;
+        case 92:
+        case 160:
+          if (sub === 'AcDbEntity') {
+            gfx = true;
+            continue;
+          }
+          break;
+        case 310:
+          if (sub === 'AcDbEntity' && gfx) continue;
+          break;
+      }
+    }
+    if (k10 >= 0) {
+      if (kept === k10 + 1) a1 = i;
+      else if (kept === k10 + 2) a2 = i;
+    }
+    switch (c) {
+      case 10:
+        if (f10 < 0) {
+          f10 = i;
+          k10 = kept;
+        }
+        break;
+      case 70:
+        if (f70 < 0) f70 = i;
+        break;
+      case 40:
+        if (f40 < 0) f40 = i;
+        break;
+      case 41:
+        if (f41 < 0) f41 = i;
+        break;
+      case 42:
+        if (f42 < 0) f42 = i;
+        break;
+      case 50:
+        if (f50 < 0) f50 = i;
+        break;
+      case 71:
+        if (f71 < 0) f71 = i;
+        break;
+      case 72:
+        if (f72 < 0) f72 = i;
+        break;
+      case 73:
+        if (f73 < 0) f73 = i;
+        break;
+      case 74:
+        if (f74 < 0) f74 = i;
+        break;
+    }
+    kept++;
+  }
+  const flags = f70 < 0 ? 0 : int(values[f70]);
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  if (f10 >= 0) {
+    x = num(values[f10]);
+    if (a1 >= 0 && codes[a1] === 20) {
+      y = num(values[a1]);
+      if (a2 >= 0 && codes[a2] === 30) z = num(values[a2]);
+    }
+  }
+  // 폭이 적히지 않은 정점은 POLYLINE의 기본 폭을 쓴다
+  const startWidth = f40 >= 0 ? num(values[f40]) : (defaults?.startWidth ?? 0);
+  const endWidth = f41 >= 0 ? num(values[f41]) : (defaults?.endWidth ?? 0);
+  const tangent = flags & 2 && f50 >= 0 ? num(values[f50]) * DEG : undefined;
+  let face: number[] | undefined;
+  if (f71 >= 0) {
+    face = [int(values[f71]), f72 < 0 ? 0 : int(values[f72]), f73 < 0 ? 0 : int(values[f73]), f74 < 0 ? 0 : int(values[f74])];
+    while (face.length && face[face.length - 1] === 0) face.pop();
+  }
+  acc.add(x, y, z, f42 < 0 ? 0 : num(values[f42]), startWidth, endWidth, flags, tangent, face);
 }
