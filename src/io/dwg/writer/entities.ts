@@ -217,8 +217,17 @@ export class EntityWriter {
     // 도형: R2000은 앞뒤 연결이 있으므로 실패한 도형을 빼고 다시 쓴다
     const real = this.sink;
     for (let attempt = 0; attempt < 8; attempt++) {
-      const buf = new Map<number, Uint8Array>();
-      this.sink = { put: (h, b) => buf.set(h, b) };
+      // R2000은 실패하면 앞뒤 연결을 고쳐 다시 쓰므로 이번 시도의 것을 모아 두었다가 다 쓰면 옮긴다.
+      // R2004 이상은 다시 쓰지 않으므로 바로 넣는다(125차 — 실패한 도형의 핸들은 live에서 빠지고 넣은 것은 끝에 live로 거른다)
+      const hs: number[] = [];
+      const bs: Uint8Array[] = [];
+      if (ver < R2004)
+        this.sink = {
+          put: (h, b) => {
+            hs.push(h);
+            bs.push(b);
+          },
+        };
       const ents = pb.ents;
       const failed = new Set<PEnt>();
       for (let i = 0; i < ents.length; i++) {
@@ -242,7 +251,7 @@ export class EntityWriter {
         }
         if (ver < R2004) continue;
       }
-      for (const [h, b] of buf) if (ctx.live.has(h)) real.put(h, b);
+      for (let k = 0; k < hs.length; k++) if (ctx.live.has(hs[k]!)) real.put(hs[k]!, bs[k]!);
       break;
     }
     // BLOCK
@@ -973,18 +982,19 @@ export class EntityWriter {
     } else for (const v of vs) hd.H(HARD_OWNER, v);
     hd.H(HARD_OWNER, pe.seqend!);
     this.done(h);
+    // 정점의 공통 자료는 폴리선 것(확장 자료·사전·반응자 빼고) — 정점마다 폴리선을 펼쳐 복사하지 않는다(125차)
+    const base = vs.length ? ({ ...e, xdata: undefined, xdict: undefined, reactors: undefined } as Entity) : e;
     for (let i = 0; i < vs.length; i++) {
       const prev = ver < R2004 && i > 0 ? vs[i - 1] : 0;
       const next = ver < R2004 ? (i + 1 < vs.length ? vs[i + 1] : pe.seqend!) : 0;
-      this.vertex(e, i, vs[i], { owner: h, mode: 0, prev, next });
+      this.vertex(e, base, i, vs[i], { owner: h, mode: 0, prev, next });
     }
     this.seqend(e, pe.seqend!, h, ver < R2004 ? (vs[vs.length - 1] ?? 0) : 0);
   }
 
-  /** 정점 i(평탄 좌표에서 바로 읽는다) */
-  private vertex(p: PolylineEntity, i: number, h: number, l: Links): void {
+  /** 정점 i(평탄 좌표에서 바로 읽는다). base는 정점의 공통 자료(폴리선에서 확장 자료·사전·반응자를 뺀 것) */
+  private vertex(p: PolylineEntity, base: Entity, i: number, h: number, l: Links): void {
     const d = this.ow.dat;
-    const base = { ...p, xdata: undefined, xdict: undefined, reactors: undefined } as Entity;
     const flags = polyFlags(p, i);
     const face = p.kind === 'polyface' ? polyFace(p, i) : undefined;
     if (p.kind === '2d') {

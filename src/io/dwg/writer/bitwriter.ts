@@ -7,6 +7,8 @@ import { R2000, R2004, R2007, R2010 } from '../version';
 import type { TextEncoderCp } from './codepage';
 
 const scratch = new DataView(new ArrayBuffer(8));
+/** 핸들 값의 바이트(낮은 바이트부터 — 유한한 수는 128바이트 안이다) */
+const handleBytes = new Float64Array(128);
 
 /** 쓸 색(CMC·ENC) */
 export interface WColor {
@@ -303,14 +305,16 @@ export class BitWriter {
 
   /** 핸들 참조(절대 값). code: 2 소프트 소유, 3 하드 소유, 4 소프트 포인터, 5 하드 포인터, 0 핸들 자체 */
   H(code: number, value: number): void {
-    const bytes: number[] = [];
+    // 낮은 바이트부터 모아 높은 바이트부터 쓴다(125차 — 핸들마다 배열을 만들어 앞에 끼우지 않는다. 객체 수백만 개 저장에서 쓰기 시간의 4~7%였다)
+    const bytes = handleBytes;
+    let n = 0;
     let x = value;
     while (x > 0) {
-      bytes.unshift(x % 256);
+      bytes[n++] = x % 256;
       x = Math.floor(x / 256);
     }
-    this.RC(((code & 15) << 4) | bytes.length);
-    for (const b of bytes) this.RC(b);
+    this.RC(((code & 15) << 4) | n);
+    for (let k = n - 1; k >= 0; k--) this.RC(bytes[k]!);
   }
 
   // -------------------------------------------------------------------------
