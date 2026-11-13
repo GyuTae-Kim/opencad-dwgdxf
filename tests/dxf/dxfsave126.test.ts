@@ -60,6 +60,14 @@ function docB(): CadDocument {
   return doc;
 }
 
+/** 헤더 $HANDSEED가 아주 큰(16진 16자) R12 도면처럼: 새 핸들이 모두 2^52 위 */
+function docC(): CadDocument {
+  const doc = createNewDocument('metric');
+  doc.header.set('$HANDSEED', '7F416A0000000000');
+  doc.blocks.get(MODEL_SPACE)!.entities.push(polyline('D01', '2d', 0, {}), line('', 2), line('7F416A0000000003', 3), polyline('', '3d', 4, {}));
+  return doc;
+}
+
 /** 125차 판(4da6b21)으로 쓴 값: 바이트 sha256 앞 16자 : 경고 JSON sha256 앞 8자 */
 const GOLDEN: Record<string, string> = {
   'A-AC1032': 'bf8f6bcbf2565a96:6eae6d2d',
@@ -78,6 +86,14 @@ const GOLDEN: Record<string, string> = {
   'B-AC1015b': '390d58c4cc075fb4:564da3c5',
   'B-AC1009': 'a84dacb38220bc97:4f53cda1',
   'B-AC1009b': '27fe900d9ea8caeb:4f53cda1',
+  'C-AC1032': '4b684f3ed43f959c:4f53cda1',
+  'C-AC1032b': '3a6a2c156225b6ec:4f53cda1',
+  'C-AC1018': '4bb0ce4c0349085a:3f311732',
+  'C-AC1018b': '575ef6fb0b440c6e:3f311732',
+  'C-AC1015': '07522f583440e38f:564da3c5',
+  'C-AC1015b': '1d05f34e9b76bc51:564da3c5',
+  'C-AC1009': 'b4d1e8372e3bd11a:4f53cda1',
+  'C-AC1009b': '306efd13acac2fae:4f53cda1',
 };
 
 const sha = (d: Uint8Array | string, n: number): string => createHash('sha256').update(d).digest('hex').slice(0, n);
@@ -113,13 +129,15 @@ let seed = 2126;
 const rand = (): number => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 0x100000000;
 
 describe('DXF 새 핸들·핸들 정하기(정규 꼴 13자 이하는 값으로, 나머지는 문자열로)', () => {
-  for (const [title, top] of [
-    ['보통 도면', ''],
-    ['2^52(16진 14자)를 넘어가는 도면', 'FFFFFFFFFFFF0'],
+  for (const [title, top, seedHex] of [
+    ['보통 도면', '', ''],
+    ['2^52(16진 14자)를 넘어가는 도면', 'FFFFFFFFFFFF0', ''],
+    ['헤더 $HANDSEED가 16진 16자인 도면', '', '7F416A0000000000'],
   ] as const) {
     it(`${title}: 무작위 정하기·새 핸들이 예전 길과 같다(앞 0·소문자·14~16자·겹침·잘못된 값)`, () => {
       const doc = createNewDocument('metric');
       if (top) doc.blocks.get(MODEL_SPACE)!.entities.push(line(top, 0));
+      if (seedHex) doc.header.set('$HANDSEED', seedHex);
       const ctx = new WriteContext(doc, { version: 'AC1032' });
       const seed0 = BigInt('0x' + ctx.handseed);
       const ref = new RefAlloc(ctx.handseed);
@@ -150,6 +168,7 @@ describe('DXF 쓰기 바이트·경고가 125차 판과 같다', () => {
   for (const [name, mk] of [
     ['A', docA],
     ['B', docB],
+    ['C', docC],
   ] as const) {
     for (const version of ['AC1032', 'AC1018', 'AC1015', 'AC1009'] as const) {
       for (const binary of [false, true]) {

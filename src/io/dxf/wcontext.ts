@@ -175,14 +175,24 @@ export class WriteContext {
   readonly options: DxfWriteOptions;
   private readonly warnMap = new Map<string, ReadWarning>();
 
-  /** 다음 새 핸들: 2^52 아래면 수, 그 위는 BigInt(126차 — 정점마다 BigInt를 만들지 않는다) */
+  /** 다음 새 핸들: 2^52 아래면 수, 그 위는 BigInt(126차 — 정점마다 BigInt를 만들지 않는다). hiBase를 정한 뒤에는 hiBase + hiOff가 다음 새 핸들이다 */
   private next: number | bigint = 1;
   /**
-   * 쓴 핸들(대문자 16진 문자열). 126차: 정규 꼴(앞 0 없음)이고 2^52 아래인 것은 값으로 takenNum에, 나머지(앞에 0이 붙은 것·14~16자)만 문자열로 taken에 둔다.
-   * 정규 꼴 문자열과 값은 일대일이라 "문자열이 쓰였는지"가 그대로다. 정점마다 새 핸들 문자열을 Set에 넣고 찾던 것이 DXF 저장 CPU의 약 21%였다
+   * 쓴 핸들(대문자 16진 문자열). 126차: 정규 꼴(앞 0 없음)이고 2^52 아래인 것은 값으로 takenNum에, hiBase 위 2^52 안인 것은 hiBase와의 차로 takenHi에,
+   * 나머지(앞에 0이 붙은 것, 그 밖의 14~16자)만 문자열로 taken에 둔다. 정규 꼴 문자열과 값은 일대일이라 "그 문자열이 쓰였는지"가 그대로다.
+   * 정점마다 새 핸들 문자열을 Set에 넣고 찾던 것이 DXF 저장 CPU의 약 21%였다
    */
   private readonly taken = new Set<string>();
   private readonly takenNum = new HandleSet();
+  /**
+   * 2^52 이상에서 처음 새 핸들을 줄 때의 다음 핸들(헤더 $HANDSEED가 아주 큰 R12 도면 등 — 그런 도면은 새 핸들이 모두 16진 14자 이상이다).
+   * 그 뒤 새 핸들은 이 값과의 차(hiOff, 수)로 센다. hiBaseHi·hiBaseLo는 이 값의 위·아래 32비트(16진 문자열을 BigInt 없이 만든다)
+   */
+  private hiBase: bigint | undefined;
+  private hiBaseHi = 0;
+  private hiBaseLo = 0;
+  private hiOff = 0;
+  private readonly takenHi = new HandleSet();
   private readonly given = new WeakMap<object, string>();
   /** 쓸 객체의 핸들 */
   readonly live = new Set<string>();
@@ -368,7 +378,7 @@ export class WriteContext {
 
   /** 새 핸들 */
   alloc(): string {
-    if (typeof this.next === 'number') {
+    if (this.hiBase === undefined && typeof this.next === 'number') {
       let n = this.next;
       while (n < NUM_HANDLE && this.takenNum.has(n)) n++;
       if (n < NUM_HANDLE) {
@@ -378,8 +388,19 @@ export class WriteContext {
       }
       this.next = BigInt(n);
     }
-    // 2^52 이상(16진 14자 이상): 문자열로
-    let next = this.next;
+    // 2^52 이상: 기준(hiBase)과의 차로
+    if (this.hiBase === undefined) this.enterHi(BigInt(this.next));
+    let k = this.hiOff;
+    while (k < NUM_HANDLE && this.takenHi.has(k)) k++;
+    if (k < NUM_HANDLE) {
+      this.takenHi.add(k);
+      this.hiOff = k + 1;
+      return this.hiHex(k);
+    }
+    // 기준 위 2^52를 넘음(새 핸들 2^52개 — 실제로는 닿지 않는다): 문자열로
+    this.hiOff = NUM_HANDLE;
+    let next = this.next as bigint;
+    if (next < this.hiBase! + BigInt(NUM_HANDLE)) next = this.hiBase! + BigInt(NUM_HANDLE);
     let h = next.toString(16).toUpperCase();
     while (this.taken.has(h)) {
       next++;
@@ -390,20 +411,65 @@ export class WriteContext {
     return h;
   }
 
-  /** 쓴 핸들인지(p는 대문자 16진 — 정규 꼴 13자 이하는 값으로 본다) */
+  /** 2^52 이상의 기준을 정하고, 그 위 2^52 안의 정규 꼴 문자열 핸들을 차로 옮긴다 */
+  private enterHi(base: bigint): void {
+    this.hiBase = base;
+    this.hiBaseHi = Number(base >> 32n);
+    this.hiBaseLo = Number(base & 0xffffffffn);
+    this.hiOff = 0;
+    for (const s of [...this.taken]) {
+      const off = this.hiOffsetOf(s);
+      if (off < 0) continue;
+      this.takenHi.add(off);
+      this.taken.delete(s);
+    }
+  }
+
+  /** 정규 꼴 핸들 p(대문자 16진)가 기준 위 2^52 안이면 그 차, 아니면 -1 */
+  private hiOffsetOf(p: string): number {
+    if (this.hiBase === undefined || p.charCodeAt(0) === 48) return -1;
+    const d = BigInt('0x' + p) - this.hiBase;
+    return d >= 0n && d < BigInt(NUM_HANDLE) ? Number(d) : -1;
+  }
+
+  /** 기준 + k의 16진(대문자) — 위·아래 32비트를 수로 더해 만든다(기준이 2^52 이상이라 위 자리는 0이 아니다) */
+  private hiHex(k: number): string {
+    let lo = this.hiBaseLo + k;
+    const carry = Math.floor(lo / 0x100000000);
+    lo -= carry * 0x100000000;
+    return (this.hiBaseHi + carry).toString(16).toUpperCase() + lo.toString(16).toUpperCase().padStart(8, '0');
+  }
+
+  /** 쓴 핸들인지(p는 대문자 16진 — 정규 꼴 13자 이하는 값으로, 기준 위 2^52 안은 차로 본다) */
   private isTaken(p: string): boolean {
-    const v = p.charCodeAt(0) !== 48 ? hexValue13(p) : -1;
-    return v >= 0 ? this.takenNum.has(v) : this.taken.has(p);
+    if (p.charCodeAt(0) !== 48) {
+      const v = hexValue13(p);
+      if (v >= 0) return this.takenNum.has(v);
+      const off = this.hiOffsetOf(p);
+      if (off >= 0) return this.takenHi.has(off);
+    }
+    return this.taken.has(p);
   }
 
   private markTaken(p: string): void {
-    const v = p.charCodeAt(0) !== 48 ? hexValue13(p) : -1;
-    if (v >= 0) this.takenNum.add(v);
-    else this.taken.add(p);
+    if (p.charCodeAt(0) !== 48) {
+      const v = hexValue13(p);
+      if (v >= 0) {
+        this.takenNum.add(v);
+        return;
+      }
+      const off = this.hiOffsetOf(p);
+      if (off >= 0) {
+        this.takenHi.add(off);
+        return;
+      }
+    }
+    this.taken.add(p);
   }
 
   /** 다음에 쓸 핸들(= $HANDSEED) */
   get handseed(): string {
+    if (this.hiBase !== undefined && this.hiOff < NUM_HANDLE) return this.hiHex(this.hiOff);
     return this.next.toString(16).toUpperCase();
   }
 
