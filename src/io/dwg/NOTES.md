@@ -81,6 +81,8 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
   닫힌 곡선·근사 공차는 계산을 몰라 비워 둔다(그릴 때 맞춤점 보간).
 - 2D 폴리선 정점의 Z는 파일 값 그대로 둔다(고도로 바꾸지 않는다 — AutoCAD DXF도 그대로 적고, 그릴 때는 고도를 쓴다).
 - R2018 여러 줄 속성: 끼워 넣은 MTEXT의 공통 자료가 entmode부터 오고, 핸들은 문자 스타일 다음에 이어진다.
+  그 전 판(R2000~R2013, R14 표본도)은 한 줄 속성 + 확장 사전의 ACAD_MLATT·ACAD_XREC_ROUNDTRIP XRECORD다(DXF와 같은 꼴 — `io/mlattr.ts`, 쓰기 `io/mlattr-write.ts`).
+  XRECORD의 점(10)은 DWG에서 3RD 한 칸이다.
 - R2007 섹션 지도의 이름 길이는 끝 0을 포함한 바이트 수다. R2007 압축의 첫 명령은 소비한 뒤 2바이트를 건너뛴다.
 - PDFUNDERLAY 등: 돌출 방향, 삽입점, 회전, 축척 순서(사양에 없음).
 - 표 객체의 색(TC)은 모든 버전에서 R2004+ CMC 배치다. R2007+ 값 종류 4(문자열)는 자료 흐름의 BL 바이트 수 + UTF-16LE(끝 0 포함).

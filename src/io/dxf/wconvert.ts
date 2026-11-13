@@ -30,6 +30,9 @@ import { codepageToEncoding, decoderFor } from '../../core/codepage';
 import type { WriteContext } from './wcontext';
 import { meshFaces, meshVertices } from '../../core/meshdata';
 import { fitCount, leaderCount, leaderVertices, splineCtrl } from '../../core/flat3';
+import { mtextPlainLines } from '../mtextplain';
+
+export { mtextPlainLines };
 
 const ACIS = new Set(['REGION', '3DSOLID', 'BODY', 'SURFACE', 'PLANESURFACE', 'EXTRUDEDSURFACE', 'LOFTEDSURFACE', 'REVOLVEDSURFACE', 'SWEPTSURFACE', 'NURBSURFACE']);
 
@@ -81,43 +84,6 @@ function vertsFrom(pts: number[], stride: number, flags: number): PolyVertex[] {
 
 function tolOf(size: number): number {
   return Math.max(size * 1e-3, 1e-9);
-}
-
-/** MTEXT 서식 코드를 걷어 낸 줄 목록 */
-export function mtextPlainLines(src: string): string[] {
-  let out = '';
-  for (let i = 0; i < src.length; i++) {
-    const ch = src[i]!;
-    if (ch === '{' || ch === '}') continue;
-    if (ch !== '\\' || i + 1 >= src.length) {
-      out += ch;
-      continue;
-    }
-    const c = src[i + 1]!;
-    if (c === 'P') {
-      out += '\n';
-      i++;
-    } else if (c === '~') {
-      out += ' ';
-      i++;
-    } else if (c === '\\' || c === '{' || c === '}') {
-      out += c;
-      i++;
-    } else if ('LlOoKkX'.includes(c)) {
-      i++;
-    } else if ('ACcFfHhQTWp'.includes(c)) {
-      const j = src.indexOf(';', i + 2);
-      i = j < 0 ? src.length : j;
-    } else if (c === 'S') {
-      const j = src.indexOf(';', i + 2);
-      const body = src.slice(i + 2, j < 0 ? src.length : j);
-      out += body.replace(/[\^#]/g, '/');
-      i = j < 0 ? src.length : j;
-    } else {
-      out += ch;
-    }
-  }
-  return out.split('\n');
 }
 
 function explodeMLeader(e: MLeaderEntity, ctx: WriteContext): Entity[] {

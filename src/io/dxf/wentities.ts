@@ -37,7 +37,7 @@ import { polyBulge, polyCount, polyEndWidth, polyFace, polyFlags, polyIsFaceReco
 import { clampedKnots } from '../../geom/curves';
 import { CollectSink, kindOf, rawTagValid, rawTagsValid, type TagSink } from './tagwriter';
 import type { WriteContext } from './wcontext';
-import { mtextPlainLines } from './wconvert';
+import { mtextPlainLines, textChunks } from '../mtextplain';
 import { COLUMNS_DROPPED } from '../mtextcols';
 import { annoDimWriteOverrides } from '../annoscale';
 import { parseDimOverrides } from './tagutil';
@@ -356,35 +356,9 @@ function extrusion(w: TagOut, e: { extrusion?: Vec3 }): void {
 }
 
 // ---------------------------------------------------------------------------
-// 문자열
+// 문자열(250자 조각 textChunks·평문 줄은 ../mtextplain.ts)
 
-/**
- * MTEXT 본문을 250자 조각으로(서로게이트 쌍을 자르지 않고, R2007 이전은 비ASCII를 7바이트로 보고 자른다).
- * 제어 문자와 ^는 파일에서 캐럿 표기 두 글자가 되므로 2로 센다.
- */
-export function textChunks(text: string, utf8: boolean): string[] {
-  const out: string[] = [];
-  let cur = '';
-  let size = 0;
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    let ch = text[i]!;
-    if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length) {
-      ch += text[i + 1]!;
-      i++;
-    }
-    const n = c < 0x20 || c === 0x5e ? 2 : utf8 ? ch.length : c < 0x80 ? 1 : 7 * ch.length;
-    if (size + n > 250) {
-      out.push(cur);
-      cur = '';
-      size = 0;
-    }
-    cur += ch;
-    size += n;
-  }
-  out.push(cur);
-  return out;
-}
+export { textChunks };
 
 function writeMTextBody(w: TagOut, text: string): void {
   const chunks = textChunks(text, w.ctx.ver >= 1021);
