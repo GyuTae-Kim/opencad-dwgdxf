@@ -1565,7 +1565,8 @@ export function registerModifyCommands(app: App): void {
         const e0 = st.doc.entityIndex.get(h);
         if (!e0) continue;
         const e = idx ? explodeView(st.doc, e0, scale, idx) : e0;
-        const r = explodeEntity(e, st.doc);
+        // 속성이 든 블록은 속성 값을 지우고 속성 정의를 다시 보인다(123차, Autodesk EXPLODE 도움말 — 값을 남기려면 BURST)
+        const r = explodeEntity(e, st.doc, false, 'definitions');
         if (!r.add?.length && !r.remove?.length && !r.replace?.length) {
           fail++;
           if (r.message) reasons.add(r.message);

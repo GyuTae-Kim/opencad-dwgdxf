@@ -295,7 +295,8 @@ export async function runInsert(app: App, ctx: CommandContext, arg: string | und
     };
     if (v.explode) {
       ins.handle = '';
-      const r = explodeEntity(ins, st.doc);
+      // 분해해 넣기는 넣은 참조를 EXPLODE한 것과 같다 — 속성 정의는 정의 그대로(123차)
+      const r = explodeEntity(ins, st.doc, false, 'definitions');
       if (!r.add?.length) {
         ctx.print(r.message ?? '분해할 수 없는 블록입니다.', 'err');
         return;
