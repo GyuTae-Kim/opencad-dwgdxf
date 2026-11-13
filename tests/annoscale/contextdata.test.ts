@@ -238,7 +238,7 @@ describe('레코드의 DXF 꼴', () => {
     expect(pt('ordinate')).toEqual([ent('ordinate').defPoint, ent('ordinate').defPoint3]);
   });
 
-  it('해치: AcDbHatchObjectContextData, 패턴 선, 그 축척의 배율, 패턴 방향, 루프 종류(폴리선 비트 없음)', () => {
+  it('해치: AcDbHatchObjectContextData, 패턴 선, 그 축척의 배율, 패턴 방향, 루프 종류(경로 플래그 그대로 — 폴리선 비트 2 포함)', () => {
     const h = f.doc.entityIndex.get(f.handles.hatch!) as HatchEntity;
     const recs = allRecords(f.doc, h.handle);
     expect(recs).toHaveLength(2);
@@ -250,7 +250,7 @@ describe('레코드의 DXF 꼴', () => {
     expect(fl.lines[1]!.dashes[0]).toBeCloseTo(h.patternLines[1]!.dashes[0]! * 2);
     const tail = r20.body.slice(r20.body.findIndex((t) => t.code === 40));
     expect(tail.map((t) => t.code)).toEqual([40, 10, 20, 30, 90, 90, 290, 90, 290]);
-    expect(tail.filter((t) => t.code === 90).map((t) => t.value)).toEqual([2, 17, 0]);
+    expect(tail.filter((t) => t.code === 90).map((t) => t.value)).toEqual([2, 19, 2]);
   });
 
   it('다중 지시선: CONTEXT_DATA{ 안의 태그(내용 → 지시선 → 272·273), 다른 축척은 연결점 기준 배율 비', () => {

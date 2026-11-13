@@ -16,7 +16,7 @@
  *   140 문자 회전(라디안), 298·291·70·292·71·280·295(뜻을 모르는 값 — 다시 쓸 때 이어받는다), 296·297 화살표 뒤집기,
  *   종류 표지 뒤 종류별 점 11(·12·13)
  * - HATCHSCALE: `100 AcDbHatchObjectContextData`, 78 패턴 선 수, 선마다 53·43·44·45·46·79·49…, 40 배율, 10 패턴 방향,
- *   90 루프 수, 루프마다 90 종류·290 1
+ *   90 루프 수, 루프마다 90 종류·290 1(만드는 레코드). AutoCAD 레코드는 290 = 0 루프 뒤에 그 경계(HATCH 경계 경로 태그)가 따를 수 있다
  * - HATCHVIEW(관리자의 ACDB_ANNOTATIONSCALE_VIEW_COLLECTION, 축척 레코드마다 하나): HATCHSCALE의 필드(40 = 1, 10 = 0 벡터),
  *   `100 AcDbHatchViewContextData`, 330 뷰포트(0), 10 시선(0, 0, 1), 51 비틀림 0, 290 0
  * - MLEADER: 다중 지시선 컨텍스트 자료(mlctx.ts)
@@ -521,13 +521,16 @@ export interface HatchRecord {
   factor: number;
   /** 패턴 각도(라디안) — 레코드의 10은 이 각도의 단위 벡터 */
   angle: number;
-  /** 루프마다 종류(경계 플래그에서 폴리선 비트 2를 뺀 것) */
+  /** 루프마다 종류(hatchLoopKind) */
   loops: number[];
 }
 
-/** 해치 루프 종류: AutoCAD는 폴리선 비트(2)를 쓰지 않는다 */
-export function hatchLoopKind(flags: number): number {
-  return flags & ~2;
+/**
+ * 해치 루프 종류: 경계 경로 플래그 그대로(폴리선이면 비트 2, 모서리면 비트 2 없음). 공개 도면 DWG의 AutoCAD 레코드 루프 2,028개
+ * (축척·뷰 레코드)가 모두 해치 본문 같은 번호 경로의 플래그와 같거나 512·1024 비트만 다르고, 폴리선 루프 1,171개 모두 비트 2가 있다.
+ */
+export function hatchLoopKind(p: { flags: number; polyline?: unknown }): number {
+  return p.polyline ? p.flags | 2 : p.flags & ~2;
 }
 
 export function hatchRecordRaw(ver: number, isDefault: boolean, scale: string, f: HatchRecord): RawTag[] {
@@ -703,6 +706,8 @@ function pendingDict(doc: CadDocument, ops: readonly EditOp[], h: string | undef
  * 해치 축척 레코드 → 그 축척의 뷰포트별 표현(HATCHVIEW) 원시 태그. AutoCAD가 주석 해치마다 만드는 꼴(공개 도면 DWG의 레코드,
  * 기능 명세 annotation-scale.md 6.1): 축척·기본 표지·패턴 선·루프는 축척 레코드와 같고 40 = 1, 10 = 0 벡터, 그 뒤
  * `100 AcDbHatchViewContextData`, 330 뷰포트 0, 10 시선 (0, 0, 1), 51 비틀림 0, 290 0. 해치 레코드가 아니면 null.
+ * 루프는 경계 없이 290 = 1로 둔다: 공개 도면 DWG의 AutoCAD 뷰 레코드 루프 1,230개가 모두 290 = 1이고, 축척 레코드 루프가 290 = 0(경계를 적음)인
+ * 167개도 뷰에서는 1이다(122차).
  */
 export function hatchViewRaw(scaleRaw: readonly RawTag[]): RawTag[] | null {
   const im = scaleRaw.findIndex((t) => t.code === 100 && String(t.value).trim() === 'AcDbHatchObjectContextData');
@@ -717,9 +722,23 @@ export function hatchViewRaw(scaleRaw: readonly RawTag[]): RawTag[] | null {
     for (let d = 0; d < nd && scaleRaw[i]?.code === 49; d++) i++;
   }
   if (scaleRaw[i]?.code !== 40) return null;
-  const out = scaleRaw.map((t) => ({ ...t }));
+  const out = scaleRaw.slice(0, i + 1).map((t) => ({ ...t }));
   out[i] = { code: 40, value: 1 };
-  for (let j = i + 1; j < i + 4 && j < out.length; j++) if ([10, 20, 30].includes(out[j]!.code)) out[j] = { code: out[j]!.code, value: 0 };
+  let j = i + 1;
+  for (; j < i + 4 && j < scaleRaw.length && [10, 20, 30].includes(scaleRaw[j]!.code); j++) out.push({ code: scaleRaw[j]!.code, value: 0 });
+  // 루프: 90 수, 루프마다 90 종류·290(0이면 경계 태그가 다음 90까지 따른다) → 290 1
+  if (scaleRaw[j]?.code === 90) {
+    const nl = num(scaleRaw[j]!.value);
+    out.push({ code: 90, value: nl });
+    j++;
+    for (let k = 0; k < nl && scaleRaw[j]?.code === 90; k++) {
+      out.push({ code: 90, value: scaleRaw[j]!.value }, { code: 290, value: 1 });
+      j++;
+      if (scaleRaw[j]?.code === 290) j++;
+      while (j < scaleRaw.length && scaleRaw[j]!.code !== 90) j++;
+    }
+  }
+  out.push(...scaleRaw.slice(j).map((t) => ({ ...t })));
   out.push(
     { code: 100, value: 'AcDbHatchViewContextData' },
     { code: 330, value: '0' },

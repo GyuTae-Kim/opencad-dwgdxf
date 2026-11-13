@@ -24,7 +24,8 @@
  *   7~14번째 비트 RC 16으로 나타났다. 앞 다섯 비트(293·298·291·70·292)는 실물이 모두 0이라 DXF 순서로 둔다.
  * - HATCHSCALE: `100 AcDbHatchObjectContextData`, BL 78 패턴 선 수, 선마다 BD 53 각도(DXF는 도), BD 43·44 기준점,
  *   BD 45·46 간격띄우기, BS 79 대시 수, BD 49 대시…; BD 40 그 축척의 배율, 3BD 10 패턴 방향, BL 90 루프 수,
- *   루프마다 BL 90 종류와 B 290(실물은 모두 1 — 0이면 경계 자료가 따르므로 풀지 않는다).
+ *   루프마다 BL 90 종류와 B 290. 290 = 0이면 그 루프의 경계가 해치 본문의 경계 경로 꼴로 따른다(rHatchLoop —
+ *   공개 도면 DWG(R2018) 20개의 레코드 67개가 끝 비트까지 맞고 점이 해치 본문의 같은 루프와 같다).
  * - HATCHVIEW(ACDB_ANNOTATIONSCALE_VIEW_COLLECTION): HATCHSCALE 필드, `100 AcDbHatchViewContextData`, H 330 뷰포트
  *   (소프트 포인터), 3BD 10 시선, BD 51 비틀림, B 290.
  * - MLEADER: 다중 지시선 컨텍스트 자료(사양 20.4.86 MLeaderAnnotContext) 전체. DXF는 MULTILEADER의 `300 CONTEXT_DATA{`
@@ -34,7 +35,7 @@
  *
  * 배치는 ODA 공개 사양(20.4.71·20.4.86·20.4.89), AutoCAD가 저장한 표본(문자·속성·블록 참조 레코드, 다중 지시선 객체의 같은
  * 컨텍스트 자료), 기능 명세(annotation-scale.md 6.1), 공개 도면(치수·해치·HATCHVIEW·MTEXT·LEADER 레코드, 일부는 같은 도면의
- * DWG·DXF 짝)으로 맞추었다. 해치 루프의 290 = 0(경계 자료가 따른다)은 실물이 없어 풀지 않는다.
+ * DWG·DXF 짝)으로 맞추었다. 해치 루프의 경계(290 = 0)는 DXF 짝이 없어 태그를 HATCH 경계 경로의 그룹 코드 차례로 둔다.
  * 읽다가 배치가 맞지 않으면 CtxLayoutError — 부르는 쪽은 원본 비트만 남긴다.
  */
 import type { RawTag, Vec3 } from '../../core/model';
@@ -300,10 +301,79 @@ function rHatchFields(i: In): void {
   const nl = i.N(3);
   i.tag(90, nl);
   for (let k = 0; k < nl; k++) {
-    i.tag(90, i.BL());
+    const flags = i.BL();
+    i.tag(90, flags);
     const b = i.B();
-    if (!b) fail('해치 루프 자료');
     i.tag(290, b);
+    if (!b) rHatchLoop(i, flags);
+  }
+}
+
+/**
+ * 290 = 0인 해치 루프의 경계: 해치 본문의 경계 경로와 같은 꼴(종류는 앞의 BL 90, 원본 객체 수는 없다).
+ * 폴리선(비트 2): B 72 볼록, B 73 닫힘, BL 93 수, 꼭짓점마다 2RD 10(볼록이면 BD 42).
+ * 모서리: BL 93 수, 모서리마다 RC 72 종류 — 선 2RD 10·11, 호 2RD 10·BD 40·BD 50·51(DXF는 도)·B 73,
+ * 타원호 2RD 10·11·BD 40·50·51·B 73, 스플라인 BL 94·B 73·74·BL 95·96·BD 40…·2RD 10(유리면 BD 42)…·(R2010+) BL 97 맞춤점·2RD 11…·12·13.
+ * DXF 태그는 HATCH 경계 경로 그룹 코드 차례(AutoCAD DXF 도움말)를 따른다.
+ */
+function rHatchLoop(i: In, flags: number): void {
+  const r = i.r;
+  const p2 = (code: number): void => {
+    const p = r.RD2();
+    i.tag(code, p.x);
+    i.tag(code + 10, p.y);
+  };
+  if (flags & 2) {
+    const bulges = i.B();
+    i.tag(72, bulges);
+    i.tag(73, i.B());
+    const n = i.N(128);
+    i.tag(93, n);
+    for (let k = 0; k < n; k++) {
+      p2(10);
+      if (bulges) i.tag(42, i.BD());
+    }
+    return;
+  }
+  const n = i.N(8);
+  i.tag(93, n);
+  for (let k = 0; k < n; k++) {
+    const t = r.RC();
+    i.tag(72, t);
+    if (t === 1) {
+      p2(10);
+      p2(11);
+    } else if (t === 2 || t === 3) {
+      p2(10);
+      if (t === 3) p2(11);
+      i.tag(40, i.BD());
+      i.tag(50, i.BD() * RAD2DEG);
+      i.tag(51, i.BD() * RAD2DEG);
+      i.tag(73, i.B());
+    } else if (t === 4) {
+      i.tag(94, i.BL());
+      const rational = i.B();
+      i.tag(73, rational);
+      i.tag(74, i.B());
+      const nk = i.N(2);
+      const nc = i.N(128);
+      i.tag(95, nk);
+      i.tag(96, nc);
+      for (let q = 0; q < nk; q++) i.tag(40, i.BD());
+      for (let q = 0; q < nc; q++) {
+        p2(10);
+        if (rational) i.tag(42, i.BD());
+      }
+      if (i.ver >= R2010) {
+        const nf = i.N(128);
+        i.tag(97, nf);
+        for (let q = 0; q < nf; q++) p2(11);
+        if (nf) {
+          p2(12);
+          p2(13);
+        }
+      }
+    } else fail(`해치 루프 모서리 ${t}`);
   }
 }
 
@@ -511,6 +581,7 @@ export function decodeCtx(type: string, dat: BitReader, hdl: BitReader, base: nu
 class Out {
   readonly ops: CtxOp[] = [];
   B = (v: number | boolean) => this.ops.push({ t: 'B', v: v ? 1 : 0 });
+  RC = (v: number) => this.ops.push({ t: 'RC', v });
   BS = (v: number) => this.ops.push({ t: 'BS', v });
   BL = (v: number) => this.ops.push({ t: 'BL', v });
   BD = (v: number) => this.ops.push({ t: 'BD', v });
@@ -709,7 +780,7 @@ function wDim(o: Out, c: Cur, type: string): void {
   for (const code of spec.points) o.P(c.pt(code));
 }
 
-function wHatchFields(o: Out, c: Cur): void {
+function wHatchFields(o: Out, c: Cur, ver: number): void {
   c.marker('AcDbHatchObjectContextData');
   const n = c.int(78);
   o.BL(n);
@@ -728,15 +799,79 @@ function wHatchFields(o: Out, c: Cur): void {
   const nl = c.int(90);
   o.BL(nl);
   for (let k = 0; k < nl; k++) {
-    o.BL(c.int(90));
-    const b = c.int(290);
-    if (!b) fail('해치 루프 자료');
-    o.B(1);
+    const flags = c.int(90);
+    o.BL(flags);
+    const b = c.int(290) ? 1 : 0;
+    o.B(b);
+    if (!b) wHatchLoop(o, c, flags, ver);
   }
 }
 
-function wHatchView(o: Out, c: Cur): void {
-  wHatchFields(o, c);
+/** 290 = 0인 해치 루프의 경계(rHatchLoop의 거꾸로). R2010 전 파일에는 스플라인 맞춤점(97…)을 쓰지 않는다 */
+function wHatchLoop(o: Out, c: Cur, flags: number, ver: number): void {
+  const p2 = (code: number): void => {
+    const p = c.pt2(code);
+    o.RD(p.x);
+    o.RD(p.y);
+  };
+  if (flags & 2) {
+    const bulges = c.int(72) ? 1 : 0;
+    o.B(bulges);
+    o.B(c.int(73));
+    const n = c.int(93);
+    o.BL(n);
+    for (let k = 0; k < n; k++) {
+      p2(10);
+      if (bulges) o.BD(num(c.opt(42)));
+    }
+    return;
+  }
+  const n = c.int(93);
+  o.BL(n);
+  for (let k = 0; k < n; k++) {
+    const t = c.int(72);
+    o.RC(t);
+    if (t === 1) {
+      p2(10);
+      p2(11);
+    } else if (t === 2 || t === 3) {
+      p2(10);
+      if (t === 3) p2(11);
+      o.BD(c.num(40));
+      o.BD(c.num(50) * DEG2RAD);
+      o.BD(c.num(51) * DEG2RAD);
+      o.B(c.int(73));
+    } else if (t === 4) {
+      o.BL(c.int(94));
+      const rational = c.int(73) ? 1 : 0;
+      o.B(rational);
+      o.B(c.int(74));
+      const nk = c.int(95);
+      const nc = c.int(96);
+      o.BL(nk);
+      o.BL(nc);
+      for (let q = 0; q < nk; q++) o.BD(c.num(40));
+      for (let q = 0; q < nc; q++) {
+        p2(10);
+        if (rational) o.BD(num(c.opt(42), 1));
+      }
+      const nf = int(c.opt(97));
+      const fit: { x: number; y: number }[] = [];
+      for (let q = 0; q < nf; q++) fit.push(c.pt2(11));
+      const tan = nf ? [c.pt2(12), c.pt2(13)] : [];
+      if (ver >= R2010) {
+        o.BL(nf);
+        for (const p of [...fit, ...tan]) {
+          o.RD(p.x);
+          o.RD(p.y);
+        }
+      }
+    } else fail(`해치 루프 모서리 ${t}`);
+  }
+}
+
+function wHatchView(o: Out, c: Cur, ver: number): void {
+  wHatchFields(o, c, ver);
   c.marker('AcDbHatchViewContextData');
   o.H(SOFT_PTR, c.handle(330));
   o.P(c.pt(10));
@@ -933,10 +1068,10 @@ export function encodeCtx(type: string, raw: readonly RawTag[] | undefined, ver:
         wDim(o, c, type);
         break;
       case 'hatch':
-        wHatchFields(o, c);
+        wHatchFields(o, c, ver);
         break;
       case 'hatchview':
-        wHatchView(o, c);
+        wHatchView(o, c, ver);
         break;
       case 'mleader':
         wMLeader(o, c, ver);
