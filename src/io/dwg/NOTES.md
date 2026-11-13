@@ -193,12 +193,12 @@ AC1012·AC1014는 AC1015로 쓰고 `dwg.write_version` 경고를 남긴다(R2007
 | --- | --- |
 | `bitwriter.ts` | 비트 단위 쓰기(읽기의 짝, 값마다 가장 짧은 형식) |
 | `codepage.ts` | R2007 이전 코드 페이지 문자열(TextDecoder로 만든 역표, 없는 글자는 `\U+XXXX`) |
-| `lz77enc.ts` | R2004 압축(3바이트 해시 탐욕 방식, 먼 거리 명령은 쓰지 않음) |
+| `lz77enc.ts` | R2004 압축(3바이트 해시 탐욕 방식, 먼 거리 명령은 쓰지 않음). 쪽마다 불리므로 해시 표·출력 버퍼는 모듈에 하나 두고 다시 쓴다(125차, 바이트는 그대로) |
 | `context.ts` | 쓰기 계획: 핸들 정하기, 필수 항목 만들기, 쓸 객체(live), 원본 본문 사용 여부 |
 | `objwriter.ts` | 객체 틀: 종류·핸들·EED·공통 자료·공통 핸들, 크기(MS·RL/UMC)·문자열 흐름·CRC |
 | `tables.ts`, `entities.ts`, `objects.ts` | 표 레코드·블록 레코드, 도형, 비도형 객체 |
 | `header.ts`, `classes.ts` | AcDb:Header(헤더 변수, 이름 → 핸들), AcDb:Classes |
-| `container.ts` | 객체 지도, 보조 헤더, R2000 파일, R2004+ 섹션·페이지(압축, 섹션 지도, 페이지 지도, XOR 머리) |
+| `container.ts` | 쓴 객체 모음(`ObjectStore` — 넣은 차례 두 배열, 끝에 핸들 순·같은 핸들은 마지막 것), 객체 지도, 보조 헤더, R2000 파일, R2004+ 섹션·페이지(압축, 섹션 지도, 페이지 지도, XOR 머리) |
 
 만드는 것(모델에 없으면): 표 제어 객체(DXF 표 머리 핸들을 이어 씀), 선종류 ByLayer·ByBlock·Continuous, 도면층 0,
 도형이 가리키는데 표에 없는 도면층, 문자 스타일 Standard, 치수 스타일(하나도 없을 때), APPID ACAD와 확장 자료의 앱 이름,
@@ -261,6 +261,8 @@ R2007 이전으로 쓸 때 도면 코드 페이지로 못 쓰는 글자가 있�
 
 ### 시험
 
+- `tests/dwg/lz77enc125.test.ts`: 압축기가 124차 구현(시험 안에 옮겨 둠)과 같은 바이트를 내는지(짧은·긴 입력, 거리 경계, 첫 묶음 규칙, 잇단 호출).
+  `tests/dwg/dwgsave125.test.ts`: `ObjectStore`가 `Map` 길과 같은지, `objectMapOf`, 쓰다 실패한 도형(먼저 넣은 머리·정점 포함)이 판마다 빠지는지.
 - `tests/dwg/writer.test.ts`: 비트 쓰기↔읽기(모든 버전), LZ77 압축↔풀기, 객체 지도, 버전 대응·진행률, 새 도면(미터·인치)·
   여러 도형 도면 × 5버전, 원본 본문 사용 조건, 표본 DWG 34개 × 5버전, DXF 원본 53개(표본 DXF 7, 생성 11, 엔진 DXF 34, 앱 예제 1) × 5버전.
   요약(`summarizeDocument`) + 객체 단위 비교(`tests/dwg/writer-compare.ts`, 알려진 손실은 머리말에 근거).

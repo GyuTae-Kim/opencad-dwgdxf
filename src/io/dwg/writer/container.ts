@@ -65,6 +65,57 @@ export class ByteOut {
   result(): Uint8Array {
     return this.buf.slice(0, this.n);
   }
+  /** 쓴 바이트의 뷰(복사하지 않는다 — 더 쓰지 않을 때만) */
+  view(): Uint8Array {
+    return this.buf.subarray(0, this.n);
+  }
+}
+
+/** 핸들 순으로 늘어놓은 객체들(핸들과 바이트를 같은 자리에) */
+export interface ObjectList {
+  hs: number[];
+  bs: Uint8Array[];
+}
+
+/**
+ * 쓴 객체 모음(핸들 → 바이트). 같은 핸들을 다시 쓰면 나중 것이 남는다(Map.set과 같다).
+ * 125차: 예전에는 Map에 넣고(블록마다 임시 Map을 거쳐 두 번) 끝에 [핸들, 바이트] 쌍을 모두 만들어 정렬했다 —
+ * 객체 수백만 개에서 저장 시간의 약 5분의 1과 그 GC였다. 이제 넣은 차례대로 두 배열에 쌓고, 끝에 이미 오름차순이면 그대로 쓴다
+ */
+export class ObjectStore {
+  private readonly hs: number[] = [];
+  private readonly bs: Uint8Array[] = [];
+
+  put(h: number, b: Uint8Array): void {
+    this.hs.push(h);
+    this.bs.push(b);
+  }
+
+  /** live에 든 핸들만 핸들 오름차순으로(같은 핸들은 마지막에 넣은 바이트) */
+  sorted(live: { has(h: number): boolean }): ObjectList {
+    const hs = this.hs;
+    const bs = this.bs;
+    const n = hs.length;
+    let asc = true;
+    for (let i = 1; i < n && asc; i++) if (!(hs[i - 1]! < hs[i]!)) asc = false;
+    let order: number[] | null = null;
+    if (!asc) {
+      order = [];
+      for (let i = 0; i < n; i++) order.push(i);
+      // 같은 핸들은 넣은 차례로 이어 두고 그 마지막 것을 쓴다
+      order.sort((a, b) => hs[a]! - hs[b]! || a - b);
+    }
+    const out: ObjectList = { hs: [], bs: [] };
+    for (let k = 0; k < n; k++) {
+      const i = order ? order[k]! : k;
+      const h = hs[i]!;
+      if (order && k + 1 < n && hs[order[k + 1]!] === h) continue;
+      if (!live.has(h)) continue;
+      out.hs.push(h);
+      out.bs.push(bs[i]!);
+    }
+    return out;
+  }
 }
 
 function mcU(out: number[], v: number): void {
@@ -94,16 +145,27 @@ function mcS(out: number[], v: number): void {
 
 /** 객체 지도: (핸들, 위치)를 핸들 순으로. 구역은 2032바이트 이하, 구역마다 기준 0 */
 export function objectMap(entries: [number, number][]): Uint8Array {
-  const out = new ByteOut(entries.length * 6 + 64);
+  return objectMapOf(
+    entries.map((e) => e[0]),
+    entries.map((e) => e[1]),
+  );
+}
+
+/** objectMap과 같되 핸들과 위치를 따로 받는다(125차 — 객체 수백만 개에서 쌍마다 배열을 만들지 않는다) */
+export function objectMapOf(hs: ArrayLike<number>, locs: ArrayLike<number>): Uint8Array {
+  const count = hs.length;
+  const out = new ByteOut(count * 6 + 64);
+  const pair: number[] = [];
   let i = 0;
-  while (i < entries.length) {
+  while (i < count) {
     const start = out.n;
     out.u16(0);
     let lastH = 0;
     let lastL = 0;
-    while (i < entries.length) {
-      const [h, loc] = entries[i];
-      const pair: number[] = [];
+    while (i < count) {
+      const h = hs[i]!;
+      const loc = locs[i]!;
+      pair.length = 0;
       mcU(pair, h - lastH);
       mcS(pair, loc - lastL);
       if (out.n - start + pair.length > 2030) break;
@@ -222,13 +284,16 @@ export interface R2000Parts {
   header: Uint8Array;
   classes: Uint8Array;
   /** 핸들과 객체 바이트(핸들 순) */
-  objects: [number, Uint8Array][];
+  objects: ObjectList;
   aux: Uint8Array;
   measurement: number;
 }
 
 export function writeR2000(p: R2000Parts): Uint8Array {
-  const o = new ByteOut(1 << 20);
+  // 파일 크기를 거의 맞게 미리 잡는다(125차 — 두 배씩 키우면 큰 도면에서 바깥 메모리가 파일의 약 세 배 오간다). 모자라면 전처럼 키운다
+  let size = 0x400 + p.aux.length + p.header.length + p.classes.length + p.objects.hs.length * 6;
+  for (const b of p.objects.bs) size += b.length;
+  const o = new ByteOut(size);
   o.bytes([0x41, 0x43, 0x31, 0x30, 0x31, 0x35]);
   o.zeros(5);
   o.u8(p.maint);
@@ -262,13 +327,14 @@ export function writeR2000(p: R2000Parts): Uint8Array {
   o.bytes(p.classes);
   // 객체
   o.u32(0x0dca);
-  const map: [number, number][] = [];
-  for (const [h, b] of p.objects) {
-    map.push([h, o.n]);
-    o.bytes(b);
+  const { hs, bs } = p.objects;
+  const locs = new Float64Array(hs.length);
+  for (let k = 0; k < hs.length; k++) {
+    locs[k] = o.n;
+    o.bytes(bs[k]!);
   }
   // 2: 객체 지도
-  const om = objectMap(map);
+  const om = objectMapOf(hs, locs);
   loc[2] = [o.n, om.length];
   o.bytes(om);
   loc[3] = [0, 0];
@@ -343,9 +409,15 @@ export function writeR2004(ver: number, maint: number, codepage: number, section
     const list: { num: number; dataSize: number; start: number }[] = [];
     secPages.set(name, list);
     const ps = s.pageSize;
+    // 가득 찬 쪽은 섹션 자료의 뷰를 그대로 쓰고, 끝의 덜 찬 쪽만 0으로 채운 사본으로(125차 — 쪽마다 새 버퍼를 잡지 않는다.
+    // 압축 결과·페이로드는 곧바로 파일에 복사하므로 뷰를 남기지 않는다)
     for (let start = 0; start < s.data.length; start += ps) {
-      const chunk = new Uint8Array(ps);
-      chunk.set(s.data.subarray(start, Math.min(s.data.length, start + ps)));
+      let chunk: Uint8Array;
+      if (start + ps <= s.data.length) chunk = s.data.subarray(start, start + ps);
+      else {
+        chunk = new Uint8Array(ps);
+        chunk.set(s.data.subarray(start));
+      }
       // 0만 있는 페이지는 쓰지 않는다. 다만 많이 건너뛰면 쓴 파일이 읽기 한도를 넘으므로 합을 묶는다
       let allZero = true;
       for (let k = 0; k < chunk.length; k++) {

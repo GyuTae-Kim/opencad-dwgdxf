@@ -12,7 +12,7 @@ import { EntityWriter } from './entities';
 import { WCtx } from './context';
 import { writeHeader, type HeaderRefs } from './header';
 import { writeClasses } from './classes';
-import { ByteOut, type R2004Section, auxHeader, emptyPreview, objectMap, templateData, writeR2000, writeR2004 } from './container';
+import { ByteOut, ObjectStore, type R2004Section, auxHeader, emptyPreview, objectMapOf, templateData, writeR2000, writeR2004 } from './container';
 import { parseHandle } from './util';
 import { arcTextsForWrite } from '../../arctext';
 import { multilineAttribsForWrite } from '../../mlattr-write';
@@ -67,8 +67,8 @@ export function writeDwg(doc: CadDocument, options: DwgWriteOptions = {}): DwgWr
   ctx.plan();
   progress?.(0.1);
 
-  const out = new Map<number, Uint8Array>();
-  const put = (h: number, b: Uint8Array) => out.set(h, b);
+  const out = new ObjectStore();
+  const put = (h: number, b: Uint8Array) => out.put(h, b);
   const ow = new ObjWriter(ver, ctx.enc, ctx.cpNum);
   // 클래스 번호를 먼저 정해 둔다(R2000은 배치·자리 표시자도 클래스)
   ctx.classes.declare('ACDBDICTIONARYWDFLT');
@@ -183,7 +183,7 @@ export function writeDwg(doc: CadDocument, options: DwgWriteOptions = {}): DwgWr
     cecolor: { index: typeof cec === 'number' ? cec : 256 },
   });
   const classes = writeClasses(ver, maint, ctx.enc, ctx.classes.list);
-  const objects = [...out.entries()].filter(([h]) => ctx.live.has(h)).sort((a, b) => a[0] - b[0]);
+  const objects = out.sorted(ctx.live);
   const num = (k: string, def: number): number => {
     const v = hv.get(k);
     return typeof v === 'number' && Number.isFinite(v) ? v : def;
@@ -197,22 +197,26 @@ export function writeDwg(doc: CadDocument, options: DwgWriteOptions = {}): DwgWr
   if (ver === R2000) {
     data = writeR2000({ ver, maint, codepage: ctx.cpNum, header, classes, objects, aux, measurement });
   } else {
-    // AcDb:AcDbObjects: RL 0x0DCA 다음에 객체들, 지도 위치는 섹션 안 위치
-    const ob = new ByteOut(1 << 20);
+    // AcDb:AcDbObjects: RL 0x0DCA 다음에 객체들, 지도 위치는 섹션 안 위치.
+    // 크기를 미리 세어 한 번에 잡고 사본 없이 넘긴다(125차 — 두 배씩 키우면 객체 92만 개 도면에서 바깥 메모리가 1GB 넘게 오가 큰 GC를 앞당겼다)
+    const { hs, bs } = objects;
+    let obSize = 4;
+    for (const b of bs) obSize += b.length;
+    const ob = new ByteOut(obSize);
     ob.u32(0x0dca);
-    const map: [number, number][] = [];
-    for (const [h, b] of objects) {
-      map.push([h, ob.n]);
-      ob.bytes(b);
+    const locs = new Float64Array(hs.length);
+    for (let k = 0; k < hs.length; k++) {
+      locs[k] = ob.n;
+      ob.bytes(bs[k]!);
     }
     const sections: R2004Section[] = [
       { name: 'AcDb:SummaryInfo', data: summaryInfo(ver, ctx, num('$TDCREATE', now), num('$TDUPDATE', now)), compressed: false, pageSize: 0x100 },
       { name: 'AcDb:Preview', data: emptyPreview(), compressed: false, pageSize: 0x400 },
       { name: 'AcDb:RevHistory', data: new Uint8Array(12), compressed: true, pageSize: 0x7400 },
-      { name: 'AcDb:AcDbObjects', data: ob.result(), compressed: true, pageSize: 0x7400 },
-      { name: 'AcDb:ObjFreeSpace', data: objFreeSpace(objects.length, num('$TDUPDATE', now)), compressed: true, pageSize: 0x7400 },
+      { name: 'AcDb:AcDbObjects', data: ob.view(), compressed: true, pageSize: 0x7400 },
+      { name: 'AcDb:ObjFreeSpace', data: objFreeSpace(hs.length, num('$TDUPDATE', now)), compressed: true, pageSize: 0x7400 },
       { name: 'AcDb:Template', data: templateData(measurement), compressed: true, pageSize: 0x7400 },
-      { name: 'AcDb:Handles', data: objectMap(map), compressed: true, pageSize: 0x7400 },
+      { name: 'AcDb:Handles', data: objectMapOf(hs, locs), compressed: true, pageSize: 0x7400 },
       { name: 'AcDb:Classes', data: classes, compressed: true, pageSize: 0x7400 },
       { name: 'AcDb:AuxHeader', data: aux, compressed: true, pageSize: 0x7400 },
       { name: 'AcDb:Header', data: header, compressed: true, pageSize: 0x7400 },

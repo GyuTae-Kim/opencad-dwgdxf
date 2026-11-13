@@ -282,13 +282,12 @@ export class ObjWriter {
     o.MS(bodyBytes);
     if (ver >= R2010) o.UMC(bodyBytes * 8 - dataBits);
     o.rawBytes(d.buf.subarray(0, bodyBytes));
-    const bytes = o.bytes();
-    const crc = crc8(0xc0c1, bytes, 0, bytes.length);
-    const res = new Uint8Array(bytes.length + 2);
-    res.set(bytes);
-    res[bytes.length] = crc & 0xff;
-    res[bytes.length + 1] = crc >>> 8;
-    return res;
+    // 크기·본문은 바이트 단위라 o는 바이트 경계에 있다. CRC까지 o에 붙여 한 번만 복사한다(125차 — 객체마다 사본 둘을 만들지 않는다)
+    const n = o.byteLength();
+    const crc = crc8(0xc0c1, o.buf, 0, n);
+    o.RC(crc & 0xff);
+    o.RC(crc >>> 8);
+    return o.buf.slice(0, n + 2);
   }
 }
 
