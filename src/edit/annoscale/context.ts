@@ -706,6 +706,8 @@ function pendingDict(doc: CadDocument, ops: readonly EditOp[], h: string | undef
  * 해치 축척 레코드 → 그 축척의 뷰포트별 표현(HATCHVIEW) 원시 태그. AutoCAD가 주석 해치마다 만드는 꼴(공개 도면 DWG의 레코드,
  * 기능 명세 annotation-scale.md 6.1): 축척·기본 표지·패턴 선·루프는 축척 레코드와 같고 40 = 1, 10 = 0 벡터, 그 뒤
  * `100 AcDbHatchViewContextData`, 330 뷰포트 0, 10 시선 (0, 0, 1), 51 비틀림 0, 290 0. 해치 레코드가 아니면 null.
+ * 루프는 경계 없이 290 = 1로 둔다: 공개 도면 DWG의 AutoCAD 뷰 레코드 루프 1,230개가 모두 290 = 1이고, 축척 레코드 루프가 290 = 0(경계를 적음)인
+ * 167개도 뷰에서는 1이다(122차).
  */
 export function hatchViewRaw(scaleRaw: readonly RawTag[]): RawTag[] | null {
   const im = scaleRaw.findIndex((t) => t.code === 100 && String(t.value).trim() === 'AcDbHatchObjectContextData');
@@ -720,9 +722,23 @@ export function hatchViewRaw(scaleRaw: readonly RawTag[]): RawTag[] | null {
     for (let d = 0; d < nd && scaleRaw[i]?.code === 49; d++) i++;
   }
   if (scaleRaw[i]?.code !== 40) return null;
-  const out = scaleRaw.map((t) => ({ ...t }));
+  const out = scaleRaw.slice(0, i + 1).map((t) => ({ ...t }));
   out[i] = { code: 40, value: 1 };
-  for (let j = i + 1; j < i + 4 && j < out.length; j++) if ([10, 20, 30].includes(out[j]!.code)) out[j] = { code: out[j]!.code, value: 0 };
+  let j = i + 1;
+  for (; j < i + 4 && j < scaleRaw.length && [10, 20, 30].includes(scaleRaw[j]!.code); j++) out.push({ code: scaleRaw[j]!.code, value: 0 });
+  // 루프: 90 수, 루프마다 90 종류·290(0이면 경계 태그가 다음 90까지 따른다) → 290 1
+  if (scaleRaw[j]?.code === 90) {
+    const nl = num(scaleRaw[j]!.value);
+    out.push({ code: 90, value: nl });
+    j++;
+    for (let k = 0; k < nl && scaleRaw[j]?.code === 90; k++) {
+      out.push({ code: 90, value: scaleRaw[j]!.value }, { code: 290, value: 1 });
+      j++;
+      if (scaleRaw[j]?.code === 290) j++;
+      while (j < scaleRaw.length && scaleRaw[j]!.code !== 90) j++;
+    }
+  }
+  out.push(...scaleRaw.slice(j).map((t) => ({ ...t })));
   out.push(
     { code: 100, value: 'AcDbHatchViewContextData' },
     { code: 330, value: '0' },

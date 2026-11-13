@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DictionaryObject, Entity, GenericObject, HatchEntity, RawTag } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
-import { ScaleIndex, annoState, contextRecords, findScale, makeAnnotative, readScaleList, withAnnotativeFlag } from '../../src/edit/annoscale';
+import { ScaleIndex, addScales, annoState, contextChain, contextRecords, dictOf, findScale, hatchViewRaw, makeAnnotative, readScaleList, withAnnotativeFlag } from '../../src/edit/annoscale';
 import { EDGE_LINE } from '../../src/core/hatchedges';
 import { BitReader } from '../../src/io/dwg/bitstream';
 import { decodeCtx, encodeCtx, writeCtxOps } from '../../src/io/dwg/ctxcodec';
@@ -262,13 +262,13 @@ describe('만드는 해치 레코드의 루프 종류', () => {
   });
 });
 
-describe('해치 레코드 루프 경계: 도면 왕복', () => {
+/** 바깥 폴리선 루프 하나인 주석 해치: 1:1(기본) 레코드는 루프 경계를 적고(290 = 0 — 해치 루프와 같은 점, 실물과 같은 꼴), 1:5는 적지 않는다 */
+function geomHatchDoc(): { doc: ReturnType<typeof newDoc>['doc']; session: ReturnType<typeof newDoc>['session']; h: Entity } {
   const { doc, session } = newDoc();
   const list = readScaleList(doc);
   const s1 = findScale(list, '1:1')!.handle!;
   const s5 = findScale(list, '1:5')!.handle!;
   const base = hatch();
-  // 바깥 폴리선 루프(해치의 루프와 같은 점을 레코드에 둔다 — 실물과 같은 꼴)
   base.paths[0]!.flags = 519;
   const loop: RawTag[] = [
     { code: 90, value: 1 },
@@ -284,6 +284,62 @@ describe('해치 레코드 루프 경계: 도면 왕복', () => {
     [...head(s1, true), ...fields(1), ...loop],
     [...head(s5, false), ...fields(5), { code: 90, value: 1 }, { code: 90, value: 519 }, { code: 290, value: 1 }],
   ]);
+  return { doc, session, h };
+}
+
+describe('해치 뷰포트별 표현(HATCHVIEW) 만들기', () => {
+  const VIEW_TAIL: RawTag[] = [
+    { code: 100, value: 'AcDbHatchViewContextData' },
+    { code: 330, value: '0' },
+    { code: 10, value: 0 },
+    { code: 20, value: 0 },
+    { code: 30, value: 1 },
+    { code: 51, value: 0 },
+    { code: 290, value: 0 },
+  ];
+  it('축척 레코드의 루프 경계(290 = 0)는 뷰 레코드에 베끼지 않는다 — 루프마다 90 종류·290 1', () => {
+    const v = hatchViewRaw([...head('1A', true), ...fields(1), ...loops(1032)])!;
+    const i40 = v.findIndex((t) => t.code === 40);
+    expect(v.slice(i40)).toEqual([
+      { code: 40, value: 1 },
+      { code: 10, value: 0 },
+      { code: 20, value: 0 },
+      { code: 30, value: 0 },
+      { code: 90, value: 4 },
+      ...[7, 519, 513, 519].flatMap((f) => [
+        { code: 90, value: f },
+        { code: 290, value: 1 },
+      ]),
+      ...VIEW_TAIL,
+    ]);
+    expect(encodeCtx('ACDB_HATCHVIEWCONTEXTDATA_CLASS', v, 1032)).toBeTruthy();
+  });
+
+  it('축척을 더하면(AutoCAD 레코드를 둔 채 뷰 모음을 다시 만든다) 뷰 레코드 셋 모두 경계 없음, 루프 경계를 적은 축척 레코드는 그대로', () => {
+    const { doc, session, h } = geomHatchDoc();
+    const before = contextRecords(doc, h).map((r) => r.raw);
+    const r = addScales(envOf(doc, session), h, ['1:10']);
+    commit(session, [...r.ops, ...(r.entity !== h ? [{ kind: 'modify' as const, block: MODEL_SPACE, before: h, after: r.entity }] : [])]);
+    const e = doc.entityIndex.get(h.handle)!;
+    const recs = contextRecords(doc, e);
+    expect(recs.map((x) => x.raw).slice(0, 2)).toEqual(before);
+    const mgr = contextChain(doc, e).manager!;
+    const views = [...dictOf(doc, mgr.entries.get('ACDB_ANNOTATIONSCALE_VIEW_COLLECTION'))!.entries.values()].map((x) => (doc.objects.get(x) as GenericObject).raw!);
+    expect(views).toHaveLength(3);
+    for (const v of views) {
+      const i40 = v.findIndex((t) => t.code === 40);
+      expect(v.slice(i40 + 4, i40 + 7)).toEqual([
+        { code: 90, value: 1 },
+        { code: 90, value: 519 },
+        { code: 290, value: 1 },
+      ]);
+      expect(v.slice(i40 + 7)).toEqual(VIEW_TAIL);
+    }
+  });
+});
+
+describe('해치 레코드 루프 경계: 도면 왕복', () => {
+  const { doc, h } = geomHatchDoc();
   const handle = h.handle;
   const want = contextRecords(doc, h).map((r) => r.raw);
 
