@@ -7,16 +7,33 @@
  *
  * 핸들 색인(entityIndex)은 finalizeDocument처럼 블록 순서·객체 순서(블록 참조의 속성 포함)로 다시 만든다.
  * 워커 문서의 색인이 그 순서·그 객체와 꼭 같을 때만 이렇게 하고, 아니면 예전처럼 문서 전체를 구조화 복제한다.
+ *
+ * 비도형 객체(objects)가 많으면 그것도 codec으로 부호화해 껍데기와 같은 메시지로 보낸다(129차 — encodeObjects). 껍데기의 objects에는
+ * 문서의 다른 곳과 같은 객체를 함께 쓰는 배치 객체만 남는다.
  */
-import type { CadDocument, Entity } from '../core/model';
+import type { CadDocument, CadObject, Entity } from '../core/model';
 import { ownEntityArrays } from '../core/f64pool';
 import { HandleIndex } from '../core/handleindex';
-import { Decoder, Encoder, type Encoded, encodedTransfer, encoderScratch, releaseEncoded } from './codec';
+import { Decoder, Encoder, type Encoded, type EncoderScratch, encodedTransfer, encoderScratch, releaseEncoded } from './codec';
 
 /** 이보다 객체가 많은 블록만 따로 보낸다 */
 const STREAM_MIN = 2000;
 /** 한 묶음의 객체 수(메인에서 한 번에 푸는 시간이 수십 ms가 되게) */
 const BATCH = 50000;
+/**
+ * 비도형 객체가 이만큼 많으면 부호화해 보낸다(129차). 적으면 모양마다 쓰기·만들기 함수를 짓는 값이 구조화 복제보다 크다
+ * (실제 도면에서 객체 100여 개는 구조화 복제 약 0.6ms, 부호화·풀기 약 2ms)
+ */
+const OBJECTS_MIN = 1000;
+/**
+ * 비도형 객체를 부호화하기 전에 함께 쓰는 객체를 찾으려고 훑는 껍데기 나머지의 상한(비도형 객체 수의 배수). 넘으면 부호화하지 않는다
+ * (훑는 값이 아낄 몫보다 커진다 — 실제 도면 417개에서 나머지/객체 수는 가운데 1.6, 8배를 넘는 도면은 6개)
+ */
+const REST_PER_OBJECT = 8;
+/** 부호화한 비도형 객체 한 항목의 머리: 열쇠가 값의 handle과 같다 / 열쇠를 따로 적는다 / 껍데기에 남긴 객체(열쇠만) */
+const OBJ_SAME = 0;
+const OBJ_KEYED = 1;
+const OBJ_KEPT = 2;
 
 /** 따로 보내는 객체 묶음 하나 */
 export interface DocPart {
@@ -56,37 +73,88 @@ function ownArrays(blocks: Iterable<{ entities: Entity[] }>): void {
 }
 
 /**
- * 문서를 메인으로 보낸다: post(껍데기 또는 문서 전체, 따로 보내는 블록과 객체 수)를 먼저 부르고, 이어서 묶음마다 part를 부른다.
- * minEntities·batch는 시험용.
+ * 값 나무에서 구조화 복제가 따라가는 객체(일반 객체·배열·형식 배열·Map·Set)를 seen에 모은다. seen이 limit개를 넘으면 그만두고 false
+ */
+function collect(root: unknown, seen: Set<object>, limit: number): boolean {
+  const stack: unknown[] = [root];
+  while (stack.length) {
+    const v = stack.pop();
+    if (typeof v !== 'object' || v === null || seen.has(v)) continue;
+    if (seen.size >= limit) return false;
+    seen.add(v);
+    if (ArrayBuffer.isView(v)) continue;
+    if (Array.isArray(v)) for (let i = 0; i < v.length; i++) stack.push(v[i]);
+    else if (v instanceof Map) for (const [k, x] of v) stack.push(k, x);
+    else if (v instanceof Set) for (const x of v) stack.push(x);
+    else for (const k of Object.keys(v)) stack.push((v as Record<string, unknown>)[k]);
+  }
+  return true;
+}
+
+/**
+ * 껍데기의 비도형 객체(objects)를 차례대로 부호화한다(129차). 구조화 복제는 그 값(사용자 객체 수천~수만 개와 원본 본문 바이트 배열)을
+ * 객체마다 속성 이름을 다시 읽어 되살리느라, 사용자 객체가 많은 R2018 도면에서는 문서 보내기·받기의 대부분이었다.
+ * - 배치 객체(LAYOUT)는 껍데기의 objects에 남긴다: 그 layout은 doc.layouts의 같은 객체라 구조화 복제가 하나로 되살린다(항목은 열쇠만).
+ * - codec은 같은 객체를 두 번 만나면 사본 둘을 만든다. 그래서 껍데기 나머지(남긴 배치 객체 포함)의 객체를 먼저 모으고, 부호화할 객체가 그중 하나이거나
+ *   다른 비도형 객체와 같은 객체를 함께 쓰면 부호화하지 않는다(얼린 공유 객체는 codec이 한 번 보낸 안에서 함께 쓴다 — 큰 블록 묶음과 같다).
+ * 부호화하지 않으면(객체가 적다·나머지가 너무 크다·함께 쓰는 객체·다루지 않는 값) null — 그때는 지금처럼 objects째 구조화 복제한다.
+ * 돌려주는 껍데기는 objects만 남긴 배치 객체로 바꾼 얕은 사본이다(워커 문서는 그대로)
+ */
+function encodeObjects(shell: CadDocument, min: number, scratch?: EncoderScratch): { shell: CadDocument; enc: Encoded } | null {
+  const objects = shell.objects;
+  if (objects.size < min) return null;
+  const kept = new Map<string, CadObject>();
+  for (const [k, o] of objects) if (o.type === 'LAYOUT') kept.set(k, o);
+  const out: CadDocument = { ...shell, objects: kept };
+  const seen = new Set<object>();
+  if (!collect(out, seen, objects.size * REST_PER_OBJECT)) return null;
+  const enc = new Encoder(scratch, seen);
+  for (const [k, o] of objects) {
+    const ok = o.type === 'LAYOUT' ? enc.add(OBJ_KEPT) && enc.add(k) : o.handle === k ? enc.add(OBJ_SAME) && enc.add(o) : enc.add(OBJ_KEYED) && enc.add(k) && enc.add(o);
+    if (!ok) return null;
+  }
+  return { shell: out, enc: enc.finish() };
+}
+
+/**
+ * 문서를 메인으로 보낸다: post(껍데기 또는 문서 전체, 따로 보내는 블록과 객체 수, 부호화한 비도형 객체)를 먼저 부르고, 이어서 묶음마다 part를 부른다.
+ * objects가 있으면 껍데기의 objects는 남긴 배치 객체뿐이고 메인이 receiveObjects로 합친다(옮길 버퍼는 encodedTransfer).
+ * minEntities·batch·minObjects는 시험용.
  */
 export function sendDocument(
   doc: CadDocument,
-  post: (doc: CadDocument, streamed: [string, number][]) => void,
+  post: (doc: CadDocument, streamed: [string, number][], objects?: Encoded) => void,
   part: (p: DocPart, transfer: Transferable[]) => void,
   onProgress?: (fraction: number) => void,
-  opt: { minEntities?: number; batch?: number } = {},
+  opt: { minEntities?: number; batch?: number; minObjects?: number } = {},
 ): void {
   const min = opt.minEntities ?? STREAM_MIN;
   const size = opt.batch ?? BATCH;
+  const minObjects = opt.minObjects ?? OBJECTS_MIN;
   const big = [...doc.blocks].filter(([, b]) => b.entities.length >= min);
   if (!big.length || !indexDerivable(doc)) {
     ownArrays(doc.blocks.values());
-    post(doc, []);
+    const o = encodeObjects(doc, minObjects);
+    if (o) post(o.shell, [], o.enc);
+    else post(doc, []);
     return;
   }
   ownArrays([...doc.blocks.values()].filter((b) => b.entities.length < min));
-  const shell: CadDocument = {
+  const scratch = encoderScratch();
+  let shell: CadDocument = {
     ...doc,
     blocks: new Map([...doc.blocks].map(([k, b]) => [k, b.entities.length >= min ? { ...b, entities: [] } : b])),
     entityIndex: new Map(),
   };
+  const o = encodeObjects(shell, minObjects, scratch);
+  if (o) shell = o.shell;
   const total = big.reduce((a, [, b]) => a + b.entities.length, 0);
   post(
     shell,
     big.map(([k, b]) => [k, b.entities.length]),
+    o?.enc,
   );
   let done = 0;
-  const scratch = encoderScratch();
   for (const [key, b] of big) {
     const list = b.entities;
     for (let i = 0; i < list.length; i += size) {
@@ -116,6 +184,44 @@ export function sendDocument(
 export function ownIndexes(doc: CadDocument): void {
   if (!(doc.entityIndex instanceof HandleIndex)) doc.entityIndex = HandleIndex.of(doc.entityIndex);
   if (!(doc.objects instanceof HandleIndex)) doc.objects = HandleIndex.of(doc.objects);
+}
+
+/**
+ * 메인: 부호화해 받은 비도형 객체(encodeObjects)를 껍데기의 objects(남긴 배치 객체)와 워커 문서의 차례대로 합쳐 핸들 색인(HandleIndex)으로 둔다(129차).
+ * 다 푼 뒤 받은 버퍼를 놓아 준다(객체의 바이트 배열은 제 버퍼로 복사돼 있다)
+ */
+export function receiveObjects(doc: CadDocument, enc: Encoded): void {
+  const kept = doc.objects;
+  const ix = new HandleIndex<CadObject>();
+  const d = new Decoder(enc);
+  while (d.more()) {
+    const head = d.next();
+    if (head === OBJ_SAME) {
+      const o = d.next() as CadObject;
+      ix.set(o.handle, o);
+    } else if (head === OBJ_KEYED) {
+      const k = d.next() as string;
+      ix.set(k, d.next() as CadObject);
+    } else if (head === OBJ_KEPT) {
+      const k = d.next() as string;
+      const o = kept.get(k);
+      if (!o) throw new Error(`껍데기에 남긴 비도형 객체가 없습니다: ${k}`);
+      ix.set(k, o);
+    } else throw new Error('비도형 객체 부호화 자료가 올바르지 않습니다');
+  }
+  releaseEncoded(enc);
+  doc.objects = ix;
+}
+
+/**
+ * 메인: 'document' 메시지의 문서를 맞춘다 — 부호화한 비도형 객체를 합치고, 따로 오는 블록이 있으면 묶음을 붙일 DocAssembler를,
+ * 없으면 핸들 색인을 바꾸고 null(문서가 다 왔다)을 돌려준다
+ */
+export function receiveDocument(doc: CadDocument, streamed: readonly [string, number][], objects?: Encoded): DocAssembler | null {
+  if (objects) receiveObjects(doc, objects);
+  if (streamed.length) return new DocAssembler(doc, streamed);
+  ownIndexes(doc);
+  return null;
 }
 
 /**

@@ -17,7 +17,7 @@ import type { FromWorker, PreviewView, SceneMessage, ToWorker } from './protocol
 import { applyOps } from '../edit/session';
 import { noteRemovedDims, withoutErasedDimBlocks } from '../edit/dim/savedrop';
 import { decodeWire, unpackOps } from './editwire';
-import { releaseEncoded } from './codec';
+import { encodedTransfer, releaseEncoded } from './codec';
 import { sendDocument } from './doctransfer';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -92,7 +92,7 @@ function makeScene(
 function postDocument(id: number, docId: number, doc: CadDocument, readMs: number): void {
   sendDocument(
     doc,
-    (d, streamed) => post({ type: 'document', id, docId, doc: d, readMs, streamed }),
+    (d, streamed, objects) => post({ type: 'document', id, docId, doc: d, readMs, streamed, objects }, objects ? encodedTransfer(objects) : []),
     (part, transfer) => post({ type: 'docpart', id, part }, transfer),
     (f) => post({ type: 'progress', id, stage: 'document', fraction: f }),
   );
