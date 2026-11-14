@@ -362,23 +362,85 @@ class AsciiByteTagReader implements TagReader {
   }
 
   next(): boolean {
-    if (!this.readLine()) return false;
-    // 파일 끝의 빈 줄은 무시한다.
-    if (this.pos >= this.len && this.blankLine()) return false;
-    const code = this.codeValue();
-    if (Number.isNaN(code)) {
-      if (this.blankLine() || this.dosEof()) return false;
-      throw new CadReadError('dxf.invalid', { line: this.line, reason: 'group_code' });
+    const d = this.data;
+    const len = this.len;
+    // 흔한 그룹 코드 줄(앞 공백 + 숫자 1~9자리 + 줄 끝)은 줄 끝을 찾으며 바로 푼다 — readLine + codeValue와 같은 값·줄 자리(128차)
+    let code = -1;
+    let p = this.pos;
+    while (p < len && d[p] === 32) p++;
+    let n = 0;
+    let v = 0;
+    for (; p < len && n < 10; p++, n++) {
+      const c = d[p]!;
+      if (c < 48 || c > 57) break;
+      v = v * 10 + (c - 48);
+    }
+    if (n > 0 && n < 10) {
+      const e = p;
+      if (p < len && d[p] === 13) p++;
+      if (p < len && d[p] === 10) {
+        this.ls = this.pos;
+        this.le = e;
+        this.pos = p + 1;
+        this.line++;
+        code = v;
+      }
+    }
+    if (code < 0) {
+      if (!this.readLine()) return false;
+      // 파일 끝의 빈 줄은 무시한다.
+      if (this.pos >= this.len && this.blankLine()) return false;
+      code = this.codeValue();
+      if (Number.isNaN(code)) {
+        if (this.blankLine() || this.dosEof()) return false;
+        throw new CadReadError('dxf.invalid', { line: this.line, reason: 'group_code' });
+      }
+    }
+    if (code >= 10 && code < 1072 && DOUBLE_CODE[code]) {
+      // 흔한 실수 줄([-]숫자[.숫자] + 줄 끝)도 줄 끝을 찾으며 바로 푼다 — readLine + parseDecimalBytes와 같은 셈·같은 줄 자리
+      const s = this.pos;
+      p = s;
+      let neg = false;
+      if (p < len && d[p] === 45) {
+        neg = true;
+        p++;
+      }
+      let m = 0;
+      let digits = 0;
+      let frac = -1;
+      for (; p < len; p++) {
+        const c = d[p]!;
+        if (c >= 48 && c <= 57) {
+          m = m * 10 + (c - 48);
+          digits++;
+          if (frac >= 0) frac++;
+        } else if (c === 46 && frac < 0) frac = 0;
+        else break;
+      }
+      const e = p;
+      if (p < len && d[p] === 13) p++;
+      if (p < len && d[p] === 10) {
+        this.ls = s;
+        this.le = e;
+        this.pos = p + 1;
+        this.line++;
+        this.code = code;
+        if (digits && m <= 9007199254740992 && frac <= 22) {
+          const x = frac > 0 ? m / POW10[frac]! : m;
+          this.value = neg ? -x : x;
+        } else this.value = this.strings.get(s, e);
+        return true;
+      }
+      if (!this.readLine()) return false;
+      this.code = code;
+      const x = parseDecimalBytes(d, this.ls, this.le);
+      this.value = x === x ? x : this.strings.get(this.ls, this.le);
+      return true;
     }
     if (!this.readLine()) return false;
     this.code = code;
-    if (code >= 10 && code < 1072 && DOUBLE_CODE[code]) {
-      const v = parseDecimalBytes(this.data, this.ls, this.le);
-      this.value = v === v ? v : this.strings.get(this.ls, this.le);
-    } else {
-      const v = this.strings.get(this.ls, this.le);
-      this.value = v.indexOf('^') >= 0 && vtOf(code) === VT.Str ? decodeCaret(v) : v;
-    }
+    const sv = this.strings.get(this.ls, this.le);
+    this.value = sv.indexOf('^') >= 0 && vtOf(code) === VT.Str ? decodeCaret(sv) : sv;
     return true;
   }
 }
