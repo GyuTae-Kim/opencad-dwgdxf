@@ -172,14 +172,15 @@ async function main(): Promise<void> {
     }
     // 지금: 껍데기 + 큰 블록 객체 묶음(codec). 워커 쪽(부호화 + 직렬화)과 메인 쪽(역직렬화 + 풀기)을 나눠 잰다
     const { serialize, deserialize } = await import('node:v8');
-    const { sendDocument, DocAssembler } = await import('../../src/worker/doctransfer');
-    // postMessage 흉내: 형식 배열은 옮기므로(transfer) 직렬화하지 않고 그대로 넘기고, 나머지(문자열 표·모양·껍데기)만 직렬화
+    const { sendDocument, receiveDocument, DocAssembler } = await import('../../src/worker/doctransfer');
+    // postMessage 흉내: 형식 배열은 옮기므로(transfer) 직렬화하지 않고 그대로 넘기고, 나머지(문자열 표·모양·껍데기)만 직렬화.
+    // 문서 메시지의 부호화한 비도형 객체(129차)도 묶음과 같게
     const msgs: { bytes: Buffer; enc?: import('../../src/worker/codec').Encoded }[] = [];
     c = cpuMs();
     t = performance.now();
     sendDocument(
       doc,
-      (d, streamed) => msgs.push({ bytes: serialize({ doc: d, streamed }) }),
+      (d, streamed, objects) => msgs.push({ bytes: serialize({ doc: d, streamed, enc: objects && { strs: objects.strs, shapes: objects.shapes } }), enc: objects }),
       (part) => msgs.push({ bytes: serialize({ ...part, enc: part.enc && { strs: part.enc.strs, shapes: part.enc.shapes } }), enc: part.enc }),
     );
     out.docSendMs = Math.round(performance.now() - t);
@@ -196,8 +197,8 @@ async function main(): Promise<void> {
       const v = deserialize(m.bytes);
       if (m.enc) v.enc = { ...m.enc, strs: v.enc.strs, shapes: v.enc.shapes };
       if (!asm && !main) {
-        if (v.streamed.length) asm = new DocAssembler(v.doc, v.streamed);
-        else main = v.doc;
+        asm = receiveDocument(v.doc, v.streamed, v.enc);
+        if (!asm) main = v.doc;
       } else asm!.add(v);
       worst = Math.max(worst, performance.now() - t1);
       each.push(Math.round(performance.now() - t1));
