@@ -54,7 +54,7 @@ import { unpack3 } from '../../../core/flat3';
 import { decodeCadEscapes } from '../../../core/codepage';
 import { type BitReader, DwgFormatError } from '../bitstream';
 import { cmcToCad, encToCad } from '../color';
-import { lineweightFromIndex } from '../lineweight';
+import { entityLineweightFromIndex } from '../lineweight';
 import { R14, R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
 import { hex } from './nonentities';
 import { applyMviewXData } from '../../mview';
@@ -139,7 +139,7 @@ function entBase(or: ObjectReader, c: EntCommon, names: Names): Omit<EntityBase,
     layer: names.layer(c.layer) || '0',
     linetype: linetypeName(or, c, names),
     color: byLayerShared(encToCad(c.color)),
-    lineweight: or.ver >= R2000 ? lineweightFromIndex(c.lineweight) : -1,
+    lineweight: or.ver >= R2000 ? entityLineweightFromIndex(c.lineweight) : -1,
     ltscale: c.ltscale,
     transparency: c.color.transparency ?? -1,
   };
