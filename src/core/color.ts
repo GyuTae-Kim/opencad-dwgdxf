@@ -53,6 +53,8 @@ function hueFractions(h: number): [number, number, number] {
 /**
  * MULTILEADER·DWG가 쓰는 원시 색 정수(상위 바이트 = 방식) → CadColor.
  * 0xC0 ByLayer, 0xC1 ByBlock, 0xC2 RGB, 0xC3 ACI(하위 바이트), 0xC8 없음.
+ * RGB의 ACI는 가장 가까운 색이다(DWG 리더의 CMC와 같다 — 135차). 전에는 256(ByLayer)이라 검은 트루컬러(rgb 0)를 도면층 색으로 그렸다.
+ * 같은 도면을 AutoCAD가 쓴 짝에서 DXF의 다중 지시선 배경 색 0xC2C8C8C8은 R2000 DWG에 ACI 9로 남는다(가까운 ACI도 9)
  */
 export function rawColorToCad(raw: number): CadColor {
   const v = raw >>> 0;
@@ -63,7 +65,7 @@ export function rawColorToCad(raw: number): CadColor {
     case 0xc1:
       return { aci: 0 };
     case 0xc2:
-      return { aci: 256, rgb: v & 0xffffff };
+      return { aci: nearestAci(v & 0xffffff), rgb: v & 0xffffff };
     case 0xc3:
       return { aci: v & 0xff };
     case 0xc8:
