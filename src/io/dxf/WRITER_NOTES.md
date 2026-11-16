@@ -79,6 +79,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 8 도면층, 6 선종류(ByLayer 아니면), 62 ACI, (R2004+) 420 트루컬러·430 색 이름·440 투명도, (R2000+) 370 선가중치
 (허용 값으로 맞춤, `entity.lineweight_fixed`)·48 선종류 축척·60 숨김·390 플롯 스타일, 그다음 하위 클래스 자료와
 확장 자료(등록된 APPID만, 하이퍼링크는 PE_URL로). R12는 하위 클래스 표지·소유자·R2000+ 코드를 쓰지 않는다.
+옛 판 DWG의 ACAD 왕복 묶음 RTLwPs·RTTcAl은 어느 판이든 쓰지 않는다(139차 — 읽을 때 제 칸으로 옮겼고, AutoCAD가 쓴 DXF R12~R2018에 없다. `io/dwg/xdata.ts`).
 
 | 객체 | 쓰는 방식 |
 | --- | --- |
