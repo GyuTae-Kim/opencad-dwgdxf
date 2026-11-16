@@ -38,6 +38,7 @@ import { hatchEdges } from '../../../core/hatchedges';
 import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../../core/meshdata';
 import { leaderVertices } from '../../../core/flat3';
 import { oleDataAt } from '../../oledata';
+import { dimMeasurementOf } from '../../../edit/geom/dimmeasure';
 
 const Z: Vec3 = { x: 0, y: 0, z: 1 };
 const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
@@ -1171,7 +1172,10 @@ export class EntityWriter {
       d.BS(e.attachment || 5);
       d.BS(e.lineSpacingStyle || 1);
       d.BD(e.lineSpacingFactor || 1);
-      d.BD(e.measurement);
+      // 실제 측정값: 파일에 없던 치수(R2000 전 DWG·DXF — NaN)는 정의점으로 잰 값(AutoCAD가 R13·R14 도면을 R2000+로 쓸 때 적는 값과 같다 — 136차).
+      // 잴 수 없으면 0(전에는 NaN 비트를 그대로 썼다)
+      const m = dimMeasurementOf(e);
+      d.BD(Number.isFinite(m) ? m : 0);
     }
     if (ver >= R2007) {
       // 알 수 없는 비트(DXF 73) 뒤 화살표 반전 1·2(DXF 74·75, 130차)

@@ -2,6 +2,7 @@
 import { codePointsOf } from '../core/arrays';
 import type { CadColor, CadDocument, DimensionEntity, Entity, HatchEntity, Vec3 } from '../core/model';
 import { isNaturalExt, ocsToWcs } from '../edit/geom/ocs';
+import { dimMeasurementOf } from '../edit/geom/dimmeasure';
 import { tableKey } from '../core/model';
 import { DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../core/dimvars';
 import { type UnitSettings, formatAngle, formatLength } from '../core/units';
@@ -240,21 +241,12 @@ export function dimVars(doc: CadDocument, d: { dimStyle: string; overrides?: Rec
   return out;
 }
 
-/** 치수 측정값(파일 42가 없으면 정의점으로 계산). 각도는 라디안 */
+/**
+ * 치수 측정값(파일 42가 없으면 정의점으로 계산 — edit/geom/dimmeasure.ts). 각도는 라디안.
+ * 136차: 각도·세로좌표·호 길이도 잰다(전에는 선형·정렬·반지름·지름만 — R13·R14 DXF의 각도 치수는 NaN이었다)
+ */
 export function dimMeasurement(d: DimensionEntity): number {
-  if (Number.isFinite(d.measurement)) return d.measurement;
-  const k = d.dimType & 7;
-  const p1 = d.defPoint2;
-  const p2 = d.defPoint3;
-  if (k === 0) {
-    const ux = Math.cos(d.rotation);
-    const uy = Math.sin(d.rotation);
-    return Math.abs((p2.x - p1.x) * ux + (p2.y - p1.y) * uy);
-  }
-  if (k === 1) return Math.hypot(p2.x - p1.x, p2.y - p1.y);
-  if (k === 3) return Math.hypot(d.defPoint4.x - d.defPoint.x, d.defPoint4.y - d.defPoint.y);
-  if (k === 4) return Math.hypot(d.defPoint4.x - d.defPoint.x, d.defPoint4.y - d.defPoint.y);
-  return NaN;
+  return dimMeasurementOf(d);
 }
 
 function zeroSuppress(s: string, dimzin: number): string {
