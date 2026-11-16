@@ -235,6 +235,26 @@ function common(w: TagOut, type: string, h: string, owner: string, e: EntityBase
   }
 }
 
+/** 쓰기 한 번 동안의 도면층 핸들(대문자) → 이름 */
+const layerByHandle = new WeakMap<WriteContext, Map<string, string>>();
+
+/**
+ * 확장 자료 1003(도면층)의 DXF 값(134차). DXF의 1003은 도면층 이름인데 R13 이후 DWG는 도면층 핸들로 적고 DWG 리더는 그 핸들을 그대로 둔다
+ * (DWG 쓰기는 이름·핸들을 모두 받아 핸들로 쓴다). 그래서 DWG에서 읽은 문서는 그 핸들의 도면층 이름으로 쓴다 — 같은 도면을 AutoCAD가 쓴 DWG·DXF 짝에서
+ * DWG의 1003 핸들이 가리키는 도면층 이름이 DXF의 1003 값이다. 그런 도면층이 없거나 다른 문서면 값 그대로
+ */
+function xdataLayer(ctx: WriteContext, v: string): string {
+  const doc = ctx.doc;
+  if (doc.format !== 'dwg' || !doc.version.startsWith('AC10') || doc.version < 'AC1012') return v;
+  let m = layerByHandle.get(ctx);
+  if (!m) {
+    m = new Map();
+    for (const l of doc.layers.values()) if (l.handle) m.set(l.handle.toUpperCase(), l.name);
+    layerByHandle.set(ctx, m);
+  }
+  return m.get(v.toUpperCase()) ?? v;
+}
+
 /** 확장 자료(등록된 APPID만) */
 export function writeXData(w: TagOut, list: XData[] | undefined): void {
   if (!list) return;
@@ -243,7 +263,9 @@ export function writeXData(w: TagOut, list: XData[] | undefined): void {
     w.t(1001, x.app);
     for (const it of x.items) {
       const v = it.value;
-      if (it.code >= 1010 && it.code <= 1013 && typeof v === 'object' && !(v instanceof Uint8Array)) {
+      if (it.code === 1003 && typeof v === 'string') {
+        w.t(1003, xdataLayer(w.ctx, v));
+      } else if (it.code >= 1010 && it.code <= 1013 && typeof v === 'object' && !(v instanceof Uint8Array)) {
         w.p3(it.code, v as Vec3);
       } else if (v instanceof Uint8Array) {
         for (const c of hexChunks(v)) w.t(1004, c);
