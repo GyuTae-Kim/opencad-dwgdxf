@@ -606,7 +606,8 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   }
 
   // LEADER 걸이선: DWG에는 걸이선 점이 없고 AutoCAD가 그릴 때(DXF로 쓸 때도) 덧붙인다.
-  // 글 주석이 있고 마지막 선분이 수평에서 15°보다 기울면 화살촉 크기만큼의 수평선을 넣는다.
+  // 글·공차 주석이 있고 마지막 선분이 수평에서 15°보다 기울면 화살촉 크기만큼의 수평선을 넣는다.
+  // 공차 주석(creation 1)도 같다(135차 — 같은 도면의 AutoCAD R2010 DWG·DXF 짝: DXF에 75 = 1과 끝점에서 DIMASZ만큼 떨어진 걸이선 점).
   for (const p of parsed.values()) {
     const e = p.entity;
     if (!e || e.type !== 'LEADER') continue;
@@ -618,7 +619,7 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
         e.textWidth = ann.extents.width;
       }
     }
-    if (e.creation !== 0 || !e.annotation || leaderCount(e) < 2) continue;
+    if ((e.creation !== 0 && e.creation !== 1) || !e.annotation || leaderCount(e) < 2) continue;
     const xd = e.horizontalDirection ?? { x: 1, y: 0, z: 0 };
     const lv = leaderVertices(e);
     const n = lv.length;
