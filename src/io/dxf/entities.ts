@@ -693,8 +693,15 @@ function dimension(c: Common, subtype?: DimensionEntity['subtype']): DimensionEn
       endAngle: t.num(41, 0, a),
       partial: t.int(70, 0, a) === 1,
     };
-    if (t.hasPoint(16, a)) e.arc.leader1 = t.point(16, undefined, a);
-    if (t.hasPoint(17, a)) e.arc.leader2 = t.point(17, undefined, a);
+    // 16·17(지시선 점)은 71(지시선 있음)이 1일 때만 쓴다(134차). AutoCAD는 지시선이 없어도 16·17에 두 보조선 끝(13·14)을 적는다 —
+    // 같은 도면을 AutoCAD가 쓴 DWG는 같은 자리 비트가 0이고(DWG 리더도 그 비트로 가른다) 치수 블록에 지시선이 없다
+    if (t.int(71, 0, a) === 1) {
+      if (t.hasPoint(16, a)) e.arc.leader1 = t.point(16, undefined, a);
+      if (t.hasPoint(17, a)) e.arc.leader2 = t.point(17, undefined, a);
+    }
+    // 이 하위 클래스의 16(지시선 점)·40(호 시작 매개변수)은 다른 치수의 호 위치·지시선 길이가 아니다(DWG 리더와 같게 0)
+    e.defPoint5 = { x: 0, y: 0, z: 0 };
+    e.leaderLength = 0;
   }
   ocs(t, e);
   const ov = parseDimOverrides(c.base.xdata);
