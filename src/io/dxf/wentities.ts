@@ -368,9 +368,9 @@ function xdataOf(e: Entity, ctx: WriteContext): XData[] | undefined {
     }
     x = [...(x ?? []), { app: 'PE_URL', items }];
   }
-  if (!x?.length) return x;
-  // MTEXT의 여러 줄 문자 저장 묶음: AutoCAD는 R2000 DXF에만 남긴다(모델 배경과 다른 배경 묶음은 빼고), 다른 판은 제 칸에(140차 — dwg/xdata.ts)
+  // MTEXT의 여러 줄 문자 저장 묶음: AutoCAD는 R2000 DXF의 모든 MTEXT에 둔다(없으면 만들고 모델 배경과 다른 배경 묶음은 빼고), 다른 판은 제 칸에(140차 — dwg/xdata.ts)
   if (e.type === 'MTEXT' && ctx.ver === 1015) x = mtextSaveXDataForR2000(x, e);
+  if (!x?.length) return x;
   // 옛 판 DWG의 왕복 묶음(RTLwPs·RTTcAl)은 AutoCAD가 쓴 DXF에 어느 판이든 없다 — 읽을 때 제 칸으로 옮겼다(139차 — dwg/xdata.ts)
   return withoutRoundTripXData(x, e.type === 'MTEXT' && ctx.ver !== 1015);
 }

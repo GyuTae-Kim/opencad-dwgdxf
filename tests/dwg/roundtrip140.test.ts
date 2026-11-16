@@ -179,28 +179,76 @@ describe('여러 줄 문자 저장 묶음(140차)', () => {
       const m = rd(docOf(mtext('E1', items, vals))).entityIndex.get('E1') as MTextEntity;
       expect(acadItems(m.xdata)).toEqual(items);
       expect([m.lineSpacingStyle, m.lineSpacingFactor, m.backgroundFlags, m.backgroundScale, m.backgroundColor]).toEqual([2, 1.5, 1, 1.25, BG]);
-      // 앱에서 배경을 지웠다·색을 바꿨다: 낡은 배경 묶음을 빼서 다시 열 때 살아나지 않는다(R2000에는 배경 칸이 없다)
-      for (const over of [{ backgroundFlags: 0 }, { backgroundColor: { aci: 3 } }, { backgroundScale: 1.5 }]) {
+      // 앱에서 배경을 지웠다·ACI 색으로 바꿨다: 낡은 배경 묶음을 빼서 다시 열 때 살아나지 않는다(R2000에는 배경 칸이 없다)
+      for (const over of [{ backgroundFlags: 0 }, { backgroundColor: { aci: 3 } }]) {
         const s = rd(docOf(mtext('E2', items, { ...vals, ...over }))).entityIndex.get('E2') as MTextEntity;
         expect(acadItems(s.xdata), JSON.stringify(over)).toEqual([...info, ...mtb(2, 1.5)]);
         expect(s.backgroundFlags, JSON.stringify(over)).toBe(0);
       }
+      // 배율·트루컬러를 바꿨다: 새 값으로 다시 만든다
+      const s = rd(docOf(mtext('E3', items, { ...vals, backgroundScale: 1.5, backgroundColor: { aci: 1, rgb: 0xff0000 } }))).entityIndex.get('E3') as MTextEntity;
+      expect(acadItems(s.xdata)).toEqual([...info, ...mtb(2, 1.5), ...bbrt(1, 1.5, 0xc2ff0000)]);
+      expect([s.backgroundFlags, s.backgroundScale, s.backgroundColor]).toEqual([1, 1.5, { aci: 1, rgb: 0xff0000 }]);
     }
     const same: XData[] = [{ app: 'ACAD', items }];
     expect(mtextSaveXDataForR2000(same, vals)).toBe(same);
     const bad: XData[] = [{ app: 'ACAD', items: [...mtb(), ...bbrt(4)] }];
-    expect(mtextSaveXDataForR2000(bad, { backgroundFlags: 0, backgroundScale: 1.5 })).toBe(bad);
+    expect(mtextSaveXDataForR2000(bad, { lineSpacingStyle: 1, lineSpacingFactor: 1, backgroundFlags: 0, backgroundScale: 1.5 })).toBe(bad);
+  });
+
+  it('R2000 DWG·DXF는 모든 MTEXT에 MTEXTBEGIN을 두고 표본 꼴 배경에 BBRT를 만든다(AutoCAD R2000 판처럼)', () => {
+    const other: XData = { app: 'MY_APP', items: [{ code: 1000, value: 'k' }] };
+    const dh: XDataItem[] = [
+      { code: 1000, value: 'ACAD_MTEXT_DEFINED_HEIGHT_BEGIN' },
+      { code: 1070, value: 46 },
+      { code: 1040, value: 7 },
+      { code: 1000, value: 'ACAD_MTEXT_DEFINED_HEIGHT_END' },
+    ];
+    const bgVals = { backgroundFlags: 1, backgroundScale: 1.25, backgroundColor: BG };
+    const cases: [MTextEntity, XData[] | undefined][] = [
+      // 확장 자료가 없다 → ACAD 자료를 만든다(다른 앱 뒤)
+      [mtext('F1', undefined, { lineSpacingStyle: 2, lineSpacingFactor: 1.5 }), [{ app: 'ACAD', items: mtb(2, 1.5) }]],
+      [{ ...mtext('F2', undefined), xdata: [other] }, [other, { app: 'ACAD', items: mtb() }]],
+      // 단 정보 뒤, 정한 높이 앞(AutoCAD R14·R2000 표본 차례)
+      [mtext('F3', [...info, ...dh]), [{ app: 'ACAD', items: [...info, ...mtb(), ...dh] }]],
+      // 앱에서 줄 간격을 바꿨다 → 제 칸 값으로
+      [mtext('F4', [...info, ...mtb(1, 1)], { lineSpacingStyle: 2, lineSpacingFactor: 0.8 }), [{ app: 'ACAD', items: [...info, ...mtb(2, 0.8)] }]],
+      // 트루컬러 배경 → MTEXTBEGIN 바로 뒤에 BBRT
+      [mtext('F5', undefined, bgVals), [{ app: 'ACAD', items: [...mtb(), ...bbrt()] }]],
+      // 실물이 없는 배경(도면 창 색 2, ACI 색, 색상표 이름)은 만들지 않는다
+      [mtext('F6', undefined, { ...bgVals, backgroundFlags: 3 }), [{ app: 'ACAD', items: mtb() }]],
+      [mtext('F7', undefined, { ...bgVals, backgroundColor: { aci: 5 } }), [{ app: 'ACAD', items: mtb() }]],
+      [mtext('F8', undefined, { ...bgVals, backgroundColor: { aci: 97, rgb: 0x367542, name: 'BOOK$C' } }), [{ app: 'ACAD', items: mtb() }]],
+    ];
+    for (const [e, want] of cases) {
+      const d = readDwg(writeDwg(docOf(structuredClone(e)), { version: 'AC1015' }).data).entityIndex.get(e.handle) as MTextEntity;
+      expect(d.xdata, e.handle).toEqual(want);
+      const x = readDxf(writeDxf(docOf(structuredClone(e)), { version: 'AC1015' }).data).entityIndex.get(e.handle) as MTextEntity;
+      expect(x.xdata, `dxf ${e.handle}`).toEqual(want);
+    }
+    // 트루컬러 도형 색의 RTTcAl(138차 — DWG만)은 저장 묶음 앞(표본 9DA 차례: RTTcAl, MTEXTBEGIN, BBRT)
+    const f10 = mtext('F10', undefined, { ...bgVals, color: { aci: 97, rgb: 0x367542 } });
+    const d10 = acadItems(readDwg(writeDwg(docOf(f10), { version: 'AC1015' }).data).entityIndex.get('F10')!.xdata)!;
+    expect(d10[0]).toEqual({ code: 1000, value: 'RTTcAl' });
+    expect(d10.slice(4)).toEqual([...mtb(), ...bbrt()]);
+    // 다시 연 R2000의 배경은 그대로, R2004+로 다시 쓰면 묶음 없이 제 칸에
+    const r = readDwg(writeDwg(docOf(mtext('F9', undefined, bgVals)), { version: 'AC1015' }).data);
+    const m = r.entityIndex.get('F9') as MTextEntity;
+    expect([m.backgroundFlags, m.backgroundScale, m.backgroundColor]).toEqual([1, 1.25, BG]);
+    const n = readDwg(writeDwg(r, { version: 'AC1018' }).data).entityIndex.get('F9') as MTextEntity;
+    expect([n.xdata, n.backgroundFlags, n.backgroundScale, n.backgroundColor]).toEqual([undefined, 1, 1.25, BG]);
   });
 
   const S = (v: string) => join(FIXTURES, 'samples', `sample_${v}.dwg`);
   const NEW = ['AC1018', 'AC1024', 'AC1027', 'AC1032'] as const;
-  it.skipIf(![...NEW, 'AC1014', 'AC1015'].every((v) => existsSync(S(v))))('표본: AutoCAD R14·R2000 판의 MTEXT를 읽은 칸과 R2004+로 쓴 확장 자료가 AutoCAD 새 판과 같다', () => {
+  it.skipIf(![...NEW, 'AC1014', 'AC1015'].every((v) => existsSync(S(v))))('표본: AutoCAD R14·R2000 판의 MTEXT를 읽은 칸, R2004+·R2000으로 쓴 확장 자료가 AutoCAD 같은 판과 같다', () => {
     const mtexts = (doc: CadDocument) =>
       new Map([...doc.blocks.values()].flatMap((b) => b.entities.filter((e) => e.type === 'MTEXT').map((e) => [e.handle.toUpperCase(), e as MTextEntity] as const)));
     const fields = (m: MTextEntity | undefined) =>
       m && JSON.stringify([m.lineSpacingStyle, m.lineSpacingFactor, m.backgroundFlags, m.backgroundFlags & 1 ? [m.backgroundScale, m.backgroundColor] : null]);
+    const num = (it: XDataItem) => (it.code === 1070 ? (it.value as number) & 0xffff : Number.isInteger(it.value) ? it.value : Number((it.value as number).toPrecision(12)));
     const norm = (e: Entity | undefined) =>
-      JSON.stringify((e?.xdata ?? []).map((x) => [x.app.toUpperCase(), x.items.map((it) => [it.code, typeof it.value === 'number' && it.code === 1070 ? it.value & 0xffff : it.value])]));
+      JSON.stringify((e?.xdata ?? []).map((x) => [x.app.toUpperCase(), x.items.map((it) => [it.code, typeof it.value === 'number' ? num(it) : it.value])]));
     // [같은 핸들 MTEXT 수, 그 가운데 칸이 같은 수, 확장 자료가 같은 수] — 전에는 R14 29·0, R2000 33·0(줄 간격 방식 1개·배경 2개, 저장 묶음)
     const expected: Record<string, [number, number, number]> = { AC1014: [32, 32, 32], AC1015: [35, 35, 35] };
     for (const sv of ['AC1014', 'AC1015'] as const) {
@@ -214,6 +262,15 @@ describe('여러 줄 문자 저장 묶음(140차)', () => {
         const xd = hs.filter((h) => norm(out.get(h)) === norm(acad.get(h))).length;
         expect([hs.length, read, xd], `${sv}→${v}`).toEqual(expected[sv]);
       }
+    }
+    // R2004+ 원본 → R2000: MTEXT 확장 자료(MTEXTBEGIN·BBRT·RTTcAl·단 정보)와 칸이 AutoCAD R2000 판과 같다(전에는 확장 자료 0개, 배경 2개를 잃었다)
+    const acad2000 = mtexts(readDwg(new Uint8Array(readFileSync(S('AC1015')))));
+    for (const v of ['AC1018', 'AC1032'] as const) {
+      const out = mtexts(readDwg(writeDwg(readDwg(new Uint8Array(readFileSync(S(v)))), { version: 'AC1015' }).data));
+      const hs = [...acad2000.keys()].filter((h) => out.has(h));
+      const read = hs.filter((h) => fields(out.get(h)) === fields(acad2000.get(h))).length;
+      const xd = hs.filter((h) => norm(out.get(h)) === norm(acad2000.get(h))).length;
+      expect([hs.length, read, xd], `${v}→AC1015`).toEqual([35, 35, 35]);
     }
     // 줄 간격 방식 2(R14에는 칸이 없다)와 배경(R2000 이하에는 칸이 없다)
     const r14 = mtexts(readDwg(new Uint8Array(readFileSync(S('AC1014')))));

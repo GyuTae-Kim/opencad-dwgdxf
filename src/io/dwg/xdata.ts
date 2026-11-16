@@ -305,30 +305,106 @@ function droppableMTextSave(items: readonly XDataItem[], i: number): number {
   return g.len;
 }
 
+type MTextSaveFields = Pick<MTextEntity, 'lineSpacingStyle' | 'lineSpacingFactor' | 'backgroundFlags' | 'backgroundScale' | 'backgroundColor'>;
+
+/** AutoCAD R2000 꼴의 MTEXTBEGIN 묶음 */
+function mtbItems(style: number, factor: number): XDataItem[] {
+  return [
+    { code: 1000, value: 'MTEXTBEGIN' },
+    { code: 1070, value: 73 },
+    { code: 1070, value: style },
+    { code: 1070, value: 44 },
+    { code: 1040, value: factor },
+    { code: 1070, value: 74 },
+    { code: 1070, value: 0 },
+    { code: 1000, value: 'MTEXTEND' },
+  ];
+}
+
+/** 표본 꼴(배경 색 1·트루컬러·이름 없음)의 BBRT 묶음. 그 밖의 배경(도면 창 색 2, ACI·색상표 색)은 AutoCAD 실물이 없어 만들지 않는다 */
+function bbrtItems(e: MTextSaveFields): XDataItem[] | undefined {
+  const c = e.backgroundColor;
+  if (e.backgroundFlags !== 1 || c?.rgb === undefined || c.name) return undefined;
+  return [
+    { code: 1000, value: 'ACAD_MTEXT_BBRT' },
+    { code: 1070, value: 91 },
+    { code: 1071, value: 1 },
+    { code: 1070, value: 46 },
+    { code: 1040, value: e.backgroundScale || 1.5 },
+    { code: 1070, value: 64 },
+    { code: 1071, value: (0xc2000000 | (c.rgb & 0xffffff)) | 0 },
+    { code: 1070, value: 65 },
+    { code: 1000, value: '' },
+    { code: 1070, value: 66 },
+    { code: 1000, value: '' },
+    { code: 1070, value: 442 },
+    { code: 1071, value: 0 },
+    { code: 1000, value: 'ACAD_MTEXT_BERT' },
+  ];
+}
+
 /**
- * R2000 DWG·DXF로 쓸 MTEXT의 저장 묶음(140차). AutoCAD는 R2000 판에 두 묶음을 남긴다(그대로 둔다). 다만 BBRT가 모델 배경과 다르면 뺀다 —
- * 앱에서 배경을 바꾸거나 지운 MTEXT다(R2000에는 배경 칸이 없어 남기면 다시 열 때 낡은 배경이 살아난다). 읽지 못한 꼴의 BBRT는 그대로 둔다.
+ * R2000 DWG·DXF로 쓸 MTEXT의 저장 묶음(140차). AutoCAD는 R2000 판의 모든 MTEXT에 MTEXTBEGIN을 두고(실제 도면 R2000 DWG 65/65·DXF 64/64, 값은 제 칸 73·44와 같다)
+ * 배경이 있으면 그 뒤에 BBRT를 둔다. 그래서:
+ * - MTEXTBEGIN이 없으면 제 칸 줄 간격으로 만든다(자리: BBRT·ACAD_MTEXT_DEFINED_HEIGHT 앞, 없으면 ACAD 자료 끝 — 단 정보 ACAD_MTEXT_COLUMN_INFO·RT 묶음은
+ *   앞에 온다. ACAD 자료가 없으면 다른 앱 뒤에 더한다). 표준 꼴의 MTEXTBEGIN이 제 칸과 다르면(앱에서 줄 간격을 바꾼 MTEXT) 제 칸 값으로 고친다
+ * - BBRT가 모델 배경과 다르면 뺀다(앱에서 배경을 바꾸거나 지운 MTEXT — R2000에는 배경 칸이 없어 남기면 다시 열 때 낡은 배경이 살아난다).
+ *   모델 배경이 표본 꼴(배경 색·트루컬러·이름 없음)이고 BBRT가 없으면 MTEXTBEGIN 바로 뒤에 만든다(전에는 R2000으로 쓰면 배경을 잃었다)
+ * 읽지 못한 꼴의 묶음은 그대로 둔다.
  * @returns 바뀌지 않으면 받은 배열 그대로
  */
-export function mtextSaveXDataForR2000(
-  xdata: XData[] | undefined,
-  e: Pick<MTextEntity, 'backgroundFlags' | 'backgroundScale' | 'backgroundColor'>,
-): XData[] | undefined {
+export function mtextSaveXDataForR2000(xdata: XData[] | undefined, e: MTextSaveFields): XData[] | undefined {
   const ai = xdata ? xdata.findIndex((d) => d.app.toUpperCase() === 'ACAD') : -1;
-  if (ai < 0) return xdata;
-  const items = xdata![ai]!.items;
-  let out: XDataItem[] | undefined;
+  const items = ai >= 0 ? xdata![ai]!.items : [];
+  const style = e.lineSpacingStyle || 1;
+  const factor = e.lineSpacingFactor || 1;
+  const out: XDataItem[] = [];
+  let changed = false;
+  let mtbEnd = -1;
+  let hasBbrt = false;
   for (let i = 0; i < items.length; ) {
     const g = mtextSaveAt(items, i);
-    if (g?.name === 'ACAD_MTEXT_BBRT' && !sameBackground(g, e)) {
-      out ??= items.slice(0, i);
-      i += g.len;
+    if (!g) {
+      out.push(items[i++]!);
       continue;
     }
-    out?.push(items[i]!);
-    i++;
+    if (g.name === 'ACAD_MTEXT_BBRT') {
+      if (!sameBackground(g, e)) {
+        changed = true;
+        i += g.len;
+        continue;
+      }
+      hasBbrt = true;
+    } else if (mtbEnd < 0) {
+      // 표준 꼴(73·44·74 = 0)인데 제 칸과 다르면 제 칸 값으로
+      const ls = mtbLineSpacing(g);
+      if (ls && g.kv.size === 3 && numOf(g.kv.get(74), 1070) === 0 && (ls.style !== style || ls.factor !== factor)) {
+        out.push(...mtbItems(style, factor));
+        mtbEnd = out.length;
+        changed = true;
+        i += g.len;
+        continue;
+      }
+      mtbEnd = out.length + g.len;
+    }
+    for (let k = 0; k < g.len; k++) out.push(items[i + k]!);
+    i += g.len;
   }
-  return withAcadItems(xdata!, ai, out);
+  if (mtbEnd < 0) {
+    let at = out.findIndex((it) => it.code === 1000 && (it.value === 'ACAD_MTEXT_BBRT' || it.value === 'ACAD_MTEXT_DEFINED_HEIGHT_BEGIN'));
+    if (at < 0) at = out.length;
+    out.splice(at, 0, ...mtbItems(style, factor));
+    mtbEnd = at + 8;
+    changed = true;
+  }
+  const bb = hasBbrt ? undefined : bbrtItems(e);
+  if (bb) {
+    out.splice(mtbEnd, 0, ...bb);
+    changed = true;
+  }
+  if (!changed) return xdata;
+  if (ai >= 0) return withAcadItems(xdata!, ai, out);
+  return [...(xdata ?? []), { app: 'ACAD', items: out }];
 }
 
 /** BBRT가 모델 배경(플래그·배율·색)과 같은지(읽지 못하는 꼴이면 같다고 본다 — 그대로 둔다) */
