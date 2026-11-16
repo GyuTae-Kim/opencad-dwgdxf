@@ -192,7 +192,7 @@ export function linear(o: Out): void {
  * AutoCAD가 그린 반전 블록이 있는 실물(실제 도면 3개의 치수 3개 — 바깥 화살촉 하나·둘을 안으로, 안쪽 화살촉 둘을 밖으로)이 모두 이 종류다.
  * 정렬·각도·반지름 등 다른 종류와 블록·눈금 화살촉은 실물이 없어 반전 없이 그린다(값은 저장에 그대로 옮긴다)
  */
-function flippable(d: { dimType: number }, k: ArrowKind, flag: boolean | undefined): boolean {
+export function flippable(d: { dimType: number }, k: ArrowKind, flag: boolean | undefined): boolean {
   return !!flag && (d.dimType & 7) === 0 && k.type === 'solid';
 }
 

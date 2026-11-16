@@ -1,7 +1,7 @@
 /**
  * 치수·지시선·주석 편집 명령(2): DIMEDIT, DIMTEDIT, DIMSPACE, DIMBREAK, DIMJOGGED, DIMJOGLINE, DIMOVERRIDE
  * 그리고 같은 묶음의 QDIM·TOLERANCE·CENTERMARK·CENTERLINE(annot2-misc), QLEADER·MLEADEREDIT·MLEADERALIGN·
- * MLEADERCOLLECT·MLEADERSTYLE(annot2-leader)을 함께 등록한다.
+ * MLEADERCOLLECT·MLEADERSTYLE(annot2-leader), 화살표 반전 AIDIMFLIPARROW(dimflip)를 함께 등록한다.
  * 프롬프트는 AutoCAD 2026 한국어판을 따른다. 계산은 src/edit/annot·src/edit/dim(extras·jogged).
  */
 import type { BlockDef, DimensionEntity, Entity, LeaderEntity, MLeaderEntity, Vec3 } from '../core/model';
@@ -27,6 +27,7 @@ import { VP_PICK, pickedViewport, viewportScaled } from './dimcmds';
 import { circleToPaper } from './vpsnap';
 import { registerAnnot2Leader } from './annot2-leader';
 import { registerAnnot2Misc } from './annot2-misc';
+import { registerDimFlip } from './dimflip';
 import { ft } from './filetext';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
@@ -490,6 +491,7 @@ export function registerAnnot2Commands(app: App): void {
 
   registerAnnot2Misc(app);
   registerAnnot2Leader(app);
+  registerDimFlip(app);
 }
 
 // ---------------------------------------------------------------------------

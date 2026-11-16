@@ -4,10 +4,11 @@
  */
 import type { CadDocument, DimensionEntity, Entity, Vec3 } from '../../core/model';
 import { angular, arcLength } from './angular';
+import { arrowKind } from './arrows';
 import { Out } from './builder';
 import { applyDimExtras } from './extras';
 import { jogged } from './jogged';
-import { linear } from './linear';
+import { flippable, linear } from './linear';
 import { ordinate } from './ordinate';
 import { radial } from './radial';
 import { type MeasureText, measureText } from './textbox';
@@ -30,6 +31,17 @@ export interface DimensionGeometry {
 export interface GenerateOptions {
   /** 문자 상자 재기(기본: 내장 글꼴 표) */
   measureText?: MeasureText;
+}
+
+/**
+ * 이 앱이 치수의 화살표(1 첫 치수보조선 쪽, 2 둘째) 반전을 그리는지(131차 — linear.ts flippable: 회전 선형 치수의 닫고 채운 화살촉,
+ * 그 반쪽 치수선을 숨기지 않았을 때). 화살표 반전 명령(AIDIMFLIPARROW)이 받을 화살표를 고른다
+ */
+export function drawsFlippedArrow(doc: CadDocument, dim: DimensionEntity, which: 1 | 2): boolean {
+  if (dim.subtype || (dim.dimType & 7) !== 0) return false;
+  const v = dimVars(doc, dim);
+  if (which === 1 ? v.sd1 : v.sd2) return false;
+  return flippable(dim, arrowKind(new Out(doc, dim, v, measureText), which === 1 ? v.blk1 : v.blk2), true);
 }
 
 /** 치수 하나의 그림(익명 블록 내용)을 만든다. 엔티티 handle은 ''로 두고 부르는 쪽이 붙인다. */

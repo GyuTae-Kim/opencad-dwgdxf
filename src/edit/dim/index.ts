@@ -4,7 +4,7 @@
  * - create…Dimension: 새 DIMENSION 객체
  * - moveDimensionText: 문자 위치 옮기기(사용자 위치 비트 128)
  */
-export { generateDimensionGeometry, type DimensionGeometry, type GenerateOptions } from './generate';
+export { drawsFlippedArrow, generateDimensionGeometry, type DimensionGeometry, type GenerateOptions } from './generate';
 export {
   createAlignedDimension,
   createAngular2LineDimension,
