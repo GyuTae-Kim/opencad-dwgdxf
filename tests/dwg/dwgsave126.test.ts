@@ -214,26 +214,41 @@ function polyDoc(): CadDocument {
   return doc;
 }
 
-/** 이 문서를 125차 판(고치기 전)으로 쓴 바이트의 sha256 앞 16자(시각 고정, 임의 GUID 0 바이트) */
+/**
+ * 이 문서를 125차 판(고치기 전)으로 쓴 바이트의 sha256 앞 16자(시각 고정, 임의 GUID 0 바이트).
+ * AC1015는 138차부터 트루컬러 폴리선(B01)에 RTTcAl 확장 자료가 붙어 바뀐다 — 그 폴리선의 RGB를 빼면 125차 바이트 그대로(GOLDEN_ACI)
+ */
 const GOLDEN: Record<string, string> = {
   AC1032: '572434618ab91a67',
   AC1027: '0771229fbe67e9f2',
   AC1024: 'b40ef99ba7da2590',
   AC1018: '7b022f35d900bd07',
-  AC1015: 'f9b1d0c847b9fd91',
+  AC1015: 'e067158d297a891c',
 };
+const GOLDEN_ACI = 'f9b1d0c847b9fd91';
 
 describe('폴리선 정점의 공통 자료를 폴리선마다 한 번 구하기', () => {
+  /** 시각·GUID를 고정한 채 문서를 만들어 쓴 바이트의 sha256 앞 16자 */
+  const hashOf = (make: () => CadDocument, version: 'AC1032' | 'AC1027' | 'AC1024' | 'AC1018' | 'AC1015') => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(((a: unknown) => a) as never);
+    try {
+      return createHash('sha256').update(writeDwg(make(), { version }).data).digest('hex').slice(0, 16);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  };
+  it('AC1015: 트루컬러 폴리선의 RGB를 빼면 125차 바이트와 같다(바뀐 것은 RTTcAl 확장 자료뿐 — 138차)', () => {
+    const aciOnly = () => {
+      const doc = polyDoc();
+      doc.entityIndex.get('B01')!.color = { aci: 3 };
+      return doc;
+    };
+    expect(hashOf(aciOnly, 'AC1015')).toBe(GOLDEN_ACI);
+  });
   for (const version of ['AC1032', 'AC1027', 'AC1024', 'AC1018', 'AC1015'] as const) {
     it(`${version}: 쓴 바이트가 고치기 전과 같다(정점·SEQEND 앞뒤 연결 포함)`, () => {
-      vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
-      vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(((a: unknown) => a) as never);
-      try {
-        const data = writeDwg(polyDoc(), { version }).data;
-        expect(createHash('sha256').update(data).digest('hex').slice(0, 16)).toBe(GOLDEN[version]);
-      } finally {
-        vi.restoreAllMocks();
-      }
+      expect(hashOf(polyDoc, version)).toBe(GOLDEN[version]);
     });
 
     it(`${version}: 다시 읽은 폴리선·정점이 그대로이고, 없는 선종류의 경고 개수는 객체마다(머리 1 + 정점 4 + SEQEND 1)`, () => {
@@ -249,7 +264,8 @@ describe('폴리선 정점의 공통 자료를 폴리선마다 한 번 구하기
       expect(Array.from(c!.verts)).toEqual([8, 0, 0, 9, 0, 1, 9, 1, 2, 8, 2, 3]);
       expect(Array.from(d!.verts)).toEqual([12, 0, 0, 13, 0, 1, 13, 1, 2, 12, 2, 3]);
       expect([a!.layer, a!.linetype.toUpperCase(), a!.lineweight, a!.ltscale]).toEqual(['L126', 'DASHED126', 50, 2]);
-      expect(version === 'AC1015' ? a!.color.aci : a!.color.rgb).toBe(version === 'AC1015' ? 3 : 0x123456);
+      // R2000은 RTTcAl 확장 자료로 트루컬러가 돌아온다(138차 — 전에는 ACI 3만)
+      expect([a!.color.aci, a!.color.rgb]).toEqual([3, 0x123456]);
       expect([b!.layer, b!.linetype.toUpperCase(), b!.color.aci, !!b!.invisible]).toEqual(['L126', 'DASHED126', 5, true]);
       expect([c!.linetype.toUpperCase(), d!.linetype.toUpperCase(), d!.lineweight]).toEqual(['BYLAYER', 'BYBLOCK', -2]);
     });
