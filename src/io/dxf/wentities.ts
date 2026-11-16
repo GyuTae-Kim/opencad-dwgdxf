@@ -47,6 +47,7 @@ import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../core/
 import { count3, leaderCount, leaderVertices } from '../../core/flat3';
 import { oleDataAt } from '../oledata';
 import { dimMeasurementOf } from '../../edit/geom/dimmeasure';
+import { withoutRoundTripXData } from '../dwg/xdata';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -367,7 +368,8 @@ function xdataOf(e: Entity, ctx: WriteContext): XData[] | undefined {
     }
     x = [...(x ?? []), { app: 'PE_URL', items }];
   }
-  return x;
+  // 옛 판 DWG의 왕복 묶음(RTLwPs·RTTcAl)은 AutoCAD가 쓴 DXF에 어느 판이든 없다 — 읽을 때 제 칸으로 옮겼다(139차 — dwg/xdata.ts)
+  return x?.length ? withoutRoundTripXData(x) : x;
 }
 
 function thickness(w: TagOut, e: EntityBase): void {

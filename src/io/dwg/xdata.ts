@@ -11,7 +11,8 @@ import { lwIndex } from './writer/util';
  * - R13·R14 "RTLwPs", 1070 = 0x80 | 선가중치 번호(도형 공통 자료의 번호 — 30은 ByBlock): 1,176/1,176 같음
  * - R2000 이하 "RTTcAl", 1070 = R2004+ 도형 색(ENC)의 플래그·색 번호 낱말(0x8000 트루컬러, 0x4000 색상표, 0x2000 투명도),
  *   1071 = 방식·RGB 낱말(0xC2RRGGBB), 다음 1000 = 색상표 이름("책$이름") 또는 "$$NoName$$": 220/220 같음
- * 읽은 확장 자료는 그대로 둔다(R2000으로 쓸 때의 정리는 roundTripXDataForR2000). 투명도(0x2000)는 값 항목이 없어 쓰지 않는다.
+ * 읽은 확장 자료는 그대로 둔다(R2000으로 쓸 때의 정리는 roundTripXDataForR2000, R2004+ DWG·DXF로 쓸 때는 withoutRoundTripXData).
+ * 투명도(0x2000)는 값 항목이 없어 쓰지 않는다.
  * 색은 낱말의 색 번호가 도형 ACI와 같을 때만 쓴다(옛 판에서 색을 바꾸면 이 자료는 그대로 남아 낡는다).
  */
 export function applyRoundTripXData(e: { color: CadColor; lineweight: number }, xdata: XData[] | undefined, ver: number): void {
@@ -135,6 +136,39 @@ export function roundTripXDataForR2000(
   const list = xdata ? [...xdata] : [];
   if (ai < 0) list.push({ app: 'ACAD', items: out });
   else if (out.length) list[ai] = { app: xdata![ai]!.app, items: out };
+  else list.splice(ai, 1);
+  return list.length ? list : undefined;
+}
+
+/**
+ * R2004+ DWG·DXF(모든 판)로 쓸 도형의 ACAD 확장 자료에서 왕복 묶음 "RTLwPs"·"RTTcAl"을 뺀다(139차). 이 앱은 R13·R14 RTLwPs를 선가중치로,
+ * R2000 이하 RTTcAl을 트루컬러로 읽어 제 칸에 두고, AutoCAD는 같은 도면을 R2004+ DWG나 DXF로 쓸 때 이 묶음을 남기지 않는다.
+ * AutoCAD가 같은 도면을 여러 판으로 쓴 세 무리(LibreDWG example·Leader, ACadSharp sample)에서 옛 판 RT 객체 ↔ 같은 핸들 새 판 객체:
+ * RTLwPs는 R2004+ DWG 980쌍·DXF(R12~R2018) 1,602쌍, RTTcAl은 R2004+ DWG 220쌍·DXF 308쌍 모두 없다. 묶음만 있던 도형은 ACAD 자료째 없다.
+ * 꼴이 맞는 묶음만 뺀다(1070이 0x80 | 번호가 아닌 RTLwPs, 1070·1071이 뒤따르지 않는 RTTcAl은 그대로). 나머지 ACAD 자료는 그대로 둔다.
+ * RTMaterial은 이 앱이 재질 칸으로 옮기지 않아 남긴다(AutoCAD는 R2007+ DWG에서 재질 칸으로 옮기고 DXF에는 쓰지 않는다).
+ * @returns 바뀌지 않으면 받은 배열 그대로
+ */
+export function withoutRoundTripXData(xdata: XData[] | undefined): XData[] | undefined {
+  const ai = xdata ? xdata.findIndex((d) => d.app.toUpperCase() === 'ACAD') : -1;
+  if (ai < 0) return xdata;
+  const items = xdata![ai]!.items;
+  let out: XDataItem[] | undefined;
+  for (let i = 0; i < items.length; ) {
+    const it = items[i]!;
+    const n =
+      it.code !== 1000 ? 0 : it.value === 'RTLwPs' ? (rtLwPsIndex(items, i) >= 0 ? 2 : 0) : it.value === 'RTTcAl' ? rtTcAlLength(items, i) : 0;
+    if (n) {
+      out ??= items.slice(0, i);
+      i += n;
+      continue;
+    }
+    out?.push(it);
+    i++;
+  }
+  if (!out) return xdata;
+  const list = [...xdata!];
+  if (out.length) list[ai] = { app: xdata![ai]!.app, items: out };
   else list.splice(ai, 1);
   return list.length ? list : undefined;
 }
