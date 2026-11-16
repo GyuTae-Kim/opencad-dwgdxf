@@ -10,7 +10,7 @@ import { R14, R2000 } from './version';
  * - R13·R14 "RTLwPs", 1070 = 0x80 | 선가중치 번호(도형 공통 자료의 번호 — 30은 ByBlock): 1,176/1,176 같음
  * - R2000 이하 "RTTcAl", 1070 = R2004+ 도형 색(ENC)의 플래그·색 번호 낱말(0x8000 트루컬러, 0x4000 색상표, 0x2000 투명도),
  *   1071 = 방식·RGB 낱말(0xC2RRGGBB), 다음 1000 = 색상표 이름("책$이름") 또는 "$$NoName$$": 220/220 같음
- * 이 앱은 그 판으로 쓰지 않으므로 확장 자료는 그대로 둔다. 투명도(0x2000)는 값 항목이 없어 쓰지 않는다.
+ * 확장 자료는 그대로 둔다(이 앱은 RT 묶음을 새로 만들지 않고, 읽은 묶음은 전처럼 다시 쓴다). 투명도(0x2000)는 값 항목이 없어 쓰지 않는다.
  * 색은 낱말의 색 번호가 도형 ACI와 같을 때만 쓴다(옛 판에서 색을 바꾸면 이 자료는 그대로 남아 낡는다).
  */
 export function applyRoundTripXData(e: { color: CadColor; lineweight: number }, xdata: XData[] | undefined, ver: number): void {
