@@ -1174,9 +1174,10 @@ export class EntityWriter {
       d.BD(e.measurement);
     }
     if (ver >= R2007) {
+      // 알 수 없는 비트(DXF 73) 뒤 화살표 반전 1·2(DXF 74·75, 130차)
       d.B(0);
-      d.B(0);
-      d.B(0);
+      d.B(e.flipArrow1 ? 1 : 0);
+      d.B(e.flipArrow2 ? 1 : 0);
     }
     d.RD(e.insertPoint?.x ?? 0);
     d.RD(e.insertPoint?.y ?? 0);

@@ -673,6 +673,11 @@ function dimension(c: Common, subtype?: DimensionEntity['subtype']): DimensionEn
     lineSpacingFactor: t.num(41, 1, s),
   } as DimensionEntity;
   if (t.hasPoint(12, s)) e.insertPoint = t.point(12, undefined, s);
+  // 화살표 반전(AcDbDimension 74·75 — AutoCAD R2007+ DXF가 적는다, 130차)
+  if (hasSubs) {
+    if (t.int(74, 0, d)) e.flipArrow1 = true;
+    if (t.int(75, 0, d)) e.flipArrow2 = true;
+  }
   if (subtype) e.subtype = subtype;
   // 호 길이·꺾기 반지름 치수의 종류 값: 파일에는 5·9(AutoCAD) 또는 8(다른 프로그램의 R2018 호 길이)이 온다.
   // 모델은 DWG 리더·새로 만든 치수와 같게 하위 비트가 & 7로 가려지는 값(호 길이 5, 꺾기 반지름 4)을 쓴다

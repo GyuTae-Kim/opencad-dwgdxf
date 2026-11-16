@@ -409,6 +409,12 @@ export interface DimensionEntity extends EntityBase {
   arc?: { center: Vec3; start: Vec3; end: Vec3; startAngle: number; endAngle: number; partial: boolean; leader1?: Vec3; leader2?: Vec3 };
   /** ACAD DSTYLE 확장 데이터 재지정(그룹 코드 → 값) */
   overrides?: Record<number, string | number>;
+  /**
+   * 첫째·둘째 화살표 반전(DXF 74·75, R2007+ DWG의 비트 — AutoCAD "화살표 반전" AIDIMFLIPARROW). 켠 것만 둔다(130차).
+   * 치수 그림 블록은 그대로 그리고, 이 앱이 블록을 다시 만들 때는 아직 반전을 그리지 않는다(값은 저장에 그대로 옮긴다)
+   */
+  flipArrow1?: boolean;
+  flipArrow2?: boolean;
 }
 
 export interface LeaderEntity extends EntityBase {
