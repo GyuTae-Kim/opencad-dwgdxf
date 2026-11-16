@@ -19,6 +19,7 @@ import { transformEntity } from './transform';
 import { keepIdentity } from './trim';
 import { type EditResult, allocBlockName, mergeResults } from './types';
 import { dimMeasure, updateDimNumber } from './xannot';
+import { dimGeomMeasurement } from './dimmeasure';
 import { layoutArcText } from '../../text/arctext';
 import { hatchEdges, packEdges } from '../../core/hatchedges';
 import { meshVertices, packMesh } from '../../core/meshdata';
@@ -433,7 +434,12 @@ export function moveDimPoint(e: DimensionEntity, key: DimKey, d: Vec2): Dimensio
   const k = e.dimType & 7;
   if (Number.isFinite(e.measurement)) {
     if (e.subtype === 'ARC_DIMENSION' || k === 0 || k === 1 || k === 3 || k === 4) r.measurement = dimMeasure(r);
-    else if (k === 2 || k === 5) r.measurement = angularMeasure(r);
+    else if (k === 2 || k === 5) {
+      // AutoCAD 저장 값과 같은 셈(dimmeasure.ts — 두 선은 교점에서 호 자리가 든 부채꼴, 세 점은 호 자리 쪽, 137차).
+      // 잴 수 없으면(평행한 두 선) 전처럼 두 방향 사이 작은 쪽 각
+      const m = dimGeomMeasurement(r);
+      r.measurement = Number.isFinite(m) ? m : angularMeasure(r);
+    }
     else if (k === 6) {
       const dx = r.defPoint2.x - r.defPoint.x;
       const dy = r.defPoint2.y - r.defPoint.y;

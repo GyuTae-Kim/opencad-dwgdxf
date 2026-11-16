@@ -129,6 +129,9 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
 - 트루컬러의 ACI: AutoCAD 팔레트(명도 255·204·153·127·76)로 가장 가까운 색. 색상표 색은 DBCOLOR의 RGB·이름.
   해치 그라데이션 색은 색마다 저장된 ACI(BS)를 쓴다.
 - 하이퍼링크(PE_URL), 도면층 설명(AcAecLayerStandard), 도면층 투명도(AcCmTransparency), 문자 스타일 글꼴(ACAD 1000·1071)은 확장 자료에서 꺼낸다.
+- 옛 판 도형의 AutoCAD 왕복 확장 자료(137차 — 같은 도면을 AutoCAD가 여러 판으로 쓴 표본으로 확인, `xdata.ts`): R13·R14 ACAD "RTLwPs" 1070 = 0x80 | 선가중치 번호,
+  R2000 이하 "RTTcAl" 1070 = R2004+ ENC 낱말(플래그·색 번호), 1071 = 0xC2RRGGBB, 다음 1000 = 색상표 이름 또는 `$$NoName$$`. 선가중치·트루컬러를 여기서 읽고
+  자료는 그대로 둔다. "RTMaterial"(1005 재질 핸들)과 RTTcAl의 투명도 플래그(값 없음)는 쓰지 않는다.
 - R2018 MTEXT 단 높이의 음수 값은 AutoCAD DXF처럼 0으로 둔다. 평면 스플라인은 법선과 70 비트 8을 둔다.
 - 비도형 객체의 확장 자료(`xdata`), LAYOUT의 확장 사전·반응자, 표 제어 객체(`tableHeads`: 핸들·확장 사전·반응자·확장 자료)를 담는다.
 - MULTILEADER에서 모델에 자리가 없는 값은 DXF 그룹 코드로 `props`(본체·문맥·문맥 텍스트)에 둔다. 도형 재질 핸들은 `material`.
