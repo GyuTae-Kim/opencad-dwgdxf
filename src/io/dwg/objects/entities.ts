@@ -55,6 +55,7 @@ import { decodeCadEscapes } from '../../../core/codepage';
 import { type BitReader, DwgFormatError } from '../bitstream';
 import { cmcToCad, encToCad } from '../color';
 import { entityLineweightFromIndex } from '../lineweight';
+import { applyRoundTripXData } from '../xdata';
 import { R14, R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
 import { hex } from './nonentities';
 import { applyMviewXData } from '../../mview';
@@ -159,6 +160,8 @@ function entBase(or: ObjectReader, c: EntCommon, names: Names): Omit<EntityBase,
   const xd = xdataFromEed(h.eed, names);
   if (xd) {
     e.xdata = xd;
+    // R2000 이하: 그 판에 칸이 없는 선가중치·트루컬러를 AutoCAD 왕복 확장 자료에서(137차)
+    if (or.ver <= R2000) applyRoundTripXData(e, xd, or.ver);
     // 하이퍼링크: PE_URL 확장 자료의 문자열(주소, 설명, 위치)
     const url = xd.find((x) => x.app.toUpperCase() === 'PE_URL');
     if (url) {
