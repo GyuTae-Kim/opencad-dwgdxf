@@ -3,7 +3,7 @@ import type { CadDocument } from '../core/model';
 import type { FromWorker, PreviewView, SaveFormat, SceneMessage, ToWorker } from '../worker/protocol';
 import type { PartialScene } from '../render/build';
 import type { EditOp } from '../edit/session';
-import { DocAssembler, ownIndexes } from '../worker/doctransfer';
+import { type DocAssembler, receiveDocument } from '../worker/doctransfer';
 import { ENCODE_MIN_OPS, encodeWire, packOps } from '../worker/editwire';
 import { type Encoded, encodedTransfer, encoderScratch, type EncoderScratch } from '../worker/codec';
 
@@ -103,8 +103,13 @@ export class EngineClient {
         break;
       case 'document':
         p.doc = { docId: m.docId, doc: m.doc, readMs: m.readMs };
-        if (m.streamed.length) p.assembler = new DocAssembler(m.doc, m.streamed);
-        else ownIndexes(m.doc);
+        try {
+          p.assembler = receiveDocument(m.doc, m.streamed, m.objects) ?? undefined;
+        } catch (e) {
+          this.pending.delete(m.id);
+          p.reject(e);
+          break;
+        }
         this.settle(m.id, p);
         break;
       case 'docpart':

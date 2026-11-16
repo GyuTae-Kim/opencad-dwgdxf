@@ -52,8 +52,11 @@ export interface SceneMessage {
 
 export type FromWorker =
   | { type: 'progress'; id: number; stage: 'read' | 'fonts' | 'build' | 'document'; fraction: number }
-  /** 문서(장면 뒤에 온다). streamed가 있으면 doc은 그 블록들의 객체를 뺀 껍데기이고, 뒤따르는 docpart로 채운다([블록 열쇠, 객체 수]) */
-  | { type: 'document'; id: number; docId: number; doc: CadDocument; readMs: number; streamed: [string, number][] }
+  /**
+   * 문서(장면 뒤에 온다). streamed가 있으면 doc은 그 블록들의 객체를 뺀 껍데기이고, 뒤따르는 docpart로 채운다([블록 열쇠, 객체 수]).
+   * objects가 있으면 비도형 객체를 부호화한 것이고 doc.objects에는 남긴 배치 객체만 든다(doctransfer.ts receiveDocument가 합친다 — 129차)
+   */
+  | { type: 'document'; id: number; docId: number; doc: CadDocument; readMs: number; streamed: [string, number][]; objects?: Encoded }
   | { type: 'docpart'; id: number; part: DocPart }
   | { type: 'scene'; id: number; docId: number; space: string; scene: SceneMessage }
   /** 점진 빌드의 미리 보기 조각(모형 공간). view: 첫 화면(맞춰 보일 사각형과 여백), 대표점이 없으면 null */

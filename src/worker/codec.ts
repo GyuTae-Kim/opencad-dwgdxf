@@ -12,6 +12,7 @@
  * - 수만 든 배열(폴리선 평탄 좌표·매듭 등)은 값마다 태그를 쓰지 않고 수 배열에 이어 적는다(되살리면 상자 없는 실수 배열).
  * - 얼린 객체(공유 ByLayer 색 등)는 같은 객체로 다시 만든다(구조화 복제처럼 한 번 보낸 안에서 공유를 지킨다).
  * - 순환 참조·함수·BigInt·희소 배열처럼 다루지 않는 값이 있으면 encode가 null을 돌려준다(그때는 구조화 복제로 보낸다).
+ * - 얼리지 않은 같은 객체를 두 번 만나면 사본 둘을 만든다(구조화 복제는 하나로 되살린다). 그래서는 안 되는 곳은 Encoder에 seen을 준다(129차).
  * 구조화 복제와 같게: 객체는 자기 열거 문자열 속성만(프로토타입은 버린다), undefined 값 속성도 남긴다, NaN·-0도 그대로.
  */
 
@@ -130,8 +131,15 @@ export class Encoder {
   private readonly frozen = new Map<object, number>();
   private readonly keyBuf: string[] = [];
 
-  /** scratch를 주면 그 버퍼를 쓰고 finish 때 (커졌으면 커진 버퍼를) 돌려놓는다 — 한 번에 Encoder 하나만 쓸 것 */
-  constructor(private readonly scratch?: EncoderScratch) {
+  /**
+   * scratch를 주면 그 버퍼를 쓰고 finish 때 (커졌으면 커진 버퍼를) 돌려놓는다 — 한 번에 Encoder 하나만 쓸 것.
+   * seen을 주면 부호화한 (얼리지 않은) 객체·배열·형식 배열·Map·Set을 거기 모으고, 이미 든 것을 다시 만나면 다루지 않는 값으로 본다
+   * (add가 false — 같은 객체를 사본 둘로 되살리지 않게. 미리 넣어 둔 객체를 만나도 같다 — 129차 문서 보내기의 비도형 객체)
+   */
+  constructor(
+    private readonly scratch?: EncoderScratch,
+    private readonly seen?: Set<object>,
+  ) {
     const s = scratch ?? encoderScratch();
     this.tags = s.tags;
     this.nums = s.nums;
@@ -316,6 +324,11 @@ export class Encoder {
 
   /** 일반 객체가 아닌 객체(원형이 Object.prototype도 null도 아님): 배열·형식 배열·Map·Set, 그 밖은 제 열거 속성만 */
   private nonPlain(o: object): void {
+    const seen = this.seen;
+    if (seen) {
+      if (seen.has(o)) throw new Unsupported();
+      seen.add(o);
+    }
     if (Array.isArray(o)) {
       const n = o.length;
       if (n > 1 && allNumbers(o, n)) {
@@ -367,7 +380,8 @@ export class Encoder {
 
   /**
    * 객체: 얼렸으면 같은 객체 다시 쓰기, 아니면 모양 번호 + 값들. guess는 짐작한 모양(-1 = 없음) — 이름이 차례대로 같으면
-   * 모양 찾기(shapeOf)를 건너뛴다(이름 차례마다 모양은 하나뿐이라 찾은 번호와 같다). 쓴 모양 번호를 돌려준다(다시 쓰기는 -1)
+   * 모양 찾기(shapeOf)를 건너뛴다(이름 차례마다 모양은 하나뿐이라 찾은 번호와 같다). 쓴 모양 번호를 돌려준다(다시 쓰기는 -1).
+   * 일반 객체가 아닌 것(simple 거짓)은 nonPlain이 이미 seen을 보았다
    */
   private record(o: Record<string, unknown>, simple: boolean, guess: number): number {
     if (Object.isFrozen(o)) {
@@ -379,7 +393,14 @@ export class Encoder {
       }
       this.frozen.set(o, this.frozen.size);
       this.tag(T_FROZEN);
-    } else this.tag(T_OBJ);
+    } else {
+      const seen = this.seen;
+      if (simple && seen) {
+        if (seen.has(o)) throw new Unsupported();
+        seen.add(o);
+      }
+      this.tag(T_OBJ);
+    }
     const keys = this.keyBuf;
     let nk = 0;
     let id: number;
@@ -475,7 +496,9 @@ export class Encoder {
   }
 
   private bin(v: ArrayBufferView): void {
-    const kind = BIN_KINDS.indexOf(v.constructor.name as BinKind);
+    // 바이트 배열(원본 본문 등 — 129차 실제 도면 51개의 비도형 객체에 94만 개)은 이름을 찾지 않고 그대로 옮긴다(같은 종류 번호·같은 바이트)
+    const u8 = v.constructor === Uint8Array;
+    const kind = u8 ? 0 : BIN_KINDS.indexOf(v.constructor.name as BinKind);
     if (kind < 0) throw new Unsupported();
     const bytes = v.byteLength;
     const at = (this.nb + 7) & ~7;
@@ -486,7 +509,7 @@ export class Encoder {
       n.set(this.bins.subarray(0, this.nb));
       this.bins = n;
     }
-    this.bins.set(new Uint8Array(v.buffer, v.byteOffset, bytes), at);
+    this.bins.set(u8 ? (v as Uint8Array) : new Uint8Array(v.buffer, v.byteOffset, bytes), at);
     this.nb = at + bytes;
     this.tag(T_BIN);
     this.int(kind);
@@ -624,9 +647,13 @@ export class Decoder {
         return s;
       }
       case T_BIN: {
-        const kind = BIN_KINDS[e.ints[this.ii++]!]!;
+        const k = e.ints[this.ii++]!;
         const at = e.ints[this.ii++]!;
         const bytes = e.ints[this.ii++]!;
+        // 바이트 배열은 slice로(제 버퍼, 차림 0 — 아래와 같은 값). 작은 배열(V8은 64바이트 이하)은 버퍼를 따로 잡지 않고 힙 안에 만들어
+        // 실제 도면 51개 비도형 객체 풀기가 476 → 270ms였다(129차 Node — 바이트 배열 94만 개의 65%가 64바이트 이하)
+        if (k === 0) return e.bins.slice(at, at + bytes);
+        const kind = BIN_KINDS[k]!;
         const C = BIN_CTORS[kind];
         // 객체마다 제 버퍼(구조화 복제와 같게 — 뷰가 큰 버퍼를 붙잡거나 다시 보낼 때 통째로 가지 않게)
         const buf = e.bins.buffer.slice(e.bins.byteOffset + at, e.bins.byteOffset + at + bytes) as ArrayBuffer;
