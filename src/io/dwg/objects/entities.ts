@@ -1180,10 +1180,13 @@ function readDimension(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Nam
     lineSpacingFactor = r.BD();
     measurement = r.BD();
   }
+  // R2007+: 알 수 없는 비트(DXF 73) 뒤 화살표 반전 1·2(DXF 74·75 — 130차: 실제 도면 3개에 반전 5개)
+  let flip1 = 0;
+  let flip2 = 0;
   if (ver >= R2007) {
     r.B();
-    r.B();
-    r.B();
+    flip1 = r.B();
+    flip2 = r.B();
   }
   const p12 = r.RD2();
   const zero: Vec3 = { x: 0, y: 0, z: 0 };
@@ -1211,6 +1214,8 @@ function readDimension(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Nam
     lineSpacingFactor,
   };
   if (p12.x || p12.y) e.insertPoint = { x: p12.x, y: p12.y, z: elev };
+  if (flip1) e.flipArrow1 = true;
+  if (flip2) e.flipArrow2 = true;
   setExtrusion(e, extrusion);
   let dt = 0;
   switch (type) {

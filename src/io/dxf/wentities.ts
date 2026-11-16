@@ -698,6 +698,12 @@ function writeDimension(w: TagOut, e: DimensionEntity, blockName: string): void 
     if (e.lineSpacingStyle && e.lineSpacingStyle !== 1) w.t(72, e.lineSpacingStyle);
     if (e.lineSpacingFactor && e.lineSpacingFactor !== 1) w.t(41, e.lineSpacingFactor);
     if (Number.isFinite(e.measurement)) w.t(42, e.measurement);
+    // 화살표 반전(130차): AutoCAD는 R2007+ DXF에 42 뒤 73·74·75를 늘 적는다 — 이 앱은 반전한 치수에만 적는다(나머지 출력은 그대로)
+    if (ver >= 1021 && (e.flipArrow1 || e.flipArrow2)) {
+      w.t(73, 0);
+      w.t(74, e.flipArrow1 ? 1 : 0);
+      w.t(75, e.flipArrow2 ? 1 : 0);
+    }
   }
   if (e.text) w.t(1, e.text);
   if (e.textRotation) w.deg(53, e.textRotation);

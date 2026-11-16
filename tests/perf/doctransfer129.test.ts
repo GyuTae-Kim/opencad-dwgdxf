@@ -2,6 +2,7 @@
  * 129차: 워커 → 메인 문서 보내기에서 비도형 객체(objects)를 codec으로 부호화해 보낸다(doctransfer.ts encodeObjects·receiveDocument).
  * 받은 문서는 구조화 복제와 같아야 하고(차례·바이트 배열까지), 배치 객체의 layout은 doc.layouts의 같은 객체로 남아야 하며,
  * 부호화할 객체가 문서의 다른 곳과 같은 객체를 함께 쓰면 부호화하지 않고 지금처럼 구조화 복제한다.
+ * 130차: 부호화하는 기본 하한을 비도형 객체 1,000 → 4,000개로(그보다 적으면 구조화 복제).
  */
 import { describe, expect, it } from 'vitest';
 import { Decoder, Encoder, encodedTransfer } from '../../src/worker/codec';
@@ -83,10 +84,13 @@ function addObjects(doc: CadDocument, n: number): string[] {
 
 const ownBuffer = (a: Uint8Array) => a.byteOffset === 0 && a.buffer.byteLength === a.byteLength;
 
+/** 부호화하는 기본 하한(130차 4,000개)보다 많은 사용자 객체 수 */
+const MANY = 4500;
+
 describe('비도형 객체 부호화 보내기(129차)', () => {
   it('부호화해 보내도 구조화 복제와 같은 문서다(차례·바이트 배열·열쇠가 handle과 다른 항목 포함)', () => {
     const doc = dwgDoc();
-    addObjects(doc, 1500);
+    addObjects(doc, MANY);
     // 열쇠가 값의 handle과 다른 항목(OBJ_KEYED)과 사전(Map)
     doc.objects.set('ZZ', { type: 'AECC_TEST_A', handle: 'ZZ1', owner: 'C' } as CadObject);
     doc.objects.set('ZZ2', { type: 'DICTIONARY', handle: 'ZZ2', owner: 'C', entries: new Map([['A', '1F'], ['B', '20']]), hardOwner: false, cloning: 1 } as unknown as CadObject);
@@ -115,18 +119,18 @@ describe('비도형 객체 부호화 보내기(129차)', () => {
           n++;
         }
       }
-      expect(n).toBeGreaterThanOrEqual(1500 * 3);
+      expect(n).toBeGreaterThanOrEqual(MANY * 3);
     }
   });
 
   it('부호화할 객체가 문서의 다른 곳이나 다른 객체와 같은 객체를 함께 쓰면 구조화 복제로 보내 같은 객체를 지킨다', () => {
     // 함께 쓰는 값이 없으면 같은 문서를 부호화한다(아래가 다른 까닭으로 부호화하지 않은 것이 아니다)
     const plain = dwgDoc();
-    addObjects(plain, 1500);
+    addObjects(plain, MANY);
     expect(transfer(plain).encoded).toBe(true);
     // 도면층과 함께 쓰는 일반 객체(안에 객체가 없는)
     const a = dwgDoc();
-    const [h1, h2] = addObjects(a, 1500);
+    const [h1, h2] = addObjects(a, MANY);
     const layer = [...a.layers.values()][0]!;
     const shared = { s: 'S' };
     (layer as unknown as { extra: unknown }).extra = shared;
@@ -137,7 +141,7 @@ describe('비도형 객체 부호화 보내기(129차)', () => {
     expect((r.doc.objects.get(h1!) as unknown as { extra: unknown }).extra).toBe((r.doc.layers.get(layer.name.toUpperCase()) as unknown as { extra: unknown }).extra);
     // 두 객체가 함께 쓰는 바이트 배열
     const b = dwgDoc();
-    const [g1, g2] = addObjects(b, 1500);
+    const [g1, g2] = addObjects(b, MANY);
     b.objects.get(g2!)!.dwgRaw!.handles = b.objects.get(g1!)!.dwgRaw!.handles;
     r = transfer(b);
     expect(r.encoded).toBe(false);
@@ -145,7 +149,7 @@ describe('비도형 객체 부호화 보내기(129차)', () => {
     expect(r.doc.objects.get(g2!)!.dwgRaw!.handles).toBe(r.doc.objects.get(g1!)!.dwgRaw!.handles);
     // 껍데기에 남기는 배치 객체(의 layout)와 함께 쓰는 값
     const c = dwgDoc();
-    addObjects(c, 1500);
+    addObjects(c, MANY);
     const lay = c.layouts[0]!;
     (c.objects.get(h2!) as unknown as { plot: unknown }).plot = lay.plot;
     r = transfer(c);
@@ -156,18 +160,29 @@ describe('비도형 객체 부호화 보내기(129차)', () => {
 
   it('다루지 않는 값이 있거나 객체가 적거나 껍데기 나머지가 크면 그대로 보낸다(얼린 공유 객체는 부호화한다)', () => {
     const a = dwgDoc();
-    const [h] = addObjects(a, 1500);
+    const [h] = addObjects(a, MANY);
     (a.objects.get(h!) as unknown as { at: unknown }).at = new Date(5);
     let r = transfer(a);
     expect(r.encoded).toBe(false);
     expect(r.doc).toStrictEqual(received(a));
-    // 객체가 기본 하한(1000개)보다 적다
+    // 객체가 기본 하한(130차 4,000개)보다 적다 — 3,999개는 구조화 복제, 4,000개는 부호화
     const small = dwgDoc();
     addObjects(small, 10);
-    expect(small.objects.size).toBeLessThan(1000);
+    expect(small.objects.size).toBeLessThan(4000);
     r = transfer(small);
     expect(r.encoded).toBe(false);
     expect(r.doc).toStrictEqual(received(small));
+    for (const [size, encoded] of [
+      [3999, false],
+      [4000, true],
+    ] as const) {
+      const d = createDocument();
+      addObjects(d, size - d.objects.size);
+      expect(d.objects.size).toBe(size);
+      r = transfer(d);
+      expect(r.encoded).toBe(encoded);
+      expect(r.doc).toStrictEqual(received(d));
+    }
     // 하한을 낮추면 적어도 부호화한다(나머지가 작은 문서)
     const tiny = createDocument();
     addObjects(tiny, 10);
@@ -176,14 +191,14 @@ describe('비도형 객체 부호화 보내기(129차)', () => {
     expect(r.doc).toStrictEqual(received(tiny));
     // 껍데기 나머지가 객체 수의 8배를 넘는다
     const wide = dwgDoc();
-    addObjects(wide, 1500);
+    addObjects(wide, MANY);
     (wide as unknown as { note: unknown }).note = Array.from({ length: wide.objects.size * 10 }, (_, i) => ({ i }));
     r = transfer(wide);
     expect(r.encoded).toBe(false);
     expect(r.doc).toStrictEqual(received(wide));
     // 얼린 공유 객체(여러 객체가 함께 쓰는 값)는 막지 않는다
     const z = dwgDoc();
-    const keys = addObjects(z, 1500);
+    const keys = addObjects(z, MANY);
     const axis = Object.freeze({ x: 0, y: 0, z: 1 });
     for (const k of keys.slice(0, 3)) (z.objects.get(k) as unknown as { normal: unknown }).normal = axis;
     r = transfer(z);
@@ -193,7 +208,7 @@ describe('비도형 객체 부호화 보내기(129차)', () => {
 
   it('남긴 배치 객체가 껍데기에 없으면 받기가 실패한다(조용히 빠뜨리지 않는다)', () => {
     const doc = dwgDoc();
-    addObjects(doc, 1500);
+    addObjects(doc, MANY);
     let shell: CadDocument | null = null;
     let enc: Parameters<typeof receiveObjects>[1] | undefined;
     sendDocument(
