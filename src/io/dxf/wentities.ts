@@ -46,6 +46,7 @@ import { hatchEdges } from '../../core/hatchedges';
 import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../core/meshdata';
 import { count3, leaderCount, leaderVertices } from '../../core/flat3';
 import { oleDataAt } from '../oledata';
+import { dimMeasurementOf } from '../../edit/geom/dimmeasure';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -719,7 +720,10 @@ function writeDimension(w: TagOut, e: DimensionEntity, blockName: string): void 
     w.t(71, e.attachment || 5);
     if (e.lineSpacingStyle && e.lineSpacingStyle !== 1) w.t(72, e.lineSpacingStyle);
     if (e.lineSpacingFactor && e.lineSpacingFactor !== 1) w.t(41, e.lineSpacingFactor);
-    if (Number.isFinite(e.measurement)) w.t(42, e.measurement);
+    // 실제 측정값: 파일에 없던 치수(R2000 전 DWG·DXF — NaN)는 정의점으로 잰 값(138차 — DWG 쓰기와 같은 셈. AutoCAD는 R2000+ DXF에 42를 늘 적고,
+    // 같은 도면을 AutoCAD가 R13·R14와 R2000~R2018 DXF로 쓴 짝에서 R13·R14 치수를 잰 값이 그 42와 같다). 잴 수 없으면 전처럼 뺀다
+    const measured = dimMeasurementOf(e);
+    if (Number.isFinite(measured)) w.t(42, measured);
     // 화살표 반전(130차): AutoCAD는 R2007+ DXF에 42 뒤 73·74·75를 늘 적는다 — 이 앱은 반전한 치수에만 적는다(나머지 출력은 그대로)
     if (ver >= 1021 && (e.flipArrow1 || e.flipArrow2)) {
       w.t(73, 0);
