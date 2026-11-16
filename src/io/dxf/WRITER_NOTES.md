@@ -90,7 +90,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 | ATTRIB·ATTDEF | R2010+ 버전 280, 잠금 280(R2007+), 74 세로 정렬. 여러 줄 속성(R2018)은 101 Embedded Object MTEXT. 그 전 버전은 AutoCAD처럼 한 줄 속성(글 = MTEXT 평문)과 확장 사전의 ACAD_MLATT·ACAD_XREC_ROUNDTRIP XRECORD(R2000+, `io/mlattr-write.ts` — DWG 쓰기도 같다) |
 | MTEXT | 250자 조각, 46 정의 높이(R2007+, 값이 있을 때), 배경(R2004+), 단(R2018 101 Embedded Object — R2000~R2013 꼴 단 묶음은 첫 단 자리의 한 객체로 합친다. R2013 이하는 단 정보를 ACAD 확장 자료로, 단이 둘 이상이면 단 객체로 나눈다 — `io/mtextcols.ts`. 나눌 근거가 없는 꼴은 `mtext.columns_dropped`) |
 | INSERT·MINSERT | 66·ATTRIB들·SEQEND. 행·열이 있으면 AcDbMInsertBlock |
-| DIMENSION | 종류별 하위 클래스(회전·정렬·2선 각도·지름·반지름·3점 각도·세로좌표), ARC_DIMENSION(AcDbArcDimension, 70 종류 값은 모든 버전에서 5 — AutoCAD 2026이 쓴 R2018 DXF로 확인, 다른 프로그램이 쓴 8은 읽을 때 5로), LARGE_RADIAL_DIMENSION(70 종류 값 9, 모델은 & 7로 가리는 4). 재지정(`overrides`)은 ACAD DSTYLE 확장 자료로(원래 확장 자료와 같으면 원래 순서 그대로) |
+| DIMENSION | 종류별 하위 클래스(회전·정렬·2선 각도·지름·반지름·3점 각도·세로좌표), ARC_DIMENSION(AcDbArcDimension, 70 종류 값은 모든 버전에서 5 — AutoCAD 2026이 쓴 R2018 DXF로 확인, 다른 프로그램이 쓴 8은 읽을 때 5로), LARGE_RADIAL_DIMENSION(70 종류 값 9, 모델은 & 7로 가리는 4). 재지정(`overrides`)은 ACAD DSTYLE 확장 자료로(원래 확장 자료와 같으면 원래 순서 그대로). 실제 측정값 42가 없으면(R2000 전 파일에서 읽음) 정의점으로 잰 값(138차 — DWG 쓰기와 같은 `dimMeasurementOf`, AutoCAD R2000+ DXF는 늘 적는다), 잴 수 없으면 뺀다 |
 | LEADER | 76 정점 수·10 정점, 340 주석, 210~213 |
 | MULTILEADER | CONTEXT_DATA{ … LEADER{ … LEADER_LINE{ … } } } 전체, 문자·블록 내용, 블록 속성(330·177·44·302). 모델에 없는 값은 `props`(읽을 때 남긴 값)나 AutoCAD 기본값 |
 | HATCH·MPOLYGON | 폴리선·모서리 경계(선·호·타원·스플라인), 연관 객체(330), 무늬 선, 씨앗 점, 그라데이션(R2004+). 모델의 호·타원 모서리 각도는 반시계로 정규화되어 있으므로 시계 방향(73 = 0) 모서리는 파일 규칙(보각, 시작·끝 바꿈)으로 되돌린다 |
