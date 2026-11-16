@@ -3,7 +3,7 @@
  * 정의점: 13 첫 치수보조선 원점, 14 둘째 원점, 10 치수선 위 점(둘째 보조선과 만나는 곳), 50 회전, 52 보조선 기울기.
  */
 import { type ArrowKind, arrowKind, drawArrow } from './arrows';
-import { type Out, type Rect, type TextPlace, cutSegment, extentAlong, textOnLine, textRect, verticalOffset } from './builder';
+import { type Out, type Rect, type TextPlace, cutSegment, extentAlong, parallel, textOnLine, textRect, verticalOffset } from './builder';
 import { decideFit } from './fit';
 import { type P, add, ang, dir, dist, dot, intersect, madd, mid, mul, neg, perp, project, sub, unit } from './vec';
 
@@ -68,6 +68,8 @@ export function linear(o: Out): void {
   /** 문자 쪽(1 첫 보조선, 2 둘째) — 바깥일 때 */
   let outSide: 1 | 2 = v.just === 1 || v.just === 3 ? 1 : 2;
   let leaderFrom: P | null = null;
+  /** DIMTMOVE 1 지시선과 밑줄(치수선 가운데 → 꺾는 점 → 밑줄 끝) */
+  let movedLeader: [P, P, P] | null = null;
   let freeText = false;
   if (text) {
     if (o.userText) {
@@ -82,8 +84,14 @@ export function linear(o: Out): void {
       } else {
         freeText = true;
         textInside = false;
-        place = { center: tm, angle: angOut };
-        if (v.tmove === 1) leaderFrom = mid(d1, d2);
+        const lt = v.tmove === 1 ? movedTextLeader(o, tm, text.box, angOut, lineAng, mid(d1, d2), side) : null;
+        if (lt) {
+          place = lt.place;
+          movedLeader = lt.leader;
+        } else {
+          place = { center: tm, angle: angOut };
+          if (v.tmove === 1) leaderFrom = mid(d1, d2);
+        }
       }
     } else if (textInside) {
       let base: P;
@@ -170,6 +178,10 @@ export function linear(o: Out): void {
   }
   for (const [a, b] of lines) o.line(a, b, pr);
   if (leaderFrom && place && text) leaderTo(o, leaderFrom, place, text.box);
+  if (movedLeader) {
+    o.line(movedLeader[0], movedLeader[1], pr);
+    o.line(movedLeader[1], movedLeader[2], pr);
+  }
 
   // 화살촉(1 = 첫 치수보조선 쪽). 반전한 화살촉은 반대쪽을 보고, 몸통 너머로 화살촉 길이만큼 선을 더하고
   // 원래 화살촉 자리(치수선을 자르던 길이)를 선으로 채운다
@@ -216,7 +228,31 @@ function flippedLines(o: Out, k: ArrowKind, at: P, body: P): void {
   o.line(at, madd(at, body, k.trim), pr);
 }
 
-/** 문자 이동(DIMTMOVE 1): 치수선에서 문자까지 지시선 */
+/**
+ * 사용자 위치 문자 + DIMTMOVE 1(지시선과 함께)에서 문자가 치수선과 나란할 때의 문자 자리와 지시선(133차 — 실제 도면 840개의
+ * AutoCAD 치수 블록에서 이 꼴인 지시선 31개·지시선 없는 2,787개와 견줌. 도움말 "Fit Tab"은 문자가 치수선에 너무 가까우면 지시선을 생략한다고만 한다):
+ * - 문자 중간점(DXF 11)은 문자 밑 자리다. 문자 가운데는 거기서 치수선 위 문자와 같은 자리(DIMTAD — DIMGAP + 문자 높이/2)만큼 비킨다.
+ * - 중간점이 치수선에서 DIMGAP + 1.1 × 문자 높이 안이면 지시선 없이 문자 가운데의 치수선 방향 자리를 중간점에 둔다
+ *   (실물 경계: 한 줄 문자 1.595 DIMASZ는 지시선 없음·1.695는 지시선, 여러 줄은 문자 높이를 따라 넓어짐 — 위·아래 같음).
+ * - 더 멀면 치수선 가운데에서 (중간점 − DIMGAP)까지 지시선, 거기서 문자 밑으로 문자 폭 + 2·DIMGAP 밑줄을 긋고,
+ *   문자는 중간점에서 치수선 가운데의 반대쪽으로 뻗는다.
+ * 나란하지 않은 문자(DIMTOH 수평·문자 회전)는 실물의 꼴이 달라(문자가 중간점 옆으로 비킴) null — 부르는 쪽이 전처럼 그린다
+ */
+function movedTextLeader(o: Out, tm: P, box: { w: number; h: number }, angle: number, lineAng: number, from: P, side: P): { place: TextPlace; leader: [P, P, P] | null } | null {
+  if (!parallel(angle, lineAng)) return null;
+  const v = o.v;
+  const ax = dir(angle);
+  const off = verticalOffset(o, box, angle, lineAng, side);
+  const rel = sub(tm, from);
+  if (Math.abs(dot(rel, perp(ax))) <= v.gap + 1.1 * box.h) return { place: { center: add(tm, off), angle }, leader: null };
+  const s = dot(rel, ax) < 0 ? -1 : 1;
+  return {
+    place: { center: add(madd(tm, ax, (s * box.w) / 2), off), angle },
+    leader: [from, madd(tm, ax, -s * v.gap), madd(tm, ax, s * (box.w + v.gap))],
+  };
+}
+
+/** 문자 이동(DIMTMOVE 1): 치수선에서 문자까지 지시선(문자가 치수선과 나란하지 않을 때 — movedTextLeader) */
 export function leaderTo(o: Out, from: P, place: TextPlace, box: { w: number; h: number }): void {
   const ax = dir(place.angle);
   const s = dot(sub(from, place.center), ax) < 0 ? -1 : 1;
