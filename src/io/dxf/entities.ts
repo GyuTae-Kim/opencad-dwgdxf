@@ -54,6 +54,7 @@ import type { DxfRecord, TagValue } from './records';
 import { DEG, Tags, handle, hexToBytes, int, name, num, parseColor, parseDimOverrides, parseXData, str } from './tagutil';
 import { parseArcAlignedText } from './arctext';
 import { applyMviewXData } from '../mview';
+import { applyMTextSaveXData } from '../dwg/xdata';
 
 export interface EntityContext {
   version: string;
@@ -1803,8 +1804,12 @@ export function parseEntity(rec: DxfRecord, ctx: EntityContext): Entity | null {
     case 'ATTRIB':
     case 'ATTDEF':
       return attrib(c, rec.type);
-    case 'MTEXT':
-      return mtextFrom(c);
+    case 'MTEXT': {
+      const m = mtextFrom(c);
+      // R2000 이하: 배경 칸이 없어 AutoCAD는 배경을 여러 줄 문자 저장 묶음(ACAD_MTEXT_BBRT)으로 남긴다(140차 — 줄 간격은 DXF 73·44에 있다)
+      if (m.xdata && ctx.version <= 'AC1015') applyMTextSaveXData(m, false, true);
+      return m;
+    }
     case 'INSERT':
       return insert(c);
     case 'DIMENSION':

@@ -27,7 +27,7 @@ import { annoDimWriteXData, ctxRecordsOf } from '../../annoscale';
 import type { PBlock, PEnt, WCtx } from './context';
 import { HARD_OWNER, HARD_PTR, SOFT_PTR, type EntCommonOut, type ObjWriter } from './objwriter';
 import { eedOf, wcolor } from './common';
-import { roundTripXDataForR2000, withoutRoundTripXData } from '../xdata';
+import { mtextSaveXDataForR2000, roundTripXDataForR2000, withoutRoundTripXData } from '../xdata';
 import { lwIndex } from './util';
 import { tableKey } from '../../../core/model';
 import { lwCount, lwHasBulge, vertCount } from '../../../core/lwpoly';
@@ -172,14 +172,16 @@ export class EntityWriter {
 
   /**
    * 객체 시작과 확장 자료. R2000은 칸이 없는 트루컬러를 ACAD 왕복 확장 자료로 남기고(138차), R2004+는 제 칸에 쓰는 선가중치·색의
-   * 왕복 묶음(RTLwPs·RTTcAl)을 뺀다(139차 — xdata.ts)
+   * 왕복 묶음(RTLwPs·RTTcAl)을 뺀다(139차 — xdata.ts). MTEXT의 여러 줄 문자 저장 묶음은 R2000에 두되 모델 배경과 다른 배경 묶음을 빼고,
+   * R2004+에서는 뺀다(140차 — 값은 제 칸에)
    */
   private begin(type: number, h: number, e: { xdata?: Entity['xdata'] } & Partial<Pick<Entity, 'type' | 'color' | 'lineweight' | 'transparency'>>): void {
     let xd = e.xdata;
     if (this.ver < R2004) {
+      if (e.type === 'MTEXT' && xd?.length) xd = mtextSaveXDataForR2000(xd, e as MTextEntity);
       if (e.type && e.color && (e.color.rgb !== undefined || xd?.length))
         xd = roundTripXDataForR2000(xd, { type: e.type, color: e.color, lineweight: e.lineweight ?? -1, transparency: e.transparency }, wcolor(this.ctx, e.color).index);
-    } else if (xd?.length) xd = withoutRoundTripXData(xd);
+    } else if (xd?.length) xd = withoutRoundTripXData(xd, e.type === 'MTEXT');
     this.ow.begin(type, h, eedOf(this.ctx, xd));
   }
 
