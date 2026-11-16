@@ -1,5 +1,5 @@
 /**
- * 치수 편집 계산: DIMEDIT(홈·새 문자·회전·기울기), DIMTEDIT(왼쪽·오른쪽·중심·홈·각도), DIMSPACE(간격 맞춤).
+ * 치수 편집 계산: DIMEDIT(홈·새 문자·회전·기울기), DIMTEDIT(왼쪽·오른쪽·중심·홈·각도), 화살표 반전(AIDIMFLIPARROW), DIMSPACE(간격 맞춤).
  * 모두 새 치수 객체를 돌려준다(블록은 부르는 쪽이 다시 만든다).
  */
 import type { CadDocument, DimensionEntity, Vec3 } from '../../core/model';
@@ -122,6 +122,29 @@ export function dimJustify(d: DimensionEntity, side: 'L' | 'R' | 'C'): Dimension
   }
   const c = applyOverrides(d, { 280: just });
   c.dimType &= ~128;
+  return c;
+}
+
+// ---------------------------------------------------------------------------
+// 화살표 반전(AIDIMFLIPARROW, 131차)
+// ---------------------------------------------------------------------------
+
+/**
+ * 고른 점에 가까운 화살표(1 첫 치수보조선 쪽, 2 둘째): 선형·정렬 치수의 치수선 두 끝 가운데 가까운 쪽(같으면 첫째).
+ * AutoCAD 도움말 "To Flip the Direction of an Arrowhead" — 뒤집을 화살표 가까이에서 치수를 고른다. 그 밖의 종류는 null
+ */
+export function nearerArrow(d: DimensionEntity, pick: P): 1 | 2 | null {
+  if (!isLinearDim(d)) return null;
+  const { d1, d2 } = linearFeetW(d);
+  return len(sub(pick, d1)) <= len(sub(pick, d2)) ? 1 : 2;
+}
+
+/** 화살표 하나의 반전을 뒤집은 새 치수(반전한 것만 깃발을 둔다 — 다시 부르면 되돌아간다) */
+export function dimFlipArrow(d: DimensionEntity, which: 1 | 2): DimensionEntity {
+  const c = structuredClone(d);
+  const key = which === 1 ? 'flipArrow1' : 'flipArrow2';
+  if (c[key]) delete c[key];
+  else c[key] = true;
   return c;
 }
 

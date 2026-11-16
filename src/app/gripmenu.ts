@@ -4,7 +4,7 @@
  *
  *  - gripOptions: 그립 하나의 옵션(신축이 첫 옵션). 폴리선 정점 추가·제거·호로/선으로 변환, 선·호 길이 조정, 호 반지름,
  *    스플라인 맞춤점·정점 추가·제거·정련·접선 방향, 치수 문자 옮기기(치수선과 함께·문자만·지시선과 함께)·치수선 위·수직 가운데·
- *    문자 위치 재설정, 치수선 끝의 연속·기준선 치수. 형상 계산은 src/edit/geom/gripops.ts.
+ *    문자 위치 재설정, 치수선 끝의 연속·기준선 치수·화살표 반전. 형상 계산은 src/edit/geom/gripops.ts.
  *  - registerGripMenu: 메뉴 항목을 고리로 단다. 항목은 그 그립을 핫 그립으로 GRIPEDIT를 시작한다(arg = 'opt:열쇠' — 옵션을 바로 실행,
  *    확정은 명령 취소 한 단계). 연속·기준선 치수는 그 치수로 DIMCONTINUE·DIMBASELINE을 시작한다.
  *  - ctrlHeld: 지금 Ctrl(⌘)을 누르고 있는지(그립 편집에서 Ctrl을 누른 채 찍으면 복사·간격 배수 스냅)
@@ -13,7 +13,8 @@
  */
 import type { CadDocument, DimensionEntity, Entity, SplineEntity } from '../core/model';
 import { formatAngle, formatLength, type UnitSettings } from '../core/units';
-import { generateDimensionGeometry } from '../edit/dim';
+import { drawsFlippedArrow, generateDimensionGeometry } from '../edit/dim';
+import { dimFlipArrow } from '../edit/annot/dimedit';
 import type { EditResult } from '../edit/geom';
 import {
   type GripDim,
@@ -170,13 +171,16 @@ function dimOptions(app: App, e: DimensionEntity, id: string, doc: CadDocument):
       home,
     ];
   }
-  // 치수선 끝: 선형·정렬 치수의 연속·기준선 치수(그 치수를 기준으로 DIMCONTINUE·DIMBASELINE)
+  // 치수선 끝: 선형·정렬 치수의 연속·기준선 치수(그 치수를 기준으로 DIMCONTINUE·DIMBASELINE)와
+  // 화살표 반전(131차 — 이 그립은 둘째 치수보조선 쪽 화살표, 이 앱이 반전해 그리는 화살촉일 때만 — dimflip.ts)
   if (id === 'defPoint' && (kind === 0 || kind === 1) && !e.subtype) {
-    return [
+    const out: GripOption[] = [
       STRETCH,
       { key: 'CO', label: '연속 치수', kind: 'command', start: () => startFromDimension(app, e.handle, 'DIMCONTINUE') },
       { key: 'BA', label: '기준선 치수', kind: 'command', start: () => startFromDimension(app, e.handle, 'DIMBASELINE') },
     ];
+    if (drawsFlippedArrow(doc, e, 2)) out.push({ key: 'FL', label: '화살표 반전', kind: 'now', apply: () => ({ replace: [dimFlipArrow(e, 2)] }) });
+    return out;
   }
   return [];
 }

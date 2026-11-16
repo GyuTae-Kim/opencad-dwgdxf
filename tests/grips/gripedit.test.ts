@@ -173,7 +173,8 @@ describe('다기능 그립 메뉴', () => {
     expect(labels(l, 'mid')).toEqual([]);
     const d = h.add(createLinearDimension(h.doc, P(0, 0), P(10, 0), P(5, 5)));
     expect(labels(d, 'textMid')).toEqual(['신축', '치수선과 함께 이동', '문자만 이동', '지시선과 함께 이동', '치수선 위', '수직 가운데', '문자 위치 재설정']);
-    expect(labels(d, 'defPoint')).toEqual(['신축', '연속 치수', '기준선 치수']);
+    // 131차: 치수선 끝(둘째 화살표)의 화살표 반전
+    expect(labels(d, 'defPoint')).toEqual(['신축', '연속 치수', '기준선 치수', '화살표 반전']);
   });
 
   it('고리: 항목은 그 그립으로 GRIPEDIT(opt:열쇠)를, 연속 치수는 그 치수를 직전 치수로 DIMCONTINUE를 시작', () => {

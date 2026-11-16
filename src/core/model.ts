@@ -411,7 +411,8 @@ export interface DimensionEntity extends EntityBase {
   overrides?: Record<number, string | number>;
   /**
    * 첫째·둘째 화살표 반전(DXF 74·75, R2007+ DWG의 비트 — AutoCAD "화살표 반전" AIDIMFLIPARROW). 켠 것만 둔다(130차).
-   * 치수 그림 블록은 그대로 그리고, 이 앱이 블록을 다시 만들 때는 아직 반전을 그리지 않는다(값은 저장에 그대로 옮긴다)
+   * 치수 그림 블록은 그대로 그리고, 이 앱이 블록을 다시 만들 때는 회전 선형 치수의 닫고 채운 화살촉만 반전해 그린다(131차, edit/dim/linear.ts —
+   * 다른 종류·화살촉은 반전 없이 그리고 값은 저장에 그대로 옮긴다)
    */
   flipArrow1?: boolean;
   flipArrow2?: boolean;
