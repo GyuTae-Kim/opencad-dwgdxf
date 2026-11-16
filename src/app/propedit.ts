@@ -9,7 +9,7 @@ import { formatAngle, formatLength, parseAngle, parseLength, type UnitSettings }
 import type { EditOp } from '../edit/session';
 import { cloneEntity } from '../edit/session';
 import type { App } from './app';
-import { colorText, lineweightText } from './inquiry';
+import { colorText, dimMeasurement, lineweightText } from './inquiry';
 import { followOps } from './dimassoc';
 import { afterEditSolve } from './constraints-hook';
 import { lwCount, lwVertices, tidyWidths } from '../core/lwpoly';
@@ -383,7 +383,8 @@ export const DIMENSION_FIELDS: Field[] = [
       (e as DimensionEntity).text = t === '<>' ? '' : t;
     },
   },
-  { label: '측정값', kind: 'number', readonly: true, get: (e) => (e as DimensionEntity).measurement, set: () => undefined },
+  // 파일에 측정값이 없는 치수(R2000 전 DWG·DXF)는 정의점으로 잰 값(136차 — 전에는 R13·R14 DWG 0, DXF NaN)
+  { label: '측정값', kind: 'number', readonly: true, get: (e) => dimMeasurement(e as DimensionEntity), set: () => undefined },
   dimVarField('문자 높이', 'DIMTXT'),
   dimVarField('화살표 크기', 'DIMASZ'),
   dimVarField('치수 축척 전체', 'DIMSCALE', 'number'),

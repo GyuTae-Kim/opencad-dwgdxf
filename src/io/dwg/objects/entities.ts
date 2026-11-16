@@ -1173,7 +1173,9 @@ function readDimension(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Nam
   let attachment = 5;
   let lineSpacingStyle = 1;
   let lineSpacingFactor = 1;
-  let measurement = 0;
+  // R2000 전 DWG에는 실제 측정값 칸이 없다(136차): AutoCAD가 같은 도면을 쓴 R13·R14 DXF에도 42가 없어 DXF·R12 리더처럼 NaN(없음)으로 둔다.
+  // 전에는 0이라 특성 창 측정값·표시 문자가 0이었다(재야 하면 edit/geom/dimmeasure.ts)
+  let measurement = NaN;
   if (ver >= R2000) {
     attachment = r.BS();
     lineSpacingStyle = r.BS();
