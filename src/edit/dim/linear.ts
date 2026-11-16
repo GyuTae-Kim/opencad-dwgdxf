@@ -51,7 +51,17 @@ export function linear(o: Out): void {
   const angOut = o.textAngle(lineAng, v.toh);
   const alongIn = text ? extentAlong(text.box, angIn, lineAng) : 0;
   const alongOut = text ? extentAlong(text.box, angOut, lineAng) : 0;
-  const fit = decideFit(o, L, text ? alongIn + 2 * v.gap : 0, Math.max(k1.size, k2.size) * 2);
+  // 맞춤(132차 — 실제 도면 840개의 AutoCAD 블록과 견줌, fit.ts FitSpace): 화살촉은 2·DIMGAP을 더한 자리가 있어야 안에 들고,
+  // 제자리 문자가 치수선 위·아래(DIMTAD)면 문자와 화살촉이 저마다 들어가면 둘 다 안이다.
+  // 옮긴 문자(사용자 위치 + DIMTMOVE 1, 또는 DIMTMOVE 2에 DIMATFIT 3이 아닌 것)는 치수선 자리를 차지하지 않고(폭 0),
+  // DIMATFIT 0·1에서 문자 중간점이 치수보조선 밖이면 화살촉도 밖이다
+  const moved = !!text && o.userText && (v.tmove === 1 || (v.tmove === 2 && v.atfit !== 3));
+  const offLine = !!text && !o.userText && !textOnLine(o, angIn, lineAng);
+  const fit = decideFit(o, L, text ? (moved ? 0 : alongIn) + 2 * v.gap : 0, Math.max(k1.size, k2.size) * 2, { arrowGap: true, textOffLine: offLine });
+  if (moved && !v.tix && v.atfit <= 1 && fit.arrowsInside) {
+    const t = dot(sub(o.o(d.textMid), d1), ux);
+    if (t < 0 || t > L) fit.arrowsInside = false;
+  }
 
   let place: TextPlace | null = null;
   let textInside = fit.textInside;
