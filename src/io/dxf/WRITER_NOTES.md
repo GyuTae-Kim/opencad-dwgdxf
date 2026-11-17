@@ -80,6 +80,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 (허용 값으로 맞춤, `entity.lineweight_fixed`)·48 선종류 축척·60 숨김·390 플롯 스타일, 그다음 하위 클래스 자료와
 확장 자료(등록된 APPID만, 하이퍼링크는 PE_URL로). R12는 하위 클래스 표지·소유자·R2000+ 코드를 쓰지 않는다.
 옛 판 DWG의 ACAD 왕복 묶음 RTLwPs·RTTcAl은 어느 판이든 쓰지 않는다(139차 — 읽을 때 제 칸으로 옮겼고, AutoCAD가 쓴 DXF R12~R2018에 없다. `io/dwg/xdata.ts`).
+재질 핸들 묶음 RTMaterial은 가리키는 객체를 쓰지 않으면 뺀다 — DWG에서 읽은 MATERIAL은 쓰지 않으므로 DWG 원본에서는 늘 빠진다(141차, AutoCAD가 쓴 DXF에 0/133쌍).
 MTEXT의 여러 줄 문자 저장 묶음(MTEXTBEGIN·ACAD_MTEXT_BBRT)은 R2000 DXF에만 AutoCAD처럼 모든 MTEXT에 두고(없으면 제 칸 줄 간격으로 만들고, 표본 꼴 배경에 BBRT,
 모델 배경과 다른 BBRT는 뺀다), 다른 판에서는 꼴이 맞는 묶음을 뺀다(140차 — AutoCAD가 쓴 DXF는 R2000 판에만 있다. `io/dwg/xdata.ts`).
 
@@ -99,7 +100,7 @@ MTEXT의 여러 줄 문자 저장 묶음(MTEXTBEGIN·ACAD_MTEXT_BBRT)은 R2000 D
 | HATCH·MPOLYGON | 폴리선·모서리 경계(선·호·타원·스플라인), 연관 객체(330), 무늬 선, 씨앗 점, 그라데이션(R2004+). 모델의 호·타원 모서리 각도는 반시계로 정규화되어 있으므로 시계 방향(73 = 0) 모서리는 파일 규칙(보각, 시작·끝 바꿈)으로 되돌린다 |
 | SOLID·TRACE·3DFACE | 그대로(3DFACE 70 숨긴 모서리) |
 | IMAGE·WIPEOUT | IMAGEDEF·IMAGEDEF_REACTOR 연결, 경계가 없으면 이미지 사각형 |
-| VIEWPORT | R2000+ 전체 자료, 동결 도면층 이름 → 341 핸들. R12는 ACAD MVIEW 확장 자료 |
+| VIEWPORT | R2000+ 전체 자료, 동결 도면층 이름 → 341 핸들. R12~R14에서 읽은 ACAD MVIEW 묶음은 R2000+에서 뺀다(141차 — AutoCAD가 쓴 R2000+ DXF에 0/78쌍). R12는 ACAD MVIEW 확장 자료(읽은 묶음이 있으면 그대로, 없으면 모델로 만든다) |
 | MLINE | 스타일 핸들(없으면 Standard), 정점마다 요소 매개변수 |
 | TOLERANCE·SHAPE | 그대로. SHAPE 이름을 모르면(DWG는 번호만 있다) AutoCAD처럼 2 대신 쉐이프 번호를 70에 쓴다(R12는 자리가 없어 `entity.shape_dropped`) |
 | ACAD_TABLE | 블록 참조 부분은 모델에서. 표 자료는 같은 형식 계열(R2004까지 / R2007+)의 원본 태그가 있으면 그대로(342 표 스타일·343 블록 레코드는 다시 정함), 없으면 셀 배치(`io/tablecells.ts`)로 만든다: 병합(173 덮인 셀, 175·176 기준 셀의 열·행), 셀 재지정(R2007+ 91 / 그 전 177 플래그, 170 정렬, 63 배경색 + 283 0, 64 문자 색, 7 문자 스타일, 140 높이). 앱 표는 OPENCAD_TABLE + 표 스타일(행 종류)에서, AutoCAD 표는 원본 태그에서 온다. `table.synthesized`는 앱 표가 아닐 때만(다른 형식 계열로 옮겨 테두리 재지정이 빠지거나 셀 서식을 모를 때) |

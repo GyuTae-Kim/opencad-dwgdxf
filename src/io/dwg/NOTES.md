@@ -107,7 +107,7 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
   맞춤점이 (0, 0)일 때만 0x02를 쓰고, 왼쪽 맞춤이 아닌데 맞춤점이 없으면 삽입점을 맞춤점으로 쓴다(그리기가 삽입점을 쓰는 것과 같게).
 - 2D 폴리선 정점 Z는 폴리선 고도로 채운다. 폴리페이스 면 번호는 끝의 0을 뺀다(DXF와 같게).
 - 배치 블록 도형(속성 포함)은 `paperSpace = true`. VIEWPORT `id`는 배치마다 1부터, `status`도 같은 값.
-- R13·R14 VIEWPORT 보기 정보는 ACAD "MVIEW" 확장 자료에서 읽는다(`io/mview.ts`, R12 DXF·R12 DWG와 같은 해석).
+- R13·R14 VIEWPORT 보기 정보는 ACAD "MVIEW" 확장 자료에서 읽는다(`io/mview.ts`, R12 DXF·R12 DWG와 같은 해석). 쓸 때(R2000+)는 제 칸에 쓰고 묶음은 뺀다(141차, 아래 쓰기 규칙).
 - R12(`r12.ts`)가 형식 설명(`dwg_ac1009.ksy`)과 다른 곳(실제 파일로 확인): 정점도 추가 플래그가 색·고도보다 먼저다.
   구역 크기와 블록 주소는 맨 위 두 비트만 표시(0x40)이고 나머지가 값이다(16MB가 넘는 블록 구역이 있다). 헤더 변수 위치는 설명의 순서대로 세면 맞고
   주석의 오프셋 몇 개가 틀렸다. 익명 블록 이름은 표 이름 + 표 번호(AutoCAD DXF와 같다), 치수 문자 공백 한 칸은 빈 글이다.
@@ -131,7 +131,7 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
 - 하이퍼링크(PE_URL), 도면층 설명(AcAecLayerStandard), 도면층 투명도(AcCmTransparency), 문자 스타일 글꼴(ACAD 1000·1071)은 확장 자료에서 꺼낸다.
 - 옛 판 도형의 AutoCAD 왕복 확장 자료(137차 — 같은 도면을 AutoCAD가 여러 판으로 쓴 표본으로 확인, `xdata.ts`): R13·R14 ACAD "RTLwPs" 1070 = 0x80 | 선가중치 번호,
   R2000 이하 "RTTcAl" 1070 = R2004+ ENC 낱말(플래그·색 번호), 1071 = 0xC2RRGGBB, 다음 1000 = 색상표 이름 또는 `$$NoName$$`. 선가중치·트루컬러를 여기서 읽고
-  자료는 그대로 둔다. "RTMaterial"(1005 재질 핸들)과 RTTcAl의 투명도 플래그(값 없음)는 쓰지 않는다. R2000·R2004+로 쓸 때의 정리는 아래 쓰기 규칙(138·139차).
+  자료는 그대로 둔다. "RTMaterial"(1005 재질 핸들)과 RTTcAl의 투명도 플래그(값 없음)는 쓰지 않는다. R2000·R2004+로 쓸 때의 정리는 아래 쓰기 규칙(138·139·141차).
 - 옛 판 MTEXT의 여러 줄 문자 저장 묶음(140차, `xdata.ts` `applyMTextSaveXData`): ACAD "MTEXTBEGIN" (1070 73, 1070 줄 간격 방식)(1070 44, 1040 배수)(1070 74, 1070 0) "MTEXTEND" —
   AutoCAD는 R14·R2000 DWG와 R2000 DXF의 모든 MTEXT에 두고(실제 도면 R2000 DWG 65/65·DXF 64/64, 값은 제 칸과 같다) 줄 간격 칸이 없는 R14 이하에서는 이것이 그 값이다.
   "ACAD_MTEXT_BBRT" (1071 91 배경 플래그)(1040 46 배율)(1071 64 0xC2RRGGBB)(1000 65·66 이름)(1071 442 0) "ACAD_MTEXT_BERT" — 배경 칸이 없는 R2000 이하의 배경 채우기
@@ -262,7 +262,12 @@ R2007 이전으로 쓸 때 도면 코드 페이지로 못 쓰는 글자가 있�
   제 칸 선가중치와 같은 RTLwPs는 뺀다(R2000 판에 없다). 정점·SEQEND·BLOCK·ENDBLK에는 붙이지 않는다(표본 없음 — 이 앱은 폴리선 색만 읽는다).
 - R2004+ 도형에는 꼴이 맞는 RTLwPs·RTTcAl 묶음을 남기지 않는다(139차, `xdata.ts` `withoutRoundTripXData` — DXF 쓰기도 모든 판에서 같다). AutoCAD가 같은 도면을
   여러 판으로 쓴 표본 세 무리에서 R2004+ DWG에 RTLwPs 0/980쌍·RTTcAl 0/220쌍. 묶음만 있던 ACAD 자료는 통째로 빼고 나머지 ACAD 묶음은 차례 그대로 둔다.
-  RTMaterial은 남긴다(AutoCAD는 R2007+에서 재질 칸으로 옮긴다 — 이 앱은 읽지 않는다).
+  RTMaterial은 R2004에 남기고(AutoCAD도 남긴다) R2007+에서는 아래 141차 규칙.
+- R2007+ 도형에는 출력에 쓰지 않는 객체를 가리키는 RTMaterial을 남기지 않는다(141차, `withoutRoundTripXData(…, written)` — `ctx.ref`가 0인 핸들).
+  AutoCAD는 R2007+에서 재질 칸으로 옮기고(같은 도면을 여러 판으로 쓴 표본 두 무리에서 R2007+ DWG에 0/57쌍), 이 앱은 MATERIAL을 다른 판으로 옮기지 않아 그 핸들은 늘 끊긴다.
+  R2000·R2004에는 AutoCAD처럼 남긴다(26/26쌍 — 다른 판이면 가리키는 MATERIAL은 빠진다). 가리키는 객체를 쓰면 그대로 둔다.
+- VIEWPORT의 MVIEW 묶음은 모든 판(R2000+)에서 뺀다(141차, `io/mview.ts` `withoutMviewXData` — 보기 정보는 제 칸에 쓰고, AutoCAD R2000+ DWG에 0/65쌍).
+  안쪽 동결 도면층 중괄호까지 빼고, 묶음만 있던 ACAD 자료는 통째로, 중괄호가 맞지 않으면 그대로 둔다.
 - MTEXT의 여러 줄 문자 저장 묶음(140차, `xdata.ts`): R2004+에는 꼴이 맞고 모델에 없는 값이 없는 MTEXTBEGIN·BBRT를 남기지 않는다(`withoutRoundTripXData(…, true)` —
   AutoCAD R2004+ DWG에 0/520쌍. 74 ≠ 0, 이름 65·66, 442 ≠ 0이면 남긴다). R2000에는 AutoCAD처럼 모든 MTEXT에 둔다(`mtextSaveXDataForR2000`): MTEXTBEGIN이 없으면 제 칸
   줄 간격으로 만들고(BBRT·ACAD_MTEXT_DEFINED_HEIGHT 앞, 없으면 ACAD 자료 끝 — 단 정보·RT 묶음 뒤, ACAD 자료가 없으면 다른 앱 뒤), 표준 꼴인데 제 칸과 다르면 고친다.
