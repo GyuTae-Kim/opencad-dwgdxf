@@ -153,18 +153,20 @@ export function roundTripXDataForR2000(
  * AutoCAD가 같은 도면을 여러 판으로 쓴 세 무리(LibreDWG example·Leader, ACadSharp sample)에서 옛 판 RT 객체 ↔ 같은 핸들 새 판 객체:
  * RTLwPs는 R2004+ DWG 980쌍·DXF(R12~R2018) 1,602쌍, RTTcAl은 R2004+ DWG 220쌍·DXF 308쌍 모두 없다. 묶음만 있던 도형은 ACAD 자료째 없다.
  * 꼴이 맞는 묶음만 뺀다(1070이 0x80 | 번호가 아닌 RTLwPs, 1070·1071이 뒤따르지 않는 RTTcAl은 그대로). 나머지 ACAD 자료는 그대로 둔다.
- * RTMaterial은 이 앱이 재질 칸으로 옮기지 않아 남긴다(AutoCAD는 R2007+ DWG에서 재질 칸으로 옮기고 DXF에는 쓰지 않는다).
+ * RTMaterial(1005 재질 핸들)은 written이 있을 때만 본다(141차 — droppableRtMaterial).
  * @param mtext MTEXT를 R2004+ DWG나 R2000이 아닌 DXF로 쓴다: 여러 줄 문자 저장 묶음(MTEXTBEGIN·ACAD_MTEXT_BBRT)도 뺀다(140차 — droppableMTextSave)
+ * @param written R2007+ DWG나 DXF로 쓴다: 그 핸들의 객체를 출력에 쓰는지. 쓰지 않는 재질을 가리키는 RTMaterial을 뺀다
  * @returns 바뀌지 않으면 받은 배열 그대로
  */
-export function withoutRoundTripXData(xdata: XData[] | undefined, mtext = false): XData[] | undefined {
+export function withoutRoundTripXData(xdata: XData[] | undefined, mtext = false, written?: (handle: string) => boolean): XData[] | undefined {
   const ai = xdata ? xdata.findIndex((d) => d.app.toUpperCase() === 'ACAD') : -1;
   if (ai < 0) return xdata;
   const items = xdata![ai]!.items;
   let out: XDataItem[] | undefined;
   for (let i = 0; i < items.length; ) {
     const it = items[i]!;
-    const n = it.code !== 1000 ? 0 : rtGroupLength(items, i) || (mtext ? droppableMTextSave(items, i) : 0);
+    const n =
+      it.code !== 1000 ? 0 : rtGroupLength(items, i) || (mtext ? droppableMTextSave(items, i) : 0) || (written ? droppableRtMaterial(items, i, written) : 0);
     if (n) {
       out ??= items.slice(0, i);
       i += n;
@@ -183,6 +185,19 @@ function withAcadItems(xdata: XData[], ai: number, out: XDataItem[] | undefined)
   if (out.length) list[ai] = { app: xdata[ai]!.app, items: out };
   else list.splice(ai, 1);
   return list.length ? list : undefined;
+}
+
+/**
+ * items[i]가 쓰지 않는 객체를 가리키는 "RTMaterial"(1000 이름, 1005 재질 핸들)이면 2, 아니면 0(141차).
+ * AutoCAD는 R2004 이하 DWG에 칸이 없는 도형 재질을 이 묶음으로 남기고, 같은 도면을 R2007+ DWG로 쓸 때는 재질 칸으로 옮기며
+ * DXF에는 어느 판이든 쓰지 않는다(같은 도면을 여러 판으로 쓴 두 무리 — 옛 판 RTMaterial 도형 ↔ 같은 핸들: R2007+ DWG 57쌍·DXF 133쌍 모두 없음,
+ * R2000·R2004 DWG 26쌍은 모두 남음). 이 앱은 가리키는 MATERIAL 객체를 같은 판으로 쓸 때만 옮기므로 R2007+ DWG·DXF 출력에서 이 핸들은 늘 끊긴다 —
+ * 그런 묶음만 뺀다(가리키는 객체를 쓰면 그대로 둔다)
+ */
+function droppableRtMaterial(items: readonly XDataItem[], i: number, written: (handle: string) => boolean): number {
+  if (items[i]!.value !== 'RTMaterial') return 0;
+  const h = items[i + 1];
+  return h?.code === 1005 && typeof h.value === 'string' && !written(h.value) ? 2 : 0;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,34 @@
 /** R12·R13·R14 VIEWPORT의 보기 정보: ACAD 확장 자료 "MVIEW"(R12 DXF·R12 DWG·R13·R14 DWG가 같은 순서) */
-import type { Vec3, ViewportEntity } from '../core/model';
+import type { Vec3, ViewportEntity, XData } from '../core/model';
+
+/**
+ * R2000+ DWG·DXF로 쓸 VIEWPORT의 ACAD 확장 자료에서 "MVIEW" 묶음(1000 "MVIEW", 1002 "{" … 1002 "}")을 뺀다(141차).
+ * R2000+ VIEWPORT는 보기 정보를 제 칸에 쓰고(읽을 때 applyMviewXData가 모델로 옮겼다), AutoCAD는 같은 도면을 R2000+ DWG·DXF로 쓸 때
+ * 이 묶음을 남기지 않는다(같은 도면을 여러 판으로 쓴 두 무리의 R12·R13·R14 뷰포트 ↔ 같은 핸들: R2000+ DWG 65쌍·DXF 78쌍에 모두 없고
+ * R12 DXF에는 남는다). 묶음만 있던 ACAD 자료는 통째로 뺀다. 중괄호가 맞지 않는 묶음은 그대로 둔다.
+ * @returns 바뀌지 않으면 받은 배열 그대로
+ */
+export function withoutMviewXData(xdata: XData[] | undefined): XData[] | undefined {
+  const ai = xdata ? xdata.findIndex((d) => d.app.toUpperCase() === 'ACAD') : -1;
+  if (ai < 0) return xdata;
+  const items = xdata![ai]!.items;
+  const i = items.findIndex((t) => t.code === 1000 && t.value === 'MVIEW');
+  if (i < 0 || items[i + 1]?.code !== 1002 || items[i + 1]!.value !== '{') return xdata;
+  let depth = 0;
+  for (let j = i + 1; j < items.length; j++) {
+    const t = items[j]!;
+    if (t.code !== 1002) continue;
+    if (t.value === '{') depth++;
+    else if (t.value === '}' && --depth === 0) {
+      const out = [...items.slice(0, i), ...items.slice(j + 1)];
+      const list = [...xdata!];
+      if (out.length) list[ai] = { app: xdata![ai]!.app, items: out };
+      else list.splice(ai, 1);
+      return list.length ? list : undefined;
+    }
+  }
+  return xdata;
+}
 
 /**
  * 버전, 대상점, 방향, 비틀기, 높이, 중심 x·y, 렌즈, 앞·뒤 자르기, 보기 모드, 원 확대, 빠른 확대, UCS 아이콘, 스냅, 격자,

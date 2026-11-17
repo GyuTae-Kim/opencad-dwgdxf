@@ -3,6 +3,45 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-17(141차): 새 판으로 쓸 때 끊긴 재질 핸들(RTMaterial)과 옛 판 뷰포트의 보기 정보 묶음(MVIEW) 빼기
+
+### 고른 까닭
+140차가 남긴 왕복 확장 자료의 남은 일(RTMaterial·R14 꼴 DSTYLE)과 같은 도면 DWG·DXF 짝의 남은 차이를, 같은 도면을 AutoCAD가 여러 판으로 쓴 공개 표본 두 무리
+(LibreDWG 예제·ACadSharp 표본)와 실제 도면 841개로 다시 갈랐습니다(하네스는 저장소에 넣지 않음). 옛 판 원본을 이 앱으로 다른 판에 쓰고 AutoCAD가 같은 판으로 쓴
+파일의 같은 핸들 객체와 견줬습니다.
+- RTMaterial(R2004 이하 DWG 도형의 재질 — ACAD 1000 "RTMaterial", 1005 MATERIAL 핸들): AutoCAD는 R2000·R2004 DWG에는 남기고(26쌍 모두) R2007+ DWG(57쌍 — 재질 칸으로
+  옮김)와 DXF R12~R2018(133쌍)에는 쓰지 않습니다. 이 앱은 가리키는 MATERIAL 객체를 같은 판으로 쓸 때만 옮기므로 R2007+ DWG·DXF 출력의 이 핸들은 가리킬 객체가
+  없었습니다(실제 도면 16개 524객체 — R2018 DWG·DXF 출력에서 모두 끊김) → ①
+- MVIEW(R12~R14 VIEWPORT의 보기 정보 — 대상·방향·중심·높이·스냅·격자·동결 도면층): AutoCAD는 R13·R14 DWG와 R12~R14 DXF에만 두고 R2000+ DWG(65쌍)·DXF(78쌍)에는
+  쓰지 않습니다(제 칸에). 이 앱은 읽을 때 모델로 옮기면서도 R2000+ 출력에 그대로 옮겨 썼습니다(실제 도면 9개, 뷰포트 20개) → ②
+- 하지 않은 것: RTMaterial을 R2007+ 재질 칸으로 옮기기(다른 판으로 쓸 때 MATERIAL 객체를 옮기지 않아 가리킬 객체가 없음), R14 꼴 DSTYLE(블록 이름 → 핸들, 빠지는 칸 등
+  규칙이 여럿이고 표본 객체 6개), R2018에서만 빠지는 AcDbSavedByObjectVersion(도면마다 한 객체, 뜻 모름)·R13 해치 묶음(실제 R2018 도면에도 남아 있어 규칙 불명).
+  짝 대조의 남은 칸(맞춤점 스플라인 매듭, 치수 문자 공백, MTEXT 기호 표기 등)은 다시 보아도 형식 차이였습니다.
+
+### 고친 것
+- ① R2007+ DWG와 모든 판 DXF로 쓸 때 출력에 쓰지 않는 객체를 가리키는 RTMaterial을 뺍니다(가리키는 객체를 쓰면 그대로, 1005가 뒤따르지 않는 꼴도 그대로 —
+  `io/dwg/xdata.ts` `withoutRoundTripXData(…, written)`, `io/dwg/writer/entities.ts`, `io/dxf/wentities.ts`). R2000·R2004 DWG에는 AutoCAD처럼 남깁니다.
+- ② R2000+ DWG·DXF로 쓸 때 VIEWPORT의 MVIEW 묶음을 뺍니다(`io/mview.ts` `withoutMviewXData` — 안쪽 동결 도면층 중괄호까지, 중괄호가 맞지 않으면 그대로).
+  R12 DXF는 읽은 묶음을 그대로 씁니다.
+
+### 확인
+- ①: 표본 옛 판 원본(R13·R14·R2000·R2004 DWG)의 RTMaterial 도형 ↔ AutoCAD 같은 판의 같은 핸들, 확장 자료 같음: R2007+ DWG 0 → 57/57, R2000+ DXF 0 → 114/114,
+  R12 DXF 0 → 15/19(남은 4는 묶음 밖 재질 매퍼 자료), R2000·R2004 DWG 26/26 그대로.
+- ②: 표본 옛 판 원본(R13·R14 DWG, R12 DXF)의 뷰포트 ↔ AutoCAD 같은 판: R2000+ DWG 0 → 65/65, R2000+ DXF 0 → 78/78, R12 DXF 3/4 그대로(남은 1은 R13 원본의 빠른 확대 칸).
+  두 고침 모두 같았다가 달라진 것 0, 기준 ↔ 새 출력의 도형 값 바뀜 0(표본 DWG 35,758·DXF 47,789 도형), 대상 밖 확장 자료 바뀜 0.
+- 실제 도면 841개 가운데 RTMaterial·MVIEW 도면 22개: RTMaterial 16도면은 R2000·R2004 DWG 출력 바이트 16/16 같음, R2018 DWG와 R2000·R2018 DXF의 RTMaterial 523 → 0,
+  R12 DXF 490 → 0. MVIEW 9도면은 R2000·R2004·R2018 DWG와 R2000·R2018 DXF의 MVIEW 20 → 0, R12 DXF 바이트 9/9 같음. 그 밖 값·확장 자료 바뀜 0.
+- 결과 같음(기준은 140차 결과 — 140차 병합 판과 src가 문서만 다른 트리): 장면 지문 841/841, EXPLODE 뒤 ERASE·MOVE·COPY 120/120, 명령 19가지 × 도면 8개 152/152(두 번),
+  EXPLODE·-OVERKILL 80/80, 겹침 -OVERKILL 120/120, edit-audit 760회 문제 0·건너뜀 0. 저장 비교 42도면 같음 40 — 바뀐 2는 RTMaterial 도면 1개(R2018 DWG와 R12·R2000·R2018 DXF)와
+  MVIEW 도면 1개(R12 DXF 밖 다섯 출력)이고 모델 지문은 같으며, 바뀐 출력이 위 실제 도면 대조가 잰 것과 같습니다(둘째 고침만 견주면 MVIEW 도면 1개).
+- 시험: `tests/dwg/roundtrip141.test.ts` 9건(RTMaterial 꼴·그대로 두는 꼴, R2007+ DWG·DXF 쓰기와 R2000·R2004 그대로, 쓰는 객체를 가리키면 남김, 표본 R14·R2000·R2004 →
+  새 판이 AutoCAD 같은 판과 같음 — R2007+ DWG 45·DXF 90·R2000·R2004 DWG 20쌍; MVIEW 꼴·그대로 두는 꼴, R2000+ DWG·DXF 쓰기와 R12 DXF는 읽은 묶음 그대로,
+  표본 R14 → R2000+ DWG 30·DXF 36쌍 — 표본 대조는 CAD_FIXTURES가 있을 때만), `roundtrip139` 표본 기대값(R14 → R2007+ 88 → 89/89).
+  RTMaterial을 DWG·DXF 쓰기에서 넘기지 않거나 쓰는 객체를 가리켜도 빼면, MVIEW를 DWG·DXF 쓰기에서 빼지 않거나 R12 DXF에서도 빼면 각각 실패.
+  tsc 오류 0, 전체 시험 4,065건 통과·211건 건너뜀.
+- 크기(수정일 전 빌드, gzip -9): 첫 화면 index 24,030바이트 그대로(gzip 10,238 → 10,240 — editor 조각 이름 해시만), editor 3,348,078바이트 그대로(gzip 1,141,855 → 1,141,856),
+  engine.worker 872,729 → 873,442(gzip 307,977 → 308,156), 언어 사전 조각 그대로.
+
 ## 2026-11-17(140차): 옛 판 MTEXT의 여러 줄 문자 저장 묶음으로 줄 간격·배경 읽기와 판마다 AutoCAD처럼 쓰기
 
 ### 고른 까닭

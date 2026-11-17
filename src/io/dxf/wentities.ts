@@ -48,6 +48,7 @@ import { count3, leaderCount, leaderVertices } from '../../core/flat3';
 import { oleDataAt } from '../oledata';
 import { dimMeasurementOf } from '../../edit/geom/dimmeasure';
 import { mtextSaveXDataForR2000, withoutRoundTripXData } from '../dwg/xdata';
+import { withoutMviewXData } from '../mview';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -370,9 +371,12 @@ function xdataOf(e: Entity, ctx: WriteContext): XData[] | undefined {
   }
   // MTEXT의 여러 줄 문자 저장 묶음: AutoCAD는 R2000 DXF의 모든 MTEXT에 둔다(없으면 만들고 모델 배경과 다른 배경 묶음은 빼고), 다른 판은 제 칸에(140차 — dwg/xdata.ts)
   if (e.type === 'MTEXT' && ctx.ver === 1015) x = mtextSaveXDataForR2000(x, e);
+  // R12~R14 뷰포트의 보기 정보 묶음(MVIEW)은 R2000+에서 제 칸에 쓴다 — AutoCAD가 쓴 R2000+ DXF에 없다(141차). R12는 이것이 보기 정보라 둔다
+  if (e.type === 'VIEWPORT' && ctx.ver >= 1015) x = withoutMviewXData(x);
   if (!x?.length) return x;
-  // 옛 판 DWG의 왕복 묶음(RTLwPs·RTTcAl)은 AutoCAD가 쓴 DXF에 어느 판이든 없다 — 읽을 때 제 칸으로 옮겼다(139차 — dwg/xdata.ts)
-  return withoutRoundTripXData(x, e.type === 'MTEXT' && ctx.ver !== 1015);
+  // 옛 판 DWG의 왕복 묶음(RTLwPs·RTTcAl)은 AutoCAD가 쓴 DXF에 어느 판이든 없다 — 읽을 때 제 칸으로 옮겼다(139차 — dwg/xdata.ts).
+  // RTMaterial도 없다 — 가리키는 재질을 쓰지 않으면(DWG에서 읽은 MATERIAL은 DXF에 쓰지 않는다) 뺀다(141차)
+  return withoutRoundTripXData(x, e.type === 'MTEXT' && ctx.ver !== 1015, (m) => ctx.isLive(m));
 }
 
 function thickness(w: TagOut, e: EntityBase): void {
