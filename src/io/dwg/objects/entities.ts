@@ -55,7 +55,7 @@ import { decodeCadEscapes } from '../../../core/codepage';
 import { type BitReader, DwgFormatError } from '../bitstream';
 import { cmcToCad, encToCad } from '../color';
 import { entityLineweightFromIndex } from '../lineweight';
-import { applyRoundTripXData } from '../xdata';
+import { applyMTextSaveXData, applyRoundTripXData } from '../xdata';
 import { R14, R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
 import { hex } from './nonentities';
 import { applyMviewXData } from '../../mview';
@@ -1116,6 +1116,8 @@ function readMText(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Names, 
   };
   if (rectHeight !== undefined) e.rectHeight = rectHeight;
   if (backgroundColor) e.backgroundColor = backgroundColor;
+  // R2000 이하: 그 판에 칸이 없는 줄 간격(R14 이하)·배경을 AutoCAD 여러 줄 문자 저장 묶음에서(140차)
+  if (ver <= R2000 && e.xdata) applyMTextSaveXData(e, ver <= R14, true);
   setExtrusion(e, extrusion);
   if (ver >= R2018) {
     try {

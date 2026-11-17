@@ -47,7 +47,7 @@ import { meshEdges, meshFaces, meshVertexCount, meshVertices } from '../../core/
 import { count3, leaderCount, leaderVertices } from '../../core/flat3';
 import { oleDataAt } from '../oledata';
 import { dimMeasurementOf } from '../../edit/geom/dimmeasure';
-import { withoutRoundTripXData } from '../dwg/xdata';
+import { mtextSaveXDataForR2000, withoutRoundTripXData } from '../dwg/xdata';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -368,8 +368,11 @@ function xdataOf(e: Entity, ctx: WriteContext): XData[] | undefined {
     }
     x = [...(x ?? []), { app: 'PE_URL', items }];
   }
+  // MTEXT의 여러 줄 문자 저장 묶음: AutoCAD는 R2000 DXF의 모든 MTEXT에 둔다(없으면 만들고 모델 배경과 다른 배경 묶음은 빼고), 다른 판은 제 칸에(140차 — dwg/xdata.ts)
+  if (e.type === 'MTEXT' && ctx.ver === 1015) x = mtextSaveXDataForR2000(x, e);
+  if (!x?.length) return x;
   // 옛 판 DWG의 왕복 묶음(RTLwPs·RTTcAl)은 AutoCAD가 쓴 DXF에 어느 판이든 없다 — 읽을 때 제 칸으로 옮겼다(139차 — dwg/xdata.ts)
-  return x?.length ? withoutRoundTripXData(x) : x;
+  return withoutRoundTripXData(x, e.type === 'MTEXT' && ctx.ver !== 1015);
 }
 
 function thickness(w: TagOut, e: EntityBase): void {

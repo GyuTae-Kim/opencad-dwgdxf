@@ -118,10 +118,10 @@ describe('새 판 쓰기의 왕복 확장 자료(139차)', () => {
     const ents = (doc: CadDocument) => new Map([...doc.blocks.values()].flatMap((b) => b.entities.map((e) => [e.handle.toUpperCase(), e] as const)));
     const norm = (e: Entity | undefined) =>
       JSON.stringify((e?.xdata ?? []).map((x) => [x.app.toUpperCase(), x.items.map((it) => [it.code, typeof it.value === 'number' && it.code === 1070 ? it.value & 0xffff : it.value])]));
-    // AutoCAD 새 판에도 남는 다름: 저장 때 만든 여러 줄 문자 묶음(MTEXT 2개 — AutoCAD 새 판에 없다), R2007+의 RTMaterial(재질 칸으로 옮긴다 — 이 앱은 하지 않는다)
+    // AutoCAD 새 판에도 남는 다름: R2007+의 RTMaterial(재질 칸으로 옮긴다 — 이 앱은 하지 않는다). 저장 때 만든 여러 줄 문자 묶음(MTEXT 2개)은 140차부터 같다
     const expected: Record<string, Record<string, [number, number]>> = {
-      AC1014: { AC1018: [87, 89], AC1024: [86, 89], AC1027: [86, 89], AC1032: [86, 89] },
-      AC1015: { AC1018: [20, 22], AC1024: [20, 22], AC1027: [20, 22], AC1032: [20, 22] },
+      AC1014: { AC1018: [89, 89], AC1024: [88, 89], AC1027: [88, 89], AC1032: [88, 89] },
+      AC1015: { AC1018: [22, 22], AC1024: [22, 22], AC1027: [22, 22], AC1032: [22, 22] },
     };
     for (const sv of ['AC1014', 'AC1015'] as const) {
       const src = readDwg(new Uint8Array(readFileSync(S(sv))));
@@ -133,14 +133,15 @@ describe('새 판 쓰기의 왕복 확장 자료(139차)', () => {
         const same = rt.filter((h) => norm(out.get(h)) === norm(acad.get(h))).length;
         expect([same, rt.length], `${sv}→${v}`).toEqual(expected[sv]![v]);
       }
-      // DXF: 묶음만 빠지고 나머지 ACAD 항목은 원본 차례 그대로(R12는 1071 칸이 없어 비교하지 않는다)
+      // DXF: 묶음만 빠지고 나머지 ACAD 항목은 원본 차례 그대로(R12는 1071 칸이 없어 비교하지 않는다). R2000이 아닌 판의 MTEXT는 여러 줄 문자 저장 묶음도 빠진다(140차)
       const srcEnts = ents(src);
       for (const v of ['AC1009', 'AC1015', 'AC1032'] as const) {
         const out = ents(readDxf(writeDxf(src, { version: v }).data));
         for (const h of rt) {
           const got = acadItems(out.get(h)?.xdata) ?? [];
+          const s = srcEnts.get(h)!;
           expect(got.some(isRt), `${sv}→dxf ${v} ${h}`).toBe(false);
-          if (v !== 'AC1009') expect(got, `${sv}→dxf ${v} ${h}`).toEqual(acadItems(withoutRoundTripXData(srcEnts.get(h)!.xdata)) ?? []);
+          if (v !== 'AC1009') expect(got, `${sv}→dxf ${v} ${h}`).toEqual(acadItems(withoutRoundTripXData(s.xdata, s.type === 'MTEXT' && v !== 'AC1015')) ?? []);
         }
       }
     }
