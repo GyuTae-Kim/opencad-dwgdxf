@@ -48,7 +48,7 @@ import { count3, leaderCount, leaderVertices } from '../../core/flat3';
 import { oleDataAt } from '../oledata';
 import { dimMeasurementOf } from '../../edit/geom/dimmeasure';
 import { mtextSaveXDataForR2000, withoutRoundTripXData } from '../dwg/xdata';
-import { withoutMviewXData } from '../mview';
+import { r12ViewportXData, withoutMviewXData } from '../mview';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -1258,40 +1258,24 @@ function writeViewport(w: TagOut, e: ViewportEntity): void {
   }
 }
 
-/** R12 VIEWPORT의 보기 정보(ACAD MVIEW 확장 자료) */
-function mviewXData(e: ViewportEntity): XData {
-  const it: XData['items'] = [];
-  const n = (code: number, value: number) => it.push({ code, value });
-  it.push({ code: 1000, value: 'MVIEW' }, { code: 1002, value: '{' });
-  n(1070, 16);
-  it.push({ code: 1010, value: e.viewTarget }, { code: 1010, value: e.viewDirection });
-  n(1040, e.twistAngle);
-  n(1040, e.viewHeight);
-  n(1040, e.viewCenter.x);
-  n(1040, e.viewCenter.y);
-  n(1040, e.lensLength || 50);
-  n(1040, e.frontClip);
-  n(1040, e.backClip);
-  n(1070, 0);
-  n(1070, e.circleSides || 1000);
-  n(1070, 1);
-  n(1070, 1);
-  n(1070, 0);
-  n(1070, 0);
-  n(1070, 0);
-  n(1070, 0);
-  n(1040, e.snapAngle);
-  n(1040, e.snapBase.x);
-  n(1040, e.snapBase.y);
-  n(1040, e.snapSpacing.x || 0.5);
-  n(1040, e.snapSpacing.y || 0.5);
-  n(1040, e.gridSpacing.x || 0.5);
-  n(1040, e.gridSpacing.y || 0.5);
-  n(1070, 0);
-  it.push({ code: 1002, value: '{' });
-  for (const l of e.frozenLayers) it.push({ code: 1003, value: l });
-  it.push({ code: 1002, value: '}' }, { code: 1002, value: '}' });
-  return { app: 'ACAD', items: it };
+/** 쓰기 한 번 동안 R13+ DWG에서 읽은 문서의 도면층 핸들(수) → 이름 */
+const mviewLayers = new WeakMap<WriteContext, Map<number, string>>();
+
+/**
+ * R12 뷰포트의 읽은 MVIEW 묶음에서 동결 도면층(1003)을 읽을 때처럼 푼다(142차 — io/mview.ts r12ViewportXData가 모델과 견준다).
+ * R13+ DWG에서 읽은 문서는 도면층 핸들이고 못 찾으면 없음(DWG 리더와 같게), 그 밖(R12 DXF·R12 DWG)은 이름 그대로
+ */
+function mviewLayerName(ctx: WriteContext): (v: string) => string | undefined {
+  const doc = ctx.doc;
+  if (doc.format !== 'dwg' || !doc.version.startsWith('AC10') || doc.version < 'AC1012') return (v) => v;
+  let m = mviewLayers.get(ctx);
+  if (!m) {
+    m = new Map();
+    for (const l of doc.layers.values()) if (l.handle) m.set(parseInt(l.handle, 16), l.name);
+    mviewLayers.set(ctx, m);
+  }
+  const map = m;
+  return (v) => map.get(parseInt(v, 16));
 }
 
 function writeMLine(w: TagOut, e: MLineEntity): void {
@@ -1413,9 +1397,8 @@ export function writeEntity(s: TagSink, e: Entity, ctx: WriteContext, owner: str
       type = e.originalType;
       break;
     case 'VIEWPORT':
-      if (r12 && !(xdata ?? []).some((x) => x.app.toUpperCase() === 'ACAD' && x.items.some((i) => i.value === 'MVIEW'))) {
-        xdata = [...(xdata ?? []), mviewXData(e)];
-      }
+      // R12는 보기 정보를 ACAD MVIEW 묶음에 쓴다: 읽은 묶음은 모델과 다른 칸만 고치고, 없으면 모델로 만든다(142차)
+      if (r12) xdata = r12ViewportXData(xdata, e, mviewLayerName(ctx));
       break;
   }
   ctx.countType(type);
