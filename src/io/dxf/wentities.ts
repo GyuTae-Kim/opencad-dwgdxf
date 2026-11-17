@@ -48,7 +48,7 @@ import { count3, leaderCount, leaderVertices } from '../../core/flat3';
 import { oleDataAt } from '../oledata';
 import { dimMeasurementOf } from '../../edit/geom/dimmeasure';
 import { mtextSaveXDataForR2000, withoutRoundTripXData } from '../dwg/xdata';
-import { r12ViewportXData, withoutMviewXData } from '../mview';
+import { r12ViewportXData, viewportFlagsR2000, withoutMviewXData } from '../mview';
 
 const RAD2DEG = 180 / Math.PI;
 const TAU = Math.PI * 2;
@@ -1235,7 +1235,8 @@ function writeViewport(w: TagOut, e: ViewportEntity): void {
     const lh = ctx.layerH.get(tableKey(name));
     if (lh) w.t(341, lh);
   }
-  w.t(90, e.flags);
+  // 옛 판(MVIEW)에서 읽은 뷰포트는 AutoCAD처럼 빠른 확대 128을 빼고 0x8000을 더한다(143차)
+  w.t(90, viewportFlagsR2000(e));
   w.h(340, e.clipBoundary);
   w.t(1, e.styleSheet ?? '');
   w.t(281, e.renderMode);

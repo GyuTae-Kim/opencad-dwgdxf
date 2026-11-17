@@ -10,8 +10,10 @@
  * - R2007 이전 코드 페이지로 쓸 수 없는 글자는 \U+XXXX가 된다(코드 페이지를 바꿔 쓸 수 있으면 바꾼다).
  * - 읽기 정규화: 선종류 BYLAYER·BYBLOCK·CONTINUOUS 대소문자, SPLINE 플래그(평면·선형 판정), MTEXT 방향·회전,
  *   DXF에서 읽은 LEADER 걸이선 점.
+ * - 옛 판(MVIEW 묶음)에서 읽은 VIEWPORT의 90 플래그는 AutoCAD처럼 빠른 확대 128을 빼고 0x8000을 더해 쓴다(143차, `io/mview.ts`).
  */
-import type { CadColor, CadDocument, Entity, SplineEntity } from '../../src/core/model';
+import type { CadColor, CadDocument, Entity, SplineEntity, ViewportEntity } from '../../src/core/model';
+import { viewportFlagsR2000 } from '../../src/io/mview';
 import { decodeCadEscapes } from '../../src/core/codepage';
 import { nearestAci } from '../../src/io/dwg/color';
 import { polyVertices } from '../../src/core/polyverts';
@@ -161,7 +163,7 @@ function unflat(x: Entity): Entity {
 
 /** 도형 하나 비교 */
 export function compareEntity(e0: Entity, a0: Entity, o: CompareOptions): string[] {
-  const e = unflat(e0);
+  const e = e0.type === 'VIEWPORT' ? ({ ...unflat(e0), flags: viewportFlagsR2000(e0 as ViewportEntity) } as Entity) : unflat(e0);
   const a = unflat(a0);
   const out: string[] = [];
   const ver = o.ver;
