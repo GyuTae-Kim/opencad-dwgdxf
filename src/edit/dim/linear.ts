@@ -54,10 +54,13 @@ export function linear(o: Out): void {
   // 맞춤(132차 — 실제 도면 840개의 AutoCAD 블록과 견줌, fit.ts FitSpace): 화살촉은 2·DIMGAP을 더한 자리가 있어야 안에 들고,
   // 제자리 문자가 치수선 위·아래(DIMTAD)면 문자와 화살촉이 저마다 들어가면 둘 다 안이다.
   // 옮긴 문자(사용자 위치 + DIMTMOVE 1, 또는 DIMTMOVE 2에 DIMATFIT 3이 아닌 것)는 치수선 자리를 차지하지 않고(폭 0),
-  // DIMATFIT 0·1에서 문자 중간점이 치수보조선 밖이면 화살촉도 밖이다
+  // DIMATFIT 0·1에서 문자 중간점이 치수보조선 밖이면 화살촉도 밖이다.
+  // 문자가 없는 치수(숨긴 문자 ' ')는 치수선 자리를 차지하지 않으므로 둘 다 들어감 = 화살촉 자리(2·DIMGAP 더함)가 들어감이다(143차 —
+  // 실제 도면의 그런 선형 치수 132개에서 AutoCAD는 (보조선 사이 − 2·DIMASZ)/DIMGAP이 1.981 이하면 모두 바깥, 2.143 이상이면 모두 안쪽으로
+  // 문자 있는 치수의 경계와 같다). 전에는 문자 자리 0 + 화살촉 둘로 세어 2·DIMGAP이 빠졌다
   const moved = !!text && o.userText && (v.tmove === 1 || (v.tmove === 2 && v.atfit !== 3));
   const offLine = !!text && !o.userText && !textOnLine(o, angIn, lineAng);
-  const fit = decideFit(o, L, text ? (moved ? 0 : alongIn) + 2 * v.gap : 0, Math.max(k1.size, k2.size) * 2, { arrowGap: true, textOffLine: offLine });
+  const fit = decideFit(o, L, text ? (moved ? 0 : alongIn) + 2 * v.gap : 0, Math.max(k1.size, k2.size) * 2, { arrowGap: true, textOffLine: offLine || !text });
   if (moved && !v.tix && v.atfit <= 1 && fit.arrowsInside) {
     const t = dot(sub(o.o(d.textMid), d1), ux);
     if (t < 0 || t > L) fit.arrowsInside = false;
