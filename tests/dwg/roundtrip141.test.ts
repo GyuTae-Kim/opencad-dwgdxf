@@ -233,10 +233,11 @@ describe('VIEWPORT의 MVIEW 묶음(141차)', () => {
     };
     for (const version of ['AC1015', 'AC1018', 'AC1024', 'AC1032'] as const) check(vpOf(readDwg(writeDwg(r12Doc(), { version }).data)), `dwg ${version}`);
     for (const version of ['AC1015', 'AC1032'] as const) check(vpOf(readDxf(writeDxf(r12Doc(), { version }).data)), `dxf ${version}`);
-    // R12 DXF는 읽은 묶음을 그대로 쓴다(모델로 다시 만들지 않는다 — 다시 만들면 늘 1인 UCS 아이콘 칸이 3이 아니게 된다)
+    // R12 DXF는 읽은 묶음에서 모델과 뜻이 같은 칸을 그대로 쓴다(142차 — 모델로 다시 만들면 늘 1인 빠른 확대 칸이 R13 원본처럼 0이 아니게 된다)
     const src = r12Doc();
     const items = acadItems(vpOf(src).xdata)!;
-    items[15] = { code: 1070, value: 3 };
+    items[14] = { code: 1070, value: 0 };
+    vpOf(src).flags &= ~128;
     const r12 = vpOf(readDxf(writeDxf(src, { version: 'AC1009' }).data));
     expect(acadItems(r12.xdata)).toEqual(items);
     expect(r12.viewCenter).toEqual({ x: 30, y: 40 });
