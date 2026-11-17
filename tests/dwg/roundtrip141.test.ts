@@ -3,17 +3,20 @@
  * RTMaterial — AutoCAD는 R2004 이하 DWG에 칸이 없는 도형 재질을 ACAD 확장 자료 "RTMaterial"(1005 재질 핸들)로 남기고, 같은 도면을 R2007+ DWG로 쓸 때는
  * 재질 칸으로 옮기며 DXF에는 어느 판이든 쓰지 않는다. 이 앱은 가리키는 MATERIAL 객체를 같은 판으로 쓸 때만 옮기므로 전에는 R2007+ DWG·DXF 출력에
  * 끊긴 재질 핸들이 남았다. 꼴은 AutoCAD가 같은 도면을 여러 판으로 쓴 공개 표본 짝에서 갈랐다.
+ * MVIEW — R12~R14 VIEWPORT는 보기 정보를 ACAD 확장 자료 "MVIEW"에 두고(읽을 때 모델로 옮긴다) R2000+는 제 칸에 쓴다. AutoCAD는 같은 도면을
+ * R2000+ DWG·DXF로 쓸 때 이 묶음을 남기지 않는데, 전에는 이 앱이 R2000+ 출력에도 그대로 옮겨 썼다(R12 DXF에는 그대로 둔다).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { CadDocument, Entity, LineEntity, XData, XDataItem } from '../../src/core/model';
-import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
+import type { CadDocument, Entity, LineEntity, ViewportEntity, XData, XDataItem } from '../../src/core/model';
+import { MODEL_SPACE, PAPER_SPACE, entityDefaults } from '../../src/core/model';
 import { createNewDocument } from '../../src/core/newdoc';
 import { readDwg, writeDwg } from '../../src/io/dwg';
 import { withoutRoundTripXData } from '../../src/io/dwg/xdata';
 import { readDxf } from '../../src/io/dxf/reader';
 import { writeDxf } from '../../src/io/dxf/writer';
+import { withoutMviewXData } from '../../src/io/mview';
 import { FIXTURES } from '../oracle/ezdxf';
 
 const rtMaterial = (h: string): XDataItem[] => [
@@ -139,5 +142,134 @@ describe('RTMaterial(141차)', () => {
       }
     }
     expect(n).toBe(45);
+  });
+});
+
+describe('VIEWPORT의 MVIEW 묶음(141차)', () => {
+  /** R13·R14 DWG 꼴(1003 동결 도면층은 핸들) */
+  const mview = (frozen: string[] = []): XDataItem[] => [
+    { code: 1000, value: 'MVIEW' },
+    { code: 1002, value: '{' },
+    { code: 1070, value: 16 },
+    { code: 1010, value: { x: 0, y: 0, z: 0 } },
+    { code: 1010, value: { x: 0, y: 0, z: 1 } },
+    { code: 1040, value: 0 },
+    { code: 1040, value: 12 },
+    { code: 1002, value: '{' },
+    ...frozen.map((h) => ({ code: 1003, value: h })),
+    { code: 1002, value: '}' },
+    { code: 1002, value: '}' },
+  ];
+  const other: XDataItem[] = [{ code: 1000, value: 'MY_GROUP' }, { code: 1070, value: 1 }];
+
+  it('MVIEW 묶음만 빼고(안쪽 중괄호 포함) 나머지는 차례 그대로', () => {
+    const read: XData[] = [
+      { app: 'MY_APP', items: [{ code: 1000, value: 'x' }] },
+      { app: 'ACAD', items: [...other, ...mview(['2F', '30']), ...dstyle] },
+    ];
+    expect(withoutMviewXData(read)).toEqual([read[0], { app: 'ACAD', items: [...other, ...dstyle] }]);
+    expect(withoutMviewXData([{ app: 'ACAD', items: mview() }])).toBeUndefined();
+    expect(withoutMviewXData([{ app: 'ACAD', items: mview() }, read[0]!])).toEqual([read[0]]);
+  });
+
+  it('중괄호가 맞지 않거나 MVIEW·ACAD가 없으면 받은 배열 그대로', () => {
+    const open: XData[] = [{ app: 'ACAD', items: mview().slice(0, -1) }];
+    expect(withoutMviewXData(open)).toBe(open);
+    const bare: XData[] = [{ app: 'ACAD', items: [{ code: 1000, value: 'MVIEW' }, { code: 1070, value: 16 }] }];
+    expect(withoutMviewXData(bare)).toBe(bare);
+    const plain: XData[] = [{ app: 'ACAD', items: dstyle }];
+    expect(withoutMviewXData(plain)).toBe(plain);
+    const app: XData[] = [{ app: 'MY_APP', items: mview() }];
+    expect(withoutMviewXData(app)).toBe(app);
+    expect(withoutMviewXData(undefined)).toBeUndefined();
+  });
+
+  /** R12 DXF로 쓰고 다시 읽은 뷰포트 문서(확장 자료에 MVIEW, 보기 정보는 모델에) */
+  function r12Doc(): CadDocument {
+    const doc = createNewDocument('metric');
+    doc.layers.set('HIDDEN', { ...doc.layers.get('0')!, name: 'HIDDEN', handle: '' });
+    const vp = {
+      ...entityDefaults(),
+      handle: '3A',
+      layer: '0',
+      type: 'VIEWPORT',
+      center: { x: 5, y: 5, z: 0 },
+      width: 10,
+      height: 8,
+      status: 2,
+      id: 2,
+      viewCenter: { x: 30, y: 40 },
+      snapBase: { x: 0, y: 0 },
+      snapSpacing: { x: 1, y: 1 },
+      gridSpacing: { x: 1, y: 1 },
+      viewDirection: { x: 0, y: 0, z: 1 },
+      viewTarget: { x: 0, y: 0, z: 0 },
+      lensLength: 50,
+      frontClip: 0,
+      backClip: 0,
+      viewHeight: 12,
+      snapAngle: 0,
+      twistAngle: 0,
+      circleSides: 100,
+      flags: 0,
+      frozenLayers: ['HIDDEN'],
+      renderMode: 0,
+      ucsPerViewport: false,
+    } as ViewportEntity;
+    doc.blocks.get(PAPER_SPACE)!.entities.push(vp);
+    return readDxf(writeDxf(doc, { version: 'AC1009' }).data);
+  }
+  // DWG는 배치의 뷰포트가 하나면 번호 1로 읽으므로 핸들로 찾는다
+  const vpOf = (doc: CadDocument) => doc.blocks.get(PAPER_SPACE)!.entities.find((e) => e.type === 'VIEWPORT' && e.handle.toUpperCase() === '3A') as ViewportEntity;
+  const hasMview = (e: Entity) => (acadItems(e.xdata) ?? []).some((it) => it.code === 1000 && it.value === 'MVIEW');
+
+  it('R2000+ DWG·DXF는 묶음 없이 제 칸에 보기 정보를 쓰고, R12 DXF는 묶음을 둔다', () => {
+    expect(hasMview(vpOf(r12Doc()))).toBe(true);
+    const check = (got: ViewportEntity, label: string) => {
+      expect(hasMview(got), label).toBe(false);
+      expect(got.viewCenter, label).toEqual({ x: 30, y: 40 });
+      expect(got.viewHeight, label).toBe(12);
+      expect(got.frozenLayers, label).toEqual(['HIDDEN']);
+    };
+    for (const version of ['AC1015', 'AC1018', 'AC1024', 'AC1032'] as const) check(vpOf(readDwg(writeDwg(r12Doc(), { version }).data)), `dwg ${version}`);
+    for (const version of ['AC1015', 'AC1032'] as const) check(vpOf(readDxf(writeDxf(r12Doc(), { version }).data)), `dxf ${version}`);
+    // R12 DXF는 읽은 묶음을 그대로 쓴다(모델로 다시 만들지 않는다 — 다시 만들면 늘 1인 UCS 아이콘 칸이 3이 아니게 된다)
+    const src = r12Doc();
+    const items = acadItems(vpOf(src).xdata)!;
+    items[15] = { code: 1070, value: 3 };
+    const r12 = vpOf(readDxf(writeDxf(src, { version: 'AC1009' }).data));
+    expect(acadItems(r12.xdata)).toEqual(items);
+    expect(r12.viewCenter).toEqual({ x: 30, y: 40 });
+  });
+
+  const S = (v: string) => join(FIXTURES, 'samples', `sample_${v}.dwg`);
+  const SX = (v: string) => join(FIXTURES, '..', 'acadsharp-dxf', 'samples', `sample_${v}_ascii.dxf`);
+  const NEW = ['AC1015', 'AC1018', 'AC1024', 'AC1027', 'AC1032'] as const;
+  const DXFV = ['AC1015', 'AC1018', 'AC1021', 'AC1024', 'AC1027', 'AC1032'] as const;
+  it.skipIf(![...NEW, 'AC1014'].every((v) => existsSync(S(v))))('표본: AutoCAD R14 판의 뷰포트를 R2000+로 쓰면 확장 자료가 AutoCAD 같은 판과 같다', () => {
+    const ents = (doc: CadDocument) => new Map([...doc.blocks.values()].flatMap((b) => b.entities.map((e) => [e.handle.toUpperCase(), e] as const)));
+    const norm = (e: Entity | undefined) => JSON.stringify((e?.xdata ?? []).map((x) => [x.app.toUpperCase(), x.items.map((it) => [it.code, it.value])]));
+    const src = readDwg(new Uint8Array(readFileSync(S('AC1014'))));
+    const vps = [...ents(src)].filter(([, e]) => e.type === 'VIEWPORT' && hasMview(e)).map(([h]) => h);
+    expect(vps.length).toBe(6);
+    let n = 0;
+    for (const v of NEW) {
+      const acad = ents(readDwg(new Uint8Array(readFileSync(S(v)))));
+      const out = ents(readDwg(writeDwg(src, { version: v }).data));
+      for (const h of vps) {
+        expect(norm(out.get(h)), `→${v} ${h}`).toBe(norm(acad.get(h)));
+        n++;
+      }
+    }
+    if (DXFV.every((v) => existsSync(SX(v))))
+      for (const v of DXFV) {
+        const acad = ents(readDxf(new Uint8Array(readFileSync(SX(v)))));
+        const out = ents(readDxf(writeDxf(src, { version: v }).data));
+        for (const h of vps) {
+          expect(norm(out.get(h)), `→dxf ${v} ${h}`).toBe(norm(acad.get(h)));
+          n++;
+        }
+      }
+    expect(n).toBe(66);
   });
 });
