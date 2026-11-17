@@ -80,6 +80,8 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 (허용 값으로 맞춤, `entity.lineweight_fixed`)·48 선종류 축척·60 숨김·390 플롯 스타일, 그다음 하위 클래스 자료와
 확장 자료(등록된 APPID만, 하이퍼링크는 PE_URL로). R12는 하위 클래스 표지·소유자·R2000+ 코드를 쓰지 않는다.
 옛 판 DWG의 ACAD 왕복 묶음 RTLwPs·RTTcAl은 어느 판이든 쓰지 않는다(139차 — 읽을 때 제 칸으로 옮겼고, AutoCAD가 쓴 DXF R12~R2018에 없다. `io/dwg/xdata.ts`).
+MTEXT의 여러 줄 문자 저장 묶음(MTEXTBEGIN·ACAD_MTEXT_BBRT)은 R2000 DXF에만 AutoCAD처럼 모든 MTEXT에 두고(없으면 제 칸 줄 간격으로 만들고, 표본 꼴 배경에 BBRT,
+모델 배경과 다른 BBRT는 뺀다), 다른 판에서는 꼴이 맞는 묶음을 뺀다(140차 — AutoCAD가 쓴 DXF는 R2000 판에만 있다. `io/dwg/xdata.ts`).
 
 | 객체 | 쓰는 방식 |
 | --- | --- |
@@ -112,7 +114,7 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 | 대상 | 바꾸는 것 |
 | --- | --- |
 | R2007 미만 | MULTILEADER → 3D 폴리선(지시선)·선(걸이)·MTEXT·INSERT로 분해(`entity.mleader_exploded`). HELIX → SPLINE |
-| R2004 미만 | ACAD_TABLE·ARC_DIMENSION·LARGE_RADIAL_DIMENSION → 그림 블록의 INSERT(블록이 없으면 뺀다). 트루컬러·투명도·그라데이션·MTEXT 배경은 쓰지 않는다 |
+| R2004 미만 | ACAD_TABLE·ARC_DIMENSION·LARGE_RADIAL_DIMENSION → 그림 블록의 INSERT(블록이 없으면 뺀다). 트루컬러·투명도·그라데이션·MTEXT 배경은 쓰지 않는다(R2000은 표본 꼴 MTEXT 배경을 ACAD_MTEXT_BBRT 확장 자료로 — 140차) |
 | R2010 미만 | MESH → 폴리페이스 POLYLINE(면이 4점보다 많으면 부채꼴 삼각형). PDFUNDERLAY 빠짐 |
 | R2018 미만 | MTEXT 단은 단 객체·확장 자료로(`io/mtextcols.ts` — 나눌 근거가 없는 꼴은 단 정보 빠짐), 여러 줄 속성은 한 줄 속성 + ACAD_MLATT 기록으로(`io/mlattr-write.ts`) |
 | R12 | LWPOLYLINE → POLYLINE, ELLIPSE·SPLINE → 2D/3D 폴리선 근사, MTEXT → 줄마다 TEXT, LEADER → 3D 폴리선, 위 변환 모두. XLINE·RAY·HATCH·MPOLYGON·TOLERANCE·MLINE·IMAGE·WIPEOUT 등은 뺀다(`r12.unsupported`). 배치는 하나(*Paper_Space)만, 블록 이름 $MODEL_SPACE·$PAPER_SPACE, 선종류 표에 ByBlock·ByLayer 없음, 하위 클래스 표지·소유자·OBJECTS·CLASSES·BLOCK_RECORD 없음, 확장 자료 1071 → 1070/1040 |

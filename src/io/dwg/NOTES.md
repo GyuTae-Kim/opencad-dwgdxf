@@ -132,6 +132,10 @@ ODA 공개 사양(Open Design Specification for .dwg files 5.4.1)만 보고 만�
 - 옛 판 도형의 AutoCAD 왕복 확장 자료(137차 — 같은 도면을 AutoCAD가 여러 판으로 쓴 표본으로 확인, `xdata.ts`): R13·R14 ACAD "RTLwPs" 1070 = 0x80 | 선가중치 번호,
   R2000 이하 "RTTcAl" 1070 = R2004+ ENC 낱말(플래그·색 번호), 1071 = 0xC2RRGGBB, 다음 1000 = 색상표 이름 또는 `$$NoName$$`. 선가중치·트루컬러를 여기서 읽고
   자료는 그대로 둔다. "RTMaterial"(1005 재질 핸들)과 RTTcAl의 투명도 플래그(값 없음)는 쓰지 않는다. R2000·R2004+로 쓸 때의 정리는 아래 쓰기 규칙(138·139차).
+- 옛 판 MTEXT의 여러 줄 문자 저장 묶음(140차, `xdata.ts` `applyMTextSaveXData`): ACAD "MTEXTBEGIN" (1070 73, 1070 줄 간격 방식)(1070 44, 1040 배수)(1070 74, 1070 0) "MTEXTEND" —
+  AutoCAD는 R14·R2000 DWG와 R2000 DXF의 모든 MTEXT에 두고(실제 도면 R2000 DWG 65/65·DXF 64/64, 값은 제 칸과 같다) 줄 간격 칸이 없는 R14 이하에서는 이것이 그 값이다.
+  "ACAD_MTEXT_BBRT" (1071 91 배경 플래그)(1040 46 배율)(1071 64 0xC2RRGGBB)(1000 65·66 이름)(1071 442 0) "ACAD_MTEXT_BERT" — 배경 칸이 없는 R2000 이하의 배경 채우기
+  (표본 MTEXT 2개 — AutoCAD R2004+ 판은 플래그 1·배율 1.25·같은 RGB). 꼴이 맞을 때만 R14 이하 DWG의 줄 간격, R2000 이하 DWG·DXF의 배경으로 읽고 자료는 그대로 둔다.
 - R2018 MTEXT 단 높이의 음수 값은 AutoCAD DXF처럼 0으로 둔다. 평면 스플라인은 법선과 70 비트 8을 둔다.
 - 비도형 객체의 확장 자료(`xdata`), LAYOUT의 확장 사전·반응자, 표 제어 객체(`tableHeads`: 핸들·확장 사전·반응자·확장 자료)를 담는다.
 - MULTILEADER에서 모델에 자리가 없는 값은 DXF 그룹 코드로 `props`(본체·문맥·문맥 텍스트)에 둔다. 도형 재질 핸들은 `material`.
@@ -259,6 +263,11 @@ R2007 이전으로 쓸 때 도면 코드 페이지로 못 쓰는 글자가 있�
 - R2004+ 도형에는 꼴이 맞는 RTLwPs·RTTcAl 묶음을 남기지 않는다(139차, `xdata.ts` `withoutRoundTripXData` — DXF 쓰기도 모든 판에서 같다). AutoCAD가 같은 도면을
   여러 판으로 쓴 표본 세 무리에서 R2004+ DWG에 RTLwPs 0/980쌍·RTTcAl 0/220쌍. 묶음만 있던 ACAD 자료는 통째로 빼고 나머지 ACAD 묶음은 차례 그대로 둔다.
   RTMaterial은 남긴다(AutoCAD는 R2007+에서 재질 칸으로 옮긴다 — 이 앱은 읽지 않는다).
+- MTEXT의 여러 줄 문자 저장 묶음(140차, `xdata.ts`): R2004+에는 꼴이 맞고 모델에 없는 값이 없는 MTEXTBEGIN·BBRT를 남기지 않는다(`withoutRoundTripXData(…, true)` —
+  AutoCAD R2004+ DWG에 0/520쌍. 74 ≠ 0, 이름 65·66, 442 ≠ 0이면 남긴다). R2000에는 AutoCAD처럼 모든 MTEXT에 둔다(`mtextSaveXDataForR2000`): MTEXTBEGIN이 없으면 제 칸
+  줄 간격으로 만들고(BBRT·ACAD_MTEXT_DEFINED_HEIGHT 앞, 없으면 ACAD 자료 끝 — 단 정보·RT 묶음 뒤, ACAD 자료가 없으면 다른 앱 뒤), 표준 꼴인데 제 칸과 다르면 고친다.
+  모델 배경과 다른 BBRT는 빼고(다시 열면 지운 배경이 살아나지 않게), 표본 꼴 배경(배경 색 1·트루컬러·이름 없음)에 BBRT가 없으면 MTEXTBEGIN 바로 뒤에 만든다.
+  도면 창 색·ACI·색상표 배경은 AutoCAD 실물이 없어 만들지 않는다.
 - XRECORD 280~289는 8비트(리더도 고쳤다), 1004는 길이(RC) + 바이트. DXF에서 읽은 점(10·20·30)은 X 코드 하나로 합친다.
 - 해치 그라데이션은 색 두 개를 늘 쓴다. 트루컬러의 ACI 칸은 가장 가까운 색, 표 레코드 CMC의 ACI 칸은 0(AutoCAD와 같다).
 - R2004+ 파일 머리 0xEC~0x100은 같은 수열의 0xEC번째부터다(XOR에 쓰는 0x6C바이트 뒤가 아님).
