@@ -110,7 +110,10 @@ export function formatLinearValue(value: number, f: UnitFmt): string {
         ft++;
         wholeIn -= 12;
       }
-      const inStr = total.n ? `${wholeIn}${f.frac === 2 ? ' ' : ''}${stackFrac(total.n, total.d, f.frac, f.tfac)}` : String(wholeIn);
+      // 피트를 보이지 않으면 정수 인치 0을 분수 앞에 쓰지 않는다(0'-0 3/4" → 3/4"), 피트가 있으면 4'-0 3/4"처럼 남긴다
+      // (AutoCAD 블록 실물 — 실제 도면의 0 피트 생략 분수 치수 모두, 144차)
+      const fr = total.n ? stackFrac(total.n, total.d, f.frac, f.tfac) : '';
+      const inStr = !total.n ? String(wholeIn) : wholeIn === 0 && !showFeet(ft, f.zin) ? fr : `${wholeIn}${f.frac === 2 ? ' ' : ''}${fr}`;
       s = feetInches(ft, inStr, wholeIn === 0 && !total.n, f.zin);
       break;
     }
@@ -127,10 +130,16 @@ export function formatLinearValue(value: number, f: UnitFmt): string {
   return neg && !/^0([.,]0*)?$/.test(s) ? '-' + s : s;
 }
 
+/** 피트를 보이는지: 0 피트는 DIMZIN 1·2만 */
+function showFeet(ft: number, zin: number): boolean {
+  const z = zin & 3;
+  return ft !== 0 || z === 1 || z === 2;
+}
+
 /** 피트·인치 0 생략: DIMZIN 0 둘 다 생략, 1 둘 다 표시, 2 피트 표시·인치 생략, 3 인치 표시·피트 생략 */
 function feetInches(ft: number, inch: string, inchZero: boolean, zin: number): string {
   const z = zin & 3;
-  const showFt = ft !== 0 || z === 1 || z === 2;
+  const showFt = showFeet(ft, zin);
   const showIn = !inchZero || z === 1 || z === 3 || ft === 0;
   if (!showFt) return `${inch}"`;
   if (!showIn) return `${ft}'`;
