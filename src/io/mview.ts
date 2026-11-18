@@ -87,6 +87,18 @@ export function applyMviewXData(e: ViewportEntity, layerName: (v: string) => str
   }
 }
 
+/**
+ * R2000+ DWG·DXF로 쓸 VIEWPORT 90 플래그(143차). MVIEW 묶음에서 읽은 R12~R14 뷰포트(applyMviewXData)는 0x8000(DXF 참조서 "늘 켬")이 없고
+ * 빠른 확대(128)가 켜져 있을 수 있다. AutoCAD는 같은 도면을 R2000+ DWG·DXF로 쓸 때 128을 빼고 0x8000을 더한다 — 같은 도면을 여러 판으로 쓴
+ * 공개 표본 두 무리의 옛 판 뷰포트 ↔ 같은 핸들 R2000+ 판이 모두 그렇고, 한 무리는 R14 원본에 없는 격자 비트(0x40000 한계 밖 격자·
+ * 0x80000 적응 격자)를 더 켜는데 원본에서 올 수 없는 값(AutoCAD 설정)이라 더하지 않는다. 그래서 MVIEW 묶음이 있고(옛 판에서 읽음) 0x8000이 없는
+ * 뷰포트만 바꾸고, 그 밖(R2000+에서 읽은 것 — 90이 없어 0인 것 포함, 이 앱이 만든 것)은 그대로 쓴다. 모델 값은 바꾸지 않는다(R12 DXF 쓰기의 MVIEW는 142차대로)
+ */
+export function viewportFlagsR2000(e: ViewportEntity): number {
+  const f = e.flags;
+  return f & 0x8000 || withoutMviewXData(e.xdata) === e.xdata ? f : (f & ~128) | 0x8000;
+}
+
 /** 등각 쌍 칸(0 왼쪽·1 위·2 오른쪽): 90 플래그 4096만이면 위, 8192만이면 오른쪽, 그 밖은 왼쪽(DXF 참조서 VIEWPORT 90 — 둘 다면 왼쪽) */
 const isoPair = (f: number): number => ((f & 0x3000) === 0x1000 ? 1 : (f & 0x3000) === 0x2000 ? 2 : 0);
 

@@ -28,7 +28,7 @@ import type { PBlock, PEnt, WCtx } from './context';
 import { HARD_OWNER, HARD_PTR, SOFT_PTR, type EntCommonOut, type ObjWriter } from './objwriter';
 import { eedOf, wcolor } from './common';
 import { mtextSaveXDataForR2000, roundTripXDataForR2000, withoutRoundTripXData } from '../xdata';
-import { withoutMviewXData } from '../../mview';
+import { viewportFlagsR2000, withoutMviewXData } from '../../mview';
 import { lwIndex } from './util';
 import { tableKey } from '../../../core/model';
 import { lwCount, lwHasBulge, vertCount } from '../../../core/lwpoly';
@@ -1513,7 +1513,8 @@ export class EntityWriter {
       if (lh) frozen.push(lh);
     }
     d.BL(frozen.length);
-    d.BL(e.flags);
+    // 옛 판(MVIEW)에서 읽은 뷰포트는 AutoCAD처럼 빠른 확대 128을 빼고 0x8000을 더한다(143차)
+    d.BL(viewportFlagsR2000(e));
     d.TV(e.styleSheet ?? '');
     d.RC(e.renderMode);
     d.B(0);

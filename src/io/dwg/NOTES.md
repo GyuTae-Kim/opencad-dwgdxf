@@ -268,6 +268,8 @@ R2007 이전으로 쓸 때 도면 코드 페이지로 못 쓰는 글자가 있�
   R2000·R2004에는 AutoCAD처럼 남긴다(26/26쌍 — 다른 판이면 가리키는 MATERIAL은 빠진다). 가리키는 객체를 쓰면 그대로 둔다.
 - VIEWPORT의 MVIEW 묶음은 모든 판(R2000+)에서 뺀다(141차, `io/mview.ts` `withoutMviewXData` — 보기 정보는 제 칸에 쓰고, AutoCAD R2000+ DWG에 0/65쌍).
   안쪽 동결 도면층 중괄호까지 빼고, 묶음만 있던 ACAD 자료는 통째로, 중괄호가 맞지 않으면 그대로 둔다.
+  그 묶음이 있고(옛 판에서 읽음) 0x8000이 없는 뷰포트의 상태 플래그는 빠른 확대 128을 빼고 0x8000을 더해 쓴다(143차, `viewportFlagsR2000` — AutoCAD가 같은 도면을
+  R2000+로 쓴 표본 짝과 같다. 한 무리에서 AutoCAD가 더 켜는 격자 비트 0x40000·0x80000은 원본에 없는 값이라 더하지 않는다).
 - MTEXT의 여러 줄 문자 저장 묶음(140차, `xdata.ts`): R2004+에는 꼴이 맞고 모델에 없는 값이 없는 MTEXTBEGIN·BBRT를 남기지 않는다(`withoutRoundTripXData(…, true)` —
   AutoCAD R2004+ DWG에 0/520쌍. 74 ≠ 0, 이름 65·66, 442 ≠ 0이면 남긴다). R2000에는 AutoCAD처럼 모든 MTEXT에 둔다(`mtextSaveXDataForR2000`): MTEXTBEGIN이 없으면 제 칸
   줄 간격으로 만들고(BBRT·ACAD_MTEXT_DEFINED_HEIGHT 앞, 없으면 ACAD 자료 끝 — 단 정보·RT 묶음 뒤, ACAD 자료가 없으면 다른 앱 뒤), 표준 꼴인데 제 칸과 다르면 고친다.
