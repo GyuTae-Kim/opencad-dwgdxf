@@ -4,8 +4,9 @@
  */
 import type { BlockDef, CadDocument, DimensionEntity, Entity, LeaderEntity, MLeaderEntity, TableEntity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
-import { dimDisplayText, dimVars as dimVarsOf } from '../../app/inquiry';
-import { measureScaleOf } from '../dim/vars';
+import { dimDisplayText } from '../../app/inquiry';
+import { dimKindName, storedDimensionText } from '../dim/format';
+import { measureScaleOf, measureVars } from '../dim/vars';
 import { cloneEntity, cloneEntityExcept, freshEntity } from './path';
 import {
   type Affine,
@@ -97,9 +98,40 @@ export function dimMeasure(d: DimensionEntity): number {
   return d.measurement;
 }
 
+/** 문자 s의 i 자리(`\`)에서 시작하는 MTEXT 서식 코드의 길이: 매개변수 코드는 `;`까지, 유니코드 글자 `\U+XXXX`·`\M+NXXXX`, 그 밖은 두 글자(`\P`·`\\` 등) */
+function mtextCodeLength(s: string, i: number): number {
+  const c = s[i + 1];
+  if (c === undefined) return 1;
+  if ('ACcFfHQTWpS'.includes(c)) {
+    const j = s.indexOf(';', i + 2);
+    return j < 0 ? 2 : j - i + 1;
+  }
+  if (c === 'U' && /^\+[0-9A-Fa-f]{4}/.test(s.slice(i + 2, i + 7))) return 7;
+  if (c === 'M' && /^\+[0-9A-Fa-f]{5}/.test(s.slice(i + 2, i + 8))) return 8;
+  return 2;
+}
+
+/** 블록 문자들에서 서식 코드 밖에 처음 나오는 find를 문자마다 rep로 바꾼다(바꾼 문자가 있으면 true) — `\A1;1`의 측정값 1을 서식 코드 안 1과 가른다 */
+function replaceDimNumber(texts: { text: string }[], find: string, rep: string): boolean {
+  let hit = false;
+  for (const e of texts) {
+    const s = e.text;
+    for (let i = 0; i < s.length; ) {
+      if (s.startsWith(find, i)) {
+        e.text = s.slice(0, i) + rep + s.slice(i + find.length);
+        hit = true;
+        break;
+      }
+      i += s[i] === '\\' ? mtextCodeLength(s, i) : 1;
+    }
+  }
+  return hit;
+}
+
 /**
  * 치수 블록의 숫자 문자를 새 측정값으로 바꾼다(재지정 문자 없이 측정값을 보일 때만).
- * 먼저 치수 스타일로 서식한 값을 찾고, 없으면 블록 문자 안에서 옛 값과 같은 숫자(그 자릿수로 반올림)를 찾아 같은 자릿수로 바꾼다.
+ * 먼저 치수 생성기가 블록에 쓰는 측정 문자(피트·인치·분수·공차·대체 단위 꼴째 — 147차)를, 다음에 치수 스타일로 서식한 값의 숫자를 블록 문자의 서식 코드 밖에서 찾고,
+ * 없으면 블록 문자 안에서 옛 값과 같은 숫자(그 자릿수로 반올림)를 찾아 같은 자릿수로 바꾼다.
  */
 export function updateDimNumber(doc: CadDocument, before: DimensionEntity, after: DimensionEntity, ents: Entity[]): void {
   if (!(before.text === '' || before.text.includes('<>'))) return;
@@ -109,18 +141,20 @@ export function updateDimNumber(doc: CadDocument, before: DimensionEntity, after
   const a = da.formatted;
   const b = db.formatted;
   if (a === b) return;
+  const texts = ents.filter((e): e is Extract<Entity, { type: 'TEXT' | 'MTEXT' }> => e.type === 'MTEXT' || e.type === 'TEXT');
+  // 생성기의 측정 문자: 전에는 아래 숫자 정규식이 건축 단위의 피트만 바꿔 `2'-2"` → `4'-2"`, 쌓은 분수는 그대로 두었다(146·147차에 잼 — 실제 도면 치수를 옮기거나 늘일 때)
+  const kind = dimKindName(before);
+  const sa = storedDimensionText(measureVars(doc, before), kind, da.value, '').measured;
+  const sb = storedDimensionText(measureVars(doc, after), kind, db.value, '').measured;
+  if (sa && sa !== sb && replaceDimNumber(texts, sa, sb)) return;
   const num = /[-+]?\d[\d.,']*/;
   const na = num.exec(a)?.[0];
   const nb = num.exec(b)?.[0];
-  const texts = ents.filter((e): e is Extract<Entity, { type: 'TEXT' | 'MTEXT' }> => e.type === 'MTEXT' || e.type === 'TEXT');
-  if (na && nb && na !== nb && texts.some((e) => e.text.includes(na))) {
-    for (const e of texts) if (e.text.includes(na)) e.text = e.text.replace(na, nb);
-    return;
-  }
-  // 표시 단위의 값(각도는 도)
-  const toDisplay = (d: DimensionEntity, info: { isAngle: boolean; value: number }) => (info.isAngle ? (info.value * 180) / Math.PI : info.value * (Number(dimVarsOf(doc, d).DIMLFAC ?? 1) || 1));
-  const va = toDisplay(before, da);
-  const vb = toDisplay(after, db);
+  if (na && nb && na !== nb && replaceDimNumber(texts, na, nb)) return;
+  // 표시 단위의 값(각도는 도). 길이 측정값(42)에는 DIMLFAC 몫이 이미 들어 있다(145차 — 전에는 여기서 DIMLFAC를 또 곱해 블록 숫자를 못 찾았다)
+  const toDisplay = (info: { isAngle: boolean; value: number }) => (info.isAngle ? (info.value * 180) / Math.PI : info.value);
+  const va = toDisplay(da);
+  const vb = toDisplay(db);
   const tok = /(\\[A-Za-z][^;\\]*;)|([-+]?\d+(?:[.,]\d+)?)/g;
   for (const e of texts) {
     let done = false;
