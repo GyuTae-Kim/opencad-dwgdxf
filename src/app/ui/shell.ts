@@ -1,6 +1,7 @@
 /** 화면 골격: 제목 막대, 리본, 파일 탭, 배치 탭, 상태 막대, 시작 화면 */
 import type { App, UiHooks } from '../app';
 import { beginOpen, showAnalyticsSettings } from 'opencad-site-kit/analytics';
+import { isFramed } from 'opencad-site-kit/embed/app';
 import { MODEL_SPACE, tableKey } from '../../core/model';
 import { unitAbbr } from '../../core/units';
 import { ALL_SNAPS, SNAP_NAMES } from '../snap';
@@ -1084,7 +1085,8 @@ export class Shell implements UiHooks {
           ? { label: '어두운 테마로 바꾸기', icon: 'moon', run: () => this.toggleTheme() }
           : { label: '밝은 테마로 바꾸기', icon: 'sun', run: () => this.toggleTheme() },
         { label: '단축키·도움말', icon: 'help', kbd: 'F1', run: () => void app.run('HELP') },
-        { label: '방문 통계 설정', icon: 'settings', run: showAnalyticsSettings },
+        // 다른 웹페이지에 넣은(iframe) 화면은 방문 통계를 켜지 않으므로 설정도 감춘다
+        ...(isFramed() ? [] : [{ label: '방문 통계 설정', icon: 'settings', run: showAnalyticsSettings }]),
         { label: 'OpenCAD 정보', icon: 'info', run: () => void app.run('ABOUT') },
       ]);
     });
