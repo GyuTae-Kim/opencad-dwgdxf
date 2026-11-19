@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-/** 홈 화면 앱 연결(pwa.ts·pwa-app.ts)과 최근 문서 저장소(recent.ts): 새 판 알림, 파일 열기, 공유 받기 주소, 서비스 워커와 같은 저장소 꼴 */
+/** 홈 화면 앱 연결(pwa.ts·pwa-app.ts)과 최근 문서 저장소(recent.ts): 새 판 알림, 파일 열기, 공유 받기 주소, 다른 웹페이지에 넣기, 서비스 워커와 같은 저장소 꼴 */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canUseServiceWorker, consumeLaunchFiles, parseLaunchQuery, registerServiceWorker, shareErrorMessage, usedResourceUrls, withoutLaunchQuery, type SwContainer, type SwRegistration, type SwWorker } from '../../src/app/pwa';
-import { applyUpdate, handleLaunchQuery } from '../../src/app/pwa-app';
+import { EMBED_ACCEPT, acceptEmbeddedDrawings, applyUpdate, handleLaunchQuery } from '../../src/app/pwa-app';
 import { RECENT_MAX, RecentStore, recentTimeLabel } from '../../src/app/recent';
 import { createFakeIndexedDB } from './fake-idb';
 
@@ -142,6 +142,51 @@ describe('파일 열기(launchQueue)와 공유 받기 주소', () => {
     expect(location.search).toBe('');
     expect(document.querySelector('.toast')!.textContent).toContain('60MB');
     expect(openRecent).toHaveBeenCalledOnce();
+  });
+});
+
+describe('다른 웹페이지에 넣기(임베드)', () => {
+  /** iframe 안의 창: 부모 창으로 보낸 글을 모으고, 받은 글(message)을 시험에서 넣는다 */
+  function fakeFrame() {
+    let onMessage: ((event: MessageEvent) => void) | null = null;
+    const parent = { postMessage: vi.fn() };
+    const setAttribute = vi.fn();
+    const w = { self: {}, top: {}, parent, addEventListener: (_t: 'message', fn: (event: MessageEvent) => void) => void (onMessage = fn), document: { documentElement: { setAttribute } } };
+    const post = (data: unknown, source: unknown = parent) => onMessage!({ source, origin: 'https://host.test', data } as unknown as MessageEvent);
+    return { w, parent, setAttribute, post };
+  }
+
+  it('부모가 넘긴 DWG·DXF만 파일 열기와 같은 길로 넘기고, 열기가 끝난 뒤에 보낸 출처로만 마쳤다고 알린다', async () => {
+    const { w, parent, setAttribute, post } = fakeFrame();
+    let finish = () => {};
+    const openFiles = vi.fn((_files: File[]) => new Promise<void>((resolve) => (finish = resolve)));
+    expect(acceptEmbeddedDrawings({ openFiles }, w)).toBe(true);
+    expect(EMBED_ACCEPT).toEqual(['.dwg', '.dxf']);
+    expect(setAttribute).toHaveBeenCalledWith('data-embedded', '');
+    expect(parent.postMessage).toHaveBeenCalledWith({ type: 'opencad:ready', protocol: 1, accept: ['.dwg', '.dxf'] }, '*');
+    post({ type: 'opencad:open', protocol: 1, id: 'a', files: [{ name: 'plan.DXF', data: new Uint8Array([48, 10, 69, 79, 70, 10]).buffer }, { name: 'tool.lsp', data: new ArrayBuffer(1) }] });
+    expect(openFiles).toHaveBeenCalledTimes(1);
+    const files = openFiles.mock.calls[0]![0];
+    expect(files.map((f) => [f.name, f.size])).toEqual([['plan.DXF', 6]]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(parent.postMessage).toHaveBeenCalledTimes(1);
+    finish();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(parent.postMessage).toHaveBeenLastCalledWith({ protocol: 1, type: 'opencad:done', id: 'a' }, 'https://host.test');
+  });
+
+  it('다른 형식만 오면 열지 않고 unsupported로 답하고, 부모가 아닌 창의 글은 듣지 않는다. iframe 밖이면 아무것도 걸지 않는다', () => {
+    const { w, parent, post } = fakeFrame();
+    const openFiles = vi.fn(async (_files: File[]) => {});
+    acceptEmbeddedDrawings({ openFiles }, w);
+    post({ type: 'opencad:open', protocol: 1, id: 'b', files: [{ name: 'part.step', data: new ArrayBuffer(1) }] });
+    expect(parent.postMessage).toHaveBeenLastCalledWith({ protocol: 1, type: 'opencad:error', id: 'b', code: 'unsupported' }, 'https://host.test');
+    post({ type: 'opencad:open', protocol: 1, id: 'c', files: [{ name: 'a.dwg', data: new ArrayBuffer(1) }] }, {});
+    expect(openFiles).not.toHaveBeenCalled();
+    const top = {};
+    const addEventListener = vi.fn();
+    expect(acceptEmbeddedDrawings({ openFiles }, { self: top, top, parent: null, addEventListener })).toBe(false);
+    expect(addEventListener).not.toHaveBeenCalled();
   });
 });
 

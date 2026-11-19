@@ -1,12 +1,12 @@
 import { installLocalization } from './app/i18n';
 import './styles.css';
 import { initAnalytics } from 'opencad-site-kit/analytics';
-import { GA4_MEASUREMENT_ID } from 'opencad-site-kit/analytics/config';
+import { OPENCAD_ANALYTICS } from 'opencad-site-kit/presets/opencad';
 import { mountEditor } from './app/startup';
 
 const root = document.getElementById('app');
 if (root) {
-  initAnalytics(GA4_MEASUREMENT_ID, 'dwgdxf');
+  initAnalytics(OPENCAD_ANALYTICS, 'dwgdxf');
   mountEditor(root, async () => (await import('./editor')).startEditor(root));
 }
 
