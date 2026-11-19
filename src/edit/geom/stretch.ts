@@ -20,6 +20,8 @@ import { keepIdentity } from './trim';
 import { type EditResult, allocBlockName, mergeResults } from './types';
 import { dimMeasure, updateDimNumber } from './xannot';
 import { dimGeomMeasurement } from './dimmeasure';
+import { dimKindName, measureScale } from '../dim/format';
+import { measureVars } from '../dim/vars';
 import { layoutArcText } from '../../text/arctext';
 import { hatchEdges, packEdges } from '../../core/hatchedges';
 import { meshVertices, packMesh } from '../../core/meshdata';
@@ -421,8 +423,11 @@ export function dimPoints(e: DimensionEntity): { key: DimKey; p: Vec2 }[] {
   return out;
 }
 
-/** 치수 정의점 하나를 옮긴 새 치수(측정값을 다시 잰다) */
-export function moveDimPoint(e: DimensionEntity, key: DimKey, d: Vec2): DimensionEntity {
+/**
+ * 치수 정의점 하나를 옮긴 새 치수(측정값을 다시 잰다). doc을 주면 길이 측정값에 DIMLFAC 몫을 곱한다
+ * (AutoCAD 42 — 145차, edit/dim/format.ts measureScale. 치수 스타일·재지정·공간으로 정해지므로 doc이 없으면 곱하지 않는다)
+ */
+export function moveDimPoint(e: DimensionEntity, key: DimKey, d: Vec2, doc?: CadDocument): DimensionEntity {
   const r = cloneEntity(e);
   if (key === 'textMid' || key === 'defPoint5') {
     const p = e[key];
@@ -433,7 +438,8 @@ export function moveDimPoint(e: DimensionEntity, key: DimKey, d: Vec2): Dimensio
   } else r[key] = mv(e[key], d);
   const k = e.dimType & 7;
   if (Number.isFinite(e.measurement)) {
-    if (e.subtype === 'ARC_DIMENSION' || k === 0 || k === 1 || k === 3 || k === 4) r.measurement = dimMeasure(r);
+    const lf = doc ? measureScale(measureVars(doc, r), dimKindName(r)) : 1;
+    if (e.subtype === 'ARC_DIMENSION' || k === 0 || k === 1 || k === 3 || k === 4) r.measurement = dimMeasure(r) * lf;
     else if (k === 2 || k === 5) {
       // AutoCAD 저장 값과 같은 셈(dimmeasure.ts — 두 선은 교점에서 호 자리가 든 부채꼴, 세 점은 호 자리 쪽, 137차).
       // 잴 수 없으면(평행한 두 선) 전처럼 두 방향 사이 작은 쪽 각
@@ -445,7 +451,7 @@ export function moveDimPoint(e: DimensionEntity, key: DimKey, d: Vec2): Dimensio
       const dy = r.defPoint2.y - r.defPoint.y;
       // 51(수평 방향)이 있으면 그 반대 각도가 재는 UCS X축(치수 블록 ordinate.ts와 같다 — 26차)
       const a = -(e.horizontalDirection || 0);
-      r.measurement = !a ? Math.abs(e.dimType & 64 ? dx : dy) : Math.abs(e.dimType & 64 ? dx * Math.cos(a) + dy * Math.sin(a) : -dx * Math.sin(a) + dy * Math.cos(a));
+      r.measurement = (!a ? Math.abs(e.dimType & 64 ? dx : dy) : Math.abs(e.dimType & 64 ? dx * Math.cos(a) + dy * Math.sin(a) : -dx * Math.sin(a) + dy * Math.cos(a))) * lf;
     }
   }
   if (e.subtype === 'ARC_DIMENSION' && e.arc) {
@@ -477,7 +483,7 @@ function stretchDimension(e: DimensionEntity, inside: (p: Vec2) => boolean, d: V
   let moved = false;
   for (const k of dimPoints(e))
     if (inside(k.p)) {
-      r = moveDimPoint(r, k.key, d);
+      r = moveDimPoint(r, k.key, d, doc);
       moved = true;
     }
   if (!moved) return null;

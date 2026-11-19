@@ -2012,12 +2012,13 @@ export class SceneBuilder {
       const dir = Math.atan2(bb.y - a.y, bb.x - a.x);
       arrow(a, dir + Math.PI);
       arrow(bb, dir);
-      const value = Number.isFinite(e.measurement) ? e.measurement : Math.hypot(bb.x - a.x, bb.y - a.y);
+      // 저장 측정값(42)에는 DIMLFAC 몫이 이미 들어 있다(145차 — AutoCAD가 그렇게 적는다). 없으면 잰 값에 곱한다:
+      // 음수 DIMLFAC는 도면 공간에서만 그 크기를, 모형 공간 치수에서는 1(도움말 DIMLFAC — 이전에는 음수 값을 그렸다)
+      const value = Number.isFinite(e.measurement) ? e.measurement : Math.hypot(bb.x - a.x, bb.y - a.y) * linearFactor(this.doc, v.DIMLFAC, e);
       const mid = { x: (a.x + bb.x) / 2, y: (a.y + bb.y) / 2 };
       const off = txt * 0.6;
       ang = dir;
-      // 음수 DIMLFAC는 도면 공간에서만 그 크기를, 모형 공간 치수에서는 1(도움말 DIMLFAC — 이전에는 음수 값을 그렸다)
-      label(value * linearFactor(this.doc, v.DIMLFAC, e), { x: mid.x - Math.sin(ang) * off, y: mid.y + Math.cos(ang) * off }, ang);
+      label(value, { x: mid.x - Math.sin(ang) * off, y: mid.y + Math.cos(ang) * off }, ang);
       return;
     }
     if (kind === 3 || kind === 4) {

@@ -5,6 +5,8 @@
 import type { BlockDef, CadDocument, DimensionEntity, Entity, LeaderEntity, MLeaderEntity, TableEntity, Vec2, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { dimDisplayText, dimVars as dimVarsOf } from '../../app/inquiry';
+import { dimKindName, measureScale } from '../dim/format';
+import { measureVars } from '../dim/vars';
 import { cloneEntity, cloneEntityExcept, freshEntity } from './path';
 import {
   type Affine,
@@ -197,7 +199,8 @@ export function xformDimension(e: DimensionEntity, m: Affine, opt: TransformOpti
   // 측정값
   const k = e.dimType & 7;
   if (Number.isFinite(e.measurement)) {
-    if (e.subtype === 'ARC_DIMENSION' || k === 0 || k === 1 || k === 3 || k === 4) r.measurement = dimMeasure(r);
+    // 길이는 AutoCAD 42처럼 DIMLFAC 몫을 곱한다(145차 — edit/dim/format.ts measureScale). 세로좌표는 저장 값(몫이 든 값)에 축척을 곱한다
+    if (e.subtype === 'ARC_DIMENSION' || k === 0 || k === 1 || k === 3 || k === 4) r.measurement = dimMeasure(r) * measureScale(measureVars(doc, r), dimKindName(r));
     else if (k === 6) r.measurement = e.measurement * affScaleOf(m);
   }
   const b = e.block ? doc.blocks.get(tableKey(e.block)) : undefined;

@@ -224,6 +224,20 @@ export interface DimText {
   measured: string;
 }
 
+/**
+ * 치수 문자가 측정값에 곱하는 DIMLFAC 몫: 각도 치수는 1, 그 밖은 |DIMLFAC|(0이면 1). r은 measureVars 값이라 모형 공간 치수의 음수 DIMLFAC는 이미 1이다.
+ * AutoCAD는 치수의 실제 측정값(DXF 42)에 정의점으로 잰 값 × 이 몫을 적는다(145차 — 실제 도면에서 DIMLFAC가 1이 아닌 치수 278개 모두:
+ * 도면 9개, DIMLFAC 19가지, DWG·DXF, 모형 공간 양수 270개·도면 공간 음수 8개. 도움말 DIMLFAC — 반지름·지름·좌표를 포함한 모든 선형 거리에 곱한다)
+ */
+export function measureScale(r: RawVars, kind: DimKindName): number {
+  return kind === 'angular' ? 1 : Math.abs(num(r.DIMLFAC, 1) || 1);
+}
+
+/** 저장된 측정값(DXF 42 — DIMLFAC 몫을 이미 곱한 값)의 치수 문자: DIMLFAC를 다시 곱하지 않는다(145차) */
+export function storedDimensionText(r: RawVars, kind: DimKindName, stored: number, userText: string): DimText {
+  return dimensionText({ ...r, DIMLFAC: 1 }, kind, stored, userText);
+}
+
 /** 치수 문자 만들기 */
 export function dimensionText(r: RawVars, kind: DimKindName, measurement: number, userText: string): DimText {
   const lunit = num(r.DIMLUNIT, 2);
@@ -255,7 +269,7 @@ export function dimensionText(r: RawVars, kind: DimKindName, measurement: number
     if (tol.limits !== null) main = tol.limits;
     else main += tol.suffix;
   } else {
-    value = Math.abs(measurement) * Math.abs(num(r.DIMLFAC, 1) || 1);
+    value = Math.abs(measurement) * measureScale(r, kind);
     const rnd = num(r.DIMRND, 0);
     if (rnd > 0) value = Math.round(value / rnd + 1e-9) * rnd;
     const post = prePost(String(r.DIMPOST ?? ''), '<>');

@@ -3,7 +3,7 @@
  */
 import type { CadColor, DimensionEntity, Entity, MLeaderEntity, MTextEntity, TextEntity } from '../../core/model';
 import { tableKey } from '../../core/model';
-import { dimensionText, generateDimensionGeometry, measureVars } from '../../edit/dim';
+import { generateDimensionGeometry, measureVars, storedDimensionText } from '../../edit/dim';
 import { dimKindName } from '../../edit/dim/format';
 import { dimMeasurementOf } from '../../edit/geom/dimmeasure';
 import { fieldTemplate } from '../../edit/field/store';
@@ -79,10 +79,10 @@ export function textInit(app: App, e: TextEntity, text: string, label = '문자 
 /** 치수 문자의 측정값 글자 */
 export function measuredText(app: App, d: DimensionEntity): string {
   const doc = app.active!.doc;
-  // 파일에 측정값이 없는 치수(R2000 전 DWG·DXF)는 정의점으로 잰 값(136차)
-  const m = dimMeasurementOf(d);
+  // 파일에 측정값이 없는 치수(R2000 전 DWG·DXF)는 정의점으로 잰 값(136차). 42에는 DIMLFAC 몫이 들어 있어 다시 곱하지 않는다(145차)
+  const m = dimMeasurementOf(d, doc);
   try {
-    return dimensionText(measureVars(doc, d), dimKindName(d), m, '').measured;
+    return storedDimensionText(measureVars(doc, d), dimKindName(d), m, '').measured;
   } catch {
     return String(+m.toFixed(4));
   }

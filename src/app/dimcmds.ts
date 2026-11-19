@@ -21,13 +21,13 @@ import {
   createLinearDimension,
   createOrdinateDimension,
   createRadialDimension,
-  dimensionText,
   generateDimensionGeometry,
   measureVars,
   nextDimBlockName,
   ordinateChainEnd,
   placeIn,
   rawDimVars,
+  storedDimensionText,
   ucsLinearRotation,
 } from '../edit/dim';
 import type { DimKindName } from '../edit/dim/format';
@@ -217,7 +217,8 @@ function printDimText(app: App, ctx: CommandContext, dim: DimensionEntity): void
   const kind: DimKindName = dim.subtype === 'ARC_DIMENSION' ? 'arc' : t === 2 || t === 5 ? 'angular' : t === 3 ? 'diameter' : t === 4 ? 'radius' : t === 6 ? 'ordinate' : 'linear';
   let shown: string;
   try {
-    shown = dimensionText(measureVars(st.doc, dim), kind, dim.measurement, '').measured;
+    // 측정값은 방금 생성기가 놓일 공간·재지정으로 잰 값(DIMLFAC 몫을 곱한 AutoCAD 42 — 145차)
+    shown = storedDimensionText(measureVars(st.doc, dim), kind, dim.measurement, '').measured;
   } catch {
     shown = formatLength(dim.measurement, st.units);
   }

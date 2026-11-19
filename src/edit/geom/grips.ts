@@ -686,7 +686,7 @@ function hatchGrip(e: HatchEntity, id: string, d: Vec2): HatchEntity {
 
 /** 문자 그립: DIMTMOVE(재지정, 없으면 스타일)에 따라 옮긴다 — 0이면 치수선(호·지시선)도 문자를 따라간다 */
 function dimTextFollow(e: DimensionEntity, d: Vec2, doc: CadDocument): DimensionEntity {
-  const r = moveDimPoint(e, 'textMid', d);
+  const r = moveDimPoint(e, 'textMid', d, doc);
   try {
     const t = moveDimensionText(doc, e, r.textMid);
     if (!Number.isFinite(t.measurement) && Number.isFinite(r.measurement)) t.measurement = r.measurement;
@@ -697,7 +697,7 @@ function dimTextFollow(e: DimensionEntity, d: Vec2, doc: CadDocument): Dimension
 }
 
 function dimGrip(e: DimensionEntity, key: Parameters<typeof moveDimPoint>[1], d: Vec2, doc: CadDocument, opts: GripOptions): EditResult {
-  const r = key === 'textMid' ? dimTextFollow(e, d, doc) : moveDimPoint(e, key, d);
+  const r = key === 'textMid' ? dimTextFollow(e, d, doc) : moveDimPoint(e, key, d, doc);
   if (opts.regenDimension) {
     const nb = opts.regenDimension(r, doc);
     if (nb) {

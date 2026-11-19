@@ -88,8 +88,13 @@ describe('치수가 놓인 공간과 측정에 쓰는 DIMLFAC', () => {
     const p = dimIn(doc, PAPER_SPACE, -10);
     expect(drawnText(doc, m)).toMatch(/^100([.,]0+)?$/);
     expect(drawnText(doc, p)).toMatch(/^1000([.,]0+)?$/);
-    expect(dimDisplayText(doc, { ...m, measurement: 100 }).formatted).toMatch(/^100([.,]0+)?$/);
-    expect(dimDisplayText(doc, { ...p, measurement: 100 }).formatted).toMatch(/^1000([.,]0+)?$/);
+    // 측정값(42)은 AutoCAD처럼 잰 값 × 문자의 DIMLFAC 몫(145차): 모형 공간 100, 도면 공간 1000. LIST·특성은 그 값을 다시 곱하지 않는다
+    const gm = generateDimensionGeometry(doc, m).measurement;
+    const gp = generateDimensionGeometry(doc, p).measurement;
+    expect(gm).toBeCloseTo(100, 9);
+    expect(gp).toBeCloseTo(1000, 9);
+    expect(dimDisplayText(doc, { ...m, measurement: gm }).formatted).toMatch(/^100([.,]0+)?$/);
+    expect(dimDisplayText(doc, { ...p, measurement: gp }).formatted).toMatch(/^1000([.,]0+)?$/);
     expect(m.overrides?.[144]).toBe(-10);
   });
 });

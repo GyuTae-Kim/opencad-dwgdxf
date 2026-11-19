@@ -7,6 +7,7 @@ import { angular, arcLength } from './angular';
 import { arrowKind } from './arrows';
 import { Out } from './builder';
 import { applyDimExtras } from './extras';
+import { measureScale } from './format';
 import { jogged } from './jogged';
 import { flippable, linear } from './linear';
 import { ordinate } from './ordinate';
@@ -19,7 +20,7 @@ export interface DimensionGeometry {
   entities: Entity[];
   /** 문자 중간점(DIMENSION 11, OCS) */
   textMid: Vec3;
-  /** 실제 측정값(DIMENSION 42). 각도는 라디안 */
+  /** 실제 측정값(DIMENSION 42 — 길이는 DIMLFAC 몫을 곱한 값, 145차). 각도는 라디안 */
   measurement: number;
   warnings: string[];
   /** 도면에 없어서 새로 만들어야 하는 AutoCAD 기본 화살촉 블록(이름 → 내용, 기준점 0,0) */
@@ -82,7 +83,8 @@ export function generateDimensionGeometry(doc: CadDocument, dim: DimensionEntity
   return {
     entities: o.entities,
     textMid: { x: tm.x, y: tm.y, z: dim.textMid?.z ?? 0 },
-    measurement: o.measurement,
+    // AutoCAD 42는 정의점으로 잰 값 × DIMLFAC 몫이다(145차 — format.ts measureScale). 그림의 문자는 곱하기 전 값으로 만든다
+    measurement: o.measurement * measureScale(v.raw, o.kind),
     warnings: o.warnings,
     arrowBlocks: [...o.arrowBlocks].map(([name, entities]) => ({ name, entities })),
     defpointsLayer: o.defpointsLayer,

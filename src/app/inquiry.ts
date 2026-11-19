@@ -12,7 +12,7 @@ import { decodePercent } from '../text/mtext';
 import { definitionName } from '../edit/dynblock';
 import { lwVertices } from '../core/lwpoly';
 import { polyDrawnBulgeVerts, polyVertices } from '../core/polyverts';
-import { childStyleOf, linearFactor } from '../edit/dim/vars';
+import { childStyleOf } from '../edit/dim/vars';
 import { ctrlCount, fitCount, leaderCount, splineCtrl } from '../core/flat3';
 import { ft } from './filetext';
 
@@ -243,10 +243,11 @@ export function dimVars(doc: CadDocument, d: { dimStyle: string; overrides?: Rec
 
 /**
  * 치수 측정값(파일 42가 없으면 정의점으로 계산 — edit/geom/dimmeasure.ts). 각도는 라디안.
- * 136차: 각도·세로좌표·호 길이도 잰다(전에는 선형·정렬·반지름·지름만 — R13·R14 DXF의 각도 치수는 NaN이었다)
+ * 136차: 각도·세로좌표·호 길이도 잰다(전에는 선형·정렬·반지름·지름만 — R13·R14 DXF의 각도 치수는 NaN이었다).
+ * 길이 치수의 값은 AutoCAD 42처럼 DIMLFAC 몫을 곱한 값이다(145차 — doc이 있으면 잰 값에도 곱한다)
  */
-export function dimMeasurement(d: DimensionEntity): number {
-  return dimMeasurementOf(d);
+export function dimMeasurement(d: DimensionEntity, doc?: CadDocument): number {
+  return dimMeasurementOf(d, doc);
 }
 
 function zeroSuppress(s: string, dimzin: number): string {
@@ -261,17 +262,16 @@ export function dimDisplayText(doc: CadDocument, d: DimensionEntity): { text: st
   const v = dimVars(doc, d);
   const k = d.dimType & 7;
   const isAngle = d.subtype !== 'ARC_DIMENSION' && (k === 2 || k === 5);
-  const m = dimMeasurement(d);
+  const m = dimMeasurement(d, doc);
   let formatted: string;
   if (isAngle) {
     const prec = Number(v.DIMADEC ?? 0) >= 0 ? Number(v.DIMADEC) : Number(v.DIMDEC ?? 0);
     formatted = formatAngle(m, { aunits: Number(v.DIMAUNIT ?? 0) === 1 ? 1 : Number(v.DIMAUNIT ?? 0), auprec: prec });
     formatted = zeroSuppress(formatted.replace('°', ''), Number(v.DIMAZIN ?? 0)) + (Number(v.DIMAUNIT ?? 0) === 0 ? '°' : '');
   } else {
-    // 음수 DIMLFAC는 도면 공간에서만 그 크기를, 모형 공간 치수에서는 1(도움말 DIMLFAC — edit/dim/vars.ts linearFactor):
-    // 치수 그림의 문자(edit/dim/format.ts, measureVars)와 같게
-    const lfac = linearFactor(doc, v.DIMLFAC, d);
-    let val = m * lfac;
+    // 측정값(42)에는 DIMLFAC 몫이 이미 들어 있다(145차 — AutoCAD가 그렇게 적고, 파일에 없으면 dimMeasurementOf가 곱한다).
+    // 전에는 여기서 또 곱해 DIMLFAC가 1이 아닌 AutoCAD 치수가 블록 문자와 다른 값을 보였다(4' → 3'-6")
+    let val = m;
     const rnd = Number(v.DIMRND ?? 0);
     if (rnd > 0) val = Math.round(val / rnd) * rnd;
     const lunit = Number(v.DIMLUNIT ?? 2);

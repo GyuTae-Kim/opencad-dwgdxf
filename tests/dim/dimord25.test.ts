@@ -201,7 +201,8 @@ describe('DIMORDINATE의 데이텀(진짜 App)', () => {
       expect(d.defPoint2.x).toBeCloseTo(240, 9);
       expect(d.defPoint2.y).toBeCloseTo(190, 9);
       expect(d.overrides?.[144]).toBeCloseTo(-10, 12);
-      expect(d.measurement).toBeCloseTo(40, 9);
+      // 측정값(42)은 AutoCAD처럼 잰 종이 값 40 × |DIMLFAC|(145차)
+      expect(d.measurement).toBeCloseTo(400, 9);
     }
     expect(x!.dimType & 64).toBe(64);
     expect(y!.dimType & 64).toBe(0);
