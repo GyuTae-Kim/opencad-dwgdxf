@@ -1188,8 +1188,8 @@ export class EntityWriter {
       d.BS(e.lineSpacingStyle || 1);
       d.BD(e.lineSpacingFactor || 1);
       // 실제 측정값: 파일에 없던 치수(R2000 전 DWG·DXF — NaN)는 정의점으로 잰 값(AutoCAD가 R13·R14 도면을 R2000+로 쓸 때 적는 값과 같다 — 136차).
-      // 잴 수 없으면 0(전에는 NaN 비트를 그대로 썼다)
-      const m = dimMeasurementOf(e);
+      // 잴 수 없으면 0(전에는 NaN 비트를 그대로 썼다). 길이 치수는 잰 값에 DIMLFAC 몫을 곱한다(AutoCAD 42 — 145차)
+      const m = dimMeasurementOf(e, this.ctx.doc);
       d.BD(Number.isFinite(m) ? m : 0);
     }
     if (ver >= R2007) {

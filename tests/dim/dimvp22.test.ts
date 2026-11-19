@@ -10,7 +10,7 @@ import { MODEL_SPACE, PAPER_SPACE, entityDefaults } from '../../src/core/model';
 import { registerDimCommands, viewportScaled } from '../../src/app/dimcmds';
 import { dimDisplayText } from '../../src/app/inquiry';
 import { newViewport } from '../../src/edit/filecmds/layoutgeom';
-import { createLinearDimension } from '../../src/edit/dim';
+import { createLinearDimension, generateDimensionGeometry } from '../../src/edit/dim';
 import { createNewDocument } from '../../src/core/newdoc';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { writeDwg } from '../../src/io/dwg/writer/index';
@@ -103,9 +103,10 @@ describe('도면 공간 선형·정렬 치수의 뷰포트 안 모형 스냅(진
     expect(d!.paperSpace).toBe(true);
     expect(d!.defPoint2.x).toBeCloseTo(150, 9);
     expect(d!.defPoint3.x).toBeCloseTo(250, 9);
-    expect(d!.measurement).toBeCloseTo(100, 9);
+    // 측정값(42)은 AutoCAD처럼 잰 종이 거리 100 × |DIMLFAC|(145차 — 실제 도면의 도면 공간 음수 DIMLFAC 치수 8개 모두)
+    expect(d!.measurement).toBeCloseTo(1000, 9);
     expect(d!.overrides?.[144]).toBeCloseTo(-10, 12);
-    expect(dimDisplayText(h.doc, d!).value).toBeCloseTo(100, 9);
+    expect(dimDisplayText(h.doc, d!).value).toBeCloseTo(1000, 9);
     expect(dimDisplayText(h.doc, d!).formatted).toMatch(/^1000([.,]0+)?$/);
     expect(h.out().some((t) => /^치수 문자 = 1000([.,]0+)?$/.test(t))).toBe(true);
     // 비연관: 확장 사전도, 모형 선의 반응자도 없다
@@ -126,7 +127,8 @@ describe('도면 공간 선형·정렬 치수의 뷰포트 안 모형 스냅(진
     await h.at(P(209.8, 199.7));
     await h.type('150,180');
     const [d] = h.dims();
-    expect(d!.measurement).toBeCloseTo(100, 9);
+    // 잰 종이 거리 100 × |DIMLFAC| 20(145차)
+    expect(d!.measurement).toBeCloseTo(2000, 9);
     expect(d!.overrides?.[144]).toBeCloseTo(-20, 12);
     expect(h.out().some((t) => /^치수 문자 = 2000([.,]0+)?$/.test(t))).toBe(true);
   });
@@ -178,6 +180,9 @@ describe('viewportScaled와 저장', () => {
     d0.handle = 'A0';
     d0.paperSpace = true;
     d0.owner = doc.blocks.get(PAPER_SPACE)!.recordHandle;
+    // 앱처럼(addDimension → dimensionBlockOps) 놓일 공간·재지정으로 측정값을 다시 잰다 — 42는 잰 값 × |DIMLFAC|(145차)
+    d0.measurement = generateDimensionGeometry(doc, d0).measurement;
+    expect(d0.measurement).toBeCloseTo(1000, 9);
     doc.blocks.get(PAPER_SPACE)!.entities.push(d0);
     doc.entityIndex.set('A0', d0);
     for (const [name, data] of [
@@ -188,6 +193,7 @@ describe('viewportScaled와 저장', () => {
       const d = back.blocks.get(PAPER_SPACE)!.entities.find((e): e is DimensionEntity => e.type === 'DIMENSION');
       expect(d, name).toBeDefined();
       expect(d!.overrides?.[144], name).toBeCloseTo(-10, 12);
+      expect(d!.measurement, name).toBeCloseTo(1000, 9);
       expect(dimDisplayText(back, d!).formatted, name).toMatch(/^1000([.,]0+)?$/);
     }
   });

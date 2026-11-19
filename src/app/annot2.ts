@@ -7,7 +7,7 @@
 import type { BlockDef, DimensionEntity, Entity, LeaderEntity, MLeaderEntity, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
-import { builtinArrowBlock, dimensionText, generateDimensionGeometry, measureVars, moveDimensionText, placeIn, rawDimVars } from '../edit/dim';
+import { builtinArrowBlock, generateDimensionGeometry, measureVars, moveDimensionText, placeIn, rawDimVars, storedDimensionText } from '../edit/dim';
 import { BREAKER_TYPES, type DimBreak, breakSize, breakerPieces, dimFrame, readBreaks, readJogLine, toFrame, writeBreaks, writeJogLine, defaultJogPoint } from '../edit/dim/extras';
 import { autoSpacing, dimHome, dimJustify, dimNewText, dimOblique, dimRotateText, isAngularDim, isLinearDim, linearFeetW, spaceDimensions } from '../edit/annot/dimedit';
 import { createJoggedDimension } from '../edit/annot/create';
@@ -40,11 +40,14 @@ function dimsOf(app: App, handles: string[]): DimensionEntity[] {
     .filter((e): e is DimensionEntity => e?.type === 'DIMENSION');
 }
 
-/** 측정값 문자(명령행 안내) */
+/**
+ * 측정값 문자(명령행 안내). 치수를 만든 뒤 뷰포트 축척(DIMLFAC 재지정)과 놓일 공간을 정하므로 측정값을 지금 재지정으로 다시 잰다
+ * (생성기 측정값은 AutoCAD 42처럼 DIMLFAC 몫을 곱한 값 — 145차)
+ */
 function shownText(app: App, d: DimensionEntity): string {
   const st = app.active!;
   try {
-    return dimensionText(measureVars(st.doc, d), 'radius', d.measurement, '').measured;
+    return storedDimensionText(measureVars(st.doc, d), 'radius', generateDimensionGeometry(st.doc, d).measurement, '').measured;
   } catch {
     return formatLength(d.measurement, st.units);
   }

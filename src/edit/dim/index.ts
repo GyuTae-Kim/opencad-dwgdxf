@@ -24,6 +24,6 @@ export {
   type CreateDimOptions,
 } from './create';
 export { builtinArrowBlock } from './arrows';
-export { dimensionText } from './format';
+export { dimensionText, storedDimensionText } from './format';
 export { measureText, type MeasureText, type TextBox } from './textbox';
 export { dimVars, measureVars, placeIn, rawDimVars } from './vars';

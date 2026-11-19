@@ -192,7 +192,8 @@ describe('도면 공간 반지름·지름·호 길이 치수(진짜 App)', () =>
     expect(d!.dimType & 7).toBe(4);
     expect(d!.defPoint.x).toBeCloseTo(200, 9);
     expect(d!.defPoint.y).toBeCloseTo(150, 9);
-    expect(d!.measurement).toBeCloseTo(40, 9);
+    // 측정값(42)은 AutoCAD처럼 잰 종이 반지름 40 × |DIMLFAC|(145차)
+    expect(d!.measurement).toBeCloseTo(400, 9);
     expect(d!.overrides?.[144]).toBeCloseTo(-10, 12);
     expect(dimDisplayText(h.doc, d!).formatted).toMatch(/^R400([.,]0+)?$/);
     expect(h.shown()).toEqual([expect.stringMatching(/^치수 문자 = R400([.,]0+)?$/)]);
@@ -213,7 +214,8 @@ describe('도면 공간 반지름·지름·호 길이 치수(진짜 App)', () =>
     await h.type('150,180');
     const [d] = h.dims();
     expect(d!.dimType & 7).toBe(3);
-    expect(d!.measurement).toBeCloseTo(80, 9);
+    // 잰 종이 지름 80 × |DIMLFAC| 20(145차)
+    expect(d!.measurement).toBeCloseTo(1600, 9);
     expect(d!.overrides?.[144]).toBeCloseTo(-20, 12);
     expect(h.shown()[0]).toMatch(/1600([.,]0+)?$/);
   });
@@ -243,8 +245,8 @@ describe('도면 공간 반지름·지름·호 길이 치수(진짜 App)', () =>
     expect(d!.arc?.partial).toBe(true);
     expect(d!.arc!.center.x).toBeCloseTo(200, 9);
     expect(d!.overrides?.[144]).toBeCloseTo(-10, 12);
-    // 종이 호 길이 40 × π/4, 값은 모형 400 × π/4 = 314.16
-    expect(d!.measurement).toBeCloseTo((40 * Math.PI) / 4, 6);
+    // 종이 호 길이 40 × π/4, 값은 모형 400 × π/4 = 314.16(측정값 42도 |DIMLFAC|를 곱한 값 — 145차)
+    expect(d!.measurement).toBeCloseTo((400 * Math.PI) / 4, 6);
     expect(h.shown()[0]).toMatch(/314[.,]16/);
   });
 
@@ -262,7 +264,8 @@ describe('도면 공간 반지름·지름·호 길이 치수(진짜 App)', () =>
     const [d] = h.dims();
     expect(d!.defPoint.x).toBeCloseTo(c.x, 9);
     expect(d!.defPoint.y).toBeCloseTo(c.y, 9);
-    expect(d!.measurement).toBeCloseTo(20, 9);
+    // 잰 종이 반지름 20 × |DIMLFAC|(145차)
+    expect(d!.measurement).toBeCloseTo(200, 9);
     expect(h.shown()[0]).toMatch(/^치수 문자 = R200([.,]0+)?$/);
   });
 
@@ -387,8 +390,8 @@ describe('도면 공간 각도·세로좌표·선형 <객체 선택>(진짜 App)
     expect(d!.dimType & 7).toBe(6);
     expect(d!.defPoint2.x).toBeCloseTo(240, 9);
     expect(d!.overrides?.[144]).toBeCloseTo(-10, 12);
-    // X 데이텀: 종이 X 240(도면 공간 UCS 원점에서) × 10
-    expect(d!.measurement).toBeCloseTo(240, 9);
+    // X 데이텀: 종이 X 240(도면 공간 UCS 원점에서) × 10 — 측정값 42도 곱한 값(145차)
+    expect(d!.measurement).toBeCloseTo(2400, 9);
     expect(h.shown()[0]).toMatch(/^치수 문자 = 2400([.,]0+)?$/);
   });
 

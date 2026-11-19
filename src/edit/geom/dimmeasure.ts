@@ -3,7 +3,8 @@
  *
  * R2000 전 DWG에는 이 값의 칸이 없고, AutoCAD가 쓴 R13·R14 DXF에도 42가 없다. 그런 치수(측정값 NaN)를 특성 창·치수 문자 편집·
  * AutoLISP·R2000+ DWG 저장이 이 셈 하나로 잰다(늘이기·그립이 다시 재는 각도 측정값도 — 137차). 셈은 AutoCAD가 저장한 값과 견주어 정했다 — 실제 도면 838개의 R2000+ 치수
- * (두 선 각도 89/89, 세 점 각도 10/10, 반지름 29/29, 세로좌표 34/34, 호 길이 6/6, 회전·정렬은 낡은 저장 값을 빼고 같음)와
+ * (두 선 각도 89/89, 세 점 각도 10/10, 반지름 29/29, 세로좌표 34/34, 호 길이 6/6, 회전·정렬은 136차에 낡은 값으로 본 저장 값을 빼고 같음 —
+ * 145차: 그 가운데 278개는 이 값 × DIMLFAC였다, dimMeasurementOf)와
  * 같은 도면을 AutoCAD가 R13·R14와 R2000+로 쓴 짝의 치수 49개(모두 같음):
  * - 회전(0): 두 보조선 원점(13·14)의 차를 치수선 방향(50)에 투영한 크기
  * - 정렬(1): 13·14 사이의 평면(OCS XY) 거리 — Z가 다른 원점도 AutoCAD는 평면 거리로 잰다
@@ -14,7 +15,8 @@
  * - 호 길이: 호 반지름 × 끼인각
  * 각도는 라디안. 정의점으로 잴 수 없으면(평행한 두 선 등) NaN.
  */
-import type { DimensionEntity, Vec3 } from '../../core/model';
+import type { CadDocument, DimensionEntity, Vec3 } from '../../core/model';
+import { measureScaleOf } from '../dim/vars';
 import { isNaturalExt, wcsToOcs } from './ocs';
 
 const TAU = Math.PI * 2;
@@ -87,7 +89,12 @@ export function dimGeomMeasurement(d: DimensionEntity): number {
   }
 }
 
-/** 파일의 측정값이 있으면 그 값, 없으면(NaN) 정의점으로 잰 값 */
-export function dimMeasurementOf(d: DimensionEntity): number {
-  return Number.isFinite(d.measurement) ? d.measurement : dimGeomMeasurement(d);
+/**
+ * 파일의 측정값이 있으면 그 값, 없으면(NaN) 정의점으로 잰 값. 길이 치수의 42는 AutoCAD가 DIMLFAC 몫을 곱해 적으므로(145차 — edit/dim/vars.ts measureScaleOf)
+ * doc을 주면 잰 값에도 그 몫을 곱한다(치수 스타일·재지정·공간으로 정해지므로 doc이 없으면 곱하지 않는다)
+ */
+export function dimMeasurementOf(d: DimensionEntity, doc?: CadDocument): number {
+  if (Number.isFinite(d.measurement)) return d.measurement;
+  const g = dimGeomMeasurement(d);
+  return doc ? g * measureScaleOf(doc, d) : g;
 }

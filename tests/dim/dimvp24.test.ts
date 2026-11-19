@@ -142,7 +142,8 @@ describe('스마트 치수 DIM의 뷰포트 안 모형 객체(진짜 App)', () =
     const [d] = h.dims();
     expect(d!.dimType & 7).toBe(3);
     expect(d!.paperSpace).toBe(true);
-    expect(d!.measurement).toBeCloseTo(80, 9);
+    // 측정값(42)은 AutoCAD처럼 잰 종이 지름 80 × |DIMLFAC|(145차)
+    expect(d!.measurement).toBeCloseTo(800, 9);
     expect(d!.overrides?.[144]).toBeCloseTo(-10, 12);
     expect(h.shown()).toEqual([expect.stringMatching(/800([.,]0+)?$/)]);
     expect(drawn(h, d!)).toMatch(/800([.,]0+)?$/);
@@ -238,7 +239,8 @@ describe('스마트 치수 DIM의 뷰포트 안 모형 객체(진짜 App)', () =
     const [r, l, a] = h.dims();
     expect(r!.dimType & 7).toBe(4);
     expect(r!.defPoint.x).toBeCloseTo(200, 9);
-    expect(r!.measurement).toBeCloseTo(40, 9);
+    // 잰 종이 반지름 40 × |DIMLFAC|(145차)
+    expect(r!.measurement).toBeCloseTo(400, 9);
     expect(r!.overrides?.[144]).toBeCloseTo(-10, 12);
     expect(l!.subtype).toBe('ARC_DIMENSION');
     expect(l!.overrides?.[144]).toBeCloseTo(-10, 12);
@@ -264,7 +266,8 @@ describe('스마트 치수 DIM의 뷰포트 안 모형 객체(진짜 App)', () =
     const [d] = h.dims();
     expect(d!.subtype).toBe('LARGE_RADIAL_DIMENSION');
     expect(d!.defPoint.x).toBeCloseTo(200, 9);
-    expect(d!.measurement).toBeCloseTo(40, 9);
+    // 잰 종이 반지름 40 × |DIMLFAC|(145차)
+    expect(d!.measurement).toBeCloseTo(400, 9);
     expect(d!.overrides?.[144]).toBeCloseTo(-10, 12);
     expect(h.shown()[0]).toMatch(/^치수 문자 = R400([.,]0+)?$/);
     expect(d!.xdict).toBeUndefined();
@@ -384,7 +387,8 @@ describe('DIMJOGGED·DIMCONTINUE·DIMBASELINE(진짜 App)', () => {
     expect(d!.paperSpace).toBe(true);
     expect(d!.defPoint.x).toBeCloseTo(200, 9);
     expect(d!.defPoint.y).toBeCloseTo(150, 9);
-    expect(d!.measurement).toBeCloseTo(40, 9);
+    // 잰 종이 반지름 40 × |DIMLFAC|(145차)
+    expect(d!.measurement).toBeCloseTo(400, 9);
     expect(d!.overrides?.[144]).toBeCloseTo(-10, 12);
     expect(drawn(h, d!)).toMatch(/^R400([.,]0+)?$/);
     expect(dimDisplayText(h.doc, d!).formatted).toMatch(/^R400([.,]0+)?$/);

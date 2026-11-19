@@ -384,7 +384,8 @@ export const DIMENSION_FIELDS: Field[] = [
     },
   },
   // 파일에 측정값이 없는 치수(R2000 전 DWG·DXF)는 정의점으로 잰 값(136차 — 전에는 R13·R14 DWG 0, DXF NaN)
-  { label: '측정값', kind: 'number', readonly: true, get: (e) => dimMeasurement(e as DimensionEntity), set: () => undefined },
+  // 길이 치수는 AutoCAD 42처럼 DIMLFAC 몫을 곱한 값(145차)
+  { label: '측정값', kind: 'number', readonly: true, get: (e, doc) => dimMeasurement(e as DimensionEntity, doc), set: () => undefined },
   dimVarField('문자 높이', 'DIMTXT'),
   dimVarField('화살표 크기', 'DIMASZ'),
   dimVarField('치수 축척 전체', 'DIMSCALE', 'number'),

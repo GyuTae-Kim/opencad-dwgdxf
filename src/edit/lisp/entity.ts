@@ -331,7 +331,7 @@ export function entityGroups(it: Interp, d: LispDrawing, h: string): Pair[] | nu
       for (const s of e.seedPoints) out.push([10, P2(s)]);
       break;
     case 'DIMENSION':
-      out.push([100, 'AcDbDimension'], [2, e.block], [10, P3(e.defPoint)], [11, P3(e.textMid)], [70, e.dimType], [71, e.attachment], [1, e.text], [3, e.dimStyle], [42, R(dimMeasurementOf(e))], [53, R(e.textRotation)]);
+      out.push([100, 'AcDbDimension'], [2, e.block], [10, P3(e.defPoint)], [11, P3(e.textMid)], [70, e.dimType], [71, e.attachment], [1, e.text], [3, e.dimStyle], [42, R(dimMeasurementOf(e, d.doc))], [53, R(e.textRotation)]);
       out.push([13, P3(e.defPoint2)], [14, P3(e.defPoint3)], [15, P3(e.defPoint4)], [50, R(e.rotation)]);
       break;
     case 'SOLID':
