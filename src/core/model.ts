@@ -389,7 +389,10 @@ export interface DimensionEntity extends EntityBase {
   defPoint5: Vec3;
   /** 1 문자 재지정("" = 측정값, "<>" 포함 가능, " " = 숨김) */
   text: string;
-  /** 42 실제 측정값 */
+  /**
+   * 42 실제 측정값. 길이 치수는 정의점으로 잰 값 × 치수 문자의 DIMLFAC 몫(AutoCAD가 적는 값 — 145차, edit/dim/vars.ts measureScaleOf),
+   * 각도는 라디안. R2000 전 파일에서 읽으면 NaN(edit/geom/dimmeasure.ts dimMeasurementOf가 잰다)
+   */
   measurement: number;
   /** 50 회전(선형 치수) */
   rotation: number;
