@@ -12,7 +12,8 @@ import { decodePercent } from '../text/mtext';
 import { definitionName } from '../edit/dynblock';
 import { lwVertices } from '../core/lwpoly';
 import { polyDrawnBulgeVerts, polyVertices } from '../core/polyverts';
-import { childStyleOf } from '../edit/dim/vars';
+import { childStyleOf, measureVars } from '../edit/dim/vars';
+import { dimKindName, storedDimensionText } from '../edit/dim/format';
 import { ctrlCount, fitCount, leaderCount, splineCtrl } from '../core/flat3';
 import { ft } from './filetext';
 
@@ -250,6 +251,24 @@ export function dimMeasurement(d: DimensionEntity, doc?: CadDocument): number {
   return dimMeasurementOf(d, doc);
 }
 
+/** 치수 문자 MTEXT의 평문: 숫자 바로 뒤 쌓은 분수 앞에 빈칸을 둔다(`10{\H1x;\S1#2;}"` → `10 1/2"` — plainText만으로는 `101/2"`) */
+function dimPlainText(s: string): string {
+  return plainText(s.replace(/(\d)((?:\{\\H[^;\\]*;)?\\S)/g, '$1 $2'));
+}
+
+/** 치수 블록이 그리는 문자: 블록에 MTEXT가 하나뿐이면 그 평문, 아니면(블록이 없거나 R12 TEXT·여러 MTEXT) null */
+function drawnDimText(doc: CadDocument, d: DimensionEntity): string | null {
+  const b = d.block ? doc.blocks.get(tableKey(d.block)) : undefined;
+  if (!b) return null;
+  let t: string | null = null;
+  for (const e of b.entities)
+    if (e.type === 'MTEXT') {
+      if (t !== null) return null;
+      t = e.text;
+    }
+  return t === null ? null : dimPlainText(t);
+}
+
 function zeroSuppress(s: string, dimzin: number): string {
   let out = s;
   if (dimzin & 8 && out.includes('.')) out = out.replace(/0+$/, '').replace(/\.$/, '');
@@ -257,7 +276,13 @@ function zeroSuppress(s: string, dimzin: number): string {
   return out;
 }
 
-/** 치수 표시 문자(재지정과 측정값을 합친 것, 서식 코드 제외) */
+/**
+ * 치수 표시 문자(서식 코드 제외).
+ * - text(특성 "표시 문자"·정보 카드·치수 목록): 측정값을 보이는 치수(사용자 문자 없음·`<>`)는 블록이 그리는 문자 — 블록에 MTEXT가 하나면 그 문자(이 앱이 화면에
+ *   그리는 것이 그 블록이다), 없으면 치수 생성기가 블록에 쓰는 셈(edit/dim/format.ts storedDimensionText — DIMZIN 0 생략·도분초·공차·대체 단위). 146차: 전에는 아래 formatted로
+ *   만들어 블록 문자와 꼴이 달랐다(블록 `4'`·`11"`·`10°` ↔ 표시 `4'-0"`·`0'-11"`·`10d`). 측정값을 보이지 않는 사용자 문자는 그대로.
+ * - formatted: 측정값의 숫자 문자(도면 단위 표시 꼴) — 치수 목록의 재지정 값 판정과 편집 커널의 블록 숫자 바꾸기(edit/geom/xannot updateDimNumber)가 숫자를 읽는다
+ */
 export function dimDisplayText(doc: CadDocument, d: DimensionEntity): { text: string; value: number; formatted: string; isAngle: boolean } {
   const v = dimVars(doc, d);
   const k = d.dimType & 7;
@@ -284,11 +309,16 @@ export function dimDisplayText(doc: CadDocument, d: DimensionEntity): { text: st
     if (k === 3) formatted = '%%c' + formatted;
     if (k === 4) formatted = 'R' + formatted;
   }
-  let text = d.text;
-  if (!text) text = formatted;
-  else if (text === ' ') text = '';
-  else text = text.replace('<>', formatted);
-  return { text: plainText(text), value: m, formatted: plainText(formatted), isAngle };
+  const user = d.text ?? '';
+  let text: string;
+  if (user && !user.includes('<>')) text = user === ' ' ? '' : plainText(user);
+  else {
+    const drawn = drawnDimText(doc, d);
+    if (drawn !== null) text = drawn;
+    else if (Number.isFinite(m)) text = dimPlainText(storedDimensionText(measureVars(doc, d), dimKindName(d), m, user).mtext);
+    else text = plainText(user ? user.replace('<>', formatted) : formatted);
+  }
+  return { text, value: m, formatted: plainText(formatted), isAngle };
 }
 
 /** MTEXT 서식을 지운 글자 */
