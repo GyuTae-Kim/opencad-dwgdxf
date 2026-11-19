@@ -11,7 +11,8 @@ import type { CadDocument, DimensionEntity, MTextEntity, Vec3 } from '../../src/
 import { MODEL_SPACE, PAPER_SPACE } from '../../src/core/model';
 import { createNewDocument } from '../../src/core/newdoc';
 import { createAngularDimension, createLinearDimension, createRadialDimension, generateDimensionGeometry, measureVars, storedDimensionText } from '../../src/edit/dim';
-import { dimKindName } from '../../src/edit/dim/format';
+import { dimKindName, measureScale } from '../../src/edit/dim/format';
+import { measureScaleOf } from '../../src/edit/dim/vars';
 import { dimGeomMeasurement, dimMeasurementOf } from '../../src/edit/geom/dimmeasure';
 import { moveDimPoint } from '../../src/edit/geom/stretch';
 import { transformEntity } from '../../src/edit/geom/transform';
@@ -98,6 +99,42 @@ describe('치수 측정값(42)의 DIMLFAC 몫', () => {
       const rb = dims.find((e) => e.defPoint3.y === 50)!;
       expect(ra.measurement, name).toBeCloseTo(200, 9);
       expect(rb.measurement, name).toBeCloseTo(48.000000006, 9);
+    }
+  });
+
+  it('편집 커널이 쓰는 measureScaleOf = 치수 변수 전체로 푼 몫(스타일·하위 스타일·머리말·재지정·공간·각도)', () => {
+    const doc = createNewDocument('metric');
+    doc.dimStyles.set('S2', { name: 'S2', handle: 'F1', flags: 0, vars: { DIMLFAC: 2 } });
+    doc.dimStyles.set('S2$0', { name: 'S2$0', handle: 'F2', flags: 0, vars: { DIMLFAC: 3 } });
+    doc.dimStyles.set('S0', { name: 'S0', handle: 'F3', flags: 0, vars: { DIMLFAC: 0 } });
+    doc.header.set('$DIMLFAC', 5);
+    const lin = (style: string, ov?: Record<number, number | string>) => {
+      const d = createLinearDimension(doc, V(0, 0), V(100, 0), V(50, 20));
+      d.dimStyle = style;
+      d.overrides = ov;
+      return d;
+    };
+    const rad = createRadialDimension(doc, V(0, 0), 25, Math.PI / 4);
+    rad.dimStyle = 'S2';
+    const ang = createAngularDimension(doc, V(0, 0), V(50, 0), V(0, 50), V(30, 30));
+    ang.dimStyle = 'S2';
+    const paper = { ...lin('S2', { 144: -10 }), paperSpace: true };
+    const block = { ...lin('S2', { 144: -10 }), owner: 'FFFF' };
+    const cases: [DimensionEntity, number][] = [
+      [lin('S2'), 3], // 선형 치수는 하위 스타일 S2$0 값
+      [rad, 2],
+      [ang, 1],
+      [lin('S0'), 1],
+      [lin('없는 스타일'), 5], // 스타일이 없으면 머리말
+      [lin('S2', { 144: 0.5 }), 0.5],
+      [lin('S2', { 144: '0.25' }), 0.25],
+      [lin('S2', { 144: -10 }), 1], // 모형 공간 음수
+      [paper, 10],
+      [block, 10],
+    ];
+    for (const [d, want] of cases) {
+      expect(measureScaleOf(doc, d), `${d.dimStyle} ${JSON.stringify(d.overrides)}`).toBeCloseTo(want, 12);
+      expect(measureScaleOf(doc, d)).toBe(measureScale(measureVars(doc, d), dimKindName(d)));
     }
   });
 

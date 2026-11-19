@@ -16,8 +16,7 @@
  * 각도는 라디안. 정의점으로 잴 수 없으면(평행한 두 선 등) NaN.
  */
 import type { CadDocument, DimensionEntity, Vec3 } from '../../core/model';
-import { dimKindName, measureScale } from '../dim/format';
-import { measureVars } from '../dim/vars';
+import { measureScaleOf } from '../dim/vars';
 import { isNaturalExt, wcsToOcs } from './ocs';
 
 const TAU = Math.PI * 2;
@@ -91,11 +90,11 @@ export function dimGeomMeasurement(d: DimensionEntity): number {
 }
 
 /**
- * 파일의 측정값이 있으면 그 값, 없으면(NaN) 정의점으로 잰 값. 길이 치수의 42는 AutoCAD가 DIMLFAC 몫을 곱해 적으므로(145차 — edit/dim/format.ts measureScale)
+ * 파일의 측정값이 있으면 그 값, 없으면(NaN) 정의점으로 잰 값. 길이 치수의 42는 AutoCAD가 DIMLFAC 몫을 곱해 적으므로(145차 — edit/dim/vars.ts measureScaleOf)
  * doc을 주면 잰 값에도 그 몫을 곱한다(치수 스타일·재지정·공간으로 정해지므로 doc이 없으면 곱하지 않는다)
  */
 export function dimMeasurementOf(d: DimensionEntity, doc?: CadDocument): number {
   if (Number.isFinite(d.measurement)) return d.measurement;
   const g = dimGeomMeasurement(d);
-  return doc ? g * measureScale(measureVars(doc, d), dimKindName(d)) : g;
+  return doc ? g * measureScaleOf(doc, d) : g;
 }

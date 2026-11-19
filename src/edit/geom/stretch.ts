@@ -20,8 +20,7 @@ import { keepIdentity } from './trim';
 import { type EditResult, allocBlockName, mergeResults } from './types';
 import { dimMeasure, updateDimNumber } from './xannot';
 import { dimGeomMeasurement } from './dimmeasure';
-import { dimKindName, measureScale } from '../dim/format';
-import { measureVars } from '../dim/vars';
+import { measureScaleOf } from '../dim/vars';
 import { layoutArcText } from '../../text/arctext';
 import { hatchEdges, packEdges } from '../../core/hatchedges';
 import { meshVertices, packMesh } from '../../core/meshdata';
@@ -425,7 +424,7 @@ export function dimPoints(e: DimensionEntity): { key: DimKey; p: Vec2 }[] {
 
 /**
  * 치수 정의점 하나를 옮긴 새 치수(측정값을 다시 잰다). doc을 주면 길이 측정값에 DIMLFAC 몫을 곱한다
- * (AutoCAD 42 — 145차, edit/dim/format.ts measureScale. 치수 스타일·재지정·공간으로 정해지므로 doc이 없으면 곱하지 않는다)
+ * (AutoCAD 42 — 145차, edit/dim/vars.ts measureScaleOf. 치수 스타일·재지정·공간으로 정해지므로 doc이 없으면 곱하지 않는다)
  */
 export function moveDimPoint(e: DimensionEntity, key: DimKey, d: Vec2, doc?: CadDocument): DimensionEntity {
   const r = cloneEntity(e);
@@ -438,7 +437,7 @@ export function moveDimPoint(e: DimensionEntity, key: DimKey, d: Vec2, doc?: Cad
   } else r[key] = mv(e[key], d);
   const k = e.dimType & 7;
   if (Number.isFinite(e.measurement)) {
-    const lf = doc ? measureScale(measureVars(doc, r), dimKindName(r)) : 1;
+    const lf = doc ? measureScaleOf(doc, r) : 1;
     if (e.subtype === 'ARC_DIMENSION' || k === 0 || k === 1 || k === 3 || k === 4) r.measurement = dimMeasure(r) * lf;
     else if (k === 2 || k === 5) {
       // AutoCAD 저장 값과 같은 셈(dimmeasure.ts — 두 선은 교점에서 호 자리가 든 부채꼴, 세 점은 호 자리 쪽, 137차).

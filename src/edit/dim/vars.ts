@@ -4,6 +4,7 @@
  */
 import { DIM_HANDLE_CODES, DIM_VAR_CODES, DIM_VAR_DEFAULTS } from '../../core/dimvars';
 import { type CadDocument, type DimStyle, type DimensionEntity, MODEL_SPACE, type TextStyle, tableKey } from '../../core/model';
+import { dimKindName } from './format';
 
 export type RawVars = Record<string, number | string>;
 
@@ -202,6 +203,24 @@ export function measureVars(doc: CadDocument, d: Parameters<typeof rawDimVars>[1
 export function linearFactor(doc: CadDocument, lfac: number | string | undefined, d: DimPlace): number {
   const f = num(lfac, 1) || 1;
   return f < 0 && dimSpace(doc, d) === 'model' ? 1 : Math.abs(f);
+}
+
+/** rawDimVars(doc, d).DIMLFAC만 같은 차례로(재지정 144 → 치수 종류의 하위 스타일 또는 스타일 값 → 스타일이 없으면 머리말 $DIMLFAC → 기본값) */
+function rawLfac(doc: CadDocument, d: Parameters<typeof rawDimVars>[1]): number | string | undefined {
+  const ov = d.overrides;
+  if (ov && '144' in ov) return ov[144];
+  const ds = childStyleOf(doc, d) ?? doc.dimStyles.get(tableKey(d.dimStyle || 'Standard'));
+  if (ds) return ds.vars.DIMLFAC ?? DIM_VAR_DEFAULTS.DIMLFAC;
+  const h = doc.header.get('$DIMLFAC');
+  return typeof h === 'number' || typeof h === 'string' ? h : DIM_VAR_DEFAULTS.DIMLFAC;
+}
+
+/**
+ * 치수의 실제 측정값(DXF 42)에 든 DIMLFAC 몫: measureScale(measureVars(doc, d), 종류)와 같은 값(145차 — edit/dim/format.ts)을
+ * 치수 변수 전체를 펼치지 않고 푼다. 편집 커널이 옮기거나 늘이는 치수마다 다시 잰 길이에 곱한다(rawDimVars로 풀면 치수 변환 시간이 두 배였다)
+ */
+export function measureScaleOf(doc: CadDocument, d: DimensionEntity): number {
+  return dimKindName(d) === 'angular' ? 1 : linearFactor(doc, rawLfac(doc, d), d);
 }
 
 const str = (v: number | string | undefined): string => (v === undefined || v === null ? '' : String(v));
