@@ -206,7 +206,12 @@ function drawCurved(o: Out, c: P, R: number, rs: Ray, re: Ray, sweep: number, me
   const pr = o.dimLineProps();
   const sh = (len: number) => chordAngle(len, R);
   const trim = (k: ArrowKind) => (fit.arrowsSuppressed ? 0 : k.tick ? -v.dle : k.trim);
-  const rect: Rect | null = text && place && !freeText && textInside && textOnLine(o, place.angle, tanAt(textAngle)) ? textRect(place, text.box, v.gap) : null;
+  // 사용자가 옮긴 문자(DIMTMOVE 1)가 그 자리 호의 접선과 나란하면 문자 상자에 걸친 보조선 사이 호를 끊는다(148차 — 실제 도면에서 MTEXT가 호 위에 놓인
+  // 사용자 위치 DIMTMOVE 1 각도 치수 7개(도면 7개)는 모두 AutoCAD 블록의 호가 문자 폭 + 2·DIMGAP만큼 끊겨 있고, 호에서 떨어진 문자는 끊지 않는다.
+  // 바깥 꼬리 호는 문자가 걸쳐도 그대로다(실물 1개). DIMTMOVE 2·회전한 문자·호 길이 치수는 호에 걸친 실물이 없어 그대로 둔다)
+  const movedOnArc = freeText && v.tmove === 1 && d.subtype !== 'ARC_DIMENSION' && !!place && parallel(place.angle, tanAt(ang(sub(place.center, c))));
+  const rect: Rect | null =
+    text && place && ((!freeText && textInside && textOnLine(o, place.angle, tanAt(textAngle))) || movedOnArc) ? textRect(place, text.box, v.gap) : null;
   const arcs: [number, number][] = [];
   const pushArc = (s: number, e: number) => {
     if (e - s > 1e-12) {
