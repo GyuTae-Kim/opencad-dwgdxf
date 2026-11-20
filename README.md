@@ -403,6 +403,10 @@ npx vite build && npx opencad-site compare-dist .runtime/dist-before dist       
 
 [docs/ROADMAP.md](docs/ROADMAP.md), 지금까지의 작업 내역은 [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
+## 기여
+
+버그 신고, 잘못 읽는 파일 제보, 번역 고침을 반깁니다. 방법은 [CONTRIBUTING.md](CONTRIBUTING.md)(한국어·영어)에 있고, 참여하는 모든 분은 [행동 강령](CODE_OF_CONDUCT.md)을 따릅니다.
+
 ## 라이선스
 
 MIT. 함께 배포하는 글꼴 등은 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 보십시오.
