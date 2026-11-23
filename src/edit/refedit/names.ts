@@ -347,6 +347,8 @@ export function createImporter(src: CadDocument, dst: CadDocument, map: NameMapp
     delete c.xdict;
     delete c.reactors;
     delete c.dwgRaw;
+    // 다른 도면의 이미지 반응자 핸들(159차)
+    if (c.type === 'IMAGE' || c.type === 'WIPEOUT') delete c.imageDefReactor;
     delete c.plotStyle;
     delete c.material;
     c.xdata = keepXdata(c.xdata);

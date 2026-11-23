@@ -119,6 +119,8 @@ export function defineBlockOps(app: App, spec: DefineBlockSpec, make?: AttribMak
       delete c.xdict;
       delete c.reactors;
       delete (c as { dwgRaw?: unknown }).dwgRaw;
+      // 이미지 반응자는 이미지마다 하나다(159차)
+      if (c.type === 'IMAGE' || c.type === 'WIPEOUT') delete c.imageDefReactor;
       if (c.type === 'INSERT')
         for (const a of c.attribs) {
           a.handle = st.session.newHandle();

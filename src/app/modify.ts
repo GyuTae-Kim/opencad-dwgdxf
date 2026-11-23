@@ -185,6 +185,8 @@ function prepareNew(st: DocState, e: Entity, ownerHandle: string | undefined): v
   delete e.xdict;
   delete e.reactors;
   delete e.dwgRaw;
+  // 이미지 반응자는 이미지마다 하나다: 새 객체는 원본 반응자를 가리키지 않는다(159차)
+  if (e.type === 'IMAGE' || e.type === 'WIPEOUT') delete e.imageDefReactor;
   if (e.type === 'INSERT')
     for (const a of e.attribs) {
       a.handle = st.session.newHandle();

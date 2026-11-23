@@ -30,6 +30,8 @@ export function stripEntity<T extends Entity>(e: T): T {
   delete e.reactors;
   delete e.dwgRaw;
   delete e.owner;
+  // 다른 도면의 이미지 반응자 핸들(159차)
+  if (e.type === 'IMAGE' || e.type === 'WIPEOUT') delete e.imageDefReactor;
   if (e.type === 'INSERT') for (const a of e.attribs) stripEntity(a as Entity);
   return e;
 }

@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest';
 import type { CadDocument, ImageDefObject, ImageEntity } from '../../src/core/model';
 import { MODEL_SPACE, entityDefaults } from '../../src/core/model';
 import { imageAttachOps } from '../../src/edit/blkcmds/attach';
+import { copyEntity } from '../../src/edit/geom/query';
+import { affTranslate } from '../../src/edit/geom/math';
 import { applyOps } from '../../src/edit/session';
 import { readDwg, writeDwg } from '../../src/io/dwg';
 import { readDxf } from '../../src/io/dxf/reader';
@@ -93,6 +95,39 @@ describe('DWG에서 연 IMAGE의 IMAGEDEF_REACTOR(159차)', () => {
     for (const version of ['AC1018', 'AC1024'] as Ver[]) {
       const back = readDwg(writeDwg(d18, { version }).data);
       for (const { h, reactor } of images) expect(img(back, h).imageDefReactor, version).toBe(reactor);
+    }
+  });
+
+  it('복사한 IMAGE는 원본 반응자 핸들을 지니지 않고, DWG·DXF로 쓰면 반응자가 IMAGE마다 다르거나 없다', () => {
+    const { doc, images, h } = attached();
+    const src = img(doc, images[0]!.h);
+    const r = copyEntity(src, affTranslate(0, 100), doc);
+    const copy = r.add![0] as ImageEntity;
+    // 전에는 복사본이 원본 반응자 핸들을 그대로 지녔다(반응자 객체의 소유자는 원본 IMAGE 하나)
+    expect(copy.imageDefReactor).toBeUndefined();
+    expect(src.imageDefReactor).toBe(images[0]!.reactor);
+    copy.handle = h();
+    applyOps(doc, [{ kind: 'add', block: MODEL_SPACE, entity: copy }]);
+    const all = [...images.map((x) => x.h), copy.handle];
+    const distinct = (list: (string | undefined)[]) => {
+      const set = list.filter((x): x is string => !!x);
+      expect(new Set(set).size).toBe(set.length);
+    };
+    for (const version of ['AC1024', 'AC1032'] as Ver[]) {
+      const back = readDwg(writeDwg(doc, { version }).data);
+      distinct(all.map((x) => img(back, x).imageDefReactor));
+      expect(img(back, images[0]!.h).imageDefReactor, version).toBe(images[0]!.reactor);
+      expect(img(back, copy.handle).imageDefReactor, version).toBeUndefined();
+    }
+    for (const version of ['AC1018', 'AC1032'] as Ver[]) {
+      const w = writeDxf(doc, { version });
+      // 전에는 두 IMAGE가 같은 반응자 핸들을 지녀 핸들 겹침을 알렸다
+      expect(w.warnings.map((x) => x.code), version).not.toContain('handle.duplicate');
+      const { image360, reactorOwner } = links(w.data);
+      distinct(all.map((x) => image360.get(x)));
+      expect(image360.get(images[0]!.h), version).toBe(images[0]!.reactor);
+      // DXF 쓰기는 반응자 없는 IMAGE에 새 반응자를 만든다
+      expect(reactorOwner.get(image360.get(copy.handle)!), version).toBe(copy.handle);
     }
   });
 
