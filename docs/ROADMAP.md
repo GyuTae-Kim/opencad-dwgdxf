@@ -441,10 +441,20 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   (만들 때 DIMJOGANG을 넣으면 새 도면의 출력이 바뀌므로 AutoCAD가 0을 어떻게 다루는지 실물로 본 뒤 고친다).
   LEADER 75(걸이선)는 DXF 리더가 읽고 DXF 쓰기가 쓰지만 DWG 쓰기는 걸이선 점을 빼고 74(걸이선 방향)만 쓰고 DWG 리더는 늘 거짓으로 둔다(DWG 본문 끝 BS·B·B가 무엇인지 공개 HTML 근거 없음).
   VIEWPORT 61·74·79·146·170·292·282·141·142·63, HATCH 그라데이션 451·463, MULTILEADER 지시선 선 재지정(170·340·171·40·341·93)은 모델에 칸이 없어 두 리더가 읽지 않고 두 쓰기가 상수로 쓴다
+- [x] DWG에서 연 IMAGE의 반응자(159차): DXF 참조서 IMAGE 360 "Hard reference to imagedef_reactor object"·IMAGEDEF_REACTOR 330 "Object ID for associated image object".
+  DXF 리더는 360을 읽고 DWG 쓰기는 IMAGE 핸들 흐름에 반응자를 쓰는데 DWG 리더가 비워 두어, DWG에서 연 이미지를 DWG로 저장하면 반응자 참조가 0이 되고
+  DXF로 저장하면 원본 반응자를 버리고 새 핸들로 다시 만들었다 — 이제 소유자가 IMAGE인 IMAGEDEF_REACTOR로 잇는다(IMAGE 핸들 흐름의 둘째 핸들은 여전히 읽지 않는다)
+- [ ] 159차에 보고 두 것(실물 표본 없이는 근거가 서지 않는 항목):
+  IMAGE를 복사하면(COPY·ARRAY — `freshEntity`가 반응자 핸들을 지우지 않음) 복사본도 원본 반응자 핸들을 지녀, DXF 쓰기는 반응자를 새 핸들로 만들며 핸들 겹침을 알리고
+  DWG 쓰기는 두 IMAGE가 한 반응자를 가리키게 쓴다(DWG 쓰기는 반응자 없는 IMAGE에 반응자를 만들지 않는다 — 만들려면 AutoCAD가 그 DWG를 받아들이는지 실물로 봐야 한다).
+  MLINE 71의 4·8(마구리 생략)은 DWG의 열림·닫힘 칸(BS)에 그대로 쓰고 읽는다(그 비트의 DWG 자리에 공개 HTML 근거 없음).
+  SHAPE는 DWG가 번호·스타일, DXF가 이름(2)을 지녀 DXF에서 이름만 읽은 쉐이프는 DWG에 번호 0으로 간다(이름 ↔ 번호는 SHX 파일이 있어야 바꾼다).
+  도형 재질(347)은 DXF 리더가 버리고 DXF 쓰기가 쓰지 않는다(MATERIAL 객체를 다른 판으로 옮기는 일이 먼저 — 아래 왕복 확장 자료 항목의 RTMaterial)
 - [ ] MPOLYGON의 남은 일(155차에 봄): 63(참조서 "pattern fill color as the ACI")을 참조서 표는 70과 71 사이에 적는데 이 앱 쓰기는 무늬 선 뒤(R2004+, 색이 없으면 256)에 써
   리더(머리만 읽음)가 이 앱이 쓴 63을 되읽지 못한다 — 무늬 뒤 63도 읽으면 쓰기가 채운 256이 채우기 색이 되어 채우기 아닌 MPOLYGON에 면이 생기므로 AutoCAD 실물의 차례가 있어야 고친다.
   장면은 채우기 아닌 MPOLYGON을 테두리(+ 63이 있으면 그 색 면)로 그리고 무늬 선은 그리지 않는다(63이 면 색인지 무늬 색인지 실물 없이 못 가름).
-  DWG 리더는 IMAGE·WIPEOUT의 둘째 핸들(IMAGEDEF_REACTOR — 이 앱 DWG 쓰기는 정의 다음에 씀)을 읽지 않는다(DWG 배치의 공개 HTML 근거가 없고 DXF 쓰기는 반응자를 새로 만든다)
+  DWG 리더는 IMAGE·WIPEOUT의 둘째 핸들(IMAGEDEF_REACTOR — 이 앱 DWG 쓰기는 정의 다음에 씀)을 읽지 않는다(DWG 배치의 공개 HTML 근거가 없다 —
+  159차부터 반응자 객체의 소유자로 IMAGE의 반응자를 잇는다)
 - [ ] 156차에 보고 두 것(실물 표본 없이는 근거가 서지 않는 항목):
   MESH 재지정 묶음(하위 객체 표지·특성 종류 뒤의 값)은 모델에 칸이 없어 리더가 읽지 않고, 모델 값으로 쓸 때는 재지정 없이(DXF 90 0·DWG BL 0) 쓴다
   (같은 판 DWG의 원본 본문만 그대로 남음) — 참조서와 ezdxf 문서 모두 특성 값의 차례를 적지 않아
