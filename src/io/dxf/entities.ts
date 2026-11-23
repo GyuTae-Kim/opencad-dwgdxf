@@ -1671,10 +1671,15 @@ function mesh(c: Common): MeshEntity {
   let i = 0;
   const n = codes.length;
   let subdivision = 0;
+  // 세분 단계는 첫 91이다. DXF 참조서 MESH는 모서리 주름 값(140) 뒤 재지정 묶음에서 91을 "Sub-entity marker"로 다시 쓴다
+  // (전에는 마지막 91을 읽어 하위 객체를 재지정한 MESH의 세분 단계가 표지 값이 됐고 저장하면 그 값을 썼다 — 156차). DWG 리더도 세분 단계를 본문 맨 앞에서 읽는다
+  let level = false;
   for (; i < n; i++) {
     const code = codes[i]!;
-    if (code === 91) subdivision = int(t.values[i]);
-    else if (code === 92) {
+    if (code === 91) {
+      if (!level) subdivision = int(t.values[i]);
+      level = true;
+    } else if (code === 92) {
       const nv = int(t.values[i]);
       i++;
       for (let k = 0; k < nv && i < n; k++) {
