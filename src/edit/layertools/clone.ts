@@ -4,7 +4,8 @@
  * - 대상: 블록, 도면층, 선종류, 문자 스타일, 치수 스타일, 다중 지시선 스타일, 테이블 스타일, 배치.
  * - 이 도면에 같은 이름의 정의가 이미 있으면 이 도면의 것을 그대로 쓴다(AutoCAD 디자인센터·붙여넣기와 같다).
  * - 정의가 쓰는 도면층·선종류·문자 스타일·중첩 블록도 함께 온다. 익명 블록(*D·*T·*U…)은 이 도면에서 비어 있는 번호로 바꾼다.
- * - 원본 핸들은 새 핸들로 바꾼다. 원본 도면의 다른 객체를 가리키는 연결(확장 사전, 반응자, 이미지 정의 등)은 끊는다.
+ * - 원본 핸들은 새 핸들로 바꾼다. 원본 도면의 다른 객체를 가리키는 연결(확장 사전, 반응자, 이미지 정의 등)은 끊는다
+ *   (함께 복사한 객체끼리의 연결 — 연관 해치 경계, 지시선 주석과 그 주석의 반응자 — 은 새 핸들로 잇는다).
  *
  * 작업은 finish()로 받는다(사전 항목 갱신은 사전마다 하나로 모아 맨 끝에 둔다).
  */
@@ -31,6 +32,7 @@ import type { EditOp } from '../session';
 import { isLayoutBlock } from '../session';
 import { cloneTableStyle, docVersionNumber, listTableStyles, tableStyleDictionary, tableStyleRaw } from '../table/style';
 import { mapTableTextStyles } from '../table/entity';
+import { addLeaderReactors } from '../util/leadercopy';
 
 export type DefKind = 'block' | 'layer' | 'linetype' | 'textStyle' | 'dimStyle' | 'mleaderStyle' | 'tableStyle' | 'layout';
 
@@ -530,6 +532,9 @@ export class DefinitionCopier {
       out.push(c);
     }
     for (const c of out) this.relink(c);
+    // 지시선 주석: relink가 340을 함께 복사한 주석으로 이었으면 그 주석의 반응자에도 지시선을 넣는다(common이 반응자를 지워 한쪽만 이어졌다 —
+    // Autodesk "Leader Associativity": 함께 복사하면 복사본도 연관, 162차)
+    addLeaderReactors(out);
     return out;
   }
 
