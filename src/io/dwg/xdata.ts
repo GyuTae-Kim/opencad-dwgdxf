@@ -1,8 +1,8 @@
 /** 확장 자료 해석 도우미 */
-import type { CadColor, MTextEntity, XData, XDataItem } from '../../core/model';
+import type { CadColor, CadDocument, MTextEntity, XData, XDataItem } from '../../core/model';
 import { rawColorToCad } from '../../core/color';
 import { entityLineweightFromIndex } from './lineweight';
-import { R14, R2000 } from './version';
+import { R13, R14, R2000, versionNumber } from './version';
 import { lwIndex } from './writer/util';
 
 /**
@@ -31,6 +31,16 @@ export function applyRoundTripXData(e: { color: CadColor; lineweight: number }, 
       if (col) e.color = col;
     }
   }
+}
+
+/**
+ * 문서가 읽을 때 RTTcAl을 트루컬러로 옮긴 판(R13~R2000 DWG — applyRoundTripXData)에서 왔는지(151차). 그런 문서에서 트루컬러가 없는 도형에 남은
+ * 꼴·색 번호가 맞는 RTTcAl은 앱 편집(색 바꾸기 — 편집은 확장 자료를 그대로 둔다)으로 낡은 자료다(roundTripXDataForR2000의 applied).
+ * DXF(AutoCAD는 RTTcAl을 쓰지 않는다 — 139차)·R2004+ DWG·새 도면·R12 DWG는 읽을 때 옮기지 않는다
+ */
+export function roundTripColorApplied(doc: Pick<CadDocument, 'format' | 'version'>): boolean {
+  const v = doc.format === 'dwg' ? versionNumber(doc.version) : 0;
+  return v >= R13 && v <= R2000;
 }
 
 /** items[i]가 1000 "RTLwPs"일 때 뒤 1070의 선가중치 번호(0x80 | 번호 꼴이 아니면 -1) */
@@ -81,17 +91,23 @@ const isMTextGroup = (it: XDataItem): boolean => it.code === 1000 && typeof it.v
  *   1000 = 색상표 이름 또는 "$$NoName$$". ACI 색 도형(투명도만 있는 것 포함)과 PDF 언더레이에는 없다
  * - ACAD 자료가 이미 있으면 그 끝(DSTYLE·HATCH 같은 묶음 뒤, RTLwPs 뒤)에 붙고 저장 때 만드는 MTEXTBEGIN·ACAD_MTEXT_… 묶음 앞에 온다.
  *   ACAD 자료가 없으면 다른 앱 자료 뒤에 ACAD를 더한다(R13~R2004 표본의 RT 묶음 도형 차례)
- * 이미 있는 RTTcAl은 다시 읽어 같은 색이 되면 그대로 둔다(AutoCAD가 쓴 옛 판 자료 — 모델에 트루컬러가 없어도 색 번호가 같으면 둔다).
+ * 이미 있는 RTTcAl은 다시 읽어 같은 색이 되면 그대로 둔다(AutoCAD가 쓴 옛 판 자료). 모델에 트루컬러가 없어도 색 번호가 같으면 두는 것은
+ * 읽을 때 RTTcAl을 옮기지 않는 원본(DXF·R2004+ DWG·새 도면 — 예전 판 이 앱이 옮겨 쓴 자료를 살리려고)에서만이다(151차 — applied).
  * 색이 다르면(앱에서 색을 바꾼 도형) 지우고 새로 만든다. RTLwPs는 그 값이 제 칸의 선가중치와 같을 때 뺀다.
  * @param aci 도형 공통 자료에 쓸 ACI(트루컬러면 가장 가까운 색 — common.ts wcolor)
+ * @param applied 문서를 읽을 때 RTTcAl을 트루컬러로 옮긴 판(R13~R2000 DWG — roundTripColorApplied)에서 읽었다: 트루컬러가 없는 도형에 남은
+ *   색 번호가 같은 묶음은 앱에서 그 번호의 ACI로 바꾼 낡은 자료라 뺀다(AutoCAD R2000 판의 ACI 색 도형처럼 — 전에는 다시 열면 바꾸기 전 트루컬러가 돌아왔다)
  * @returns 바뀌지 않으면 받은 배열 그대로
  */
 export function roundTripXDataForR2000(
   xdata: XData[] | undefined,
   e: { type: string; color: CadColor; lineweight: number; transparency?: number },
   aci: number,
+  applied = false,
 ): XData[] | undefined {
   const want = e.color.rgb !== undefined && !NO_RT_COLOR.has(e.type) ? e.color : undefined;
+  // 읽을 때 옮겼다면 트루컬러가 없는 도형의 묶음은 편집으로 낡은 것(PDF 언더레이처럼 트루컬러가 있는데 묶음을 만들지 않는 도형은 그대로 둔다)
+  const stale = applied && e.color.rgb === undefined;
   const ai = xdata ? xdata.findIndex((d) => d.app.toUpperCase() === 'ACAD') : -1;
   if (ai < 0 && !want) return xdata;
   const items = ai >= 0 ? xdata![ai]!.items : [];
@@ -106,7 +122,7 @@ export function roundTripXDataForR2000(
       const n = rtTcAlLength(items, i);
       if (n) {
         const col = rtTcAlColor(items, i, aci);
-        if (!kept && col && (!want || (col.rgb === (want.rgb! & 0xffffff) && col.name === (want.name || undefined)))) {
+        if (!kept && col && (want ? col.rgb === (want.rgb! & 0xffffff) && col.name === (want.name || undefined) : !stale)) {
           kept = true;
           for (let k = 0; k < n; k++) out.push(items[i + k]!);
         } else {
