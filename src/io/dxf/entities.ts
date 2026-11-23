@@ -1177,10 +1177,13 @@ function hatch(c: Common, type: 'HATCH' | 'MPOLYGON', version: string): HatchEnt
         e.patternName = str(at(i)).trim();
         break;
       case 70:
-        e.solid = int(at(i)) === 1;
+        // MPOLYGON의 70은 판이다(DXF 참조서 HATCH 그룹 코드 "for MPolygon, the version of MPolygon" — 쓰기는 1). 채우기는 71
+        if (type === 'HATCH') e.solid = int(at(i)) === 1;
         break;
       case 71:
-        e.associative = int(at(i)) === 1;
+        // MPOLYGON의 71은 채우기 플래그다(참조서 "for MPolygon, solid-fill flag") — MPOLYGON에는 연관 플래그가 없다
+        if (type === 'MPOLYGON') e.solid = int(at(i)) === 1;
+        else e.associative = int(at(i)) === 1;
         break;
       case 63:
         if (type === 'MPOLYGON') e.fillColor = { aci: int(at(i)) };
