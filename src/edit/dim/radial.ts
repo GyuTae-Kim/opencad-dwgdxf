@@ -36,7 +36,13 @@ export function radial(o: Out): void {
       const anchor = madd(c, u, anchorT);
       place = { center: add(anchor, verticalOffset(o, text.box, ta, uAng)), angle: ta };
     } else {
-      place = { center: tm, angle: o.textAngle(uAng, v.toh) };
+      const ta = o.textAngle(uAng, v.toh);
+      // 반지름 치수에서 DIMTMOVE 1로 옮긴 문자의 중간점이 지시선 위면(149차) 중간점은 문자 밑 자리다 — 133차 선형 치수와 같은 꼴로
+      // 문자 가운데 = 중간점 + DIMTAD 쪽 DIMGAP + 높이/2(verticalOffset — 문자가 선과 나란할 때만). 실제 도면의 그런 반지름 치수 12개(도면 6,
+      // 모두 DIMTAD 1)에서 AutoCAD 문자는 선 방향 자리가 중간점과 같고 선에서 1.095~1.357 DIMASZ(이 앱 셈 1.090~1.448) 비켜 있다.
+      // 지름 치수·DIMTMOVE 2·지시선에서 떨어진 중간점은 실물이 없어 전처럼 중간점이 문자 가운데다
+      const onLeader = v.tmove === 1 && !dia && Math.abs(dot(sub(tm, c), perp(u))) <= 1e-3 * Math.max(text.box.h, v.txt);
+      place = { center: onLeader ? add(tm, verticalOffset(o, text.box, ta, uAng)) : tm, angle: ta };
     }
   } else {
     inside = v.tix;
