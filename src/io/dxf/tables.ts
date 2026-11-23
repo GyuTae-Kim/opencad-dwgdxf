@@ -70,6 +70,20 @@ function split(rec: DxfRecord): { base: TableRecordBase; tags: Tags } {
   return { base, tags: new Tags(sc, sv, ss) };
 }
 
+/**
+ * R2000+ 꼴의 표준 플래그 70(16 외부 참조 의존, 32 해결됨, 64 참조됨): DXF 참조서 LTYPE·APPID·UCS·VPORT·DIMSTYLE은 하위 클래스 표지와
+ * 이름(2) 바로 뒤에 둔다. split은 하위 클래스 표지 앞의 70(R12 꼴)만 담아 전에는 잃었다(154차 — 쓰기는 이 자리에 70을 늘 쓴다).
+ * 표 고유 하위 클래스의 첫 태그가 70일 때만 플래그로 본다 — DIMSTYLE은 뒤에 다른 뜻의 70(R2007+ DIMTFILLCLR, 69 다음)이 더 있다.
+ */
+function recordFlags(t: Tags, base: TableRecordBase): number {
+  for (let i = 0; i < t.length; i++) {
+    const s = t.subs[i] ?? '';
+    if (s === '' || s.startsWith('AcDbSymbolTableRecord')) continue;
+    return t.codes[i] === 70 ? int(t.values[i]) : base.flags;
+  }
+  return base.flags;
+}
+
 function layer(rec: DxfRecord): Layer {
   const { base, tags: t } = split(rec);
   const flags = t.int(70);
@@ -152,7 +166,7 @@ function linetype(rec: DxfRecord): Linetype {
   }
   let patternLength = t.num(40);
   if (!patternLength && elements.length) patternLength = elements.reduce((a, e) => a + Math.abs(e.length), 0);
-  return { ...base, description: t.str(3), patternLength, elements };
+  return { ...base, flags: recordFlags(t, base), description: t.str(3), patternLength, elements };
 }
 
 function textStyle(rec: DxfRecord): TextStyle {
@@ -198,7 +212,7 @@ function dimStyle(rec: DxfRecord, handles: Map<number, string>): DimStyle {
       vars[vn] = num(v);
     }
   }
-  return { ...base, vars };
+  return { ...base, flags: recordFlags(t, base), vars };
 }
 
 function vport(rec: DxfRecord): VPortRecord {
@@ -209,6 +223,7 @@ function vport(rec: DxfRecord): VPortRecord {
   };
   return {
     ...base,
+    flags: recordFlags(t, base),
     lowerLeft: p(10),
     upperRight: p(11, 1, 1),
     center: p(12),
@@ -246,7 +261,7 @@ function view(rec: DxfRecord): ViewRecord {
 
 function ucs(rec: DxfRecord): UcsRecord {
   const { base, tags: t } = split(rec);
-  return { ...base, origin: t.point(10), xAxis: t.point(11, { x: 1, y: 0, z: 0 }), yAxis: t.point(12, { x: 0, y: 1, z: 0 }) };
+  return { ...base, flags: recordFlags(t, base), origin: t.point(10), xAxis: t.point(11, { x: 1, y: 0, z: 0 }), yAxis: t.point(12, { x: 0, y: 1, z: 0 }) };
 }
 
 function blockRecord(rec: DxfRecord): BlockRecord {
@@ -332,7 +347,8 @@ export function readTableEntry(doc: CadDocument, rec: DxfRecord, th: TableHandle
       break;
     }
     case 'APPID': {
-      const { base } = split(rec);
+      const { base, tags } = split(rec);
+      base.flags = recordFlags(tags, base);
       doc.appIds.set(tableKey(base.name), base);
       break;
     }
