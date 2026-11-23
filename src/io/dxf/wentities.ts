@@ -6,7 +6,6 @@
 import type {
   AcisEntity,
   AttribEntity,
-  CadColor,
   DimensionEntity,
   Entity,
   EntityBase,
@@ -32,6 +31,7 @@ import type {
   XData,
 } from '../../core/model';
 import { tableKey } from '../../core/model';
+import { cadColorToRaw } from '../../core/color';
 import { lwCount, lwHasWidths, vertCount } from '../../core/lwpoly';
 import { polyBulge, polyCount, polyEndWidth, polyFace, polyFlags, polyIsFaceRecord, polyLoc, polyStartWidth, polyTangent, polyX, polyY, polyZ } from '../../core/polyverts';
 import { clampedKnots } from '../../geom/curves';
@@ -65,15 +65,8 @@ export function validLineweight(lw: number): number {
   return best;
 }
 
-/** CadColor → MULTILEADER·DWG 원시 색 정수(부호 있는 32비트) */
-export function cadColorToRaw(c: CadColor | undefined): number {
-  if (!c) return 0xc1000000 | 0;
-  if (c.rgb !== undefined) return (0xc2000000 | (c.rgb & 0xffffff)) | 0;
-  if (c.aci === 256) return 0xc0000000 | 0;
-  if (c.aci === 0) return 0xc1000000 | 0;
-  if (c.aci === 257) return 0xc8000000 | 0;
-  return (0xc3000000 | (c.aci & 0xff)) | 0;
-}
+// CadColor → MULTILEADER·DWG 원시 색 정수: DWG 리더도 쓰므로 core/color.ts에 둔다(157차)
+export { cadColorToRaw };
 
 /** 다른 객체를 가리키는 핸들 코드(5·105 자기 핸들 제외) */
 function isRefCode(code: number): boolean {

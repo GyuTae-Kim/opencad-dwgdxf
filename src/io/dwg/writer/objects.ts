@@ -345,7 +345,9 @@ export class ObjectWriter {
     d.BD(m.scale);
     d.B(n(295, 0) !== 0);
     d.B(n(296, 0) !== 0);
-    d.BD(n(143, 0.125));
+    // 끊기 간격: 원본 태그가 없으면 DXF 쓰기와 같은 기본값(acad.dwt 0.125, acadiso.dwt 3.75). 전에는 늘 0.125였고
+    // DWG 리더가 이 칸을 읽고 버려 드러나지 않았다(157차부터 원본 태그로 읽는다)
+    d.BD(n(143, ctx.doc.header.get('$MEASUREMENT') === 1 ? 3.75 : 0.125));
     if (ver >= R2010) {
       d.BS(n(271, 0));
       d.BS(n(273, 9));

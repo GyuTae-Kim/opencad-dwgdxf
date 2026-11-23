@@ -75,6 +75,16 @@ export function rawColorToCad(raw: number): CadColor {
   }
 }
 
+/** CadColor → MULTILEADER·DWG 원시 색 정수(부호 있는 32비트, rawColorToCad의 거꾸로) */
+export function cadColorToRaw(c: CadColor | undefined): number {
+  if (!c) return 0xc1000000 | 0;
+  if (c.rgb !== undefined) return (0xc2000000 | (c.rgb & 0xffffff)) | 0;
+  if (c.aci === 256) return 0xc0000000 | 0;
+  if (c.aci === 0) return 0xc1000000 | 0;
+  if (c.aci === 257) return 0xc8000000 | 0;
+  return (0xc3000000 | (c.aci & 0xff)) | 0;
+}
+
 /** 화면 색: 배경이 어두우면 ACI 7 = 흰색, 밝으면 검은색 */
 export function aciToRgb(aci: number, darkBackground: boolean): number {
   if (aci === 7) return darkBackground ? 0xffffff : 0x000000;
