@@ -232,6 +232,9 @@ function view(rec: DxfRecord): ViewRecord {
   const c = t.point(10);
   return {
     ...base,
+    // 70(1 종이 공간 뷰, 16·32 외부 참조 의존)은 R2000+ 꼴에서 AcDbViewTableRecord 하위 클래스 표지 뒤에 있어 split이 담지 않는다.
+    // 전에는 R12 꼴만 읽어 종이 공간 뷰가 모형 뷰가 됐다(153차 — 쓰기는 70을 늘 쓴다)
+    flags: t.int(70, base.flags),
     center: { x: c.x, y: c.y },
     height: t.num(40, 1),
     width: t.num(41, 1),
