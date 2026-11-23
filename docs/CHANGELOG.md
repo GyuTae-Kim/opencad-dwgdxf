@@ -3,6 +3,32 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(155차): DXF에서 연 무늬 MPOLYGON이 채우기가 되어 저장하면 무늬가 빠지던 것
+
+### 고른 까닭
+152~154차의 표 레코드에 이어 도형 다섯 종류(ATTRIB·ATTDEF, IMAGE·WIPEOUT, MLINE, LEADER, HATCH·MPOLYGON)의 쓰기·읽기 짝을 DXF 참조서와 견줬습니다(실제 도면 표본 없음 — 새 표본은 내려받지 않음).
+- MPOLYGON의 70·71: DXF 참조서 HATCH 그룹 코드는 70을 "for MPolygon, the version of MPolygon", 71을 "for MPolygon, solid-fill flag"로 적습니다. DXF 쓰기는 이 뜻대로
+  70 = 1(판)·71 = 채우기로 쓰는데, 리더가 MPOLYGON도 HATCH 뜻(70 채우기, 71 연관)으로 읽어 70 = 1인 MPOLYGON은 모두 채우기가 되고 채우기 MPOLYGON은 연관이 됐습니다.
+  그래서 무늬 MPOLYGON을 DXF로 다시 저장하면 71 = 1로 쓰고 무늬(52·41·77·무늬 선)를 뺐고(값을 잃음), DWG(MPOLYGON을 HATCH로 씀)에는 무늬 대신 채우기 해치로 갔습니다.
+  실물 없이 쓰기·읽기 짝과 공개 문서로 근거가 섭니다 → ①
+  - 장면: 무늬 MPOLYGON은 전에는 채운 면이었고, 이제 그리기 규칙(채우기 아닌 MPOLYGON은 테두리, 63 색이 있으면 그 색 면)대로 그립니다. 그리기 규칙은 바꾸지 않았습니다.
+    채우기 MPOLYGON(71 = 1)은 전처럼 채웁니다.
+  - 앞 차수 결과: 작업 내역·로드맵·앞 차수 결과 파일에 MPOLYGON을 따로 센 대조가 없고, DWG 리더는 MPOLYGON을 알 수 없는 객체로 둬 DWG·DXF 짝 대조에서도 같을 수 없던 객체입니다.
+- 하지 않은 것: MPOLYGON의 63(무늬 채우기 색)은 참조서 표가 70과 71 사이에 적는데 이 앱 쓰기는 무늬 선 뒤에 써(색이 없으면 256) 리더가 되읽지 못합니다. 무늬 뒤 63도 읽으면
+  채우기 아닌 MPOLYGON에 면이 생겨 AutoCAD 실물의 차례가 있어야 고칩니다. DWG IMAGE·WIPEOUT의 반응자 핸들(이 앱 DWG 쓰기는 정의 다음에 씀)은 DWG 리더가 읽지 않지만
+  DWG 배치의 공개 HTML 근거가 없고 DXF 쓰기가 반응자를 새로 만드는 일과 얽혀 두었습니다. ATTRIB·ATTDEF·MLINE·LEADER는 쓰기와 읽기가 맞았습니다.
+
+### 고친 것
+- ① DXF 리더가 MPOLYGON의 71을 채우기 플래그로 읽고 70(판)은 채우기로 보지 않습니다(`io/dxf/entities.ts` `hatch`). MPOLYGON의 연관은 거짓입니다. HATCH 읽기와 쓰기는 바꾸지 않았습니다.
+
+### 확인
+- ①: DXF R2000~R2018로 쓴 무늬 MPOLYGON이 다시 열면 무늬(이름·각도·축척·무늬 선 그대로 — 전에는 채우기), 채우기 MPOLYGON은 채우기·연관 아님(전에는 연관),
+  다시 저장한 DXF는 71 = 0과 무늬 선을 씀, DWG R2000·R2004·R2018에는 무늬 해치. 참조서 차례로 손으로 쓴 MPOLYGON의 71·63을 읽고, 장면은 무늬 MPOLYGON을 채우지 않습니다.
+  쓰기 꼴(70 = 1, 71 = 채우기)은 전과 같습니다.
+- 시험: `tests/dwg/roundtrip155.test.ts` 3건. 고치기 전 판에서 3건 모두 실패합니다. tsc 오류 0, 관련 시험 3파일(roundtrip155·hatch/island-style·dxf/writer.unit) 45건 통과.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·워커 조각 크기 전·후.
+  실도면 표본 없음: 실제 도면 대조는 하지 않았습니다. 바뀐 곳이 DXF MPOLYGON의 70·71 읽기뿐이고 HATCH는 그대로인 것을 근거로 둡니다.
+
 ## 2026-11-24(154차): R2000+ DXF에서 연 선종류·치수 스타일 등의 외부 참조 의존 플래그가 저장하면 빠지던 것
 
 ### 고른 까닭
