@@ -213,12 +213,14 @@ export function linear(o: Out): void {
 }
 
 /**
- * 화살표 반전(DXF 74·75, AutoCAD "화살표 반전" AIDIMFLIPARROW)을 그리는 치수: 회전 선형 치수(종류 0)의 닫고 채운 기본 화살촉만(131차).
- * AutoCAD가 그린 반전 블록이 있는 실물(실제 도면 3개의 치수 3개 — 바깥 화살촉 하나·둘을 안으로, 안쪽 화살촉 둘을 밖으로)이 모두 이 종류다.
- * 정렬·각도·반지름 등 다른 종류와 블록·눈금 화살촉은 실물이 없어 반전 없이 그린다(값은 저장에 그대로 옮긴다)
+ * 화살표 반전(DXF 74·75, AutoCAD "화살표 반전" AIDIMFLIPARROW)을 그리는 치수: 회전·정렬 선형 치수(종류 0·1)의 닫고 채운 기본 화살촉만.
+ * AutoCAD가 그린 반전 블록이 있는 실물(실제 도면 3개의 치수 3개 — 바깥 화살촉 하나·둘을 안으로, 안쪽 화살촉 둘을 밖으로)은 모두 회전 치수다(131차).
+ * 정렬 치수(150차)는 반전 실물이 없지만 같은 꼴로 그린다: 반전 깃발은 치수 공통 자료이고(R2007+ DWG 공통 비트·DXF AcDbDimension 73~75 — 130차),
+ * 132차 맞춤 규칙이 정렬 치수에도 그대로 맞았으며(AutoCAD가 두 종류를 같은 배치로 그린다), 위 그리기는 치수선 방향만 다르고 규칙은 치수선 좌표로 적혀 있다.
+ * 각도·반지름 등 다른 종류와 블록·눈금 화살촉은 실물이 없어 반전 없이 그린다(값은 저장에 그대로 옮긴다)
  */
 export function flippable(d: { dimType: number }, k: ArrowKind, flag: boolean | undefined): boolean {
-  return !!flag && (d.dimType & 7) === 0 && k.type === 'solid';
+  return !!flag && (d.dimType & 7) <= 1 && k.type === 'solid';
 }
 
 /**
