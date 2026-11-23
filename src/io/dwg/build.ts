@@ -14,6 +14,7 @@ import {
   type DimStyle,
   type GenericObject,
   type HeaderValue,
+  type ImageEntity,
   type Layer,
   type Layout,
   type Linetype,
@@ -603,6 +604,16 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
       const ov = parseDimOverrides(e.xdata);
       if (ov) e.overrides = ov;
     }
+  }
+
+  // IMAGE의 반응자(DXF 360 — DXF 참조서 IMAGE "Hard reference to imagedef_reactor object"): 반응자 객체의 소유자가 그 IMAGE다
+  // (IMAGEDEF_REACTOR 330 "Object ID for associated image object"). DXF 리더는 360을 imageDefReactor로 읽고 DWG 쓰기는 IMAGE 본문에 그 반응자를 쓰는데,
+  // DWG 리더가 비워 두어 DWG에서 연 이미지를 DWG로 다시 쓰면 반응자 참조가 0이 되고 DXF로 쓰면 원본 반응자를 버리고 새 핸들로 다시 만들었다(159차).
+  // IMAGE 핸들 흐름의 배치(공개 근거 없음 — 155차)가 아니라 이미 읽은 반응자 객체의 소유자로 잇는다
+  for (const o of objects.values()) {
+    if (o.type !== 'IMAGEDEF_REACTOR' || !o.owner) continue;
+    const e = parsed.get(parseInt(o.owner, 16))?.entity;
+    if (e?.type === 'IMAGE' && !(e as ImageEntity).imageDefReactor) (e as ImageEntity).imageDefReactor = o.handle;
   }
 
   // LEADER 걸이선: DWG에는 걸이선 점이 없고 AutoCAD가 그릴 때(DXF로 쓸 때도) 덧붙인다.
