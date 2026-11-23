@@ -27,7 +27,7 @@ import { annoDimWriteXData, ctxRecordsOf } from '../../annoscale';
 import type { PBlock, PEnt, WCtx } from './context';
 import { HARD_OWNER, HARD_PTR, SOFT_PTR, type EntCommonOut, type ObjWriter } from './objwriter';
 import { eedOf, wcolor } from './common';
-import { mtextSaveXDataForR2000, roundTripXDataForR2000, withoutRoundTripXData } from '../xdata';
+import { mtextSaveXDataForR2000, roundTripColorApplied, roundTripXDataForR2000, withoutRoundTripXData } from '../xdata';
 import { viewportFlagsR2000, withoutMviewXData } from '../../mview';
 import { lwIndex } from './util';
 import { tableKey } from '../../../core/model';
@@ -146,12 +146,15 @@ export class EntityWriter {
   readonly ver: number;
   /** LEADER 주석 MTEXT 핸들 → 글 상자 크기(R2010+에서 MTEXT 범위로 쓴다) */
   readonly leaderBox = new Map<number, { height: number; width: number }>();
+  /** 문서를 읽을 때 RTTcAl을 트루컬러로 옮긴 판(R13~R2000 DWG)에서 읽었다 — R2000으로 쓸 때 트루컬러 없는 도형의 낡은 묶음을 뺀다(151차) */
+  private readonly rtColorApplied: boolean;
 
   constructor(ctx: WCtx, ow: ObjWriter, sink: EntSink) {
     this.ctx = ctx;
     this.ow = ow;
     this.sink = sink;
     this.ver = ctx.ver;
+    this.rtColorApplied = roundTripColorApplied(ctx.doc);
     for (const pb of ctx.blocks) {
       for (const pe of pb.ents) {
         const e = pe.e;
@@ -175,7 +178,8 @@ export class EntityWriter {
    * 객체 시작과 확장 자료. R2000은 칸이 없는 트루컬러를 ACAD 왕복 확장 자료로 남기고(138차), R2004+는 제 칸에 쓰는 선가중치·색의
    * 왕복 묶음(RTLwPs·RTTcAl)을 뺀다(139차 — xdata.ts). MTEXT의 여러 줄 문자 저장 묶음은 R2000에 AutoCAD처럼 두고(없으면 만들고 모델 배경과 다른
    * 배경 묶음은 빼고), R2004+에서는 뺀다(140차 — 값은 제 칸에). R2007+는 쓰지 않는 재질을 가리키는 RTMaterial을 뺀다(141차 — AutoCAD는 재질 칸으로 옮긴다).
-   * VIEWPORT의 R12~R14 보기 정보 묶음(MVIEW)은 모든 판에서 뺀다(141차 — R2000+는 제 칸에 쓴다)
+   * VIEWPORT의 R12~R14 보기 정보 묶음(MVIEW)은 모든 판에서 뺀다(141차 — R2000+는 제 칸에 쓴다). R13~R2000 DWG에서 읽은 문서면 R2000으로 쓸 때
+   * 트루컬러가 없는 도형에 남은 RTTcAl(앱에서 그 번호의 ACI로 바꾼 도형의 낡은 자료)을 뺀다(151차)
    */
   private begin(type: number, h: number, e: { xdata?: Entity['xdata'] } & Partial<Pick<Entity, 'type' | 'color' | 'lineweight' | 'transparency'>>): void {
     let xd = e.xdata;
@@ -183,7 +187,12 @@ export class EntityWriter {
     if (this.ver < R2004) {
       if (e.type === 'MTEXT') xd = mtextSaveXDataForR2000(xd, e as MTextEntity);
       if (e.type && e.color && (e.color.rgb !== undefined || xd?.length))
-        xd = roundTripXDataForR2000(xd, { type: e.type, color: e.color, lineweight: e.lineweight ?? -1, transparency: e.transparency }, wcolor(this.ctx, e.color).index);
+        xd = roundTripXDataForR2000(
+          xd,
+          { type: e.type, color: e.color, lineweight: e.lineweight ?? -1, transparency: e.transparency },
+          wcolor(this.ctx, e.color).index,
+          this.rtColorApplied,
+        );
     } else if (xd?.length) xd = withoutRoundTripXData(xd, e.type === 'MTEXT', this.ver >= R2007 ? (m) => this.ctx.ref(m) !== 0 : undefined);
     this.ow.begin(type, h, eedOf(this.ctx, xd));
   }
