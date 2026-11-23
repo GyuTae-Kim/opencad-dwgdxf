@@ -20,7 +20,8 @@ import { defaultPlotSettings } from '../../../core/finalize';
 import { type BitReader, DwgFormatError, codesToString } from '../bitstream';
 import { decodeCadEscapes } from '../../../core/codepage';
 import { cmcToCad } from '../color';
-import { R2000, R2004, R2007, R2010, R2018 } from '../version';
+import { cadColorToRaw } from '../../../core/color';
+import { R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
 import type { ObjectReader } from './reader';
 
 export const hex = (h: number): string => (h > 0 ? h.toString(16).toUpperCase() : '');
@@ -298,51 +299,69 @@ export function readSpatialFilter(or: ObjectReader): SpatialFilterObject {
   return o;
 }
 
-/** isNewFormat: R2010+ 또는 ACAD_MLEADERVER 확장 자료가 있을 때(사양 20.4.87) */
+/**
+ * isNewFormat: R2010+ 또는 ACAD_MLEADERVER 확장 자료가 있을 때(사양 20.4.87).
+ * 모델에 칸이 없는 값(DXF 참조서 MLEADERSTYLE의 171·172·90·40·41·291·300·174~178·292·297·46·94·47·49·140·293·141·294·177·295·296·143·271~273)은
+ * DXF에서 연 스타일처럼 원본 태그(raw)로 둔다 — DWG 쓰기가 그 태그에서 읽어 쓰고, 앱은 주석(296)·끊기 간격(143)을 거기서 본다.
+ * 전에는 읽고 버려 DWG에서 연 스타일을 DXF·다른 판 DWG로 쓰면 기본값이 됐다(157차). 태그 차례·판 조건은 DXF 쓰기의 모델 값 길(io/dxf/wobjects.ts)과 같다.
+ */
 export function readMLeaderStyle(or: ObjectReader, isNewFormat: boolean): MLeaderStyleObject {
   or.commonObject();
   const r = or.dat;
   const ver = or.ver;
   const hr = or.hdl;
   const hb = or.h.handle;
-  if (ver >= R2010) r.BS();
+  const styleVersion = ver >= R2010 ? r.BS() : 2;
   const contentType = r.BS();
-  r.BS();
-  r.BS();
-  r.BL();
-  r.BD();
-  r.BD();
+  const drawMLeaderOrder = r.BS();
+  const drawLeaderOrder = r.BS();
+  const maxPoints = r.BL();
+  const firstAngle = r.BD();
+  const secondAngle = r.BD();
   const leaderLineType = r.BS();
   const leaderLineColor = cmcToCad(r.CMC());
-  hr.H(hb); // 선종류
+  const ltype = hr.H(hb); // 선종류
   // 1/100 mm 값 그대로다(-2 ByBlock). 30은 0.30 mm다
   const leaderLineWeight = r.BL();
   const landing = r.B() === 1;
   const landingGap = r.BD();
-  r.B();
+  const dogleg = r.B();
   const doglegLength = r.BD();
   const name = r.TV(); // 설명
   const arrow = hr.H(hb);
   const arrowSize = r.BD();
-  r.TV(); // 기본 문자
+  const defaultText = r.TV(); // 기본 문자
   const textStyle = hr.H(hb);
-  r.BS();
-  r.BS();
-  if (isNewFormat) r.BS(); // 문자 각도 종류
-  r.BS();
+  const leftAttachment = r.BS();
+  const rightAttachment = r.BS();
+  const angleType = isNewFormat ? r.BS() : 1; // 문자 각도 종류(없으면 DXF 쓰기의 기본값)
+  const textAlignment = r.BS();
   const textColor = cmcToCad(r.CMC());
   const textHeight = r.BD();
-  r.B();
-  if (isNewFormat) r.B(); // 항상 왼쪽 정렬
-  r.BD();
+  const frame = r.B();
+  const alignLeft = isNewFormat ? r.B() : 0; // 항상 왼쪽 정렬
+  const alignSpace = r.BD();
   const block = hr.H(hb);
-  r.CMC();
-  r.BD3();
-  r.B();
-  r.BD();
-  r.B();
-  r.BS();
+  const blockColor = cmcToCad(r.CMC());
+  const blockScale = r.BD3();
+  const blockScaleOn = r.B();
+  const blockRotation = r.BD();
+  const blockRotationOn = r.B();
+  const blockConnection = r.BS();
   const scale = r.BD();
+  // 그 뒤(DWG 쓰기와 같은 차례): 재지정 B, 주석 B, 끊기 간격 BD, R2010+ 부착 방향·위·아래 BS, R2013+ 비트 하나
+  const overwrite = r.B();
+  const annotative = r.B();
+  const breakGap = r.BD();
+  let attachDirection = 0;
+  let topAttachment = 9;
+  let bottomAttachment = 9;
+  if (ver >= R2010) {
+    attachDirection = r.BS();
+    topAttachment = r.BS();
+    bottomAttachment = r.BS();
+  }
+  const lastBit = ver >= R2013 ? r.B() : 0;
   const o: MLeaderStyleObject = {
     ...base(or, 'MLEADERSTYLE'),
     name,
@@ -361,6 +380,62 @@ export function readMLeaderStyle(or: ObjectReader, isNewFormat: boolean): MLeade
   if (arrow) o.arrowHeadHandle = hex(arrow);
   if (textStyle) o.textStyleHandle = hex(textStyle);
   if (block) o.blockHandle = hex(block);
+  // 본문이 짧아 끝까지 읽지 못하면 전처럼 원본 태그 없이 둔다(쓰기는 모델 값과 기본값)
+  if (r.overflowed()) return o;
+  const raw: RawTag[] = [{ code: 100, value: 'AcDbMLeaderStyle' }];
+  const t = (code: number, value: string | number): void => {
+    raw.push({ code, value });
+  };
+  if (ver >= R2010) t(179, styleVersion);
+  t(170, contentType);
+  t(171, drawMLeaderOrder);
+  t(172, drawLeaderOrder);
+  t(90, maxPoints);
+  t(40, firstAngle);
+  t(41, secondAngle);
+  t(173, leaderLineType);
+  t(91, cadColorToRaw(leaderLineColor));
+  if (ltype) t(340, hex(ltype));
+  t(92, leaderLineWeight);
+  t(290, landing ? 1 : 0);
+  t(42, landingGap);
+  t(291, dogleg);
+  t(43, doglegLength);
+  t(3, name);
+  if (arrow) t(341, hex(arrow));
+  t(44, arrowSize);
+  t(300, defaultText);
+  if (textStyle) t(342, hex(textStyle));
+  t(174, leftAttachment);
+  t(178, rightAttachment);
+  t(175, angleType);
+  t(176, textAlignment);
+  t(93, cadColorToRaw(textColor));
+  t(45, textHeight);
+  t(292, frame);
+  t(297, alignLeft);
+  t(46, alignSpace);
+  if (block) t(343, hex(block));
+  t(94, cadColorToRaw(blockColor));
+  t(47, blockScale.x);
+  t(49, blockScale.y);
+  t(140, blockScale.z);
+  t(293, blockScaleOn);
+  t(141, blockRotation);
+  t(294, blockRotationOn);
+  t(177, blockConnection);
+  t(142, scale);
+  t(295, overwrite);
+  t(296, annotative);
+  t(143, breakGap);
+  if (ver >= R2010) {
+    t(271, attachDirection);
+    t(272, bottomAttachment);
+    t(273, topAttachment);
+  }
+  // DXF 쓰기는 298을 R2018 DXF에만 쓴다(AutoCAD 표본은 값 0)
+  if (ver >= R2018) t(298, lastBit);
+  o.raw = raw;
   return o;
 }
 
