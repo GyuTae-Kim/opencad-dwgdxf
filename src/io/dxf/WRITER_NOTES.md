@@ -81,8 +81,9 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 확장 자료(등록된 APPID만, 하이퍼링크는 PE_URL로). R12는 하위 클래스 표지·소유자·R2000+ 코드를 쓰지 않는다.
 옛 판 DWG의 ACAD 왕복 묶음 RTLwPs·RTTcAl은 어느 판이든 쓰지 않는다(139차 — 읽을 때 제 칸으로 옮겼고, AutoCAD가 쓴 DXF R12~R2018에 없다. `io/dwg/xdata.ts`).
 재질 핸들 묶음 RTMaterial은 가리키는 객체를 쓰지 않으면 뺀다 — DWG에서 읽은 MATERIAL은 쓰지 않으므로 DWG 원본에서는 늘 빠진다(141차, AutoCAD가 쓴 DXF에 0/133쌍).
-MTEXT의 여러 줄 문자 저장 묶음(MTEXTBEGIN·ACAD_MTEXT_BBRT)은 R2000 DXF에만 AutoCAD처럼 모든 MTEXT에 두고(없으면 제 칸 줄 간격으로 만들고, 표본 꼴 배경에 BBRT,
-모델 배경과 다른 BBRT는 뺀다), 다른 판에서는 꼴이 맞는 묶음을 뺀다(140차 — AutoCAD가 쓴 DXF는 R2000 판에만 있다. `io/dwg/xdata.ts`).
+MTEXT의 여러 줄 문자 저장 묶음(MTEXTBEGIN·ACAD_MTEXT_BBRT)은 R2000 DXF에만 AutoCAD처럼 모든 MTEXT에 두고(없으면 제 칸 줄 간격으로 만들고, 표본 꼴 배경에 BBRT —
+색상표 배경은 이름 없이 같은 RGB로(152차), 모델 배경과 다른 BBRT는 뺀다), 다른 판에서는 꼴이 맞는 묶음을 뺀다(140차 — AutoCAD가 쓴 DXF는 R2000 판에만 있다. `io/dwg/xdata.ts`).
+R2004+ MTEXT 배경 색은 63·421·431(색상표 이름 — DXF 참조서 430~439)로 쓰고 리더도 431을 읽는다(152차 — 전에는 읽지 않아 다시 열면 이름이 빠졌다).
 
 | 객체 | 쓰는 방식 |
 | --- | --- |

@@ -215,10 +215,11 @@ describe('여러 줄 문자 저장 묶음(140차)', () => {
       [mtext('F4', [...info, ...mtb(1, 1)], { lineSpacingStyle: 2, lineSpacingFactor: 0.8 }), [{ app: 'ACAD', items: [...info, ...mtb(2, 0.8)] }]],
       // 트루컬러 배경 → MTEXTBEGIN 바로 뒤에 BBRT
       [mtext('F5', undefined, bgVals), [{ app: 'ACAD', items: [...mtb(), ...bbrt()] }]],
-      // 실물이 없는 배경(도면 창 색 2, ACI 색, 색상표 이름)은 만들지 않는다
+      // 실물이 없는 배경(도면 창 색 2, ACI 색)은 만들지 않는다
       [mtext('F6', undefined, { ...bgVals, backgroundFlags: 3 }), [{ app: 'ACAD', items: mtb() }]],
       [mtext('F7', undefined, { ...bgVals, backgroundColor: { aci: 5 } }), [{ app: 'ACAD', items: mtb() }]],
-      [mtext('F8', undefined, { ...bgVals, backgroundColor: { aci: 97, rgb: 0x367542, name: 'BOOK$C' } }), [{ app: 'ACAD', items: mtb() }]],
+      // 색상표 색은 같은 RGB의 표본 꼴로(이름은 빠진다 — 152차, roundtrip152)
+      [mtext('F8', undefined, { ...bgVals, backgroundColor: { aci: 97, rgb: 0x367542, name: 'BOOK$C' } }), [{ app: 'ACAD', items: [...mtb(), ...bbrt()] }]],
     ];
     for (const [e, want] of cases) {
       const d = readDwg(writeDwg(docOf(structuredClone(e)), { version: 'AC1015' }).data).entityIndex.get(e.handle) as MTextEntity;

@@ -500,6 +500,7 @@ function mtextFrom(c: Common): MTextEntity {
   let bgFlags = 0;
   let bgAci: number | undefined;
   let bgRgb: number | undefined;
+  let bgName: string | undefined;
   const e = {
     ...c.base,
     type: 'MTEXT',
@@ -566,6 +567,10 @@ function mtextFrom(c: Common): MTextEntity {
       case 421:
         bgRgb = int(v);
         break;
+      // 배경 색의 색상표 이름("책$이름" — DXF 참조서 MTEXT 430~439, 쓰기도 431). 전에는 읽지 않아 DXF로 저장하고 다시 열면 이름이 빠졌다(152차)
+      case 431:
+        bgName = str(v);
+        break;
       case 45:
         e.backgroundScale = num(v) || 1.5;
         break;
@@ -580,7 +585,7 @@ function mtextFrom(c: Common): MTextEntity {
   e.rotation = rotation;
   if (direction && (direction.x !== 0 || direction.y !== 0)) e.direction = shareXDirection(direction);
   e.backgroundFlags = bgFlags;
-  if (bgFlags & 1) e.backgroundColor = parseColor(bgAci, bgRgb, undefined);
+  if (bgFlags & 1) e.backgroundColor = parseColor(bgAci, bgRgb, bgName);
   if (embedStart >= 0) {
     const cols: MTextColumns = { type: 0, count: 0, width: 0, gutter: 0, autoHeight: false, flowReversed: false, heights: [] };
     let totalWidth = 0;

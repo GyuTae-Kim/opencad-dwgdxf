@@ -352,10 +352,14 @@ function mtbItems(style: number, factor: number): XDataItem[] {
   ];
 }
 
-/** 표본 꼴(배경 색 1·트루컬러·이름 없음)의 BBRT 묶음. 그 밖의 배경(도면 창 색 2, ACI·색상표 색)은 AutoCAD 실물이 없어 만들지 않는다 */
+/**
+ * 표본 꼴(배경 색 1·트루컬러·이름 빈칸)의 BBRT 묶음. 색상표 색도 이 꼴로 쓴다(152차 — R2004+ CMC의 RGB 낱말이 트루컬러와 같은 0xC2RRGGBB라 64가 같고,
+ * 이름을 65·66에 어떻게 적는지는 실물이 없어 빈칸 — 색상표 이름만 빠진다. 전에는 DWG에서 온 색상표 배경은 R2000 출력에서 배경째 잃었고,
+ * DXF에서 온 것은 리더가 이름을 읽지 않아 이 꼴이 되었다). 그 밖의 배경(도면 창 색 2, ACI 색)은 AutoCAD 실물이 없어 만들지 않는다
+ */
 function bbrtItems(e: MTextSaveFields): XDataItem[] | undefined {
   const c = e.backgroundColor;
-  if (e.backgroundFlags !== 1 || c?.rgb === undefined || c.name) return undefined;
+  if (e.backgroundFlags !== 1 || c?.rgb === undefined) return undefined;
   return [
     { code: 1000, value: 'ACAD_MTEXT_BBRT' },
     { code: 1070, value: 91 },
@@ -380,7 +384,7 @@ function bbrtItems(e: MTextSaveFields): XDataItem[] | undefined {
  * - MTEXTBEGIN이 없으면 제 칸 줄 간격으로 만든다(자리: BBRT·ACAD_MTEXT_DEFINED_HEIGHT 앞, 없으면 ACAD 자료 끝 — 단 정보 ACAD_MTEXT_COLUMN_INFO·RT 묶음은
  *   앞에 온다. ACAD 자료가 없으면 다른 앱 뒤에 더한다). 표준 꼴의 MTEXTBEGIN이 제 칸과 다르면(앱에서 줄 간격을 바꾼 MTEXT) 제 칸 값으로 고친다
  * - BBRT가 모델 배경과 다르면 뺀다(앱에서 배경을 바꾸거나 지운 MTEXT — R2000에는 배경 칸이 없어 남기면 다시 열 때 낡은 배경이 살아난다).
- *   모델 배경이 표본 꼴(배경 색·트루컬러·이름 없음)이고 BBRT가 없으면 MTEXTBEGIN 바로 뒤에 만든다(전에는 R2000으로 쓰면 배경을 잃었다)
+ *   모델 배경이 배경 색·트루컬러(색상표 색이면 이름 없이 — 152차)이고 BBRT가 없으면 MTEXTBEGIN 바로 뒤에 표본 꼴로 만든다(전에는 R2000으로 쓰면 배경을 잃었다)
  * 읽지 못한 꼴의 묶음은 그대로 둔다.
  * @returns 바뀌지 않으면 받은 배열 그대로
  */
@@ -438,14 +442,17 @@ export function mtextSaveXDataForR2000(xdata: XData[] | undefined, e: MTextSaveF
   return [...(xdata ?? []), { app: 'ACAD', items: out }];
 }
 
-/** BBRT가 모델 배경(플래그·배율·색)과 같은지(읽지 못하는 꼴이면 같다고 본다 — 그대로 둔다) */
+/**
+ * BBRT가 모델 배경(플래그·배율·색)과 같은지(읽지 못하는 꼴이면 같다고 본다 — 그대로 둔다). 색상표 이름은 견주지 않는다(152차 — BBRT를 읽을 때도
+ * 이름을 보지 않고, 만들 때도 같은 RGB의 이름 빈칸 꼴이라 같은 RGB면 묶음을 둔다. 전에는 빼고 다시 만들지 않아 배경을 잃었다)
+ */
 function sameBackground(g: MTextSave, e: Pick<MTextEntity, 'backgroundFlags' | 'backgroundScale' | 'backgroundColor'>): boolean {
   const bg = bbrtBackground(g);
   if (!bg) return true;
   if (bg.flags !== (e.backgroundFlags ?? 0)) return false;
   if (bg.scale !== undefined && bg.scale !== e.backgroundScale) return false;
   const c = e.backgroundColor;
-  return !bg.color || (!!c && c.aci === bg.color.aci && c.rgb === bg.color.rgb && !c.name);
+  return !bg.color || (!!c && c.aci === bg.color.aci && c.rgb === bg.color.rgb);
 }
 
 /**
