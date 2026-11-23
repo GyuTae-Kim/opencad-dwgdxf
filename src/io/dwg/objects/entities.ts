@@ -1302,9 +1302,12 @@ function readDimension(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Nam
     case 'LARGE_RADIAL_DIMENSION': {
       dt = 4;
       e.subtype = 'LARGE_RADIAL_DIMENSION';
+      // 중심(10)·현 점(15)·꺾기 각도·재지정 중심(13)·꺾기 점(14). ObjectARX AcDbRadialDimensionLarge의 실수는 꺾기 각도(jogAngle) 하나이고
+      // DXF에서는 40이다 — DXF 리더가 40을 leaderLength로 읽고 DXF·DWG 쓰기가 그 값을 40·이 BD로 쓴다. 전에는 읽고 버려 DWG에서 연 치수를
+      // DXF·다른 판 DWG로 저장하면 0이 됐다(158차)
       e.defPoint = r.BD3();
       e.defPoint4 = r.BD3();
-      r.BD();
+      e.leaderLength = r.BD();
       e.defPoint2 = r.BD3();
       e.defPoint3 = r.BD3();
       break;
