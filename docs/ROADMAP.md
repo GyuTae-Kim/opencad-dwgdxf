@@ -444,9 +444,10 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
 - [x] DWG에서 연 IMAGE의 반응자(159차): DXF 참조서 IMAGE 360 "Hard reference to imagedef_reactor object"·IMAGEDEF_REACTOR 330 "Object ID for associated image object".
   DXF 리더는 360을 읽고 DWG 쓰기는 IMAGE 핸들 흐름에 반응자를 쓰는데 DWG 리더가 비워 두어, DWG에서 연 이미지를 DWG로 저장하면 반응자 참조가 0이 되고
   DXF로 저장하면 원본 반응자를 버리고 새 핸들로 다시 만들었다 — 이제 소유자가 IMAGE인 IMAGEDEF_REACTOR로 잇는다(IMAGE 핸들 흐름의 둘째 핸들은 여전히 읽지 않는다)
+- [x] 복사한 이미지의 반응자(159차): 새 핸들을 받는 복사 경로(`freshEntity`·`prepareNew`·블록 정의 유지·배치 복사·연관 배열·동적 블록 표현 블록·다른 도면에서 가져오기)가
+  IMAGE의 반응자 핸들을 지우지 않아 복사본도 원본 반응자를 가리켰다(DWG 쓰기는 두 IMAGE가 한 반응자를, DXF 쓰기는 핸들 겹침 경고) — 이제 복사본은 반응자 없이 간다
 - [ ] 159차에 보고 두 것(실물 표본 없이는 근거가 서지 않는 항목):
-  IMAGE를 복사하면(COPY·ARRAY — `freshEntity`가 반응자 핸들을 지우지 않음) 복사본도 원본 반응자 핸들을 지녀, DXF 쓰기는 반응자를 새 핸들로 만들며 핸들 겹침을 알리고
-  DWG 쓰기는 두 IMAGE가 한 반응자를 가리키게 쓴다(DWG 쓰기는 반응자 없는 IMAGE에 반응자를 만들지 않는다 — 만들려면 AutoCAD가 그 DWG를 받아들이는지 실물로 봐야 한다).
+  DWG 쓰기는 반응자 없는 IMAGE(복사본 등)에 반응자를 만들지 않고 0을 쓴다(DXF 쓰기는 새로 만든다 — DWG에서도 만들려면 AutoCAD가 그 DWG를 받아들이는지 실물로 봐야 한다).
   MLINE 71의 4·8(마구리 생략)은 DWG의 열림·닫힘 칸(BS)에 그대로 쓰고 읽는다(그 비트의 DWG 자리에 공개 HTML 근거 없음).
   SHAPE는 DWG가 번호·스타일, DXF가 이름(2)을 지녀 DXF에서 이름만 읽은 쉐이프는 DWG에 번호 0으로 간다(이름 ↔ 번호는 SHX 파일이 있어야 바꾼다).
   도형 재질(347)은 DXF 리더가 버리고 DXF 쓰기가 쓰지 않는다(MATERIAL 객체를 다른 판으로 옮기는 일이 먼저 — 아래 왕복 확장 자료 항목의 RTMaterial)
