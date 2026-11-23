@@ -91,6 +91,8 @@ export function blockCopies(env: BuildEnv, list: readonly Entity[], m: Affine): 
       delete c.reactors;
       delete c.dwgRaw;
       delete c.paperSpace;
+      // 이미지 반응자는 이미지마다 하나다(159차)
+      if (c.type === 'IMAGE' || c.type === 'WIPEOUT') delete c.imageDefReactor;
       if (c.type === 'INSERT')
         for (const a of c.attribs) {
           a.handle = env.newHandle();
@@ -357,6 +359,7 @@ export function regenerateOps(env: BuildEnv, info: ArrayInfo, next: ArrayState, 
         delete c.reactors;
         delete c.xdict;
         delete c.dwgRaw;
+        if (c.type === 'IMAGE' || c.type === 'WIPEOUT') delete c.imageDefReactor;
         return c;
       }),
     );

@@ -381,6 +381,8 @@ function representation(doc: CadDocument, ref: DynRef, ev: DynEval, newHandle: (
     e.owner = recH;
     delete e.xdict;
     delete e.dwgRaw;
+    // 표현 블록의 이미지는 정의 블록의 이미지와 다른 객체다: 그 반응자를 가리키지 않는다(159차)
+    if (e.type === 'IMAGE' || e.type === 'WIPEOUT') delete e.imageDefReactor;
     if (e.type === 'INSERT')
       for (const a of e.attribs) {
         a.handle = newHandle();

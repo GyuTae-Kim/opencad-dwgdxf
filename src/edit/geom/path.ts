@@ -93,6 +93,8 @@ export function freshEntity<T extends Entity>(x: T, keepOwner = true): T {
   delete x.xdict;
   delete x.reactors;
   delete x.dwgRaw;
+  // 이미지 반응자(IMAGEDEF_REACTOR)는 이미지마다 하나라(DXF 참조서 IMAGEDEF 330 "one for each instance") 복사본은 원본 반응자를 가리키지 않는다(159차)
+  if (x.type === 'IMAGE' || x.type === 'WIPEOUT') delete x.imageDefReactor;
   if (!keepOwner) delete x.owner;
   if (x.type === 'INSERT') for (const a of x.attribs) freshEntity(a as Entity, keepOwner);
   // R2000~R2013 여러 단 MTEXT의 단 연결(원본의 다른 단 핸들)은 복사본에 남기지 않는다
