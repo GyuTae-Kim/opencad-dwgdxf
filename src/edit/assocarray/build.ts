@@ -25,6 +25,7 @@ import { tryParseAssocObject, writeAssocObject } from '../assocnet/objects';
 import { sameTags } from '../assocnet/tags';
 import { type ArrayItem, type ArrayParams, type ArrayState, MAX_ITEMS, MAX_REMOVED, MAX_REPLACED } from './types';
 import { relinkClonedColumns } from '../util/mtextcols';
+import { noteLeaderCopy, relinkLeaderCopies } from '../util/leadercopy';
 
 export interface BuildEnv {
   doc: CadDocument;
@@ -86,6 +87,8 @@ export function blockCopies(env: BuildEnv, list: readonly Entity[], m: Affine): 
     for (const x of [...(r.replace ?? []), ...(r.add ?? [])]) {
       const c = x === e ? cloneEntity(e) : x;
       sources.push(x.handle);
+      // 지시선 주석(340 ↔ 주석 반응자): 새 핸들을 주기 전에 원본 핸들을 적어 둔다(161차)
+      noteLeaderCopy(c);
       c.handle = env.newHandle();
       delete c.xdict;
       delete c.reactors;
@@ -107,6 +110,9 @@ export function blockCopies(env: BuildEnv, list: readonly Entity[], m: Affine): 
   }
   // 여러 단 MTEXT: 블록 안의 새 단끼리 잇는다(원본 단을 가리키지 않게)
   relinkClonedColumns(out, sources);
+  // 지시선과 주석을 함께 복사했으면 복사본끼리 잇고, 지시선만이면 주석 연결을 뗀다(Autodesk "Leader Associativity" — 161차).
+  // 배열을 만들면 원본을 지우므로 전에는 복사본 지시선이 없는 객체를 가리켰다
+  relinkLeaderCopies(out);
   return { entities: out, blocks };
 }
 

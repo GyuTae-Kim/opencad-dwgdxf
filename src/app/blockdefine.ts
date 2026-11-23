@@ -11,6 +11,7 @@ import type { EditOp } from '../edit/session';
 import { cloneEntity } from '../edit/session';
 import { annotativeFlag, withAnnotativeFlag } from '../edit/annoscale/xdata';
 import { relinkClonedColumns } from '../edit/util/mtextcols';
+import { noteLeaderCopy, relinkLeaderCopies } from '../edit/util/leadercopy';
 import type { App, CommandContext } from './app';
 import { currentProps } from './draw';
 import { unlockedOnly } from './layers';
@@ -115,6 +116,8 @@ export function defineBlockOps(app: App, spec: DefineBlockSpec, make?: AttribMak
     if (spec.mode !== 'retain') {
       removeOps.push({ kind: 'remove', block: space, entity: e, index: order.get(hd) ?? -1 });
     } else {
+      // 지시선 주석(340 ↔ 주석 반응자): 새 핸들을 주기 전에 원본 핸들을 적어 둔다(161차)
+      noteLeaderCopy(c);
       c.handle = st.session.newHandle();
       delete c.xdict;
       delete c.reactors;
@@ -132,8 +135,12 @@ export function defineBlockOps(app: App, spec: DefineBlockSpec, make?: AttribMak
     }
     ents.push(c);
   }
-  // 원본을 남기면 블록 안 사본은 새 핸들이다: 여러 단 MTEXT는 새 단끼리 잇는다(원본 단을 가리키지 않게)
-  if (spec.mode === 'retain') relinkClonedColumns(ents, chosen);
+  // 원본을 남기면 블록 안 사본은 새 핸들이다: 여러 단 MTEXT는 새 단끼리 잇는다(원본 단을 가리키지 않게).
+  // 지시선과 주석을 함께 골랐으면 블록 안의 복사본끼리 잇고, 지시선만이면 주석 연결을 뗀다(Autodesk "Leader Associativity" — 161차)
+  if (spec.mode === 'retain') {
+    relinkClonedColumns(ents, chosen);
+    relinkLeaderCopies(ents);
+  }
   // 지우기는 뒤에서부터(앞 객체를 지워도 뒤 번호가 맞게)
   pushAll(ops, removeOps.reverse());
   const hasAtt = ents.some((e) => e.type === 'ATTDEF');
