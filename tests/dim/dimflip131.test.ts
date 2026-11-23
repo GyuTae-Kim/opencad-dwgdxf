@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { CadDocument, DimensionEntity, Entity, FaceEntity, Vec3 } from '../../src/core/model';
-import { createAlignedDimension, createAngularDimension, createLinearDimension, generateDimensionGeometry } from '../../src/edit/dim';
+import { createAngularDimension, createLinearDimension, generateDimensionGeometry } from '../../src/edit/dim';
 import { dimVars } from '../../src/edit/dim/vars';
 import { createNewDocument } from '../../src/core/newdoc';
 
@@ -181,10 +181,9 @@ describe('치수 화살표 반전 그림(131차)', () => {
     expect(segs(doc, d, on)).toEqual(sorted([...segs(doc, d, off), [L - 1, L], [L + 1, L + 2]]));
   });
 
-  it('실물이 없는 종류·화살촉은 반전 없이 그린다(정렬·각도 치수, 블록·눈금 화살촉, 화살촉을 숨긴 반쪽)', () => {
+  it('실물이 없는 종류·화살촉은 반전 없이 그린다(각도 치수, 블록·눈금 화살촉, 화살촉을 숨긴 반쪽 — 정렬 치수는 150차부터 회전과 같이 그린다: dimflip150)', () => {
     const doc = createNewDocument('metric');
     const same = (d: DimensionEntity) => expect(gen(doc, d, true, true)).toEqual(gen(doc, d, false, false));
-    same(createAlignedDimension(doc, V(0, 0), V(30, 20), V(-5, 25)));
     same(createAngularDimension(doc, V(0, 0), V(30, 0), V(0, 30), V(20, 20)));
     const open = createLinearDimension(doc, V(0, 0), V(40, 0), V(20, 10));
     open.overrides = { 5: '_Open' };

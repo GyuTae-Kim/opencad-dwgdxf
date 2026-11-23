@@ -9,7 +9,7 @@ import type { App } from '../../src/app/app';
 import type { ContextMenuProvider } from '../../src/app/hooks';
 import { registerDimFlip } from '../../src/app/dimflip';
 import { gripOptions } from '../../src/app/gripmenu';
-import { createAlignedDimension, createLinearDimension } from '../../src/edit/dim';
+import { createAlignedDimension, createAngularDimension, createLinearDimension } from '../../src/edit/dim';
 import { writeDwg } from '../../src/io/dwg/writer/index';
 import { writeDxf } from '../../src/io/dxf/writer';
 import { readCadFile } from '../../src/io/index';
@@ -65,17 +65,17 @@ describe('화살표 반전 명령(131차)', () => {
     expect(bodyAt(h.doc, d, 0)).toBe(-1);
   });
 
-  it('치수가 아닌 객체는 다시 묻고, 반전해 그리지 못하는 치수(정렬)는 알리고 그대로 둔다', async () => {
+  it('치수가 아닌 객체는 다시 묻고, 반전해 그리지 못하는 치수(각도 — 정렬 치수는 150차부터 받는다)는 알리고 그대로 둔다', async () => {
     const { h } = setup();
-    const al = h.add(createAlignedDimension(h.doc, V(0, 50), V(30, 70), V(-5, 75))) as DimensionEntity;
+    const an = h.add(createAngularDimension(h.doc, V(0, 50), V(30, 50), V(0, 80), V(20, 70))) as DimensionEntity;
     const ln = h.add({ ...entityDefaults(), type: 'LINE', handle: '', start: V(0, -20), end: V(10, -20) } as LineEntity);
-    const before = structuredClone(get(h, al.handle));
+    const before = structuredClone(get(h, an.handle));
     await h.run('AIDIMFLIPARROW', [
       { pick: ln.handle, at: [5, -20] },
-      { pick: al.handle, at: [0, 50] },
+      { pick: an.handle, at: [20, 70] },
     ]);
-    expect(h.printed).toEqual(['치수가 아닙니다.', '회전 선형 치수의 닫고 채운 화살촉만 반전할 수 있습니다.']);
-    expect(get(h, al.handle)).toEqual(before);
+    expect(h.printed).toEqual(['치수가 아닙니다.', '회전 선형·정렬 치수의 닫고 채운 화살촉만 반전할 수 있습니다.']);
+    expect(get(h, an.handle)).toEqual(before);
   });
 
   it('바로 가기 메뉴: 치수 하나를 고르고 누른 자리 가까운 화살표 — 명령에 그 자리를 넘긴다', async () => {
@@ -100,7 +100,10 @@ describe('화살표 반전 명령(131차)', () => {
     expect(opts.map((o) => o.key)).toEqual(['ST', 'CO', 'BA', 'FL']);
     const r = opts[3]!.apply!();
     expect((r.replace![0] as DimensionEntity).flipArrow2).toBe(true);
+    // 정렬 치수도 반전을 그린다(150차). 눈금 화살촉은 반전 없이 그려 메뉴가 없다
     const al = createAlignedDimension(h.doc, V(0, 50), V(30, 70), V(-5, 75));
+    expect(gripOptions(h.app as App, { handle: 'X', id: 'defPoint', point: { x: 0, y: 0 } }, al, h.st).map((o) => o.key)).toEqual(['ST', 'CO', 'BA', 'FL']);
+    al.overrides = { 142: 0.1 };
     expect(gripOptions(h.app as App, { handle: 'X', id: 'defPoint', point: { x: 0, y: 0 } }, al, h.st).map((o) => o.key)).toEqual(['ST', 'CO', 'BA']);
   });
 
