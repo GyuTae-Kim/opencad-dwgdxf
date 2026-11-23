@@ -441,12 +441,33 @@ export function readVport(or: ObjectReader): VportRec {
 export function readView(or: ObjectReader): ViewRec {
   const rc = recordCommon(or);
   const r = or.dat;
+  const ver = or.ver;
   const height = r.BD();
   const width = r.BD();
   const center = r.RD2();
   const target = r.BD3();
   const direction = r.BD3();
   const twist = r.BD();
+  // 종이 공간 비트(DXF 70 비트 1 — DXF 참조서 VIEW "paper space view"): VPORT와 같은 머리(렌즈·앞뒤 자르기·보기 모드·R2000+ 렌더 모드·
+  // R2007+ 조명 칸 — readVport) 뒤의 B다(쓰기 writer/tables.ts view와 같은 배치). 전에는 읽지 않아 종이 공간 뷰가 모형 뷰가 됐다(153차).
+  // 본문이 짧아 읽지 못하면 전처럼 둔다
+  try {
+    r.BD();
+    r.BD();
+    r.BD();
+    viewMode(r);
+    if (ver >= R2000) r.RC();
+    if (ver >= R2007) {
+      r.B();
+      r.RC();
+      r.BD();
+      r.BD();
+      r.CMC();
+    }
+    if (r.B()) rc.flags |= 1;
+  } catch {
+    /* 종이 공간 비트 없이 전처럼 */
+  }
   return { ...rc, height, width, center, target, direction, twist };
 }
 
