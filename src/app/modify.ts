@@ -66,6 +66,7 @@ import { pasteDependencies } from './pastedeps';
 import { expandBudget } from '../core/limits';
 import { MSG } from '../edit/geom/types';
 import { relinkClonedColumns, relinkColumnCopies } from '../edit/util/mtextcols';
+import { relinkLeaderCopies } from '../edit/util/leadercopy';
 import { columnGripEdit } from './mtextcols-grips';
 import { ft } from './filetext';
 import { ScaleIndex, explodeView } from '../edit/annoscale/represent';
@@ -463,6 +464,7 @@ function planResults(app: App, ctx: CommandContext, results: EditResult[], label
   // 공간 표지는 객체마다 같다(106차 — 객체마다 정규식을 돌리지 않는다)
   const paper = /^\*PAPER_SPACE/i.test(st.space) ? true : undefined;
   let addedMText: Entity[] | null = null;
+  let addedLeader = false;
   for (const r of results)
     for (const e of r.add ?? []) {
       fixBlock(e);
@@ -475,9 +477,12 @@ function planResults(app: App, ctx: CommandContext, results: EditResult[], label
       ops.push({ kind: 'add', block: st.space, entity: e });
       out.added.push(e.handle);
       if (e.type === 'MTEXT') (addedMText ??= []).push(e);
+      else if (e.type === 'LEADER') addedLeader = true;
     }
   // 여러 단 MTEXT를 묶음째 복사했으면 새 단끼리 잇는다(AutoCAD에서는 여러 단 문자가 객체 하나라 복사본도 한 묶음이다)
   if (addedMText) relinkColumnCopies(addedMText);
+  // 지시선과 주석을 함께 복사했으면 복사본끼리 잇고, 지시선만 복사했으면 주석 연결을 뗀다(Autodesk "Leader Associativity" — 160차)
+  if (addedLeader) relinkLeaderCopies(results.flatMap((r) => r.add ?? []));
   if (!opt.quiet) {
     const msgs = new Set(results.map((r) => r.message).filter((m): m is string => !!m));
     for (const m of msgs) ctx.print(m);

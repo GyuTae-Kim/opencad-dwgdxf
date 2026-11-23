@@ -30,6 +30,7 @@ import { type Affine, TAU, affApply, affLin, affSimilarity, dist, normAngle, swe
 import { type Nurbs, arcBeziers, beziersToNurbs, domain, ellBeziers, lineBezier, normalizeNurbs, reverseNurbs, subNurbs, toBezier } from './nurbs';
 import { planProj, planZ } from './ocs';
 import { noteColumnCopy, stripMTextColumnLinks } from '../util/mtextcols';
+import { noteLeaderCopy } from '../util/leadercopy';
 
 // ---------------------------------------------------------------------------
 // 특성 잇기
@@ -89,6 +90,8 @@ export function arcFrom(src: Entity, center: Vec3, radius: number, startAngle: n
 export function freshEntity<T extends Entity>(x: T, keepOwner = true): T {
   // 여러 단 MTEXT: 원본 핸들과 떼기 전 확장 자료를 적어 둔다(묶음째 복사하면 commitResults가 새 단끼리 다시 잇는다)
   if (x.type === 'MTEXT') noteColumnCopy(x);
+  // 지시선 주석(340 ↔ 주석 반응자): 원본 핸들을 적어 두면 commitResults가 함께 복사한 복사본끼리 잇고, 주석 없이 복사한 지시선은 연결을 뗀다(160차)
+  noteLeaderCopy(x);
   x.handle = '';
   delete x.xdict;
   delete x.reactors;
