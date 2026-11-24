@@ -1040,6 +1040,23 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   도면층은 DXF 도면층 370을 그대로 써서 DWG 0.25·DXF 29로 갈림 — entmod 도움말에 선가중치 규칙 없음, AutoCAD가 거절하는지는 실물 필요). AutoCAD SETVAR가 표 밖 CELWEIGHT를
   맞추는지 거절하는지(도움말은 -LWEIGHT만 가장 가까운 값 — 이 앱은 그 규칙을 따름), -LAYER의 2.11 mm 넘는 값(지금 거절 — 저장하지 않아 갈리지 않음)은 실물 필요.
   -LWEIGHT 명령(새 객체의 기본 선가중치·? 목록 — 새 프롬프트 글)은 202차에 보고 둔 그대로다
+- [x] SOLID의 점 Z(205차, Autodesk ELEV 도움말: 현재 고도는 새 객체의 기본 Z로 X·Y만 준 점에 쓰이고, 두께는 2D 객체를 그 고도에서 돌출한다):
+  `app/propcmds.ts` SOLID가 네 점의 Z를 늘 0으로 써서 두께(THICKNESS)는 받으면서 바닥은 0에 있었다 — 이제 LINE·PLINE·ARC·TRACE·3DFACE와 같은 `currentElevation`
+  (모형 ELEVATION, 배치 PELEVATION)이다. 고도 0인 도면과 프롬프트 흐름(넷째 점 Enter = 삼각형, 셋째·넷째 이어 주기)은 같은 값이다
+- [ ] 205차에 보고 두 것 — 도움말 옵션 빈칸 표 여덟째(181·182·186·187·197·199·202차 표 밖 주석 편집·문자 도구·그룹·그리기 보조·구속 명령, Autodesk 2026 도움말 HTML —
+  DRAWORDER·TEXTTOFRONT(187차)·DIMEDIT·DIMTEDIT(186차)·DIMBREAK·DIMSPACE(181차)는 앞 표에 있어 뺌). MLEADEREDIT(지시선 추가 — 커서 쪽·제거), MLEADERCOLLECT(왼쪽 위 구석·수직·
+  수평·줄 바꿈 폭·번호), SCALETEXT(기존·자리맞추기 기준점·모형 높이·용지 높이·객체 일치·축척 비율·참조), DIMJOGLINE(추가·제거·Enter), -MLEDIT·MLEDIT(열두 도구),
+  GEOMCONSTRAINT(열두 유형과 GC 하위 옵션), TABLEDIT, DIMOVERRIDE(변수·재지정 지우기), AUTOCONSTRAIN(설정)·DELCONSTRAINT는 옵션을 받는다. 남은 빈칸:
+  -GROUP은 따로 없어 앞 -를 뗀 GROUP(「객체 선택 또는 [이름(N)/설명(D)]」 — 2026 GROUP 꼴)으로 가므로 ?·정렬·추가·제거·분해·이름 바꾸기·선택 가능·만들기가 없다
+  (추가·제거·이름 바꾸기·분해는 GROUPEDIT — 넣으면 지금 「-GROUP」 입력의 결과가 바뀌고 새 프롬프트 글이 여럿). TEXTALIGN은 첫 프롬프트의 정렬(왼쪽 기본·중심·오른쪽·TL~BR,
+  TEXTALIGNMODE)이 없고 맞추는 점을 기준 문자의 자리맞추기로 정한다(도움말: TEXTALIGNMODE — 새 시스템 변수, 바꾸면 지금 결과가 바뀜). DIMCONSTRAINT의 형식 주석 구속과
+  변환(연관 치수 → 구속)은 없다(새 구속 종류 — 큼). JUSTIFYTEXT의 지시선 문자는 180차에 보고 둔 그대로다(다중 지시선인지 옛 LEADER 주석 — 이미 MTEXT로 받음 — 인지
+  글로 가르지 못함). REGION은 웹 판 한계 알림이다(ACIS 형상). 2026 도움말의 TRACE는 다른 기능(마크업 트레이스)이라 옛 폭 있는 선 TRACE는 견주지 않았다.
+  정확성 후보(지금 결과가 도움말과 틀림 — 다음 후보): MLEADERALIGN 간격 지정(S)은 기준의 연결 점에서 간격 × 순번 자리에 연결 점을 둔다(`edit/annot/mleader.ts`
+  `alignMleaders` — 도움말: 고른 다중 지시선 내용의 범위 사이 간격, TEXTALIGN 간격 설정은 이미 범위 사이. 내용 범위를 정렬 방향으로 잴지 상자로 잴지는 실물 필요, 문자 내용은
+  문자 배치 계산이 새로 들고 기존 시험 annot.test.ts의 [60, 70] 기대도 바뀜). 실물 필요: DIMJOGLINE Enter 자리(도움말은 문자와 첫 치수보조선 사이 가운데 또는 치수선 가운데를
+  문자 자리에 따라 고른다고만 적음 — 이 앱은 앞쪽, 문자가 없으면 1/4), SOLID에 Z를 준 점(PLINE·ARC처럼 받지 않고 고도 — 2D 객체의 평면을 어느 점의 Z로 정하는지 도움말에 없음 —
+  위 「다른 2D 명령(PLINE·ARC·ELLIPSE·RECTANG 등)에 준 Z」 항목과 같은 빈칸). MLEADER 도면층·DIMBASELINE의 직접 고른 기준은 182차에 보고 둔 그대로다
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
