@@ -7,6 +7,7 @@ import { tableKey } from '../core/model';
 import { type EditOp, cloneEntity } from '../edit/session';
 import { type Affine, affApply, affDet, affInv, affLin, affMul, affRotate, affTranslate } from '../edit/geom/math';
 import { planProj } from '../edit/geom/ocs';
+import { nearestLineweight } from '../edit/layercmd';
 import { STANDARD_LINETYPES, makeLinetype } from '../edit/linetypes';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
@@ -128,7 +129,11 @@ async function changeProps(app: App, ctx: CommandContext, hs: string[], label: s
       case 'LW': {
         const t = (await ask('새 선가중치 입력 <BYLAYER>:')) ?? '';
         const up = t.toUpperCase();
-        const v = up === '' || up === 'BYLAYER' ? -1 : up === 'BYBLOCK' ? -2 : up === 'DEFAULT' || up === '기본값' ? -3 : Math.round(Number(t) * 100);
+        // 표에 없는 값은 가장 가까운 표준 값(203차, Autodesk CHPROP 도움말 「선가중치」: 정해진 값이 아니면 가장 가까운 정해진 값을 준다 —
+        // -LAYER 선가중치와 같은 `nearestLineweight`). 전에는 입력 × 100을 그대로 두어(0.29 → 29) 저장 때 DWG는 아래 값(0.25), DXF는 가장 가까운 값(0.30)이 됐다.
+        // 음수는 도움말에 말이 없어 받지 않는다(알림 — 객체 값은 그대로). 표준 값·BYLAYER·BYBLOCK·DEFAULT·Enter는 전과 같다
+        const mm = Number(t);
+        const v = up === '' || up === 'BYLAYER' ? -1 : up === 'BYBLOCK' ? -2 : up === 'DEFAULT' || up === '기본값' ? -3 : Number.isFinite(mm) && mm >= 0 ? nearestLineweight(mm * 100) : NaN;
         if (!Number.isFinite(v)) ctx.print('선가중치는 mm 값(예: 0.25)이나 BYLAYER로 입력하십시오.', 'err');
         else modifyAll(st, ctx, label, hs, (e) => ({ ...e, lineweight: v }) as Entity);
         break;
