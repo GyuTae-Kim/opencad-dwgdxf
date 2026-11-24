@@ -34,7 +34,7 @@ import type { DimKindName } from '../edit/dim/format';
 import { angularSpan } from '../edit/dim/angular';
 import { OSNAP, type PointRef, circlePointRef } from '../edit/dim/assoc';
 import type { EditOp } from '../edit/session';
-import type { App, CommandContext, EntityResult, Keyword } from './app';
+import type { App, CommandContext, EntityPick, EntityResult, Keyword } from './app';
 import { finishNewDimension, inheritedRef, newDimensionAssocOps, objectRef, pointRef, snapNewDimension } from './dimassoc';
 import type { DocState } from './docstate';
 import { textDialog } from './draw';
@@ -44,7 +44,7 @@ import type { OverlayGeom, Pt } from './view';
 import { lwCount, packLw } from '../core/lwpoly';
 // 평면도 사상 도우미(174~176차에 여기서 만들었고 177차에 QDIM과 함께 쓰려고 edit/geom/ocs.ts로 옮겼다 — 같은 값)
 import { circleOf, isNaturalExt, isPlanarExt, lwPlanVertices, ocsPlan } from '../edit/geom/ocs';
-import { smartTarget } from '../edit/dim/smart';
+import { type SmartTarget, smartTarget } from '../edit/dim/smart';
 import type { ViewportXf } from './scene';
 import { circleToPaper, layoutXfs, modelToPaperVp, paperProjection } from './vpsnap';
 import { plainText } from './inquiry';
@@ -235,17 +235,35 @@ function circleEntity(e: Entity | undefined): Entity | undefined {
 }
 
 /**
- * 폴리선(LWPOLYLINE)에서 고른 호 세그먼트의 평면도 중심·반지름·반시계 시작·끝 각과 평면의 WCS Z(182차 — DIMRADIUS·DIMDIAMETER·DIMARC).
+ * 폴리선(LWPOLYLINE)에서 고른 호 세그먼트의 평면도 중심·반지름·반시계 시작·끝 각과 평면의 WCS Z(182차 — DIMRADIUS·DIMDIAMETER·DIMARC, 183차 DIMJOGGED, 184차 DIMANGULAR 호 선택).
  * Autodesk DIMRADIUS·DIMDIAMETER 도움말 「호 또는 원 선택」: 원, 호, 폴리선의 호 세그먼트를 지정한다. DIMARC 도움말: 호 또는 폴리선 호 세그먼트를 지정한다
  * (전에는 원·호만 받아 폴리선을 고르면 알림만 하고 끝났다). 세그먼트는 스마트 치수 DIM과 같이 고른 점에 가장 가까운 것(`smartTarget`)이고,
  * 꼭짓점·볼록도는 OCS 값이라 −Z 폴리선은 176차 `lwPlanVertices`의 평면도 꼭짓점으로 고른다. 가장 가까운 세그먼트가 직선이거나
  * 돌출 방향이 Z축과 평행하지 않은 폴리선(평면도에서 타원)이면 null(원·호의 <객체 선택>과 같이 받지 않는다)
  */
 export function polyArcOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; a0: number; a1: number; z: number } | null {
+  const s = polySegment(e, pick);
+  const t = s?.t;
+  return s && t?.kind === 'arc' ? { c: t.c, r: t.r, a0: t.a0, a1: t.a1, z: s.z } : null;
+}
+
+/**
+ * 폴리선에서 고른 직선 세그먼트의 평면도 두 끝점(꼭짓점 차례, Z는 평면의 WCS Z — 184차, DIMANGULAR 선 선택).
+ * Autodesk DIMANGULAR 도움말 「선 선택」: 두 선 또는 폴리선 세그먼트로 각도를 정의한다. 세그먼트 고르기는 `polyArcOf`와 같고,
+ * 가장 가까운 세그먼트가 호이거나 돌출 방향이 Z축과 평행하지 않은 폴리선이면 null
+ */
+export function polyLineOf(e: Entity | undefined, pick: Pt): [Vec3, Vec3] | null {
+  const s = polySegment(e, pick);
+  const t = s?.t;
+  return s && t?.kind === 'line' ? [{ x: t.a.x, y: t.a.y, z: s.z }, { x: t.b.x, y: t.b.y, z: s.z }] : null;
+}
+
+/** 폴리선에서 고른 점에 가장 가까운 세그먼트(평면도 값 — `smartTarget`·`lwPlanVertices`)와 평면의 WCS Z(182차 `polyArcOf`에서 나눔 — 같은 값) */
+function polySegment(e: Entity | undefined, pick: Pt): { t: SmartTarget; z: number } | null {
   if (e?.type !== 'LWPOLYLINE' || !isPlanarExt(e.extrusion)) return null;
   const plan = lwPlanVertices(e);
   const t = smartTarget(isNaturalExt(e.extrusion) ? e : { ...e, verts: packLw(plan.vs).verts, extrusion: undefined }, pick);
-  return t?.kind === 'arc' ? { c: t.c, r: t.r, a0: t.a0, a1: t.a1, z: plan.z } : null;
+  return t ? { t, z: plan.z } : null;
 }
 
 /** 문서 기본 치수 스타일 옵션(문자 재지정) */
@@ -504,21 +522,32 @@ export function registerDimCommands(app: App): void {
       } else if ('handle' in r) {
         const e = doc.entityIndex.get(r.handle);
         const vx1 = pickedViewport(app, r);
-        if (e?.type === 'LINE') {
+        // 폴리선 세그먼트(184차 — 도움말 「호 선택」: 호 또는 폴리선 호 세그먼트, 「선 선택」: 두 선 또는 폴리선 세그먼트)는
+        // 고른 점에 가장 가까운 세그먼트다(뷰포트 안 모형 폴리선이면 모형 점으로 고른다 — 182차 DIMRADIUS와 같다)
+        const modelPick = (q: EntityPick, vx: ViewportXf | null): Pt => (vx && q.viewport ? q.viewport.model : q.point);
+        // 선 선택의 선: LINE은 두 끝점(WCS) 그대로, 폴리선 직선 세그먼트는 평면도 두 끝점
+        const lineOf = (x: Entity | undefined, q: EntityPick, vx: ViewportXf | null): [Vec3, Vec3] | null =>
+          x?.type === 'LINE' ? [x.start, x.end] : polyLineOf(x, modelPick(q, vx));
+        const line1 = lineOf(e, r, vx1);
+        // 호 선택의 호: ARC는 175차 circleOf, 폴리선 호 세그먼트는 182차 polyArcOf(같은 꼴 — 평면도 중심·반시계 범위·평면 Z)
+        const arc1 = e?.type === 'ARC' ? circleOf(e) : polyArcOf(e, modelPick(r, vx1));
+        if (line1) {
           const r2 = await ctx.getEntity('두 번째 선 선택:', undefined, VP_PICK);
           if (!('handle' in r2)) return;
           const e2 = doc.entityIndex.get(r2.handle);
-          if (e2?.type !== 'LINE') {
+          const vx2 = pickedViewport(app, r2);
+          const line2 = lineOf(e2, r2, vx2);
+          if (!line2) {
             ctx.print('선을 선택하십시오.', 'err');
             return;
           }
-          const vx2 = pickedViewport(app, r2);
-          const ref = (vx: ViewportXf | null, l: typeof e, p: Vec3) => (vx ? null : objectRef(app, l, OSNAP.END, p));
-          refs = [ref(vx1, e, e.start), ref(vx1, e, e.end), ref(vx2, e2, e2.start), ref(vx2, e2, e2.end)];
-          const s1 = toPaper(vx1, e.start);
-          const t1 = toPaper(vx1, e.end);
-          const s2 = toPaper(vx2, e2.start);
-          const t2 = toPaper(vx2, e2.end);
+          // LINE의 끝점에 연관한다. 폴리선 세그먼트는 182·183차 폴리선 호처럼 연관하지 않는다
+          const ref = (vx: ViewportXf | null, l: Entity | undefined, p: Vec3) => (vx || l?.type !== 'LINE' ? null : objectRef(app, l, OSNAP.END, p));
+          refs = [ref(vx1, e, line1[0]), ref(vx1, e, line1[1]), ref(vx2, e2, line2[0]), ref(vx2, e2, line2[1])];
+          const s1 = toPaper(vx1, line1[0]);
+          const t1 = toPaper(vx1, line1[1]);
+          const s2 = toPaper(vx2, line2[0]);
+          const t2 = toPaper(vx2, line2[1]);
           const d1 = { x: t1.x - s1.x, y: t1.y - s1.y };
           const d2 = { x: t2.x - s2.x, y: t2.y - s2.y };
           const den = d1.x * d2.y - d1.y * d2.x;
@@ -530,13 +559,14 @@ export function registerDimCommands(app: App): void {
             bounds = [h1, h2, h1 + Math.PI, h2 + Math.PI];
           }
           make = (p) => createAngular2LineDimension(doc, s1, t1, s2, t2, v3(p), { text: o.text });
-        } else if (e?.type === 'ARC') {
-          // 호의 평면도 중심·호 범위·평면 Z(−Z 호의 OCS 중심·각도는 X 거울상 자리 — 175차, circleOf). 자연 +Z는 전과 같은 값
-          const g = circleOf(e)!;
+        } else if (arc1) {
+          // 호의 평면도 중심·호 범위·평면 Z(−Z 호의 OCS 중심·각도는 X 거울상 자리 — 175차, circleOf). 자연 +Z는 전과 같은 값.
+          // 폴리선 호 세그먼트(184차)도 같은 규칙(중심이 꼭짓점, 반시계 시작·끝이 두 끝점)이고 연관하지 않는다
+          const g = arc1;
           const cen = { x: g.c.x, y: g.c.y, z: g.z };
           const am = { x: g.c.x + g.r * Math.cos(g.a0!), y: g.c.y + g.r * Math.sin(g.a0!), z: 0 };
           const bm = { x: g.c.x + g.r * Math.cos(g.a1!), y: g.c.y + g.r * Math.sin(g.a1!), z: 0 };
-          refs = vx1 ? [] : [objectRef(app, e, OSNAP.END, am), objectRef(app, e, OSNAP.END, bm), objectRef(app, e, OSNAP.CEN, cen)];
+          refs = vx1 || e?.type !== 'ARC' ? [] : [objectRef(app, e, OSNAP.END, am), objectRef(app, e, OSNAP.END, bm), objectRef(app, e, OSNAP.CEN, cen)];
           const c = toPaper(vx1, cen);
           const a = toPaper(vx1, am);
           const b = toPaper(vx1, bm);
