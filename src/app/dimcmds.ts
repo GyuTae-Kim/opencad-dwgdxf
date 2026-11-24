@@ -242,12 +242,13 @@ function circleEntity(e: Entity | undefined): Entity | undefined {
  * Autodesk DIMRADIUS·DIMDIAMETER 도움말 「호 또는 원 선택」: 원, 호, 폴리선의 호 세그먼트를 지정한다. DIMARC 도움말: 호 또는 폴리선 호 세그먼트를 지정한다
  * (전에는 원·호만 받아 폴리선을 고르면 알림만 하고 끝났다). 세그먼트는 스마트 치수 DIM과 같이 고른 점에 가장 가까운 것(`smartTarget`)이고,
  * 꼭짓점·볼록도는 OCS 값이라 −Z 폴리선은 176차 `lwPlanVertices`의 평면도 꼭짓점으로 고른다. 가장 가까운 세그먼트가 직선이거나
- * 돌출 방향이 Z축과 평행하지 않은 폴리선(평면도에서 타원)이면 null(원·호의 <객체 선택>과 같이 받지 않는다)
+ * 돌출 방향이 Z축과 평행하지 않은 폴리선(평면도에서 타원)이면 null(원·호의 <객체 선택>과 같이 받지 않는다).
+ * seg는 고른 세그먼트 번호다(192차 — DIMREASSOCIATE 호 길이 치수가 그 세그먼트 표지로 연관한다)
  */
-export function polyArcOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; a0: number; a1: number; z: number } | null {
+export function polyArcOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; a0: number; a1: number; z: number; seg?: number } | null {
   const s = polySegment(e, pick);
   const t = s?.t;
-  return s && t?.kind === 'arc' ? { c: t.c, r: t.r, a0: t.a0, a1: t.a1, z: s.z } : null;
+  return s && t?.kind === 'arc' ? { c: t.c, r: t.r, a0: t.a0, a1: t.a1, z: s.z, seg: t.segment } : null;
 }
 
 /**
