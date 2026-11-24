@@ -1057,6 +1057,16 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   문자 배치 계산이 새로 들고 기존 시험 annot.test.ts의 [60, 70] 기대도 바뀜). 실물 필요: DIMJOGLINE Enter 자리(도움말은 문자와 첫 치수보조선 사이 가운데 또는 치수선 가운데를
   문자 자리에 따라 고른다고만 적음 — 이 앱은 앞쪽, 문자가 없으면 1/4), SOLID에 Z를 준 점(PLINE·ARC처럼 받지 않고 고도 — 2D 객체의 평면을 어느 점의 Z로 정하는지 도움말에 없음 —
   위 「다른 2D 명령(PLINE·ARC·ELLIPSE·RECTANG 등)에 준 Z」 항목과 같은 빈칸). MLEADER 도면층·DIMBASELINE의 직접 고른 기준은 182차에 보고 둔 그대로다
+- [x] TEXT·MTEXT·INSERT의 현재 고도(206차, Autodesk ELEV 도움말: 현재 고도는 새 객체의 기본 Z로 X·Y만 준 점에 쓰인다 — DXF 참조서: TEXT 10·11(OCS)·INSERT 10(OCS)·
+  MTEXT 10은 고도 칸 없이 점의 Z): `app/textedit/commands.ts` TEXT(줄마다 삽입점·정렬점)·MTEXT(삽입점)와 `app/blockinsert.ts` INSERT(화면에서 찍은 삽입점 — 속성은 그 Z에서 옮김)가
+  Z를 늘 0으로 썼다 — 이제 `currentElevation`(모형 ELEVATION, 배치 PELEVATION)이다. 고도 0인 도면과 프롬프트 흐름은 같은 값이다. 현재 고도 입구 표는 CHANGELOG 206차 절
+- [ ] 206차에 보고 두 것 — 현재 고도 입구 표에서 아직 Z 0을 쓰는 만들기 명령(다음 후보, 같은 `currentElevation`으로 맞출 수 있는 것): ATTDEF(화면에서 시작점 — `app/blockinsert.ts`
+  runAttdef), -INSERT(`app/dashcmds-insert.ts` — 삽입점과 기준점(B)의 Z를 함께 정해야 함), MINSERT(`app/util2-blocks.ts`), TABLE(`app/tablecmds.ts`), TOLERANCE(`app/annot2-misc.ts`),
+  LEADER·QLEADER·MLEADER(꼭짓점·주석·내용 블록 자리가 여럿 — 한 묶음으로), MLINE(`edit/mline/geom.ts`), REVCLOUD 직사각형·폴리곤·프리핸드(`edit/geom/markup.ts` cloudPolyline의 고도 38),
+  WIPEOUT 점(makeWipeout), SKETCH(`edit/sketch.ts`), Express BREAKLINE(`edit/express/breakline.ts` — Z 인자는 있으나 명령이 넘기지 않음), HELIX(바닥 중심 — 3D 객체).
+  치수 정의점은 177차 판단(도움말에 Z 규칙 없음) 그대로다. 실물 표본 없이는 근거가 서지 않는 것: HATCH·GRADIENT·BOUNDARY는 해치 고도를 늘 0으로 쓴다
+  (`edit/hatch/create.ts` — 경계 객체가 고도에 있을 때 경계 평면을 따를지는 현재 고도와 다른 줄기, 이번에 도움말을 보지 않음), REVCLOUD 객체 모드는 원본이 고도에 있어도 0이다
+  (원본 평면을 따를지 도움말에 없음). 입력이 Z를 준 점은 위 「다른 2D 명령에 준 Z」 항목과 같은 빈칸이다
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다

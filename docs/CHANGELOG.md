@@ -3,6 +3,46 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(206차): TEXT·MTEXT·INSERT가 현재 고도를 쓰지 않고 Z 0에 놓이던 것
+
+### 고른 까닭
+205차가 SOLID를 현재 고도로 고친 줄기에서, 사용자가 X·Y만 준 점으로 새 2D 객체를 만드는 명령을 모두 견준 현재 고도 입구 표를 만들었습니다
+(코드 읽기 — 실제 도면 표본 없음).
+
+| 명령 | 지금 새 객체의 Z | 판단 |
+| --- | --- | --- |
+| LINE·PLINE·CIRCLE·ARC·RECTANG·POLYGON·ELLIPSE·SPLINE·POINT·XLINE·RAY·DONUT(`app/draw.ts`), TRACE·3DFACE·3DPOLY(`draw3d.ts`), SOLID(205차) | 현재 고도(RECTANG는 자체 고도 옵션을 주면 그 값) | 맞음 |
+| TEXT·MTEXT(`app/textedit/commands.ts`) | 0(TEXT는 삽입점·정렬점) | **고침** |
+| INSERT 화면에서 찍은 삽입점(`app/blockinsert.ts`) | 0(속성은 참조 Z에서 옮김) | **고침** |
+| ATTDEF·-INSERT·MINSERT·TABLE·TOLERANCE | 0 | 같은 꼴 — ROADMAP |
+| LEADER·QLEADER·MLEADER·MLINE·REVCLOUD·WIPEOUT·SKETCH·BREAKLINE·HELIX | 0 | ROADMAP |
+| 치수(DIMLINEAR 등) | 0 | 177차 판단(도움말에 Z 규칙 없음) 그대로 |
+| DIVIDE·MEASURE | 고른 객체 경로의 Z | 맞음(객체 위 점) |
+| HATCH·GRADIENT·BOUNDARY, ARCTEXT·CENTERMARK·CENTERLINE | 경계·고른 객체에서 | 고도 규칙이 아님 — 표 밖 |
+
+- 근거: Autodesk ELEV 도움말은 현재 고도가 새 객체의 기본 Z로 X·Y만 준 점에 쓰인다고 적습니다. DXF 참조서는 TEXT의 첫째·둘째 정렬점(10·11, OCS),
+  INSERT의 삽입점(10, OCS), MTEXT의 삽입점(10)에 따로 고도 칸을 두지 않고 점의 Z(30)로 적습니다(DWG의 TEXT 고도 칸은 이 앱 쓰기 코드가 삽입점 Z로 채웁니다).
+- 0을 쓰는 명령이 넷을 넘어, 같은 꼴(사용자가 찍은 점 하나로 자리가 정해지는 문자·블록 참조) 셋만 고쳤습니다. 셋 다 고도 칸이 점 Z 하나라 쓰기·읽기 코드를 바꾸지 않습니다.
+- 고르지 않은 것: ATTDEF(넷째 — 대화 상자 흐름), -INSERT(기준점(B)의 Z도 함께 정해야 함), MINSERT, TABLE·TOLERANCE, 지시선 셋(꼭짓점·주석·내용 블록 자리가 여럿),
+  MLINE, REVCLOUD·WIPEOUT·SKETCH·BREAKLINE, HELIX(3D 객체) — ROADMAP.
+
+### 고친 것
+- TEXT: 줄마다 삽입점·정렬점 Z를 `currentElevation`(모형 ELEVATION, 배치 PELEVATION)으로 씁니다. MTEXT: 삽입점 Z를 같은 값으로.
+  INSERT: 화면에서 찍은 삽입점 Z를 같은 값으로(속성은 그 Z에서 옮깁니다).
+- 바뀐 기본 동작: 고도가 0이 아닌 도면에서 새 문자·여러 줄 문자·블록 참조가 그 고도에 놓입니다. 고도 0인 도면, 프롬프트 흐름은 같습니다.
+  입력이 Z를 준 점은 SOLID(205차)처럼 받지 않고, INSERT 대화 상자의 X·Y·Z 칸(화면에서 지정 끔)은 준 값 그대로입니다. 쓰기 코드는 바꾸지 않았습니다.
+
+### 확인
+- 고도 5에서 TEXT 두 줄은 삽입점 Z 5(정렬점 없음), 고도 −1.5의 중간 중심(MC)은 삽입점·정렬점 Z −1.5, 고도 −2.5의 MTEXT는 삽입점 (0, 0, −2.5),
+  고도 7의 INSERT는 삽입점 (10, 20, 7)·속성 (11, 22, 7)이고, 명령 취소 한 번이면 각각 없습니다. 고도가 없는 도면은 셋 모두 Z 0입니다.
+  고도 4에서 만든 셋을 DWG·DXF(AC1015·AC1032)로 쓰고 다시 읽어도 TEXT 삽입점·정렬점, MTEXT·INSERT·속성 삽입점 Z가 4입니다.
+- 시험: `tests/drawmod/text-insert-elev206.test.ts` 6건 — 고치기 전 판에서 5건 실패(받은 Z 0), 전과 같은 값 1건 통과.
+  고친 뒤 이 파일과 `tests/annotedit/app.test.ts`(MTEXT·TEXT 명령)·`tests/manage/ui.test.ts`(INSERT 대화 상자) 32건 통과, tsc 오류 0.
+- 결과·바이트 고정 시험: `fingerprint|snapshot|toMatchInlineSnapshot`·`createHash|GOLDEN|sha256` 시험 가운데 TEXT·MTEXT·INSERT 명령을 돌리는 것이 없고,
+  쓰기 코드를 바꾸지 않았습니다(새 문서의 고도는 0).
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·편집기 조각 크기 전·후,
+  check:i18n(새 프롬프트 글·사전 항목 없음). 실도면 표본 없음: AutoCAD에서 같은 입력의 결과와 견주지는 않았습니다.
+
 ## 2026-11-24(205차): SOLID가 현재 고도를 쓰지 않고 2D 솔리드를 Z 0에 그리던 것
 
 ### 고른 까닭
