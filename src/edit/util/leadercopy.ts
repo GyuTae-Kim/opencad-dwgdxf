@@ -24,7 +24,11 @@ const notes = new WeakMap<Entity, CopyNote>();
 /** 지시선 주석이 될 수 있는 객체(지시선 73: 여러 줄 문자·공차·블록 참조) */
 const ANNOTATION_TYPES = new Set(['MTEXT', 'TOLERANCE', 'INSERT']);
 
-/** freshEntity가 핸들을 지우기 전에 부른다: 주석이 있는 지시선과 반응자가 있는 주석 꼴 객체만 적는다 */
+/**
+ * freshEntity가 핸들을 지우기 전에 부른다: 주석이 있는 지시선과 반응자가 있는 주석 꼴 객체만 적는다.
+ * 편집 명령 확정을 거치지 않고 블록 정의로 복사하는 경로(블록으로 붙여넣기·BLOCK의 유지·연관 배열의 원본 블록)도 새 핸들을 주기 전에 부르고,
+ * 새 핸들을 다 준 뒤 relinkLeaderCopies를 부른다(161차)
+ */
 export function noteLeaderCopy(x: Entity): void {
   if (!x.handle) return;
   if (x.type === 'LEADER') {
@@ -39,7 +43,7 @@ export function tagLeaderCopy(x: Entity, m: readonly number[], dz?: number): voi
 }
 
 /**
- * 같은 편집에서 더하는 객체(새 핸들을 받고 반응자를 지운 뒤): 적어 둔 복사본 지시선마다 원본 주석이 같은 변환으로 함께 복사됐으면
+ * 같은 편집에서 더하는 객체(또는 한 번에 블록 정의로 복사한 객체 — 새 핸들을 받고 반응자를 지운 뒤): 적어 둔 복사본 지시선마다 원본 주석이 같은 변환으로 함께 복사됐으면
  * 그 복사본을 가리키게 하고 복사본 주석의 반응자에 지시선을 넣는다. 함께 복사되지 않았으면 주석 연결을 뗀다.
  * 같은 원본의 복사본이 여럿이면(분해한 블록 참조 여럿 등) 더한 차례로 짝짓는다. 이은 수
  */

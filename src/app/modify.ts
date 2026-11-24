@@ -66,7 +66,7 @@ import { pasteDependencies } from './pastedeps';
 import { expandBudget } from '../core/limits';
 import { MSG } from '../edit/geom/types';
 import { relinkClonedColumns, relinkColumnCopies } from '../edit/util/mtextcols';
-import { relinkLeaderCopies } from '../edit/util/leadercopy';
+import { noteLeaderCopy, relinkLeaderCopies } from '../edit/util/leadercopy';
 import { columnGripEdit } from './mtextcols-grips';
 import { ft } from './filetext';
 import { ScaleIndex, explodeView } from '../edit/annoscale/represent';
@@ -2415,9 +2415,15 @@ export function pasteAsBlock(app: App, st: DocState, list: Entity[], base: Pt, a
   // 붙여 넣기·복사와 같게 새 핸들을 주고 원본 본문(dwgRaw)도 버린다. R2013+ ACIS 객체의 원본 본문은
   // 자료 저장소(AcDs)의 원래 핸들 기록을 가리키므로, 새 핸들로 쓰면 형상 없는 객체가 된다.
   const sources = list.map((e) => e.handle);
-  for (const e of list) prepareNew(st, e, recordHandle);
+  for (const e of list) {
+    // 지시선 주석(340 ↔ 주석 반응자): 새 핸들을 주기 전에 원본 핸들을 적어 둔다(161차)
+    noteLeaderCopy(e);
+    prepareNew(st, e, recordHandle);
+  }
   // 여러 단 MTEXT: 블록 안의 새 단끼리 잇는다(원본 단을 가리키지 않게)
   relinkClonedColumns(list, sources);
+  // 지시선과 주석을 함께 붙여 넣었으면 블록 안의 복사본끼리 잇고, 지시선만이면 주석 연결을 뗀다(Autodesk "Leader Associativity" — 161차)
+  relinkLeaderCopies(list);
   const record: BlockRecord = { name, handle: recordHandle, flags: 0, insertUnits: Number(st.doc.header.get('$INSUNITS') ?? 0) || 0, explodable: true, scalable: true };
   const def: BlockDef = {
     name,
