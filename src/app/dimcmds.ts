@@ -331,7 +331,7 @@ export function originsFromEntity(e: Entity | undefined, pick: Pt): [Pt, Pt] | n
 }
 
 /**
- * 호·원의 평면도 중심·반지름·호 범위와 평면의 WCS Z(DIMRADIUS·DIMDIAMETER·DIMARC·DIMCENTER).
+ * 호·원의 평면도 중심·반지름·호 범위와 평면의 WCS Z(DIMRADIUS·DIMDIAMETER·DIMARC·DIMCENTER, 175차부터 DIMANGULAR 호·원과 CENTERMARK).
  * CIRCLE·ARC의 중심(10)·각도(50·51)는 객체 OCS 값이다(DXF 참조서 OCS). 돌출 방향이 −Z(대칭으로 뒤집힌 원·호)면 OCS X = WCS −X라
  * 편집 기하 커널과 같은 평면 사상(planProj)으로 평면도에 옮긴다 — 중심은 X 거울상 자리에서 돌아오고, 호는 돌아가는 방향이 뒤집혀
  * 평면도의 반시계 시작·끝이 OCS 끝·시작이 된다(174차 — 전에는 치수·중심 표식이 X 거울상 자리에 생겼다).
@@ -493,22 +493,28 @@ export function registerDimCommands(app: App): void {
           }
           make = (p) => createAngular2LineDimension(doc, s1, t1, s2, t2, v3(p), { text: o.text });
         } else if (e?.type === 'ARC') {
-          const am = { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle), z: 0 };
-          const bm = { x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle), z: 0 };
-          refs = vx1 ? [] : [objectRef(app, e, OSNAP.END, am), objectRef(app, e, OSNAP.END, bm), objectRef(app, e, OSNAP.CEN, e.center)];
-          const c = toPaper(vx1, e.center);
+          // 호의 평면도 중심·호 범위·평면 Z(−Z 호의 OCS 중심·각도는 X 거울상 자리 — 175차, circleOf). 자연 +Z는 전과 같은 값
+          const g = circleOf(e)!;
+          const cen = { x: g.c.x, y: g.c.y, z: g.z };
+          const am = { x: g.c.x + g.r * Math.cos(g.a0!), y: g.c.y + g.r * Math.sin(g.a0!), z: 0 };
+          const bm = { x: g.c.x + g.r * Math.cos(g.a1!), y: g.c.y + g.r * Math.sin(g.a1!), z: 0 };
+          refs = vx1 ? [] : [objectRef(app, e, OSNAP.END, am), objectRef(app, e, OSNAP.END, bm), objectRef(app, e, OSNAP.CEN, cen)];
+          const c = toPaper(vx1, cen);
           const a = toPaper(vx1, am);
           const b = toPaper(vx1, bm);
           const tw = vx1?.twist ?? 0;
           vertex = c;
-          bounds = [e.startAngle - tw, e.endAngle - tw];
+          bounds = [g.a0! - tw, g.a1! - tw];
           make = (p) => createAngularDimension(doc, c, a, b, v3(p), { text: o.text });
         } else if (e?.type === 'CIRCLE') {
           const first = r.point;
-          const c = toPaper(vx1, e.center);
+          // 원의 평면도 중심과 평면 Z(−Z 원의 OCS 중심은 X 거울상 자리 — 175차, circleOf)
+          const g = circleOf(e)!;
+          const cen = { x: g.c.x, y: g.c.y, z: g.z };
+          const c = toPaper(vx1, cen);
           const b = await ctx.getPoint('각도의 두 번째 끝점 지정:', { base: c, ...(vx1 ? { viewportSnaps: true } : {}) });
           if (!('point' in b)) return;
-          refs = vx1 ? [] : [circlePointRef(e, first), pointRef(app, b), objectRef(app, e, OSNAP.CEN, e.center)];
+          refs = vx1 ? [] : [circlePointRef(e, first), pointRef(app, b), objectRef(app, e, OSNAP.CEN, cen)];
           vertex = c;
           bounds = [angTo(c, first), angTo(c, b.point)];
           make = (p) => createAngularDimension(doc, c, v3(first), v3(b.point), v3(p), { text: o.text });

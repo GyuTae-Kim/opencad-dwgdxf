@@ -15,6 +15,8 @@ import type { App, CommandContext, Keyword } from './app';
 import { addEntities, currentProps } from './draw';
 import { dimGhost } from './annot2-common';
 import { attachAssociation, finishNewDimension } from './dimassoc';
+import { circleOf } from './dimcmds';
+import { isNaturalExt, isPlanarExt, planProj, planZ } from '../edit/geom/ocs';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { ucsOrigin } from './ucs';
@@ -332,17 +334,27 @@ function straightOf(e: Entity | undefined, pick: Pt): [Pt, Pt] | null {
   return null;
 }
 
-/** 호·원(폴리선 호 세그먼트 포함)의 중심·반지름·중심각 */
+/**
+ * 호·원(폴리선 호 세그먼트 포함)의 평면도 중심·반지름·중심각과 평면의 WCS Z.
+ * 원·호의 중심·각도와 폴리선의 꼭짓점·고도는 객체 OCS 값이다(DXF 참조서 CIRCLE·ARC 10·50·51, LWPOLYLINE 10·38). 돌출 방향이 −Z면
+ * OCS X = WCS −X라 원·호는 치수 명령과 같은 평면 사상(`circleOf`)으로 옮기고, 폴리선은 꼭짓점을 같은 사상으로 옮겨 뒤집힌 평면이면 볼록도 부호를 뒤집는다
+ * (175차 — 전에는 중심 표식이 X 거울상 자리에 Z 부호가 반대로 생겼다). 자연 +Z와 돌출 방향이 기운 객체는 전과 같은 값
+ */
 function roundOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; sweep: number; z: number } | null {
   if (!e) return null;
-  if (e.type === 'CIRCLE') return { c: e.center, r: e.radius, sweep: 2 * Math.PI, z: e.center.z };
-  if (e.type === 'ARC') {
-    let sw = e.endAngle - e.startAngle;
+  const g = circleOf(e);
+  if (g) {
+    if (g.a0 === undefined || g.a1 === undefined) return { c: g.c, r: g.r, sweep: 2 * Math.PI, z: g.z };
+    let sw = g.a1 - g.a0;
     while (sw <= 0) sw += 2 * Math.PI;
-    return { c: e.center, r: e.radius, sweep: sw, z: e.center.z };
+    return { c: g.c, r: g.r, sweep: sw, z: g.z };
   }
   if (e.type === 'LWPOLYLINE') {
-    const vs = lwVertices(e);
+    const ext = e.extrusion;
+    const m = !isNaturalExt(ext) && isPlanarExt(ext) ? planProj(ext, e.elevation) : null;
+    const flip = !!m && m[0] * m[3] - m[1] * m[2] < 0;
+    const vs = m ? lwVertices(e).map((v) => ({ ...v, x: m[0] * v.x + m[2] * v.y + m[4], y: m[1] * v.x + m[3] * v.y + m[5], bulge: flip ? -v.bulge : v.bulge })) : lwVertices(e);
+    const z = m ? planZ(ext, e.elevation) || 0 : e.elevation;
     let best: { c: Pt; r: number; sweep: number; z: number } | null = null;
     let bd = Infinity;
     for (let i = 0; i < (e.closed ? vs.length : vs.length - 1); i++) {
@@ -358,7 +370,7 @@ function roundOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; sweep: nu
       const dd = Math.abs(Math.hypot(pick.x - c.x, pick.y - c.y) - r);
       if (dd < bd) {
         bd = dd;
-        best = { c, r, sweep: Math.abs(th), z: e.elevation };
+        best = { c, r, sweep: Math.abs(th), z };
       }
     }
     return best;
