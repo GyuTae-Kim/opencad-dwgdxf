@@ -14,6 +14,7 @@
 import type { HeaderValue, Vec2, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { DEFAULT_HEADER, HEADER_VARS, R12_HEADER_VARS } from '../io/dxf/headervars';
+import { nearestLineweight } from '../edit/layercmd';
 import { Real, toArray, type Value } from '../edit/lisp/types';
 import type { App, CommandContext } from './app';
 import { addHook } from './hooks';
@@ -471,7 +472,10 @@ export function setSysvarText(app: App, raw: string, text: string): string | nul
       const vals = INT_VALUES[n];
       const [lo, hi] = info.kind === 'bool' ? [0, 1] : (INT_RANGE[n] ?? [-32768, 32767]);
       if (vals ? !vals.includes(v) : v < lo || v > hi) return vals ? `값이 맞지 않습니다(${vals.join(', ')} 가운데 하나).` : `${lo}과(와) ${hi} 사이의 정수가 필요합니다.`;
-      after = v;
+      // CELWEIGHT의 표에 없는 값은 가장 가까운 표준 선가중치(204차). Autodesk CELWEIGHT 도움말: −1·−2·−3 밖의 유효 값은 표준 값 24개(1/100 mm)뿐,
+      // -LWEIGHT 도움말: 같은 설정(새 객체의 기본 선가중치)에 그 밖의 값을 넣으면 가장 가까운 유효 값 — CHPROP·-LAYER와 같은 `nearestLineweight`.
+      // 전에는 29를 그대로 두어 저장 때 DWG 머리말은 아래 값(0.25), DXF 머리말은 29, 새 객체는 DWG 0.25·DXF 0.30이 됐다
+      after = n === 'CELWEIGHT' && v >= 0 ? nearestLineweight(v) : v;
       break;
     }
     case 'real': {

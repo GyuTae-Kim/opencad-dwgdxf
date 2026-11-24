@@ -411,6 +411,15 @@ export function setSysVar(app: App, name: string, v: Value): string | null {
   const key = `$${n}`;
   const cur = st?.doc.header.get(key);
   if (!st || cur === undefined) return '';
+  // CELWEIGHT는 SETVAR·변수 이름 입력과 같은 검사(204차 — −3~211 정수, 표에 없는 값은 가장 가까운 표준 선가중치).
+  // 전에는 검사 없이 29·300·−5를 머리말에 넣어 DWG·DXF 저장 값이 갈렸다
+  if (n === 'CELWEIGHT') {
+    if (typeof v !== 'number' && !(v instanceof Real)) return '';
+    const num = typeof v === 'number' ? v : v.v;
+    if (!Number.isInteger(num)) return '정수가 필요합니다';
+    const err = setSysvarText(app, n, String(num));
+    return err === null ? null : err.replace(/\.$/, '');
+  }
   let after: HeaderValue;
   if (typeof cur === 'number') {
     if (typeof v === 'number') after = v;
