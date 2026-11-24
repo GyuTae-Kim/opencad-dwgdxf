@@ -80,7 +80,7 @@ describe('옮길 수 없는 블록 내용의 분해(163차)', () => {
     expect(doc.blocks.get('S')!.entities.map((e) => e.type)).toEqual(['LINE', '3DSOLID']);
   });
 
-  it('내용이 모두 옮길 수 없는 블록은 참조를 지우지 않는다(전에는 참조만 지우고 아무것도 넣지 않았다 — AutoCAD도 이때 분해하지 않는다)', () => {
+  it('내용이 모두 옮길 수 없는 블록은 참조를 지우지 않는다(전에는 참조만 지우고 아무것도 넣지 않았다 — 비균등 축척이면 AutoCAD도 분해하지 않는다)', () => {
     refused(explodeEntity(insert('O', 0, 0), doc, false, 'definitions'), MSG.acis);
     refused(explodeEntity(insert('O', 0, 0, { scale: P(2, 1, 1) }), doc, false, 'definitions'), MSG.acis);
   });
