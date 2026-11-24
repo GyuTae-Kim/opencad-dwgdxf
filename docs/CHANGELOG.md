@@ -3,6 +3,45 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(209차): BREAKLINE·COUNT 표·DATAEXTRACTION 표·WIPEOUT이 현재 고도를 쓰지 않고 Z 0에 놓이던 것
+
+### 고른 까닭
+208차가 같은 꼴(화면에서 찍은 점 하나로 자리가 정해지고 고도 칸이 하나)로 적어 둔 명령과 WIPEOUT을 다시 읽었습니다(코드 읽기 — 실제 도면 표본 없음).
+
+| 명령 | 지금 새 객체의 Z(고도) | 판단 |
+| --- | --- | --- |
+| Express BREAKLINE(`app/express-draw.ts` → `edit/express/breakline.ts` makeBreakline) | 폴리선 고도 0(계산 함수의 Z 인자를 넘기지 않음) | **고침** |
+| COUNT 「표 삽입」·COUNTTABLE(`app/count.ts` — 같은 함수) | 표 삽입점 Z 0 | **고침** |
+| DATAEXTRACTION 표(`app/dataextract.ts`) | 표 삽입점 Z 0 | **고침** |
+| WIPEOUT 점 지정(`app/modify2.ts` → `edit/geom/markup.ts` makeWipeout) | 삽입점 Z 0 | **고침** |
+| WIPEOUT 폴리선(P) | 원본 폴리선의 Z | 그대로(원본 평면을 따르는 갈래 — 이미 그렇게 동작) |
+| XATTACH·IMAGEATTACH·PDFATTACH 삽입점, FIELD로 새로 넣는 여러 줄 문자 | 삽입점 Z 0 | 이번에 찾은 같은 꼴 — ROADMAP |
+
+- 근거: Autodesk ELEV 도움말은 현재 고도가 새 객체의 기본 Z로 X·Y만 준 점에 쓰인다고 적습니다. DXF 참조서는 LWPOLYLINE의 꼭짓점을 X·Y(10·20)만 두고
+  고도를 38 하나에, ACAD_TABLE의 삽입점(10, 블록 참조 부분)을 점의 Z(30)로 적습니다. WIPEOUT 쪽은 삽입점(10, WCS)·U 벡터(11, 그림 아래 변)·
+  V 벡터(12, 왼쪽 변)만 두고 고도(38)·돌출(210) 칸이 없어, 고도는 삽입점의 Z뿐입니다. 같은 앱의 PLINE·TABLE(208차)은 이미 현재 고도를 씁니다.
+- 넷 모두 한 줄 고침이고 쓰기·읽기 코드를 바꾸지 않아, 넷을 한 시험 파일로 끝까지 확인했습니다.
+- 고르지 않은 것: 지시선 셋(LEADER·QLEADER·MLEADER — 자리가 여럿), MLINE·SKETCH(다음 묶음), HELIX(3D 객체), 이번에 찾은 XATTACH·IMAGEATTACH·PDFATTACH·FIELD — ROADMAP.
+
+### 고친 것
+- BREAKLINE: 화면에서 찍은 두 점으로 그린 끊기선의 폴리선 고도를 `currentElevation`(모형 ELEVATION, 배치 PELEVATION)으로 씁니다(미리보기는 그대로).
+  COUNT 「표 삽입」·COUNTTABLE·DATAEXTRACTION: 「테이블 삽입점 지정」으로 찍은 표 삽입점 Z를 같은 값으로. WIPEOUT: 점으로 지정한 가리기의 삽입점 Z를 같은 값으로.
+- 바뀐 기본 동작: 고도가 0이 아닌 도면에서 네 명령이 만든 끊기선·표·가리기가 그 고도에 놓입니다. 고도 0인 도면, 프롬프트 흐름, 끊기선 꼭짓점의 X·Y, 표 내용,
+  가리기의 U·V 벡터는 같습니다. WIPEOUT 폴리선(P)은 원본 폴리선의 Z를 따르는 그대로이고, 입력이 Z를 준 점은 205~208차처럼 받지 않습니다. 쓰기·읽기 코드는 바꾸지 않았습니다.
+
+### 확인
+- 고도 2.5의 BREAKLINE (0, 0)·(10, 0)(크기 1·확장 1, 기호 위치 Enter)은 고도 2.5이고 꼭짓점 X·Y는 (−1, 0)·(4.5, 0)·(4.75, 0.5)·(5.25, −0.5)·(5.5, 0)·(11, 0),
+  고도 −1.5의 COUNTTABLE(지금 공간 전체)은 표 삽입점 (10, 20, −1.5), 고도 6의 DATAEXTRACTION(대화 상자 기본값)은 (30, 40, 6),
+  고도 −2의 WIPEOUT 세 점 (0, 0)·(10, 0)·(10, 5)는 삽입점 (0, 0, −2)·U 벡터 (10, 0, 0)·V 벡터 (0, 5, 0)입니다. 넷 모두 명령 취소 한 번이면 없습니다(COUNTTABLE은 표만 없어지고 블록 참조는 남음).
+  고도가 없는 도면은 넷 모두 Z(고도) 0이고, 고도 4에서 만든 넷을 DWG·DXF(AC1015·AC1032)로 쓰고 다시 읽어도 끊기선 고도·두 표 삽입점·가리기 삽입점 Z가 4이고
+  끊기선 꼭짓점 수(6)와 가리기 U·V 벡터도 같습니다.
+- 시험: `tests/drawmod/breakline-table-wipeout-elev209.test.ts` 6건 — 고치기 전 판에서 5건 실패(받은 Z·고도 0 — X·Y·꼭짓점 수·U·V는 기대와 같음), 전과 같은 값 1건 통과.
+  고친 뒤 이 파일과 `tests/drawmod/table-tol-cloud-elev208.test.ts`(TABLE·REVCLOUD — 같은 `modify2`) 13건 통과, tsc 오류 0.
+- 결과·바이트 고정 시험: `fingerprint|snapshot|toMatchInlineSnapshot`·`createHash|GOLDEN|sha256` 시험 가운데 네 명령과 makeBreakline·makeWipeout을 쓰는 것이 없고
+  (makeWipeout을 직접 부르는 계산 시험은 Z 기본값 0 그대로), 네 명령을 앱으로 돌리는 기존 시험도 없습니다. 쓰기 코드를 바꾸지 않았습니다(새 문서의 고도는 0).
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·편집기 조각 크기 전·후,
+  check:i18n(새 프롬프트 글·사전 항목 없음), COUNT 대화 상자의 「표 삽입」 단추(COUNTTABLE과 같은 함수 — 코드 읽기만). 실도면 표본 없음: AutoCAD에서 같은 입력의 결과와 견주지는 않았습니다.
+
 ## 2026-11-24(208차): TABLE·TOLERANCE·REVCLOUD가 현재 고도를 쓰지 않고 Z 0에 놓이던 것
 
 ### 고른 까닭

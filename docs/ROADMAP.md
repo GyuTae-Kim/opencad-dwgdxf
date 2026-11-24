@@ -1070,11 +1070,18 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   LWPOLYLINE은 꼭짓점이 X·Y뿐이고 고도 38 하나): `app/tablecmds.ts` TABLE 삽입점(삽입점 지정·윈도우 지정), `app/annot2-misc.ts` TOLERANCE 삽입점,
   `app/modify2.ts` REVCLOUD 직사각형·폴리곤·프리핸드 구름의 폴리선 고도(`edit/geom/markup.ts` cloudPolyline — 고도 인자, 기본 0)가 늘 0이었다 — 이제 `currentElevation`이다.
   REVCLOUD 객체(O)·수정(M)과 미리보기, 고도 0인 도면, 프롬프트 흐름, 구름 꼭짓점의 X·Y·볼록은 같은 값이다
-- [ ] 208차에 보고 두 것 — 같은 꼴(화면 점 하나·고도 칸 하나, 다음 후보): Express BREAKLINE(`app/express-draw.ts` — `edit/express/breakline.ts` makeBreakline의 Z 인자를 넘기지 않아
-  폴리선 고도 0), COUNT 표(`app/count.ts`)·DATAEXTRACTION 표(`app/dataextract.ts`)의 「테이블 삽입점 지정」(표 삽입점 Z 0 — 208차 TABLE과 같은 `addTableOps` 꼴)
+- [x] BREAKLINE·COUNT 표·DATAEXTRACTION 표·WIPEOUT의 현재 고도(209차, 같은 ELEV 도움말 — DXF 참조서: LWPOLYLINE은 꼭짓점이 X·Y뿐이고 고도 38 하나,
+  ACAD_TABLE 10(블록 참조 부분)은 고도 칸 없이 점의 Z, WIPEOUT은 삽입점 10(WCS)·U 벡터 11·V 벡터 12이고 고도·돌출 칸이 없음): `app/express-draw.ts` Express BREAKLINE의
+  폴리선 고도(`edit/express/breakline.ts` makeBreakline의 Z 인자 — 마지막 객체만, 미리보기 그대로), `app/count.ts` COUNT 「표 삽입」·COUNTTABLE과 `app/dataextract.ts` DATAEXTRACTION의
+  표 삽입점, `app/modify2.ts` WIPEOUT 점 지정의 삽입점(makeWipeout의 Z 인자)이 늘 0이었다 — 이제 `currentElevation`이다. WIPEOUT 폴리선(P)은 이미 원본 폴리선의 Z를 따르는 그대로다.
+  고도 0인 도면, 프롬프트 흐름, 끊기선 꼭짓점의 X·Y, 표 내용, 가리기의 U·V 벡터는 같은 값이다
+- [ ] 209차에 보고 두 것 — 이번에 찾은 같은 꼴(화면에서 찍은 삽입점의 Z 0, 다음 후보 — 코드 읽기): XATTACH(`app/blkcmds-xref.ts` — 외부 참조 블록 참조 삽입점),
+  IMAGEATTACH(같은 파일 — 이미지 삽입점, 「삽입점 지정 <0,0>」의 Enter 기본값은 X·Y만 준 점인지 따로 정할 것), PDFATTACH(같은 파일 — 언더레이 삽입점),
+  FIELD로 새로 넣는 여러 줄 문자(`app/fieldcmds.ts` — MTEXT 삽입점). 도면 비교 정보 표(`app/compare.ts`)·PASTESPEC·블록으로 붙여넣기(`app/modify.ts` pasteAsBlock)는
+  찍은 점이 기준점·붙여넣기 자리라 현재 고도 규칙과 같은 꼴인지 먼저 볼 것
 - [ ] 206차에 보고 두 것 — 현재 고도 입구 표에서 아직 Z 0을 쓰는 만들기 명령(다음 후보, 같은 `currentElevation`으로 맞출 수 있는 것 — ATTDEF·-INSERT·MINSERT는 207차,
-  TABLE·TOLERANCE·REVCLOUD 직사각형·폴리곤·프리핸드는 208차가 고침): LEADER·QLEADER·MLEADER(꼭짓점·주석·내용 블록 자리가 여럿 — 한 묶음으로), MLINE(`edit/mline/geom.ts`),
-  WIPEOUT 점(makeWipeout), SKETCH(`edit/sketch.ts`), Express BREAKLINE(208차에 보고 둔 그대로), HELIX(바닥 중심 — 3D 객체).
+  TABLE·TOLERANCE·REVCLOUD 직사각형·폴리곤·프리핸드는 208차, Express BREAKLINE·WIPEOUT 점은 209차가 고침): LEADER·QLEADER·MLEADER(꼭짓점·주석·내용 블록 자리가 여럿 — 한 묶음으로),
+  MLINE(`edit/mline/geom.ts`), SKETCH(`edit/sketch.ts`), HELIX(바닥 중심 — 3D 객체).
   치수 정의점은 177차 판단(도움말에 Z 규칙 없음) 그대로다. 실물 표본 없이는 근거가 서지 않는 것: HATCH·GRADIENT·BOUNDARY는 해치 고도를 늘 0으로 쓴다
   (`edit/hatch/create.ts` — 경계 객체가 고도에 있을 때 경계 평면을 따를지는 현재 고도와 다른 줄기, 이번에 도움말을 보지 않음), REVCLOUD 객체 모드는 원본이 고도에 있어도 0이다
   (원본 평면을 따를지 도움말에 없음). 입력이 Z를 준 점은 위 「다른 2D 명령에 준 Z」 항목과 같은 빈칸이다
