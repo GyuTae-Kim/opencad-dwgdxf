@@ -305,7 +305,18 @@ export function angularSpan(d: { dimType: number; defPoint: Vec3; defPoint2: Vec
   // 둘레의 변(보조선 방향) 후보: 세 점은 두 변, 두 선은 두 직선의 네 반직선
   const rays: number[] = [];
   for (const p0 of cands) if (dist(p0, c) > 1e-12) rays.push(ang(sub(p0, c)));
-  if ((d.dimType & 7) === 2) rays.push(...rays.slice(0, 2).map((a) => a + Math.PI));
+  if ((d.dimType & 7) === 2) {
+    const own = rays.length;
+    rays.push(...rays.slice(0, 2).map((a) => a + Math.PI));
+    // 185차: 위 반대쪽은 첫 두 반직선(대개 첫 선의 두 점)에서만 만들어, 둘째 선의 두 점이 꼭짓점 같은 쪽(꼭짓점이 둘째 선 밖)이면 둘째 선의
+    // 연장 반직선이 없었다 — 그 사분면에 치수 호를 두면 180° 범위를 잡아(그림 `angular`의 값은 그 사분면) DIMCONTINUE·DIMBASELINE이 엉뚱한 변에서 이었다.
+    // Autodesk DIMANGULAR 도움말 「선 선택」: 두 선의 교점이 꼭짓점이고 호는 늘 180° 미만이다. 점 방향 모두의 반대 가운데 아직 없는 방향만 더한다
+    // (네 반직선이 이미 있던 꼴 — 첫 선이 꼭짓점에 닿거나 둘째 선이 꼭짓점을 지남 — 은 후보 배열이 그대로라 같은 값)
+    for (const a of rays.slice(0, own)) {
+      const o = a + Math.PI;
+      if (!rays.some((r) => Math.abs(normPi(r - o)) < 1e-9)) rays.push(o);
+    }
+  }
   if (rays.length < 2) return null;
   let best: { s: number; e: number } | null = null;
   for (const s0 of rays)
