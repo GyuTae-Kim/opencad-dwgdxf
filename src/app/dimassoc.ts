@@ -144,6 +144,15 @@ export function objectRef(app: App, e: Entity | undefined, osnap: number, p: Pt)
   return snapRef(app.active.doc, e, osnap, p, Math.max(tolFor(p) * 10, 1e-9));
 }
 
+/**
+ * 고른 폴리선 세그먼트 seg(0부터)의 스냅 점 참조(정확한 자리 — 세그먼트 번호 표지, 192차 `segmentSnapRef`).
+ * DIMARC가 폴리선 호 세그먼트로 만든 호 길이 치수의 끝점 둘·중심(193차)
+ */
+export function segmentRef(app: App, e: Entity | undefined, osnap: number, seg: number, p: Pt): PointRef | null {
+  if (!e || !app.active) return null;
+  return segmentSnapRef(e, osnap, seg, p, Math.max(tolFor(p) * 10, 1e-9));
+}
+
 /** 고른 원·호 위 점의 근처점 참조 */
 export function curveRef(app: App, e: Entity | undefined, p: Pt): PointRef | null {
   if (!e || !app.active) return null;
