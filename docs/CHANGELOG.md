@@ -3,6 +3,43 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(187차): MEASUREGEOM 반지름이 폴리선 호 세그먼트를 받지 않던 것
+
+### 고른 까닭
+181·182·186차 표에 없던 조회·도면층·정리·선택 명령(AREA·MEASUREGEOM·DIST·ID·LIST·LAYOFF·LAYFRZ·LAYISO·LAYUNISO·LAYMRG·LAYDEL·LAYWALK·COPYTOLAYER·
+OVERKILL·-OVERKILL·QSELECT·FILTER·DRAWORDER·TEXTTOFRONT·CHSPACE·COUNT·BCOUNT·PURGE·-PURGE·BREAKATPOINT·TEXTEDIT)의 프롬프트 키워드를 Autodesk 2026 도움말과
+견주었습니다(실제 도면 표본 없음 — 새 표본은 내려받지 않음). 빈칸은 MEASUREGEOM 반지름의 폴리선 호·면적 구석점의 호·길이·명령 취소·체적·빠른·모드, LAYOFF·LAYFRZ의 설정·명령 취소,
+LAYISO의 설정, LAYMRG의 명령 취소, COPYTOLAYER 기준점의 변위, -OVERKILL의 연관성·폴리선 최적화 아래 폭·분할, TEXTTOFRONT의 옵션 넷이었습니다.
+- Autodesk MEASUREGEOM 도움말의 반지름 옵션은 지정한 호, 원, 폴리선 호의 반지름과 지름을 잰다고 적습니다.
+  그런데 MEASUREGEOM 반지름(`app/commands.ts`)은 CIRCLE·ARC만 받아 → ①
+  - ① 폴리선을 고르면 호 세그먼트를 골라도 「호나 원이 아닙니다.」만 알리고 같은 프롬프트를 다시 물었습니다. MEASURERADIUS와 휴대폰 보기의 반지름 단추도 이 갈래입니다.
+  - 셋 조건: 도움말이 분명히 적고, 182차 `polyArcOf`(DIMRADIUS·DIMDIAMETER·DIMARC·DIMJOGGED·DIMANGULAR가 쓰는 세그먼트 고르기)를 그대로 쓰며, 지금 받던 입력의 결과는 같습니다
+    — 바뀌는 것은 알림만 하던 폴리선 호 세그먼트뿐이고 직선 세그먼트·원·호·키워드·프롬프트 글은 같습니다(AutoCAD 도움말에도 이 옵션의 프롬프트 줄은 없습니다).
+    새 글은 없습니다(반지름·지름 글과 알림 글은 원·호의 것). 결과 고정 시험(장면 지문·명령 묶음)·바이트 고정 시험은 이 명령을 쓰지 않습니다
+    (`grep -rln -E "fingerprint|snapshot|toMatchInlineSnapshot|GOLDEN|createHash|sha256" tests/` 21개 가운데 MEASUREGEOM·MEASURERADIUS·`registerCommands`가 든 것 0개).
+- 고르지 않은 것: LAYOFF·LAYFRZ·LAYISO의 설정은 세션을 넘어 기억하는 새 시스템 변수(LAYISO 잠금 및 페이드는 LAYLOCKFADECTL)가, LAYOFF·LAYFRZ·LAYMRG의 명령 취소와
+  COPYTOLAYER의 변위, -OVERKILL의 연관성·폭·분할, TEXTTOFRONT의 옵션은 새 프롬프트 글(사전 항목)이 필요합니다. TEXTTOFRONT는 지금 묻지 않고 끝나는 흐름도 바뀝니다.
+  -OVERKILL이 대화 상자의 폴리선 폭 무시·폴리선 분할 안 함·연관 객체 유지를 넘기지 않고 기억에서 지우는 것(코드 읽기)은 넘기면 연관 객체 유지(대화 상자 기본 참)로
+  지금 결과가 바뀌고 -OVERKILL의 기본값을 도움말이 적지 않습니다. LAYDEL 이름 갈래의 잠긴 도면층(도움말은 대화 상자 쪽만 지울 수 없다고 적음)도 지금 결과가 바뀝니다.
+  MEASUREGEOM 면적 구석점의 호·길이·명령 취소와 체적·빠른·모드는 새 갈래가 여럿입니다. ROADMAP에 두었습니다.
+
+### 고친 것
+- MEASUREGEOM 반지름: 고른 객체가 원·호가 아니면 `polyArcOf(객체, 고른 점)`(`app/dimcmds.ts`)의 반지름을 씁니다. 고른 점에 가장 가까운 세그먼트가 호인 경량 폴리선만
+  (−Z 폴리선은 평면도 꼭짓점 — 반지름은 같음), 직선 세그먼트·POLYLINE 2D·돌출 방향이 Z축과 평행하지 않은 폴리선은 전과 같은 알림입니다. 글과 휴대폰 결과 카드 값은 원·호와 같은 꼴입니다.
+- 바뀐 기본 동작: MEASUREGEOM 반지름·MEASURERADIUS·휴대폰 보기 반지름 단추로 경량 폴리선의 호 세그먼트를 고르면 반지름·지름을 보입니다. 쓰기 코드는 바꾸지 않았습니다.
+  `app/commands.ts`가 `app/dimcmds.ts`를 새로 가져오지만 두 모듈은 이미 `editor.ts`가 함께 정적으로 가져옵니다(첫 화면 조각 밖).
+
+### 확인
+- ①: (0, 0)→(10, 0) 직선과 (10, 0)→(20, 0) 볼록도 1 호의 폴리선에서 첫 프롬프트에 R을 치고 (15, −5)를 고르면 반지름 5·지름 10 mm(원·호와 같은 두 줄 글, 알림 없음)이고
+  같은 프롬프트로 돌아가 종료(X)로 끝납니다. 호 세그먼트가 둘(반지름 5·10)이면 (20, −10) → 10, (5, −5) → 5, −Z 폴리선은 평면도 (−15, −5)를 골라 MEASURERADIUS로도 5입니다.
+- 전과 같은 꼴: 폴리선의 직선 세그먼트와 POLYLINE 2D의 호 세그먼트는 「호나 원이 아닙니다.」, 원 12.5·호 3은 같은 값입니다.
+- 시험: `tests/settings/measurepolyarc187.test.ts` 4건(진짜 App — 볼록 호·−Z 평면도를 실제 경로로 고르는 작은 Picker). 고치기 전 판에서 3건 실패합니다(반지름 줄 없음 — 알림 갈래).
+  전과 같은 꼴 1건은 통과합니다. tsc 오류 0, 관련 시험 3파일(measurepolyarc187·direct/measurecard — MEASURERADIUS 원과 휴대폰 결과 카드·settings/dist19 — MEASUREGEOM 거리) 17건 통과.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·워커 조각 크기 전·후, check:i18n(새 사전 항목 없음).
+  쓰기 코드를 바꾸지 않아 새 도면의 쓰기 바이트는 같습니다.
+  실도면 표본 없음: AutoCAD에서 폴리선 호에 MEASUREGEOM 반지름을 해 견주지는 않았습니다. 바뀐 곳이 전에 알림만 하던 입력뿐이고,
+  MEASUREGEOM 도움말의 반지름 옵션 글과 같은 앱의 DIMRADIUS 폴리선 호 갈래(182차)를 근거로 둡니다.
+
 ## 2026-11-24(186차): TEXT 시작점 프롬프트에서 자리맞추기 옵션을 받지 않던 것
 
 ### 고른 까닭

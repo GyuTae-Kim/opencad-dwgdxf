@@ -22,6 +22,7 @@ import type { ViewportXf } from './scene';
 import { type PaperPick, paperProjection, projectedDelta } from './vpsnap';
 import { type LimitsRect, parseZoomFactor } from './vpzoom';
 import { ft } from './filetext';
+import { polyArcOf } from './dimcmds';
 
 function pointOf(r: PointResult): Pt | null {
   return 'point' in r ? r.point : null;
@@ -327,7 +328,9 @@ export function registerCommands(app: App): void {
           }
           if ('enter' in r) return;
           const e = app.entity(r.handle);
-          const rad = e?.type === 'CIRCLE' || e?.type === 'ARC' ? e.radius : null;
+          // Autodesk MEASUREGEOM 도움말 반지름: 호, 원, 폴리선 호의 반지름·지름을 잰다(187차 — 전에는 원·호만 받아 폴리선은 알림만).
+          // 폴리선은 고른 점에 가장 가까운 세그먼트가 호일 때만(182차 `polyArcOf` — DIMRADIUS와 같은 고르기, 직선이면 전과 같은 알림)
+          const rad = e?.type === 'CIRCLE' || e?.type === 'ARC' ? e.radius : (polyArcOf(e, r.point)?.r ?? null);
           if (rad === null) ctx.print('호나 원이 아닙니다.', 'err');
           else ctx.print(`반지름 = ${L(app, rad)}${unitSuffix(app)}\n지름 = ${L(app, rad * 2)}${unitSuffix(app)}`, 'res', radiusResult(measureFormat(app), rad));
           continue;
