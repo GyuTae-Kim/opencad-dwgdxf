@@ -7,6 +7,7 @@ import { tableKey } from '../core/model';
 import { type EditOp, cloneEntity } from '../edit/session';
 import { type Affine, affApply, affDet, affInv, affLin, affMul, affRotate, affTranslate } from '../edit/geom/math';
 import { planProj } from '../edit/geom/ocs';
+import { STANDARD_LINETYPES, makeLinetype } from '../edit/linetypes';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { addEntities, currentProps } from './draw';
@@ -54,8 +55,8 @@ function setHeader(st: DocState, ctx: CommandContext | null, label: string, name
   st.session.commit({ label, ops: [{ kind: 'header', name, before, after: value }], group: ctx?.group });
 }
 
-/** 고른 객체들을 같은 방식으로 바꾼다 */
-function modifyAll(st: DocState, ctx: CommandContext, label: string, hs: string[], f: (e: Entity) => Entity | null): number {
+/** 고른 객체들을 같은 방식으로 바꾼다(pre: 바꾼 객체가 있을 때 같은 명령 취소 단계에 앞서 넣을 작업 — 선종류 로드 등) */
+function modifyAll(st: DocState, ctx: CommandContext, label: string, hs: string[], f: (e: Entity) => Entity | null, pre: EditOp[] = []): number {
   const ops: EditOp[] = [];
   for (const h of hs) {
     const e = st.doc.entityIndex.get(h);
@@ -65,7 +66,7 @@ function modifyAll(st: DocState, ctx: CommandContext, label: string, hs: string[
     // 자리 짐작(108차 — 큰 선택의 특성 바꾸기가 적용 때 블록 전체의 자리 표를 만들지 않게)
     if (after) ops.push(st.session.hinted({ kind: 'modify', block, before: e, after }));
   }
-  if (ops.length) st.session.commit({ label, ops, group: ctx.group });
+  if (ops.length) st.session.commit({ label, ops: [...pre, ...ops], group: ctx.group });
   return ops.length;
 }
 
@@ -108,7 +109,14 @@ async function changeProps(app: App, ctx: CommandContext, hs: string[], label: s
         const t = await ask('새 선종류 이름 입력 <BYLAYER>:');
         const name = t || 'ByLayer';
         const k = tableKey(name);
-        if (k !== 'BYLAYER' && k !== 'BYBLOCK' && !st.doc.linetypes.has(k)) ctx.print(`선종류 "${ft(name)}"을(를) 찾을 수 없습니다. 선종류 관리자(LINETYPE)에서 먼저 로드하십시오.`, 'err');
+        // 로드되지 않은 선종류는 표준 선종류 정의에서 올린다(202차, Autodesk CHPROP·CHANGE 도움말 「선종류」: 표준 선종류 라이브러리 파일에서
+        // 로드를 시도하고 실패하면 LINETYPE으로 로드). 정의 꼴은 -LINETYPE 로드·CENTERMARK처럼 $MEASUREMENT(1 = ISO mm, 0 = ANSI 인치, 없으면 1).
+        // 로드와 객체 바꾸기는 명령 취소 한 단계. 전에는 표준 이름도 아래 알림만 했다 — 표준 정의에 없는 이름·로드된 이름·ByLayer·ByBlock은 전과 같다
+        const def = k !== 'BYLAYER' && k !== 'BYBLOCK' && !st.doc.linetypes.has(k) ? STANDARD_LINETYPES.find((d) => d.name === k) : undefined;
+        if (def) {
+          const lt = makeLinetype(def, st.session.newHandle(), Number(st.doc.header.get('$MEASUREMENT') ?? 1) === 1);
+          modifyAll(st, ctx, label, hs, (e) => ({ ...e, linetype: lt.name }) as Entity, [{ kind: 'linetype', key: k, before: null, after: lt }]);
+        } else if (k !== 'BYLAYER' && k !== 'BYBLOCK' && !st.doc.linetypes.has(k)) ctx.print(`선종류 "${ft(name)}"을(를) 찾을 수 없습니다. 선종류 관리자(LINETYPE)에서 먼저 로드하십시오.`, 'err');
         else modifyAll(st, ctx, label, hs, (e) => ({ ...e, linetype: k === 'BYLAYER' ? 'ByLayer' : k === 'BYBLOCK' ? 'ByBlock' : st.doc.linetypes.get(k)!.name }) as Entity);
         break;
       }

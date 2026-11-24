@@ -3,6 +3,38 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(202차): CHPROP 선종류(LT)가 로드되지 않은 표준 선종류를 받지 않던 것
+
+### 고른 까닭
+앞 표(181·182·186·187·197·199차) 밖의 스타일·도면층·특성 명령의 명령행 꼴을 Autodesk 2026 도움말 HTML과 견준 일곱째 표를 만들었습니다
+(-LAYER·-LINETYPE·-STYLE·-DIMSTYLE·-RENAME·-COLOR·-LWEIGHT·CHPROP·CHANGE 특성·SETBYLAYER·LTSCALE·PSLTSCALE·MLSTYLE·TABLESTYLE·MLEADERSTYLE·-VISUALSTYLES — 남은 빈칸은 ROADMAP).
+셋 조건(도움말이 분명히 적음 · 저장소 시험으로 재현 · 지금 입력의 결과는 그대로)을 넘고 작은 것 하나를 골랐습니다(실제 도면 표본 없음).
+- Autodesk CHPROP 도움말 「선종류」와 CHANGE 도움말 특성 절의 같은 글은, 새 선종류가 로드되어 있지 않으면 표준 선종류 라이브러리 파일에서 로드를 시도하고
+  실패하면 LINETYPE으로 로드하라고 적습니다. 이 앱의 CHPROP·CHANGE 특성(P) 공통 함수(`app/propcmds.ts` `changeProps`)는 → ①
+  - ① DASHED처럼 표준 이름이어도 로드되지 않았으면 「선종류 "DASHED"을(를) 찾을 수 없습니다. 선종류 관리자(LINETYPE)에서 먼저 로드하십시오.」만 알리고 특성 프롬프트로 돌아갔습니다.
+- 전에 거절하던 입력만 새 갈래가 됩니다. 새 키워드·프롬프트 글이 없고, 알림 뒤나 고친 뒤나 같은 특성 프롬프트로 돌아가 다음 입력 흐름이 같습니다.
+- 고르지 않은 것: -LINETYPE 설정(S)의 로드되지 않은 선종류도 셋 조건을 넘지만 도움말이 「LIN 파일에서 정의를 찾는다」까지만 적어 덜 분명합니다(다음 후보).
+  정확성 어긋남 — CHPROP 선가중치가 표에 없는 값을 그대로 두는 것(도움말: 가장 가까운 정해진 값), -LAYER 만들기·설정·색상이 꺼진 도면층을 켜지 않는 것(도움말: 켠다),
+  -LWEIGHT가 현재 선가중치를 묻지 않고 선가중치 표시를 바꾸는 것 — 은 고치면 지금 결과가 바뀌어, 셋 조건 후보가 있는 이번에는 뒤로 두었습니다(ROADMAP).
+
+### 고친 것
+- `changeProps` 선종류(LT): 로드되지 않은 이름이 내장 표준 선종류 정의(`STANDARD_LINETYPES` — -LINETYPE 로드(L)·CENTERMARK·도면층 상태 가져오기가 쓰는 것)에 있으면
+  레코드를 만들어 고른 객체에 줍니다. 정의 꼴은 같은 명령들처럼 `$MEASUREMENT`로 고릅니다(1 = ISO 쪽 mm, 0 = ANSI 쪽 인치, 없으면 1 — Autodesk MEASUREMENT 시스템 변수 도움말:
+  영국식이면 ANSI 선종류 파일, 미터법이면 ISO 선종류 파일). 레코드 추가와 객체 바꾸기는 명령 취소 한 단계입니다(`modifyAll`에 앞 작업 인자).
+- CHANGE 특성(P)도 같은 함수라 함께 바뀝니다(CHANGE 도움말의 선종류 글이 CHPROP과 같음).
+- 바뀐 기본 동작: 표준 이름의 로드되지 않은 선종류가 이제 받아집니다(전에는 알림). 표준 정의에 없는 이름은 같은 알림, 로드된 이름·ByLayer·ByBlock·Enter는 같은 값입니다.
+  쓰기 코드는 바꾸지 않았습니다.
+
+### 확인
+- 미터법 도면에서 선 둘을 CHPROP 선종류 DASHED로 바꾸면 DASHED 레코드(무늬 12.7, −6.35)가 생기고 두 선이 DASHED이며, 명령 취소 한 번이면 레코드가 없고 선은 ByLayer입니다.
+  `$MEASUREMENT` 0 도면에서 소문자 hidden을 주면 HIDDEN(0.25, −0.125), `$MEASUREMENT`가 없는 도면에서 ACAD_ISO02W100을 주면 (12, −3)이고, CHANGE 특성(P)으로 CENTER를 주면 (31.75, −6.35, 6.35, −6.35)입니다.
+- 전과 같은 값: 표준 정의에 없는 NOSUCH는 같은 알림이고 레코드가 생기지 않으며, 이미 있는 Dashed(사용자 무늬)는 레코드가 그대로이고 객체 선종류는 Dashed, Enter는 ByLayer입니다.
+- 시험: `tests/edit/chprop-linetype202.test.ts` 4건(진짜 명령 틀 — CHPROP·CHANGE). 고치기 전 판에서 3건 실패합니다(DASHED·CENTER에 알림이 찍힘, HIDDEN 레코드 없음).
+  전과 같은 값 1건은 통과합니다. tsc 오류 0, 관련 시험 2파일(새 시험·`edit/slothint108` — CHPROP·CHANGE 특성 길) 12건 통과.
+- 결과·바이트 고정 시험(`grep -rln -E "fingerprint|snapshot|toMatchInlineSnapshot" tests/` 가운데 CHPROP·CHANGE를 쓰는 것)은 없고, 쓰기 코드를 바꾸지 않아 바이트 고정 시험과도 닿지 않습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·편집기 조각 크기 전·후, check:i18n(새 사전 항목 없음).
+  실도면 표본 없음: AutoCAD에서 같은 입력의 결과(미터법 도면에서 어느 LIN 파일의 무늬를 올리는지 포함)와 견주지는 않았습니다.
+
 ## 2026-11-24(201차): -ATTEDIT 높이(H)가 점을, XCLIP 폴리선 선택(S)이 열린 폴리선을 받지 않던 것
 
 ### 고른 까닭
