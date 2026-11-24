@@ -27,6 +27,8 @@ ezdxf(MIT)는 DXF 값의 뜻을 확인할 때만 참고했다.
 - 평면도(WCS XY)에서 계산한다. OCS 객체(원·호·폴리선·문자·블록 참조·해치·솔리드 등, extrusion (0, 0, −1)이 흔하다)는
   `ocs.ts`의 임의 축 알고리즘으로 WCS 조각을 만들고, 결과는 되도록 자연스러운(+Z) 객체로 쓴다.
   예: −Z 호를 자르면 WCS에서 같은 자리의 +Z 호가 된다. 분해(EXPLODE)는 원본 OCS를 지킨다(−Z 폴리선 → −Z 호).
+- 높이도 WCS로 견준다: 2D 폴리선의 고도(38)·원·호 중심 Z는 OCS 값이라 −Z면 WCS Z = −고도(`ocs.ts` `planZ`). `entityPath`의 z, OVERKILL(선·호 갈래),
+  JOIN(높이가 다르면 3D 폴리선), PEDIT 퍼지 결합의 잇는 선(`fuzzjoin.ts` `bridgeZ`)이 이 값을 쓴다(178차 — 전에는 OVERKILL 폴리선 호와 잇는 선이 OCS 고도를 썼다).
 - 2D 아핀 `[a, b, c, d, e, f]`: x' = a·x + c·y + e, y' = b·x + d·y + f(`src/text/layout.ts`와 같다). Z는 `opts.dz`만큼 옮긴다.
 - 곡선은 조각(`curve.ts`: 선·호·타원호·NURBS)과 경로(`path.ts`)로 다룬다. 조각 매개변수 t ∈ [0, 1], 경로 매개변수 s = 조각 번호 + t.
 
