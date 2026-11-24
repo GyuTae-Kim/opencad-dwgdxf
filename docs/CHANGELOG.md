@@ -3,6 +3,45 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(205차): SOLID가 현재 고도를 쓰지 않고 2D 솔리드를 Z 0에 그리던 것
+
+### 고른 까닭
+앞 표(181·182·186·187·197·199·202차) 밖의 주석 편집·문자 도구·그룹·그리기 보조·구속 명령을 Autodesk 2026 도움말 HTML과 견준 여덟째 표를 만들었습니다
+(실제 도면 표본 없음 — 남은 빈칸은 ROADMAP). DRAWORDER·TEXTTOFRONT(187차), DIMEDIT·DIMTEDIT(186차), DIMBREAK·DIMSPACE(181차)는 앞 표에 있어 뺐습니다.
+
+| 명령 | 이 앱 | 빈칸·판단 |
+| --- | --- | --- |
+| MLEADEREDIT·MLEADERCOLLECT·SCALETEXT·DIMJOGLINE·-MLEDIT·MLEDIT·GEOMCONSTRAINT(GC 하위 옵션 포함)·TABLEDIT·DIMOVERRIDE·AUTOCONSTRAIN·DELCONSTRAINT | 도움말 옵션을 모두 받음 | — |
+| MLEADERALIGN | 분산·평행·간격 지정·현재 간격 사용 | 정확성 후보: 간격 지정이 연결 점끼리 거리(도움말: 내용 범위 사이 간격) — 다음 후보 |
+| -GROUP | 따로 없음(앞 -를 떼어 GROUP의 「객체 선택 또는 [이름/설명]」) | 명령행 꼴 전부 — 지금 「-GROUP」의 결과가 바뀌고 새 프롬프트 글 |
+| TEXTALIGN | 옵션(분산·간격 설정·현재 수직·현재 수평) | 정렬 옵션(새 시스템 변수 TEXTALIGNMODE). 맞추는 점이 기준 문자의 자리맞추기(도움말: TEXTALIGNMODE, 기본 왼쪽) |
+| DIMCONSTRAINT | 선형~지름·형식(동적만) | 주석 구속·변환(연관 치수 → 구속) — 큼 |
+| JUSTIFYTEXT | 한 줄·여러 줄 문자·속성 | 지시선 문자(180차가 범위 밖으로 둔 그대로) |
+| REGION | 웹 판 한계 알림 | 명령 자체(ACIS 형상) |
+| SOLID | 네 점 흐름은 같음 | **정확성: 점 Z가 늘 0** — 고침 |
+| TRACE | 옛 폭 있는 선 | 2026 도움말의 TRACE는 다른 기능(마크업 트레이스)이라 근거 없음 |
+
+- 셋 조건(도움말이 분명히 적음 · 저장소 시험으로 재현 · 지금 입력의 결과는 그대로, 그리고 작게)을 넘는 후보가 없어, 정확성 후보 가운데 근거와 범위가 가장 작은 것을 골랐습니다.
+- Autodesk ELEV 도움말은 현재 고도가 새 객체의 기본 Z로 X·Y만 준 점에 쓰이고, 두께는 2D 객체를 그 고도에서 위아래로 돌출한다고 적습니다.
+  이 앱의 LINE·PLINE·ARC·CIRCLE·TRACE·3DFACE는 `currentElevation`(모형 ELEVATION, 배치 PELEVATION)을 쓰는데 SOLID(`app/propcmds.ts`)는 → ①
+  - ① 네 점의 Z를 늘 0으로 써서, 두께(THICKNESS)는 받으면서 바닥은 고도가 아닌 0에 있었습니다(객체의 꼭짓점 값이라 저장한 DWG·DXF에도 그대로 — 코드 읽기).
+- 고르지 않은 것: MLEADERALIGN 간격 지정(내용 범위를 정렬 방향으로 잴지 상자로 잴지 실물 필요, 문자 배치 계산이 새로 듦), TEXTALIGN 맞추는 점(새 시스템 변수),
+  DIMJOGLINE Enter 자리(문자와 첫 치수보조선 사이 가운데와 치수선 가운데 가운데 어느 때 어느 쪽인지 도움말이 적지 않음) — ROADMAP.
+
+### 고친 것
+- SOLID: 네 점의 Z를 `currentElevation`으로 씁니다(PLINE·ARC·TRACE와 같은 함수).
+- 바뀐 기본 동작: 고도가 0이 아닌 도면에서 새 2D 솔리드가 그 고도에 놓입니다. 고도 0인 도면, 프롬프트 흐름(넷째 점 Enter = 삼각형, 셋째·넷째 이어 주기, 셋째 점 Enter = 끝)은 같습니다.
+  입력이 Z를 준 점(0,0,3)은 PLINE·ARC처럼 받지 않습니다(2D 객체의 평면을 어느 점의 Z로 정하는지 도움말에 없음). 쓰기 코드는 바꾸지 않았습니다.
+
+### 확인
+- 고도 5·두께 2에서 네 점을 주면 네 꼭짓점 Z가 5이고 두께 2입니다. 고도 −1.5에서 넷째 점까지 준 뒤 셋째 점을 하나 더 주고 Enter면 두 조각 모두 Z −1.5이고
+  둘째 조각은 넷째 = 셋째(삼각형)이며, 명령 취소 한 번이면 둘 다 없습니다. 전과 같은 값: 고도가 없는 도면의 삼각형은 Z 0, 셋째 점 Enter는 아무것도 만들지 않습니다.
+- 시험: `tests/drawmod/solid-elev205.test.ts` 3건 — 고치기 전 판에서 2건 실패(받은 Z 0), 전과 같은 값 1건 통과.
+  고친 뒤 이 파일과 `tests/drawmod/more.test.ts`(새 객체의 고도·두께) 9건 통과, tsc 오류 0.
+- 결과·바이트 고정 시험: SOLID 명령을 돌리는 시험이 없고 `fingerprint|snapshot|toMatchInlineSnapshot`·`createHash|GOLDEN|sha256` 시험 가운데 SOLID를 쓰는 것도 없으며, 쓰기 코드를 바꾸지 않았습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·편집기 조각 크기 전·후, check:i18n(새 사전 항목 없음).
+  실도면 표본 없음: AutoCAD에서 같은 입력의 결과(입력이 Z를 준 점의 평면 포함)와 견주지는 않았습니다.
+
 ## 2026-11-24(204차): 새 객체의 선가중치 CELWEIGHT가 표에 없는 값을 그대로 두던 것
 
 ### 고른 까닭

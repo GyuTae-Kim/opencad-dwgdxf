@@ -11,7 +11,7 @@ import { nearestLineweight } from '../edit/layercmd';
 import { STANDARD_LINETYPES, makeLinetype } from '../edit/linetypes';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
-import { addEntities, currentProps } from './draw';
+import { addEntities, currentElevation, currentProps } from './draw';
 import { form } from './ui/dom';
 import { ft } from './filetext';
 
@@ -415,7 +415,11 @@ export function registerPropCommands(app: App): void {
         const c = await get('세 번째 점 지정:', b, true);
         if (!c) return;
         const d = await get('네 번째 점 지정 또는 <종료>:', c, true);
-        const z = (p: Pt) => ({ x: p.x, y: p.y, z: 0 });
+        // 205차: 점 Z는 현재 고도(ELEVATION, 배치는 PELEVATION — Autodesk ELEV 도움말: X·Y만 준 점의 Z가 현재 고도이고 두께는 그 고도에서 돌출).
+        // 전에는 늘 0이라 두께(currentProps의 THICKNESS)는 받으면서 바닥은 0에 있었다. LINE·PLINE·ARC·TRACE·3DFACE와 같은 `currentElevation`.
+        // 입력이 Z를 준 점은 PLINE·ARC처럼 받지 않는다(2D 객체의 평면을 어느 점의 Z로 정하는지 도움말에 없음 — ROADMAP)
+        const elev = currentElevation(app);
+        const z = (p: Pt) => ({ x: p.x, y: p.y, z: elev });
         const e: FaceEntity = { ...currentProps(app), type: 'SOLID', handle: '', points: [z(a), z(b), z(c), z(d ?? c)], invisibleEdges: 0 };
         addEntities(app, ctx, [e as Entity], 'SOLID');
         if (!d) return;
