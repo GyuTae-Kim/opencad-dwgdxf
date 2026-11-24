@@ -173,8 +173,14 @@ export function registerUcsCommands(app: App): void {
           { key: 'Z', label: 'Z' },
         ],
       });
-      if ('enter' in r || ('keyword' in r && (r.keyword === 'W' || r.keyword === 'V'))) {
+      if ('enter' in r || ('keyword' in r && r.keyword === 'W')) {
         applyUcs(app, st, WORLD, ctx);
+        return;
+      }
+      // 뷰(V): XY 평면을 보는 방향에 수직으로 맞추되 원점은 그대로 둔다(Autodesk UCS 도움말 뷰 절, 198차 — 전에는 표준처럼 원점을 0,0으로 옮겼다).
+      // 이 앱의 화면은 돌지 않아(비틀린 뷰포트는 모형 공간으로 들어갈 수 없다) 화면의 가로·세로가 WCS X·Y다. 원점 Z는 다른 옵션처럼 0으로 쓴다
+      if ('keyword' in r && r.keyword === 'V') {
+        applyUcs(app, st, { ox: cur.ox, oy: cur.oy, angle: 0 }, ctx);
         return;
       }
       if ('point' in r) {
