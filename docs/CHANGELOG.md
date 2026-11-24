@@ -3,6 +3,44 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(180차): JUSTIFYTEXT·SCALETEXT가 여러 줄 문자의 왼쪽을 맨 위 왼쪽으로 보고 정렬·맞춤은 아무것도 하지 않던 것
+
+### 고른 까닭
+ROADMAP 열린 항목(107개)에서 편집·그리기 명령의 정확성 후보를 견주었습니다(실제 도면 표본 없음 — 새 표본은 내려받지 않음). 167~179차의 OCS·문자 범위·CHANGE·치수 줄기와
+분해·지시선·MATCHPROP 폴리선 칸·STRETCH·배열은 빼고 봤습니다. 남은 항목은 대부분 도움말이 동작을 적지 않거나(각도 기준·2D 명령의 Z·LIST 좌표·도면 공간 재기·ZOOM 동적)
+실물이 있어야 정할 수 있어, 169차가 「다음 후보」로 남긴 JUSTIFYTEXT 여러 줄 문자 부착점을 골랐습니다.
+- Autodesk JUSTIFYTEXT 도움말(2018·2026 판 같은 글)은 한 줄 문자의 자리맞추기 옵션이 여러 줄 문자와 비슷하지만 정렬(A)·맞춤(F)·왼쪽(L)은 여러 줄 문자의
+  맨 아래 왼쪽(BL) 부착점과 같다고 적고, SCALETEXT 도움말(기준점 옵션)도 같은 문장을 적습니다. 그런데 두 명령이 쓰는 `MTEXT_ATTACH`(`edit/geom/textjust.ts`)는
+  여러 줄 문자의 왼쪽을 맨 위 왼쪽(TL)으로 보고 정렬·맞춤 짝이 없어 → ①②
+  - ① JUSTIFYTEXT 왼쪽은 여러 줄 문자를 부착점 1(TL)로 바꾸었고, 정렬·맞춤은 아무것도 하지 않고 「문자 객체 0개의 자리맞추기를 바꿨습니다.」만 알렸습니다
+    (높이 2·중간 중심 부착점·삽입점 (10, 20)인 두 줄 MTEXT로 재현).
+  - ② SCALETEXT 기준점 왼쪽은 여러 줄 문자의 맨 위 왼쪽 점 (6, 22.667)을 두고 축척해 글자가 아래로 자랐습니다(맨 아래 왼쪽 점은 (6, 17.333)).
+  - 지금 결과가 바뀌는 범위: 여러 줄 문자에 왼쪽·정렬·맞춤을 준 JUSTIFYTEXT와 왼쪽을 준 SCALETEXT뿐입니다. 한 줄 문자·속성, 두 글자 옵션(TL~BR), 기존(E),
+    중심·중간·오른쪽은 전과 같습니다. 결과 고정 시험(장면 지문·명령 묶음)·바이트 고정 시험은 두 명령을 쓰지 않고
+    (`grep -rln -E "fingerprint|snapshot|toMatchInlineSnapshot|GOLDEN|createHash|sha256" tests/` 21개 가운데 JUSTIFYTEXT·SCALETEXT·TEXTALIGN과 그 함수 이름이 든 것 0개),
+    편집 훑기(edit-audit)의 SCALETEXT는 기준점 기존(E)이라 그대로입니다.
+- 하지 않은 것: 중심(C)·중간(M)·오른쪽(R)의 여러 줄 문자 짝은 도움말이 적지 않아 그대로(맨 위 중심·중간 중심·맨 위 오른쪽) 두었습니다. TEXTALIGN은 같은 함수로
+  맞추는 점을 구하지만 TEXTALIGN 도움말은 여러 줄 문자 짝을 적지 않아 전처럼 맨 위 왼쪽입니다. 견준 다른 후보(FILLET·CHAMFER의 다른 도면층, MATCHPROP 선종류·두께의 객체 범위,
+  MIRRTEXT 1의 MTEXT, CHANGE 선의 직교, 세로 문자의 맞춤·TL~BR)는 실물이 필요하거나 보이는 결과가 거의 없어 고르지 않았습니다. ROADMAP에 두었습니다.
+
+### 고친 것
+- 새 `MTEXT_JUST_ATTACH`(`edit/geom/textjust.ts`)는 `MTEXT_ATTACH`에서 왼쪽·정렬·맞춤만 맨 아래 왼쪽(7)으로 둔 표입니다. `justifyText`와 `scaleBasePoint`(기본값)가 씁니다.
+  ① JUSTIFYTEXT 왼쪽·정렬·맞춤은 같은 글자 상자를 맨 아래 왼쪽 부착점으로 놓고(이미 맨 아래 왼쪽이면 바꾸지 않음), ② SCALETEXT 왼쪽은 맨 아래 왼쪽 점을 두고 축척합니다.
+- TEXTALIGN의 맞추는 점(`edit/textools/textalign.ts` `anchorOf`)은 `MTEXT_ATTACH`를 넘겨 전과 같습니다. 새 문구는 없고 쓰기 코드는 바꾸지 않았습니다.
+
+### 확인
+- ①: 위 MTEXT에 JUSTIFYTEXT 왼쪽·정렬·맞춤을 주면 부착점 7, 삽입점은 같은 글자 상자의 맨 아래 왼쪽 점이고 상자는 그대로입니다. 0.6 라디안 돌린 MTEXT에 맞춤을 주어도
+  삽입점이 맨 아래 왼쪽 점이고 바꾼 문자의 중간 중심 점이 원래 삽입점입니다. 맨 아래 왼쪽 부착점 MTEXT에 왼쪽·정렬·맞춤·BL은 바꾸지 않습니다.
+  맨 아래 오른쪽 부착점 MTEXT에 중심·중간·오른쪽·TL을 주면 전처럼 부착점 2·5·3·1입니다.
+- ②: SCALETEXT 왼쪽 기준점이 (6, 17.333)이고 두 배로 축척하면 높이 4, 맨 아래 왼쪽 점·왼쪽 끝은 그대로이고 맨 위 왼쪽 점이 위로 옮깁니다.
+  BL·TL·중심(C)·기존(E) 기준점과 TEXTALIGN 왼쪽 맞추는 점(맨 위 왼쪽)은 전후 같습니다.
+- 시험: `tests/edit2/textjust-mtext180.test.ts` 8건. 고치기 전 판에서 5건 실패합니다(전후 같음 3건은 통과).
+  tsc 오류 0, 관련 시험 3파일(textjust-mtext180·edit2/textjust — 한 줄 문자 JUSTIFYTEXT·SCALETEXT·textools/texttools — TEXTALIGN) 28건 통과.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·워커 조각 크기 전·후.
+  쓰기 코드를 바꾸지 않아 새 도면의 쓰기 바이트는 같습니다.
+  실도면 표본 없음: AutoCAD에서 여러 줄 문자에 JUSTIFYTEXT·SCALETEXT를 해 견주지는 않았습니다. 바뀐 곳이 여러 줄 문자의 왼쪽·정렬·맞춤 세 옵션뿐이고,
+  두 명령 도움말의 같은 문장을 근거로 둡니다.
+
 ## 2026-11-24(179차): DIMLINEAR·DIMALIGNED <객체 선택>으로 원을 고르면 지름 끝점을 치수보조선 원점으로
 
 ### 고른 까닭
