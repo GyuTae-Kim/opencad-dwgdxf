@@ -1917,7 +1917,9 @@ export function registerModifyCommands(app: App): void {
       if (!sel) return;
       const ents = sel.handles.map((h) => st.doc.entityIndex.get(h)).filter((e): e is Entity => !!e);
       const poly = sel.poly;
-      const ghostOf = (d: Pt): OverlayGeom[] => (ents.length <= 400 ? resultGeom(app, stretch(ents, poly, d, st.doc)) : []);
+      // 하나씩 찍어 고른 객체는 늘이지 않고 옮긴다(165차 — Autodesk STRETCH 도움말)
+      const picked = new Set(sel.picked);
+      const ghostOf = (d: Pt): OverlayGeom[] => (ents.length <= 400 ? resultGeom(app, stretch(ents, poly, d, st.doc, { picked })) : []);
       const r = await ctx.getPoint('기준점 지정 또는 [변위(D)] <변위>:', { keywords: [{ key: 'D', label: '변위' }] });
       let d: Pt | null = null;
       if ('point' in r) {
@@ -1928,7 +1930,7 @@ export function registerModifyCommands(app: App): void {
       } else if ('enter' in r || 'keyword' in r) d = await askDisplacement(ctx, { x: 0, y: 0 });
       if (!d || (!d.x && !d.y)) return;
       st.selection.clear();
-      const res = stretch(ents, poly, d, st.doc);
+      const res = stretch(ents, poly, d, st.doc, { picked });
       const out = commitResults(app, ctx, [res], 'STRETCH');
       app.refreshSelectionOverlay();
       ctx.print(`객체 ${out.changed.length + out.added.length}개를 신축했습니다.`);

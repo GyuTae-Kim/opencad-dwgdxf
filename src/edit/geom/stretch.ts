@@ -1,5 +1,5 @@
 /**
- * STRETCH: 걸침 다각형 안의 정의점만 옮긴다. 정의점이 모두 안에 있으면 객체 전체를 옮긴다.
+ * STRETCH: 걸침 다각형 안의 정의점만 옮긴다. 정의점이 모두 안에 있거나 하나씩 찍어 고른 객체(`picked`)는 객체 전체를 옮긴다.
  * - 선·폴리선·스플라인·지시선·여러 줄·면: 안의 끝점·정점(조정점·맞춤점)
  * - 호: 안의 끝점, 현의 높이(sagitta)는 그대로(AutoCAD와 같다)
  * - 원·타원·문자·블록 참조·점·이미지 등: 중심·삽입점이 안에 있으면 이동
@@ -57,16 +57,21 @@ function makeInside(poly: Vec2[]): (p: { x: number; y: number }) => boolean {
 export interface StretchOptions {
   /** 치수 블록을 다시 만드는 함수(치수 생성기). 없으면 블록 내용을 같은 영역으로 늘여 근사한다 */
   regenDimension?: (d: DimensionEntity, doc: CadDocument) => BlockDef | null;
+  /**
+   * 하나씩 찍어 고른 객체의 핸들: 걸침 영역과 관계없이 늘이지 않고 통째로 옮긴다(165차 — Autodesk STRETCH 도움말:
+   * 창 안에 다 든 객체나 하나씩 고른 객체는 늘이지 않고 옮긴다). 영역이 없어도(찍기만 했을 때) 이 객체들은 옮긴다
+   */
+  picked?: ReadonlySet<string>;
 }
 
 export function stretch(entities: Entity[], crossing: Vec2[], displacement: Vec2, doc: CadDocument, opts: StretchOptions = {}): EditResult {
   const poly = polygonOf(crossing);
-  if (poly.length < 3) return {};
-  const inside = makeInside(poly);
+  if (poly.length < 3 && !opts.picked?.size) return {};
+  const inside = poly.length >= 3 ? makeInside(poly) : null;
   const parts: EditResult[] = [];
   const M = affTranslate(displacement.x, displacement.y);
   for (const e of entities) {
-    const r = stretchOne(e, inside, displacement, M, doc, opts);
+    const r = opts.picked?.has(e.handle) ? transformEntity(e, M, doc) : inside ? stretchOne(e, inside, displacement, M, doc, opts) : null;
     if (r) parts.push(r);
   }
   return mergeResults(parts);
