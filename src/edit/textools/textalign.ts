@@ -12,6 +12,8 @@
  */
 import type { CadDocument, Entity, Vec2 } from '../../core/model';
 import { type TextLike, isTextLike, scaleBasePoint, textFrame } from '../geom/textjust';
+import { affApply, cross3, norm3 } from '../geom/math';
+import { isNaturalExt, planProj } from '../geom/ocs';
 import { mtextDir, mtextLocalBox } from '../geom/xtext';
 
 export type SpacingMode = 'D' | 'S' | 'V' | 'H';
@@ -43,34 +45,51 @@ export function anchorOf(e: Entity, key: string, doc: CadDocument): Vec2 | null 
   return scaleBasePoint(e, key, doc);
 }
 
-/** 문자 범위의 네 모서리(WCS 평면도) */
+/** 한 줄 문자 범위의 네 모서리(OCS): 왼쪽 기준선 원점에서 글자 폭 × (하강 ~ 문자 높이) */
+export function textCornersOcs(e: TextLike, doc: CadDocument): Vec2[] {
+  const f = textFrame(e, doc);
+  const c = Math.cos(f.rot);
+  const s = Math.sin(f.rot);
+  const W = f.W * f.h * f.wf;
+  const lo = -f.desc * f.h;
+  const hi = f.h;
+  return [
+    [0, lo],
+    [W, lo],
+    [W, hi],
+    [0, hi],
+  ].map(([x, y]) => ({ x: f.o.x + c * x! - s * y!, y: f.o.y + s * x! + c * y! }));
+}
+
+/**
+ * 문자 범위의 네 모서리(WCS 평면도). TEXTALIGN 간격 설정은 이 범위 사이를 잰다(Autodesk 도움말: 문자 객체 범위 사이 간격).
+ * 한 줄 문자의 점은 OCS라 자연 +Z가 아니면 모서리를 평면 사상으로 옮기고(맞추는 점 `anchorOf`와 같은 좌표계),
+ * 여러 줄 문자의 위 방향은 돌출 방향 × 글줄 방향이다(그리기·`textOutline`과 같다 — −Z면 +Z의 반대쪽).
+ */
 export function textCorners(e: Entity, doc: CadDocument): Vec2[] {
   if (isTextLike(e)) {
-    const f = textFrame(e as TextLike, doc);
-    const c = Math.cos(f.rot);
-    const s = Math.sin(f.rot);
-    const W = f.W * f.h * f.wf;
-    const lo = -f.desc * f.h;
-    const hi = f.h;
-    return [
-      [0, lo],
-      [W, lo],
-      [W, hi],
-      [0, hi],
-    ].map(([x, y]) => ({ x: f.o.x + c * x! - s * y!, y: f.o.y + s * x! + c * y! }));
+    const k = textCornersOcs(e, doc);
+    if (isNaturalExt(e.extrusion)) return k;
+    const P = planProj(e.extrusion, e.insert.z);
+    return k.map((q) => affApply(P, q));
   }
   if (e.type === 'MTEXT') {
     const b = mtextLocalBox(e, doc);
     const d = mtextDir(e);
-    const a = Math.atan2(d.y, d.x);
-    const c = Math.cos(a);
-    const s = Math.sin(a);
-    return [
+    const box = [
       [b.minX, b.minY],
       [b.maxX, b.minY],
       [b.maxX, b.maxY],
       [b.minX, b.maxY],
-    ].map(([x, y]) => ({ x: e.insert.x + c * x! - s * y!, y: e.insert.y + s * x! + c * y! }));
+    ];
+    if (!isNaturalExt(e.extrusion)) {
+      const Y = norm3(cross3(norm3(e.extrusion!), d));
+      return box.map(([x, y]) => ({ x: e.insert.x + d.x * x! + Y.x * y!, y: e.insert.y + d.y * x! + Y.y * y! }));
+    }
+    const a = Math.atan2(d.y, d.x);
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    return box.map(([x, y]) => ({ x: e.insert.x + c * x! - s * y!, y: e.insert.y + s * x! + c * y! }));
   }
   return [];
 }
