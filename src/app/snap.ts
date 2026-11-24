@@ -16,6 +16,7 @@ import type { Pt, SnapKind } from './view';
 import { lwVertices } from '../core/lwpoly';
 import { polyVertices } from '../core/polyverts';
 import { entityPath } from '../edit/geom/path';
+import { segmentShape } from '../edit/geom/gripops';
 import { type ArcPiece, type EllPiece, type LinePiece, type NurbsPiece, pieceNearest } from '../edit/geom/curve';
 import { commonTangentCurves, tangentNearPick, tangentsFromPoint } from '../edit/geom/tangent';
 import { apparentSnaps } from './snap-app';
@@ -284,9 +285,16 @@ function onArc(a: number, a0: number, sweep: number): boolean {
   return sweep >= Math.PI * 2 - 1e-12 || ccwSweep(a0, a) <= sweep + 1e-9 || Math.abs(ccwSweep(a0, a) - Math.PI * 2) < 1e-9;
 }
 
-/** 연장선 획득점이 될 수 있는 객체의 끝(선·호·열린 폴리선) */
+/** 연장선 획득점이 될 수 있는 객체의 끝(선·호·열린 경량 폴리선·맞춤이 아닌 열린 2D POLYLINE) */
 export function extAnchorsOf(e: Entity): ExtAnchor[] {
   switch (e.type) {
+    case 'POLYLINE': {
+      // 196차: Autodesk 객체 스냅 탭 도움말은 연장을 객체의 끝점 위에서 보이는 임시 연장선·호라고만 적고 폴리선 종류를 가르지 않는다.
+      // 맞춤이 아닌 2D POLYLINE은 188차 `segmentShape`의 경량 꼴로 아래 경량 폴리선 갈래를 그대로 쓴다(닫힘도 그 갈래가 거른다).
+      // 곡선 맞춤·스플라인 맞춤 2D POLYLINE·3D 폴리선·메시·폴리면은 전처럼 획득점이 없다
+      const lw = segmentShape(e);
+      return lw ? extAnchorsOf(lw) : [];
+    }
     case 'LINE': {
       const dx = e.end.x - e.start.x;
       const dy = e.end.y - e.start.y;

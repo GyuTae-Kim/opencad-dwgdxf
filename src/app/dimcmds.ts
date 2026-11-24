@@ -9,7 +9,7 @@
  * 곱하고, 각도 치수에는 효과가 없다. 그래서 모형 객체를 재는 선형·정렬·반지름·지름·호 길이·세로좌표 치수는 뷰포트 축척을
  * DIMLFAC 재지정(viewportScaled)으로 맞추고, 각도 치수는 그대로 둔다(뷰포트 변환은 회전과 확대뿐이라 각도가 같다).
  */
-import type { BlockDef, BlockRecord, CadDocument, DimensionEntity, Entity, Layer, LwPolylineEntity, Vec3 } from '../core/model';
+import type { BlockDef, BlockRecord, CadDocument, DimensionEntity, Entity, Layer, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
 import {
@@ -42,8 +42,7 @@ import { headerOverrides, overridesOf } from './dimstyle';
 import { applyOverrides } from '../edit/annot/override';
 import type { OverlayGeom, Pt } from './view';
 import { lwCount, packLw } from '../core/lwpoly';
-import { polyVertices } from '../core/polyverts';
-import { isPlainPoly2d } from '../edit/geom/gripops';
+import { segmentShape } from '../edit/geom/gripops';
 // 평면도 사상 도우미(174~176차에 여기서 만들었고 177차에 QDIM과 함께 쓰려고 edit/geom/ocs.ts로 옮겼다 — 같은 값)
 import { circleOf, isNaturalExt, isPlanarExt, lwPlanVertices, ocsPlan } from '../edit/geom/ocs';
 import { type SmartTarget, smartTarget } from '../edit/dim/smart';
@@ -274,20 +273,8 @@ function polySegment(e: Entity | undefined, pick: Pt): { t: SmartTarget; z: numb
   return t ? { t, z: plan.z, vs: plan.vs } : null;
 }
 
-/**
- * 세그먼트 고르기가 보는 경량 꼴(188차). 경량 폴리선은 그대로(같은 객체 — 전과 같은 값)이고, 맞춤이 아닌 2D POLYLINE은 같은 OCS 꼭짓점·볼록도·
- * 닫힘(70 비트 1)·고도·돌출 방향의 경량 폴리선으로 본다. Autodesk 치수·MEASUREGEOM 도움말의 「폴리선 호 세그먼트」는 폴리선 종류를 가르지 않고,
- * 이 앱의 경로(`entityPath`)도 두 폴리선을 같은 평면 사상(고도·돌출 방향)으로 그린다(전에는 2D POLYLINE을 고르면 호 세그먼트여도 알림만 했다).
- * 곡선 맞춤·스플라인 맞춤(70 비트 2·4, 맞춤이 만든 정점 70 비트 1·8·16 — 다기능 그립과 같은 `isPlainPoly2d`)의 세그먼트는 사용자가 그린
- * 세그먼트가 아니라 맞춤 근사라 받지 않는다. 3D 폴리선·메시·폴리면도 null(전과 같은 알림).
- * 스마트 치수 DIM의 치수 대상(190차 — `dimsmart.ts` `dimTarget`)도 이것으로 2D POLYLINE을 경량 꼴로 넘긴다
- */
-export function segmentShape(e: Entity | undefined): LwPolylineEntity | null {
-  if (e?.type === 'LWPOLYLINE') return e;
-  if (e?.type !== 'POLYLINE' || !isPlainPoly2d(e)) return null;
-  const vs = polyVertices(e).map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge, startWidth: 0, endWidth: 0 }));
-  return { ...e, type: 'LWPOLYLINE', ...packLw(vs), closed: (e.flags & 1) !== 0, plinegen: false, constantWidth: 0 };
-}
+/** 세그먼트 고르기가 보는 경량 꼴(188차 — 196차부터 `edit/geom/gripops.ts`에 있다. 치수·DIM·CENTERMARK·CENTERLINE은 전처럼 이 모듈에서 가져온다) */
+export { segmentShape };
 
 /** 문서 기본 치수 스타일 옵션(문자 재지정) */
 export interface DimOpts {

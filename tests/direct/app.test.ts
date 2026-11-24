@@ -16,6 +16,7 @@ import * as dom from '../../src/app/ui/dom';
 import { browserGlobals } from '../polish/fakes';
 import { type RealApp, makeApp, settle } from '../polish/real-app';
 import { type DirectCommandLine, FakePicker } from './fakes';
+import { lw, poly2d } from '../edit/make';
 
 vi.mock('../../src/app/view', async (orig) => ({ ...(await orig<object>()), CadView: (await import('../polish/fakes')).FakeView }));
 vi.mock('../../src/app/commandline', async (orig) => ({ ...(await orig<object>()), CommandLine: (await import('./fakes')).DirectCommandLine }));
@@ -279,6 +280,32 @@ describe('객체 스냅 재지정', () => {
     h.click(P(24, 0.6));
     await vi.advanceTimersByTimeAsync(0);
     expect(got.at(-1)).toMatchObject({ point: P(24, 0), snap: { kind: 'ext' } });
+  });
+
+  it('연장선(196차): 열린 2D POLYLINE도 끝 세그먼트의 끝점 위에 머물면 획득(+)하고 그 연장선 위의 커서는 연장선 스냅 — 같은 모양의 경량 폴리선과 같다', async () => {
+    vi.useFakeTimers();
+    for (const make of [poly2d, lw]) {
+      const h = setup();
+      // (0,10)→(0,0)→(10,0): 끝 세그먼트 (0,0)→(10,0)의 바깥 방향은 (1, 0)
+      const e = make([[0, 10], [0, 0], [10, 0]]);
+      e.handle = h.st.session.newHandle();
+      e.owner = h.doc.blocks.get(MODEL_SPACE)!.recordHandle;
+      h.st.session.commit({ label: 'T', ops: [{ kind: 'add', block: MODEL_SPACE, entity: e }] });
+      const got = pointCmd(h, 'PT', { base: P(0, -20) });
+      void h.app.run('PT');
+      await vi.advanceTimersByTimeAsync(0);
+      h.move(P(10.2, 0.2));
+      vi.advanceTimersByTime(450);
+      expect(ov(h).acquired).toEqual([P(10, 0)]);
+      h.move(P(24, 0.6));
+      expect(ov(h).snap).toMatchObject({ kind: 'ext', p: P(24, 0) });
+      const t = ov(h).tracks;
+      expect(t).toHaveLength(1);
+      expect([t[0]!.from.x, t[0]!.from.y, t[0]!.dir.x, t[0]!.dir.y].map((v) => v + 0)).toEqual([10, 0, 1, 0]);
+      h.click(P(24, 0.6));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(got.at(-1)).toMatchObject({ point: P(24, 0), snap: { kind: 'ext' } });
+    }
   });
 });
 
