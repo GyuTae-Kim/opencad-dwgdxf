@@ -9,7 +9,7 @@ import { enableXclipOps, removeXclipOps, setXclipOps, xclipBoundaryWorld, xclipP
 import type { App, CommandContext } from './app';
 import { currentProps } from './draw';
 import { unlockedOnly } from './layers';
-import { lwCount, lwPoints, lwVertices, packLwPoints } from '../core/lwpoly';
+import { lwPoints, lwVertices, packLwPoints } from '../core/lwpoly';
 
 async function boundary(ctx: CommandContext, app: App): Promise<Vec2[] | null> {
   ctx.print('외부 모드 - 경계 외부의 객체가 숨겨집니다.');
@@ -58,12 +58,21 @@ async function boundary(ctx: CommandContext, app: App): Promise<Vec2[] | null> {
       const q = await ctx.getEntity('자르기 경계로 사용할 폴리선 선택:');
       if (!('handle' in q)) return null;
       const e = app.active!.doc.entityIndex.get(q.handle);
-      if (e?.type !== 'LWPOLYLINE' || !e.closed || lwCount(e) < 3) {
+      // 열린 경량 폴리선도 받는다(201차, Autodesk XCLIP 도움말 「폴리선 선택」: 폴리선은 열려 있어도 된다). 자르기 경계는 늘 닫힌 다각형이라
+      // 다각형(P)처럼 마지막 점에서 첫 점으로 닫힌다. 닫음 표시 없이 첫 점으로 돌아온 끝점은 빼고, 점이 셋 아래면(둘은 직사각형 두 구석으로 읽힌다) 전처럼 거절한다
+      const pts = e?.type === 'LWPOLYLINE' ? lwPoints(e) : [];
+      if (e?.type === 'LWPOLYLINE' && !e.closed && pts.length > 1) {
+        const a = pts[0]!;
+        const b = pts[pts.length - 1]!;
+        if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-9) pts.pop();
+      }
+      if (e?.type !== 'LWPOLYLINE' || pts.length < 3) {
         ctx.print('닫힌 폴리선을 선택하십시오.', 'err');
         continue;
       }
-      if (lwVertices(e).some((v) => Math.abs(v.bulge) > 1e-12)) ctx.print('호 세그먼트는 직선으로 이어 자릅니다.');
-      return lwPoints(e);
+      // 호 알림은 있는 세그먼트만(열린 폴리선의 마지막 정점 볼록 값은 이어지는 세그먼트가 없다)
+      if (lwVertices(e).some((v, i, all) => (e.closed || i < all.length - 1) && Math.abs(v.bulge) > 1e-12)) ctx.print('호 세그먼트는 직선으로 이어 자릅니다.');
+      return pts;
     }
   }
 }

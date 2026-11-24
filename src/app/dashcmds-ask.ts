@@ -72,19 +72,21 @@ export const YES_NO: Keyword[] = [
   { key: 'N', label: '아니오' },
 ];
 
-/** 실수 입력. Enter면 def(null이면 다시 묻는다). check가 글을 돌려주면 오류로 알리고 다시 */
-export async function askReal(ctx: CommandContext, prompt: string, def: number | null, check: (v: number) => string | null = () => null): Promise<number> {
+/**
+ * 실수 입력. Enter면 def(null이면 다시 묻는다). check가 글을 돌려주면 오류로 알리고 다시.
+ * base가 있으면 점도 받아 base까지의 평면 거리를 값으로 본다(201차 — -ATTEDIT 높이: 점이면 그 점과 문자 시작점의 거리, TEXT 높이와 같은 꼴).
+ * 숫자는 base가 있어도 거리 입력이 아니라 값이다
+ */
+export async function askReal(ctx: CommandContext, prompt: string, def: number | null, check: (v: number) => string | null = () => null, base: Pt | null = null): Promise<number> {
   for (;;) {
-    const r = await ctx.getPoint(prompt, { preferNumber: true, allowText: true });
+    const r = await ctx.getPoint(prompt, { ...(base ? { base } : {}), preferNumber: true, allowText: true });
     if ('enter' in r && def !== null) return def;
-    if ('text' in r) {
-      const v = parseReal(r.text);
-      if (v !== null) {
-        const e = check(v);
-        if (!e) return v;
-        ctx.print(e, 'err');
-        continue;
-      }
+    const v = 'point' in r && base ? Math.hypot(r.point.x - base.x, r.point.y - base.y) : 'text' in r ? parseReal(r.text) : null;
+    if (v !== null) {
+      const e = check(v);
+      if (!e) return v;
+      ctx.print(e, 'err');
+      continue;
     }
     ctx.print('숫자 값이 필요합니다.', 'err');
   }
