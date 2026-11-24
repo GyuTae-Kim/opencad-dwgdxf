@@ -4,7 +4,9 @@
  * 따로 복사하면 연관이 아니다. freshEntity가 복사본의 원본 핸들(지시선은 원본 주석 핸들도)을 적어 두고, 같은 편집에서 새 핸들을 받은 뒤
  * relinkLeaderCopies가 같은 변환으로 만든 복사본끼리 잇는다 — 주석이 함께 복사되지 않았으면 복사본 지시선의 주석 연결을 뗀다.
  * 전에는 복사본 지시선이 원본 주석을 가리켰다(함께 복사해도 복사본 주석은 반응자가 지워져 옮겨도 복사본 지시선이 따라가지 않았다).
- * 함께 복사한 객체끼리 새 핸들로 잇고 못 찾으면 떼는 것은 다른 도면으로 옮기는 정의 복사(edit/layertools/clone.ts relink)와 같다
+ * 함께 복사한 객체끼리 새 핸들로 잇고 못 찾으면 떼는 것은 다른 도면으로 옮기는 정의 복사(edit/layertools/clone.ts relink)와 같다 —
+ * 정의 복사는 모든 객체의 반응자를 지우므로 relink 뒤에 addLeaderReactors로 복사본 주석의 반응자를 채우고, 다른 도면에서 붙여 넣을 때(app/pastedeps.ts)는
+ * leaderAnnotations로 함께 붙여 넣는 주석의 반응자를 남겨 붙여넣기 명령이 이 파일의 흐름으로 잇게 한다(162차)
  */
 import type { Entity } from '../../core/model';
 import { normalizeHandle } from '../../core/model';
@@ -77,4 +79,36 @@ export function relinkLeaderCopies(added: readonly Entity[]): number {
   }
   for (const e of added) notes.delete(e);
   return linked;
+}
+
+/**
+ * 함께 복사하는 객체 가운데 지시선이 가리키는 주석의 핸들(정규화). 반응자를 지우는 의존 정의 복사(다른 도면에서 붙여넣기 — app/pastedeps.ts)가
+ * 이 주석의 원래 반응자를 남겨 두면, 붙여넣기 명령이 새 핸들을 주기 전에 noteLeaderCopy가 주석을 적어 복사본끼리 잇는다(같은 도면에서 붙여넣기와 같다 — 162차).
+ * 지시선이 없으면 null
+ */
+export function leaderAnnotations(list: readonly Entity[]): Set<string> | null {
+  let out: Set<string> | null = null;
+  for (const e of list) if (e.type === 'LEADER' && e.annotation) (out ??= new Set()).add(normalizeHandle(e.annotation));
+  return out;
+}
+
+/**
+ * 다른 도면으로 옮기는 정의 복사(edit/layertools/clone.ts entities — 새 핸들을 다 주고 relink가 지시선 340을 함께 복사한 주석으로 이은 뒤)에서
+ * 그 복사본 주석의 반응자에 복사본 지시선을 넣는다(relinkLeaderCopies가 잇는 짝과 같다 — 162차). 정의 복사가 반응자를 지워 전에는 340만 이어졌다
+ * (가져온 배치의 주석을 옮겨도 지시선이 따라가지 않았다 — app/leaderassoc.ts는 주석의 반응자로 지시선을 찾는다). 넣은 수
+ */
+export function addLeaderReactors(list: readonly Entity[]): number {
+  let byHandle: Map<string, Entity> | null = null;
+  let n = 0;
+  for (const ld of list) {
+    if (ld.type !== 'LEADER' || !ld.annotation || !ld.handle) continue;
+    byHandle ??= new Map(list.filter((x) => x.handle).map((x) => [normalizeHandle(x.handle), x] as const));
+    const ann = byHandle.get(normalizeHandle(ld.annotation));
+    if (!ann || !ANNOTATION_TYPES.has(ann.type)) continue;
+    const h = normalizeHandle(ld.handle);
+    if (ann.reactors?.some((r) => normalizeHandle(r) === h)) continue;
+    ann.reactors = [...(ann.reactors ?? []), ld.handle];
+    n++;
+  }
+  return n;
 }

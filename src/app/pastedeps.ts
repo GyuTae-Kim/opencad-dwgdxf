@@ -6,13 +6,15 @@
  * - 이 도면에 같은 이름의 정의가 있으면 이 도면의 것을 쓴다(AutoCAD와 같다).
  * - 익명 블록(*D·*U·*T …)은 이름이 겹치면 이 도면의 다른 블록으로 그려지므로 늘 새 번호로 옮기고 참조를 다시 잇는다.
  * 붙여 넣을 객체(list)는 그 자리에서 이 도면의 이름·핸들을 가리키게 바꾼다. 객체 핸들과 서로 가리키는 연결(연관 해치 경계 등)은
- * 붙여넣기 명령이 새로 붙이므로 원래대로 둔다.
+ * 붙여넣기 명령이 새로 붙이므로 원래대로 둔다. 함께 붙여 넣는 지시선이 가리키는 주석은 원래 반응자도 남긴다 — 붙여넣기 명령이 새 핸들을 주기 전에
+ * 적어 복사본끼리 잇고 반응자를 지운다(edit/util/leadercopy.ts, 162차).
  */
 import type { CadDocument, DictionaryObject, Entity, MLineEntity, MLineStyleObject } from '../core/model';
 import { normalizeHandle, tableKey } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { DefinitionCopier } from '../edit/layertools/clone';
 import { listMLineStyles, mlineStyleDictionary } from '../edit/mline/style';
+import { leaderAnnotations } from '../edit/util/leadercopy';
 import type { DocState } from './docstate';
 
 /** 의존 정의를 가져오는 작업. list의 객체는 이 도면의 정의를 가리키게 바뀐다(같은 배열 자리에 바꿔 넣는다) */
@@ -22,6 +24,8 @@ export function pasteDependencies(st: DocState, src: CadDocument, list: Entity[]
   const copier = new DefinitionCopier(src, dst, () => st.session.newHandle());
   const owner = dst.blocks.get(st.space)?.recordHandle ?? '';
   const mline = new MLineStyleCopier(src, dst, copier, () => st.session.newHandle());
+  // 함께 붙여 넣는 지시선이 가리키는 주석(162차)
+  const annotated = leaderAnnotations(list);
   for (let i = 0; i < list.length; i++) {
     const e = list[i]!;
     const c = copier.entity(e, owner);
@@ -32,6 +36,9 @@ export function pasteDependencies(st: DocState, src: CadDocument, list: Entity[]
     if (e.owner) c.owner = e.owner;
     else delete c.owner;
     if (c.type === 'INSERT' && e.type === 'INSERT') c.attribs.forEach((a, j) => (a.handle = e.attribs[j]?.handle ?? a.handle));
+    // 지시선 주석: 정의 복사가 지운 반응자를 되살려 붙여넣기 명령(noteLeaderCopy)이 주석을 적게 한다 — 같은 도면에서 붙여넣기처럼 함께 붙여 넣으면
+    // 복사본끼리 잇는다(Autodesk "Leader Associativity", 162차 — 전에는 연결이 떼어졌다). 반응자는 붙여넣기 명령이 새 핸들을 줄 때 지운다
+    if (annotated && e.handle && e.reactors?.length && annotated.has(normalizeHandle(e.handle))) c.reactors = [...e.reactors];
     if (c.type === 'MLINE' && e.type === 'MLINE') mline.relink(c, e);
     if (e.paperSpace) c.paperSpace = true;
     else delete c.paperSpace;
