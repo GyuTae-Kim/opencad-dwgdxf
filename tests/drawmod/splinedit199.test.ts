@@ -93,18 +93,18 @@ describe('SPLINEDIT — 스플라인 맞춤 폴리선을 고르면 스플라인�
     onCurve(s!, pl);
   });
 
-  it('전과 같은 꼴: 맞춤 아닌 2D 폴리선·경량 폴리선·−Z 스플라인 맞춤 폴리선은 「스플라인이 아닙니다.」', async () => {
+  // −Z·기운 2D 스플라인 맞춤 폴리선은 200차부터 같은 자리의 스플라인으로 바꾼다(tests/drawmod/spline200.test.ts)
+  it('전과 같은 꼴: 맞춤 아닌 2D 폴리선·경량 폴리선은 「스플라인이 아닙니다.」', async () => {
     const h = harness();
     const plain = h.add({ ...poly2d([[0, 0], [5, 5], [10, 0]]), handle: '' });
     const light = h.add({ ...lw([[0, 20], [5, 25], [10, 20]]), handle: '' });
-    const flipped = h.add(fitPoly([[0, 40], [5, 45], [10, 40], [15, 45]], 6, false, { extrusion: { x: 0, y: 0, z: -1 } }));
-    for (const e of [plain, light, flipped]) {
+    for (const e of [plain, light]) {
       h.printed.length = 0;
       await h.run('SPLINEDIT', [{ pick: e.handle, at: [0, 0] }, '']);
       expect(h.printed).toContain('스플라인이 아닙니다.');
     }
     expect(modelEntities(h.doc, 'SPLINE').length).toBe(0);
-    expect(modelEntities(h.doc, 'POLYLINE').length).toBe(2);
+    expect(modelEntities(h.doc, 'POLYLINE').length).toBe(1);
     expect(modelEntities(h.doc, 'LWPOLYLINE').length).toBe(1);
   });
 });

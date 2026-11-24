@@ -10,6 +10,7 @@ import { pieceAt, pieceD1, pieceNearest } from './curve';
 import { footNear, osculatingPiece } from './tangent';
 import { ccwSweep, dist, wrapPi } from './math';
 import { inherit } from './path';
+import { isNaturalExt, ocsToWcs } from './ocs';
 import { fitKind, frameVerts, isClosed, isPolyline } from './pedit';
 import { closeSpline } from './splinedit';
 import { pack3 } from '../../core/flat3';
@@ -584,18 +585,22 @@ export function makeCvSpline(base: Omit<EntityBase, 'type' | 'handle'>, ctrl: re
 }
 
 /**
- * 스플라인 맞춤 폴리선(PEDIT 스플라인) → 같은 곡선의 SPLINE(SPLINE 객체(O)): 틀 정점 = 조정점,
+ * 스플라인 맞춤 폴리선(PEDIT 스플라인) → 같은 곡선의 SPLINE(SPLINE 객체(O)·SPLINEDIT): 틀 정점 = 조정점,
  * 2차·3차 균일 B 스플라인(열린 틀은 끝을 고정, 닫힌 틀은 주기). 스플라인 맞춤이 아니면 null.
+ * 2D 폴리선의 틀 정점·고도는 OCS 값이고 SPLINE 조정점은 WCS 값이라(DXF 참조서), 돌출 방향이 +Z가 아닌(−Z·기운) 2D 폴리선은
+ * OCS → WCS로 옮긴다(200차 — 전에는 그대로 써서 −Z면 X 거울상 자리·고도 부호가 반대인 곳에 생겼다). +Z 2D·3D 폴리선은 전과 같은 식.
+ * 조정점 WCS Z가 서로 다르면 평면 비트(8)를 지운다(3D 폴리선과 같은 규칙 — 기운 평면도 법선(210)을 쓰지 않으므로)
  */
 export function splineFromFitPolyline(e: Entity): SplineEntity | null {
   if (e.type !== 'POLYLINE' || !isPolyline(e) || fitKind(e) !== 'spline') return null;
   const vs = frameVerts(e);
   if (vs.length < 2) return null;
   const d3 = e.kind === '3d';
-  const ctrl = vs.map((v) => ({ x: v.x, y: v.y, z: d3 ? v.z : e.elevation }));
+  const ocs = !d3 && !isNaturalExt(e.extrusion);
+  const ctrl = vs.map((v) => (ocs ? ocsToWcs({ x: v.x, y: v.y, z: e.elevation }, e.extrusion) : { x: v.x, y: v.y, z: d3 ? v.z : e.elevation }));
   const degree = e.smoothType === 5 ? 2 : 3;
   const s = makeCvSpline(inherit(e), ctrl, degree, isClosed(e));
-  if (s && d3 && ctrl.some((q) => Math.abs(q.z - ctrl[0]!.z) > 1e-12)) s.flags &= ~8;
+  if (s && (d3 || ocs) && ctrl.some((q) => Math.abs(q.z - ctrl[0]!.z) > 1e-12)) s.flags &= ~8;
   return s;
 }
 
