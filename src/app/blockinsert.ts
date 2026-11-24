@@ -11,7 +11,7 @@ import { explodeEntity } from '../edit/geom';
 import { insertUnitFactor } from '../edit/script/dash';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
-import { addEntities, currentProps } from './draw';
+import { addEntities, currentElevation, currentProps } from './draw';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { previewOf } from './modify2-util';
@@ -253,7 +253,10 @@ export async function runInsert(app: App, ctx: CommandContext, arg: string | und
     if (v.pointOnScreen) {
       const r = await ctx.getPoint('삽입점 지정:', { ghost });
       if (!('point' in r)) return;
-      at = { x: r.point.x, y: r.point.y, z: 0 };
+      // 206차: 화면에서 찍은 삽입점의 Z는 현재 고도(ELEVATION, 배치는 PELEVATION — Autodesk ELEV 도움말: X·Y만 준 점의 Z가 현재 고도).
+      // 전에는 늘 0이었다. DXF 참조서 INSERT: 10의 30이 삽입점 Z(OCS — 따로 고도 칸 없음). 속성은 makeAttribs가 이 Z에서 옮긴다.
+      // 대화 상자의 X·Y·Z 칸(화면에서 지정 끔)은 사용자가 준 값 그대로, -INSERT·MINSERT는 아직 0(ROADMAP)
+      at = { x: r.point.x, y: r.point.y, z: currentElevation(app) };
     } else at = { ...v.point };
     if (v.scaleOnScreen) {
       const s = await askScale(ctx, at, v.uniform || (rec ? !rec.scalable : false));
