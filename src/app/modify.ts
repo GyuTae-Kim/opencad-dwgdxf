@@ -1289,11 +1289,14 @@ export function registerModifyCommands(app: App): void {
         const hs = await ctx.getSelection('객체 선택 또는 <모두 선택>:', { noPickfirst: true });
         edges = hs.length ? hs : [...(st.doc.blocks.get(st.space)?.entities ?? [])].map((e) => e.handle);
       }
-      // 빠른 작업: [절단(경계) 모서리/걸치기/모드/프로젝트/지우기], 표준: [울타리/걸치기/모드/프로젝트/모서리/지우기/명령 취소]
-      // Shift를 누른 채 고르면 반대 작업(자르기 ↔ 연장). 빈 곳을 누르면 빠른 작업은 두 점 울타리, 표준은 걸치기 창
+      // 빠른 작업: [절단(경계) 모서리/걸치기/모드/프로젝트/지우기], 표준: [절단(경계) 모서리/울타리/걸치기/모드/프로젝트/모서리/지우기/명령 취소]
+      // Shift를 누른 채 고르면 반대 작업(자르기 ↔ 연장). 빈 곳을 누르면 빠른 작업은 두 점 울타리, 표준은 걸치기 창.
+      // 절단(경계) 모서리(T·B)는 두 모드 모두 모서리를 새로 고른다(181차 — Autodesk TRIM·EXTEND 도움말은 표준 모드 옵션 목록에도 적고
+      // 설명은 빠른 작업과 같은 글이다. 전에는 빠른 작업에서만 받아 표준 모드의 T·B는 잘못된 입력이었다)
+      const edgeKw: Keyword = mode === 'trim' ? { key: 'T', label: '절단 모서리' } : { key: 'B', label: '경계 모서리' };
       const kws: Keyword[] = quick
         ? [
-            mode === 'trim' ? { key: 'T', label: '절단 모서리' } : { key: 'B', label: '경계 모서리' },
+            edgeKw,
             { key: 'C', label: '걸치기' },
             { key: 'O', label: '모드' },
             { key: 'P', label: '프로젝트' },
@@ -1301,6 +1304,7 @@ export function registerModifyCommands(app: App): void {
             ...(steps.length ? [{ key: 'U', label: '명령 취소' }] : []),
           ]
         : [
+            edgeKw,
             { key: 'F', label: '울타리' },
             { key: 'C', label: '걸치기' },
             { key: 'O', label: '모드' },

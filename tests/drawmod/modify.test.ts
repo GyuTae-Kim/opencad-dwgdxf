@@ -39,7 +39,8 @@ describe('TRIM·EXTEND 옵션', () => {
     const vs = verticals(h, cut);
     expect(vs.length).toBe(3);
     for (const v of vs) close(Math.max(v.start.y, v.end.y), 0);
-    expect(h.prompts).toContain('자를 객체 선택 또는 Shift 키를 누른 채 선택하여 연장 또는 [울타리(F)/걸치기(C)/모드(O)/프로젝트(P)/모서리(E)/지우기(R)/명령 취소(U)]:');
+    // 표준 모드도 절단 모서리(T)를 받는다(181차 — Autodesk TRIM 도움말의 표준 모드 옵션 목록)
+    expect(h.prompts).toContain('자를 객체 선택 또는 Shift 키를 누른 채 선택하여 연장 또는 [절단 모서리(T)/울타리(F)/걸치기(C)/모드(O)/프로젝트(P)/모서리(E)/지우기(R)/명령 취소(U)]:');
     const h2 = harness();
     const c2 = comb(h2).cut;
     await h2.run('TRIM', ['O', 'S', { sel: [c2.handle] }, 'F', '-5,3', '5,3', '', 'U', '']);
