@@ -41,9 +41,10 @@ import { textDialog } from './draw';
 import { headerOverrides, overridesOf } from './dimstyle';
 import { applyOverrides } from '../edit/annot/override';
 import type { OverlayGeom, Pt } from './view';
-import { lwCount } from '../core/lwpoly';
+import { lwCount, packLw } from '../core/lwpoly';
 // 평면도 사상 도우미(174~176차에 여기서 만들었고 177차에 QDIM과 함께 쓰려고 edit/geom/ocs.ts로 옮겼다 — 같은 값)
-import { circleOf, isPlanarExt, lwPlanVertices, ocsPlan } from '../edit/geom/ocs';
+import { circleOf, isNaturalExt, isPlanarExt, lwPlanVertices, ocsPlan } from '../edit/geom/ocs';
+import { smartTarget } from '../edit/dim/smart';
 import type { ViewportXf } from './scene';
 import { circleToPaper, layoutXfs, modelToPaperVp, paperProjection } from './vpsnap';
 import { plainText } from './inquiry';
@@ -231,6 +232,20 @@ function printDimText(app: App, ctx: CommandContext, dim: DimensionEntity): void
 /** 원·호 객체(연관 참조용) */
 function circleEntity(e: Entity | undefined): Entity | undefined {
   return e && (e.type === 'CIRCLE' || e.type === 'ARC') ? e : undefined;
+}
+
+/**
+ * 폴리선(LWPOLYLINE)에서 고른 호 세그먼트의 평면도 중심·반지름·반시계 시작·끝 각과 평면의 WCS Z(182차 — DIMRADIUS·DIMDIAMETER·DIMARC).
+ * Autodesk DIMRADIUS·DIMDIAMETER 도움말 「호 또는 원 선택」: 원, 호, 폴리선의 호 세그먼트를 지정한다. DIMARC 도움말: 호 또는 폴리선 호 세그먼트를 지정한다
+ * (전에는 원·호만 받아 폴리선을 고르면 알림만 하고 끝났다). 세그먼트는 스마트 치수 DIM과 같이 고른 점에 가장 가까운 것(`smartTarget`)이고,
+ * 꼭짓점·볼록도는 OCS 값이라 −Z 폴리선은 176차 `lwPlanVertices`의 평면도 꼭짓점으로 고른다. 가장 가까운 세그먼트가 직선이거나
+ * 돌출 방향이 Z축과 평행하지 않은 폴리선(평면도에서 타원)이면 null(원·호의 <객체 선택>과 같이 받지 않는다)
+ */
+export function polyArcOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; a0: number; a1: number; z: number } | null {
+  if (e?.type !== 'LWPOLYLINE' || !isPlanarExt(e.extrusion)) return null;
+  const plan = lwPlanVertices(e);
+  const t = smartTarget(isNaturalExt(e.extrusion) ? e : { ...e, verts: packLw(plan.vs).verts, extrusion: undefined }, pick);
+  return t?.kind === 'arc' ? { c: t.c, r: t.r, a0: t.a0, a1: t.a1, z: plan.z } : null;
 }
 
 /** 문서 기본 치수 스타일 옵션(문자 재지정) */
@@ -592,9 +607,11 @@ export function registerDimCommands(app: App): void {
     // 도면 공간이면 단일 뷰포트에 보이는 모형 호·원도 고른다: 그 뷰포트로 본 종이 원·호에 치수를 두고 값은 뷰포트 축척으로 맞춘다
     const r = await ctx.getEntity(kind === 'arc' ? '호 또는 폴리선 호 세그먼트 선택:' : '호 또는 원 선택:', undefined, VP_PICK);
     if (!('handle' in r)) return;
-    const picked = circleEntity(doc.entityIndex.get(r.handle));
+    const ent = doc.entityIndex.get(r.handle);
+    const picked = circleEntity(ent);
     const vx = pickedViewport(app, r);
-    const c0 = circleOf(picked);
+    // 폴리선 호 세그먼트(182차): 고른 점(뷰포트 안 모형 폴리선이면 모형 점)에 가장 가까운 세그먼트가 호면 그 호. 연관은 스마트 치수 DIM처럼 붙이지 않는다
+    const c0 = circleOf(picked) ?? polyArcOf(ent, vx && r.viewport ? r.viewport.model : r.point);
     const c = c0 && vx ? circleToPaper(vx, c0) : c0;
     if (!c || (kind === 'arc' && c.a0 === undefined)) {
       ctx.print(kind === 'arc' ? '호를 선택하십시오.' : '호 또는 원을 선택하십시오.', 'err');
