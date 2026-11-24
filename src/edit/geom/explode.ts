@@ -1,6 +1,7 @@
 /**
  * EXPLODE: 한 단계 분해.
  * - INSERT(MINSERT 격자 포함): 블록 내용을 참조 변환으로 옮긴다. 도면층 0·ByBlock 특성은 그대로 둔다(AutoCAD와 같다).
+ *   옮길 수 없는 내용(원본 ACIS 자료가 있는 영역·3D 솔리드, 모르는 객체 등)이 있으면 분해하지 않고 그 까닭을 돌려준다(163차 — 버리지 않는다).
  *   속성은 ExplodeAttribs가 정한다 — EXPLODE는 속성 값을 지우고 블록 정의의 ATTDEF를 다시 보이고, BURST·조회는 현재 값을 담은
  *   TEXT(여러 줄 속성은 MTEXT)로 남기며 상수가 아닌 ATTDEF는 버린다.
  * - LWPOLYLINE·2D POLYLINE → LINE·ARC(폭은 버리고 OCS는 그대로), 3D POLYLINE → LINE, 메시·폴리페이스·MESH → 3DFACE.
@@ -72,7 +73,7 @@ export type ExplodeAttribs = 'definitions' | 'values';
 
 /**
  * 객체를 한 단계 분해한다. partial은 도면을 바꾸지 않는 조회(범위, 모서리)용으로, 다중 삽입이 칸 한도를 넘어도 한도까지 펼친다.
- * 편집은 잘린 칸을 잃으므로 거부하고 원본을 남긴다.
+ * 편집은 잘린 칸을 잃으므로 거부하고 원본을 남긴다. 블록 내용에 옮길 수 없는 객체가 있어도 같다(163차 — 그 객체를 잃지 않게).
  * 결과는 주석 객체가 아니다(120차 — plainExplodedParts). 주석 객체의 어느 축척 표현을 분해할지는 부르는 쪽이 고른다(explodeView).
  */
 export function explodeEntity(e: Entity, doc: CadDocument, partial = false, attribs: ExplodeAttribs = 'values'): EditResult {
@@ -263,6 +264,10 @@ function explodeInsert(e: InsertEntity, doc: CadDocument, partial: boolean, attr
         opt,
         false,
       );
+      // 옮길 수 없는 내용(원본 ACIS 자료가 있는 영역·3D 솔리드·곡면, 모르는 객체 등)은 버리지 않는다(163차, Autodesk EXPLODE 도움말 — 블록은 한 단계씩
+      // 분해하고, 비균등 축척 블록에서 분해할 수 없는 객체는 *E 익명 블록으로 모아 참조하며 모두 그러면 참조를 분해하지 않는다). ACIS 형상은 새 핸들로
+      // 복사하면 원본 본문을 잃어 *E 블록으로 모으지 않고, 잘리는 다중 삽입처럼 거부하고 원본을 남긴다. 조회(partial)는 옮길 수 있는 내용만 본다
+      if (res.lost && !partial) return { message: res.lost };
       pushAll(out, res.ents);
       pushAll(blocks, res.blocks);
       if (res.message && !message) message = res.message;

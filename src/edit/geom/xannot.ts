@@ -33,7 +33,7 @@ import {
   sub,
 } from './math';
 import { isNaturalExt, isPlanarExt, ocsToWcs, planProj, planZ, planeMap } from './ocs';
-import { type EditResult, type TransformOptions, allocBlockName } from './types';
+import { type EditResult, MSG, type TransformOptions, allocBlockName } from './types';
 import { metrics } from './xtext';
 import { tagColumnCopy, transformTag } from '../util/mtextcols';
 import { tagLeaderCopy } from '../util/leadercopy';
@@ -46,15 +46,28 @@ function dir3(m: Affine, v: Vec3): Vec3 {
   return l > 0 ? { x: d.x / l, y: d.y / l, z: d.z / l } : { ...v };
 }
 
-/** 블록 내용을 아핀 A로 옮긴 새 객체 목록(핸들 비움) */
-export function mapBlockContents(list: readonly Entity[], A: Affine, doc: CadDocument, opt: TransformOptions, stripOcs: boolean): { ents: Entity[]; blocks: BlockDef[]; message?: string } {
+/**
+ * 블록 내용을 아핀 A로 옮긴 새 객체 목록(핸들 비움).
+ * lost: 옮긴 결과가 없는 내용(원본 ACIS 자료가 있는 영역·3D 솔리드·곡면, 모르는 객체, 고르지 않게 축척한 원호 정렬 문자 등)이 있으면 처음 것의 까닭 —
+ * ents에는 그 내용이 빠져 있다. 블록 분해는 이것을 보고 내용을 버리지 않게 거부한다(163차 — explode.ts explodeInsert)
+ */
+export function mapBlockContents(
+  list: readonly Entity[],
+  A: Affine,
+  doc: CadDocument,
+  opt: TransformOptions,
+  stripOcs: boolean,
+): { ents: Entity[]; blocks: BlockDef[]; message?: string; lost?: string } {
   const ents: Entity[] = [];
   const blocks: BlockDef[] = [];
   let message: string | undefined;
+  let lost: string | undefined;
   for (const c of list) {
     const src = stripOcs && c.extrusion ? ({ ...c, extrusion: undefined } as Entity) : c;
     const r = transformEntity(src, A, doc, opt);
-    for (const x of [...(r.replace ?? []), ...(r.add ?? [])]) {
+    const out = [...(r.replace ?? []), ...(r.add ?? [])];
+    if (!out.length && lost === undefined) lost = r.message ?? MSG.cannotTransform;
+    for (const x of out) {
       // 새 객체: 핸들·사전·반응자·DWG 원본 본문은 잇지 않는다(여러 단 MTEXT는 같은 변환으로 만든 단끼리 다시 잇는다)
       const c = freshEntity(x);
       if (c.type === 'MTEXT') tagColumnCopy(c, transformTag(A, opt.dz));
@@ -64,7 +77,7 @@ export function mapBlockContents(list: readonly Entity[], A: Affine, doc: CadDoc
     if (r.blocks) blocks.push(...r.blocks);
     if (r.message && !message) message = r.message;
   }
-  return { ents, blocks, message };
+  return { ents, blocks, message, lost };
 }
 
 function newBlock(doc: CadDocument, prefix: string, base: BlockDef | undefined, ents: Entity[]): BlockDef {
