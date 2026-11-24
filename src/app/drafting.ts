@@ -32,6 +32,15 @@ const SNAP_ABBR: Record<string, SnapKind> = {
   PAR: 'par',
 };
 
+/**
+ * GRID의 간격 값: 끝이 X면 스냅 간격(snap — 그 축의 스냅 간격)의 배수, 아니면 그림 단위. 값이 아니면 NaN.
+ * Autodesk GRID 도움말: 격자 간격(X)도 종횡비의 가로·세로 값도 뒤에 x를 붙이면 스냅 간격의 배수다(197차 — 종횡비는 전에 숫자로만 읽어 「2x」를 버렸다)
+ */
+function gridValue(text: string, snap: number): number {
+  const t = text.trim().toUpperCase();
+  return t.endsWith('X') ? Number(t.slice(0, -1)) * snap : Number(t);
+}
+
 export function registerDraftingCommands(app: App): void {
   app.register({
     name: 'GRID',
@@ -66,8 +75,9 @@ export function registerDraftingCommands(app: App): void {
         } else if (r.keyword === 'A') {
           const x = await ctx.getPoint(`수평 간격두기(X) 지정 <${cur}>:`, { allowText: true, preferNumber: true });
           const y = await ctx.getPoint(`수직 간격두기(Y) 지정 <${formatLength(st.grid.y, st.units)}>:`, { allowText: true, preferNumber: true });
-          const vx = 'text' in x ? Number(x.text) : st.grid.x;
-          const vy = 'text' in y ? Number(y.text) : st.grid.y;
+          // 2x처럼 끝이 X면 가로는 스냅 X 간격, 세로는 스냅 Y 간격의 배수(도움말은 축을 적지 않는다 — 같은 축의 스냅 간격으로 정함)
+          const vx = 'text' in x ? gridValue(x.text, st.snap.x) : st.grid.x;
+          const vy = 'text' in y ? gridValue(y.text, st.snap.y) : st.grid.y;
           if (vx > 0 && vy > 0) {
             st.grid.x = vx;
             st.grid.y = vy;
@@ -77,9 +87,8 @@ export function registerDraftingCommands(app: App): void {
         return;
       }
       if ('text' in r) {
-        // 10x처럼 끝이 X면 스냅 간격의 배수
-        const t = r.text.trim().toUpperCase();
-        const v = t.endsWith('X') ? Number(t.slice(0, -1)) * st.snap.x : Number(t);
+        // 10x처럼 끝이 X면 스냅 간격의 배수(가로·세로 모두 스냅 X 간격 — 전부터의 꼴)
+        const v = gridValue(r.text, st.snap.x);
         if (!(v > 0)) {
           ctx.print('값은 양수이고 0이 아니어야 합니다.', 'err');
           return;
