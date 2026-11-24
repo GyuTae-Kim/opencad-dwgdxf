@@ -9,6 +9,7 @@
 import type { AttribEntity, BlockDef, CadColor, InsertEntity, Vec3 } from '../core/model';
 import { entityDefaults, tableKey } from '../core/model';
 import { explodeEntity } from '../edit/geom';
+import { ocsToWcs } from '../edit/geom/ocs';
 import { cloneEntity, isLayoutBlock } from '../edit/session';
 import { matchNameList, parseLayerColor, parseTrueColor } from '../edit/layercmd';
 import { UNIT_NAMES, insertUnitFactor } from '../edit/script/dash';
@@ -402,7 +403,9 @@ export function registerDashInsertCommands(app: App): void {
               break;
             }
             case 'H': {
-              const v = await askReal(ctx, `새 높이 지정 <${fmt4(a.height)}>:`, a.height, (x) => (x > 0 ? null : '값은 0보다 커야 합니다.'));
+              // 점이면 그 점과 문자 시작점의 거리(201차, Autodesk -ATTEDIT 도움말 「높이」). 시작점은 ATTRIB 10(OCS)을 WCS로 옮긴 평면도 자리
+              const s = ocsToWcs(a.insert, a.extrusion);
+              const v = await askReal(ctx, `새 높이 지정 <${fmt4(a.height)}>:`, a.height, (x) => (x > 0 ? null : '값은 0보다 커야 합니다.'), { x: s.x, y: s.y });
               patch(it, (x) => {
                 x.height = v;
                 if (x.mtext) x.mtext.height = v;
