@@ -1,6 +1,7 @@
 /**
  * 스마트 치수 DIM: `객체 선택 또는 첫 번째 치수보조선 원점 지정 또는 [각도(A)/기준선(B)/계속(C)/세로좌표(O)/정렬(G)/분산(D)/도면층(L)/명령 취소(U)]:`
- * - 마우스를 올린 객체에 맞는 치수를 미리 보여 준다: 선·폴리선 직선 세그먼트 → 선형(수평·수직) 또는 정렬, 원 → 지름, 호 → 반지름.
+ * - 마우스를 올린 객체에 맞는 치수를 미리 보여 준다: 선·폴리선 직선 세그먼트 → 선형(수평·수직) 또는 정렬, 원 → 지름, 호·폴리선 호 세그먼트 → 반지름
+ *   (폴리선은 경량 폴리선과 맞춤이 아닌 2D POLYLINE — 190차 `dimTarget`).
  *   객체 스냅 표지가 보일 때(근처점 제외) 누르면 점, 객체 위를 누르면 그 객체를 고른다.
  * - 선을 고른 뒤 다른 선을 누르면 두 선의 각도 치수, 원·호는 반지름·지름·꺾기·호 길이·각도로 바꿀 수 있다.
  * - 치수를 하나 만들면 첫 프롬프트로 돌아가 Enter(또는 Esc)까지 이어진다. 명령 취소(U)는 이 명령에서 만든 마지막 치수를 지운다.
@@ -37,7 +38,7 @@ import { extDir, linearFeetW, spaceDimensions } from '../edit/annot/dimedit';
 import { type SmartTarget, alignDimensions, distributeEqual, hoverDimLinePoint, linearChoice, parallelLines, pointOnCircle, smartTarget } from '../edit/dim/smart';
 import type { App, Keyword, PointResult } from './app';
 import { askAngle } from './annot2-common';
-import { VP_PICK, addDimension, pickedViewport, viewportScaled } from './dimcmds';
+import { VP_PICK, addDimension, pickedViewport, segmentShape, viewportScaled } from './dimcmds';
 import { inheritedRef, objectRef, pointRef } from './dimassoc';
 import { textDialog } from './draw';
 import { commitResults } from './modify';
@@ -50,6 +51,14 @@ import { currentUcs, ucsOrigin } from './ucs';
 import { ft } from './filetext';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
+
+/**
+ * 마우스 아래·고른 객체의 치수 대상(190차). Autodesk DIM 도움말: 객체 위에 머무르면 맞는 치수 종류를 미리 보이고, 폴리선은 고른 세그먼트에 따라
+ * 선형 또는 반지름이다 — 폴리선 종류를 가르지 않는다. 맞춤·스플라인 맞춤이 아닌 2D POLYLINE은 188차 `segmentShape`의 경량 꼴(같은 꼭짓점·볼록도·닫힘·
+ * 고도·돌출 방향)로 넘겨 같은 모양의 경량 폴리선과 같은 대상이 된다(전에는 미리 보기가 없고 누르면 첫 원점으로 받았다). 경량 폴리선은 같은 객체,
+ * 선·원·호와 맞춤 꼴·3D 폴리선은 그대로 넘긴다(전과 같은 값). 연관은 고른 원래 객체에 붙인다
+ */
+const dimTarget = (e: Entity | undefined, p: Pt): SmartTarget | null => smartTarget(segmentShape(e) ?? e, p);
 
 /** 뷰포트 안 모형 객체의 치수 대상을 그 뷰포트로 본 종이 형상으로(선은 두 끝, 원·호는 중심·반지름·각도 — vpsnap.circleToPaper) */
 export function targetToPaper(vx: ViewportXf, t: SmartTarget): SmartTarget {
@@ -202,11 +211,11 @@ export function registerDimSmartCommand(app: App): void {
         const e = doc.entityIndex.get(hit.handle);
         if (!e) return null;
         if (!hit.vx) {
-          const t = smartTarget(e, p);
+          const t = dimTarget(e, p);
           return t ? { e, t, vx: null } : null;
         }
         // 뷰포트 안 모형 객체: 고른 자리의 모형 좌표로 세그먼트를 고르고, 그 뷰포트로 본 종이 형상으로
-        const t = smartTarget(e, paperToModelVp(hit.vx, p));
+        const t = dimTarget(e, paperToModelVp(hit.vx, p));
         return t ? { e, t: targetToPaper(hit.vx, t), vx: hit.vx } : null;
       };
       /** 마우스 아래 객체의 강조 형상(뷰포트 안 모형 객체는 종이 자리에) */
@@ -454,7 +463,7 @@ export function registerDimSmartCommand(app: App): void {
           app.clearSelection();
           const e = doc.entityIndex.get(r.handle);
           const vx = pickedViewport(app, r);
-          const t = smartTarget(e, vx ? paperToModelVp(vx, r.point) : r.point);
+          const t = dimTarget(e, vx ? paperToModelVp(vx, r.point) : r.point);
           return { e, t: t && vx ? targetToPaper(vx, t) : t, vx, point: r.point };
         };
         const r = await picked('호, 원, 선을 선택하거나 <정점 지정>:');
