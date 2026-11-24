@@ -703,8 +703,18 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   이제 174차 `circleOf`(폴리선은 같은 평면 사상과 뒤집힌 평면의 볼록도 부호)로 옮긴다. 각도 치수는 연관이 붙어 호·원을 옮기면 따라간다(자연 +Z와 기운 돌출 방향은 전과 같은 값)
 - [ ] 175차에 보고 두 것(고르지 않은 것과 실물 표본·공개 근거 없이는 정하지 못한 것): 치수 명령 <객체 선택>의 `originsFromEntity`(`app/dimcmds.ts` —
   DIMLINEAR·DIMALIGNED·DIMHORIZONTAL·DIMVERTICAL)는 호의 끝점과 폴리선 세그먼트를 OCS 값 그대로 써 −Z 호·폴리선의 치수보조선 원점이 거울상 자리에 생긴다(코드 읽기,
-  같은 꼴 — 다음 후보), CENTERLINE의 `straightOf`(`app/annot2-misc.ts`)도 −Z 폴리선 직선 세그먼트를 OCS 꼭짓점으로 쓴다(코드 읽기). QDIM은 173차에 보고 둔 그대로.
+  같은 꼴 — 176차가 고침), CENTERLINE의 `straightOf`(`app/annot2-misc.ts`)도 −Z 폴리선 직선 세그먼트를 OCS 꼭짓점으로 쓴다(코드 읽기 — 176차가 고침). QDIM은 173차에 보고 둔 그대로.
   이 앱의 CENTERMARK는 익명 블록 참조 하나로 만들고 연관(원·호를 옮기면 따라가기)을 붙이지 않는다 — AutoCAD의 연관 중심 표식(CENTERREASSOCIATE·CENTERDISASSOCIATE)은 없다
+- [x] −Z 호·폴리선의 선형 치수 <객체 선택> 원점과 CENTERLINE 중심선(176차, DXF 참조서: ARC의 중심 10과 각도 50·51, LWPOLYLINE의 꼭짓점 10과 고도 38은 OCS,
+  LINE의 끝점은 WCS, Autodesk DIMLINEAR·DIMALIGNED 도움말 <객체 선택>: 고른 선·호의 끝점이 치수보조선 원점이고 폴리선은 고른 세그먼트, CENTERLINE 도움말: 고른 두 선·
+  직선 폴리선 세그먼트의 중심선): `originsFromEntity`(DIMLINEAR·DIMALIGNED·DIMHORIZONTAL·DIMVERTICAL)와 CENTERLINE의 `straightOf`가 호 끝점·폴리선 꼭짓점의
+  OCS 값을 평면도 자리로 그대로 써 −Z 호의 원점이 X 거울상 자리에 생기고(연관도 붙지 않았다), 폴리선은 고른 점과 OCS 세그먼트를 견줘 다른 세그먼트를 재기도 했고,
+  중심선은 거울상 선 쪽으로 생겼다 — 이제 폴리선 평면도 꼭짓점 도우미 `lwPlanVertices`(175차 CENTERMARK 폴리선 갈래와 같은 식 — `roundOf`도 이것을 쓴다)와
+  같은 평면 사상으로 호 끝점을 옮긴다. 원점이 연관되어 호·폴리선을 옮기면 따라간다(선과 자연 +Z·기운 돌출 방향은 전과 같은 값)
+- [ ] 176차에 보고 두 것(고르지 않은 것과 실물 표본·공개 근거 없이는 정하지 못한 것): QDIM(`edit/annot/qdim.ts` `qdimGeometry` — 173차에 보고 둔 그대로, 다음 후보).
+  DIMLINEAR·DIMALIGNED <객체 선택>으로 원을 고르면 도움말은 지름 끝점을 원점으로 쓴다고(고른 점이 첫 원점, 고른 점에 가까운 사분점에 따라 수평·수직) 적지만
+  이 앱은 원을 받지 않는다(없는 기능이라 이번 범위 밖). CENTERLINE은 고른 선의 Z와 무관하게
+  Z 0에 놓는다(+Z 선에서도 같다 — 도움말에 Z 규칙이 없어 그대로)
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다

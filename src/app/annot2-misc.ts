@@ -15,14 +15,13 @@ import type { App, CommandContext, Keyword } from './app';
 import { addEntities, currentProps } from './draw';
 import { dimGhost } from './annot2-common';
 import { attachAssociation, finishNewDimension } from './dimassoc';
-import { circleOf } from './dimcmds';
-import { isNaturalExt, isPlanarExt, planProj, planZ } from '../edit/geom/ocs';
+import { circleOf, lwPlanVertices } from './dimcmds';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { ucsOrigin } from './ucs';
 import { dialog, h } from './ui/dom';
 import type { OverlayGeom, Pt } from './view';
-import { lwCount, lwVertices, packLw } from '../core/lwpoly';
+import { lwCount, packLw } from '../core/lwpoly';
 
 const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
@@ -305,12 +304,15 @@ function centerSettings(app: App): CenterSettings {
   return defaultCenterSettings(Number(app.active!.doc.header.get('$MEASUREMENT') ?? 1) === 1);
 }
 
-/** 선택한 객체의 직선 구간(선, 폴리선 직선 세그먼트) */
+/**
+ * 선택한 객체의 직선 구간(선, 폴리선 직선 세그먼트 — Autodesk CENTERLINE: 고른 두 선·직선 폴리선 세그먼트의 중심선).
+ * 폴리선 꼭짓점은 OCS 값이라 −Z 폴리선은 평면 사상으로 평면도 자리에 옮긴다(176차 — 전에는 중심선이 X 거울상 선 쪽으로 생겼다). 선과 +Z 폴리선은 전과 같은 값
+ */
 function straightOf(e: Entity | undefined, pick: Pt): [Pt, Pt] | null {
   if (!e) return null;
   if (e.type === 'LINE') return [e.start, e.end];
   if (e.type === 'LWPOLYLINE' && lwCount(e) >= 2) {
-    const vs = lwVertices(e);
+    const vs = lwPlanVertices(e).vs;
     const n = e.closed ? vs.length : vs.length - 1;
     let best = -1;
     let bd = Infinity;
@@ -350,11 +352,8 @@ function roundOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; sweep: nu
     return { c: g.c, r: g.r, sweep: sw, z: g.z };
   }
   if (e.type === 'LWPOLYLINE') {
-    const ext = e.extrusion;
-    const m = !isNaturalExt(ext) && isPlanarExt(ext) ? planProj(ext, e.elevation) : null;
-    const flip = !!m && m[0] * m[3] - m[1] * m[2] < 0;
-    const vs = m ? lwVertices(e).map((v) => ({ ...v, x: m[0] * v.x + m[2] * v.y + m[4], y: m[1] * v.x + m[3] * v.y + m[5], bulge: flip ? -v.bulge : v.bulge })) : lwVertices(e);
-    const z = m ? planZ(ext, e.elevation) || 0 : e.elevation;
+    // 평면도 꼭짓점·볼록도와 평면 Z(176차부터 <객체 선택> 원점·CENTERLINE과 같은 도우미 — 같은 식)
+    const { vs, z } = lwPlanVertices(e);
     let best: { c: Pt; r: number; sweep: number; z: number } | null = null;
     let bd = Infinity;
     for (let i = 0; i < (e.closed ? vs.length : vs.length - 1); i++) {
