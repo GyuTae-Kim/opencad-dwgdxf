@@ -8,7 +8,7 @@ import { createTable, setText, tableHeight, tableWidth } from '../edit/table/mod
 import { addTableOps } from '../edit/table/ops';
 import { currentTableStyle, defaultTableStyle, isMetric } from '../edit/table/style';
 import type { App } from './app';
-import { currentProps } from './draw';
+import { currentElevation, currentProps } from './draw';
 import { baseName, download } from './export';
 import { form } from './ui/dom';
 
@@ -112,7 +112,8 @@ export function registerDataExtractCommands(app: App): void {
         },
       });
       if (!('point' in p)) return;
-      const r = addTableOps(doc, () => st.session.newHandle(), { space: st.space, data, style, styleHandle: entry?.handle, insert: { x: p.point.x, y: p.point.y, z: 0 }, props: currentProps(app) });
+      // 209차: 찍은 표 삽입점의 Z는 현재 고도(ELEVATION, 배치는 PELEVATION — Autodesk ELEV 도움말: X·Y만 준 점의 Z). 전에는 늘 0이었다 — TABLE(208차)과 같은 꼴
+      const r = addTableOps(doc, () => st.session.newHandle(), { space: st.space, data, style, styleHandle: entry?.handle, insert: { x: p.point.x, y: p.point.y, z: currentElevation(app) }, props: currentProps(app) });
       st.session.commit({ label: 'DATAEXTRACTION', ops: r.ops, group: ctx.group });
       app.lastCreated = [r.table.handle];
     },
