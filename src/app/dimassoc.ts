@@ -23,6 +23,7 @@ import {
   isAssocGeometry,
   movedDimension,
   regenAssociations,
+  segmentSnapRef,
   setDimAssocChanges,
   snapRef,
   tolFor,
@@ -30,7 +31,7 @@ import {
 import { explodeEntity } from '../edit/geom';
 import { affApply } from '../edit/geom/math';
 import type { App, CommandContext, Keyword, PointResult } from './app';
-import { dimensionBlockOps, originsFromEntity } from './dimcmds';
+import { dimensionBlockOps, originsFromEntity, polyArcOf } from './dimcmds';
 import type { DocState } from './docstate';
 import { unlockedOnly } from './layers';
 import { askNumber } from './modify2-util';
@@ -538,7 +539,12 @@ async function reassociate(app: App, ctx: CommandContext, dim: DimensionEntity):
   };
   const t = dim.dimType & 7;
   if (dim.subtype === 'ARC_DIMENSION') {
-    const sel = await askEntity('호 또는 폴리선 호 세그먼트 선택 <다음>:', (e) => e.type === 'ARC');
+    // 192차: 프롬프트(AutoCAD 2026 한국어판)대로 폴리선 호 세그먼트도 받는다 — Autodesk DIMARC 도움말의 첫 프롬프트도 호 또는 폴리선 호 세그먼트이고,
+    // 연관 치수 도움말이 연관하지 않는 객체로 적은 것(해치·이미지·언더레이·다중선·2D 솔리드·두께 있는 객체)에 폴리선은 없다. 세그먼트는 DIMARC 만들기와 같은
+    // 182차 `polyArcOf`(가장 가까운 세그먼트가 호일 때, 맞춤이 아닌 2D POLYLINE도, −Z는 평면도)로 고르고, ARC처럼 반시계 시작(13)·끝(14)·중심(15)에 연관한다.
+    // 참조는 고른 세그먼트 번호 표지로 만든다(`segmentSnapRef`). 전에는 거르개가 ARC만 받아 폴리선을 고르면 다시 선택하게 했다 — 182차부터 연관 없이
+    // 만든 폴리선 호 길이 치수를 연관할 길이 없었다. ARC 갈래는 그대로
+    const sel = await askEntity('호 또는 폴리선 호 세그먼트 선택 <다음>:', (e, at) => e.type === 'ARC' || polyArcOf(e, at)?.seg !== undefined);
     if (sel && sel.e.type === 'ARC') {
       const e = sel.e;
       const a = { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle) };
@@ -553,6 +559,23 @@ async function reassociate(app: App, ctx: CommandContext, dim: DimensionEntity):
       pts.set('defPoint3', b);
       pts.set('defPoint4', { x: e.center.x, y: e.center.y });
       touched = true;
+    } else if (sel) {
+      const g = polyArcOf(sel.e, sel.at);
+      const seg = g?.seg;
+      if (g && seg !== undefined) {
+        const on = (a: number): Pt => ({ x: g.c.x + g.r * Math.cos(a), y: g.c.y + g.r * Math.sin(a) });
+        const want: [DefKey, number, Pt][] = [
+          ['defPoint2', OSNAP.END, on(g.a0)],
+          ['defPoint3', OSNAP.END, on(g.a1)],
+          ['defPoint4', OSNAP.CEN, { x: g.c.x, y: g.c.y }],
+        ];
+        want.forEach(([k, osnap, p], i) => {
+          const ref = segmentSnapRef(sel.e, osnap, seg, p, Math.max(tolFor(p) * 10, 1e-9));
+          refs[i] = ref;
+          pts.set(k, ref ? { x: ref.point.x, y: ref.point.y } : p);
+        });
+        touched = true;
+      }
     }
   } else if (t === 0 || t === 1) {
     const r = await askPoint('defPoint2', '첫 번째 치수보조선 원점 지정 또는 [객체 선택(S)] <다음>:', [{ key: 'S', label: '객체 선택' }]);

@@ -674,6 +674,17 @@ export function snapRef(doc: CadDocument, e: Entity, osnap: number, q: P, tol: n
   return makeRef(e, osnap === OSNAP.START ? OSNAP.END : osnap, c.p, c.segs[0]);
 }
 
+/**
+ * 폴리선 세그먼트 seg(0부터)에 닿는 스냅 점 참조 — GS 표지를 그 세그먼트로 적는다(192차, DIMREASSOCIATE 호 길이 치수의 폴리선 호 세그먼트).
+ * `snapRef`는 같은 자리 후보가 여럿이면 처음 것의 세그먼트를 적으므로, 닫힌 반원 둘(도넛 꼴)의 둘째 중심이 첫째 세그먼트 표지가 되어 둘째만 바뀌는
+ * 편집에서 첫째 중심을 따라가게 된다. 폴리선이 아니거나 그 세그먼트에 q(tol 안)인 스냅 점이 없으면 null
+ */
+export function segmentSnapRef(e: Entity, osnap: number, seg: number, q: P, tol: number): PointRef | null {
+  if (!POLY.has(e.type)) return null;
+  const c = nearestCand(candidates(e, osnap).filter((x) => x.segs.includes(seg)), q);
+  return c && dist(c.p, q) <= tol ? makeRef(e, osnap, c.p, seg) : null;
+}
+
 /** 기본 찾기 차례: 끝점 → 교차점 → 중심 → 중간점 → 사분점 → 노드 → 삽입점 */
 export const DEFAULT_ORDER: readonly number[] = [OSNAP.END, OSNAP.INT, OSNAP.CEN, OSNAP.MID, OSNAP.QUAD, OSNAP.NODE, OSNAP.INS];
 
