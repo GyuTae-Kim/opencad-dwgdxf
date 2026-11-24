@@ -52,10 +52,15 @@ function moveAndRegen(h: H, before: Entity, after: Entity, d: DimensionEntity): 
 /** (0, 0)→(10, 0) 직선, (10, 0)→(20, 0) 볼록도 1(반시계 반원 — 중심 (15, 0), 반지름 5, (15, −5)를 지난다) — 182차 시험과 같은 폴리선 */
 const HALF: [number, number, number?][] = [[0, 0], [10, 0, 1], [20, 0]];
 
-/** HALF를 Y로 −40 옮긴 폴리선에서 DIMARC로 만든(연관 없는 — 182차) 호 길이 치수: 시작 (10, −40)·끝 (20, −40)·중심 (15, −40), 값 5π */
+/**
+ * HALF를 Y로 −40 옮긴 폴리선에서 DIMARC로 만든 연관 없는 호 길이 치수: 시작 (10, −40)·끝 (20, −40)·중심 (15, −40), 값 5π.
+ * 193차부터 DIMASSOC 2의 DIMARC는 폴리선 호 세그먼트에도 연관하므로 DIMASSOC 1(연관하지 않는 치수 객체)로 만들고 2로 되돌린다(정의점은 같은 자리)
+ */
 async function looseArcDim(h: H): Promise<DimensionEntity> {
   const src = h.add(lw([[0, -40], [10, -40, 1], [20, -40]]));
+  h.doc.header.set('$DIMASSOC', 1);
   await h.run('DIMARC', [{ pick: src.handle, at: [15, -45] }, '15,-48']);
+  h.doc.header.set('$DIMASSOC', 2);
   const d = dimsOf(h).at(-1)!;
   expect(d.subtype).toBe('ARC_DIMENSION');
   expect(arcPts(d)).toEqual([10, -40, 20, -40, 15, -40]);

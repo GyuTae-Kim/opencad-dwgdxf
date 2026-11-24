@@ -35,7 +35,7 @@ import { angularSpan } from '../edit/dim/angular';
 import { OSNAP, type PointRef, circlePointRef } from '../edit/dim/assoc';
 import type { EditOp } from '../edit/session';
 import type { App, CommandContext, EntityPick, EntityResult, Keyword } from './app';
-import { finishNewDimension, inheritedRef, newDimensionAssocOps, objectRef, pointRef, snapNewDimension } from './dimassoc';
+import { finishNewDimension, inheritedRef, newDimensionAssocOps, objectRef, pointRef, segmentRef, snapNewDimension } from './dimassoc';
 import type { DocState } from './docstate';
 import { textDialog } from './draw';
 import { headerOverrides, overridesOf } from './dimstyle';
@@ -243,7 +243,7 @@ function circleEntity(e: Entity | undefined): Entity | undefined {
  * (전에는 원·호만 받아 폴리선을 고르면 알림만 하고 끝났다). 세그먼트는 스마트 치수 DIM과 같이 고른 점에 가장 가까운 것(`smartTarget`)이고,
  * 꼭짓점·볼록도는 OCS 값이라 −Z 폴리선은 176차 `lwPlanVertices`의 평면도 꼭짓점으로 고른다. 가장 가까운 세그먼트가 직선이거나
  * 돌출 방향이 Z축과 평행하지 않은 폴리선(평면도에서 타원)이면 null(원·호의 <객체 선택>과 같이 받지 않는다).
- * seg는 고른 세그먼트 번호다(192차 — DIMREASSOCIATE 호 길이 치수가 그 세그먼트 표지로 연관한다)
+ * seg는 고른 세그먼트 번호다(192차 — DIMREASSOCIATE 호 길이 치수가 그 세그먼트 표지로 연관한다, 193차부터 DIMARC 만들기도)
  */
 export function polyArcOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; a0: number; a1: number; z: number; seg?: number } | null {
   const s = polySegment(e, pick);
@@ -676,8 +676,10 @@ export function registerDimCommands(app: App): void {
     const ent = doc.entityIndex.get(r.handle);
     const picked = circleEntity(ent);
     const vx = pickedViewport(app, r);
-    // 폴리선 호 세그먼트(182차): 고른 점(뷰포트 안 모형 폴리선이면 모형 점)에 가장 가까운 세그먼트가 호면 그 호. 연관은 스마트 치수 DIM처럼 붙이지 않는다
-    const c0 = circleOf(picked) ?? polyArcOf(ent, vx && r.viewport ? r.viewport.model : r.point);
+    // 폴리선 호 세그먼트(182차): 고른 점(뷰포트 안 모형 폴리선이면 모형 점)에 가장 가까운 세그먼트가 호면 그 호.
+    // 호 길이 치수는 그 세그먼트 번호(seg)로 연관한다(193차 — 아래 refs). 반지름·지름 치수는 연관을 붙이지 않는다
+    const pa = picked ? null : polyArcOf(ent, vx && r.viewport ? r.viewport.model : r.point);
+    const c0 = circleOf(picked) ?? pa;
     const c = c0 && vx ? circleToPaper(vx, c0) : c0;
     if (!c || (kind === 'arc' && c.a0 === undefined)) {
       ctx.print(kind === 'arc' ? '호를 선택하십시오.' : '호 또는 원을 선택하십시오.', 'err');
@@ -771,6 +773,14 @@ export function registerDimCommands(app: App): void {
           if (kind === 'arc') refs = [objectRef(app, picked, OSNAP.END, d.defPoint2), objectRef(app, picked, OSNAP.END, d.defPoint3), objectRef(app, picked, OSNAP.CEN, d.defPoint4)];
           else if (kind === 'radius') refs = [circlePointRef(picked, d.defPoint4), objectRef(app, picked, OSNAP.CEN, d.defPoint)];
           else refs = [circlePointRef(picked, d.defPoint4), circlePointRef(picked, d.defPoint)];
+        } else if (kind === 'arc' && !vx && pa?.seg !== undefined) {
+          // 폴리선 호 세그먼트의 호 길이 치수(193차): ARC와 같은 세 참조(시작·끝 끝점, 중심)를 고른 세그먼트 번호 표지로(192차 DIMREASSOCIATE와 같은
+          // `segmentSnapRef` — 같은 자리 후보가 여럿인 도넛 꼴도 고른 세그먼트). Autodesk DIMASSOC 도움말: 2는 정의점이 형상 객체의 연관점에 묶여
+          // 그 점이 움직이면 치수의 위치·방향·값이 바뀐다. 연관 치수 도움말이 받지 않는 객체(해치·이미지·언더레이·다중선·2D 솔리드)에 폴리선은 없고,
+          // DIMARC 도움말은 호 또는 폴리선 호 세그먼트를 고른다. 전에는 DIMASSOC 2여도 붙이지 않아 폴리선을 옮겨도 치수가 남았다(182차).
+          // 부분(P)의 안쪽 점처럼 세그먼트 끝이 아닌 점은 ARC처럼 비운다. DIMASSOC 0·1, 뷰포트 안 모형 폴리선은 ARC와 같은 규칙이다
+          const seg = pa.seg;
+          refs = [segmentRef(app, ent, OSNAP.END, seg, d.defPoint2), segmentRef(app, ent, OSNAP.END, seg, d.defPoint3), segmentRef(app, ent, OSNAP.CEN, seg, d.defPoint4)];
         }
         addDimension(app, ctx, d, kind === 'radius' ? 'DIMRADIUS' : kind === 'diameter' ? 'DIMDIAMETER' : 'DIMARC', refs);
         return;

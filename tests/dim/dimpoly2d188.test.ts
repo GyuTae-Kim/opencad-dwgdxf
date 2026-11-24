@@ -3,7 +3,8 @@
  * Autodesk DIMRADIUS·DIMDIAMETER·DIMARC·DIMJOGGED·DIMANGULAR 도움말은 「폴리선 호 세그먼트」(DIMANGULAR 선 선택은 「폴리선 세그먼트」)를 적고
  * 폴리선 종류를 가르지 않는다. 고치기 전에는 세그먼트 고르기(`polySegment`)가 경량 폴리선(LWPOLYLINE)만 받아, 2D POLYLINE을 고르면
  * 호 세그먼트여도 알림만 하고 끝났다. 이제 맞춤·스플라인 맞춤이 아닌 2D POLYLINE(다기능 그립과 같은 `isPlainPoly2d`)은
- * 같은 꼭짓점·볼록도·닫힘·고도·돌출 방향의 경량 폴리선과 같은 치수를 만든다(연관은 182~184차처럼 붙이지 않음).
+ * 같은 꼭짓점·볼록도·닫힘·고도·돌출 방향의 경량 폴리선과 같은 치수를 만든다(연관은 182~184차처럼 붙이지 않음 — DIMARC는 193차부터
+ * 경량 폴리선과 같이 시작·끝 끝점과 중심 세 참조를 붙인다, `tests/dim/dimpolyarc182.test.ts` 193차 절).
  * 곡선 맞춤·스플라인 맞춤 2D POLYLINE과 3D 폴리선은 전과 같은 알림, 경량 폴리선은 전과 같은 값이다.
  * MEASUREGEOM 반지름(187차)은 `tests/settings/measurepolyarc187.test.ts`에서 본다.
  */
@@ -70,7 +71,7 @@ describe('2D POLYLINE 호 세그먼트: 같은 모양의 경량 폴리선과 같
     expect(dd.measurement).toBeCloseTo(10, 9);
   });
 
-  it('DIMARC: 반시계 세그먼트는 시작 (10, 0)·끝 (20, 0)·중심 (15, 0)·5π, 닫힌 2D POLYLINE의 닫는 호 세그먼트도', async () => {
+  it('DIMARC: 반시계 세그먼트는 시작 (10, 0)·끝 (20, 0)·중심 (15, 0)·5π, 닫힌 2D POLYLINE의 닫는 호 세그먼트도 — 193차부터 경량 폴리선처럼 연관 셋', async () => {
     const h = harness();
     const p = heavy(h);
     await h.run('DIMARC', [{ pick: p.handle, at: [15, -5] }, '15,-8']);
@@ -80,7 +81,8 @@ describe('2D POLYLINE 호 세그먼트: 같은 모양의 경량 폴리선과 같
     expect(xy(d.defPoint2)).toEqual([10, 0]);
     expect(xy(d.defPoint3)).toEqual([20, 0]);
     expect(d.measurement).toBeCloseTo(5 * Math.PI, 9);
-    expect(dimAssocOf(h.doc, d)).toBeNull();
+    // 188차에는 연관 없음이었다 — 193차부터 시작·끝 끝점과 중심(DIMASSOC 참조 칸 넷 가운데 빈 칸은 거른다)
+    expect(dimAssocOf(h.doc, d)!.data.refs.filter((r) => r).map((r) => r!.ids[0])).toEqual([p.handle, p.handle, p.handle]);
     // 닫힘(70 비트 1): (0,30)→(10,30) 직선, 닫는 (10,30)→(0,30) 볼록도 1(중심 (5,30), (5,35)를 지난다)
     const c = heavy(h, [[0, 30], [10, 30, 1]], true);
     await h.run('DIMARC', [{ pick: c.handle, at: [5, 35] }, '5,38']);
@@ -90,6 +92,8 @@ describe('2D POLYLINE 호 세그먼트: 같은 모양의 경량 폴리선과 같
     expect(xy(dc.defPoint2)).toEqual([10, 30]);
     expect(xy(dc.defPoint3)).toEqual([0, 30]);
     expect(dc.measurement).toBeCloseTo(5 * Math.PI, 9);
+    // 닫는 세그먼트(번호 1)의 두 끝점 (10,30)·(0,30)과 중심 — 첫 꼭짓점도 닫는 세그먼트의 끝점으로 붙는다
+    expect(dimAssocOf(h.doc, dc)!.data.refs.filter((r) => r)).toHaveLength(3);
   });
 
   it('DIMJOGGED: 고도 2인 −Z 2D POLYLINE은 평면도 중심 (−15, 0)·현 위 점 (−15, −5)에 WCS Z −2 — 경량 폴리선과 같다', async () => {
