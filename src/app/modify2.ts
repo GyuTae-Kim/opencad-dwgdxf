@@ -842,7 +842,9 @@ export function registerModify2Commands(app: App): void {
         if (!('point' in q)) return;
         pts.push(q.point);
       }
-      const w = makeWipeout(props, pts);
+      // 209차: 화면에서 찍은 점으로 만든 가리기의 삽입점 Z는 현재 고도(전에는 늘 0 — Autodesk ELEV 도움말: X·Y만 준 점의 Z).
+      // DXF 참조서의 WIPEOUT은 삽입점 10(WCS)·U 벡터 11·V 벡터 12이고 고도·돌출 칸이 없다. 폴리선(P) 갈래는 이미 원본 폴리선의 Z를 따른다
+      const w = makeWipeout(props, pts, currentElevation(app));
       if (!w) {
         ctx.print('세 점 이상으로 넓이가 있는 영역을 지정하십시오.', 'err');
         return;

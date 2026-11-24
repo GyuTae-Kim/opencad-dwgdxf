@@ -18,7 +18,7 @@ import { cdorderList, colorKeyLabel, colorsOf, displayColorKey, reorderOps } fro
 import { linFileText, linetypeFromObjects, linetypeNameProblem, makeLinetypeRecord } from '../edit/express/mkltype';
 import { REDIR_DEFAULT, type RedirMode, redirList, redirModeText, redirOps } from '../edit/express/redir';
 import type { App, Command, CommandContext } from './app';
-import { currentProps } from './draw';
+import { currentElevation, currentProps } from './draw';
 import { download } from './export';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
@@ -65,7 +65,7 @@ async function runBreakline(app: App, ctx: CommandContext): Promise<void> {
     break;
   }
   const props = { ...currentProps(app), handle: '' };
-  const make = (a: Pt, b: Pt, at?: Pt) => makeBreakline(props, a, b, { size, extension: ext, at });
+  const make = (a: Pt, b: Pt, at?: Pt, z = 0) => makeBreakline(props, a, b, { size, extension: ext, at }, z);
   const r2 = await ctx.getPoint('끊기선의 두 번째 점 지정:', {
     base: p1,
     ghost: (p) => {
@@ -82,7 +82,9 @@ async function runBreakline(app: App, ctx: CommandContext): Promise<void> {
     },
   });
   const at = 'point' in r3 ? r3.point : undefined;
-  const e = make(p1, p2, at);
+  // 209차: 화면에서 찍은 두 점으로 그린 끊기선의 폴리선 고도는 현재 고도(전에는 늘 0 — Autodesk ELEV 도움말: X·Y만 준 점의 Z,
+  // DXF 참조서 LWPOLYLINE은 꼭짓점이 X·Y뿐이고 고도 38 하나 — PLINE과 같은 꼴). 미리보기는 그대로다
+  const e = make(p1, p2, at, currentElevation(app));
   if (typeof e === 'string') {
     ctx.print(e, 'err');
     return;
