@@ -11,7 +11,7 @@
  * - 간격 설정(S): 기준에서 선 방향으로, 문자 범위 사이 간격을 그 값으로.
  */
 import type { CadDocument, Entity, Vec2 } from '../../core/model';
-import { type TextLike, isTextLike, scaleBasePoint, textFrame } from '../geom/textjust';
+import { type TextLike, isTextLike, scaleBasePoint, textFrame, verticalTextCorners } from '../geom/textjust';
 import { affApply, cross3, norm3 } from '../geom/math';
 import { isNaturalExt, planProj } from '../geom/ocs';
 import { mtextDir, mtextLocalBox } from '../geom/xtext';
@@ -51,8 +51,11 @@ export function anchorOf(e: Entity, key: string, doc: CadDocument): Vec2 | null 
  * 거꾸로 글자(생성 플래그 2)는 원점을 지나는 글줄 수직축으로, 뒤집기 글자(4)는 기준선으로 뒤집고,
  * 기울기는 높이만큼 글줄 방향으로 밀어 평행사변형이 된다. `slant`가 거짓이면 기울기를 넣지 않는다(Express 문자 상자의 직사각형).
  * 플래그·기울기가 없으면 곱 1·더하기 0이라 전과 같은 값이다 — `textOutline`과 계산 순서가 달라 그 함수를 그대로 쓰지 않는다.
+ * 세로 문자 스타일(STYLE 70 비트 4, SHX)은 글자를 진행 방향으로 쌓아 그리므로 그린 글자 상자(`verticalTextCorners` — 직사각형)다(172차).
  */
 export function textCornersOcs(e: TextLike, doc: CadDocument, slant = true): Vec2[] {
+  const vk = verticalTextCorners(e, doc);
+  if (vk) return vk;
   const f = textFrame(e, doc);
   const c = Math.cos(f.rot);
   const s = Math.sin(f.rot);

@@ -12,6 +12,7 @@ import { cloneEntity } from './path';
 import { planProj } from './ocs';
 import { affApply } from './math';
 import { metrics, mtextDir, mtextLocalBox } from './xtext';
+import { isShxFont } from '../../text/layout';
 
 export type TextLike = TextEntity | AttribEntity;
 
@@ -118,6 +119,38 @@ export function textFrame(e: TextLike, doc: CadDocument): TextFrame {
   return f;
 }
 
+/**
+ * 세로 문자의 그린 글자 상자(OCS 네 모서리, 왼쪽 아래부터 반시계). 세로 문자가 아니거나 글자가 없으면 null.
+ * 세로 문자 스타일(STYLE 70 비트 4, SHX 글꼴 — Autodesk 문자 스타일 도움말: 트루타입 글꼴에는 세로가 없다)은 그리기(src/text/layout.ts layoutText)가
+ * 글자를 바로 세워 삽입점부터 진행 방향으로 쌓으므로(자리맞추기·거꾸로·뒤집기를 쓰지 않는다) 가로 글자 틀(`textFrame`)과 다른 자리에 그린다.
+ * 상자는 그 배치의 범위로 객체 범위(query.ts entityBounds)와 같은 값이다(OCS 축에 나란하고, 글자 기울기 밀기는 그리기의 범위처럼 넣지 않는다).
+ * 자리맞추기 점은 바꾸지 않는다(Autodesk TEXT 도움말은 맞춤·TL~BR을 가로 문자에만 쓴다고 적을 뿐 세로 문자의 자리맞추기 점을 적지 않는다).
+ */
+export function verticalTextCorners(e: TextLike, doc: CadDocument): Vec2[] | null {
+  const style = doc.textStyles.get(tableKey(e.style));
+  if (!style || !((style.flags ?? 0) & 4) || !isShxFont(metrics().styleFont(style))) return null;
+  const lay = metrics().layoutText({
+    text: e.text || ('tag' in e ? e.tag : ''),
+    insert: e.insert,
+    alignPoint: e.alignPoint,
+    height: e.height,
+    rotation: e.rotation,
+    widthFactor: e.widthFactor,
+    oblique: e.oblique,
+    generation: e.generation,
+    halign: e.halign,
+    valign: e.valign,
+    style,
+  });
+  if (!(lay.maxX > lay.minX) || !(lay.maxY > lay.minY)) return null;
+  return [
+    { x: lay.minX, y: lay.minY },
+    { x: lay.maxX, y: lay.minY },
+    { x: lay.maxX, y: lay.maxY },
+    { x: lay.minX, y: lay.maxY },
+  ];
+}
+
 /** TEXT의 자리맞추기 점(OCS). key = TEXT_JUST의 옵션, 'E' = 지금 자리맞추기 점 */
 export function textPointOcs(e: TextLike, key: string, doc: CadDocument): Vec2 {
   if (key === 'E') {
@@ -149,14 +182,16 @@ export function mtextPoint(e: MTextEntity, k: number, doc: CadDocument): Vec3 {
 
 /**
  * 문자의 글자 상자 네 모서리(평면도 WCS): TRIM·EXTEND가 문자를 절단·경계 모서리로 쓸 때(AutoCAD와 같다).
- * TEXT·ATTRIB·ATTDEF는 왼쪽 기준선 원점에서 폭 × (하강 ~ 높이), MTEXT는 배치한 글자 상자.
+ * TEXT·ATTRIB·ATTDEF는 왼쪽 기준선 원점에서 폭 × (하강 ~ 높이)(세로 문자는 그린 글자 상자 `verticalTextCorners`), MTEXT는 배치한 글자 상자.
  */
 export function textOutline(e: Entity, doc: CadDocument): Vec2[] | null {
   if (isTextLike(e)) {
     if (!(e.text || ('tag' in e && e.tag))) return null;
+    const P = planProj(e.extrusion, e.insert.z);
+    const vk = verticalTextCorners(e, doc);
+    if (vk) return vk.map((q) => affApply(P, q));
     const f = textFrame(e, doc);
     if (!(f.W > 0) || !(f.h > 0)) return null;
-    const P = planProj(e.extrusion, e.insert.z);
     return [
       [0, -f.desc],
       [f.W, -f.desc],
