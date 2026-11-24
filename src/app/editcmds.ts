@@ -62,6 +62,25 @@ export function setMatchSettings(on: ReadonlySet<string>): void {
 /** 종류와 관계없이 옮기는 공통 특성 */
 const COMMON_PROPS = ['color', 'layer', 'linetype', 'ltscale', 'lineweight', 'transparency', 'thickness', 'plotStyle'] as const;
 
+/**
+ * 폴리선의 그리는 세그먼트가 모두 같은 폭이면 그 폭, 폭이 바뀌면 null(MATCHPROP 폴리선 칸).
+ * 정점 폭이 0이면 전역 폭으로 그리고(그리기·경로와 같은 셈), 열린 폴리선의 끝 정점 폭은 그리지 않아 세지 않는다.
+ */
+function uniformWidth(e: LwPolylineEntity): number | null {
+  const cw = e.constantWidth || 0;
+  const ws = e.widths;
+  if (!ws) return cw;
+  const n = lwCount(e);
+  const segs = e.closed ? n : n - 1;
+  let first: number | null = null;
+  for (let i = 0; i < segs * 2; i++) {
+    const w = ws[i]! || cw;
+    if (first === null) first = w;
+    else if (w !== first) return null;
+  }
+  return first ?? cw;
+}
+
 /** 원본 특성을 대상에 옮긴 사본(켠 설정만) */
 export function matchProps(src: Entity, dst: Entity, on: ReadonlySet<string> = matchSettings()): Entity {
   const c = cloneEntity(dst) as unknown as Record<string, unknown>;
@@ -99,10 +118,15 @@ export function matchProps(src: Entity, dst: Entity, on: ReadonlySet<string> = m
     for (const k of ['patternName', 'solid', 'patternType', 'patternAngle', 'patternScale', 'patternDouble', 'patternLines', 'gradient', 'hatchStyle'] as const) c[k] = structuredClone(s[k]);
   }
   if (on.has('polyline') && src.type === 'LWPOLYLINE' && dst.type === 'LWPOLYLINE') {
-    c.constantWidth = s.constantWidth;
-    // 정점 폭도 모두 전역 폭으로(0이면 정점 폭 없음)
-    const w = s.constantWidth as number;
-    c.widths = tidyWidths(new Float64Array(lwCount(dst as LwPolylineEntity) * 2).fill(w));
+    // Autodesk 특성 설정 대화 상자: 폴리선은 폭과 선종류 생성을 옮기고, 원본이 폭이 바뀌는 폴리선이면 폭은 옮기지 않는다(맞춤·고도도 옮기지 않는다).
+    // 164차 — 전에는 원본의 전역 폭 칸(폭이 바뀌는 폴리선은 0)으로 대상 정점 폭을 모두 덮어 대상 폭을 지웠고, 선종류 생성은 옮기지 않았다
+    c.plinegen = s.plinegen;
+    const w = uniformWidth(src);
+    if (w !== null) {
+      c.constantWidth = w;
+      // 정점 폭도 모두 그 폭으로(0이면 정점 폭 없음)
+      c.widths = tidyWidths(new Float64Array(lwCount(dst) * 2).fill(w));
+    }
   }
   if (on.has('table') && src.type === 'ACAD_TABLE' && dst.type === 'ACAD_TABLE' && s.tableStyle !== undefined) c.tableStyle = s.tableStyle;
   if (on.has('mleader') && src.type === 'MULTILEADER' && dst.type === 'MULTILEADER' && s.styleHandle !== undefined) c.styleHandle = s.styleHandle;
