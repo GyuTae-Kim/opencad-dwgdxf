@@ -261,13 +261,16 @@ export function polyLineOf(e: Entity | undefined, pick: Pt): [Vec3, Vec3] | null
   return s && t?.kind === 'line' ? [{ x: t.a.x, y: t.a.y, z: s.z }, { x: t.b.x, y: t.b.y, z: s.z }] : null;
 }
 
-/** 폴리선에서 고른 점에 가장 가까운 세그먼트(평면도 값 — `smartTarget`·`lwPlanVertices`)와 평면의 WCS Z(182차 `polyArcOf`에서 나눔 — 같은 값) */
-function polySegment(e: Entity | undefined, pick: Pt): { t: SmartTarget; z: number } | null {
+/**
+ * 폴리선에서 고른 점에 가장 가까운 세그먼트(평면도 값 — `smartTarget`·`lwPlanVertices`)와 평면의 WCS Z(182차 `polyArcOf`에서 나눔 — 같은 값).
+ * vs는 세그먼트 번호(`t.segment`)가 가리키는 평면도 꼭짓점이다(189차 `originsFromEntity` — 호 세그먼트의 두 끝점을 꼭짓점 차례로 쓴다)
+ */
+function polySegment(e: Entity | undefined, pick: Pt): { t: SmartTarget; z: number; vs: readonly Pt[] } | null {
   const lw = segmentShape(e);
   if (!lw || !isPlanarExt(lw.extrusion)) return null;
   const plan = lwPlanVertices(lw);
   const t = smartTarget(isNaturalExt(lw.extrusion) ? lw : { ...lw, verts: packLw(plan.vs).verts, extrusion: undefined }, pick);
-  return t ? { t, z: plan.z } : null;
+  return t ? { t, z: plan.z, vs: plan.vs } : null;
 }
 
 /**
@@ -352,7 +355,12 @@ export async function textOption(ctx: CommandContext, key: string, o: DimOpts): 
  * 선택한 객체에서 두 치수보조선 원점(선·폴리선 세그먼트·호 — Autodesk DIMLINEAR <객체 선택>: 고른 선·호의 끝점, 폴리선은 고른 세그먼트).
  * LINE의 끝점은 WCS 값이고, ARC의 중심·각도와 폴리선 꼭짓점은 OCS 값이다(DXF 참조서 OCS). −Z 호·폴리선은 평면 사상으로 평면도 자리에 옮긴다
  * (176차 — 전에는 원점이 X 거울상 자리에 생겨 연관도 붙지 않았고, 폴리선은 고른 점과 OCS 세그먼트를 견줘 다른 세그먼트를 고르기도 했다).
- * 호의 첫 원점은 시작점(OCS 시작 각도의 점)이다. 선과 자연 +Z·돌출 방향이 기운 호·폴리선은 전과 같은 값
+ * 호의 첫 원점은 시작점(OCS 시작 각도의 점)이다. 선과 자연 +Z·돌출 방향이 기운 호·폴리선은 전과 같은 값.
+ * 폴리선(189차): Autodesk DIMLINEAR·DIMALIGNED 도움말 <객체 선택> — 폴리선처럼 분해할 수 있는 객체는 낱낱의 선·호 세그먼트만 재고, 고른 선·호는 그 끝점이
+ * 치수보조선 원점이다(폴리선 종류는 가르지 않음). 세그먼트는 182~188차 치수 명령과 같은 `polySegment`(호 세그먼트는 호 위 거리, 맞춤이 아닌 2D POLYLINE도)로 고르고
+ * 그 두 꼭짓점을 꼭짓점 차례로 쓴다(직선·호 모두). 전에는 호 세그먼트도 현까지 거리로 견줘 호의 불룩한 쪽을 고르면 이웃 세그먼트의 끝점으로 쟀고,
+ * 2D POLYLINE은 알림만 했다. 직선 세그먼트만 견주는 경우는 같은 식이라 같은 세그먼트다. `polySegment`가 받지 않는 경량 폴리선(돌출 방향이 기운 것,
+ * 가장 가까운 세그먼트의 길이가 0인 것)은 아래 옛 갈래 그대로다
  */
 export function originsFromEntity(e: Entity | undefined, pick: Pt): [Pt, Pt] | null {
   if (!e) return null;
@@ -365,6 +373,13 @@ export function originsFromEntity(e: Entity | undefined, pick: Pt): [Pt, Pt] | n
       return m ? { x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] } : { x, y };
     };
     return [at(e.startAngle), at(e.endAngle)];
+  }
+  const s = polySegment(e, pick);
+  const i = s && s.t.kind !== 'circle' ? s.t.segment : undefined;
+  if (s && i !== undefined) {
+    const a = s.vs[i]!;
+    const b = s.vs[(i + 1) % s.vs.length]!;
+    return [{ x: a.x, y: a.y }, { x: b.x, y: b.y }];
   }
   if (e.type === 'LWPOLYLINE' && lwCount(e) >= 2) {
     const vs = lwPlanVertices(e).vs;
