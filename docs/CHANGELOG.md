@@ -3,6 +3,47 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(188차): 폴리선 세그먼트를 받는 치수 명령·MEASUREGEOM 반지름이 2D POLYLINE을 받지 않던 것
+
+### 고른 까닭
+182·187차가 남긴 한계(「POLYLINE 2D의 호 세그먼트는 받지 않음」)를 직접 재현했습니다(실제 도면 표본 없음 — 새 표본은 내려받지 않음).
+- Autodesk DIMRADIUS·DIMDIAMETER·DIMARC·DIMJOGGED·DIMANGULAR·MEASUREGEOM 도움말은 「폴리선 호 세그먼트」(DIMANGULAR 선 선택은 「폴리선 세그먼트」)를 적고 폴리선 종류를 가르지 않습니다.
+  2D 「무거운」 폴리선(DXF `POLYLINE` + `VERTEX`, 2D 꼴)도 꼭짓점마다 볼록도가 있어 호 세그먼트를 가집니다. 이 앱의 DXF·DWG 리더는 2D POLYLINE을 경량 폴리선으로 바꾸지 않고 그대로 둡니다.
+  그런데 여섯 명령이 함께 쓰는 세그먼트 고르기 `polySegment`(`app/dimcmds.ts`)는 LWPOLYLINE만 받아 → ①
+  - ① 2D POLYLINE을 고르면 호 세그먼트여도(DIMANGULAR는 직선 세그먼트도) 원·호가 아닐 때의 알림만 하고 치수를 만들지 않거나 반지름을 재지 않았습니다.
+    187차 시험의 「전과 같은 꼴」이 이미 MEASUREGEOM 반지름의 이 알림을 기대하고 있었습니다.
+  - 셋 조건: 도움말이 분명히 적고, 같은 앱의 다기능 그립(`polyData` — `isPlainPoly2d`)과 경로(`entityPath`)가 2D POLYLINE을 경량 폴리선과 같은 꼭짓점 자료·같은 평면 사상
+    (고도·돌출 방향)으로 다루며, 지금 받던 입력의 결과는 같습니다 — 경량 폴리선은 같은 객체를 그대로 넘기고, 바뀌는 것은 알림만 하던 2D POLYLINE뿐입니다. 새 글은 없습니다.
+    결과 고정 시험(장면 지문·명령 묶음)·바이트 고정 시험은 이 명령들을 쓰지 않습니다(`grep -rln -E "fingerprint|snapshot|toMatchInlineSnapshot|GOLDEN|createHash|sha256" tests/` 21개 가운데
+    여섯 명령·MEASURERADIUS·`registerCommands`·`registerDimCommands`·`registerAnnot2Commands`·`polyArcOf`·`polyLineOf`·`polySegment`가 든 것 0개).
+  - 곡선 맞춤·스플라인 맞춤 2D POLYLINE은 받지 않습니다: DXF 참조서의 POLYLINE 70 비트 2·4(맞춤 정점 더함)와 VERTEX 70 비트 1·8·16(맞춤이 만든 정점·스플라인 틀 조정점)이 있는 꼴은
+    세그먼트가 사용자가 그린 것이 아니라 맞춤 근사여서, 도움말의 「폴리선 호 세그먼트」로 보는지 도움말이 적지 않습니다. 다기능 그립과 같은 선(`isPlainPoly2d`)으로 가릅니다.
+- 고르지 않은 것: 같은 2D POLYLINE 빈칸이 스마트 치수 DIM(`smartTarget`)과 DIMLINEAR·DIMALIGNED <객체 선택>(`originsFromEntity`)에도 있습니다(코드 읽기 — 다른 함수라 하나만 고침,
+  DIM은 마우스를 올린 미리 보기와 치수 종류 추정까지 바뀜). 첫 후보가 서서 「그다음」(186·187차 표의 빈칸)은 보지 않았습니다. ROADMAP에 두었습니다.
+
+### 고친 것
+- 새 `segmentShape`(`app/dimcmds.ts`): 경량 폴리선은 같은 객체 그대로, 맞춤·스플라인 맞춤이 아닌 2D POLYLINE은 같은 OCS 꼭짓점·볼록도·닫힘(70 비트 1)·고도·돌출 방향의 경량 꼴을 돌려줍니다.
+  `polySegment`는 이것으로 182차와 같은 `lwPlanVertices`(−Z 평면도 꼭짓점)·`smartTarget`(가장 가까운 세그먼트)을 씁니다. 3D 폴리선·메시·폴리면과 맞춤 꼴은 전처럼 null입니다.
+- 바뀐 기본 동작: DIMRADIUS·DIMDIAMETER·DIMARC·DIMJOGGED·DIMANGULAR(호·선)·MEASUREGEOM 반지름(MEASURERADIUS·휴대폰 보기 반지름 단추 포함)이 맞춤이 아닌 2D POLYLINE의 세그먼트를
+  같은 모양의 경량 폴리선과 같이 받습니다. 연관은 182~184차처럼 붙이지 않습니다. 새 문구는 없고 쓰기 코드는 바꾸지 않았습니다.
+  `app/dimcmds.ts`가 `edit/geom/gripops.ts`·`core/polyverts.ts`를 새로 가져오지만 두 모듈은 이미 `editor.ts`가 정적으로 가져오는 `app/modify.ts` 쪽에 있습니다(첫 화면 조각 밖).
+
+### 확인
+- ①: (0, 0)→(10, 0) 직선과 (10, 0)→(20, 0) 볼록도 1 세그먼트의 2D POLYLINE에서 (15, −5)를 고르면 DIMRADIUS 중심 (15, 0)·현 위 점 (15, −5)·값 5(연관 없음 — 같은 자리의 경량 폴리선과
+  정의점이 같음), DIMDIAMETER 값 10, DIMARC 시작 (10, 0)·끝 (20, 0)·5π, DIMANGULAR 꼭짓점 (15, 0)·180°입니다. 닫힌 2D POLYLINE의 닫는 호 세그먼트((10, 30)→(0, 30))도 DIMARC 5π,
+  고도 2인 −Z 2D POLYLINE은 DIMJOGGED 평면도 중심 (−15, 0)·WCS Z −2로 같은 경량 폴리선과 정의점 넷이 같습니다. (0, 0)→(10, 0)→(10, 10) 2D POLYLINE의 두 세그먼트는 DIMANGULAR 90°,
+  LINE과 섞으면 LINE 쪽 두 끝점만 연관됩니다. MEASUREGEOM 반지름으로 2D POLYLINE 호 세그먼트를 고르면 반지름 5·지름 10입니다.
+- 전과 같은 꼴: 곡선 맞춤·스플라인 맞춤 2D POLYLINE과 3D 폴리선의 알림, 2D POLYLINE 직선 세그먼트의 알림(DIMRADIUS·DIMJOGGED·DIMARC), 직선 세그먼트 다음 호 세그먼트의
+  「선을 선택하십시오.」, 경량 폴리선·LINE·원·호의 값(184차 시험 11건 그대로 통과).
+- 시험: `tests/dim/dimpoly2d188.test.ts` 7건(cmds2 harness)과 `tests/settings/measurepolyarc187.test.ts`에 더한 2D POLYLINE 건 하나(「전과 같은 꼴」의 POLYLINE 2D는 곡선 맞춤 POLYLINE 2D로 바꿈).
+  고치기 전 src 판에서 23건 중 7건 실패했습니다(2D POLYLINE 건 여섯 — 치수 없음·반지름 줄 없음, 그리고 「전과 같은 꼴」로 잘못 묶은 DIMANGULAR 「직선 세그먼트 다음 호 세그먼트」
+  — 그 실행 뒤 이 부분을 DIMANGULAR 선 선택 건으로 옮김). 곡선 맞춤 알림 건들은 통과했습니다.
+  tsc 오류 0, 관련 시험 3파일(dimpoly2d188·settings/measurepolyarc187·dim/dimangpoly184 — DIMANGULAR 경량 폴리선·LINE) 23건 통과.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·워커 조각 크기 전·후, check:i18n(새 사전 항목 없음).
+  쓰기 코드를 바꾸지 않아 새 도면의 쓰기 바이트는 같습니다. 배치의 도면 공간에서 뷰포트 안 모형 2D POLYLINE을 고르는 갈래는 182차와 같은 모형 점 갈래로 코드 읽기만 했습니다(시험 없음).
+  실도면 표본 없음: AutoCAD에서 2D POLYLINE 세그먼트에 여섯 명령을 해 견주지는 않았습니다. 바뀐 곳이 전에 알림만 하던 2D POLYLINE뿐이고, 여섯 명령 도움말과
+  같은 앱의 경량 폴리선 갈래(182~187차)·2D POLYLINE 경로·다기능 그립을 근거로 둡니다.
+
 ## 2026-11-24(187차): MEASUREGEOM 반지름이 폴리선 호 세그먼트를 받지 않던 것
 
 ### 고른 까닭
