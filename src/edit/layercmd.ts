@@ -168,7 +168,14 @@ export function parseLineweight(text: string): number | null {
   if (!m) return null;
   const mm = Number(m[1]);
   if (!Number.isFinite(mm) || mm < 0 || mm > 2.11 + 1e-9) return null;
-  const v = mm * 100;
+  return nearestLineweight(mm * 100);
+}
+
+/**
+ * 1/100 mm 값 → 가장 가까운 표준 선가중치(한가운데면 작은 쪽). -LAYER 선가중치와 CHPROP·CHANGE 특성 선가중치(203차)가 같이 쓴다.
+ * 표 끝 밖이면 끝 값(2.11 넘으면 211)
+ */
+export function nearestLineweight(v: number): number {
   let best = LINEWEIGHTS[0]!;
   for (const w of LINEWEIGHTS) if (Math.abs(w - v) < Math.abs(best - v) - 1e-9) best = w;
   return best;
