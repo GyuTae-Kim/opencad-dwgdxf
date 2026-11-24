@@ -8,7 +8,7 @@ import { isTextLike, textHeightOf } from '../geom/textjust';
 import { affApply, affLin, angleOf, dist, len, norm, rot90, sub } from '../geom/math';
 import { isNaturalExt, planProj, planZ } from '../geom/ocs';
 import { mtextDir } from '../geom/xtext';
-import { textCorners } from '../textools/textalign';
+import { textCorners, textCornersOcs } from '../textools/textalign';
 
 export interface TextBox {
   /** 왼쪽 아래 구석(WCS 평면도) */
@@ -54,9 +54,9 @@ export function textAngle(e: Entity): number | null {
 /** 문자 상자(문자가 아니면 null) */
 export function textBox(e: Entity, doc: CadDocument): TextBox | null {
   if (!hasTextBox(e)) return null;
-  let k = textCorners(e, doc);
+  let k = isTextLike(e) ? textCornersOcs(e, doc) : textCorners(e, doc);
   if (k.length !== 4) return null;
-  // 한 줄 문자의 구석은 OCS다(자연 +Z가 아니면 평면도로 옮긴다)
+  // 한 줄 문자의 구석은 OCS로 받는다(자연 +Z가 아니면 평면도로 옮긴다)
   if (isTextLike(e) && e.extrusion && !isNaturalExt(e.extrusion)) {
     const P = planProj(e.extrusion, 0);
     k = k.map((q) => affApply(P, q));
