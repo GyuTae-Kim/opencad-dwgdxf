@@ -14,7 +14,7 @@ import { lwVertices, packLw } from '../../core/lwpoly';
 import type { ArcPiece } from './curve';
 import { TAU, bulgeToSweep, ccwFrom, cross, dist, dot, normAngle, sub, sweepToBulge } from './math';
 import { bulgePieces, cloneEntity, entityPath, inherit, lwVerts } from './path';
-import { planProj } from './ocs';
+import { planProj, planZ } from './ocs';
 import { reverseEntity } from './query';
 import type { EditResult } from './types';
 
@@ -532,10 +532,13 @@ function arcOverlaps(
       const fixed = keep(e);
       arcs.push({ it: fixed ? null : it, fixed, full: e.type === 'CIRCLE', c: pc.c, r: pc.r, a0: normAngle(pc.a0), sw: Math.abs(pc.sw), z, pk: it.pk, rank: it.rank });
     } else if (e.type === 'LWPOLYLINE' && (wide || (!e.widths?.some((w) => w > 0) && !(e.constantWidth > 0)))) {
+      // 높이는 WCS Z(178차): 고도(38)는 OCS 값이라 −Z 폴리선은 WCS Z = −고도다(DXF 참조서 OCS). 선 갈래(entityPath)·ARC 갈래와 같은 planZ —
+      // 전에는 OCS 고도 그대로 견주어 고도가 0이 아닌 −Z 폴리선이 +고도 높이의 호를 덮인 것으로 지우고 같은 높이의 겹친 호는 남겼다
+      const z = planZ(e.extrusion, e.elevation);
       for (const p of bulgePieces(lwVerts(e), e.closed, planProj(e.extrusion, e.elevation))) {
         if (p.k !== 'arc') continue;
         const a0 = p.sw >= 0 ? p.a0 : p.a0 + p.sw;
-        arcs.push({ it: null, fixed: true, full: false, c: p.c, r: p.r, a0: normAngle(a0), sw: Math.abs(p.sw), z: e.elevation, pk: it.pk, rank: it.rank });
+        arcs.push({ it: null, fixed: true, full: false, c: p.c, r: p.r, a0: normAngle(a0), sw: Math.abs(p.sw), z, pk: it.pk, rank: it.rank });
       }
     }
   }

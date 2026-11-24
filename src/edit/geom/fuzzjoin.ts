@@ -10,7 +10,8 @@
  * 가까운 틈부터 끝 하나에 한 번씩만 잇는다.
  */
 import type { Entity, LineEntity, Vec2 } from '../../core/model';
-import { type PV, type PolyEntity, frameVerts, isClosed, toOcs, vertexPoint, withVerts } from './pedit';
+import { type PV, type PolyEntity, frameVerts, is3d, isClosed, toOcs, vertexPoint, withVerts } from './pedit';
+import { isPlanarExt, planZ } from './ocs';
 
 export type JoinType = 'E' | 'A' | 'B';
 
@@ -78,7 +79,7 @@ export function fuzzJoinPrep(polys: readonly PolyEntity[], fuzz: number, type: J
     }
     if (!done && type !== 'E') {
       const src = polys[A.i]!;
-      const z = src.type === 'LWPOLYLINE' ? src.elevation : 0;
+      const z = bridgeZ(src);
       bridges.push({ ...lineBase(src), type: 'LINE', handle: '', start: { x: A.p.x, y: A.p.y, z }, end: { x: B.p.x, y: B.p.y, z } });
       done = true;
     }
@@ -120,6 +121,19 @@ function extendMeet(A: End, B: End, gap: number): Vec2 | null {
   const X = { x: A.p.x + da.x * t, y: A.p.y + da.y * t };
   if (dist(X, A.p) > limit || dist(X, B.p) > limit) return null;
   return X;
+}
+
+/**
+ * 잇는 선의 높이(WCS Z, 178차). Autodesk PEDIT 도움말의 추가(A)·모두(B)는 가장 가까운 끝점 사이에 직선 세그먼트를 더해 잇는다.
+ * 2D 폴리선(LWPOLYLINE·2D POLYLINE)의 고도는 객체 OCS 값이라(DXF 참조서 OCS) 돌출 방향이 Z축과 평행하면 끝점의 WCS 높이는
+ * 편집 기하 커널의 평면 Z(`planZ` — entityPath, JOIN이 견주는 높이)다: −Z면 −고도. 전에는 LWPOLYLINE 고도를 OCS 값 그대로(−Z면 부호 반대),
+ * 2D POLYLINE은 0으로 두어 고도가 0이 아닌 −Z 폴리선·2D POLYLINE을 이으면 JOIN이 높이가 다르다고 보아 3D 폴리선(호가 있으면 스플라인)을 만들었다.
+ * 3D 폴리선(도움말의 3D 결합에 퍼지·결합 유형 규칙이 없다)과 돌출 방향이 기운 폴리선은 전과 같은 값
+ */
+function bridgeZ(e: PolyEntity): number {
+  if (is3d(e)) return 0;
+  if (!isPlanarExt(e.extrusion)) return e.type === 'LWPOLYLINE' ? e.elevation : 0;
+  return planZ(e.extrusion, e.elevation) || 0;
 }
 
 function lineBase(e: Entity): Omit<LineEntity, 'type' | 'handle' | 'start' | 'end'> {
