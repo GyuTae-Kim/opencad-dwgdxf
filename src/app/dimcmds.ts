@@ -42,6 +42,7 @@ import { headerOverrides, overridesOf } from './dimstyle';
 import { applyOverrides } from '../edit/annot/override';
 import type { OverlayGeom, Pt } from './view';
 import { lwCount, lwVertices } from '../core/lwpoly';
+import { isNaturalExt, isPlanarExt, planProj, planZ } from '../edit/geom/ocs';
 import type { ViewportXf } from './scene';
 import { circleToPaper, layoutXfs, modelToPaperVp, paperProjection } from './vpsnap';
 import { plainText } from './inquiry';
@@ -329,12 +330,30 @@ export function originsFromEntity(e: Entity | undefined, pick: Pt): [Pt, Pt] | n
   return null;
 }
 
-/** 호·원에서 중심·반지름(폴리선 볼록 세그먼트 포함) */
-function circleOf(e: Entity | undefined): { c: Pt; r: number; a0?: number; a1?: number } | null {
-  if (!e) return null;
-  if (e.type === 'CIRCLE') return { c: e.center, r: e.radius };
-  if (e.type === 'ARC') return { c: e.center, r: e.radius, a0: e.startAngle, a1: e.endAngle };
-  return null;
+/**
+ * 호·원의 평면도 중심·반지름·호 범위와 평면의 WCS Z(DIMRADIUS·DIMDIAMETER·DIMARC·DIMCENTER).
+ * CIRCLE·ARC의 중심(10)·각도(50·51)는 객체 OCS 값이다(DXF 참조서 OCS). 돌출 방향이 −Z(대칭으로 뒤집힌 원·호)면 OCS X = WCS −X라
+ * 편집 기하 커널과 같은 평면 사상(planProj)으로 평면도에 옮긴다 — 중심은 X 거울상 자리에서 돌아오고, 호는 돌아가는 방향이 뒤집혀
+ * 평면도의 반시계 시작·끝이 OCS 끝·시작이 된다(174차 — 전에는 치수·중심 표식이 X 거울상 자리에 생겼다).
+ * 자연 +Z는 전과 같은 값, 돌출 방향이 Z축과 평행하지 않은 원·호(평면도에서 타원)는 전처럼 OCS 값 그대로 둔다
+ */
+export function circleOf(e: Entity | undefined): { c: Pt; r: number; a0?: number; a1?: number; z: number } | null {
+  if (!e || (e.type !== 'CIRCLE' && e.type !== 'ARC')) return null;
+  const ext = e.extrusion;
+  if (isNaturalExt(ext) || !isPlanarExt(ext)) {
+    if (e.type === 'CIRCLE') return { c: e.center, r: e.radius, z: e.center.z };
+    return { c: e.center, r: e.radius, a0: e.startAngle, a1: e.endAngle, z: e.center.z };
+  }
+  const m = planProj(ext, e.center.z);
+  const c = { x: m[0] * e.center.x + m[2] * e.center.y + m[4], y: m[1] * e.center.x + m[3] * e.center.y + m[5] };
+  const z = planZ(ext, e.center.z) || 0;
+  if (e.type === 'CIRCLE') return { c, r: e.radius, z };
+  const dir = (a: number) => {
+    const t = Math.atan2(m[1] * Math.cos(a) + m[3] * Math.sin(a), m[0] * Math.cos(a) + m[2] * Math.sin(a));
+    return t < 0 ? t + 2 * Math.PI : t;
+  };
+  const flip = m[0] * m[3] - m[1] * m[2] < 0;
+  return { c, r: e.radius, a0: dir(flip ? e.endAngle : e.startAngle), a1: dir(flip ? e.startAngle : e.endAngle), z };
 }
 
 export function registerDimCommands(app: App): void {

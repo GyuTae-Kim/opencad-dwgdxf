@@ -5,7 +5,7 @@
  * - TABLEEXPORT: 표를 CSV(쉼표 구분, UTF-8)로 내려받는다.
  * - MATCHCELL: 원본 셀의 특성(정렬·배경 채우기·문자 높이·문자 색)을 대상 셀들에 옮긴다.
  */
-import type { CircleEntity, DimensionEntity, Entity, LineEntity, Vec3 } from '../core/model';
+import type { DimensionEntity, Entity, LineEntity, Vec3 } from '../core/model';
 import { entityDefaults } from '../core/model';
 import { dimVars } from '../edit/dim/vars';
 import { createLinearDimension, ucsLinearRotation } from '../edit/dim';
@@ -16,7 +16,7 @@ import { isEditableTable, tableFromEntity } from '../edit/table/entity';
 import { cellName } from '../edit/table/model';
 import type { App, CommandContext, Keyword } from './app';
 import { objectRef, pointRef } from './dimassoc';
-import { type DimOpts, addDimension, originsFromEntity, preview, textOption } from './dimcmds';
+import { type DimOpts, addDimension, circleOf, originsFromEntity, preview, textOption } from './dimcmds';
 import { addEntities, currentProps } from './draw';
 import { baseName, download } from './export';
 import { commitTable, formatLockedIn, lockedLayer, pickCell } from './tablecmds';
@@ -49,20 +49,20 @@ export function registerEditCmds2Dim(app: App): void {
       for (;;) {
         const r = await ctx.getEntity('호 또는 원 선택:');
         if (!('handle' in r)) return;
-        const e = st.doc.entityIndex.get(r.handle);
-        if (e?.type !== 'CIRCLE' && e?.type !== 'ARC') {
+        // 원·호의 평면도 중심과 평면의 WCS Z(−Z 원·호의 OCS 중심은 X 거울상 자리 — 174차, dimcmds.ts circleOf)
+        const c = circleOf(st.doc.entityIndex.get(r.handle));
+        if (!c) {
           ctx.print('호 또는 원을 선택하십시오.', 'err');
           continue;
         }
-        const c = e as CircleEntity;
         const cen = currentDimCen(app);
         if (!cen) {
           ctx.print('DIMCEN이 0이어서 중심 표식을 그리지 않습니다.');
           return;
         }
-        const segs = dimCenterSegments({ x: c.center.x, y: c.center.y }, c.radius, cen, currentUcs(st).angle);
+        const segs = dimCenterSegments({ x: c.c.x, y: c.c.y }, c.r, cen, currentUcs(st).angle);
         const props = currentProps(app);
-        const z = c.center.z || 0;
+        const z = c.z || 0;
         const lines: Entity[] = segs.map(([a, b]) => ({ ...entityDefaults(), ...props, type: 'LINE', handle: '', start: { x: a.x, y: a.y, z }, end: { x: b.x, y: b.y, z } }) as LineEntity);
         app.lastCreated = addEntities(app, ctx, lines, 'DIMCENTER');
         return;
