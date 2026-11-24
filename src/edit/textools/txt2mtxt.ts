@@ -9,11 +9,19 @@
  *   끄면 줄마다 문단(\P)이고 폭 0(줄바꿈 없음).
  * - 결합하지 않으면 한 줄 문자마다 여러 줄 문자 하나(같은 자리, 같은 특성).
  * TEXT의 %%d·%%p·%%c는 글자로, %%u·%%o는 \L·\O 서식으로 바꾼다.
+ *
+ * 줄은 WCS 평면도에서 잰다(169차): TEXT의 글자 틀은 OCS, MTEXT 삽입점은 WCS라서, 돌출 방향이 ±Z인 TEXT는 평면 사상으로 옮기고
+ * −Z 평면(TEXT·MTEXT)의 위 방향은 글줄 방향의 거울상(돌출 방향 × 글줄 방향)으로 둔다. 결과는 첫 줄의 돌출 방향·OCS 회전 각도를 잇는다.
+ * 전에는 −Z TEXT의 글자 틀 원점(OCS)을 그대로 삽입점(WCS)에 넣어 결과가 X 거울상 자리로 갔고, 첫 줄이 −Z MTEXT면 위 방향을 +Z로 보아
+ * 돌출 방향을 버린 +Z MTEXT(180° 돈 글자)를 만들었다(Autodesk TXT2MTXT 도움말 — 고른 문자를 여러 줄 문자로 바꾼다). +Z 문자는 전과 같은 값이다.
+ * 기운(돌출 방향이 Z축과 평행하지 않은) TEXT는 전처럼 OCS 좌표 그대로 쓴다.
  */
-import type { CadDocument, Entity, MTextEntity, TextEntity } from '../../core/model';
+import type { CadDocument, Entity, MTextEntity, TextEntity, Vec3 } from '../../core/model';
 import { maxOf, minOf } from '../../core/arrays';
 import { tableKey } from '../../core/model';
 import { TOGGLE_OVERLINE, TOGGLE_STRIKE, TOGGLE_UNDERLINE, parseTextString } from '../../text/mtext';
+import { type Affine, affApply, affLin, dot3 } from '../geom/math';
+import { frameOf, isNaturalExt, isPlanarExt, planProj, planZ } from '../geom/ocs';
 import { textFrame } from '../geom/textjust';
 import { mtextDir, mtextLocalBox } from '../geom/xtext';
 
@@ -33,7 +41,18 @@ interface Line {
   /** 왼쪽 기준선 원점(WCS 평면도) */
   ox: number;
   oy: number;
+  /** 글줄 방향(WCS 평면도 단위 벡터) */
+  ux: number;
+  uy: number;
+  /** 글자 위 방향(WCS 평면도 단위 벡터 — −Z 평면이면 글줄 방향에서 시계 방향 90°) */
+  vx: number;
+  vy: number;
+  /** 결과 여러 줄 문자의 회전 각도(첫 줄일 때): 원본 평면(OCS)의 각도 */
   rot: number;
+  /** 결과 여러 줄 문자에 이을 돌출 방향 */
+  ext?: Vec3;
+  /** 결과 여러 줄 문자 삽입점의 WCS Z */
+  z: number;
   h: number;
   wf: number;
   ob: number;
@@ -77,11 +96,22 @@ export function textToMTextString(s: string): string {
 
 const num = (v: number) => String(Math.round(v * 1e6) / 1e6);
 
+const IDENTITY: Affine = [1, 0, 0, 1, 0, 0];
+
 function lineOf(e: Entity, doc: CadDocument): Line | null {
   if (e.type === 'TEXT') {
     const f = textFrame(e, doc);
     const hj = e.halign === 1 || e.halign === 4 ? 1 : e.halign === 2 ? 2 : 0;
-    return { e, ox: f.o.x, oy: f.o.y, rot: f.rot, h: f.h, wf: f.wf, ob: e.oblique || 0, width: f.W * f.h * f.wf, mtext: false, body: textToMTextString(e.text), hj };
+    // 글자 틀(OCS) → WCS 평면도. ±Z 평면만 옮기고 기운 평면은 전처럼 OCS 좌표 그대로(+Z는 항등이라 전과 같은 값)
+    const planar = isPlanarExt(e.extrusion);
+    const P = planar ? planProj(e.extrusion, e.insert.z) : IDENTITY;
+    const o = affApply(P, f.o);
+    const c = Math.cos(f.rot);
+    const s = Math.sin(f.rot);
+    const u = affLin(P, { x: c, y: s });
+    const v = affLin(P, { x: -s, y: c });
+    const z = planar ? planZ(e.extrusion, e.insert.z) : e.insert.z;
+    return { e, ox: o.x, oy: o.y, ux: u.x, uy: u.y, vx: v.x, vy: v.y, rot: f.rot, ext: e.extrusion, z, h: f.h, wf: f.wf, ob: e.oblique || 0, width: f.W * f.h * f.wf, mtext: false, body: textToMTextString(e.text), hj };
   }
   if (e.type === 'MTEXT') {
     const d = mtextDir(e);
@@ -91,20 +121,44 @@ function lineOf(e: Entity, doc: CadDocument): Line | null {
     // 첫 줄 기준선(왼쪽)을 원점으로: 상자 왼쪽 위에서 높이만큼 아래
     const c = Math.cos(rot);
     const s = Math.sin(rot);
+    // −Z 평면이면 위 방향(돌출 방향 × 글줄 방향)이 거울상이고, 결과는 돌출 방향과 OCS 회전 각도를 잇는다
+    const flip = isPlanarExt(e.extrusion) && !isNaturalExt(e.extrusion);
+    const vx = flip ? s : -s;
+    const vy = flip ? -c : c;
+    let ocsRot = rot;
+    if (flip) {
+      const f = frameOf(e.extrusion);
+      ocsRot = Math.atan2(dot3(d, f.ay), dot3(d, f.ax));
+    }
     const lx = box.minX;
     const ly = box.maxY - h;
     const col = (e.attachment - 1) % 3;
-    return { e, ox: e.insert.x + c * lx - s * ly, oy: e.insert.y + s * lx + c * ly, rot, h, wf: 1, ob: 0, width: box.maxX - box.minX, mtext: true, body: e.text, hj: col };
+    return {
+      e,
+      ox: e.insert.x + c * lx + vx * ly,
+      oy: e.insert.y + s * lx + vy * ly,
+      ux: c,
+      uy: s,
+      vx,
+      vy,
+      rot: ocsRot,
+      ext: flip ? { ...e.extrusion! } : undefined,
+      z: e.insert.z,
+      h,
+      wf: 1,
+      ob: 0,
+      width: box.maxX - box.minX,
+      mtext: true,
+      body: e.text,
+      hj: col,
+    };
   }
   return null;
 }
 
-/** 줄 순서(위치): 기준 방향 rot에서 위 → 아래, 같은 높이면 왼쪽 → 오른쪽 */
-function sortByPosition(lines: Line[], rot: number): Line[] {
-  const ux = Math.cos(rot);
-  const uy = Math.sin(rot);
-  const vx = -uy;
-  const vy = ux;
+/** 줄 순서(위치): 기준 줄 base의 방향에서 위 → 아래, 같은 높이면 왼쪽 → 오른쪽 */
+function sortByPosition(lines: Line[], base: Line): Line[] {
+  const { ux, uy, vx, vy } = base;
   const tol = minOf(lines.map((l) => l.h)) * 0.25;
   return [...lines].sort((a, b) => {
     const da = a.ox * vx + a.oy * vy;
@@ -118,11 +172,7 @@ function sortByPosition(lines: Line[], rot: number): Line[] {
 function combineLines(lines: Line[], opt: Txt2MtxtOptions): MTextEntity {
   const first = lines[0]!;
   const h = first.h;
-  const rot = first.rot;
-  const ux = Math.cos(rot);
-  const uy = Math.sin(rot);
-  const vx = -uy;
-  const vy = ux;
+  const { ux, uy, vx, vy } = first;
   // 같은 줄(기준선 높이가 같은) 문자는 빈칸으로 이어 한 줄로
   const rows: Line[][] = [];
   for (const l of lines) {
@@ -179,21 +229,21 @@ function combineLines(lines: Line[], opt: Txt2MtxtOptions): MTextEntity {
     lineweight: src.lineweight,
     ltscale: src.ltscale,
     transparency: src.transparency,
-    insert: { x: ix, y: iy, z: src.insert.z },
+    insert: { x: ix, y: iy, z: first.z },
     height: h,
     width: opt.wordWrap ? maxW * 1.05 : 0,
     attachment: 1 + hj,
     drawingDirection: 1,
     text,
     style: src.style,
-    rotation: rot,
+    rotation: first.rot,
     lineSpacingStyle: rows.length > 1 ? 2 : 1,
     lineSpacingFactor: rows.length > 1 ? factor : 1,
     backgroundFlags: 0,
     backgroundScale: 1.5,
   };
   if (src.paperSpace) m.paperSpace = true;
-  if (src.type === 'TEXT' && src.extrusion) m.extrusion = { ...src.extrusion };
+  if (first.ext) m.extrusion = { ...first.ext };
   return m;
 }
 
@@ -214,7 +264,7 @@ export function textsToMText(list: readonly Entity[], doc: CadDocument, opt: Txt
     }
     return add.length ? { remove, add } : null;
   }
-  const ordered = opt.order === 'position' ? sortByPosition(lines, lines[0]!.rot) : lines;
+  const ordered = opt.order === 'position' ? sortByPosition(lines, lines[0]!) : lines;
   // 같은 스타일 이름이 문서에 없으면 첫 줄 스타일을 그대로 둔다(쓰기가 자리 표시 스타일을 만든다)
   void doc.textStyles.get(tableKey(ordered[0]!.e.style));
   return { remove: ordered.map((l) => l.e.handle), add: [combineLines(ordered, opt)] };
