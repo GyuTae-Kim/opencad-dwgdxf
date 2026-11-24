@@ -1,7 +1,8 @@
 /**
  * Express 문자 도구 공통: 문자 상자(평면도, 문자 방향으로 놓인 직사각형)와 문자 방향 각도.
  * 상자는 TEXTALIGN과 같은 규칙(src/edit/textools/textalign.ts textCorners)으로 잰다:
- * 한 줄 문자는 글자 폭 × (하강 ~ 문자 높이), 여러 줄 문자는 배치 범위.
+ * 한 줄 문자는 글자 폭 × (하강 ~ 문자 높이)를 그린 글자처럼 거꾸로·뒤집기 플래그로 뒤집고, 여러 줄 문자는 배치 범위.
+ * 기울기는 넣지 않는다 — TCIRCLE은 직사각형으로 둘러싼다(평행사변형이 아니다).
  */
 import type { CadDocument, Entity, Vec2 } from '../../core/model';
 import { isTextLike, textHeightOf } from '../geom/textjust';
@@ -15,7 +16,7 @@ export interface TextBox {
   o: Vec2;
   /** 문자 방향(단위) */
   u: Vec2;
-  /** 문자 위쪽(단위, u를 반시계로 90°) */
+  /** 문자 위쪽(단위, u를 반시계로 90° — −Z 문자나 거꾸로·뒤집기 하나만 켠 글자는 시계 방향) */
   v: Vec2;
   /** 폭·높이(도면 단위) */
   w: number;
@@ -54,7 +55,7 @@ export function textAngle(e: Entity): number | null {
 /** 문자 상자(문자가 아니면 null) */
 export function textBox(e: Entity, doc: CadDocument): TextBox | null {
   if (!hasTextBox(e)) return null;
-  let k = isTextLike(e) ? textCornersOcs(e, doc) : textCorners(e, doc);
+  let k = isTextLike(e) ? textCornersOcs(e, doc, false) : textCorners(e, doc);
   if (k.length !== 4) return null;
   // 한 줄 문자의 구석은 OCS로 받는다(자연 +Z가 아니면 평면도로 옮긴다)
   if (isTextLike(e) && e.extrusion && !isNaturalExt(e.extrusion)) {

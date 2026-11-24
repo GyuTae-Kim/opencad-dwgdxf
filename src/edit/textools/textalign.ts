@@ -45,25 +45,37 @@ export function anchorOf(e: Entity, key: string, doc: CadDocument): Vec2 | null 
   return scaleBasePoint(e, key, doc);
 }
 
-/** 한 줄 문자 범위의 네 모서리(OCS): 왼쪽 기준선 원점에서 글자 폭 × (하강 ~ 문자 높이) */
-export function textCornersOcs(e: TextLike, doc: CadDocument): Vec2[] {
+/**
+ * 한 줄 문자 범위의 네 모서리(OCS): 왼쪽 기준선 원점에서 글자 폭 × (하강 ~ 문자 높이).
+ * 그리기(src/text/layout.ts layoutText)·TRIM 모서리(`textOutline`)와 같은 글자 틀이다(DXF TEXT 71·51):
+ * 거꾸로 글자(생성 플래그 2)는 원점을 지나는 글줄 수직축으로, 뒤집기 글자(4)는 기준선으로 뒤집고,
+ * 기울기는 높이만큼 글줄 방향으로 밀어 평행사변형이 된다. `slant`가 거짓이면 기울기를 넣지 않는다(Express 문자 상자의 직사각형).
+ * 플래그·기울기가 없으면 곱 1·더하기 0이라 전과 같은 값이다 — `textOutline`과 계산 순서가 달라 그 함수를 그대로 쓰지 않는다.
+ */
+export function textCornersOcs(e: TextLike, doc: CadDocument, slant = true): Vec2[] {
   const f = textFrame(e, doc);
   const c = Math.cos(f.rot);
   const s = Math.sin(f.rot);
   const W = f.W * f.h * f.wf;
   const lo = -f.desc * f.h;
   const hi = f.h;
+  const sh = slant ? f.sh : 0;
   return [
     [0, lo],
     [W, lo],
     [W, hi],
     [0, hi],
-  ].map(([x, y]) => ({ x: f.o.x + c * x! - s * y!, y: f.o.y + s * x! + c * y! }));
+  ].map(([u, v]) => {
+    const x = f.mx * (u! + sh * v!);
+    const y = f.my * v!;
+    return { x: f.o.x + c * x - s * y, y: f.o.y + s * x + c * y };
+  });
 }
 
 /**
  * 문자 범위의 네 모서리(WCS 평면도). TEXTALIGN 간격 설정은 이 범위 사이를 잰다(Autodesk 도움말: 문자 객체 범위 사이 간격).
- * 한 줄 문자의 점은 OCS라 자연 +Z가 아니면 모서리를 평면 사상으로 옮기고(맞추는 점 `anchorOf`와 같은 좌표계),
+ * 한 줄 문자는 그린 글자 상자(거꾸로·뒤집기·기울기 포함 — 기운 글자는 평행사변형 꼭짓점 넷이라 간격 설정은 그 넷의 범위를 잰다)이고,
+ * 점은 OCS라 자연 +Z가 아니면 모서리를 평면 사상으로 옮기고(맞추는 점 `anchorOf`와 같은 좌표계),
  * 여러 줄 문자의 위 방향은 돌출 방향 × 글줄 방향이다(그리기·`textOutline`과 같다 — −Z면 +Z의 반대쪽).
  */
 export function textCorners(e: Entity, doc: CadDocument): Vec2[] {
