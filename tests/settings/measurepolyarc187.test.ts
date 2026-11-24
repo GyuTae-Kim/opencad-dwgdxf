@@ -3,10 +3,12 @@
  * Autodesk MEASUREGEOM 도움말의 반지름 옵션은 지정한 호·원·폴리선 호의 반지름과 지름을 잰다고 적는다.
  * 고치기 전에는 원·호만 받아 폴리선을 고르면 「호나 원이 아닙니다.」만 알리고 같은 프롬프트로 돌아갔다.
  * 이제 고른 점에 가장 가까운 세그먼트가 호면(182차 `polyArcOf` — DIMRADIUS와 같은 세그먼트 고르기, −Z 폴리선은 평면도 꼭짓점)
- * 그 반지름·지름을 원·호와 같은 글·결과 값으로 보인다. 직선 세그먼트·POLYLINE 2D·원·호·키워드는 전과 같다.
+ * 그 반지름·지름을 원·호와 같은 글·결과 값으로 보인다. 직선 세그먼트·원·호·키워드는 전과 같다.
+ * 188차: 맞춤·스플라인 맞춤이 아닌 POLYLINE 2D의 호 세그먼트도 같은 세그먼트 고르기로 잰다(전에는 경량 폴리선만 — 알림).
+ * 곡선 맞춤 POLYLINE 2D는 전과 같은 알림이다(다른 치수 명령은 `tests/dim/dimpoly2d188.test.ts`).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { CadDocument, Entity } from '../../src/core/model';
+import type { CadDocument, Entity, PolylineEntity } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
 import { registerCommands } from '../../src/app/commands';
 import { entityPath } from '../../src/edit/geom/path';
@@ -130,20 +132,35 @@ describe('MEASUREGEOM 반지름: 폴리선 호 세그먼트', () => {
     expect(radiusLines(h)[0]).toMatch(R('5', '10'));
     expect(notArc(h)).toHaveLength(0);
   });
+
+  it('188차: 맞춤이 아닌 POLYLINE 2D의 호 세그먼트 (15, 35)도 반지름 5·지름 10, 알림 없음', async () => {
+    const h = setup();
+    h.add(poly2d([[0, 40], [10, 40, 1], [20, 40]]));
+    void h.app.run('MEASUREGEOM', 'R');
+    await settle();
+    await h.at(P(15, 35));
+    await h.type('X');
+    expect(radiusLines(h)).toHaveLength(1);
+    expect(radiusLines(h)[0]).toMatch(R('5', '10'));
+    expect(notArc(h)).toHaveLength(0);
+  });
 });
 
 describe('전과 같은 꼴', () => {
-  it('직선 세그먼트·POLYLINE 2D는 전과 같은 알림, 원·호는 전과 같은 값', async () => {
+  it('직선 세그먼트·곡선 맞춤 POLYLINE 2D는 전과 같은 알림, 원·호는 전과 같은 값', async () => {
     const h = setup();
     h.add(polyline());
-    h.add(poly2d([[0, 40], [10, 40, 1], [20, 40]]));
+    // 곡선 맞춤 POLYLINE 2D(DXF POLYLINE 70 비트 2 — 맞춤이 만든 세그먼트는 188차에도 받지 않음)
+    const fit = poly2d([[0, 40], [10, 40, 1], [20, 40]]) as PolylineEntity;
+    fit.flags |= 2;
+    h.add(fit);
     h.add(circle(100, 0, 12.5));
     h.add(arc(200, 0, 3, 0, 90));
     void h.app.run('MEASUREGEOM', 'R');
     await settle();
     // 폴리선의 직선 세그먼트(가장 가까운 세그먼트가 직선)
     await h.at(P(5, 0));
-    // POLYLINE 2D의 호 세그먼트(182차 `polyArcOf`처럼 경량 폴리선만 — 이번 범위 밖)
+    // 곡선 맞춤 POLYLINE 2D의 호 세그먼트
     await h.at(P(15, 35));
     expect(notArc(h)).toHaveLength(2);
     expect(radiusLines(h)).toHaveLength(0);
