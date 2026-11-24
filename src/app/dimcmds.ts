@@ -9,7 +9,7 @@
  * 곱하고, 각도 치수에는 효과가 없다. 그래서 모형 객체를 재는 선형·정렬·반지름·지름·호 길이·세로좌표 치수는 뷰포트 축척을
  * DIMLFAC 재지정(viewportScaled)으로 맞추고, 각도 치수는 그대로 둔다(뷰포트 변환은 회전과 확대뿐이라 각도가 같다).
  */
-import type { BlockDef, BlockRecord, CadDocument, DimensionEntity, Entity, Layer, Vec3 } from '../core/model';
+import type { BlockDef, BlockRecord, CadDocument, DimensionEntity, Entity, Layer, LwPolylineEntity, LwVertex, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
 import {
@@ -296,17 +296,45 @@ export async function textOption(ctx: CommandContext, key: string, o: DimOpts): 
   return false;
 }
 
-/** 선택한 객체에서 두 치수보조선 원점(선·폴리선 세그먼트·호) */
+/** 돌출 방향이 Z축과 평행하고 자연 +Z가 아닌(−Z) OCS 평면의 평면도 사상. 자연 +Z와 돌출 방향이 기운 객체는 null(OCS 값 그대로 쓴다) */
+function ocsPlan(ext: Vec3 | undefined, z: number) {
+  return !isNaturalExt(ext) && isPlanarExt(ext) ? planProj(ext, z) : null;
+}
+
+/**
+ * 폴리선(LWPOLYLINE)의 평면도 꼭짓점과 평면의 WCS Z(<객체 선택> 원점·CENTERLINE·CENTERMARK가 함께 씀 — 176차).
+ * 꼭짓점(10)·고도(38)는 객체 OCS 값이다(DXF 참조서 OCS). 돌출 방향이 −Z면 OCS X = WCS −X라 편집 기하 커널과 같은 평면 사상(planProj)으로
+ * 옮기고, 뒤집힌 평면이면 볼록도 부호를 뒤집는다(175차 CENTERMARK의 폴리선 갈래와 같은 식). 자연 +Z와 돌출 방향이 기운 폴리선은 OCS 값 그대로
+ */
+export function lwPlanVertices(e: LwPolylineEntity): { vs: LwVertex[]; z: number } {
+  const ext = e.extrusion;
+  const m = ocsPlan(ext, e.elevation);
+  if (!m) return { vs: lwVertices(e), z: e.elevation };
+  const flip = m[0] * m[3] - m[1] * m[2] < 0;
+  const vs = lwVertices(e).map((v) => ({ ...v, x: m[0] * v.x + m[2] * v.y + m[4], y: m[1] * v.x + m[3] * v.y + m[5], bulge: flip ? -v.bulge : v.bulge }));
+  return { vs, z: planZ(ext, e.elevation) || 0 };
+}
+
+/**
+ * 선택한 객체에서 두 치수보조선 원점(선·폴리선 세그먼트·호 — Autodesk DIMLINEAR <객체 선택>: 고른 선·호의 끝점, 폴리선은 고른 세그먼트).
+ * LINE의 끝점은 WCS 값이고, ARC의 중심·각도와 폴리선 꼭짓점은 OCS 값이다(DXF 참조서 OCS). −Z 호·폴리선은 평면 사상으로 평면도 자리에 옮긴다
+ * (176차 — 전에는 원점이 X 거울상 자리에 생겨 연관도 붙지 않았고, 폴리선은 고른 점과 OCS 세그먼트를 견줘 다른 세그먼트를 고르기도 했다).
+ * 호의 첫 원점은 시작점(OCS 시작 각도의 점)이다. 선과 자연 +Z·돌출 방향이 기운 호·폴리선은 전과 같은 값
+ */
 export function originsFromEntity(e: Entity | undefined, pick: Pt): [Pt, Pt] | null {
   if (!e) return null;
   if (e.type === 'LINE') return [e.start, e.end];
   if (e.type === 'ARC') {
-    const a = { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle) };
-    const b = { x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle) };
-    return [a, b];
+    const m = ocsPlan(e.extrusion, e.center.z);
+    const at = (t: number): Pt => {
+      const x = e.center.x + e.radius * Math.cos(t);
+      const y = e.center.y + e.radius * Math.sin(t);
+      return m ? { x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] } : { x, y };
+    };
+    return [at(e.startAngle), at(e.endAngle)];
   }
   if (e.type === 'LWPOLYLINE' && lwCount(e) >= 2) {
-    const vs = lwVertices(e);
+    const vs = lwPlanVertices(e).vs;
     const n = e.closed ? vs.length : vs.length - 1;
     let best = 0;
     let bd = Infinity;
