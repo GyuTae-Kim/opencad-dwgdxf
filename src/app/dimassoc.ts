@@ -30,6 +30,7 @@ import {
 } from '../edit/dim/assoc';
 import { explodeEntity } from '../edit/geom';
 import { affApply } from '../edit/geom/math';
+import { circleOf } from '../edit/geom/ocs';
 import type { App, CommandContext, Keyword, PointResult } from './app';
 import { dimensionBlockOps, originsFromEntity, polyArcOf } from './dimcmds';
 import type { DocState } from './docstate';
@@ -555,18 +556,22 @@ async function reassociate(app: App, ctx: CommandContext, dim: DimensionEntity):
     // 만든 폴리선 호 길이 치수를 연관할 길이 없었다. ARC 갈래는 그대로
     const sel = await askEntity('호 또는 폴리선 호 세그먼트 선택 <다음>:', (e, at) => e.type === 'ARC' || polyArcOf(e, at)?.seg !== undefined);
     if (sel && sel.e.type === 'ARC') {
+      // 194차: 호의 평면도 중심·반시계 범위(`circleOf` — DIMARC 만들기 174차와 같은 규칙). −Z 호의 OCS 중심·각도는 X 거울상 자리라 전에는
+      // 정의점을 거기로 옮기고 연관하지 못했다. 자연 +Z·돌출 방향이 기운 호는 OCS 값 그대로(같은 값)
       const e = sel.e;
-      const a = { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle) };
-      const b = { x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle) };
+      const g = circleOf(e)!;
+      const a = { x: g.c.x + g.r * Math.cos(g.a0!), y: g.c.y + g.r * Math.sin(g.a0!) };
+      const b = { x: g.c.x + g.r * Math.cos(g.a1!), y: g.c.y + g.r * Math.sin(g.a1!) };
+      const cen = { x: g.c.x, y: g.c.y };
       const r0 = objectRef(app, e, OSNAP.END, a);
       const r1 = objectRef(app, e, OSNAP.END, b);
-      const rc = objectRef(app, e, OSNAP.CEN, e.center);
+      const rc = objectRef(app, e, OSNAP.CEN, cen);
       refs[0] = r0;
       refs[1] = r1;
       refs[2] = rc;
       pts.set('defPoint2', a);
       pts.set('defPoint3', b);
-      pts.set('defPoint4', { x: e.center.x, y: e.center.y });
+      pts.set('defPoint4', cen);
       touched = true;
     } else if (sel) {
       const g = polyArcOf(sel.e, sel.at);
@@ -634,12 +639,15 @@ async function reassociate(app: App, ctx: CommandContext, dim: DimensionEntity):
     if (typeof r === 'object' && r.keyword === 'S') {
       const sel = await askEntity('호 또는 원 선택:', (e) => e.type === 'ARC' || e.type === 'CIRCLE');
       if (sel) {
+        // 194차: 원·호의 평면도 중심·반시계 범위(`circleOf` — DIMANGULAR 만들기 175차와 같은 규칙, −Z는 X 거울상 자리에서 돌아옴, +Z는 같은 값)
         const e = sel.e as Extract<Entity, { type: 'ARC' | 'CIRCLE' }>;
-        refs[2] = objectRef(app, e, OSNAP.CEN, e.center);
-        pts.set('defPoint4', { x: e.center.x, y: e.center.y });
+        const g = circleOf(e)!;
+        const cen = { x: g.c.x, y: g.c.y };
+        refs[2] = objectRef(app, e, OSNAP.CEN, cen);
+        pts.set('defPoint4', cen);
         if (e.type === 'ARC') {
-          const a = { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle) };
-          const b = { x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle) };
+          const a = { x: g.c.x + g.r * Math.cos(g.a0!), y: g.c.y + g.r * Math.sin(g.a0!) };
+          const b = { x: g.c.x + g.r * Math.cos(g.a1!), y: g.c.y + g.r * Math.sin(g.a1!) };
           refs[0] = objectRef(app, e, OSNAP.END, a);
           refs[1] = objectRef(app, e, OSNAP.END, b);
           pts.set('defPoint2', a);
@@ -661,13 +669,15 @@ async function reassociate(app: App, ctx: CommandContext, dim: DimensionEntity):
   } else if (t === 3 || t === 4) {
     const sel = await askEntity('호 또는 원 선택 <다음>:', (e) => e.type === 'ARC' || e.type === 'CIRCLE');
     if (sel) {
+      // 194차: 원·호의 평면도 중심(`circleOf` — DIMRADIUS·DIMDIAMETER 만들기 174차와 같은 규칙, −Z는 X 거울상 자리에서 돌아옴, +Z는 같은 값)
       const e = sel.e as Extract<Entity, { type: 'ARC' | 'CIRCLE' }>;
-      const c = { x: e.center.x, y: e.center.y };
+      const g = circleOf(e)!;
+      const c = { x: g.c.x, y: g.c.y };
       const old = P('defPoint4');
       const oc = t === 4 ? P('defPoint') : { x: (P('defPoint').x + old.x) / 2, y: (P('defPoint').y + old.y) / 2 };
       let a = Math.atan2(old.y - oc.y, old.x - oc.x);
       if (!Number.isFinite(a)) a = 0;
-      const chord = { x: c.x + e.radius * Math.cos(a), y: c.y + e.radius * Math.sin(a) };
+      const chord = { x: c.x + g.r * Math.cos(a), y: c.y + g.r * Math.sin(a) };
       refs[0] = curveRef(app, e, chord);
       pts.set('defPoint4', chord);
       if (t === 4) {
