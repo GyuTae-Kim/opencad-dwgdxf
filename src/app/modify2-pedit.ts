@@ -54,7 +54,6 @@ import {
   reverseSplineEntity,
 } from '../edit/geom/splinedit';
 import { splineFromFitPolyline } from '../edit/geom/drawgeom';
-import { isNaturalExt } from '../edit/geom/ocs';
 import type { App, CommandContext, Keyword } from './app';
 import { commitResults } from './modify';
 import { askNumber, choose, hnum, previewOf } from './modify2-util';
@@ -672,12 +671,11 @@ async function splinedit(app: App, ctx: CommandContext): Promise<void> {
 /**
  * SPLINEDIT가 스플라인으로 바꿀 스플라인 맞춤 폴리선(199차, Autodesk SPLINEDIT 도움말 「스플라인 선택」: 스플라인 맞춤 폴리선을 고르면
  * 고른 뒤 바로 끝내도 스플라인으로 바꾼다). 바꾸는 꼴은 SPLINE 객체(O)와 같다(틀 정점 = 조정점, 2차·3차 균일 B 스플라인).
- * PEDIT 스플라인의 꼴(75 = 5·6)만 받고, 2D 폴리선은 돌출 방향이 +Z일 때만 받는다 — `splineFromFitPolyline`이 OCS 틀 정점을
- * WCS 조정점으로 그대로 쓰기 때문이다(−Z·기운 것은 전처럼 「스플라인이 아닙니다.」). 아니면 null
+ * PEDIT 스플라인의 꼴(75 = 5·6)만 받는다. 199차는 2D 폴리선을 돌출 방향이 +Z일 때만 받았는데, 200차부터 `splineFromFitPolyline`이
+ * −Z·기운 2D 폴리선의 OCS 틀 정점을 WCS로 옮기므로 돌출 방향과 상관없이 받는다. 아니면 null
  */
 function fitPolylineSpline(e: Entity): SplineEntity | null {
   if (e.type !== 'POLYLINE' || (e.smoothType !== 5 && e.smoothType !== 6)) return null;
-  if (e.kind !== '3d' && !isNaturalExt(e.extrusion)) return null;
   return splineFromFitPolyline(e);
 }
 
