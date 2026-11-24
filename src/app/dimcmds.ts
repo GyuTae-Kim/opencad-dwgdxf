@@ -43,7 +43,7 @@ import { applyOverrides } from '../edit/annot/override';
 import type { OverlayGeom, Pt } from './view';
 import { lwCount } from '../core/lwpoly';
 // 평면도 사상 도우미(174~176차에 여기서 만들었고 177차에 QDIM과 함께 쓰려고 edit/geom/ocs.ts로 옮겼다 — 같은 값)
-import { circleOf, lwPlanVertices, ocsPlan } from '../edit/geom/ocs';
+import { circleOf, isPlanarExt, lwPlanVertices, ocsPlan } from '../edit/geom/ocs';
 import type { ViewportXf } from './scene';
 import { circleToPaper, layoutXfs, modelToPaperVp, paperProjection } from './vpsnap';
 import { plainText } from './inquiry';
@@ -340,6 +340,34 @@ export function originsFromEntity(e: Entity | undefined, pick: Pt): [Pt, Pt] | n
   return null;
 }
 
+/**
+ * DIMLINEAR·DIMALIGNED <객체 선택>으로 고른 원의 두 치수보조선 원점(179차 — 전에는 원을 받지 않아 알림만 하고 치수를 만들지 않았다).
+ * Autodesk DIMLINEAR 도움말 <객체 선택>: 원을 고르면 지름의 끝점을 치수보조선 원점으로 쓰고, 원을 고른 점이 북·남 사분점에 가까우면 수평 치수,
+ * 동·서 사분점에 가까우면 수직 치수를 그린다. DIMALIGNED 도움말: 원을 고른 점이 첫 치수보조선 원점이다(둘째는 같은 지름의 반대쪽 끝).
+ * c는 치수가 놓일 공간의 평면도 원, pick은 같은 공간에서 고른 점(원 위로 옮겨 쓴다), ua는 지금 UCS X축 각도다.
+ * 이 앱의 수평·수직은 UCS 축이라(27차) 선형은 사분점과 지름도 UCS 축으로 센다(돌지 않은 UCS면 WCS 사분점 — 객체 스냅 사분점과 같다).
+ * 두 사분점에서 같은 거리면 수평. 선형의 원점 차례는 도움말이 적지 않아 UCS −X(수직은 −Y) 쪽 끝을 첫 원점으로 둔다.
+ * rotation은 UCS X축에서 잰 치수선 각도(수평 0·수직 π/2), 정렬 치수는 없다
+ */
+export function circleOrigins(c: { c: Pt; r: number }, pick: Pt, aligned: boolean, ua = 0): { o: [Pt, Pt]; rotation?: number } {
+  const dx = pick.x - c.c.x;
+  const dy = pick.y - c.c.y;
+  const end = (ux: number, uy: number, s: number): Pt => ({ x: c.c.x + s * c.r * ux, y: c.c.y + s * c.r * uy });
+  if (aligned) {
+    const l = Math.hypot(dx, dy);
+    const ux = l > 0 ? dx / l : 1;
+    const uy = l > 0 ? dy / l : 0;
+    return { o: [end(ux, uy, 1), end(ux, uy, -1)] };
+  }
+  const cx = Math.cos(ua);
+  const sx = Math.sin(ua);
+  // 고른 점의 UCS X·Y 성분: |Y| ≥ |X|면 북·남 사분점이 가깝다
+  const u = dx * cx + dy * sx;
+  const v = -dx * sx + dy * cx;
+  if (Math.abs(v) >= Math.abs(u)) return { o: [end(cx, sx, -1), end(cx, sx, 1)], rotation: 0 };
+  return { o: [end(-sx, cx, -1), end(-sx, cx, 1)], rotation: Math.PI / 2 };
+}
+
 export function registerDimCommands(app: App): void {
   // ------------------------------------------------------------- DIMLINEAR·DIMALIGNED
   const linear = (aligned: boolean) => async (ctx: CommandContext) => {
@@ -350,19 +378,32 @@ export function registerDimCommands(app: App): void {
     let refs: (PointRef | null)[] = [];
     // 배치의 도면 공간이면 원점은 뷰포트에 보이는 모형 객체에도 스냅하고, 두 점이 같은 뷰포트 하나의 모형 스냅이면 그 축척으로 맞춘다
     let vx: ViewportXf | null = null;
+    /** 수평(H)·수직(V)·회전(R)의 각도 — 지금 UCS X축에서 잰다(없으면 수평·수직 자동). <객체 선택>의 원은 고른 사분점으로 정한다 */
+    let rotation: number | undefined;
     const r1 = await ctx.getPoint('첫 번째 치수보조선 원점 지정 또는 <객체 선택>:', { viewportSnaps: true });
     if ('enter' in r1) {
-      // 도면 공간이면 단일 뷰포트에 보이는 모형 선·호·폴리선 세그먼트도 고른다: 원점은 그 뷰포트로 본 종이 점, 값은 뷰포트 축척으로 맞춘다
+      // 도면 공간이면 단일 뷰포트에 보이는 모형 선·호·원·폴리선 세그먼트도 고른다: 원점은 그 뷰포트로 본 종이 점, 값은 뷰포트 축척으로 맞춘다
       const pick = await ctx.getEntity('치수기입할 객체 선택:', undefined, VP_PICK);
       if (!('handle' in pick)) return;
       const picked = doc.entityIndex.get(pick.handle);
       const pvx = pickedViewport(app, pick);
       const o = originsFromEntity(picked, pvx && pick.viewport ? pick.viewport.model : pick.point);
-      if (!o) {
+      // 원(179차): 지름 끝점. 평면도 원(−Z 원은 평면 사상 — circleOf)과 고른 점을 치수가 놓일 공간에서 센다(뷰포트 안 모형 원은 종이 원과 종이 점).
+      // 돌출 방향이 Z축과 평행하지 않은 원(평면도에서 타원)은 전처럼 받지 않는다
+      const circ = !o && picked?.type === 'CIRCLE' && isPlanarExt(picked.extrusion) ? picked : undefined;
+      const c0 = circleOf(circ);
+      const co = c0 ? circleOrigins(pvx ? circleToPaper(pvx, c0) : c0, pick.point, aligned, currentUcs(st).angle) : null;
+      if (circ && co) {
+        [p1, p2] = co.o;
+        if (!aligned) rotation = co.rotation;
+        // 선형은 사분점(UCS가 돌아 사분점이 아니면 원 위 점), 정렬은 원 위 점에 연관한다(지름 치수와 같은 참조 — 원을 옮기거나 키우면 따라간다).
+        // 뷰포트 안 모형 원은 연관하지 않는다(공간을 넘는 연관은 아직 없다)
+        if (pvx) vx = pvx;
+        else refs = co.o.map((p) => (aligned ? null : objectRef(app, circ, OSNAP.QUAD, p)) ?? circlePointRef(circ, p));
+      } else if (!o) {
         ctx.print('선, 호, 폴리선 세그먼트를 선택하십시오.', 'err');
         return;
-      }
-      if (pvx) {
+      } else if (pvx) {
         // 공간을 넘는 연관은 아직 만들지 않는다(비연관 — 원점 스냅과 같다)
         p1 = modelToPaperVp(pvx, o[0]);
         p2 = modelToPaperVp(pvx, o[1]);
@@ -384,8 +425,6 @@ export function registerDimCommands(app: App): void {
       ]);
     } else return;
     const o: DimOpts = {};
-    /** 수평(H)·수직(V)·회전(R)의 각도 — 지금 UCS X축에서 잰다(없으면 수평·수직 자동) */
-    let rotation: number | undefined;
     const scaled = (d: DimensionEntity) => (vx ? viewportScaled(doc, d, vx.k) : d);
     // 27차: 수평·수직은 지금 공간 UCS의 X·Y축(도면 공간은 $PUCSXDIR), 회전(R) 각도도 UCS X축에서(도움말 "About the User Coordinate System" —
     // UCS는 치수 객체의 정렬·각도와 절대 기준 각도의 방향을 정한다). 51에 −UCS 각도. 돌지 않은 UCS는 예전과 같은 치수
