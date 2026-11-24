@@ -278,9 +278,10 @@ function polySegment(e: Entity | undefined, pick: Pt): { t: SmartTarget; z: numb
  * 닫힘(70 비트 1)·고도·돌출 방향의 경량 폴리선으로 본다. Autodesk 치수·MEASUREGEOM 도움말의 「폴리선 호 세그먼트」는 폴리선 종류를 가르지 않고,
  * 이 앱의 경로(`entityPath`)도 두 폴리선을 같은 평면 사상(고도·돌출 방향)으로 그린다(전에는 2D POLYLINE을 고르면 호 세그먼트여도 알림만 했다).
  * 곡선 맞춤·스플라인 맞춤(70 비트 2·4, 맞춤이 만든 정점 70 비트 1·8·16 — 다기능 그립과 같은 `isPlainPoly2d`)의 세그먼트는 사용자가 그린
- * 세그먼트가 아니라 맞춤 근사라 받지 않는다. 3D 폴리선·메시·폴리면도 null(전과 같은 알림)
+ * 세그먼트가 아니라 맞춤 근사라 받지 않는다. 3D 폴리선·메시·폴리면도 null(전과 같은 알림).
+ * 스마트 치수 DIM의 치수 대상(190차 — `dimsmart.ts` `dimTarget`)도 이것으로 2D POLYLINE을 경량 꼴로 넘긴다
  */
-function segmentShape(e: Entity | undefined): LwPolylineEntity | null {
+export function segmentShape(e: Entity | undefined): LwPolylineEntity | null {
   if (e?.type === 'LWPOLYLINE') return e;
   if (e?.type !== 'POLYLINE' || !isPlainPoly2d(e)) return null;
   const vs = polyVertices(e).map((v) => ({ x: v.location.x, y: v.location.y, bulge: v.bulge, startWidth: 0, endWidth: 0 }));
