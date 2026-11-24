@@ -64,6 +64,16 @@ export function registerDashLayerCommand(app: App): void {
         if (ops.length) st.session.commit({ label, ops });
         return ops.length;
       };
+      /**
+       * 꺼진 도면층을 켜고 현재로(203차 — 만들기(M)·설정(S), Autodesk -LAYER 도움말: 도면층이 있는데 꺼져 있으면 켜고 현재로 만든다).
+       * 켜기와 현재 도면층 바꾸기는 명령 취소 한 단계. 전에는 현재로만 해서 꺼진 현재 도면층이 남았다(새로 그린 객체가 보이지 않음)
+       */
+      const turnOnCurrent = (l: Layer): void => {
+        const before = doc.header.get('$CLAYER');
+        const ops: EditOp[] = [{ kind: 'layer', key: tableKey(l.name), before: l, after: { ...structuredClone(l), off: false } }];
+        if (!(typeof before === 'string' && tableKey(before) === tableKey(l.name))) ops.push({ kind: 'header', name: '$CLAYER', before, after: l.name });
+        st.session.commit({ label: '-LAYER', ops });
+      };
       /** 이름 리스트 → 도면층(맞지 않는 패턴은 알린다) */
       const layersOf = (list: string): Layer[] => {
         const m = matchNameList(layerNames(), list);
@@ -140,6 +150,7 @@ export function registerDashLayerCommand(app: App): void {
                 ],
               });
             } else if (existing.frozen) ctx.print(`동결된 도면층 "${ft(existing.name)}"은(는) 현재 도면층으로 만들 수 없습니다.`, 'err');
+            else if (existing.off) turnOnCurrent(existing);
             else setCurrentLayer(app, existing.name);
             break;
           }
@@ -154,6 +165,8 @@ export function registerDashLayerCommand(app: App): void {
             }
             const l = doc.layers.get(tableKey(name));
             if (!l) ctx.print(`도면층 "${ft(name)}"을(를) 찾을 수 없습니다.`, 'err');
+            // 동결 도면층은 전과 같이 setCurrentLayer가 알리고 켜지 않는다(도움말: 동결 도면층은 현재로 만들 수 없다)
+            else if (l.off && !l.frozen) turnOnCurrent(l);
             else setCurrentLayer(app, l.name);
             break;
           }
@@ -239,7 +252,8 @@ export function registerDashLayerCommand(app: App): void {
             }
             if (!color) break;
             const ls = await askLayers(`색상 ${layerColorText(color)}에 대한 도면층의 이름 리스트 입력`, { current: true });
-            commitLayers('-LAYER', ls.map((l) => [l, off ? { color, off: true } : { color }]));
+            // 색을 주면 도면층을 켜고, 앞에 −면 끈다(203차, Autodesk -LAYER 도움말 「색상」). 전에는 − 없는 색이 꺼진 도면층을 켜지 않았다
+            commitLayers('-LAYER', ls.map((l) => [l, { color, off }]));
             break;
           }
           case 'L': {
