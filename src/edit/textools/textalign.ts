@@ -11,7 +11,7 @@
  * - 간격 설정(S): 기준에서 선 방향으로, 문자 범위 사이 간격을 그 값으로.
  */
 import type { CadDocument, Entity, Vec2 } from '../../core/model';
-import { type TextLike, isTextLike, scaleBasePoint, textFrame, verticalTextCorners } from '../geom/textjust';
+import { MTEXT_ATTACH, type TextLike, isTextLike, scaleBasePoint, textFrame, verticalTextCorners } from '../geom/textjust';
 import { affApply, cross3, norm3 } from '../geom/math';
 import { isNaturalExt, planProj } from '../geom/ocs';
 import { mtextDir, mtextLocalBox } from '../geom/xtext';
@@ -40,9 +40,12 @@ export function justKeyOf(e: Entity): string {
   return 'L';
 }
 
-/** 맞추는 점(WCS 평면도) */
+/**
+ * 맞추는 점(WCS 평면도). 여러 줄 문자의 왼쪽은 전처럼 맨 위 왼쪽(`MTEXT_ATTACH`) — JUSTIFYTEXT·SCALETEXT 도움말의
+ * "왼쪽 = 맨 아래 왼쪽"(180차)을 TEXTALIGN 도움말은 적지 않는다.
+ */
 export function anchorOf(e: Entity, key: string, doc: CadDocument): Vec2 | null {
-  return scaleBasePoint(e, key, doc);
+  return scaleBasePoint(e, key, doc, MTEXT_ATTACH);
 }
 
 /**

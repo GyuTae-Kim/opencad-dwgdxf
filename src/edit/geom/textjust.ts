@@ -35,8 +35,17 @@ export const TEXT_JUST: Record<string, { ha: number; va: number }> = {
   BR: { ha: 2, va: 1 },
 };
 
-/** 자리맞추기 옵션 → MTEXT 부착점(71). 왼쪽·중심·오른쪽·중간은 맨 위 줄·가운데로 본다 */
+/**
+ * 자리맞추기 옵션 → MTEXT 부착점(71). 왼쪽·중심·오른쪽·중간은 맨 위 줄·가운데로 본다.
+ * TEXTALIGN의 맞추는 점(TEXTALIGN 도움말은 여러 줄 문자 짝을 적지 않는다)과 지금 부착점의 옵션 이름 찾기가 쓴다.
+ */
 export const MTEXT_ATTACH: Record<string, number> = { TL: 1, TC: 2, TR: 3, ML: 4, MC: 5, MR: 6, BL: 7, BC: 8, BR: 9, L: 1, C: 2, R: 3, M: 5 };
+
+/**
+ * JUSTIFYTEXT·SCALETEXT의 자리맞추기 옵션 → MTEXT 부착점(180차). Autodesk JUSTIFYTEXT·SCALETEXT 도움말: 한 줄 문자의 옵션은 여러 줄 문자와 비슷하지만
+ * 정렬(A)·맞춤(F)·왼쪽(L)은 여러 줄 문자의 맨 아래 왼쪽(BL) 부착점과 같다. 중심·오른쪽·중간의 짝은 도움말이 적지 않아 `MTEXT_ATTACH`와 같다.
+ */
+export const MTEXT_JUST_ATTACH: Record<string, number> = { ...MTEXT_ATTACH, L: 7, A: 7, F: 7 };
 
 export function isTextLike(e: Entity): e is TextLike {
   return e.type === 'TEXT' || e.type === 'ATTRIB' || e.type === 'ATTDEF';
@@ -216,15 +225,18 @@ export function textOutline(e: Entity, doc: CadDocument): Vec2[] | null {
   return null;
 }
 
-/** SCALETEXT 기준점(WCS 평면도) */
-export function scaleBasePoint(e: Entity, key: string, doc: CadDocument): Vec2 | null {
+/**
+ * SCALETEXT 기준점(WCS 평면도). `attach`는 MTEXT의 옵션 → 부착점 표(기본 SCALETEXT 도움말대로 왼쪽 = 맨 아래 왼쪽 —
+ * TEXTALIGN은 `MTEXT_ATTACH`를 넘긴다).
+ */
+export function scaleBasePoint(e: Entity, key: string, doc: CadDocument, attach: Record<string, number> = MTEXT_JUST_ATTACH): Vec2 | null {
   if (isTextLike(e)) {
     const q = textPointOcs(e, key, doc);
     return affApply(planProj(e.extrusion, e.insert.z), q);
   }
   if (e.type === 'MTEXT') {
     if (key === 'E') return { x: e.insert.x, y: e.insert.y };
-    const p = mtextPoint(e, MTEXT_ATTACH[key] ?? e.attachment, doc);
+    const p = mtextPoint(e, attach[key] ?? e.attachment, doc);
     return { x: p.x, y: p.y };
   }
   return null;
@@ -240,6 +252,7 @@ export function textHeightOf(e: Entity, doc: CadDocument): number | null {
 /**
  * 자리맞추기를 바꾼다(문자 자리는 그대로). 바뀌지 않으면 null.
  * TEXT: 정렬(A)·맞춤(F)으로 바꾸면 지금 폭의 두 점, 다른 것으로 바꾸면 지금 높이·폭 비율을 지닌다.
+ * MTEXT: 같은 글자 상자를 새 부착점으로 놓는다(왼쪽·정렬·맞춤은 맨 아래 왼쪽 — `MTEXT_JUST_ATTACH`).
  */
 export function justifyText(e: Entity, key: string, doc: CadDocument): Entity | null {
   if (isTextLike(e)) {
@@ -268,7 +281,7 @@ export function justifyText(e: Entity, key: string, doc: CadDocument): Entity | 
     return out;
   }
   if (e.type === 'MTEXT') {
-    const k = MTEXT_ATTACH[key];
+    const k = MTEXT_JUST_ATTACH[key];
     if (!k || k === e.attachment) return null;
     const out = cloneEntity(e);
     out.insert = mtextPoint(e, k, doc);
