@@ -1066,10 +1066,15 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   ATTDEF 대화 상자의 X·Y·Z 칸, 고도 0인 도면, 프롬프트 흐름은 같은 값이다
 - [ ] 207차에 보고 두 것: MINSERT에 기준점(B) 옵션이 없다(AutoCAD MINSERT 도움말에는 -INSERT와 같은 기준점 옵션이 있다 — 새 옵션·프롬프트 글이라 이번 범위 밖).
   실물 표본 없이는 근거가 서지 않는 것: -INSERT 기준점(B)으로 찍은 점의 Z(도움말이 적지 않아 X·Y만 옮김 — 고도가 있는 도면에서 AutoCAD가 기준점에 고도를 대는지는 실물 필요)
-- [ ] 206차에 보고 두 것 — 현재 고도 입구 표에서 아직 Z 0을 쓰는 만들기 명령(다음 후보, 같은 `currentElevation`으로 맞출 수 있는 것 — ATTDEF·-INSERT·MINSERT는 207차가 고침):
-  TABLE(`app/tablecmds.ts`), TOLERANCE(`app/annot2-misc.ts`),
-  LEADER·QLEADER·MLEADER(꼭짓점·주석·내용 블록 자리가 여럿 — 한 묶음으로), MLINE(`edit/mline/geom.ts`), REVCLOUD 직사각형·폴리곤·프리핸드(`edit/geom/markup.ts` cloudPolyline의 고도 38),
-  WIPEOUT 점(makeWipeout), SKETCH(`edit/sketch.ts`), Express BREAKLINE(`edit/express/breakline.ts` — Z 인자는 있으나 명령이 넘기지 않음), HELIX(바닥 중심 — 3D 객체).
+- [x] TABLE·TOLERANCE·REVCLOUD의 현재 고도(208차, 같은 ELEV 도움말 — DXF 참조서: ACAD_TABLE 10(블록 참조 부분)·TOLERANCE 10(WCS)은 고도 칸 없이 점의 Z,
+  LWPOLYLINE은 꼭짓점이 X·Y뿐이고 고도 38 하나): `app/tablecmds.ts` TABLE 삽입점(삽입점 지정·윈도우 지정), `app/annot2-misc.ts` TOLERANCE 삽입점,
+  `app/modify2.ts` REVCLOUD 직사각형·폴리곤·프리핸드 구름의 폴리선 고도(`edit/geom/markup.ts` cloudPolyline — 고도 인자, 기본 0)가 늘 0이었다 — 이제 `currentElevation`이다.
+  REVCLOUD 객체(O)·수정(M)과 미리보기, 고도 0인 도면, 프롬프트 흐름, 구름 꼭짓점의 X·Y·볼록은 같은 값이다
+- [ ] 208차에 보고 두 것 — 같은 꼴(화면 점 하나·고도 칸 하나, 다음 후보): Express BREAKLINE(`app/express-draw.ts` — `edit/express/breakline.ts` makeBreakline의 Z 인자를 넘기지 않아
+  폴리선 고도 0), COUNT 표(`app/count.ts`)·DATAEXTRACTION 표(`app/dataextract.ts`)의 「테이블 삽입점 지정」(표 삽입점 Z 0 — 208차 TABLE과 같은 `addTableOps` 꼴)
+- [ ] 206차에 보고 두 것 — 현재 고도 입구 표에서 아직 Z 0을 쓰는 만들기 명령(다음 후보, 같은 `currentElevation`으로 맞출 수 있는 것 — ATTDEF·-INSERT·MINSERT는 207차,
+  TABLE·TOLERANCE·REVCLOUD 직사각형·폴리곤·프리핸드는 208차가 고침): LEADER·QLEADER·MLEADER(꼭짓점·주석·내용 블록 자리가 여럿 — 한 묶음으로), MLINE(`edit/mline/geom.ts`),
+  WIPEOUT 점(makeWipeout), SKETCH(`edit/sketch.ts`), Express BREAKLINE(208차에 보고 둔 그대로), HELIX(바닥 중심 — 3D 객체).
   치수 정의점은 177차 판단(도움말에 Z 규칙 없음) 그대로다. 실물 표본 없이는 근거가 서지 않는 것: HATCH·GRADIENT·BOUNDARY는 해치 고도를 늘 0으로 쓴다
   (`edit/hatch/create.ts` — 경계 객체가 고도에 있을 때 경계 평면을 따를지는 현재 고도와 다른 줄기, 이번에 도움말을 보지 않음), REVCLOUD 객체 모드는 원본이 고도에 있어도 0이다
   (원본 평면을 따를지 도움말에 없음). 입력이 Z를 준 점은 위 「다른 2D 명령에 준 Z」 항목과 같은 빈칸이다
