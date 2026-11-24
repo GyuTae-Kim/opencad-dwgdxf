@@ -5,6 +5,7 @@
  */
 import type { Entity } from '../core/model';
 import { pushAll } from '../core/arrays';
+import { polarArrayBasePoint } from '../edit/geom/array';
 import { boundsOf } from '../edit/geom/query';
 import { polarArrayAngles, polarCountFrom, rectArrayOffsets } from '../edit/script/dash';
 import type { App, CommandContext } from './app';
@@ -100,7 +101,8 @@ export function registerDashArrayCommand(app: App): void {
         for (const o of rectArrayOffsets(rows, cols, dy, dx, snapang)) pushAll(results, transformList(st, hs, translate(o.x, o.y), true));
         count = rows * cols;
       } else {
-        // 회전하지 않을 때 옮기는 기준: 기준(B)으로 준 점, 없으면 선택 범위의 가운데
+        // 회전하지 않을 때 옮기는 기준: 기준(B)으로 준 점, 없으면 마지막으로 고른 객체의 기본 기준점(166차 — -ARRAY·Array 대화 상자 도움말),
+        // 그것도 없는 종류면 선택 범위의 가운데
         let base: Pt | null = null;
         let center: Pt;
         for (;;) {
@@ -146,7 +148,8 @@ export function registerDashArrayCommand(app: App): void {
         const rotate = await askYN(ctx, '배열된 객체를 회전하시겠습니까?', true);
         const ents = hs.map((h) => doc.entityIndex.get(h)).filter((e): e is Entity => !!e);
         const box = boundsOf(ents, doc);
-        const ref = base ?? (box ? { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 } : center);
+        const last = ents.at(-1);
+        const ref = base ?? (last ? polarArrayBasePoint(last) : null) ?? (box ? { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 } : center);
         for (const a of angles) {
           let mm: Affine;
           if (rotate) mm = rotateAbout(center, a);

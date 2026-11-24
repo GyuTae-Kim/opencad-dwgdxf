@@ -29,6 +29,7 @@ import {
   lengthenEntity,
   nearestPointOn,
   offsetEntity,
+  polarArrayBasePoint,
   stretch,
   transformEntity,
   trimEntity,
@@ -1669,9 +1670,14 @@ export function registerModifyCommands(app: App): void {
         createAssocArray(app, ctx, { kind: 'polar', handles: hs, center, items: n, fill, rotate: rot }, 'ARRAYPOLAR');
         return;
       }
-      // 회전하지 않을 때는 선택 범위의 중심을 기준으로 옮긴다
-      const ext = extentsOf(app, hs) ?? [center.x, center.y, center.x, center.y];
-      const ref = { x: (ext[0] + ext[2]) / 2, y: (ext[1] + ext[3]) / 2 };
+      // 회전하지 않을 때는 마지막으로 고른 객체의 기본 기준점을 원을 따라 옮긴다(166차 — Array 대화 상자 도움말의 "객체 기본값으로 설정").
+      // 표에 없는 종류면 선택 범위의 중심
+      const lastEnt = hs.length ? st.doc.entityIndex.get(hs[hs.length - 1]!) : undefined;
+      const extCenter = () => {
+        const ext = extentsOf(app, hs) ?? [center.x, center.y, center.x, center.y];
+        return { x: (ext[0] + ext[2]) / 2, y: (ext[1] + ext[3]) / 2 };
+      };
+      const ref = (lastEnt ? polarArrayBasePoint(lastEnt) : null) ?? extCenter();
       const results: EditResult[] = [];
       for (let i = 1; i < n; i++) {
         const a = step * i;

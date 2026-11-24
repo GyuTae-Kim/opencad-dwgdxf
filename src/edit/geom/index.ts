@@ -30,4 +30,4 @@ export { stretch } from './stretch';
 export type { StretchOptions } from './stretch';
 export { gripMove, gripPoints } from './grips';
 export type { GripOptions } from './grips';
-export { arrayPolar, arrayRectangular } from './array';
+export { arrayPolar, arrayRectangular, polarArrayBasePoint } from './array';

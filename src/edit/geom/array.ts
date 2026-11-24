@@ -6,9 +6,52 @@
  */
 import type { CadDocument, Entity, Vec2 } from '../../core/model';
 import { createDocument } from '../../core/model';
+import { pathStart } from './curve';
 import { type Affine, TAU, affRotate, affTranslate } from './math';
+import { ocsToWcs } from './ocs';
+import { entityPath } from './path';
 import { boundsOf, copyEntity } from './query';
 import { type EditResult, mergeResults } from './types';
+
+/**
+ * 클래식 원형 배열(-ARRAY·ARRAYCLASSIC)에서 항목을 돌리지 않을 때 원을 따라 옮기는 객체의 기본 기준점(166차).
+ * Autodesk Array 대화 상자 도움말의 "객체 기본값으로 설정" 표: 호·원·타원은 중심, 선·폴리선·3D 폴리선·광선·스플라인(도넛·다각형·직사각형도
+ * 폴리선이라 첫 정점)은 시작점, 블록·여러 줄 문자·한 줄 문자는 삽입점, 구성선은 중간점(첫 점). 여러 객체를 고르면 마지막으로 고른 객체의
+ * 기준점을 모두에 쓴다(-ARRAY 도움말도 같다 — 부르는 쪽이 마지막 객체를 넘긴다). 표에 없는 종류는 null(부르는 쪽이 선택 범위 가운데).
+ */
+export function polarArrayBasePoint(e: Entity): Vec2 | null {
+  const xy = (p: { x: number; y: number }): Vec2 => ({ x: p.x, y: p.y });
+  switch (e.type) {
+    case 'ARC':
+    case 'CIRCLE':
+      return xy(ocsToWcs(e.center, e.extrusion));
+    case 'ELLIPSE':
+      return xy(e.center);
+    case 'LINE':
+      return xy(e.start);
+    case 'RAY':
+    case 'XLINE':
+      return xy(e.base);
+    case 'LWPOLYLINE':
+    case 'POLYLINE':
+    case 'SPLINE': {
+      if (e.type === 'POLYLINE' && e.kind !== '2d' && e.kind !== '3d') return null;
+      const path = entityPath(e);
+      return path?.pieces.length ? pathStart(path) : null;
+    }
+    case 'INSERT':
+      return xy(ocsToWcs(e.insert, e.extrusion));
+    case 'MTEXT':
+      return xy(e.insert);
+    case 'TEXT': {
+      // 삽입점: 맞춘 문자는 맞춤점(정렬·맞춤 두 점 문자와 왼쪽 문자는 첫 점) — 삽입점 스냅과 같다
+      const p = e.alignPoint && (e.halign !== 0 || e.valign !== 0) && e.halign !== 3 && e.halign !== 5 ? e.alignPoint : e.insert;
+      return xy(ocsToWcs(p, e.extrusion));
+    }
+    default:
+      return null;
+  }
+}
 
 function copies(list: readonly Entity[], mats: Affine[], doc: CadDocument): EditResult {
   const parts: EditResult[] = [];
