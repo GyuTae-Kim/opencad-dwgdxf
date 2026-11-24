@@ -361,7 +361,8 @@ export async function textOption(ctx: CommandContext, key: string, o: DimOpts): 
  * 치수보조선 원점이다(폴리선 종류는 가르지 않음). 세그먼트는 182~188차 치수 명령과 같은 `polySegment`(호 세그먼트는 호 위 거리, 맞춤이 아닌 2D POLYLINE도)로 고르고
  * 그 두 꼭짓점을 꼭짓점 차례로 쓴다(직선·호 모두). 전에는 호 세그먼트도 현까지 거리로 견줘 호의 불룩한 쪽을 고르면 이웃 세그먼트의 끝점으로 쟀고,
  * 2D POLYLINE은 알림만 했다. 직선 세그먼트만 견주는 경우는 같은 식이라 같은 세그먼트다. `polySegment`가 받지 않는 경량 폴리선(돌출 방향이 기운 것,
- * 가장 가까운 세그먼트의 길이가 0인 것)은 아래 옛 갈래 그대로다
+ * 가장 가까운 세그먼트의 길이가 0인 것)은 아래 옛 갈래 그대로다.
+ * DIMREASSOCIATE 선형·정렬 치수의 객체 선택(S)도 이 원점에 연관한다(191차 — `dimassoc.ts`, 전에는 이 함수의 176·189차 이전 옛 사본)
  */
 export function originsFromEntity(e: Entity | undefined, pick: Pt): [Pt, Pt] | null {
   if (!e) return null;

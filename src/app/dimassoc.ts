@@ -30,14 +30,13 @@ import {
 import { explodeEntity } from '../edit/geom';
 import { affApply } from '../edit/geom/math';
 import type { App, CommandContext, Keyword, PointResult } from './app';
-import { dimensionBlockOps } from './dimcmds';
+import { dimensionBlockOps, originsFromEntity } from './dimcmds';
 import type { DocState } from './docstate';
 import { unlockedOnly } from './layers';
 import { askNumber } from './modify2-util';
 import type { Affine } from './modify';
 import { commitResults } from './modify';
 import type { OverlayGeom, Pt, SnapKind } from './view';
-import { lwCount, lwVertices } from '../core/lwpoly';
 
 // ---------------------------------------------------------------------------
 // DIMASSOC 변수
@@ -526,13 +525,14 @@ async function reassociate(app: App, ctx: CommandContext, dim: DimensionEntity):
     touched = true;
     return 'next';
   };
-  const askEntity = async (prompt: string, ok: (e: Entity) => boolean): Promise<{ e: Entity; at: Pt } | null> => {
+  /** 객체 하나: ok는 고른 객체와 고른 점을 받는다(받지 않으면 다시 선택) */
+  const askEntity = async (prompt: string, ok: (e: Entity, at: Pt) => boolean): Promise<{ e: Entity; at: Pt } | null> => {
     mark();
     for (;;) {
       const r = await ctx.getEntity(prompt);
       if (!('handle' in r)) return null;
       const e = doc.entityIndex.get(r.handle);
-      if (e && ok(e)) return { e, at: r.point };
+      if (e && ok(e, r.point)) return { e, at: r.point };
       ctx.print('객체를 다시 선택하십시오.', 'err');
     }
   };
@@ -558,9 +558,17 @@ async function reassociate(app: App, ctx: CommandContext, dim: DimensionEntity):
     const r = await askPoint('defPoint2', '첫 번째 치수보조선 원점 지정 또는 [객체 선택(S)] <다음>:', [{ key: 'S', label: '객체 선택' }]);
     if (r === 'done') return;
     if (typeof r === 'object' && r.keyword === 'S') {
-      const sel = await askEntity('객체 선택:', (e) => e.type === 'LINE' || e.type === 'ARC' || e.type === 'LWPOLYLINE');
+      // 191차: Autodesk DIMREASSOCIATE 도움말 — 선형·정렬 치수의 첫 원점 프롬프트에서 S를 넣고 형상 객체를 고른다(받는 종류·점은 적지 않음).
+      // 같은 옵션인 DIMLINEAR·DIMALIGNED <객체 선택>의 원점(`originsFromEntity` — 고른 선·호의 끝점, 폴리선은 고른 세그먼트의 두 꼭짓점,
+      // 호 세그먼트는 호 위 거리, −Z 호·폴리선은 평면도 자리, 맞춤이 아닌 2D POLYLINE도)에 연관한다. 전에는 176·189차 이전의 옛 사본이라
+      // 호 세그먼트의 불룩한 쪽을 고르면 이웃 세그먼트에 연관했고, 2D POLYLINE은 다시 선택하게 했으며, −Z 호·폴리선은 X 거울상 자리로 옮겼다.
+      // 선·경량 폴리선·호는 전처럼 받고, 2D POLYLINE은 원점이 나올 때만 받는다(맞춤·3D·돌출 방향이 기운 것은 전처럼 다시 선택)
+      const sel = await askEntity(
+        '객체 선택:',
+        (e, at) => e.type === 'LINE' || e.type === 'ARC' || e.type === 'LWPOLYLINE' || (e.type === 'POLYLINE' && originsFromEntity(e, at) !== null),
+      );
       if (sel) {
-        const ends = objectEnds(sel.e, sel.at);
+        const ends = originsFromEntity(sel.e, sel.at);
         if (ends) {
           refs[0] = objectRef(app, sel.e, OSNAP.END, ends[0]);
           refs[1] = objectRef(app, sel.e, OSNAP.END, ends[1]);
@@ -647,37 +655,6 @@ async function reassociate(app: App, ctx: CommandContext, dim: DimensionEntity):
   const moved = pts.size ? (movedDimension(doc, dim, pts as Map<DefKey, Pt>) ?? dim) : dim;
   if (moved !== dim && arcEndsSwapped(moved, pts)) [refs[0], refs[1]] = [refs[1] ?? null, refs[0] ?? null];
   commitDim(st, ctx, dim, moved, refs, 'DIMREASSOCIATE');
-}
-
-/** 선·호·폴리선 세그먼트의 두 끝(고른 점에 가까운 세그먼트) */
-function objectEnds(e: Entity, pick: Pt): [Pt, Pt] | null {
-  if (e.type === 'LINE') return [e.start, e.end];
-  if (e.type === 'ARC')
-    return [
-      { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle) },
-      { x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle) },
-    ];
-  if (e.type === 'LWPOLYLINE' && lwCount(e) >= 2) {
-    const vs = lwVertices(e);
-    const n = e.closed ? vs.length : vs.length - 1;
-    let best = 0;
-    let bd = Infinity;
-    for (let i = 0; i < n; i++) {
-      const a = vs[i]!;
-      const b = vs[(i + 1) % vs.length]!;
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const L = dx * dx + dy * dy || 1;
-      const t = Math.max(0, Math.min(1, ((pick.x - a.x) * dx + (pick.y - a.y) * dy) / L));
-      const d = Math.hypot(a.x + dx * t - pick.x, a.y + dy * t - pick.y);
-      if (d < bd) {
-        bd = d;
-        best = i;
-      }
-    }
-    return [vs[best]!, vs[(best + 1) % vs.length]!];
-  }
-  return null;
 }
 
 /** 치수 선택 도우미(테스트·다른 명령용): 연관 치수인지 */
