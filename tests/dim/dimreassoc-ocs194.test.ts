@@ -7,12 +7,14 @@
  * 고치기 전에는 재연관의 호 길이(ARC)·반지름·지름·각도 「호 또는 원 선택(S)」 갈래가 원·호의 중심·각도를 OCS 값 그대로 써, −Z 원·호를 고르면
  * 정의점이 X 거울상 자리로 옮겨졌고 그 점에는 연관 참조가 붙지 않았다(평면도 스냅 점과 맞지 않음). 이제 그 갈래들이 `circleOf`를 쓴다.
  * 각도 세 점 갈래는 점 스냅(평면도 스냅 후보)이라 이미 맞았고, +Z 원·호는 평면 사상이 항등이라 전과 같은 값이다.
+ * 195차: 194차가 코드 읽기만 한 꺾기 반지름 치수(DIMJOGGED — 같은 반지름 갈래를 지남)의 −Z 원 재연관을 한 건 더 본다(맨 끝 절).
  */
 import { describe, expect, it } from 'vitest';
 import type { ArcEntity, CadDocument, CircleEntity, DimensionEntity, Entity } from '../../src/core/model';
 import { MODEL_SPACE } from '../../src/core/model';
 import { registerDimCommands } from '../../src/app/dimcmds';
 import { registerDimAssocCommands } from '../../src/app/dimassoc';
+import { registerAnnot2Commands } from '../../src/app/annot2';
 import { dimAssocOf, regenAssociations } from '../../src/edit/dim/assoc';
 import { makeDoc } from './doc';
 import { type Input, makeHarness } from '../cmds2/harness';
@@ -28,6 +30,8 @@ function harness(setup?: (doc: CadDocument) => void) {
   });
   registerDimCommands(h.app);
   registerDimAssocCommands(h.app);
+  // 195차: 꺾기 반지름 치수(DIMJOGGED)를 만드는 명령
+  registerAnnot2Commands(h.app);
   return h;
 }
 type H = ReturnType<typeof harness>;
@@ -203,5 +207,31 @@ describe('+Z 원·호는 전과 같은 값', () => {
     expect([...xy(d.defPoint4), ...xy(d.defPoint2), ...xy(d.defPoint3)]).toEqual([10, 5, 14, 5, 10, 9]);
     expect(refsOn(h, d)).toHaveLength(2);
     expect(regenAssociations(h.doc, () => h.st.session.newHandle()).dims.size).toBe(0);
+  });
+});
+
+describe('195차 — 꺾기 반지름 치수(DIMJOGGED)의 −Z 원 재연관(194차가 코드 읽기만 한 반지름 갈래)', () => {
+  it('+Z 원(중심 (10, 5), 반지름 4)에서 만든 꺾기 치수를 −Z 원(OCS 중심 (40, 5), 반지름 6)에: 평면도 중심 (−40, 5)·현 위 점 (−34, 5)에 두 점 연관, 재지정 중심·꺾기 점은 중심과 함께 (−50, 0) 옮기고, 원을 옮기면 따라간다', async () => {
+    const h = harness();
+    const a = h.add(circle(10, 5, 4)) as CircleEntity;
+    const b = h.add(circle(40, 5, 6, NEG_Z)) as CircleEntity;
+    // 고른 점 (14, 5), 재지정 중심 (20, −5), 치수선 위치 (20, 5) — 현 위 점은 중심에서 (20, 5) 쪽 (14, 5), 꺾기 위치 (17, 0)
+    const d0 = await looseDim(h, 'DIMJOGGED', [{ pick: a.handle, at: [14, 5] }, '20,-5', '20,5', '17,0']);
+    expect(d0.subtype).toBe('LARGE_RADIAL_DIMENSION');
+    expect([...xy(d0.defPoint), ...xy(d0.defPoint4), ...xy(d0.defPoint2)]).toEqual([10, 5, 14, 5, 20, -5]);
+    const jog0 = { x: d0.defPoint3.x, y: d0.defPoint3.y };
+    const d = await reassoc(h, d0, { pick: b.handle, at: [-46, 5] });
+    expect(xy(d.defPoint)).toEqual([-40, 5]);
+    expect(xy(d.defPoint4)).toEqual([-34, 5]);
+    expect(d.measurement).toBeCloseTo(6, 9);
+    expect(xy(d.defPoint2)).toEqual([-30, -5]);
+    expect(xy(d.defPoint3)).toEqual(xy({ x: jog0.x - 50, y: jog0.y }));
+    expectAssocHolds(h, d, 2);
+    // OCS 중심 (42, 5) = 평면도 (−42, 5)로 옮기면 중심·현 위 점·재지정 중심이 (−2, 0) 따라간다
+    const m = moveAndRegen(h, b, { ...b, center: { x: 42, y: 5, z: 0 } }, d);
+    expect(m).toBeDefined();
+    expect(xy(m!.defPoint)).toEqual([-42, 5]);
+    expect(xy(m!.defPoint4)).toEqual([-36, 5]);
+    expect(xy(m!.defPoint2)).toEqual([-32, -5]);
   });
 });

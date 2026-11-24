@@ -15,6 +15,7 @@ import type { App, CommandContext, Keyword } from './app';
 import { addEntities, currentProps } from './draw';
 import { dimGhost } from './annot2-common';
 import { attachAssociation, finishNewDimension } from './dimassoc';
+import { segmentShape } from './dimcmds';
 import { circleOf, lwPlanVertices } from '../edit/geom/ocs';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
@@ -306,14 +307,18 @@ function centerSettings(app: App): CenterSettings {
 
 /**
  * 선택한 객체의 직선 구간(선, 폴리선 직선 세그먼트 — Autodesk CENTERLINE: 고른 두 선·직선 폴리선 세그먼트의 중심선).
- * 폴리선 꼭짓점은 OCS 값이라 −Z 폴리선은 평면 사상으로 평면도 자리에 옮긴다(176차 — 전에는 중심선이 X 거울상 선 쪽으로 생겼다). 선과 +Z 폴리선은 전과 같은 값
+ * 폴리선 꼭짓점은 OCS 값이라 −Z 폴리선은 평면 사상으로 평면도 자리에 옮긴다(176차 — 전에는 중심선이 X 거울상 선 쪽으로 생겼다). 선과 +Z 폴리선은 전과 같은 값.
+ * 195차: 맞춤이 아닌 2D POLYLINE도 188차 `segmentShape`의 경량 꼴로 같은 규칙에 받는다 — CENTERLINE 도움말의 「직선 폴리선 세그먼트」와 Autodesk
+ * 「Create Associative Center Marks and Centerlines」(중심선은 폴리선을 낱낱의 선 세그먼트로 본다)는 폴리선 종류를 가르지 않는다(전에는 다시 선택하게 했다).
+ * 경량 폴리선은 같은 객체 그대로라 같은 값, 곡선 맞춤·스플라인 맞춤 2D POLYLINE과 3D 폴리선은 전처럼 null
  */
 function straightOf(e: Entity | undefined, pick: Pt): [Pt, Pt] | null {
   if (!e) return null;
   if (e.type === 'LINE') return [e.start, e.end];
-  if (e.type === 'LWPOLYLINE' && lwCount(e) >= 2) {
-    const vs = lwPlanVertices(e).vs;
-    const n = e.closed ? vs.length : vs.length - 1;
+  const lw = segmentShape(e);
+  if (lw && lwCount(lw) >= 2) {
+    const vs = lwPlanVertices(lw).vs;
+    const n = lw.closed ? vs.length : vs.length - 1;
     let best = -1;
     let bd = Infinity;
     for (let i = 0; i < n; i++) {
@@ -340,7 +345,10 @@ function straightOf(e: Entity | undefined, pick: Pt): [Pt, Pt] | null {
  * 호·원(폴리선 호 세그먼트 포함)의 평면도 중심·반지름·중심각과 평면의 WCS Z.
  * 원·호의 중심·각도와 폴리선의 꼭짓점·고도는 객체 OCS 값이다(DXF 참조서 CIRCLE·ARC 10·50·51, LWPOLYLINE 10·38). 돌출 방향이 −Z면
  * OCS X = WCS −X라 원·호는 치수 명령과 같은 평면 사상(`circleOf`)으로 옮기고, 폴리선은 꼭짓점을 같은 사상으로 옮겨 뒤집힌 평면이면 볼록도 부호를 뒤집는다
- * (175차 — 전에는 중심 표식이 X 거울상 자리에 Z 부호가 반대로 생겼다). 자연 +Z와 돌출 방향이 기운 객체는 전과 같은 값
+ * (175차 — 전에는 중심 표식이 X 거울상 자리에 Z 부호가 반대로 생겼다). 자연 +Z와 돌출 방향이 기운 객체는 전과 같은 값.
+ * 195차: 맞춤이 아닌 2D POLYLINE도 188차 `segmentShape`의 경량 꼴로 같은 규칙에 받는다 — Autodesk 「Create Associative Center Marks and Centerlines」
+ * (폴리선의 호는 낱낱의 호 세그먼트로 보아 세그먼트마다 중심 표식)는 폴리선 종류를 가르지 않는다(전에는 「원 또는 호를 선택하십시오.」만 알렸다).
+ * 경량 폴리선은 같은 객체 그대로라 같은 값, 곡선 맞춤·스플라인 맞춤 2D POLYLINE과 3D 폴리선은 전처럼 null
  */
 function roundOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; sweep: number; z: number } | null {
   if (!e) return null;
@@ -351,12 +359,13 @@ function roundOf(e: Entity | undefined, pick: Pt): { c: Pt; r: number; sweep: nu
     while (sw <= 0) sw += 2 * Math.PI;
     return { c: g.c, r: g.r, sweep: sw, z: g.z };
   }
-  if (e.type === 'LWPOLYLINE') {
+  const lw = segmentShape(e);
+  if (lw) {
     // 평면도 꼭짓점·볼록도와 평면 Z(176차부터 <객체 선택> 원점·CENTERLINE과 같은 도우미 — 같은 식)
-    const { vs, z } = lwPlanVertices(e);
+    const { vs, z } = lwPlanVertices(lw);
     let best: { c: Pt; r: number; sweep: number; z: number } | null = null;
     let bd = Infinity;
-    for (let i = 0; i < (e.closed ? vs.length : vs.length - 1); i++) {
+    for (let i = 0; i < (lw.closed ? vs.length : vs.length - 1); i++) {
       const a = vs[i]!;
       const b = vs[(i + 1) % vs.length]!;
       if (!a.bulge) continue;

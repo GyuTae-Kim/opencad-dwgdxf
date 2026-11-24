@@ -3,6 +3,48 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(195차): CENTERMARK·CENTERLINE이 2D POLYLINE의 세그먼트를 받지 않던 것
+
+### 고른 까닭
+190차가 ROADMAP 「190차에 보고 두 것」에 코드 읽기로 남긴 2D POLYLINE 빈칸 가운데 CENTERMARK `roundOf`·CENTERLINE `straightOf`를 도움말로 먼저 확인하고
+저장소 시험으로 재현했습니다(실제 도면 표본 없음 — 새 표본은 내려받지 않음).
+- Autodesk 「Create Associative Center Marks and Centerlines」(Have You Tried 도움말 — 2022·2026 판을 읽음, 같은 글)는 폴리선의 호를 낱낱의 호 세그먼트로 보아
+  세그먼트마다 중심 표식을 두고(호 셋인 폴리선이면 셋을 고름), 중심선을 만들 때는 폴리선을 낱낱의 선 세그먼트로 본다고 적습니다. CENTERLINE 명령 도움말(2026)도
+  두 선 또는 직선 폴리선 세그먼트를 고른다고 적습니다. 두 글 모두 폴리선 종류를 가르지 않습니다(CENTERMARK 명령 참조 글은 「원 또는 호 선택」만 적음).
+  이 앱은 경량 폴리선(LWPOLYLINE)의 세그먼트를 전부터 받았지만(175·176차가 −Z 평면도까지 맞춤) 두 함수(`app/annot2-misc.ts`)가 LWPOLYLINE만 보아 → ①
+  - ① 2D POLYLINE(무거운 폴리선)을 고르면 호·직선 세그먼트여도 CENTERMARK는 「원 또는 호를 선택하십시오.」, CENTERLINE은 「선 또는 폴리선의 직선 세그먼트를 선택하십시오.」만
+    알리고 다시 선택하게 했습니다. 같은 모양의 경량 폴리선에는 중심 표식·중심선이 생겼습니다.
+  - 셋 조건: 도움말이 폴리선 세그먼트를 분명히 적고, 고침은 같은 앱의 188차 `segmentShape`(치수 명령·스마트 치수 DIM이 쓰는 경량 꼴)를 그대로 씁니다(새 글 없음).
+    경량 폴리선은 `segmentShape`가 같은 객체를 돌려줘 같은 값이고, 원·호·선·맞춤 꼴·3D 폴리선의 결과도 같습니다. 바뀌는 것은 전에 알림만 하던 2D POLYLINE뿐입니다.
+    결과 고정 시험(장면 지문·명령 묶음)은 이 명령을 쓰지 않습니다(`grep -rln -E "fingerprint|snapshot|toMatchInlineSnapshot" tests/` 11개 가운데 `CENTERMARK`·`CENTERLINE`·`annot2-misc`·
+    `registerAnnot2`·`registerCommands`·`segmentShape`가 든 것 0개 — annot2를 등록하는 `tests/robust/edit-audit.test.ts`도 이 명령을 쓰지 않음). 쓰기 코드를 바꾸지 않아 바이트 고정 시험은 닿지 않습니다.
+  - 같은 차수에 덧붙인 시험: 194차가 코드 읽기만 한 DIMREASSOCIATE의 꺾기 반지름 치수(DIMJOGGED — 같은 반지름 갈래)의 −Z 원 재연관. 194차 판단대로 맞아 src는 바꾸지 않았습니다.
+- 고르지 않은 것: 「그다음」 후보 연장(EXT) 객체 스냅 `extAnchorsOf`의 2D POLYLINE은 첫 후보가 서서 보지 않았습니다. 두 명령의 경량 폴리선 세그먼트 고르기 규칙이
+  182~189차 치수 명령(`polySegment` — 가장 가까운 세그먼트, 호는 호 위 거리)과 다른 것은 바꾸면 경량 폴리선의 지금 결과가 바뀌어 두었습니다. ROADMAP 「195차에 보고 두 것」에 두었습니다.
+
+### 고친 것
+- CENTERMARK `roundOf`와 CENTERLINE `straightOf`가 188차 `segmentShape`(맞춤·스플라인 맞춤이 아닌 2D POLYLINE을 같은 꼭짓점·볼록도·닫힘(70 비트 1)·고도·돌출 방향의 경량 꼴로)를 거쳐
+  경량 폴리선 갈래를 그대로 씁니다 — CENTERMARK는 호 세그먼트의 평면도 중심·반지름·중심각과 평면 Z, CENTERLINE은 고른 점에 가까운 평면도 직선 세그먼트. −Z는 평면도 꼭짓점이고 닫는 세그먼트도 받습니다.
+- 바뀐 기본 동작: 2D POLYLINE의 호·직선 세그먼트에 중심 표식·중심선이 생깁니다(같은 모양의 경량 폴리선과 같은 블록 참조). 중심 표식·중심선은 원·호·선처럼 연관을 붙이지 않습니다(175차 한계 그대로).
+  새 문구는 없고, 새 가져오기 `app/dimcmds`는 이 파일이 가져오는 `app/dimassoc.ts`가 이미 가져오는 모듈입니다.
+
+### 확인
+- ① CENTERMARK: (10, 0)→(20, 0) 볼록도 1 세그먼트를 (15, −5)에서 고르면 십자 (14.5, 0)~(15.5, 0)·(15, −0.5)~(15, 0.5)(지름 10의 0.1x, 중심각 180°라 연장선 없음 — 경량 폴리선과 같음),
+  고도 2인 −Z 2D POLYLINE은 평면도 (−15, 0)에 Z −2(−Z 경량 폴리선과 같음), 닫힌 2D POLYLINE의 닫는 호 (10, 30)→(0, 30)은 중심 (5, 30).
+- ① CENTERLINE: 선 (0, 0)→(20, 0)과 2D POLYLINE (2, 10)→(18, 10)은 (−2.5, 5)→(22.5, 5)(경량 폴리선과 같음), 고도 3인 −Z 2D POLYLINE OCS (2, 10)→(18, 10)과 선 (−20, 0)→(0, 0)은
+  (−22.5, 5)→(2.5, 5)에 Z 0, 닫힌 직사각형의 닫는 세그먼트 (0, 10)→(0, 0)과 마주 보는 (20, 0)→(20, 10)은 (10, 13.5)→(10, −3.5).
+- 전과 같은 꼴: 곡선 맞춤·스플라인 맞춤·3D·직선뿐인 2D POLYLINE은 CENTERMARK에서, 곡선 맞춤·스플라인 맞춤·3D·호뿐인 2D POLYLINE은 CENTERLINE에서 같은 알림(넷씩)이고 블록 참조가 없습니다.
+  선 둘·경량 폴리선 둘의 중심선, 175차 원·호·경량 폴리선의 중심 표식은 같은 값입니다.
+- 덧붙인 시험: +Z 원(중심 (10, 5)·반지름 4)에서 DIMASSOC 1로 만든 꺾기 반지름 치수를 −Z 원(OCS 중심 (40, 5)·반지름 6)에 다시 연관하면 중심 (−40, 5)·현 위 점 (−34, 5)·값 6·연관 둘,
+  재지정 중심 (20, −5) → (−30, −5)·꺾기 점도 (−50, 0) 옮김, OCS 중심 (42, 5)로 옮기면 DIMREGEN이 (−42, 5)·(−36, 5)·(−32, −5).
+- 시험: 새 `tests/dim/center-poly2d195.test.ts` 9건, `tests/dim/dimreassoc-ocs194.test.ts`에 꺾기 치수 한 건(하네스가 `registerAnnot2Commands`도 부름 — cmds2 harness).
+  고치기 전 src 판에서 이 두 파일과 `tests/dim/dimang-centermark-ocs175.test.ts` 3파일 26건 중 6건 실패(새 2D POLYLINE 갈래 여섯 — CENTERMARK는 블록 참조 0개, CENTERLINE은 다시 선택을 물음),
+  20건 통과(새 시험 「전과 같은 꼴」 셋, 194차 파일 10건 — 덧붙인 꺾기 치수 포함, 175차 7건 — 실행 뒤 시험 파일은 고치지 않음). 고친 뒤 26건 통과, tsc 오류 0.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·워커 조각 크기 전·후, check:i18n(새 사전 항목 없음).
+  176차 CENTERLINE 시험(`tests/dim/dimorigin-centerline-ocs176.test.ts`)은 시험 파일 셋 한도로 돌리지 않았습니다(같은 경량 폴리선·선 꼴을 새 시험 「전과 같은 꼴」이 봄).
+  돌출 방향이 기운 2D POLYLINE은 코드 읽기만 했습니다(경량 폴리선과 같은 갈래).
+  실도면 표본 없음: AutoCAD에서 2D POLYLINE으로 CENTERMARK·CENTERLINE을 해 견주지는 않았습니다. 도움말 글과 같은 앱의 188차 경량 꼴 규칙을 근거로 둡니다.
+
 ## 2026-11-24(194차): DIMREASSOCIATE가 −Z 원·호를 고르면 정의점을 X 거울상 자리로 옮기던 것
 
 ### 고른 까닭
