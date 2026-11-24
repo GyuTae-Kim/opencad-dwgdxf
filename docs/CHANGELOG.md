@@ -3,6 +3,41 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(199차): SPLINEDIT가 스플라인 맞춤 폴리선을 받지 않던 것
+
+### 고른 까닭
+181·182·186·187·197차 표에 없던 블록·속성·외부 참조·첨부·편집 명령(ATTDEF·-ATTDEF·-ATTEDIT·-BLOCK·-WBLOCK·-XREF·XCLIP·CLIP·-IMAGE·IMAGEATTACH·IMAGECLIP·PDFCLIP·
+-IMAGEADJUST·SPLINEDIT·-HATCHEDIT·ARRAYEDIT·TABLE·FIELD)의 옵션을 Autodesk 도움말과 견주었습니다(실제 도면 표본 없음 — 새 표본은 내려받지 않음).
+빈칸은 SPLINEDIT의 스플라인 맞춤 폴리선 고르기·닫힌 스플라인 접선·폴리선으로 변환의 DELOBJ, -ATTEDIT 높이·각도의 점과 정렬 속성 위치의 두 점,
+XCLIP 폴리선 선택의 열린 폴리선, IMAGECLIP·PDFCLIP의 폴리선 선택, -WBLOCK 모드·기준점 기본값, IMAGEATTACH 명령행 꼴의 회전, -HATCHEDIT의 열한 옵션,
+ATTDEF 여러 줄·주석, -ATTDEF·-TABLE 명령이었습니다.
+- Autodesk SPLINEDIT 도움말(2026)의 「스플라인 선택」은 스플라인 맞춤 폴리선을 고르면 고른 뒤 바로 끝내도 스플라인으로 바꾼다고 적습니다.
+  이 앱의 SPLINEDIT(`app/modify2-pedit.ts`)는 SPLINE만 받아 → ①
+  - ① PEDIT 스플라인(S)으로 만든 폴리선을 고르면 「스플라인이 아닙니다.」로 다시 고르게 해, 그 곡선을 스플라인으로 편집할 길이 SPLINE 객체(O)뿐이었습니다.
+  - 셋 조건: 도움말이 분명히 적고, 진짜 명령 틀 시험으로 재현되며, 전에 거절하던 입력만 새 갈래가 됩니다 — 새 키워드가 없어 가로챌 투명 명령 글자가 없고 프롬프트 글도 같습니다.
+    바꾸는 꼴은 SPLINE 객체(O)가 이미 쓰는 `splineFromFitPolyline`이라 새 글이 없습니다. 쓰기 코드는 바꾸지 않았고, 결과·바이트 고정 시험 가운데 SPLINEDIT를 쓰는 것은 없습니다
+    (`grep -rln -E "fingerprint|snapshot|toMatchInlineSnapshot|GOLDEN|createHash|sha256" tests/` 가운데 `registerPeditCommands`가 든 것은 PEDIT를 쓰는 `drawmod/modify` 하나 — 함께 돌림).
+- 고르지 않은 것: -ATTEDIT 높이(H)의 점(점에서 문자 시작점까지 거리)·XCLIP 폴리선 선택의 열린 폴리선도 셋 조건을 넘지만 하나만 넣어 다음 후보로 두었습니다.
+  -ATTEDIT 각도(A)의 점은 −Z 속성의 OCS 각도와 닿고, 정렬 속성 위치(P)의 두 점·폴리선으로 변환의 DELOBJ 0·-WBLOCK 기준점 Enter·IMAGEATTACH 회전은 지금 결과가 바뀝니다.
+  나머지는 새 프롬프트 글·새 칸·새 명령이 필요합니다. ROADMAP에 두었습니다.
+
+### 고친 것
+- SPLINEDIT의 고르기: 스플라인 맞춤 폴리선(75 = 5·6 — PEDIT 스플라인·SPLINETYPE의 꼴, 3D 폴리선 또는 돌출 방향 +Z인 2D 폴리선)을 고르면 SPLINE 객체(O)와 같은 변환
+  (틀 정점 = 조정점, 2차·3차 균일 B 스플라인, 열린 틀은 끝 고정·닫힌 틀은 주기)으로 같은 그리기 차례 자리의 새 핸들 SPLINE을 만들고 폴리선을 지운 뒤 그 스플라인을 편집합니다.
+  변환은 명령 묶음 안이라 명령 전체는 U 한 번으로 되돌리고, SPLINEDIT 안의 명령 취소(U) 단계 기록에는 넣지 않아 옵션을 되돌려도 변환은 남습니다.
+- 바뀐 기본 동작: SPLINEDIT가 +Z·3D 스플라인 맞춤 폴리선을 스플라인으로 바꿉니다(바로 끝내도). 돌출 방향이 +Z가 아닌 2D 스플라인 맞춤 폴리선과 75가 5·6이 아닌 꼴은
+  전처럼 「스플라인이 아닙니다.」입니다(`splineFromFitPolyline`이 OCS 틀 정점을 WCS 조정점으로 그대로 써 −Z면 거울상 자리가 되기 때문 — ROADMAP).
+
+### 확인
+- ①: 틀 (0,0)·(5,5)·(10,0)·(15,5)의 3차 스플라인 맞춤 폴리선에서 SPLINEDIT → 고르기 → Enter면 POLYLINE 0개·SPLINE 1개(차수 3, 열림, 시작 (0,0)·끝 (15,5)),
+  조정점·매듭은 `splineFromFitPolyline` 값과 같고 폴리선이 그린 근사 정점이 모두 스플라인 위(거리 1e-7 아래)입니다. 이어서 U 한 번이면 폴리선이 돌아옵니다.
+  고르기 → 반전(R)이면 시작이 (15,5), 반전(R) → U → U면 「명령 취소할 것이 없습니다.」와 시작 (0,0)의 SPLINE(변환은 남음)입니다. 닫힌 2차 틀은 닫힌 2차 SPLINE입니다.
+- 전과 같은 꼴: 맞춤 아닌 2D 폴리선·경량 폴리선·−Z 3차 스플라인 맞춤 폴리선은 「스플라인이 아닙니다.」이고 그대로 남습니다.
+- 시험: `tests/drawmod/splinedit199.test.ts` 4건(진짜 명령 틀). 고치기 전 판에서 3건 실패합니다(알림이 찍히고 POLYLINE이 남음 — 반전 시험은 다시 묻는 「스플라인 선택:」에 막힘).
+  전과 같은 꼴 1건은 통과합니다. tsc 오류 0, 관련 시험 2파일(새 시험·drawmod/modify — 같은 등록의 PEDIT 명령 시험) 15건 통과.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·편집기 조각 크기 전·후, check:i18n(새 사전 항목 없음).
+  실도면 표본 없음: AutoCAD에서 SPLINEDIT로 스플라인 맞춤 폴리선을 바꿔 견주지는 않았습니다. 근거는 도움말 글이고, 바꾸는 곡선은 SPLINE 객체(O)가 쓰던 변환 그대로입니다.
+
 ## 2026-11-24(198차): UCS 뷰(V)가 원점을 0,0으로 옮기던 것과 LAYOUT 복사의 기본 이름이 늘 (2)이던 것
 
 ### 고른 까닭
