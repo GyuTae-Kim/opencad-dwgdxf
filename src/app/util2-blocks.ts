@@ -26,7 +26,7 @@ import { ScaleIndex, attribHeightK, explodeView, factorOf } from '../edit/annosc
 import type { App, CommandContext } from './app';
 import { scaleForSpace } from './annoscale-core';
 import { userBlocks } from './blocks';
-import { addEntities, currentProps } from './draw';
+import { addEntities, currentElevation, currentProps } from './draw';
 import { baseName, download } from './export';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
@@ -588,7 +588,8 @@ export function registerUtil2BlockCommands(app: App): void {
         type: 'INSERT',
         handle,
         block: bd.name,
-        insert: { x: p0.x, y: p0.y, z: 0 },
+        // 207차: 찍은 삽입점의 Z는 현재 고도(Autodesk ELEV 도움말 — 전에는 늘 0). DXF 참조서: MINSERT도 INSERT 개체라 10의 30이 삽입점 Z, 속성은 이 Z에서 옮긴다
+        insert: { x: p0.x, y: p0.y, z: currentElevation(app) },
         scale: { x: sx, y: sy, z: 1 },
         rotation: rot,
         columnCount: cols,

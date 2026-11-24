@@ -15,7 +15,7 @@ import { matchNameList, parseLayerColor, parseTrueColor } from '../edit/layercmd
 import { UNIT_NAMES, insertUnitFactor } from '../edit/script/dash';
 import type { App, CommandContext, Keyword } from './app';
 import { makeAttribs } from './blocks';
-import { addEntities, currentProps } from './draw';
+import { addEntities, currentElevation, currentProps } from './draw';
 import { commitResults } from './modify';
 import { previewOf } from './modify2-util';
 import { askAngleDeg, askLine, askOption, askReal, askWord, askYN, fmt4, matchKeyword } from './dashcmds-ask';
@@ -47,13 +47,17 @@ export function listBlocks(ctx: CommandContext, pattern: string): void {
   ctx.print(`${String(user.length).padStart(6)}${String(xref.length).padStart(12)}${String(dep.length).padStart(12)}${String(unnamed.length).padStart(14)}`);
 }
 
-/** 블록 기준점 base가 삽입점 p에 오도록 실제 삽입점(블록 정의 기준점 기준) */
-function insertPointFor(def: BlockDef, base: Vec3, p: Pt, scale: Vec3, rot: number): Vec3 {
+/**
+ * 블록 기준점 base가 삽입점 p에 오도록 실제 삽입점(블록 정의 기준점 기준). z = 찍은 삽입점의 Z(207차 — 명령은 현재 고도를 준다).
+ * 기준점(B)은 X·Y만 옮긴다: -INSERT 도움말은 기준점의 Z를 적지 않고, 정의 기준점의 Z가 삽입점에 오는 것은 INSERT 대화 상자(206차)와 같게 둔다
+ * (찍은 기준점에 고도를 대면 고도 0 도면에서도 정의 기준점 Z가 0이 아닌 블록의 결과가 바뀐다)
+ */
+function insertPointFor(def: BlockDef, base: Vec3, p: Pt, scale: Vec3, rot: number, z = 0): Vec3 {
   const dx = (base.x - def.basePoint.x) * scale.x;
   const dy = (base.y - def.basePoint.y) * scale.y;
   const c = Math.cos(rot);
   const s = Math.sin(rot);
-  return { x: p.x - (dx * c - dy * s), y: p.y - (dx * s + dy * c), z: 0 };
+  return { x: p.x - (dx * c - dy * s), y: p.y - (dx * s + dy * c), z };
 }
 
 const INSERT_KW: Keyword[] = [
@@ -233,7 +237,9 @@ export function registerDashInsertCommands(app: App): void {
           for (const d of verify) values.set(d.tag, await ask(d, values.get(d.tag) ?? ''));
         }
       }
-      const insert = insertPointFor(def, base, at, scale, rot);
+      // 207차: 찍은 삽입점의 Z는 현재 고도(ELEVATION, 배치는 PELEVATION — Autodesk ELEV 도움말: X·Y만 준 점의 Z가 현재 고도). 전에는 늘 0이라
+      // 같은 도면에서 INSERT(206차)로 넣은 블록과 Z가 달랐다. DXF 참조서 INSERT: 10의 30이 삽입점 Z(OCS). 속성·분해해 넣기(*이름)도 이 삽입점에서 옮긴다
+      const insert = insertPointFor(def, base, at, scale, rot, currentElevation(app));
       const handle = explode ? '' : st.session.newHandle();
       const ins: InsertEntity = {
         ...entityDefaults(),
