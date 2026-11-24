@@ -53,6 +53,8 @@ import {
   purgeFit,
   reverseSplineEntity,
 } from '../edit/geom/splinedit';
+import { splineFromFitPolyline } from '../edit/geom/drawgeom';
+import { isNaturalExt } from '../edit/geom/ocs';
 import type { App, CommandContext, Keyword } from './app';
 import { commitResults } from './modify';
 import { askNumber, choose, hnum, previewOf } from './modify2-util';
@@ -598,9 +600,13 @@ async function splinedit(app: App, ctx: CommandContext): Promise<void> {
         h = r.handle;
       }
       const e = t.get(h);
+      const fitted = e ? fitPolylineSpline(e) : null;
       if (e?.type === 'SPLINE' && e.helix) ctx.print('나선은 스플라인 편집으로 고칠 수 없습니다.', 'err');
       else if (e?.type === 'SPLINE' && unlockedOnly(app, [h]).length) break;
-      else ctx.print('스플라인이 아닙니다.', 'err');
+      else if (e && fitted && unlockedOnly(app, [h]).length && adoptSpline(st, ctx, e, fitted)) {
+        h = fitted.handle;
+        break;
+      } else ctx.print('스플라인이 아닙니다.', 'err');
       h = null;
     }
     for (;;) {
@@ -661,6 +667,32 @@ async function splinedit(app: App, ctx: CommandContext): Promise<void> {
     st.selection.clear();
     app.refreshSelectionOverlay();
   }
+}
+
+/**
+ * SPLINEDIT가 스플라인으로 바꿀 스플라인 맞춤 폴리선(199차, Autodesk SPLINEDIT 도움말 「스플라인 선택」: 스플라인 맞춤 폴리선을 고르면
+ * 고른 뒤 바로 끝내도 스플라인으로 바꾼다). 바꾸는 꼴은 SPLINE 객체(O)와 같다(틀 정점 = 조정점, 2차·3차 균일 B 스플라인).
+ * PEDIT 스플라인의 꼴(75 = 5·6)만 받고, 2D 폴리선은 돌출 방향이 +Z일 때만 받는다 — `splineFromFitPolyline`이 OCS 틀 정점을
+ * WCS 조정점으로 그대로 쓰기 때문이다(−Z·기운 것은 전처럼 「스플라인이 아닙니다.」). 아니면 null
+ */
+function fitPolylineSpline(e: Entity): SplineEntity | null {
+  if (e.type !== 'POLYLINE' || (e.smoothType !== 5 && e.smoothType !== 6)) return null;
+  if (e.kind !== '3d' && !isNaturalExt(e.extrusion)) return null;
+  return splineFromFitPolyline(e);
+}
+
+/**
+ * 폴리선을 같은 그리기 차례 자리의 새 핸들 스플라인으로 바꾼다(명령 묶음 안 — SPLINEDIT 명령 취소(U)의 단계 기록에는 넣지 않아
+ * 옵션을 되돌려도 변환은 남고, 명령 전체는 U 한 번으로 되돌린다). 바꿨으면 true(s.handle이 새 핸들)
+ */
+function adoptSpline(st: DocState, ctx: CommandContext, e: Entity, s: SplineEntity): boolean {
+  const block = st.session.ownerOf(e.handle);
+  const idx = block ? (st.doc.blocks.get(block)?.entities.indexOf(e) ?? -1) : -1;
+  if (!block || idx < 0) return false;
+  s.handle = st.session.newHandle();
+  s.owner = e.owner;
+  st.session.commit({ label: 'SPLINEDIT', ops: [{ kind: 'remove', block, entity: e, index: idx }, { kind: 'add', block, entity: s, index: idx }], group: ctx.group });
+  return true;
 }
 
 const fitPts = (e: SplineEntity): Vec2[] => splineFit(e).map((q) => ({ x: q.x, y: q.y }));
