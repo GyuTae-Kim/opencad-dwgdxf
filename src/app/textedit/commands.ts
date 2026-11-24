@@ -121,6 +121,8 @@ export const TEXT_JUSTIFY: [string, string, TextHAlign, TextVAlign, string][] = 
  */
 const justifyOpt = ([k, l]: (typeof TEXT_JUSTIFY)[number]) => (k === 'F' ? '맞춤\u{2060}' : l);
 export const JUSTIFY_PROMPT = `옵션 입력 [${TEXT_JUSTIFY.map((j) => `${justifyOpt(j)}(${j[0]})`).join('/')}]:`;
+/** 자리맞추기 옵션 열다섯의 키워드(자리맞추기(J) 목록과 TEXT 시작점 프롬프트가 함께 쓴다 — 186차) */
+const JUSTIFY_KEYWORDS: Keyword[] = TEXT_JUSTIFY.map((x) => ({ key: x[0], label: justifyOpt(x) }));
 
 /** 단일 행 문자의 한 줄(자리맞추기에 맞게 삽입점·정렬점) */
 export function makeTextLine(base: Omit<TextEntity, 'type' | 'handle' | 'insert' | 'text' | 'halign' | 'valign' | 'alignPoint'>, text: string, just: { h: TextHAlign; v: TextVAlign }, p1: Pt, p2?: Pt): TextEntity {
@@ -193,11 +195,11 @@ export function registerTextCommands(app: App): void {
       let p1: Pt | null = null;
       let p2: Pt | undefined;
       for (;;) {
+        // 186차: 자리맞추기 옵션 열다섯도 여기서 바로 받는다(Autodesk TEXT 도움말 자리맞추기 절 — 이 옵션들은 「문자의 시작점 지정」
+        // 프롬프트에서도 입력할 수 있다). 프롬프트 글은 AutoCAD처럼 [자리맞추기/스타일]만 보이고, 고른 뒤는 자리맞추기(J) 다음과 같다.
+        // 키워드가 투명 명령보다 먼저라 따옴표 없는 R은 오른쪽이다('R은 그대로 REDRAW)
         const r = await ctx.getPoint('문자의 시작점 지정 또는 [자리맞추기(J)/스타일(S)]:', {
-          keywords: [
-            { key: 'J', label: '자리맞추기' },
-            { key: 'S', label: '스타일' },
-          ],
+          keywords: [{ key: 'J', label: '자리맞추기' }, { key: 'S', label: '스타일' }, ...JUSTIFY_KEYWORDS],
         });
         if ('point' in r) {
           p1 = r.point;
@@ -209,9 +211,13 @@ export function registerTextCommands(app: App): void {
           styleLine(d, styleName, ctx);
           continue;
         }
-        const j = await ctx.getPoint(JUSTIFY_PROMPT, { keywords: TEXT_JUSTIFY.map((x) => ({ key: x[0], label: justifyOpt(x) })) });
-        if (!('keyword' in j)) continue;
-        const def = TEXT_JUSTIFY.find(([k]) => k === j.keyword)!;
+        let key = r.keyword;
+        if (key === 'J') {
+          const j = await ctx.getPoint(JUSTIFY_PROMPT, { keywords: JUSTIFY_KEYWORDS });
+          if (!('keyword' in j)) continue;
+          key = j.keyword;
+        }
+        const def = TEXT_JUSTIFY.find(([k]) => k === key)!;
         just = { h: def[2], v: def[3] };
         const q = await ctx.getPoint(def[4]);
         if (!('point' in q)) return;
