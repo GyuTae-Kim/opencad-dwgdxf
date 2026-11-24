@@ -70,6 +70,16 @@ export function nextLayoutName(st: DocState): string {
   return `${base}${n}`;
 }
 
+/**
+ * 복사한 배치의 기본 이름: 원래 이름 + 괄호 속 증가 번호 — (2)부터 비어 있는 첫 번호(이름은 대소문자를 가리지 않고 견준다).
+ * 근거: Autodesk LAYOUT 도움말 복사 절(이름을 주지 않으면 원래 이름에 괄호 속 증가 번호, 198차 — 전에는 LAYOUT 복사가 늘 (2)였다)
+ */
+function copyLayoutName(st: DocState, base: string): string {
+  let name = `${base} (2)`;
+  for (let n = 3; st.doc.layouts.some((l) => l.name.toUpperCase() === name.toUpperCase()); n++) name = `${base} (${n})`;
+  return name;
+}
+
 function nextPaperBlock(st: DocState): string {
   if (!st.doc.blocks.has('*PAPER_SPACE')) return '*Paper_Space';
   let n = 0;
@@ -245,7 +255,7 @@ export function registerLayoutCommands(app: App): void {
         case 'C': {
           const src = await chooseLayout(ctx, '복사할 배치 입력', curName);
           if (!src) return;
-          const def = `${src.name} (2)`;
+          const def = copyLayoutName(st, src.name);
           const r = await ctx.getPoint(`복사된 배치의 이름 입력 <${ft(def)}>:`, { allowText: true });
           const name = 'text' in r && r.text.trim() ? r.text.trim() : def;
           if (st.doc.layouts.some((l) => l.name.toUpperCase() === name.toUpperCase())) {
@@ -367,8 +377,7 @@ async function moveOrCopyLayout(app: App, ctx: CommandContext, arg?: string): Pr
   const keys = papers.map((l) => tableKey(l.blockName));
   const srcKey = tableKey(src.blockName);
   if (v.copy) {
-    let name = `${src.name} (2)`;
-    for (let n = 3; st.doc.layouts.some((l) => l.name.toUpperCase() === name.toUpperCase()); n++) name = `${src.name} (${n})`;
+    const name = copyLayoutName(st, src.name);
     const srcBlock = st.doc.blocks.get(srcKey);
     await app.edits.flush(st);
     const { ops, layout } = createLayoutOps(app, st, name, structuredClone(src.plot), srcBlock?.entities ?? []);
