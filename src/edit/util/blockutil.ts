@@ -10,6 +10,7 @@ import { explodeEntity } from '../geom/explode';
 import type { EditResult } from '../geom/types';
 import { attribHeightK, spaceAnnoFactor } from '../annoscale/attrib';
 import { ScaleIndex } from '../annoscale/represent';
+import { isNaturalExt, ocsToWcs } from '../geom/ocs';
 
 /** 블록 좌표 → 도면 좌표(축척·회전만, 2D) */
 export function insertTransform(def: BlockDef, ins: Pick<InsertEntity, 'insert' | 'scale' | 'rotation'>): (p: Vec3) => Vec3 {
@@ -43,16 +44,20 @@ export interface BuildAttribOptions {
  * 정의의 속성 정의로 참조의 속성을 만든다.
  * values: 태그(대문자) → 값. reuse: 태그(대문자) → 지킬 핸들(동기화할 때 같은 속성은 핸들을 유지한다)
  * 속성은 정의의 확장 사전·반응자를 갖지 않는다(119차 — 예전에는 통째로 베껴 정의의 필드·주석 축척 사전을 함께 가리켰다)
+ * 속성의 삽입점·맞춤점은 참조 OCS 좌표다. 참조가 자연 +Z가 아니면(−Z·기운 평면) 속성도 참조의 돌출 방향에 두고, 여러 줄 속성의
+ * MTEXT 삽입점(WCS)은 참조 OCS에서 WCS로 옮긴다(173차 — DXF 참조서상 INSERT·ATTRIB의 점은 각자 210의 OCS다. 예전에는 정의의 +Z를
+ * 그대로 두어 −Z 참조의 속성이 X 거울상 자리로 갔다). 자연 +Z 참조와, 자연 +Z가 아닌 속성 정의는 전과 같다.
  */
 export function buildAttribs(
   def: BlockDef,
-  ins: Pick<InsertEntity, 'insert' | 'scale' | 'rotation' | 'handle'>,
+  ins: Pick<InsertEntity, 'insert' | 'scale' | 'rotation' | 'handle' | 'extrusion'>,
   values: Map<string, string>,
   newHandle: () => string,
   reuse: Map<string, string> = new Map(),
   opt: BuildAttribOptions = {},
 ): AttribEntity[] {
   const tf = insertTransform(def, ins);
+  const plane = isNaturalExt(ins.extrusion) ? undefined : ins.extrusion;
   const out: AttribEntity[] = [];
   const used = new Set<string>();
   for (const d of attdefsOf(def)) {
@@ -68,13 +73,19 @@ export function buildAttribs(
     a.owner = ins.handle;
     a.insert = tf(d.insert);
     if (d.alignPoint) a.alignPoint = tf(d.alignPoint);
+    const onPlane = plane && isNaturalExt(d.extrusion) ? plane : undefined;
+    if (onPlane) a.extrusion = { ...onPlane };
     a.height = d.height * Math.abs(ins.scale.y) * (opt.heightK?.(d, prev) ?? 1);
     a.rotation = d.rotation + ins.rotation;
     a.text = values.get(tag) ?? d.text;
     a.prompt = undefined;
     delete a.dwgRaw;
     if (a.mtext) {
-      a.mtext.insert = tf(a.mtext.insert);
+      const mi = tf(a.mtext.insert);
+      if (onPlane && isNaturalExt(a.mtext.extrusion)) {
+        a.mtext.insert = ocsToWcs(mi, onPlane);
+        a.mtext.extrusion = { ...onPlane };
+      } else a.mtext.insert = mi;
       a.mtext.height *= Math.abs(ins.scale.y);
       a.mtext.rotation += ins.rotation;
       a.mtext.direction = undefined;
