@@ -16,7 +16,8 @@ import { isEditableTable, tableFromEntity } from '../edit/table/entity';
 import { cellName } from '../edit/table/model';
 import type { App, CommandContext, Keyword } from './app';
 import { objectRef, pointRef } from './dimassoc';
-import { type DimOpts, addDimension, circleOf, originsFromEntity, preview, textOption } from './dimcmds';
+import { type DimOpts, addDimension, originsFromEntity, preview, textOption } from './dimcmds';
+import { circleOf } from '../edit/geom/ocs';
 import { addEntities, currentProps } from './draw';
 import { baseName, download } from './export';
 import { commitTable, formatLockedIn, lockedLayer, pickCell } from './tablecmds';
@@ -49,7 +50,7 @@ export function registerEditCmds2Dim(app: App): void {
       for (;;) {
         const r = await ctx.getEntity('호 또는 원 선택:');
         if (!('handle' in r)) return;
-        // 원·호의 평면도 중심과 평면의 WCS Z(−Z 원·호의 OCS 중심은 X 거울상 자리 — 174차, dimcmds.ts circleOf)
+        // 원·호의 평면도 중심과 평면의 WCS Z(−Z 원·호의 OCS 중심은 X 거울상 자리 — 174차, edit/geom/ocs.ts circleOf)
         const c = circleOf(st.doc.entityIndex.get(r.handle));
         if (!c) {
           ctx.print('호 또는 원을 선택하십시오.', 'err');

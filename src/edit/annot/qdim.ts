@@ -1,14 +1,15 @@
 /**
  * 빠른 치수(QDIM): 고른 객체의 치수 점을 모아 연속·다중(엇갈림)·기준선·세로좌표·반지름·지름 치수를 한꺼번에 만든다.
- * 치수 점 = 선·폴리선 끝점과 꼭짓점, 호 끝점, 원 중심, 점, 블록 삽입점. 반지름·지름은 원과 호.
+ * 치수 점 = 선·폴리선 끝점과 꼭짓점, 호 끝점, 원 중심, 점, 블록 삽입점. 반지름·지름은 원과 호. 모두 평면도(WCS XY) 자리다.
  * 방향: 치수선 위치가 점들의 범위 위·아래면 수평(X 거리), 왼쪽·오른쪽이면 수직(Y 거리).
  */
 import type { CadDocument, DimensionEntity, Entity, Vec3 } from '../../core/model';
 import { maxOf, minOf } from '../../core/arrays';
 import { createDiameterDimension, createLinearDimension, createOrdinateDimension, createRadialDimension } from '../dim/create';
 import { dimVars } from '../dim/vars';
-import { lwVertices } from '../../core/lwpoly';
 import { polyLocs } from '../../core/polyverts';
+import type { Affine } from '../geom/math';
+import { circleOf, lwPlanVertices, ocsPlan } from '../geom/ocs';
 
 export interface P {
   x: number;
@@ -24,7 +25,16 @@ export interface QdimGeometry {
 
 const v3 = (q: P, z = 0): Vec3 => ({ x: q.x, y: q.y, z });
 
-/** 고른 객체의 치수 점과 원·호 */
+/** OCS 평면 점의 평면도 자리(평면 사상 m이 없으면 — 자연 +Z·기운 돌출 방향 — 그대로) */
+const onPlan = (m: Affine | null, q: P): P => (m ? { x: m[0] * q.x + m[2] * q.y + m[4], y: m[1] * q.x + m[3] * q.y + m[5] } : q);
+
+/**
+ * 고른 객체의 치수 점과 원·호(평면도 자리).
+ * LINE의 끝점과 POINT의 위치(10)는 WCS 값이고, CIRCLE·ARC의 중심(10)·각도(50·51), LWPOLYLINE의 꼭짓점(10), 2D POLYLINE의 정점,
+ * INSERT의 삽입점(10)은 객체 OCS 값이다(DXF 참조서 OCS). 돌출 방향이 −Z(대칭으로 뒤집힌 객체)면 OCS X = WCS −X라 치수 명령과 같은
+ * 평면 사상(`geom/ocs.ts`의 `ocsPlan`·`circleOf`·`lwPlanVertices`)으로 옮긴다(177차 — 전에는 치수 점·원 중심이 X 거울상 자리에 생겨
+ * 연관이 붙지 않았고 편집(E)도 그 자리를 봤다). 호의 점은 OCS 시작·끝 각도의 점 차례다. 선·점과 자연 +Z·돌출 방향이 기운 객체는 전과 같은 값
+ */
 export function qdimGeometry(ents: readonly Entity[]): QdimGeometry {
   const points: P[] = [];
   const circles: { c: P; r: number }[] = [];
@@ -38,7 +48,8 @@ export function qdimGeometry(ents: readonly Entity[]): QdimGeometry {
         add(e.end);
         break;
       case 'LWPOLYLINE': {
-        const vs = lwVertices(e);
+        // 평면도 꼭짓점(뒤집힌 평면이면 볼록도 부호도 뒤집혀 호 중심이 평면도 자리로 셈된다)
+        const vs = lwPlanVertices(e).vs;
         for (const v of vs) add(v);
         for (let i = 0; i < vs.length; i++) {
           const a = vs[i]!;
@@ -58,23 +69,31 @@ export function qdimGeometry(ents: readonly Entity[]): QdimGeometry {
         }
         break;
       }
-      case 'POLYLINE':
-        for (const p of polyLocs(e)) add(p);
+      case 'POLYLINE': {
+        // 2D 정점은 OCS, 3D·메시·폴리페이스 정점은 WCS
+        const m = e.kind === '2d' ? ocsPlan(e.extrusion, e.elevation) : null;
+        for (const p of polyLocs(e)) add(onPlan(m, p));
         break;
-      case 'ARC':
-        add({ x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle) });
-        add({ x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle) });
-        circles.push({ c: { x: e.center.x, y: e.center.y }, r: e.radius });
+      }
+      case 'ARC': {
+        const m = ocsPlan(e.extrusion, e.center.z);
+        add(onPlan(m, { x: e.center.x + e.radius * Math.cos(e.startAngle), y: e.center.y + e.radius * Math.sin(e.startAngle) }));
+        add(onPlan(m, { x: e.center.x + e.radius * Math.cos(e.endAngle), y: e.center.y + e.radius * Math.sin(e.endAngle) }));
+        const g = circleOf(e)!;
+        circles.push({ c: { x: g.c.x, y: g.c.y }, r: g.r });
         break;
-      case 'CIRCLE':
-        add(e.center);
-        circles.push({ c: { x: e.center.x, y: e.center.y }, r: e.radius });
+      }
+      case 'CIRCLE': {
+        const g = circleOf(e)!;
+        add(g.c);
+        circles.push({ c: { x: g.c.x, y: g.c.y }, r: g.r });
         break;
+      }
       case 'POINT':
         add(e.position);
         break;
       case 'INSERT':
-        add(e.insert);
+        add(onPlan(ocsPlan(e.extrusion, e.insert.z), e.insert));
         break;
       default:
         break;
