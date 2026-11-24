@@ -11,7 +11,7 @@ import type { EditOp } from '../edit/session';
 import type { App, CommandContext, Keyword } from './app';
 import { type ContextMenuItem, addHook } from './hooks';
 import type { Pt } from './view';
-import { currentProps } from './draw';
+import { currentElevation, currentProps } from './draw';
 import { dialog, form, h } from './ui/dom';
 import { ft } from './filetext';
 import { type CellKind, type TableStyle, type TableStyleEntry, ALIGN_LABEL, KIND_LABEL, cloneTableStyle, currentTableStyle, defaultTableStyle, isMetric, listTableStyles } from '../edit/table/style';
@@ -976,7 +976,9 @@ export function registerTableEditCommands(app: App): void {
         const left = Math.min(p0.x, p1.x);
         insert = { x: left, y: style.flow === 1 ? Math.min(p0.y, p1.y) : Math.max(p0.y, p1.y) };
       }
-      const r = addTableOps(doc, () => st.session.newHandle(), { space: st.space, data, style, styleHandle: entry?.handle, insert: { x: insert.x, y: insert.y, z: 0 }, props: currentProps(app) });
+      // 208차: 화면에서 찍은 삽입점(두 구석)의 Z는 현재 고도(ELEVATION, 배치는 PELEVATION — Autodesk ELEV 도움말: X·Y만 준 점의 Z).
+      // 전에는 늘 0이었다. DXF 참조서의 ACAD_TABLE은 삽입점 10(블록 참조 부분)의 Z 말고 따로 고도 칸이 없다 — INSERT(206차)와 같은 꼴
+      const r = addTableOps(doc, () => st.session.newHandle(), { space: st.space, data, style, styleHandle: entry?.handle, insert: { x: insert.x, y: insert.y, z: currentElevation(app) }, props: currentProps(app) });
       st.session.commit({ label: 'TABLE', ops: r.ops, group: ctx.group });
       app.lastCreated = [r.table.handle];
       ctx.print(`${data.rows}행 ${data.cols}열 표를 만들었습니다(폭 ${+tableWidth(data).toFixed(4)}, 높이 ${+tableHeight(data).toFixed(4)}).`);

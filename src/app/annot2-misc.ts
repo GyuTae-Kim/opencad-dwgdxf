@@ -12,7 +12,7 @@ import { GDT_SYMBOLS, type MaterialCond, type TolSpec, buildToleranceText, empty
 import { allocBlockName } from '../edit/geom/types';
 import { STANDARD_LINETYPES, makeLinetype } from '../edit/linetypes';
 import type { App, CommandContext, Keyword } from './app';
-import { addEntities, currentProps } from './draw';
+import { addEntities, currentElevation, currentProps } from './draw';
 import { dimGhost } from './annot2-common';
 import { attachAssociation, finishNewDimension } from './dimassoc';
 import { segmentShape } from './dimcmds';
@@ -480,7 +480,8 @@ export function registerAnnot2Misc(app: App): void {
       if (!('point' in p)) return;
       const props = currentProps(app);
       const ds = doc.dimStyles.get(tableKey(dimStyle));
-      const e: ToleranceEntity = { ...entityDefaults(), ...props, type: 'TOLERANCE', handle: '', dimStyle: ds?.name ?? dimStyle, insert: v3(p.point), text, direction: { x: 1, y: 0, z: 0 } };
+      // 208차: 찍은 공차 위치의 Z는 현재 고도(전에는 늘 0 — Autodesk ELEV 도움말: X·Y만 준 점의 Z). DXF 참조서의 TOLERANCE는 삽입점 10(WCS)의 Z 말고 고도 칸이 없다
+      const e: ToleranceEntity = { ...entityDefaults(), ...props, type: 'TOLERANCE', handle: '', dimStyle: ds?.name ?? dimStyle, insert: v3(p.point, currentElevation(app)), text, direction: { x: 1, y: 0, z: 0 } };
       addEntities(app, ctx, [e], 'TOLERANCE');
     },
   });
