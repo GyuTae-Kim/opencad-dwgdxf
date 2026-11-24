@@ -142,7 +142,12 @@ async function changeProps(app: App, ctx: CommandContext, hs: string[], label: s
   }
 }
 
-/** 선의 가까운 끝점을 옮기고, 원은 반지름을 바꾸고, 문자는 위치·높이·각도·내용을 묻는다 */
+/**
+ * 선의 가까운 끝점을 옮기고, 원은 반지름을 바꾸고, 문자는 위치·높이·각도·내용을 묻는다.
+ * 원·문자·속성 정의는 찍은 점(WCS 평면도)을 객체 OCS로 옮겨 쓴다(168차, Autodesk CHANGE 도움말 — 문자는 새 삽입점으로 옮기고 원은 반지름을 바꾼다,
+ * 고른 객체는 현재 UCS와 평행해야 한다: −Z 객체도 평행하다). 전에는 찍은 점을 OCS 좌표에 그대로 넣어 −Z 문자는 거울상 X 자리로 가고,
+ * −Z 원은 OCS 중심과 찍은 점 사이로 반지름을 재어 찍은 점을 지나지 않았다. +Z 객체는 전과 같은 값이다
+ */
 async function changePoint(app: App, ctx: CommandContext, hs: string[], p: Pt): Promise<void> {
   const st = app.active!;
   const ops: EditOp[] = [];
@@ -159,10 +164,13 @@ async function changePoint(app: App, ctx: CommandContext, hs: string[], p: Pt): 
       const np = { x: p.x, y: p.y, z: ds <= de ? e.start.z : e.end.z };
       modify(ds <= de ? { ...e, start: np } : { ...e, end: np });
     } else if (e.type === 'CIRCLE') {
-      const r = Math.hypot(p.x - e.center.x, p.y - e.center.y);
+      const q = ocsPoint(e.extrusion, e.center.z, p);
+      const r = q ? Math.hypot(q.x - e.center.x, q.y - e.center.y) : 0;
       if (r > 1e-12) modify({ ...e, radius: r });
     } else if (e.type === 'TEXT' || e.type === 'ATTDEF') {
-      const pt = { x: p.x, y: p.y, z: e.insert.z };
+      const q = ocsPoint(e.extrusion, e.insert.z, p);
+      if (!q) continue;
+      const pt = { x: q.x, y: q.y, z: e.insert.z };
       const nh = await ctx.getPoint(`새 높이 지정 <${e.height.toFixed(4)}>:`, { allowText: true, preferNumber: true });
       const na = await ctx.getPoint(`새 회전 각도 지정 <${((e.rotation * 180) / Math.PI).toFixed(0)}>:`, { allowText: true, preferNumber: true });
       const nt = await ctx.getPoint(`새 문자 입력 <${ft(e.text)}>:`, { allowText: true });
@@ -171,7 +179,7 @@ async function changePoint(app: App, ctx: CommandContext, hs: string[], p: Pt): 
       const text = 'text' in nt ? nt.text : e.text;
       const after = { ...e, insert: pt, height, rotation, text } as Entity;
       // 맞춤점을 쓰는 자리맞추기면 맞춤점도 같은 만큼 옮긴다
-      if ('alignPoint' in e && e.alignPoint && (e.halign || e.valign)) (after as typeof e).alignPoint = { x: e.alignPoint.x + p.x - e.insert.x, y: e.alignPoint.y + p.y - e.insert.y, z: e.alignPoint.z };
+      if ('alignPoint' in e && e.alignPoint && (e.halign || e.valign)) (after as typeof e).alignPoint = { x: e.alignPoint.x + q.x - e.insert.x, y: e.alignPoint.y + q.y - e.insert.y, z: e.alignPoint.z };
       modify(after);
     } else if (e.type === 'INSERT') {
       const na = await ctx.getPoint(`새 블록 회전 각도 지정 <${((e.rotation * 180) / Math.PI).toFixed(0)}>:`, { allowText: true, preferNumber: true });
@@ -188,6 +196,12 @@ function planeOf(ext: Vec3 | undefined, z: number): { to: Affine; back: Affine; 
   const to = planProj(ext, z);
   const back = affInv(to);
   return back ? { to, back, sign: affDet(to) < 0 ? -1 : 1 } : null;
+}
+
+/** 찍은 점(WCS 평면도) → 돌출 방향 ext·고도 z인 OCS 평면의 (x, y). 평면도로 옮길 수 없으면 null */
+function ocsPoint(ext: Vec3 | undefined, z: number, p: Pt): Pt | null {
+  const pl = planeOf(ext, z);
+  return pl ? affApply(pl.back, p) : null;
 }
 
 /**
