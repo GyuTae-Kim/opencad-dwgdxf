@@ -9,12 +9,13 @@ import { textStyleAnnotative } from '../../edit/annoscale/xdata';
 import { applyTemplate } from '../../edit/field/store';
 import type { App, CommandContext, Keyword } from '../app';
 import type { DocState } from '../docstate';
-import { addEntities, currentProps } from '../draw';
+import { addEntities, currentElevation, currentProps } from '../draw';
 import type { Pt } from '../view';
 import { type EditorResult, TextEditor, openTextEditor } from './editor';
 import { ft } from '../filetext';
 
-const v3 = (p: Pt) => ({ x: p.x, y: p.y, z: 0 });
+/** 찍은 점(X·Y) + Z. TEXT·MTEXT는 Z에 현재 고도를 준다(206차) */
+const v3 = (p: Pt, z = 0) => ({ x: p.x, y: p.y, z });
 const dist = (a: Pt, b: Pt) => Math.hypot(b.x - a.x, b.y - a.y);
 
 /** 필드 평가 환경(fieldcmds.fieldContext와 같다) */
@@ -124,16 +125,16 @@ export const JUSTIFY_PROMPT = `옵션 입력 [${TEXT_JUSTIFY.map((j) => `${justi
 /** 자리맞추기 옵션 열다섯의 키워드(자리맞추기(J) 목록과 TEXT 시작점 프롬프트가 함께 쓴다 — 186차) */
 const JUSTIFY_KEYWORDS: Keyword[] = TEXT_JUSTIFY.map((x) => ({ key: x[0], label: justifyOpt(x) }));
 
-/** 단일 행 문자의 한 줄(자리맞추기에 맞게 삽입점·정렬점) */
-export function makeTextLine(base: Omit<TextEntity, 'type' | 'handle' | 'insert' | 'text' | 'halign' | 'valign' | 'alignPoint'>, text: string, just: { h: TextHAlign; v: TextVAlign }, p1: Pt, p2?: Pt): TextEntity {
+/** 단일 행 문자의 한 줄(자리맞추기에 맞게 삽입점·정렬점). z = 두 점의 Z(DXF 참조서 TEXT: 10·11의 30이 OCS Z — 따로 고도 칸이 없다) */
+export function makeTextLine(base: Omit<TextEntity, 'type' | 'handle' | 'insert' | 'text' | 'halign' | 'valign' | 'alignPoint'>, text: string, just: { h: TextHAlign; v: TextVAlign }, p1: Pt, p2?: Pt, z = 0): TextEntity {
   const e = { ...entityDefaults(), ...base, type: 'TEXT', handle: '', text, halign: just.h, valign: just.v } as TextEntity;
-  if (just.h === 0 && just.v === 0) e.insert = v3(p1);
+  if (just.h === 0 && just.v === 0) e.insert = v3(p1, z);
   else if ((just.h === 3 || just.h === 5) && p2) {
-    e.insert = v3(p1);
-    e.alignPoint = v3(p2);
+    e.insert = v3(p1, z);
+    e.alignPoint = v3(p2, z);
   } else {
-    e.insert = v3(p1);
-    e.alignPoint = v3(p1);
+    e.insert = v3(p1, z);
+    e.alignPoint = v3(p1, z);
   }
   return e;
 }
@@ -238,6 +239,9 @@ export function registerTextCommands(app: App): void {
       const rot = p2 ? Math.atan2(p2.y - p1.y, p2.x - p1.x) : await askAngle(ctx, '문자의 회전 각도 지정', p1, 0);
       const props = currentProps(app);
       const base = { ...props, height, rotation: rot, widthFactor: style?.widthFactor || 1, oblique: style?.oblique || 0, style: style?.name ?? styleName, generation: style?.generation ?? 0 };
+      // 206차: 줄마다 삽입점·정렬점 Z는 현재 고도(ELEVATION, 배치는 PELEVATION — Autodesk ELEV 도움말: X·Y만 준 점의 Z가 현재 고도).
+      // 전에는 늘 0이었다. POINT·LINE·PLINE·SOLID와 같은 `currentElevation`, 입력이 Z를 준 점은 SOLID(205차)처럼 받지 않는다
+      const elev = currentElevation(app);
       // 정렬(A)·맞춤(F)은 한 줄만(AutoCAD와 같다: 두 끝점이 그 줄의 것)
       const single = just.h === 3 || just.h === 5;
       const step = height * 1.667;
@@ -251,7 +255,7 @@ export function registerTextCommands(app: App): void {
       let ended = false;
       const commit = (text: string, r: EditorResult | null) => {
         if (!text) return;
-        const e = makeTextLine(base, text, just, at, single ? p2 : undefined);
+        const e = makeTextLine(base, text, just, at, single ? p2 : undefined, elev);
         addEntities(app, ctx, [r ? finishText(app, e, r) : e], 'TEXT');
       };
       const moveTo = (p: Pt) => {
@@ -491,7 +495,8 @@ export function registerTextCommands(app: App): void {
         ...props,
         type: 'MTEXT',
         handle: '',
-        insert: v3(insert),
+        // 206차: 삽입점 Z는 현재 고도(Autodesk ELEV 도움말 — 전에는 늘 0). DXF 참조서 MTEXT: 10의 30이 삽입점 Z
+        insert: v3(insert, currentElevation(app)),
         height: r.height,
         width: r.width,
         attachment: r.attachment,
