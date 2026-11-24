@@ -1075,10 +1075,14 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   폴리선 고도(`edit/express/breakline.ts` makeBreakline의 Z 인자 — 마지막 객체만, 미리보기 그대로), `app/count.ts` COUNT 「표 삽입」·COUNTTABLE과 `app/dataextract.ts` DATAEXTRACTION의
   표 삽입점, `app/modify2.ts` WIPEOUT 점 지정의 삽입점(makeWipeout의 Z 인자)이 늘 0이었다 — 이제 `currentElevation`이다. WIPEOUT 폴리선(P)은 이미 원본 폴리선의 Z를 따르는 그대로다.
   고도 0인 도면, 프롬프트 흐름, 끊기선 꼭짓점의 X·Y, 표 내용, 가리기의 U·V 벡터는 같은 값이다
-- [ ] 209차에 보고 두 것 — 이번에 찾은 같은 꼴(화면에서 찍은 삽입점의 Z 0, 다음 후보 — 코드 읽기): XATTACH(`app/blkcmds-xref.ts` — 외부 참조 블록 참조 삽입점),
-  IMAGEATTACH(같은 파일 — 이미지 삽입점, 「삽입점 지정 <0,0>」의 Enter 기본값은 X·Y만 준 점인지 따로 정할 것), PDFATTACH(같은 파일 — 언더레이 삽입점),
-  FIELD로 새로 넣는 여러 줄 문자(`app/fieldcmds.ts` — MTEXT 삽입점). 도면 비교 정보 표(`app/compare.ts`)·PASTESPEC·블록으로 붙여넣기(`app/modify.ts` pasteAsBlock)는
-  찍은 점이 기준점·붙여넣기 자리라 현재 고도 규칙과 같은 꼴인지 먼저 볼 것
+- [x] XATTACH·IMAGEATTACH·PDFATTACH·FIELD의 현재 고도(210차, 같은 ELEV 도움말 — 외부 참조·이미지·PDF 언더레이 부착 대화 상자 도움말: 삽입점 「화면상에 지정」은
+  명령행·화면에서 점, 끄면 X·Y·Z 칸(이미지 기본 삽입점 0,0,0) — DXF 참조서: INSERT 10(OCS)·IMAGE 10(WCS)·UNDERLAY 10(OCS, 고도 38 없음)·MTEXT 10은 고도 칸 없이 점의 Z):
+  `app/blkcmds-xref.ts` XATTACH 외부 참조 삽입점, IMAGEATTACH 화면에서 찍은 이미지 삽입점(`commitImage`의 z 인자), PDFATTACH 언더레이 삽입점, `app/fieldcmds.ts` FIELD로
+  새로 넣는 여러 줄 문자 삽입점이 늘 0이었다 — 이제 `currentElevation`이다. IMAGEATTACH 「삽입점 지정 <0,0>」의 Enter는 도움말의 기본 삽입점 0,0,0이라 그대로다.
+  고도 0인 도면, 프롬프트 흐름, 축척·회전·이미지 U·V 벡터는 같은 값이다
+- [ ] 210차에 보고 두 것 — 찍은 점이 붙여넣기 자리·기준점인 명령(현재 고도 규칙과 같은 꼴인지 먼저 볼 것, 다음 후보 — 코드 읽기): PASTESPEC 그림 붙여넣기
+  (`app/blkcmds-misc.ts` → IMAGEATTACH와 같은 `attachImageFile` — 라벨 PASTESPEC은 Z 0 그대로 둠), 블록으로 붙여넣기(`app/modify.ts` pasteAsBlock), 도면 비교 정보 표(`app/compare.ts`).
+  실물 표본 없이는 근거가 서지 않는 것: IMAGEATTACH 명령행 꼴의 「삽입점 지정 <0,0>」 Enter를 AutoCAD가 고도에 놓는지(도움말은 대화 상자의 기본 삽입점 0,0,0만 적음 — Z 0 그대로)
 - [ ] 206차에 보고 두 것 — 현재 고도 입구 표에서 아직 Z 0을 쓰는 만들기 명령(다음 후보, 같은 `currentElevation`으로 맞출 수 있는 것 — ATTDEF·-INSERT·MINSERT는 207차,
   TABLE·TOLERANCE·REVCLOUD 직사각형·폴리곤·프리핸드는 208차, Express BREAKLINE·WIPEOUT 점은 209차가 고침): LEADER·QLEADER·MLEADER(꼭짓점·주석·내용 블록 자리가 여럿 — 한 묶음으로),
   MLINE(`edit/mline/geom.ts`), SKETCH(`edit/sketch.ts`), HELIX(바닥 중심 — 3D 객체).
