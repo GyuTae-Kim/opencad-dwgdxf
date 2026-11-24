@@ -2,7 +2,9 @@
  * STRETCH의 객체 선택: `신축할 객체를 걸침 윈도우 또는 걸침 폴리곤으로 선택...` 다음 `객체 선택:`을 Enter까지 되풀이한다.
  * - 빈 곳을 찍으면 걸침 윈도우(두 구석, 방향과 관계없이 걸침), 객체를 찍으면 그 객체를 더한다.
  * - 걸침(C)·걸침 폴리곤(CP)·윈도우(W)·윈도우 폴리곤(WP)·상자(BOX)는 선택 방식(src/app/selmethod.ts)을 그대로 쓴다.
- * - 신축 영역은 마지막 윈도우·폴리곤이다(AutoCAD처럼 그 안의 정점만 옮긴다). 영역 없이 찍기만 했으면 신축하지 않는다.
+ * - 신축 영역은 마지막 윈도우·폴리곤이다(AutoCAD처럼 그 안의 정점만 옮긴다).
+ * - 하나씩 찍어 고른 객체(`picked`)는 늘이지 않고 통째로 옮긴다(165차 — Autodesk STRETCH 도움말: 창 안에 다 든 객체나 하나씩 고른 객체는
+ *   늘이지 않고 옮긴다). 영역 없이 찍기만 해도 된다. 이미 고른 객체를 다시 고르면 중복으로 버려 처음 고른 방식을 따른다.
  */
 import type { App, CommandContext, Keyword } from './app';
 import { unlockedOnly } from './layers';
@@ -24,19 +26,22 @@ export function rectPolygon(r: readonly [number, number, number, number]): Pt[] 
 
 /**
  * 신축할 객체와 신축 영역을 고른다. Esc·Enter로 아무것도 고르지 않으면 null.
- * 고른 객체는 잠긴 도면층을 뺀 것이고, 선택 표시에 올린다.
+ * 고른 객체는 잠긴 도면층을 뺀 것이고, 선택 표시에 올린다. `picked`는 그 가운데 하나씩 찍어 고른 객체(옮긴다),
+ * `poly`는 마지막 윈도우·폴리곤(찍기만 했으면 빈 배열)이다.
  */
-export async function stretchSelection(app: App, ctx: CommandContext): Promise<{ handles: string[]; poly: Pt[] } | null> {
+export async function stretchSelection(app: App, ctx: CommandContext): Promise<{ handles: string[]; poly: Pt[]; picked: string[] } | null> {
   ctx.print('신축할 객체를 걸침 윈도우 또는 걸침 폴리곤으로 선택...');
   const pk = app.picker();
   if (!pk) return null;
   const chosen: string[] = [];
+  const picked: string[] = [];
   let region: Pt[] | null = null;
-  const add = (hs: string[]) => {
+  const add = (hs: string[], byPick = false) => {
     let n = 0;
     for (const h of unlockedOnly(app, hs))
       if (!chosen.includes(h)) {
         chosen.push(h);
+        if (byPick) picked.push(h);
         n++;
       }
     app.setSelection(chosen);
@@ -63,7 +68,7 @@ export async function stretchSelection(app: App, ctx: CommandContext): Promise<{
       const tol = app.view.overlay.pickbox * app.view.pixelSize();
       const hit = pk.pick(p.x, p.y, tol);
       if (hit) {
-        add([hit]);
+        add([hit], true);
         continue;
       }
       // 빈 곳: 걸침 윈도우(방향과 관계없이 걸침)
@@ -90,10 +95,6 @@ export async function stretchSelection(app: App, ctx: CommandContext): Promise<{
     ctx.print('선택된 객체가 없습니다.');
     return null;
   }
-  if (!poly) {
-    ctx.print('걸침 윈도우 또는 걸침 폴리곤으로 객체를 선택해야 신축할 수 있습니다.', 'err');
-    app.clearSelection();
-    return null;
-  }
-  return { handles: chosen, poly };
+  // 영역 없이 찍기만 했으면 고른 객체는 모두 옮긴다(윈도우·폴리곤 방식은 고르는 수가 0이어도 영역을 남긴다)
+  return { handles: chosen, poly: poly ?? [], picked };
 }

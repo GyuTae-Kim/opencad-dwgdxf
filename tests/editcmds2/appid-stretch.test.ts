@@ -85,7 +85,7 @@ describe('STRETCH 걸침 폴리곤(CP)', () => {
     void c;
   });
 
-  it('빈 곳을 찍으면 걸침 윈도우, 찍기만 하면 신축하지 않는다', async () => {
+  it('빈 곳을 찍으면 걸침 윈도우, 찍기만 하면 영역 없이 찍은 객체를 옮길 객체로 돌려준다(165차)', async () => {
     const h = makeHarness();
     withPolygonPicker(h);
     const a = h.add(ln(0, 0, 10, 0));
@@ -94,9 +94,12 @@ describe('STRETCH 걸침 폴리곤(CP)', () => {
     await h.run('T', ['8,-1', '12,1', '']);
     expect(got!.handles).toEqual([a.handle]);
     expect(got!.poly).toEqual(rectPolygon([8, -1, 12, 1]));
-    // 객체 위를 찍기만 하면 영역이 없다
+    expect(got!.picked).toEqual([]);
+    // 객체 위를 찍기만 하면 영역이 없고, 하나씩 고른 객체는 늘이지 않고 옮긴다(Autodesk STRETCH 도움말)
     await h.run('T', ['5,0', '']);
-    expect(got).toBeNull();
-    expect(h.printed.some((t) => t.includes('걸침 윈도우 또는 걸침 폴리곤으로 객체를 선택해야'))).toBe(true);
+    expect(got!.handles).toEqual([a.handle]);
+    expect(got!.poly).toEqual([]);
+    expect(got!.picked).toEqual([a.handle]);
+    expect(h.printed.some((t) => t.includes('걸침 윈도우 또는 걸침 폴리곤으로 객체를 선택해야'))).toBe(false);
   });
 });
