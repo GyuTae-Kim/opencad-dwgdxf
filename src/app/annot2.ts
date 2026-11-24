@@ -23,7 +23,8 @@ import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import type { Pt } from './view';
 import { askAngle, commitChanged, dimGhost } from './annot2-common';
-import { VP_PICK, pickedViewport, viewportScaled } from './dimcmds';
+import { VP_PICK, pickedViewport, polyArcOf, viewportScaled } from './dimcmds';
+import { circleOf } from '../edit/geom/ocs';
 import { circleToPaper } from './vpsnap';
 import { registerAnnot2Leader } from './annot2-leader';
 import { registerAnnot2Misc } from './annot2-misc';
@@ -357,16 +358,21 @@ export function registerAnnot2Commands(app: App): void {
       // 모형 공간 값의 치수를 만든다. DIMLFAC — 반지름을 포함한 모든 선형 치수 거리에 곱한다
       const r = await ctx.getEntity('호 또는 원 선택:', undefined, VP_PICK);
       if (!('handle' in r)) return;
-      const e = doc.entityIndex.get(r.handle);
-      if (e?.type !== 'CIRCLE' && e?.type !== 'ARC') {
+      const ent = doc.entityIndex.get(r.handle);
+      const e = ent?.type === 'CIRCLE' || ent?.type === 'ARC' ? ent : undefined;
+      const vx = pickedViewport(app, r);
+      // 183차: 원·호는 174차 `circleOf`의 평면도 중심·평면 Z(−Z 원·호의 OCS 중심은 X 거울상 자리 — 전에는 OCS 값 그대로라 치수가 거울상 자리에 생겼다),
+      // 폴리선은 182차 `polyArcOf` — Autodesk DIMJOGGED 도움말 「호 또는 원 선택」: 원, 호, 폴리선의 호 세그먼트(DIMRADIUS와 같은 글).
+      // 고른 점(뷰포트 안 모형 폴리선이면 모형 점)에 가장 가까운 세그먼트가 호면 그 호. 자연 +Z와 기운 돌출 방향의 원·호는 전과 같은 값
+      const g = circleOf(e) ?? polyArcOf(ent, vx && r.viewport ? r.viewport.model : r.point);
+      if (!g) {
         ctx.print('호 또는 원을 선택하십시오.', 'err');
         return;
       }
       app.clearSelection();
-      const vx = pickedViewport(app, r);
-      const pc = vx ? circleToPaper(vx, { c: e.center, r: e.radius }) : null;
-      const center: Vec3 = pc ? v3(pc.c) : e.center;
-      const radius = pc ? pc.r : e.radius;
+      const pc = vx ? circleToPaper(vx, g) : null;
+      const center: Vec3 = pc ? v3(pc.c) : v3(g.c, g.z);
+      const radius = pc ? pc.r : g.r;
       const oc = await ctx.getPoint('중심 위치 재지정 지정:', vx ? { viewportSnaps: true } : {});
       if (!('point' in oc)) return;
       const ovr = v3(oc.point, center.z);
@@ -415,10 +421,11 @@ export function registerAnnot2Commands(app: App): void {
       const j = await ctx.getPoint('꺾기 위치 지정:', { ghost: dimGhost(app, (q) => build(tp0, q)) });
       if (!('point' in j)) return;
       const a = commitResults(app, ctx, [{ add: [build(tp0, j.point)] }], 'DIMJOGGED', { quiet: true });
-      // 연관: [15 현 위 점, 10 중심] — 재지정 중심·꺾기 점은 중심을 따라 옮긴다(뷰포트 안 모형 원·호는 연관하지 않는다)
+      // 연관: [15 현 위 점, 10 중심] — 재지정 중심·꺾기 점은 중심을 따라 옮긴다(뷰포트 안 모형 원·호는 연관하지 않는다).
+      // 폴리선 호 세그먼트는 DIMRADIUS(182차)·스마트 치수 DIM처럼 연관을 붙이지 않는다(현 위 점 참조 circlePointRef가 원·호만)
       const h = a.added[0];
       const d = h ? doc.entityIndex.get(h) : undefined;
-      if (h && !vx && d?.type === 'DIMENSION') attachAssociation(app, ctx, h, [circlePointRef(e, d.defPoint4), objectRef(app, e, OSNAP.CEN, d.defPoint), null, null], 'DIMJOGGED');
+      if (h && !vx && e && d?.type === 'DIMENSION') attachAssociation(app, ctx, h, [circlePointRef(e, d.defPoint4), objectRef(app, e, OSNAP.CEN, d.defPoint), null, null], 'DIMJOGGED');
       if (h) finishNewDimension(app, ctx, h, 'DIMJOGGED');
     },
   });
