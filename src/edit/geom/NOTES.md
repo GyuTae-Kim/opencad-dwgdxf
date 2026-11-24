@@ -36,7 +36,7 @@ ezdxf(MIT)는 DXF 값의 뜻을 확인할 때만 참고했다.
 | --- | --- |
 | `index.ts` | 공개 API |
 | `types.ts` | `EditResult`, 그립 형식, 안내 문구, 익명 블록 이름 |
-| `math.ts`, `ocs.ts`, `conic.ts` | 벡터·아핀·각도, OCS 평면 사상, 켤레 반지름 → 타원 |
+| `math.ts`, `ocs.ts`, `conic.ts` | 벡터·아핀·각도, OCS 평면 사상(−Z 원·호·폴리선의 평면도 도우미 `ocsPlan`·`circleOf`·`lwPlanVertices` — 치수 명령·QDIM이 함께 쓴다, 177차), 켤레 반지름 → 타원 |
 | `curve.ts`, `path.ts`, `nurbs.ts` | 조각·경로(가장 가까운 점·길이·부분), 객체 ↔ 경로, NURBS(매듭 삽입·나누기·베지어 잇기·보간) |
 | `intersect.ts`, `edges.ts` | 조각 교점(선·원은 해석적, 나머지는 꺾은선 + 뉴턴법), 절단·경계 모서리(EDGEMODE 연장 포함) |
 | `transform.ts`, `xtext.ts`, `xannot.ts`, `xhatch.ts` | MOVE·ROTATE·SCALE·MIRROR·비균등 축척 |

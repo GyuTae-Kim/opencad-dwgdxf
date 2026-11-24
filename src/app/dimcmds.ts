@@ -9,7 +9,7 @@
  * 곱하고, 각도 치수에는 효과가 없다. 그래서 모형 객체를 재는 선형·정렬·반지름·지름·호 길이·세로좌표 치수는 뷰포트 축척을
  * DIMLFAC 재지정(viewportScaled)으로 맞추고, 각도 치수는 그대로 둔다(뷰포트 변환은 회전과 확대뿐이라 각도가 같다).
  */
-import type { BlockDef, BlockRecord, CadDocument, DimensionEntity, Entity, Layer, LwPolylineEntity, LwVertex, Vec3 } from '../core/model';
+import type { BlockDef, BlockRecord, CadDocument, DimensionEntity, Entity, Layer, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
 import { formatLength } from '../core/units';
 import {
@@ -41,8 +41,9 @@ import { textDialog } from './draw';
 import { headerOverrides, overridesOf } from './dimstyle';
 import { applyOverrides } from '../edit/annot/override';
 import type { OverlayGeom, Pt } from './view';
-import { lwCount, lwVertices } from '../core/lwpoly';
-import { isNaturalExt, isPlanarExt, planProj, planZ } from '../edit/geom/ocs';
+import { lwCount } from '../core/lwpoly';
+// 평면도 사상 도우미(174~176차에 여기서 만들었고 177차에 QDIM과 함께 쓰려고 edit/geom/ocs.ts로 옮겼다 — 같은 값)
+import { circleOf, lwPlanVertices, ocsPlan } from '../edit/geom/ocs';
 import type { ViewportXf } from './scene';
 import { circleToPaper, layoutXfs, modelToPaperVp, paperProjection } from './vpsnap';
 import { plainText } from './inquiry';
@@ -296,25 +297,6 @@ export async function textOption(ctx: CommandContext, key: string, o: DimOpts): 
   return false;
 }
 
-/** 돌출 방향이 Z축과 평행하고 자연 +Z가 아닌(−Z) OCS 평면의 평면도 사상. 자연 +Z와 돌출 방향이 기운 객체는 null(OCS 값 그대로 쓴다) */
-function ocsPlan(ext: Vec3 | undefined, z: number) {
-  return !isNaturalExt(ext) && isPlanarExt(ext) ? planProj(ext, z) : null;
-}
-
-/**
- * 폴리선(LWPOLYLINE)의 평면도 꼭짓점과 평면의 WCS Z(<객체 선택> 원점·CENTERLINE·CENTERMARK가 함께 씀 — 176차).
- * 꼭짓점(10)·고도(38)는 객체 OCS 값이다(DXF 참조서 OCS). 돌출 방향이 −Z면 OCS X = WCS −X라 편집 기하 커널과 같은 평면 사상(planProj)으로
- * 옮기고, 뒤집힌 평면이면 볼록도 부호를 뒤집는다(175차 CENTERMARK의 폴리선 갈래와 같은 식). 자연 +Z와 돌출 방향이 기운 폴리선은 OCS 값 그대로
- */
-export function lwPlanVertices(e: LwPolylineEntity): { vs: LwVertex[]; z: number } {
-  const ext = e.extrusion;
-  const m = ocsPlan(ext, e.elevation);
-  if (!m) return { vs: lwVertices(e), z: e.elevation };
-  const flip = m[0] * m[3] - m[1] * m[2] < 0;
-  const vs = lwVertices(e).map((v) => ({ ...v, x: m[0] * v.x + m[2] * v.y + m[4], y: m[1] * v.x + m[3] * v.y + m[5], bulge: flip ? -v.bulge : v.bulge }));
-  return { vs, z: planZ(ext, e.elevation) || 0 };
-}
-
 /**
  * 선택한 객체에서 두 치수보조선 원점(선·폴리선 세그먼트·호 — Autodesk DIMLINEAR <객체 선택>: 고른 선·호의 끝점, 폴리선은 고른 세그먼트).
  * LINE의 끝점은 WCS 값이고, ARC의 중심·각도와 폴리선 꼭짓점은 OCS 값이다(DXF 참조서 OCS). −Z 호·폴리선은 평면 사상으로 평면도 자리에 옮긴다
@@ -356,32 +338,6 @@ export function originsFromEntity(e: Entity | undefined, pick: Pt): [Pt, Pt] | n
     return [a, b];
   }
   return null;
-}
-
-/**
- * 호·원의 평면도 중심·반지름·호 범위와 평면의 WCS Z(DIMRADIUS·DIMDIAMETER·DIMARC·DIMCENTER, 175차부터 DIMANGULAR 호·원과 CENTERMARK).
- * CIRCLE·ARC의 중심(10)·각도(50·51)는 객체 OCS 값이다(DXF 참조서 OCS). 돌출 방향이 −Z(대칭으로 뒤집힌 원·호)면 OCS X = WCS −X라
- * 편집 기하 커널과 같은 평면 사상(planProj)으로 평면도에 옮긴다 — 중심은 X 거울상 자리에서 돌아오고, 호는 돌아가는 방향이 뒤집혀
- * 평면도의 반시계 시작·끝이 OCS 끝·시작이 된다(174차 — 전에는 치수·중심 표식이 X 거울상 자리에 생겼다).
- * 자연 +Z는 전과 같은 값, 돌출 방향이 Z축과 평행하지 않은 원·호(평면도에서 타원)는 전처럼 OCS 값 그대로 둔다
- */
-export function circleOf(e: Entity | undefined): { c: Pt; r: number; a0?: number; a1?: number; z: number } | null {
-  if (!e || (e.type !== 'CIRCLE' && e.type !== 'ARC')) return null;
-  const ext = e.extrusion;
-  if (isNaturalExt(ext) || !isPlanarExt(ext)) {
-    if (e.type === 'CIRCLE') return { c: e.center, r: e.radius, z: e.center.z };
-    return { c: e.center, r: e.radius, a0: e.startAngle, a1: e.endAngle, z: e.center.z };
-  }
-  const m = planProj(ext, e.center.z);
-  const c = { x: m[0] * e.center.x + m[2] * e.center.y + m[4], y: m[1] * e.center.x + m[3] * e.center.y + m[5] };
-  const z = planZ(ext, e.center.z) || 0;
-  if (e.type === 'CIRCLE') return { c, r: e.radius, z };
-  const dir = (a: number) => {
-    const t = Math.atan2(m[1] * Math.cos(a) + m[3] * Math.sin(a), m[0] * Math.cos(a) + m[2] * Math.sin(a));
-    return t < 0 ? t + 2 * Math.PI : t;
-  };
-  const flip = m[0] * m[3] - m[1] * m[2] < 0;
-  return { c, r: e.radius, a0: dir(flip ? e.endAngle : e.startAngle), a1: dir(flip ? e.startAngle : e.endAngle), z };
 }
 
 export function registerDimCommands(app: App): void {

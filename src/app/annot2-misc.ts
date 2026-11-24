@@ -15,7 +15,7 @@ import type { App, CommandContext, Keyword } from './app';
 import { addEntities, currentProps } from './draw';
 import { dimGhost } from './annot2-common';
 import { attachAssociation, finishNewDimension } from './dimassoc';
-import { circleOf, lwPlanVertices } from './dimcmds';
+import { circleOf, lwPlanVertices } from '../edit/geom/ocs';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { ucsOrigin } from './ucs';
