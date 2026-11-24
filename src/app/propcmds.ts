@@ -2,9 +2,11 @@
  * 특성·표시 명령: CHPROP, CHANGE(-CH), COLOR(COL), DDPTYPE(PTYPE), ATTDISP, SOLID(SO), TIME
  * 프롬프트는 AutoCAD 2026 한국어판을 따른다.
  */
-import type { CadColor, Entity, FaceEntity, HeaderValue } from '../core/model';
+import type { AttribEntity, CadColor, Entity, FaceEntity, HeaderValue, InsertEntity, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
-import type { EditOp } from '../edit/session';
+import { type EditOp, cloneEntity } from '../edit/session';
+import { type Affine, affApply, affDet, affInv, affLin, affMul, affRotate, affTranslate } from '../edit/geom/math';
+import { planProj } from '../edit/geom/ocs';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { addEntities, currentProps } from './draw';
@@ -174,12 +176,64 @@ async function changePoint(app: App, ctx: CommandContext, hs: string[], p: Pt): 
     } else if (e.type === 'INSERT') {
       const na = await ctx.getPoint(`새 블록 회전 각도 지정 <${((e.rotation * 180) / Math.PI).toFixed(0)}>:`, { allowText: true, preferNumber: true });
       const rotation = 'text' in na && Number.isFinite(Number(na.text)) ? (Number(na.text) * Math.PI) / 180 : e.rotation;
-      const dx = p.x - e.insert.x;
-      const dy = p.y - e.insert.y;
-      modify({ ...e, insert: { x: p.x, y: p.y, z: e.insert.z }, rotation, attribs: e.attribs.map((a) => ({ ...a, insert: { ...a.insert, x: a.insert.x + dx, y: a.insert.y + dy } })) });
+      const moved = relocateInsert(e, p, rotation);
+      if (moved) modify(moved);
     }
   }
   if (ops.length) st.session.commit({ label: 'CHANGE', ops, group: ctx.group });
+}
+
+/** OCS 평면(고도 z)의 좌표 → WCS 평면도 좌표, 그 역, 방향(−Z처럼 뒤집힌 평면이면 −1). 평면도로 옮길 수 없으면 null */
+function planeOf(ext: Vec3 | undefined, z: number): { to: Affine; back: Affine; sign: number } | null {
+  const to = planProj(ext, z);
+  const back = affInv(to);
+  return back ? { to, back, sign: affDet(to) < 0 ? -1 : 1 } : null;
+}
+
+/**
+ * CHANGE 변경점의 블록 참조(167차, Autodesk CHANGE 도움말 — 블록은 위치나 회전을 바꾼다): 삽입점을 찍은 점(WCS → 블록 OCS)에 두고 새 회전 각도로 돌린다.
+ * 속성은 블록 참조에 딸려 블록과 함께 옮기고 돈다(특성 팔레트의 블록 위치·회전과 같은 뜻) — 맞춘 속성의 맞춤점, 여러 줄 속성의 MTEXT 삽입점·방향까지.
+ * 전에는 속성의 삽입점만 옮겨 맞춘 속성·여러 줄 속성이 제자리에 남고 회전을 바꿔도 속성은 돌지 않았으며, 찍은 점을 OCS 삽입점에 그대로 넣어
+ * 돌출 방향이 −Z인 블록은 거울상 자리로 갔다. 회전이 그대로면 속성은 블록과 같은 만큼 옮기기만 한다(전과 같은 값)
+ */
+function relocateInsert(e: InsertEntity, p: Pt, rotation: number): InsertEntity | null {
+  const pb = planeOf(e.extrusion, e.insert.z);
+  if (!pb) return null;
+  const at = affApply(pb.back, p);
+  const was = affApply(pb.to, e.insert);
+  // WCS 평면도에서 블록이 움직이는 만큼: 옮긴 뒤 찍은 점 둘레로 돈다(블록 OCS가 뒤집혔으면 반대쪽으로)
+  const turn = (rotation - e.rotation) * pb.sign;
+  let W: Affine = affTranslate(p.x - was.x, p.y - was.y);
+  if (turn) W = affMul(affRotate(turn, p), W);
+  const r = cloneEntity(e);
+  r.insert = { x: at.x, y: at.y, z: e.insert.z };
+  r.rotation = rotation;
+  for (const a of r.attribs) moveAttrib(a, W, turn);
+  return r;
+}
+
+/** 속성 하나를 WCS 평면도 변환 W(회전 turn)로 옮긴다 — 삽입점·맞춤점은 속성 OCS, 여러 줄 속성의 MTEXT 삽입점·방향은 WCS */
+function moveAttrib(a: AttribEntity, W: Affine, turn: number): void {
+  const pa = planeOf(a.extrusion, a.insert.z);
+  if (pa) {
+    const map = (q: Vec3): Vec3 => {
+      const w = affApply(pa.back, affApply(W, affApply(pa.to, q)));
+      return { x: w.x, y: w.y, z: q.z };
+    };
+    a.insert = map(a.insert);
+    if (a.alignPoint) a.alignPoint = map(a.alignPoint);
+    if (turn) a.rotation += pa.sign * turn;
+  }
+  const mt = a.mtext;
+  if (!mt) return;
+  const w = affApply(W, mt.insert);
+  mt.insert = { x: w.x, y: w.y, z: mt.insert.z };
+  if (!turn) return;
+  if (mt.direction) {
+    const d = affLin(W, mt.direction);
+    mt.direction = { x: d.x, y: d.y, z: mt.direction.z };
+  }
+  mt.rotation += (planeOf(mt.extrusion, 0)?.sign ?? 1) * turn;
 }
 
 /** PDMODE 그림 이름 */
