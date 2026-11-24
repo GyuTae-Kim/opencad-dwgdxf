@@ -1060,8 +1060,14 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
 - [x] TEXT·MTEXT·INSERT의 현재 고도(206차, Autodesk ELEV 도움말: 현재 고도는 새 객체의 기본 Z로 X·Y만 준 점에 쓰인다 — DXF 참조서: TEXT 10·11(OCS)·INSERT 10(OCS)·
   MTEXT 10은 고도 칸 없이 점의 Z): `app/textedit/commands.ts` TEXT(줄마다 삽입점·정렬점)·MTEXT(삽입점)와 `app/blockinsert.ts` INSERT(화면에서 찍은 삽입점 — 속성은 그 Z에서 옮김)가
   Z를 늘 0으로 썼다 — 이제 `currentElevation`(모형 ELEVATION, 배치 PELEVATION)이다. 고도 0인 도면과 프롬프트 흐름은 같은 값이다. 현재 고도 입구 표는 CHANGELOG 206차 절
-- [ ] 206차에 보고 두 것 — 현재 고도 입구 표에서 아직 Z 0을 쓰는 만들기 명령(다음 후보, 같은 `currentElevation`으로 맞출 수 있는 것): ATTDEF(화면에서 시작점 — `app/blockinsert.ts`
-  runAttdef), -INSERT(`app/dashcmds-insert.ts` — 삽입점과 기준점(B)의 Z를 함께 정해야 함), MINSERT(`app/util2-blocks.ts`), TABLE(`app/tablecmds.ts`), TOLERANCE(`app/annot2-misc.ts`),
+- [x] -INSERT·MINSERT·ATTDEF의 현재 고도(207차, 같은 ELEV 도움말 — DXF 참조서: INSERT 10(OCS, MINSERT도 같은 개체)·ATTDEF 10·11(OCS)은 고도 칸 없이 점의 Z):
+  `app/dashcmds-insert.ts` -INSERT 삽입점(속성·분해해 넣기도 그 자리에서), `app/util2-blocks.ts` MINSERT 삽입점, `app/blockinsert.ts` ATTDEF 화면상에 지정의 시작점·둘째 끝점이
+  Z를 늘 0으로 썼다 — 이제 `currentElevation`이다. -INSERT 기준점(B)은 X·Y만 옮긴다(도움말이 기준점의 Z를 적지 않음 — 정의 기준점의 Z가 삽입점에 오는 것은 INSERT와 같다).
+  ATTDEF 대화 상자의 X·Y·Z 칸, 고도 0인 도면, 프롬프트 흐름은 같은 값이다
+- [ ] 207차에 보고 두 것: MINSERT에 기준점(B) 옵션이 없다(AutoCAD MINSERT 도움말에는 -INSERT와 같은 기준점 옵션이 있다 — 새 옵션·프롬프트 글이라 이번 범위 밖).
+  실물 표본 없이는 근거가 서지 않는 것: -INSERT 기준점(B)으로 찍은 점의 Z(도움말이 적지 않아 X·Y만 옮김 — 고도가 있는 도면에서 AutoCAD가 기준점에 고도를 대는지는 실물 필요)
+- [ ] 206차에 보고 두 것 — 현재 고도 입구 표에서 아직 Z 0을 쓰는 만들기 명령(다음 후보, 같은 `currentElevation`으로 맞출 수 있는 것 — ATTDEF·-INSERT·MINSERT는 207차가 고침):
+  TABLE(`app/tablecmds.ts`), TOLERANCE(`app/annot2-misc.ts`),
   LEADER·QLEADER·MLEADER(꼭짓점·주석·내용 블록 자리가 여럿 — 한 묶음으로), MLINE(`edit/mline/geom.ts`), REVCLOUD 직사각형·폴리곤·프리핸드(`edit/geom/markup.ts` cloudPolyline의 고도 38),
   WIPEOUT 점(makeWipeout), SKETCH(`edit/sketch.ts`), Express BREAKLINE(`edit/express/breakline.ts` — Z 인자는 있으나 명령이 넘기지 않음), HELIX(바닥 중심 — 3D 객체).
   치수 정의점은 177차 판단(도움말에 Z 규칙 없음) 그대로다. 실물 표본 없이는 근거가 서지 않는 것: HATCH·GRADIENT·BOUNDARY는 해치 고도를 늘 0으로 쓴다
