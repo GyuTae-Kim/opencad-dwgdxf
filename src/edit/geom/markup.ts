@@ -89,11 +89,11 @@ export function cloudVertices(outline: readonly Vec2[], closed: boolean, opt: Cl
   return out;
 }
 
-/** 구름 LWPOLYLINE */
-export function cloudPolyline(base: Omit<EntityBase, 'type'>, outline: readonly Vec2[], closed: boolean, opt: CloudOptions): LwPolylineEntity | null {
+/** 구름 LWPOLYLINE. elevation은 폴리선 고도(DXF 38 — 꼭짓점은 X·Y뿐이다) */
+export function cloudPolyline(base: Omit<EntityBase, 'type'>, outline: readonly Vec2[], closed: boolean, opt: CloudOptions, elevation = 0): LwPolylineEntity | null {
   const vertices = cloudVertices(outline, closed, opt);
   if (vertices.length < 2) return null;
-  return { type: 'LWPOLYLINE', ...base, ...packLw(vertices), closed, plinegen: false, constantWidth: 0, elevation: 0 };
+  return { type: 'LWPOLYLINE', ...base, ...packLw(vertices), closed, plinegen: false, constantWidth: 0, elevation };
 }
 
 /**

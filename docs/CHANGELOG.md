@@ -3,6 +3,43 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-24(208차): TABLE·TOLERANCE·REVCLOUD가 현재 고도를 쓰지 않고 Z 0에 놓이던 것
+
+### 고른 까닭
+206차 현재 고도 입구 표에 남은 만들기 명령 가운데 화면에서 찍은 점으로 자리가 정해지고 고도 칸이 하나인 것을 다시 읽었습니다(코드 읽기 — 실제 도면 표본 없음).
+
+| 명령 | 지금 새 객체의 Z(고도) | 판단 |
+| --- | --- | --- |
+| TABLE 삽입점 지정·윈도우 지정(`app/tablecmds.ts`) | 표 삽입점 Z 0 | **고침** |
+| TOLERANCE(`app/annot2-misc.ts`) | 삽입점 Z 0 | **고침** |
+| REVCLOUD 직사각형·폴리곤·프리핸드(`app/modify2.ts` → `edit/geom/markup.ts` cloudPolyline) | 폴리선 고도 0 | **고침** |
+| REVCLOUD 객체(O)·수정(M) | 0 / 원본 고도 | 그대로(원본을 따르는 갈래 — 도움말에 규칙 없음) |
+| Express BREAKLINE(`app/express-draw.ts`) | 폴리선 고도 0(계산 함수의 Z 인자를 넘기지 않음) | 같은 꼴 — 셋을 끝까지 확인하려고 ROADMAP |
+| COUNT 표·DATAEXTRACTION 표(`app/count.ts`·`app/dataextract.ts`) | 표 삽입점 Z 0 | 이번에 찾음 — ROADMAP |
+
+- 근거: Autodesk ELEV 도움말은 현재 고도가 새 객체의 기본 Z로 X·Y만 준 점에 쓰인다고 적습니다. DXF 참조서는 ACAD_TABLE의 삽입점(10, 블록 참조 부분)과
+  TOLERANCE의 삽입점(10, WCS)에 따로 고도 칸을 두지 않고 점의 Z(30)로 적습니다. LWPOLYLINE은 꼭짓점이 X·Y(10·20, OCS)뿐이고 고도는 38 하나입니다 —
+  같은 앱의 PLINE·RECTANG·POLYGON·DONUT은 이미 38에 현재 고도를 넣습니다.
+- 고르지 않은 것: BREAKLINE(같은 꼴이지만 셋을 끝까지 확인하는 쪽을 골랐음), COUNT·DATAEXTRACTION 표(이번에 찾은 같은 꼴), REVCLOUD 객체(O)의 원본 평면 — ROADMAP.
+
+### 고친 것
+- TABLE: 삽입점 지정의 점, 윈도우 지정의 두 구석에서 정한 표 삽입점 Z를 `currentElevation`(모형 ELEVATION, 배치 PELEVATION)으로 씁니다.
+  TOLERANCE: 공차 위치 Z를 같은 값으로. REVCLOUD: 직사각형·폴리곤·프리핸드로 그린 구름 폴리선의 고도를 같은 값으로(`cloudPolyline`에 고도 인자, 기본 0).
+- 바뀐 기본 동작: 고도가 0이 아닌 도면에서 세 명령이 만든 표·공차·구름이 그 고도에 놓입니다. 고도 0인 도면, 프롬프트 흐름, 구름 꼭짓점의 X·Y·볼록은 같습니다.
+  미리보기, REVCLOUD 객체(O)·수정(M)은 그대로이고, 입력이 Z를 준 점은 205~207차처럼 받지 않습니다. 쓰기·읽기 코드는 바꾸지 않았습니다.
+
+### 확인
+- 고도 6의 TABLE 삽입점 (10, 20)은 표 삽입점 (10, 20, 6), 고도 −2.5의 윈도우 지정 (0, 0)·(100, 50)은 (0, 50, −2.5)(아래로 쌓는 표 — 왼쪽 위 구석),
+  고도 −3의 TOLERANCE는 삽입점 (10, 20, −3)(문자·방향 그대로), 고도 3의 REVCLOUD 직사각형은 고도 3(꼭짓점 셋의 X·Y·볼록은 고도 없는 도면과 같음),
+  고도 −4의 폴리곤 구름과 고도 1.5의 열린 프리핸드 구름도 그 고도입니다. TABLE·TOLERANCE·REVCLOUD 모두 명령 취소 한 번이면 없습니다.
+  고도가 없는 도면은 셋 모두 0이고, 고도 4에서 만든 셋을 DWG·DXF(AC1015·AC1032 — AC1015에서는 표가 블록 참조로 쓰임)로 쓰고 다시 읽어도 Z·고도가 4입니다.
+- 시험: `tests/drawmod/table-tol-cloud-elev208.test.ts` 7건 — 고치기 전 판에서 6건 실패(받은 Z·고도 0 — X·Y는 기대와 같음), 전과 같은 값 1건 통과.
+  고친 뒤 이 파일과 `tests/table2/cellsel28.test.ts`(TABLE 첫 셀 편집)·`tests/drawmod/more.test.ts`(REVCLOUD 수정 M·ELEVATION) 26건 통과, tsc 오류 0.
+- 결과·바이트 고정 시험: `fingerprint|snapshot|toMatchInlineSnapshot`·`createHash|GOLDEN|sha256` 시험 가운데 세 명령을 돌리는 것이 없고(이름이 나오는 둘은 표를 직접 만들거나
+  DXF 표 구역 이름), `cloudPolyline`을 직접 부르는 시험은 고도 기본값 0 그대로입니다. 쓰기 코드를 바꾸지 않았습니다(새 문서의 고도는 0).
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·편집기 조각 크기 전·후,
+  check:i18n(새 프롬프트 글·사전 항목 없음). 실도면 표본 없음: AutoCAD에서 같은 입력의 결과와 견주지는 않았습니다.
+
 ## 2026-11-24(207차): -INSERT·MINSERT·ATTDEF가 현재 고도를 쓰지 않고 Z 0에 놓이던 것
 
 ### 고른 까닭

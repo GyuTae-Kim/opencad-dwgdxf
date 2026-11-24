@@ -26,7 +26,7 @@ import type { HatchPath } from '../core/model';
 import { detectBoundary } from '../edit/hatch';
 import { ScaleIndex, type TextScaleMode, type TextScaleSkip, textAnnoFactor, textScaleFactor } from '../edit/annoscale';
 import type { App, CommandContext, Keyword } from './app';
-import { addEntities, currentProps } from './draw';
+import { addEntities, currentElevation, currentProps } from './draw';
 import { Ghost, commitResults } from './modify';
 import { askNumber, choose, fmtLen, hnum, memOf, previewOf, propsTemplate, resultPreview, selectEditable, transformList, undoStep, visibleEntities, yesNo } from './modify2-util';
 import { registerPeditCommands } from './modify2-pedit';
@@ -561,14 +561,16 @@ export function registerModify2Commands(app: App): void {
         }
         return { ...o, scaled: false };
       };
-      const cloudOf = (pts: Pt[], closed: boolean, reverse = false, from?: Entity) => {
+      const cloudOf = (pts: Pt[], closed: boolean, reverse = false, from?: Entity, elevation = 0) => {
         const o = fitOpts(pts, closed);
         const base = from ? { ...props, layer: from.layer, color: { ...from.color }, linetype: from.linetype, lineweight: from.lineweight, ltscale: from.ltscale, transparency: from.transparency } : props;
-        return { e: cloudPolyline(base, pts, closed, { ...o, reverse }), scaled: o.scaled };
+        return { e: cloudPolyline(base, pts, closed, { ...o, reverse }, elevation), scaled: o.scaled };
       };
       /** from: 구름으로 바꾼 원본(특성을 잇는다). remove면 원본을 지운다(DELOBJ) */
       const finish = (pts: Pt[], closed: boolean, reverse = false, from?: Entity, remove = false): void => {
-        const c = cloudOf(pts, closed, reverse, from);
+        // 208차: 화면에서 찍은 점(직사각형·폴리곤·프리핸드)으로 그린 구름의 고도는 현재 고도(전에는 늘 0 — Autodesk ELEV 도움말: X·Y만 준 점의 Z,
+        // DXF 참조서 LWPOLYLINE 고도 38 — PLINE과 같은 꼴). 객체(O)로 바꾼 구름은 원본 평면을 따를지 도움말에 없어 그대로 0이다
+        const c = cloudOf(pts, closed, reverse, from, from ? 0 : currentElevation(app));
         if (!c.e) {
           ctx.print('구름형 리비전을 만들 수 없습니다.', 'err');
           return;
