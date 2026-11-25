@@ -3224,6 +3224,18 @@ export class App {
         void this.run('LAYERSTATE');
         return;
       }
+      // Ctrl+Shift+C = 기준점을 사용하여 복사, Ctrl+Shift+V = 블록으로 붙여넣기(AutoCAD와 같다 — 249차 전에는 Shift를 거르는 아래 Ctrl+C·V 갈래 안에 있어 닿지 않았다).
+      // 조건은 Ctrl+C·Ctrl+V와 같다: 복사는 고른 객체가 있을 때(보기 모드도), 붙여넣기는 보기 모드가 아닐 때, 글 칸에서는 그 칸의 키
+      if (k === 'c' && !typing && this.active?.selection.size) {
+        ev.preventDefault();
+        void this.run('COPYBASE');
+        return;
+      }
+      if (k === 'v' && !typing && !this.viewOnly) {
+        ev.preventDefault();
+        void this.run('PASTEBLOCK');
+        return;
+      }
     }
     if (mod && !ev.shiftKey && !ev.altKey) {
       const k = ev.key.toLowerCase();
@@ -3266,15 +3278,13 @@ export class App {
       // 휴대폰 보기 모드는 보기만(247차): 키보드가 붙은 태블릿에서도 잘라내지 않는다(복사는 그대로)
       if ((k === 'c' || (k === 'x' && !this.viewOnly)) && !typing && this.active?.selection.size) {
         ev.preventDefault();
-        // Ctrl+Shift+C = 기준점을 두고 복사(AutoCAD와 같다)
-        void this.run(k === 'c' ? (ev.shiftKey ? 'COPYBASE' : 'COPYCLIP') : 'CUTCLIP');
+        void this.run(k === 'c' ? 'COPYCLIP' : 'CUTCLIP');
         return;
       }
       // 보기 모드는 붙여넣지 않는다(247차 — 삽입점을 측정 띠로 물어 객체가 들어갔다)
       if (k === 'v' && !typing && !this.viewOnly) {
         ev.preventDefault();
-        // Ctrl+Shift+V = 블록으로 붙여넣기
-        void this.run(ev.shiftKey ? 'PASTEBLOCK' : 'PASTECLIP');
+        void this.run('PASTECLIP');
         return;
       }
       if (k === 's') {
