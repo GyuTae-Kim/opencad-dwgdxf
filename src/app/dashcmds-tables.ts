@@ -14,7 +14,7 @@ import { matchNameList } from '../edit/layercmd';
 import { annotativeFlag, textStyleAnnotative, withAnnotativeFlag } from '../edit/annoscale/xdata';
 import { columns, degText } from '../edit/script/dash';
 import type { App, CommandContext, Keyword } from './app';
-import { askAngleDeg, askInteger, askOption, askReal, askWord, askYN, fmt4 } from './dashcmds-ask';
+import { askAngleDeg, askInteger, askOption, askReal, askRealAngle, askWord, askYN, fmt4 } from './dashcmds-ask';
 import { dimensionBlockOps } from './dimcmds';
 import { purgeable } from './editcmds';
 import { fileNameMode } from './script';
@@ -271,7 +271,8 @@ async function runDashStyle(app: App, ctx: CommandContext): Promise<void> {
     ctx.print('0 이상의 높이가 필요합니다.', 'err');
   }
   s.widthFactor = await askReal(ctx, `폭 비율 지정 <${fmt4(s.widthFactor)}>:`, s.widthFactor, (v) => (v > 0 ? null : '값은 0보다 커야 합니다.'));
-  s.oblique = (Math.PI / 180) * (await askReal(ctx, `기울기 각도 지정 <${degText(s.oblique)}>:`, +degText(s.oblique), (v) => (Math.abs(v) <= 85 ? null : '-85에서 85 사이의 각도가 필요합니다.')));
+  // 227차: 기울기는 단위 글자 꼴(`45d30'`·`50g`·`0.7854r`)도 그 각(전에는 「숫자 값이 필요합니다.」 뒤 다시). 범위는 도로 바꾼 값으로 그대로 잰다
+  s.oblique = (Math.PI / 180) * (await askRealAngle(ctx, `기울기 각도 지정 <${degText(s.oblique)}>:`, +degText(s.oblique), (v) => (Math.abs(v) <= 85 ? null : '-85에서 85 사이의 각도가 필요합니다.')));
   const back = await askYN(ctx, '문자를 반대로 표시하시겠습니까?', !!(s.generation & 2));
   const upside = await askYN(ctx, '문자를 거꾸로 표시하시겠습니까?', !!(s.generation & 4));
   s.generation = (s.generation & ~6) | (back ? 2 : 0) | (upside ? 4 : 0);

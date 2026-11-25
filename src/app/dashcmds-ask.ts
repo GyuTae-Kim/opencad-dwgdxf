@@ -3,7 +3,7 @@
  * 공백은 Enter(스크립트와 같다)이고, 숫자는 직접 거리 입력이 아니라 값으로 받는다(preferNumber).
  * 잘못된 입력은 오류(err)로 알리고 다시 묻는다 — 스크립트는 오류에서 멈춘다.
  */
-import { parseBearing, parseUnitAngle } from '../core/units';
+import { parseBearing, parseUnitAngle, unitAngleDegrees } from '../core/units';
 import type { CommandContext, Keyword } from './app';
 import type { Pt } from './view';
 
@@ -76,13 +76,20 @@ export const YES_NO: Keyword[] = [
 /**
  * 실수 입력. Enter면 def(null이면 다시 묻는다). check가 글을 돌려주면 오류로 알리고 다시.
  * base가 있으면 점도 받아 base까지의 평면 거리를 값으로 본다(201차 — -ATTEDIT 높이: 점이면 그 점과 문자 시작점의 거리, TEXT 높이와 같은 꼴).
- * 숫자는 base가 있어도 거리 입력이 아니라 값이다
+ * 숫자는 base가 있어도 거리 입력이 아니라 값이다. read: 글 → 수(기본 parseReal — 각도는 askRealAngle, 227차)
  */
-export async function askReal(ctx: CommandContext, prompt: string, def: number | null, check: (v: number) => string | null = () => null, base: Pt | null = null): Promise<number> {
+export async function askReal(
+  ctx: CommandContext,
+  prompt: string,
+  def: number | null,
+  check: (v: number) => string | null = () => null,
+  base: Pt | null = null,
+  read: (text: string) => number | null = parseReal,
+): Promise<number> {
   for (;;) {
     const r = await ctx.getPoint(prompt, { ...(base ? { base } : {}), preferNumber: true, allowText: true });
     if ('enter' in r && def !== null) return def;
-    const v = 'point' in r && base ? Math.hypot(r.point.x - base.x, r.point.y - base.y) : 'text' in r ? parseReal(r.text) : null;
+    const v = 'point' in r && base ? Math.hypot(r.point.x - base.x, r.point.y - base.y) : 'text' in r ? read(r.text) : null;
     if (v !== null) {
       const e = check(v);
       if (!e) return v;
@@ -91,6 +98,14 @@ export async function askReal(ctx: CommandContext, prompt: string, def: number |
     }
     ctx.print('숫자 값이 필요합니다.', 'err');
   }
+}
+
+/**
+ * 각(도) 값 입력(227차): askReal과 같은 프롬프트·Enter·검사·오류이고 글은 parseRealAngle로 읽는다(-STYLE 기울기, -ARRAY 채울 각도·항목 사이 각도,
+ * XATTACH·PDFATTACH·TINSERT 회전). check는 도로 바꾼 값을 본다(-STYLE −85~85는 `100g`도 90도로 잰다)
+ */
+export function askRealAngle(ctx: CommandContext, prompt: string, def: number | null, check: (v: number) => string | null = () => null): Promise<number> {
+  return askReal(ctx, prompt, def, check, null, parseRealAngle);
 }
 
 /** 정수 입력(min~max). Enter면 def(null이면 다시 묻는다) */
@@ -124,6 +139,16 @@ export function parseReal(text: string): number | null {
   if (!/^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i.test(t)) return null;
   const v = Number(t);
   return Number.isFinite(v) ? v : null;
+}
+
+/**
+ * askReal로 각(도)을 읽던 프롬프트의 글 읽기(227차): parseReal이 읽는 글은 그 값 그대로(같은 parseReal — 수·지수 표기), 못 읽은 글이 단위 글자 꼴
+ * (`45d30'`·`50g`·`0.7854r` — core/units unitAngleDegrees, 224·226차)이면 그 각을 도로, 그 밖은 전처럼 null(식·16진·피트-인치·`45x` — 오류 뒤 다시).
+ * parseReal이 읽는 글에는 단위 글자(d·°·g·r)가 없어 두 갈래가 겹치지 않는다. Autodesk 도움말 "About Unit Format Conventions": 각도는 현재 단위와
+ * 상관없이 다른 꼴로도 넣는다. 전에는 이 꼴을 「숫자 값이 필요합니다.」로 거절했다
+ */
+export function parseRealAngle(text: string): number | null {
+  return parseReal(text) ?? unitAngleDegrees(text);
 }
 
 /** 숫자를 프롬프트 기본값 꼴로(소수 네 자리, AutoCAD처럼) */

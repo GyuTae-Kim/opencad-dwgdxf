@@ -9,7 +9,7 @@ import { polarArrayBasePoint } from '../edit/geom/array';
 import { boundsOf } from '../edit/geom/query';
 import { polarArrayAngles, polarCountFrom, rectArrayOffsets } from '../edit/script/dash';
 import type { App, CommandContext } from './app';
-import { askInteger, askOption, askReal, askYN, parseReal } from './dashcmds-ask';
+import { askInteger, askOption, askRealAngle, askYN, parseReal } from './dashcmds-ask';
 import { type Affine, commitResults, rotateAbout, translate } from './modify';
 import { memOf, selectEditable, transformList } from './modify2-util';
 import type { Pt } from './view';
@@ -130,12 +130,13 @@ export function registerDashArrayCommand(app: App): void {
           ctx.print(`2에서 ${MAX_ITEMS} 사이의 정수가 필요합니다.`, 'err');
         }
         const deg = (v: number) => (v * Math.PI) / 180;
-        const fill = deg(await askReal(ctx, '채울 각도 지정 (+=시계 반대 방향, -=시계 방향) <360>:', 360, (v) => (Math.abs(v) <= 360 ? null : '-360에서 360 사이의 각도가 필요합니다.')));
+        // 227차: 두 각도는 단위 글자 꼴(`45d30'`·`50g`·`0.7854r`)도 그 각(전에는 「숫자 값이 필요합니다.」 뒤 다시). 범위는 도로 바꾼 값으로 잰다
+        const fill = deg(await askRealAngle(ctx, '채울 각도 지정 (+=시계 반대 방향, -=시계 방향) <360>:', 360, (v) => (Math.abs(v) <= 360 ? null : '-360에서 360 사이의 각도가 필요합니다.')));
         let angles: number[];
         if (n && fill) angles = polarArrayAngles(n, fill);
         else {
           let between = deg(
-            await askReal(ctx, '항목 사이의 각도 지정 (+=시계 반대 방향, -=시계 방향):', null, (v) => (v !== 0 && Math.abs(v) <= 360 ? null : '0이 아닌 각도가 필요합니다.')),
+            await askRealAngle(ctx, '항목 사이의 각도 지정 (+=시계 반대 방향, -=시계 방향):', null, (v) => (v !== 0 && Math.abs(v) <= 360 ? null : '0이 아닌 각도가 필요합니다.')),
           );
           if (fill < 0 && between > 0) between = -between;
           if (!n) n = polarCountFrom(fill, between);

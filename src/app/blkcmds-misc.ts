@@ -13,7 +13,7 @@ import { anchorOf, cellAt, cellRect } from '../edit/table/model';
 import type { App, Command, CommandContext } from './app';
 import { blockGeometry, geometryBounds } from './blockpreview';
 import { makeAttribs, userBlocks } from './blocks';
-import { askOption, askReal, askWord, askYN, fmt4 } from './dashcmds-ask';
+import { askOption, askReal, askRealAngle, askWord, askYN, fmt4 } from './dashcmds-ask';
 import { addEntities, currentProps } from './draw';
 import { baseName } from './export';
 import { lispSession } from './lisp';
@@ -219,7 +219,8 @@ function registerTinsert(app: App): void {
         }
         autofit = await askYN(ctx, '셀에 맞춰 자동 축척', true);
         if (!autofit) scale = await askReal(ctx, `축척 비율 지정 <${fmt4(1)}>:`, 1, (v) => (v > 0 ? null : '축척은 0보다 커야 합니다.'));
-        rotDeg = await askReal(ctx, '회전 각도 지정 <0>:', 0);
+        // 227차: 회전은 단위 글자 꼴(`50g` 등)도 그 각(전에는 「숫자 값이 필요합니다.」 뒤 다시)
+        rotDeg = await askRealAngle(ctx, '회전 각도 지정 <0>:', 0);
       } else {
         const v = await form(
           '표 셀에 블록 삽입',
