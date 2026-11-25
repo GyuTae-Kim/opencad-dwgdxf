@@ -124,17 +124,29 @@ const area = (app: App, v: number) => {
   const u = app.active!.units;
   return formatLength(v, { lunits: u.lunits === 3 || u.lunits === 4 ? 2 : u.lunits, luprec: u.luprec });
 };
+/**
+ * 길이 글 뒤의 단위 꼬리(INSUNITS 약자, 앞에 빈칸 — 단위 없는 도면은 빈 글). 건축·공학 단위(LUNITS 3·4)는 길이 글이 이미 피트-인치(`4'-2"`)라 붙이지 않는다
+ * (240차 — 전에는 `4'-2" in`처럼 단위가 두 번 적혔다. Autodesk UNITS 도움말: 두 꼴은 피트-인치로 보이고 도면 단위 하나를 1인치로 본다.
+ * 상태 막대 좌표·LIST 객체 줄·DIST 증분 줄도 꼬리 없이 쓴다). DIST·MEASUREGEOM·다중 점·LIST 합계·결과 카드가 이 꼬리를 쓴다
+ */
 const unitSuffix = (app: App) => {
-  const a = unitAbbr(app.active!.units.insunits);
+  const u = app.active!.units;
+  if (u.lunits === 3 || u.lunits === 4) return '';
+  const a = unitAbbr(u.insunits);
   return a ? ` ${a}` : '';
 };
 /** 측정 결과 값(휴대폰 보기 모드의 결과 카드)을 명령행 글과 같은 단위 형식으로 */
-const measureFormat = (app: App): MeasureFormat => ({
-  length: (v) => L(app, v),
-  angle: (a) => formatAngle(a, app.active!.units),
-  area: (v) => area(app, v),
-  unit: unitSuffix(app),
-});
+const measureFormat = (app: App): MeasureFormat => {
+  const abbr = unitAbbr(app.active!.units.insunits);
+  return {
+    length: (v) => L(app, v),
+    angle: (a) => formatAngle(a, app.active!.units),
+    area: (v) => area(app, v),
+    unit: unitSuffix(app),
+    // 면적 글은 건축·공학 단위도 소수(area)라 제곱 단위는 길이 꼬리와 따로 그대로 붙인다(240차)
+    areaUnit: abbr ? ` ${abbr}²` : '',
+  };
+};
 
 export function registerCommands(app: App): void {
   // ------------------------------------------------------------- 화면

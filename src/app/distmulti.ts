@@ -59,7 +59,7 @@ export interface MultiHost {
   base(p: Pt3): Pt & { z?: number };
   /** 길이 글(도면 단위) */
   length(v: number): string;
-  /** 단위 꼬리(" mm", 단위 없는 도면은 빈 글) */
+  /** 단위 꼬리(" mm", 단위 없는 도면·피트-인치 글(건축·공학 단위 — 240차)은 빈 글) */
   unit: string;
   /** 도면 공간: 평면 거리 */
   flat: boolean;
