@@ -3,6 +3,56 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-25(212차): MLINE·SKETCH가 현재 고도를 쓰지 않고 Z 0에 놓이던 것
+
+### 고른 까닭
+211차가 다음 후보로 남긴 MLINE·SKETCH를 읽었습니다(코드 읽기 — 실제 도면 표본 없음). 현재 고도 줄기(205~211차)에서 화면에서 찍은 점(X·Y만)의
+Z를 늘 0으로 쓰던 만들기 명령 가운데 마지막 둘입니다.
+
+| 명령 | 지금 새 객체의 Z | 판단 |
+| --- | --- | --- |
+| MLINE(`app/mlinecmds.ts`, `edit/mline/geom.ts`) | 시작점(10)·정점(11) Z 0 — 첫 구간 추가·구간마다 고치는 커밋·명령 취소(U)·닫기(C)가 모두 `make()` 한 곳 | **고침** |
+| SKETCH(`app/sketch.ts`, `edit/sketch.ts`) | 선(SKPOLY 0) 끝점, 폴리선(1) 고도 38, 스플라인(2) 맞춤점·조정점 Z 0 | **고침** |
+| HELIX | 바닥 중심 Z 0 | 그대로(3D 객체 — 이번에 보지 않음, ROADMAP) |
+
+- 근거: Autodesk ELEV 도움말은 현재 고도가 새 객체의 기본 Z로 X·Y만 준 점에 쓰인다고 적습니다. DXF 참조서 MLINE은 시작점(10 — WCS)과 정점 좌표
+  (11 — 정점마다)를 고도 칸(38) 없는 3D 점으로 적습니다. SPLINE은 조정점(10)·맞춤점(11)을 WCS 3D 점으로 적고 고도 칸이 없습니다. LWPOLYLINE은
+  꼭짓점이 X·Y뿐이고 고도(38)가 하나(208차 근거), LINE 10·11은 3D 점(176차 근거)입니다.
+- 한 객체의 점이 서로 다른 Z가 되지 않게 명령마다 고도를 한 번 읽어 모든 자리에 씁니다. 쓰기·읽기 코드는 MLINE 시작점·정점, LINE 끝점, LWPOLYLINE
+  고도, SPLINE 점의 Z를 DXF·DWG 모두 그대로 쓰고 읽어 바꾸지 않았습니다(R12 DXF는 전처럼 MLINE을 쓰지 않습니다).
+
+### 고친 것
+- MLINE: 시작점과 설정을 받은 뒤 `currentElevation`(모형 ELEVATION, 배치 PELEVATION)을 한 번 읽어 `make()`가 `mlineGeometry`에 넘깁니다.
+  `mlineGeometry`에 Z(선택, 기본 0)를 더해 시작점과 정점이 그 Z가 됩니다. 방향·마이터 벡터와 요소 매개변수는 그대로라 고도 위 XY와 나란합니다.
+  미리보기와 MLSTYLE 그림은 2D 그림이라 그대로입니다.
+- SKETCH: `sketchEntities`에 Z(기본 0)를 더해 선의 두 끝점, 폴리선 고도, 스플라인 맞춤점에 씁니다(`.map(v3)`가 배열 색인을 Z로 넘기지 않게
+  화살표 함수로). 스플라인 조정점은 맞춤점이 모두 고도 평면에 있으니 풀이의 반올림 없이 고도 값 그대로 둡니다. 조정점의 X·Y는 Z와 따로 풀려
+  고도 0과 같고, 고도 0이면 계산한 조정점을 그대로 씁니다.
+- 바뀐 기본 동작: 고도가 0이 아닌 도면에서 두 명령이 만든 객체가 그 고도에 놓입니다. 고도 0인 도면, 프롬프트 흐름, 점의 X·Y, 편집 명령(MLEDIT 등)은
+  같습니다. 입력이 Z를 준 점은 205~211차처럼 받지 않습니다.
+
+### 확인
+- 고도 3의 MLINE (0, 0)→(10, 0)→(10, 10)은 시작점·정점 셋 Z 3(X·Y·방향·마이터·요소 매개변수는 고도 0에서 같은 입력과 같음, 방향·마이터 Z 0)이고
+  명령 취소 한 번이면 없습니다. 고도 −2에서 셋째 점 뒤 U는 정점 둘 Z −2로 고치고, 두 점을 더해 닫으면(C) 정점 넷·시작점 모두 Z −2입니다. 점이 하나만
+  남는 U는 객체를 지우고 다음 점에서 다시 만들어도 Z −2입니다.
+- 고도 2.5의 SKETCH 획 둘은 선 둘의 끝점 Z 2.5(명령 취소 한 번이면 없음)·폴리선 둘의 고도 2.5, 고도 −1.25의 스플라인 획(맞춤점 둘·조정점 넷)은
+  모든 점 Z −1.25이고 X·Y·매듭은 고도 0과 같습니다. 점 넷 획(공차 0)을 고도 1.7로 만든 스플라인은 조정점 여섯이 모두 정확히 1.7입니다.
+  고도가 없는 도면은 모든 점 Z 0이고, 고도 4에서 만든 MLINE·선·폴리선·스플라인을 DWG·DXF(AC1015·AC1032)로 쓰고 다시 읽어도 Z가 4입니다.
+- 시험: `tests/drawmod/mline-sketch-elev212.test.ts` 7건 — 고치기 전 판에서 6건 실패(받은 Z 0 — MLINE U 뒤 객체 수는 기대와 같음), 전과 같은 값 1건 통과.
+  고친 뒤 이 파일과 `tests/table2/mline.test.ts`(`mlineGeometry`·편집 단위)·`tests/render/sketch.test.ts`(`sketchEntities` 단위) 24건 통과, tsc 오류 0.
+- 결과·바이트 고정 시험: `fingerprint|snapshot|toMatchInlineSnapshot`·`createHash|GOLDEN|sha256` 시험 가운데 두 명령을 쓰는 것이 없고, MLINE·SKETCH를 앱으로
+  돌리는 기존 시험도 없습니다. 쓰기 코드를 바꾸지 않았습니다(새 문서의 고도는 0).
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음(장면 지문·명령 묶음·저장 비교·edit-audit), 첫 화면·편집기 조각 크기 전·후,
+  check:i18n(새 프롬프트 글·사전 항목 없음). 실도면 표본 없음: AutoCAD에서 같은 입력의 결과와 견주지는 않았습니다.
+
+### 현재 고도 줄기를 닫음
+- 205~212차가 고친 만들기 명령: SOLID(205), TEXT·MTEXT·INSERT(206), -INSERT·MINSERT·ATTDEF(207), TABLE·TOLERANCE·REVCLOUD 직사각형·폴리곤·
+  프리핸드(208), Express BREAKLINE·COUNT 표·DATAEXTRACTION 표·WIPEOUT 점(209), XATTACH·IMAGEATTACH·PDFATTACH·FIELD(210), LEADER·QLEADER·
+  MLEADER(211), MLINE·SKETCH(212). LINE·PLINE·CIRCLE·ARC·SPLINE 같은 그리기 명령은 그 전부터 현재 고도를 썼습니다.
+- 남은 것은 ROADMAP에 「실물·새 옵션이 필요해 남김」으로 묶었습니다: HELIX(3D), 붙여넣기 자리 꼴(PASTESPEC 그림·블록으로 붙여넣기·도면 비교 정보 표),
+  치수 정의점(177차 판단), 실물 필요(HATCH 계열 고도, 원본에서 만드는 REVCLOUD 객체 모드, -INSERT 기준점의 Z, IMAGEATTACH 명령행 Enter, LEADER 주석 복사),
+  새 옵션(MINSERT 기준점).
+
 ## 2026-11-25(211차): LEADER·QLEADER·MLEADER가 현재 고도를 쓰지 않고 Z 0에 놓이던 것
 
 ### 고른 까닭
