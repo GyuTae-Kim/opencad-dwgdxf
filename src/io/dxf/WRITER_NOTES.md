@@ -142,7 +142,7 @@ R2004+ MTEXT 배경 색은 63·421·431(색상표 이름 — DXF 참조서 430~4
   FIELD(원본 태그, R2007 전후로 값 배치가 바뀌면 모델 값 `field`로 다시 만든다(`io/fields.ts`), R2004부터)·SCALE·IMAGEDEF(+REACTOR)·PDF/DWF/DGNDEFINITION·SORTENTSTABLE·
   GROUP·XRECORD(280 복제 플래그 + 자료)·SPATIAL_FILTER·ACDBPLACEHOLDER, 그 밖의 종류는 읽을 때 남긴 원본 태그(`GenericObject.raw`).
   원본 태그가 없는 종류(DWG 리더가 해석하지 않은 VISUALSTYLE·MATERIAL 등)는 뺀다(`object.no_data`).
-  DWG에서 읽은 DICTIONARYVAR는 DWG 리더가 푼 280·1만 쓴다(참조서의 100 DictionaryVariables 표지 없이 — 236차 보고).
+  DWG에서 읽은 DICTIONARYVAR는 DWG 리더가 푼 원본 태그(100 DictionaryVariables·280·1 — 표지는 237차부터, DXF에서 읽은 것과 같은 꼴)를 쓴다.
   DWG의 DBCOLOR(색상표 색)는 원본 태그 없이 색(62·420·430)으로 쓴다(R2004+).
 - 버전에 없는 객체 종류(MLEADERSTYLE·VISUALSTYLE … R2007+, TABLESTYLE R2004+ 등)는 그 버전에서 뺀다. SCALE과 주석 축척
   컨텍스트 데이터(ACDB_…CONTEXTDATA_CLASS 14종)는 R2000부터 쓴다(AutoCAD도 R2000 DXF에 SCALE을, SAVEFIDELITY 0이면 레코드를 쓴다).
@@ -213,7 +213,7 @@ ezdxf 결과는 파일 내용 해시로 `.runtime/dxfw-cache`에 캐시하고, �
   한 객체(이어 붙인 글, 단 자료)로 합친다. R2018 꼴(`columns`)을 R2013 이하로 쓰면 단 정보를 확장 자료로 옮기고, 단이 둘 이상이면 문단 끝·단 나누기에서
   단 객체로 나눈다(새 핸들, 첫 단이 가리킨다). AutoCAD가 같은 도면을 R2018·R2007로 쓴 짝 24개 객체와 값·글이 같다. 흐름 거꾸로·왼쪽 위가 아닌
   부착점은 근거가 없어 단 정보를 빼고 한 MTEXT로 쓴다.
-- DWG에서 읽은 문서: DWG 리더가 해석하지 않은 객체(VISUALSTYLE·MATERIAL 등)는 원본 태그가 없어 빠진다(DICTIONARYVAR는 280·1로 풀어 쓴다 — 표지 100 없이).
+- DWG에서 읽은 문서: DWG 리더가 해석하지 않은 객체(VISUALSTYLE·MATERIAL 등)는 원본 태그가 없어 빠진다(DICTIONARYVAR는 표지 100·280·1로 풀어 쓴다 — 표지는 237차부터).
   DWG 리더가 XRECORD의 8비트 값(280~289)을 16비트로 읽어 자료가 어긋나는 경우가 있고(예: sample_AC1018.dwg의
   AcDb_Thumbnail_Schema), 그런 XRECORD는 빠진다.
 - 대상 버전이 R2004 이전일 때 MULTILEADER 분해는 화살촉을 그리지 않는다(지시선·걸이·문자·블록만).

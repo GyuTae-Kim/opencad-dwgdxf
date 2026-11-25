@@ -297,9 +297,10 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
         default: {
           const o = readGenericObject(or) as GenericObject;
           if (t === 'DICTIONARYVAR') {
-            // 정수(280)와 문자열(1)
+            // 하위 클래스 표지(DXF 참조서 DICTIONARYVAR — DXF에서 읽은 것·새로 만든 것과 같은 원본 태그, 237차), 정수(280)와 문자열(1)
             const schema = or.dat.RC();
             o.raw = [
+              { code: 100, value: 'DictionaryVariables' },
               { code: 280, value: schema },
               { code: 1, value: or.dat.TV() },
             ];
