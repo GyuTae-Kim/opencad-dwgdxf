@@ -22,16 +22,13 @@ function zeros(s: string, dimzin: number): string {
 export function rtos(v: number, mode: number, prec: number, dimzin: number): string {
   const p = Math.max(0, Math.min(16, prec));
   switch (mode) {
-    case 1: {
-      const e = v.toExponential(p);
-      const m = /^(-?[\d.]+)e([+-])(\d+)$/.exec(e)!;
-      return `${m[1]}E${m[2]}${m[3]!.padStart(2, '0')}`;
-    }
     case 2:
       return zeros(v.toFixed(p), dimzin);
+    case 1:
     case 3:
     case 4:
     case 5:
+      // 과학(지수는 부호와 두 자리 — 1.7500E+01)·공학·건축·분수는 도면 단위 표시(core/units)와 같은 함수
       return formatLength(v, { lunits: mode, luprec: p });
     default:
       throw badValue('모드', mode);
@@ -52,17 +49,9 @@ export function angtos(a: number, mode: number, prec: number, dimzin: number): s
       return `${zeros(((r * 200) / Math.PI).toFixed(p), dimzin)}g`;
     case 3:
       return `${zeros(r.toFixed(p), dimzin)}r`;
-    case 4: {
-      // 측량 단위: 북·남에서 동·서로 잰 각도(도분초)
-      const deg = (r * 180) / Math.PI;
-      const b = deg <= 90 ? 90 - deg : deg <= 180 ? deg - 90 : deg <= 270 ? 270 - deg : deg - 270;
-      const ns = deg > 180 && deg < 360 ? 'S' : 'N';
-      const ew = deg > 90 && deg < 270 ? 'W' : 'E';
-      if (Math.abs(deg) < 1e-9 || Math.abs(deg - 180) < 1e-9) return deg < 90 ? 'E' : 'W';
-      if (Math.abs(deg - 90) < 1e-9) return 'N';
-      if (Math.abs(deg - 270) < 1e-9) return 'S';
-      return `${ns} ${formatAngle((b * Math.PI) / 180, { aunits: 1, auprec: p })} ${ew}`;
-    }
+    case 4:
+      // 측량 단위: 북·남에서 동·서로 잰 각도(도분초), 정방위는 글자 하나 — 도면 단위 표시(core/units)와 같은 함수
+      return formatAngle(r, { aunits: 4, auprec: p });
     default:
       throw badValue('모드', mode);
   }
