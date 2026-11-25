@@ -2,8 +2,8 @@
  * 도면에 저장되는 변수: AcDbVariableDictionary의 DICTIONARYVAR(CANNOSCALE 등)와
  * 이 프로그램의 자체 기록(탭마다 ANNOALLVISIBLE).
  *
- * DICTIONARYVAR 원시 태그: DXF는 `100 DictionaryVariables`, `280 0`, `1 값`. DWG 리더는 `280`·`1`만 남긴다.
- * 어느 쪽이든 1의 값만 바꾸고 나머지 태그는 그대로 둔다.
+ * DICTIONARYVAR 원시 태그: `100 DictionaryVariables`, `280 0`, `1 값`(DXF 리더·DWG 리더 같음 — DWG 리더는 237차부터 표지를 넣는다).
+ * 표지가 없는 원본 태그(그 전 판이 읽은 것)도 받는다. 어느 쪽이든 1의 값만 바꾸고 나머지 태그는 그대로 둔다.
  */
 import type { CadDocument, DictionaryObject, GenericObject, LayoutObject, RawTag, XData } from '../../core/model';
 import type { EditOp } from '../session';
