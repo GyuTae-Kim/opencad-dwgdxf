@@ -120,6 +120,8 @@ export interface UcsRec extends RecordCommon {
   origin: Vec3;
   xAxis: Vec3;
   yAxis: Vec3;
+  /** R2000+ 고도 BD(DXF 146 — 235차, 거르기 전 값). R13·R14이거나 본문이 짧으면 0 */
+  elevation: number;
 }
 
 export type TableRecord = LayerRec | StyleRec | LtypeRec | DimStyleRec | BlockHeaderRec | VportRec | ViewRec | UcsRec | RecordCommon;
@@ -491,7 +493,19 @@ export function readUcs(or: ObjectReader): UcsRec {
   const origin = r.BD3();
   const xAxis = r.BD3();
   const yAxis = r.BD3();
-  return { ...rc, origin, xAxis, yAxis };
+  // 고도(DXF 146 — 235차): R2000+는 Y 축 바로 뒤 BD다(쓰기 writer/tables.ts ucs가 그 자리에 BD·BS·BS를 쓴다 — 셋 가운데 실수는 고도 하나. VIEW 연결 UCS·
+  // VIEWPORT 도형의 UCS도 Y 축 뒤 고도 BD·직교 유형 BS 꼴). 전에는 Y 축에서 멈췄다. 고도가 첫 칸이라 뒤 칸(직교 유형 등)은 읽지 않는다.
+  // 본문이 짧으면(옛 판·깨진 레코드) 전처럼 0 — 비트 리더는 자료 끝을 넘어도 버퍼 안이면 던지지 않아 자료 흐름을 넘었는지도 본다. 범위는 build가 ucsElevationOf로 거른다
+  let elevation = 0;
+  if (or.ver >= R2000) {
+    try {
+      const e = r.BD();
+      if (!r.overflowed()) elevation = e;
+    } catch {
+      /* 고도 없이 전처럼 */
+    }
+  }
+  return { ...rc, origin, xAxis, yAxis, elevation };
 }
 
 export function readSimpleRecord(or: ObjectReader): RecordCommon {

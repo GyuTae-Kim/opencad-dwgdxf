@@ -2,7 +2,7 @@
 import type { DimStyle, Layer, Linetype, TableRecordBase, TextStyle, UcsRecord, ViewRecord, VPortRecord, XData } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { DIM_VAR_CODES } from '../../core/dimvars';
-import { viewProjectionOf, viewRenderModeOf } from '../../core/finalize';
+import { ucsElevationOf, viewProjectionOf, viewRenderModeOf } from '../../core/finalize';
 import type { TagSink } from './tagwriter';
 import { kindOf } from './tagwriter';
 import type { PlannedRecord, TableName, WriteContext } from './wcontext';
@@ -235,7 +235,8 @@ function ucs(w: TagOut, p: PlannedRecord<UcsRecord>): void {
   w.p3(12, u.yAxis);
   if (w.ctx.ver >= 1015) {
     w.t(79, 0);
-    w.t(146, 0);
+    // 고도(235차): 읽은 유한한 값, 없거나 유한하지 않으면 전처럼 0. 79는 참조서대로 늘 0(346·71/13 직교 원점 묶음은 쓰지 않음)
+    w.t(146, ucsElevationOf(u.elevation));
   }
   writeXData(w, u.xdata);
 }

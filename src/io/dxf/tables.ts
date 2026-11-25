@@ -15,7 +15,7 @@ import type {
 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { DIM_VAR_CODES } from '../../core/dimvars';
-import { viewProjectionRead, viewRenderModeOf } from '../../core/finalize';
+import { ucsElevationOf, viewProjectionRead, viewRenderModeOf } from '../../core/finalize';
 import type { DxfRecord } from './records';
 import { DEG, Tags, findXData, handle, int, name, num, parseXData, str } from './tagutil';
 
@@ -272,7 +272,11 @@ function view(rec: DxfRecord): ViewRecord {
 
 function ucs(rec: DxfRecord): UcsRecord {
   const { base, tags: t } = split(rec);
-  return { ...base, flags: recordFlags(t, base), origin: t.point(10), xAxis: t.point(11, { x: 1, y: 0, z: 0 }), yAxis: t.point(12, { x: 0, y: 1, z: 0 }) };
+  const u: UcsRecord = { ...base, flags: recordFlags(t, base), origin: t.point(10), xAxis: t.point(11, { x: 1, y: 0, z: 0 }), yAxis: t.point(12, { x: 0, y: 1, z: 0 }) };
+  // 고도 146(235차): 유한하고 0이 아닐 때만 둔다. 0(이 앱이 써 온 값)·없음은 칸이 없다(쓰기는 전처럼 0). 79(참조서 「늘 0」)·346·71/13 직교 원점 묶음은 읽지 않는다
+  const elevation = ucsElevationOf(t.num(146));
+  if (elevation) u.elevation = elevation;
+  return u;
 }
 
 function blockRecord(rec: DxfRecord): BlockRecord {

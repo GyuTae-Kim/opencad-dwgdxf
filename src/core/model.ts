@@ -1065,6 +1065,11 @@ export interface UcsRecord extends TableRecordBase {
   origin: Vec3;
   xAxis: Vec3;
   yAxis: Vec3;
+  /**
+   * 고도(DXF 146·DWG R2000+ Y 축 뒤 BD — 235차). 유한하고 0이 아닐 때만 있다(없으면 0 — 이 앱이 만든 UCS). 이 앱 화면(UCS 복원)·현재 고도는 쓰지 않고
+   * 저장에서만 지킨다. 쓸 값은 `core/finalize.ts` ucsElevationOf
+   */
+  elevation?: number;
 }
 
 export interface BlockRecord extends TableRecordBase {

@@ -28,7 +28,7 @@ import {
   createDocument,
   tableKey,
 } from '../../core/model';
-import { finalizeDocument, viewProjectionRead, viewRenderModeOf } from '../../core/finalize';
+import { finalizeDocument, ucsElevationOf, viewProjectionRead, viewRenderModeOf } from '../../core/finalize';
 import { HandleMap } from '../../core/handlemap';
 import { HandleSet } from '../../core/handleset';
 import { PolyAccum } from '../../core/polyverts';
@@ -547,6 +547,9 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   for (const h of live(refs.ucsControl, ucss)) {
     const u = ucss.get(h)!;
     const rec: UcsRecord = { name: u.name, handle: hex(h), flags: u.flags, origin: u.origin, xAxis: u.xAxis, yAxis: u.yAxis };
+    // 고도(235차): 유한하고 0이 아닐 때만 둔다(0·유한하지 않은 값은 칸 없음 — 쓰기는 전처럼 0)
+    const elevation = ucsElevationOf(u.elevation);
+    if (elevation) rec.elevation = elevation;
     applyRecordExtras(rec, u, names);
     doc.ucs.set(tableKey(u.name), rec);
   }
