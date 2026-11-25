@@ -33,6 +33,24 @@ const TABS: { key: Tab; label: string }[] = [
 const PANEL_ID = 'palette-panel';
 const tabId = (key: Tab) => `palette-tab-${key}`;
 
+/**
+ * 좁은 화면(760px 미만 — styles.css 같은 기준)에서 아래쪽 시트로 보이는지. 휴대폰 시트만 열 때 초점을 옮기고 닫을 때 돌려주며 Esc로 닫는다(255차).
+ * 데스크톱 오른쪽 팔레트(가로로 눕힌 휴대폰 포함)는 붙박이 패널이라 그대로
+ */
+const isSheet = (): boolean => typeof window !== 'undefined' && window.innerWidth < NARROW_WIDTH;
+
+/** 글 칸(앱 키 처리의 typing과 같은 갈래): 그 칸의 Esc(값 되돌리기·이름 바꾸기 취소 등)가 먼저라 시트를 닫지 않는다 */
+function textField(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null;
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || !!el.isContentEditable);
+}
+
+/** 지금 초점이 있는 요소(문서 본문이면 null) */
+function focusedElement(): HTMLElement | null {
+  const a = document.activeElement as HTMLElement | null;
+  return a && a !== document.body ? a : null;
+}
+
 export class Palette {
   readonly el: HTMLDivElement;
   private readonly tabs: HTMLDivElement;
@@ -42,6 +60,8 @@ export class Palette {
   private readonly findState = newFindState();
   private dimFilter: 'all' | 'mismatch' = 'all';
   private width = 320;
+  /** 시트를 연 곳(보기 단추·정보 카드 칩·명령행 등 — 255차: 휴대폰 시트를 닫을 때 초점을 돌려준다). 본문에서 열었으면 null */
+  private opener: HTMLElement | null = null;
 
   constructor(
     private readonly app: App,
@@ -65,6 +85,15 @@ export class Palette {
       );
     const grip = h('div', { class: 'palette-resize', 'aria-hidden': 'true' });
     this.el = h('div', { class: 'palette', hidden: true }, grip, h('div', { class: 'palette-head' }, this.tabs, close), this.body);
+    // 휴대폰 시트는 Esc로 닫는다(255차 — 252차 보고 (3), W3C APG 상자 꼴의 Esc를 비모달 시트에): 초점이 시트 안 글 칸 밖일 때만 —
+    // 글 칸의 Esc가 먼저고(앱 키 처리의 typing 꼴) 안쪽이 이미 처리한 Esc도 그대로 둔다. 앱 취소로 넘기지 않아 진행 중인 재기는 그대로다
+    // (대화 상자 Esc 꼴 — 시트 밖·연 단추에서 한 번 더 누르면 앱이 취소한다). 데스크톱 팔레트는 그대로(앱 취소)
+    this.el.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape' || ev.defaultPrevented || this.el.hidden || !isSheet() || textField(ev.target)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.close();
+    });
     parent.append(this.el);
     try {
       const w = Number(localStorage.getItem('opencad.palette.width'));
@@ -83,7 +112,7 @@ export class Palette {
     parent.style.setProperty('--sheet-h', `${Math.round(sheet * 100)}%`);
     grip.addEventListener('pointerdown', (ev) => {
       grip.setPointerCapture(ev.pointerId);
-      const asSheet = window.innerWidth < NARROW_WIDTH;
+      const asSheet = isSheet();
       const x0 = ev.clientX;
       const w0 = this.el.getBoundingClientRect().width;
       const host = parent.getBoundingClientRect();
@@ -113,15 +142,32 @@ export class Palette {
     });
   }
 
-  open(tab: string): void {
+  /** inside: 시트 머리 탭으로 바꿈(연 곳은 그대로) */
+  open(tab: string, inside = false): void {
+    // 바깥(보기 단추·정보 카드 칩·명령행 등)에서 열면 연 곳을 둔다 — 휴대폰 시트를 닫을 때 돌려준다(255차). 시트 안에서 탭을 바꾸면 그대로
+    const from = focusedElement();
+    if (!inside && !(from && this.el.contains(from))) this.opener = from;
     this.tab = (TABS.find((t) => t.key === tab)?.key ?? 'props') as Tab;
     this.el.hidden = false;
     this.refresh();
     if (this.tab === 'find') (this.body.querySelector('input.search') as HTMLInputElement | null)?.focus();
+    // 휴대폰 시트는 초점을 시트 안 고른 탭(253차 aria-selected)으로 옮긴다(255차 — WCAG 2.4.3, APG 상자 꼴). 찾기 탭은 지금처럼 찾을 글 칸.
+    // 탭을 바꾸면 탭을 다시 그려도 새 고른 탭에. 데스크톱 오른쪽 팔레트는 초점을 옮기지 않는다(그대로)
+    else if (isSheet()) this.tabs.querySelector<HTMLElement>('[aria-selected="true"]')?.focus({ preventScroll: true });
   }
 
   close(): void {
+    // 휴대폰 시트(255차 — WCAG 2.4.3, APG 상자 꼴): 닫을 때(닫기 단추·Esc·재기 단추) 초점이 시트 안이었으면 연 곳으로 돌려준다.
+    // 연 곳이 사라졌거나(정보 카드를 다시 그림) 초점을 받지 못하면(숨은 보기 단추 줄) 시트 안 초점을 풀어 본문으로 — 도면 영역은 초점을 받는 요소가 없고
+    // 앱 키 처리는 본문을 도면으로 받는다(dom.ts keyboardControl). 초점이 시트 밖이면(다른 곳을 고름) 그대로, 데스크톱 팔레트도 그대로
+    const inside = !this.el.hidden && this.el.contains(document.activeElement);
+    const opener = this.opener;
+    this.opener = null;
     this.el.hidden = true;
+    if (!inside || !isSheet()) return;
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+    const now = document.activeElement as HTMLElement | null;
+    if (now && this.el.contains(now)) now.blur();
   }
 
   refresh(): void {
@@ -132,7 +178,7 @@ export class Palette {
     for (const t of TABS) {
       const on = t.key === this.tab;
       const b = h('button', { class: `palette-tab ${on ? 'active' : ''}`, role: 'tab', id: tabId(t.key), 'aria-selected': on ? 'true' : 'false', 'aria-controls': PANEL_ID }, t.label);
-      b.addEventListener('click', () => this.open(t.key));
+      b.addEventListener('click', () => this.open(t.key, true));
       this.tabs.append(b);
     }
     this.body.setAttribute('aria-labelledby', tabId(this.tab));
