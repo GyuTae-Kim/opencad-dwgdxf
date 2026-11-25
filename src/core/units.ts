@@ -85,8 +85,12 @@ function fraction(v: number, prec: number): string {
 export function formatLength(v: number, u: Pick<UnitSettings, 'lunits' | 'luprec'>, prec = u.luprec): string {
   if (!Number.isFinite(v)) return '-';
   switch (u.lunits) {
-    case 1:
-      return v.toExponential(prec).replace('e', 'E');
+    case 1: {
+      // 과학: 지수는 부호와 두 자리 이상(AutoCAD -UNITS 예 1.55E+01 — AutoLISP rtos 1·치수 DIMLUNIT 1·필드 %lu1과 같은 꼴)
+      const e = v.toExponential(prec);
+      const m = /^(-?[\d.]+)e([+-])(\d+)$/.exec(e);
+      return m ? `${m[1]}E${m[2]}${m[3]!.padStart(2, '0')}` : e.toUpperCase();
+    }
     case 3: {
       // 공학: 피트-인치(소수)
       const neg = v < 0;
@@ -116,6 +120,7 @@ export function formatLength(v: number, u: Pick<UnitSettings, 'lunits' | 'luprec
 }
 
 const RAD = 180 / Math.PI;
+const TAU = Math.PI * 2;
 
 /** 각도 표시(라디안 입력, 도면의 각도 0 방향·방향은 적용하지 않은 순수 각도) */
 export function formatAngle(a: number, u: Pick<UnitSettings, 'aunits' | 'auprec'>, prec = u.auprec): string {
@@ -154,24 +159,19 @@ export function formatAngle(a: number, u: Pick<UnitSettings, 'aunits' | 'auprec'
     case 3:
       return `${a.toFixed(prec)}r`;
     case 4: {
-      // 측량 단위: N 45d0' E
-      const deg = (((90 - a * RAD) % 360) + 360) % 360; // 북쪽 기준 시계 방향
-      let ns = 'N';
-      let ew = 'E';
-      let b = deg;
-      if (deg <= 90) b = deg;
-      else if (deg <= 180) {
-        ns = 'S';
-        b = 180 - deg;
-      } else if (deg <= 270) {
-        ns = 'S';
-        ew = 'W';
-        b = deg - 180;
-      } else {
-        ew = 'W';
-        b = 360 - deg;
-      }
-      return `${ns} ${b.toFixed(prec)}d ${ew}`;
+      // 측량 단위(UNITS 도움말): N·S에서 E·W 쪽으로 잰 90도 아래 각을 도/분/초로(N 45d0'0" E — 자릿수는 위 AUNITS 1과 같다),
+      // 정확한 동서남북이면 그 글자 하나. a는 동쪽에서 시계 반대 방향(음수·2π 넘는 각은 0 ≤ θ < 2π로 — AutoLISP angtos와 같다)
+      let r = a % TAU;
+      if (r < 0) r += TAU;
+      if (Math.abs(r - TAU) < 1e-12) r = 0;
+      const deg = (r * 180) / Math.PI;
+      if (Math.abs(deg) < 1e-9 || Math.abs(deg - 180) < 1e-9) return deg < 90 ? 'E' : 'W';
+      if (Math.abs(deg - 90) < 1e-9) return 'N';
+      if (Math.abs(deg - 270) < 1e-9) return 'S';
+      const b = deg <= 90 ? 90 - deg : deg <= 180 ? deg - 90 : deg <= 270 ? 270 - deg : deg - 270;
+      const ns = deg > 180 && deg < 360 ? 'S' : 'N';
+      const ew = deg > 90 && deg < 270 ? 'W' : 'E';
+      return `${ns} ${formatAngle((b * Math.PI) / 180, { aunits: 1, auprec: prec })} ${ew}`;
     }
     default:
       return `${(a * RAD).toFixed(prec)}°`;
