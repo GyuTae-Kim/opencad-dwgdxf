@@ -18,9 +18,14 @@ export interface MeasureFormat {
   length(v: number): string;
   angle(a: number): string;
   area(v: number): string;
-  /** 길이 단위(" mm"처럼 앞에 빈칸, 단위 없는 도면은 빈 글) */
+  /** 길이 단위(" mm"처럼 앞에 빈칸, 단위 없는 도면·피트-인치 글(건축·공학 단위)은 빈 글) */
   unit: string;
+  /** 면적 단위(" mm²"처럼 앞에 빈칸, 단위 없는 도면은 빈 글). 없으면 길이 단위에 ²(240차 — 피트-인치 도면은 길이 꼬리가 없어도 소수 면적에는 붙인다) */
+  areaUnit?: string;
 }
+
+/** 면적 값 뒤의 단위 */
+const areaUnitOf = (f: MeasureFormat): string => f.areaUnit ?? (f.unit ? `${f.unit}²` : '');
 
 /**
  * DIST의 두 점 사이(지금 UCS의 증분 dx·dy·dz — 도움말 DIST: 모형 공간은 3D 거리, X·Y·Z 증분과 각도는 현재 UCS 기준).
@@ -62,7 +67,7 @@ export function angleResult(f: MeasureFormat, a: number, supplement = false): Me
 export function areaResult(f: MeasureFormat, area: number | null, perimeter: number | null): MeasureResult {
   const per = perimeter !== null ? f.length(perimeter) + f.unit : null;
   if (area === null) return { kind: 'area', label: '둘레', value: per ?? '-', details: [] };
-  return { kind: 'area', label: '면적', value: f.area(area) + (f.unit ? `${f.unit}²` : ''), details: per !== null ? [{ k: '둘레', v: per }] : [] };
+  return { kind: 'area', label: '면적', value: f.area(area) + areaUnitOf(f), details: per !== null ? [{ k: '둘레', v: per }] : [] };
 }
 
 /**
@@ -71,7 +76,7 @@ export function areaResult(f: MeasureFormat, area: number | null, perimeter: num
  * (도움말 MEASUREGEOM 면적: 정한 면적마다 면적과 둘레, 면적 추가는 총합을 이어 센다 — 보기 모드는 명령행을 숨겨 카드가 아니면 볼 수 없다)
  */
 export function totalAreaResult(f: MeasureFormat, total: number, area: number | null = null, perimeter: number | null = null): MeasureResult {
-  const sq = f.unit ? `${f.unit}²` : '';
+  const sq = areaUnitOf(f);
   const details: { k: string; v: string }[] = [];
   if (area !== null) details.push({ k: '면적', v: f.area(area) + sq });
   if (perimeter !== null) details.push({ k: '둘레', v: f.length(perimeter) + f.unit });
