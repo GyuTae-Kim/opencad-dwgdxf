@@ -1088,16 +1088,22 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   QLEADER의 꼭짓점(갈고리선 꼭짓점 포함)·여러 줄 문자·공차·블록 참조 삽입점, `app/annotate.ts` MLEADER(`makeMLeader` 내용의 z)의 문맥 데이터 점이 늘 0이었다 —
   이제 명령마다 한 번 읽은 `currentElevation`이다(평면 축·법선은 그대로라 고도 위 XY와 나란한 평면). 고도 0인 도면, 프롬프트 흐름, 점의 X·Y, 편집 명령은 같은 값이다.
   DXF·DWG 쓰기·읽기는 문맥 데이터와 꼭짓점의 Z를 그대로 쓰고 읽어(R2007 아래 다중 지시선 분해도 원래 Z) 쓰기 코드 후보는 없다
-- [ ] 211차에 보고 두 것 — 다음 후보(코드 읽기): MLINE(`edit/mline/geom.ts` mlineGeometry — buildVertices에 Z 인자가 있지만 시작점 `p3`와 명령의 새 객체가 Z 0,
-  `app/mlinecmds.ts`는 구간마다 고치는 커밋·닫기·명령 취소 갈래가 따로라 함께 봐야 함), SKETCH. 실물 표본 없이는 근거가 서지 않는 것: LEADER 주석 복사(C)는 원본을
+- [x] MLINE·SKETCH의 현재 고도(212차, 같은 ELEV 도움말 — DXF 참조서: MLINE 시작점 10(WCS)·정점 11은 고도 칸 없는 3D 점, SPLINE 조정점 10·맞춤점 11은 WCS 3D 점,
+  LWPOLYLINE은 꼭짓점이 X·Y뿐이고 고도 38 하나, LINE 10·11은 3D 점): `app/mlinecmds.ts` MLINE(`edit/mline/geom.ts` mlineGeometry의 z — 첫 구간 추가·구간마다 고치는
+  커밋·명령 취소(U)·닫기(C)가 한 값)과 `app/sketch.ts` SKETCH(`edit/sketch.ts` sketchEntities의 z — 선 끝점·폴리선 고도·스플라인 맞춤점과 조정점)가 늘 0이었다 —
+  이제 명령마다 한 번 읽은 `currentElevation`이다. 고도 0인 도면, 프롬프트 흐름, 점의 X·Y, 여러 줄 방향·마이터·요소 매개변수, 편집 명령(MLEDIT 등)은 같은 값이다.
+  DXF·DWG 쓰기·읽기는 그 Z를 그대로 쓰고 읽어 쓰기 코드 후보는 없다
+- [ ] 211차에 보고 두 것 — MLINE·SKETCH는 212차가 고쳤다. 실물 표본 없이는 근거가 서지 않는 것: LEADER 주석 복사(C)는 원본을
   X·Y만 옮겨 원본 Z에 둔다(도움말이 복사본의 Z를 적지 않음 — 고도 0 도면에서도 이미 원본 Z라 그대로). DXF 참조서 LEADER 쪽은 꼭짓점 좌표계(WCS/OCS)를 적지 않는다
   (이 앱이 만드는 지시선은 법선이 0,0,1이라 둘이 같음 — 지시선 마디(LEADER{ 의 10) 쪽은 받지 않음)
-- [ ] 206차에 보고 두 것 — 현재 고도 입구 표에서 아직 Z 0을 쓰는 만들기 명령(다음 후보, 같은 `currentElevation`으로 맞출 수 있는 것 — ATTDEF·-INSERT·MINSERT는 207차,
-  TABLE·TOLERANCE·REVCLOUD 직사각형·폴리곤·프리핸드는 208차, Express BREAKLINE·WIPEOUT 점은 209차, LEADER·QLEADER·MLEADER는 211차가 고침):
-  MLINE(`edit/mline/geom.ts`), SKETCH(`edit/sketch.ts`), HELIX(바닥 중심 — 3D 객체).
-  치수 정의점은 177차 판단(도움말에 Z 규칙 없음) 그대로다. 실물 표본 없이는 근거가 서지 않는 것: HATCH·GRADIENT·BOUNDARY는 해치 고도를 늘 0으로 쓴다
-  (`edit/hatch/create.ts` — 경계 객체가 고도에 있을 때 경계 평면을 따를지는 현재 고도와 다른 줄기, 이번에 도움말을 보지 않음), REVCLOUD 객체 모드는 원본이 고도에 있어도 0이다
-  (원본 평면을 따를지 도움말에 없음). 입력이 Z를 준 점은 위 「다른 2D 명령에 준 Z」 항목과 같은 빈칸이다
+- [ ] 206차에 보고 두 것 — 현재 고도 줄기는 212차로 닫는다. 고친 만들기 명령(205~212차): SOLID(205), TEXT·MTEXT·INSERT(206), -INSERT·MINSERT·ATTDEF(207),
+  TABLE·TOLERANCE·REVCLOUD 직사각형·폴리곤·프리핸드(208), Express BREAKLINE·COUNT 표·DATAEXTRACTION 표·WIPEOUT 점(209), XATTACH·IMAGEATTACH·PDFATTACH·FIELD(210),
+  LEADER·QLEADER·MLEADER(211), MLINE·SKETCH(212) — LINE·PLINE·CIRCLE·ARC·SPLINE 같은 그리기 명령은 그 전부터 썼다.
+  실물·새 옵션이 필요해 남김: HELIX(바닥 중심 — 3D 객체, 이번에 보지 않음), 찍은 점이 붙여넣기 자리인 PASTESPEC 그림·블록으로 붙여넣기·도면 비교 정보 표
+  (위 210차 항목 — 붙여넣기 자리 꼴), 치수 정의점(177차 판단 — 도움말에 Z 규칙 없음), 실물 필요: HATCH·GRADIENT·BOUNDARY의 해치 고도(`edit/hatch/create.ts` — 늘 0,
+  경계 객체가 고도에 있을 때 경계 평면을 따를지는 다른 줄기), REVCLOUD 객체 모드(원본이 고도에 있어도 0 — 원본 평면을 따를지 도움말에 없음, WIPEOUT 폴리선(P)은 이미
+  원본 Z), -INSERT 기준점(B)으로 찍은 점의 Z(위 207차 항목), IMAGEATTACH 명령행 「삽입점 지정 <0,0>」 Enter(위 210차 항목), LEADER 주석 복사(C)의 Z(위 211차 항목),
+  새 옵션: MINSERT 기준점(B)(위 207차 항목). 입력이 Z를 준 점은 위 「다른 2D 명령에 준 Z」 항목과 같은 빈칸이다
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
