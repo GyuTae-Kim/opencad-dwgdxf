@@ -1,7 +1,7 @@
 /** 표 제어 객체와 표 레코드 쓰기(사양 20.4.51~20.4.70, objects/tables.ts의 짝) */
 import type { DimStyle, Layer, Linetype, TableRecordBase, TextStyle, UcsRecord, ViewRecord, VPortRecord, XData } from '../../../core/model';
 import { DIM_VAR_DEFAULTS } from '../../../core/dimvars';
-import { viewRenderModeOf } from '../../../core/finalize';
+import { viewProjectionOf, viewRenderModeOf } from '../../../core/finalize';
 import { R2000, R2004, R2007, R2010 } from '../version';
 import type { PBlock, PRec, TableName, WCtx } from './context';
 import { eedOf, wcolor } from './common';
@@ -395,10 +395,13 @@ export class TableWriter {
     d.BD3(v.viewTarget);
     d.BD3(v.viewDirection);
     d.BD(v.twist);
-    d.BD(50);
-    d.BD(0);
-    d.BD(0);
-    viewMode(d, 0);
+    // 렌즈·앞뒤 자르기·보기 모드(DXF 42·43·44·71 — 233차): 읽은 묶음, 없거나 칸이 범위 밖이면 전처럼 50·0·0·0.
+    // 보기 모드는 1·2·4·16만 자리가 있어 DXF 71의 8(UCS 따라감)은 빠진다(전에도 0으로 써 잃었다)
+    const pj = viewProjectionOf(v.projection);
+    d.BD(pj.lensLength);
+    d.BD(pj.frontClip);
+    d.BD(pj.backClip);
+    viewMode(d, pj.viewMode);
     // 렌더 모드(DXF 281 — 232차): 읽은 1~6, 없거나 참조서 범위 밖이면 전처럼 0
     if (ver >= R2000) d.RC(viewRenderModeOf(v.renderMode));
     if (ver >= R2007) {

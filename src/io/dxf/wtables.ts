@@ -2,7 +2,7 @@
 import type { DimStyle, Layer, Linetype, TableRecordBase, TextStyle, UcsRecord, ViewRecord, VPortRecord, XData } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { DIM_VAR_CODES } from '../../core/dimvars';
-import { viewRenderModeOf } from '../../core/finalize';
+import { viewProjectionOf, viewRenderModeOf } from '../../core/finalize';
 import type { TagSink } from './tagwriter';
 import { kindOf } from './tagwriter';
 import type { PlannedRecord, TableName, WriteContext } from './wcontext';
@@ -211,11 +211,13 @@ function view(w: TagOut, p: PlannedRecord<ViewRecord>): void {
   w.t(41, v.width || 1);
   w.p3(11, v.viewDirection);
   w.p3(12, v.viewTarget);
-  w.t(42, 50);
-  w.t(43, 0);
-  w.t(44, 0);
+  // 렌즈·앞뒤 자르기·보기 모드(233차): 읽은 묶음, 없거나 칸이 범위 밖이면 전처럼 50·0·0·0(R12도 같은 코드)
+  const pj = viewProjectionOf(v.projection);
+  w.t(42, pj.lensLength);
+  w.t(43, pj.frontClip);
+  w.t(44, pj.backClip);
   w.deg(50, v.twist);
-  w.t(71, 0);
+  w.t(71, pj.viewMode);
   if (ver >= 1015) {
     // 렌더 모드(232차): 읽은 1~6, 없거나 참조서 범위 밖이면 전처럼 0
     w.t(281, viewRenderModeOf(v.renderMode));

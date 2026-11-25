@@ -1041,6 +1041,24 @@ export interface ViewRecord extends TableRecordBase {
    * 없으면 0(2D 최적화 — 이 앱이 만든 뷰). 쓸 값은 `core/finalize.ts` viewRenderModeOf
    */
   renderMode?: number;
+  /**
+   * 보기 모드·렌즈·앞뒤 자르기 묶음(DXF 71·42·43·44, DWG 보기 모드 비트 넷·BD 셋 — 233차). 넷 가운데 하나라도 기본(0·50·0·0)이 아닐 때만 있다
+   * (원근·자르기 비트는 렌즈·자르기 면과 함께여야 뜻이 서서 하나로 둔다). 이 앱 화면(VIEW 복원·플롯 뷰 범위)은 쓰지 않고 저장에서만 지킨다.
+   * 쓸 값은 `core/finalize.ts` viewProjectionOf
+   */
+  projection?: ViewProjection;
+}
+
+/** 명명된 뷰의 보기 모드·렌즈·앞뒤 자르기(DXF 참조서 VIEW 71·42·43·44 — 233차) */
+export interface ViewProjection {
+  /** 71 보기 모드(VIEWMODE 비트): 1 원근, 2 앞 자르기, 4 뒤 자르기, 8 UCS 따라감(DWG VIEW에는 자리가 없어 DWG로 쓰면 빠짐), 16 앞 자르기 면이 눈에 있지 않음 */
+  viewMode: number;
+  /** 42 렌즈 길이(mm) */
+  lensLength: number;
+  /** 43 앞 자르기 면 — 대상에서 떨어진 거리 */
+  frontClip: number;
+  /** 44 뒤 자르기 면 — 대상에서 떨어진 거리 */
+  backClip: number;
 }
 
 export interface UcsRecord extends TableRecordBase {

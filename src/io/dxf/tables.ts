@@ -15,7 +15,7 @@ import type {
 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { DIM_VAR_CODES } from '../../core/dimvars';
-import { viewRenderModeOf } from '../../core/finalize';
+import { viewProjectionRead, viewRenderModeOf } from '../../core/finalize';
 import type { DxfRecord } from './records';
 import { DEG, Tags, findXData, handle, int, name, num, parseXData, str } from './tagutil';
 
@@ -263,6 +263,10 @@ function view(rec: DxfRecord): ViewRecord {
     const mode = viewRenderModeOf(t.int(281));
     if (mode) v.renderMode = mode;
   }
+  // 보기 모드 71·렌즈 42·앞뒤 자르기 43·44(233차): 한 묶음으로, 넷 가운데 하나라도 기본(0·50·0·0)이 아닐 때만 둔다. 범위 밖은 그 칸만 기본이고,
+  // 넷 모두 기본이면 칸이 없다(쓰기는 전처럼 0·50·0·0)
+  const projection = viewProjectionRead({ viewMode: t.int(71), lensLength: t.num(42, 50), frontClip: t.num(43), backClip: t.num(44) });
+  if (projection) v.projection = projection;
   return v;
 }
 
