@@ -63,8 +63,20 @@ export function defaultPlotSettings(): PlotSettings {
  * 정수만 쓰고, 없거나 그 밖이면 전처럼 0(화면표시대로)·2(보통)·300
  */
 export function shadePlotOf(p: PlotSettings): [mode: number, resolution: number, dpi: number] {
-  const pick = (v: number | undefined, min: number, max: number, def: number): number => (Number.isInteger(v) && v! >= min && v! <= max ? v! : def);
-  return [pick(p.shadePlotMode, 0, 3, 0), pick(p.shadePlotResolution, 0, 5, 2), pick(p.shadePlotDpi, 100, 32767, 300)];
+  return [pickInt(p.shadePlotMode, 0, 3, 0), pickInt(p.shadePlotResolution, 0, 5, 2), pickInt(p.shadePlotDpi, 100, 32767, 300)];
+}
+
+/**
+ * 뷰포트의 음영 플롯 방식(R2004+ DXF VIEWPORT 170, DWG BS — 228차). DXF 참조서 VIEWPORT가 적은 0~3(PLOTSETTINGS 76과 같은 뜻)의 정수만, 없거나 그 밖이면
+ * 전처럼 0(화면표시대로). 4·5(비주얼 스타일·렌더 사전 설정)는 333·348 핸들과 함께여야 뜻이 서서 범위 밖으로 둔다. 리더도 이것으로 걸러 0이 아니면 둔다
+ */
+export function viewportShadePlotOf(mode: number | undefined): number {
+  return pickInt(mode, 0, 3, 0);
+}
+
+/** min~max의 정수면 그 값, 아니면 def */
+function pickInt(v: number | undefined, min: number, max: number, def: number): number {
+  return Number.isInteger(v) && v! >= min && v! <= max ? v! : def;
 }
 
 export function defaultLayout(name: string, blockName: string, tabOrder: number): Layout {

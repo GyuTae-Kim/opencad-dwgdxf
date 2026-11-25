@@ -31,6 +31,7 @@ import { mtextSaveXDataForR2000, roundTripColorApplied, roundTripXDataForR2000, 
 import { viewportFlagsR2000, withoutMviewXData } from '../../mview';
 import { lwIndex } from './util';
 import { tableKey } from '../../../core/model';
+import { viewportShadePlotOf } from '../../../core/finalize';
 import { lwCount, lwHasBulge, vertCount } from '../../../core/lwpoly';
 import { polyBulge, polyCount, polyEndWidth, polyFace, polyFlags, polyLoc, polyStartWidth, polyTangent } from '../../../core/polyverts';
 import { tableCellsOut } from '../../tablecells';
@@ -1533,7 +1534,8 @@ export class EntityWriter {
     d.BD3(e.ucsYAxis ?? { x: 0, y: 1, z: 0 });
     d.BD(0);
     d.BS(0);
-    if (ver >= R2004) d.BS(0);
+    // 음영 플롯 방식(DXF 170 — 228차, 없거나 참조서 범위 밖이면 전처럼 0)
+    if (ver >= R2004) d.BS(viewportShadePlotOf(e.shadePlotMode));
     if (ver >= R2007) {
       d.B(1);
       d.RC(1);

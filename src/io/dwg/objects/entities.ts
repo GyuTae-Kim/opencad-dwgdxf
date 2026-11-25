@@ -48,6 +48,7 @@ import type {
 import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../../core/hatchedges';
 import { TABLE_CELL_LIMIT, TABLE_EMPTY_CELLS } from '../../../core/limits';
 import { BYLAYER, SHARED_BYLAYER_COLOR, shareUnitScale, shareXDirection } from '../../../core/model';
+import { viewportShadePlotOf } from '../../../core/finalize';
 import { tidyWidths } from '../../../core/lwpoly';
 import { f64Of, newF64 } from '../../../core/f64pool';
 import { unpack3 } from '../../../core/flat3';
@@ -1513,7 +1514,11 @@ function readViewport(or: ObjectReader, b: Omit<EntityBase, 'type'>, names: Name
   e.ucsYAxis = r.BD3();
   r.BD();
   r.BS();
-  if (ver >= R2004) r.BS();
+  if (ver >= R2004) {
+    // 음영 플롯 방식(DXF 170 — 228차): 1~3만 둔다(0·범위 밖은 쓰기가 0으로 써서 칸이 없어도 같다)
+    const shade = viewportShadePlotOf(r.BS());
+    if (shade) e.shadePlotMode = shade;
+  }
   if (ver >= R2007) {
     r.B();
     r.RC();
