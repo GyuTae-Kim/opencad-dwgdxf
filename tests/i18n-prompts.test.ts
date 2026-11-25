@@ -153,13 +153,13 @@ describe('언어 사전 동음이의(자르기·명령 취소)', () => {
     const write = [/writ|wrote/i, /schreib|geschrieben/i, /書/, /写/];
     const used = [/\bused?\b/i, /verwend/i, /使用/, /使用|改用|用作/];
     const dicts = [en, de, ja, zh];
-    // 이름·명령·옵션·파일을 "쓰는"(사용) 줄 — 각 줄의 소스 자리: 계산기 단위, 필터·별칭·함수 이름 검사, 파일 이름 찾기, TEXTMASK, 이미지 부착 안내,
+    // 이름·명령·옵션·파일을 "쓰는"(사용) 줄 — 각 줄의 소스 자리: 계산기 단위, 필터·별칭·함수 이름 검사, 파일 이름 찾기, 이미지 부착 안내,
     // SELECT 안내, 주석 축척 삭제, REFEDIT, LAYVPI, WBLOCK 블록 이름, 색상표, SELECTIONCYCLING, 외부 참조 목록, 블록 편집기 안 막기
+    // (TEXTMASK 3D 면 거절 글은 215차가 3D 면 가리개를 넣어 지웠다)
     const use = [
       '"{0}"은(는) 기본 필터 이름이라 쓸 수 없습니다.',
       '"{0}"은(는) 명령 이름이라 별칭으로 쓸 수 없습니다.',
       '"{0}"은(는) 함수·상수·단위 이름이라 쓸 수 없습니다.',
-      '3D 면 가리기는 숨기기(HIDE) 표시가 필요해 이 웹 버전에서 쓸 수 없습니다. 가리기(W)나 솔리드(S)를 쓰십시오.',
       '{0} × {1} 화소. 해상도 정보를 쓰지 않으므로 축척 1 = 폭 1 도면 단위입니다(AutoCAD와 같다).',
       '{0}개를 선택했습니다. 다음 명령에서 이전(P)으로 쓸 수 있습니다.',
       '{0}은(는) 주석 객체가 쓰고 있어 삭제할 수 없습니다.',
@@ -211,11 +211,11 @@ describe('언어 사전 동음이의(자르기·명령 취소)', () => {
     for (const [k, ls] of partly)
       for (const i of ls) if (used[i]!.test(dicts[i]![k]!) || !write[i]!.test(dicts[i]![k]!)) bad.push(`${i}: ${k} => ${dicts[i]![k]}`);
     expect(bad).toEqual([]);
-    // 면(face)·띠(bar)·작업 세트 개수
-    expect(de['3D 면 가리기는 숨기기(HIDE) 표시가 필요해 이 웹 버전에서 쓸 수 없습니다. 가리기(W)나 솔리드(S)를 쓰십시오.']).toContain('3D-Flächen');
-    expect(zh['3D 면 가리기는 숨기기(HIDE) 표시가 필요해 이 웹 버전에서 쓸 수 없습니다. 가리기(W)나 솔리드(S)를 쓰십시오.']).toContain('三维面');
+    // 면(face)·띠(bar)·작업 세트 개수 — 3D 면은 215차 TEXTMASK 3D 면 가리개 결과 글에서
+    expect(de['문자 {0}개를 3D 면(으)로 가렸습니다.']).toContain('3D-Flächen');
+    expect(zh['문자 {0}개를 3D 면(으)로 가렸습니다.']).toContain('三维面');
     expect(zh['ACIS 자료를 쓸 수 없어 ACIS 객체를 와이어(3D 폴리선)로 썼습니다.']).not.toContain('电线');
-    const ref = use[8]!;
+    const ref = use.find((k) => k.includes('내부 편집합니다'))!;
     expect(en[ref]).toContain('{1} objects in the working set');
     expect(zh[ref]).not.toContain('波段');
     // REFSET 도움말: de Arbeitssatz·abgeblendet, ja 作業セット·暗く表示, zh 工作集·在位编辑·淡入显示
@@ -275,7 +275,7 @@ describe('언어 사전 동음이의(자르기·명령 취소)', () => {
     const { translate } = await import('../site/i18n.mjs');
     // express-text.ts가 찍는 꼴 그대로(명령행은 [ 앞 글·옵션·] 뒤 글 조각과 통째 프롬프트를 함께 옮긴다)
     const lines: string[] = [];
-    for (const t of ['wipeout', 'solid'] as const) {
+    for (const t of ['wipeout', '3dface', 'solid'] as const) {
       const label = MASK_LABEL[t];
       lines.push(`현재 설정: 간격띄우기 비율 = 0.35, 가리기 유형 = ${label}${t === 'solid' ? ' (색상 1)' : ''}`);
       lines.push(`가리기에 사용할 객체 유형 지정 [가리기(W)/3D 면(3)/솔리드(S)] <${label}>:`, `] <${label}>:`, `문자 3개를 ${label}(으)로 가렸습니다.`);
@@ -288,7 +288,6 @@ describe('언어 사전 동음이의(자르기·명령 취소)', () => {
       '가리기(W)',
       '3D 면(3)',
       '솔리드(S)',
-      '3D 면 가리기는 숨기기(HIDE) 표시가 필요해 이 웹 버전에서 쓸 수 없습니다. 가리기(W)나 솔리드(S)를 쓰십시오.',
       '배경 가리기 색상 번호 입력 <1>:',
       '문자 높이에 대한 간격띄우기 비율 입력',
       '가릴 수 있는 문자가 없습니다(빈 문자).',

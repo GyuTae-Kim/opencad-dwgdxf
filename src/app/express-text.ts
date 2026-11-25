@@ -1,6 +1,6 @@
 /**
  * Express Tools 문자 명령: TCASE·-TCASE(대소문자), TCOUNT(일련번호), TORIENT(방향), TEXTFIT(맞추기),
- * TEXTMASK·TEXTUNMASK(가리기), TCIRCLE(둘레 원·슬롯·사각형), TXTEXP(문자 분해).
+ * TEXTMASK·TEXTUNMASK(가리기 — 가리기·3D 면·솔리드), TCIRCLE(둘레 원·슬롯·사각형), TXTEXP(문자 분해).
  * 계산은 src/edit/express/*.ts. 각 명령은 한 번의 명령 취소로 되돌린다.
  */
 import type { CadColor, Entity, TextEntity } from '../core/model';
@@ -297,9 +297,10 @@ async function runTextmask(app: App, ctx: CommandContext): Promise<void> {
           { key: 'W', label: '가리기' },
           { key: '3', label: '3D 면' },
           { key: 'S', label: '솔리드' },
-        ], maskType === 'solid' ? 'S' : 'W');
-        if (t === '3') ctx.print('3D 면 가리기는 숨기기(HIDE) 표시가 필요해 이 웹 버전에서 쓸 수 없습니다. 가리기(W)나 솔리드(S)를 쓰십시오.', 'err');
-        else maskType = t === 'S' ? 'solid' : 'wipeout';
+        ], maskType === 'solid' ? 'S' : maskType === '3dface' ? '3' : 'W');
+        // 3D 면(215차, Autodesk TEXTMASK 도움말): 모서리를 모두 숨긴 3D 면 — 숨기기로 플롯할 때 가리고 화면에서는 가려 보이지 않는다.
+        // 전에는 이 웹 버전에 숨기기 표시가 없다며 알리고 유형을 바꾸지 않았다
+        maskType = t === 'S' ? 'solid' : t === '3' ? '3dface' : 'wipeout';
         if (maskType === 'solid') {
           for (;;) {
             const c = await askString(ctx, `배경 가리기 색상 번호 입력 <${maskColor.aci}>:`, String(maskColor.aci));
