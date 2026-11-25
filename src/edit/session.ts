@@ -921,6 +921,11 @@ export class EditSession {
     return this.undoStack[this.undoStack.length - 1] ?? null;
   }
 
+  /** 다시 실행 목록의 맨 위 항목(다음 REDO가 다시 할 것 — 휴대폰 보기 모드가 보기 모드에서 되돌린 단계인지 본다). 없으면 null */
+  redoTop(): Transaction | null {
+    return this.redoStack[this.redoStack.length - 1] ?? null;
+  }
+
   /** 명령 취소 목록에서 그 항목의 자리(0부터). 이미 취소했거나 밀려났으면 -1 */
   undoIndex(tx: Transaction): number {
     return this.undoStack.lastIndexOf(tx);
