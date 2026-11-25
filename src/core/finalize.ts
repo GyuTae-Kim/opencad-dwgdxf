@@ -58,6 +58,15 @@ export function defaultPlotSettings(): PlotSettings {
   };
 }
 
+/**
+ * 쓸 음영 플롯 값(R2004+ DXF 76·77·78, DWG BS 셋 — 221차). DXF 참조서 PLOTSETTINGS가 적은 범위(방식 0~3, 해상도 수준 0~5, 사용자 DPI 100~32767)의
+ * 정수만 쓰고, 없거나 그 밖이면 전처럼 0(화면표시대로)·2(보통)·300
+ */
+export function shadePlotOf(p: PlotSettings): [mode: number, resolution: number, dpi: number] {
+  const pick = (v: number | undefined, min: number, max: number, def: number): number => (Number.isInteger(v) && v! >= min && v! <= max ? v! : def);
+  return [pick(p.shadePlotMode, 0, 3, 0), pick(p.shadePlotResolution, 0, 5, 2), pick(p.shadePlotDpi, 100, 32767, 300)];
+}
+
 export function defaultLayout(name: string, blockName: string, tabOrder: number): Layout {
   return {
     name,

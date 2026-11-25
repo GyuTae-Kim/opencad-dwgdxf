@@ -110,7 +110,7 @@ function plotSettings(t: Tags): PlotSettings {
   const s = 'AcDbPlotSettings';
   const has = t.subs.includes(s);
   const sub = has ? s : undefined;
-  return {
+  const p: PlotSettings = {
     pageSetupName: t.str(1, '', sub),
     printerName: t.str(2, '', sub),
     paperName: t.str(4, '', sub),
@@ -129,6 +129,13 @@ function plotSettings(t: Tags): PlotSettings {
     styleSheet: t.str(7, '', sub),
     standardScaleType: t.int(75, 16, sub),
   };
+  // 음영 플롯 76~78(221차): LAYOUT의 AcDbLayout에도 76(UCS 직교 유형)이 있어 하위 클래스 표지가 있을 때만 읽는다
+  if (has) {
+    if (t.find(76, s) >= 0) p.shadePlotMode = t.int(76, 0, s);
+    if (t.find(77, s) >= 0) p.shadePlotResolution = t.int(77, 2, s);
+    if (t.find(78, s) >= 0) p.shadePlotDpi = t.int(78, 300, s);
+  }
+  return p;
 }
 
 function layout(rec: DxfRecord): LayoutObject {
