@@ -144,14 +144,21 @@ const sameLabel = (a: string, b: string | null): boolean => b !== null && unmark
 const INFO_KEYS = ['측정값', '표시 문자', '치수 종류', '길이', '반지름', '지름', '호 길이', '사이 각도', '각도', '둘레', '면적', '장축 반지름', '단축 반지름', '델타 X', '델타 Y', '문자 높이', '높이', '내용', '이름'];
 const INFO_MAX = 6;
 
-/** 객체의 치수 정보 행(정보 카드): 특성 목록에서 치수에 쓰는 것만 골라 앞에서 INFO_MAX개 */
-export function infoRows(groups: readonly { rows: readonly { k: string; v: string }[] }[]): { k: string; v: string }[] {
-  const all = new Map<string, string>();
-  for (const g of groups) for (const r of g.rows) if (!all.has(r.k)) all.set(r.k, r.v);
-  const out: { k: string; v: string }[] = [];
+/** 정보 카드 행: file은 도면에서 온 글(표시 문자·블록 이름·문자 내용 — 특성 목록 PropRow.file)이라 화면 번역층이 옮기지 않는다 */
+export interface InfoRow {
+  k: string;
+  v: string;
+  file?: boolean;
+}
+
+/** 객체의 치수 정보 행(정보 카드): 특성 목록에서 치수에 쓰는 것만 골라 앞에서 INFO_MAX개. 도면 글 표지(file)는 있을 때만 옮긴다 */
+export function infoRows(groups: readonly { rows: readonly InfoRow[] }[]): InfoRow[] {
+  const all = new Map<string, InfoRow>();
+  for (const g of groups) for (const r of g.rows) if (!all.has(r.k)) all.set(r.k, r);
+  const out: InfoRow[] = [];
   for (const k of INFO_KEYS) {
-    const v = all.get(k);
-    if (v !== undefined && v !== '') out.push({ k, v });
+    const r = all.get(k);
+    if (r && r.v !== '') out.push(r.file ? { k, v: r.v, file: true } : { k, v: r.v });
     if (out.length >= INFO_MAX) break;
   }
   return out;
@@ -597,7 +604,9 @@ export class MobileView {
     const head = h('div', { class: 'mv-title' }, h('b', {}, typeName(e)), h('span', { class: 'mv-layer', 'data-i18n-skip': '' }, e.layer));
     body.append(head);
     const grid = h('dl', { class: 'mv-rows' });
-    for (const r of rows) grid.append(h('dt', {}, r.k), h('dd', { 'data-i18n-skip': '' }, r.v));
+    // 값은 특성 팔레트와 같이 도면 글만 지키고(translate="no"), 앱 낱말 값(치수 종류 "선형(수평)" 등)은 화면 언어로 옮긴다(241차 — 전에는 값을 모두 건너뛰었다).
+    // 수 값은 번역층이 바꾸지 않는다(한글이 없는 글은 사전에 통째로 있을 때만)
+    for (const r of rows) grid.append(h('dt', {}, r.k), h('dd', { translate: r.file ? 'no' : undefined }, r.v));
     if (rows.length) body.append(grid);
     const acts = h('div', { class: 'mv-acts' });
     acts.append(h('button', { class: 'mv-chip', type: 'button', html: `${icon('props')}<span>특성 전체</span>`, onclick: () => this.host.openPalette('props') }));
