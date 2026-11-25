@@ -11,7 +11,7 @@
  */
 import type { BlockDef, BlockRecord, CadDocument, DimensionEntity, Entity, Layer, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
-import { formatLength } from '../core/units';
+import { formatLength, parseBearing, parseUnitAngle } from '../core/units';
 import {
   createAlignedDimension,
   createAngular2LineDimension,
@@ -315,11 +315,13 @@ export async function textOption(ctx: CommandContext, key: string, o: DimOpts): 
       const r = await ctx.getPoint(`치수 문자의 각도를 지정 <${+(((o.angle ?? 0) * 180) / Math.PI).toFixed(4)}>:`, { preferNumber: true });
       if ('text' in r) {
         const v = Number(r.text);
-        if (!Number.isFinite(v)) {
+        // 수가 아니면 측량 방위·단위 글자 꼴(224차 — DIM의 같은 프롬프트 annot2-common askAngle과 같게, 수와 같은 동쪽 0·반시계 각)
+        const a = Number.isFinite(v) ? (v * Math.PI) / 180 : (parseBearing(r.text) ?? parseUnitAngle(r.text));
+        if (a === null) {
           ctx.print('각도를 입력하십시오.', 'err');
           continue;
         }
-        o.angle = (v * Math.PI) / 180;
+        o.angle = a;
       } else if ('point' in r) {
         const r2 = await ctx.getPoint('두 번째 점 지정:', { base: r.point });
         if ('point' in r2) o.angle = Math.atan2(r2.point.y - r.point.y, r2.point.x - r.point.x);

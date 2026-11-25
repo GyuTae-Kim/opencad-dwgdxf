@@ -256,6 +256,16 @@ export function parseAngle(s: string, aunits = 0): number | null {
 }
 
 /**
+ * 단위 글자를 붙인 각 읽기(라디안 — 224차): 도/분/초 `45d30'15"`·`45°`, 그라드 `50g`, 라디안 `0.7854r`(parseAngle — 그 글자의 단위, 도면 AUNITS와 상관없이).
+ * 수만 쓴 글(`45`·`1E+01`)·방위·못 읽는 글은 null — 수는 프롬프트마다 읽는 법이 따로라 이 함수가 읽지 않는다.
+ * Autodesk 도움말 "About Unit Format Conventions": 각도는 현재 단위와 상관없이 다른 꼴로도 넣는다. 방향 글자가 없는 수 각도라 0 방향·방향은 수와 같게 쓴다
+ */
+export function parseUnitAngle(s: string): number | null {
+  const t = s.trim().replace(/\s+/g, '');
+  return /[d°gr]/i.test(t) ? parseAngle(t, 0) : null;
+}
+
+/**
  * 측량 방위 읽기(라디안 — 동쪽에서 시계 반대 방향, 0 ≤ θ < 2π). formatAngle AUNITS 4의 거꾸로이고 AutoLISP angtof 4의 방위 규칙이다(223차에 angtof에서 옮김).
  * N·S + 북·남에서 E·W 쪽으로 잰 각(parseAngle의 도 — 비면 0) + E·W: `N 45d0'0" E`, 빈칸 없이 `N45d0'0"E`, 도움말 예 `n45d20'6"e`.
  * 정방위는 글자 하나(N·S·E·W). 빈칸·대소문자는 가리지 않고 도면의 0 방향·방향(ANGBASE·ANGDIR)은 쓰지 않는다.

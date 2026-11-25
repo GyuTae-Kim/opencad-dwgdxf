@@ -3,6 +3,7 @@
  * 공백은 Enter(스크립트와 같다)이고, 숫자는 직접 거리 입력이 아니라 값으로 받는다(preferNumber).
  * 잘못된 입력은 오류(err)로 알리고 다시 묻는다 — 스크립트는 오류에서 멈춘다.
  */
+import { parseBearing, parseUnitAngle } from '../core/units';
 import type { CommandContext, Keyword } from './app';
 import type { Pt } from './view';
 
@@ -97,7 +98,11 @@ export async function askInteger(ctx: CommandContext, prompt: string, def: numbe
   return askReal(ctx, prompt, def, (v) => (Number.isInteger(v) && v >= min && v <= max ? null : `${min}에서 ${max} 사이의 정수가 필요합니다.`));
 }
 
-/** 각도(도) 입력 또는 기준점에서 찍은 점의 방향. 라디안을 돌려준다. Enter면 def(라디안) */
+/**
+ * 각도(도) 입력 또는 기준점에서 찍은 점의 방향. 라디안을 돌려준다. Enter면 def(라디안).
+ * 수가 아니면 측량 방위(N45d0'0"E·정방위 글자 — parseBearing)와 단위 글자 꼴(45d30'·50g·0.7854r — parseUnitAngle)도 받는다(224차 — 수와 같은
+ * 동쪽 0·반시계 각. 이 프롬프트에는 키워드가 없어 방위 글자와 겹치지 않는다)
+ */
 export async function askAngleDeg(ctx: CommandContext, prompt: string, base: Pt | null, def: number): Promise<number> {
   for (;;) {
     const r = await ctx.getPoint(prompt, { base, preferNumber: true, allowText: true });
@@ -106,6 +111,8 @@ export async function askAngleDeg(ctx: CommandContext, prompt: string, base: Pt 
     if ('text' in r) {
       const v = parseReal(r.text);
       if (v !== null) return (v * Math.PI) / 180;
+      const a = parseBearing(r.text) ?? parseUnitAngle(r.text);
+      if (a !== null) return a;
     }
     ctx.print('각도 또는 점이 필요합니다.', 'err');
   }

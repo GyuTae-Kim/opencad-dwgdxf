@@ -2,7 +2,7 @@
  * 주석 편집 명령(annot2*) 공통 도우미: 치수 미리보기, 각도 입력, 바뀐 객체 적용.
  */
 import type { DimensionEntity, Entity } from '../core/model';
-import { parseBearing } from '../core/units';
+import { parseBearing, parseUnitAngle } from '../core/units';
 import { generateDimensionGeometry, placeIn } from '../edit/dim';
 import type { App, CommandContext } from './app';
 import { commitResults } from './modify';
@@ -46,7 +46,8 @@ export async function askAngle(ctx: CommandContext, prompt: string, def: number 
       const n = Number(r.text);
       if (Number.isFinite(n)) return n * RAD;
       // 측량 방위(N45d0'0"E·정방위 글자 — 223차): 수와 같은 동쪽 0·반시계 각(AutoLISP angtof 4)
-      const b = parseBearing(r.text);
+      // 단위 글자 꼴(45d30'·50g·0.7854r — 224차)도
+      const b = parseBearing(r.text) ?? parseUnitAngle(r.text);
       if (b !== null) return b;
       ctx.print('각도를 입력하십시오.', 'err');
       continue;
