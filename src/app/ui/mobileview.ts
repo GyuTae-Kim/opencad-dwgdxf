@@ -284,8 +284,11 @@ export class MobileView {
     private readonly host: MobileViewHost,
     private readonly root: HTMLElement,
   ) {
+    // 접근 이름은 보이는 이름(252차 — WCAG 2.5.3, 데스크톱 리본 단추 꼴): 자세한 뜻은 제목 풍선(title — 접근 설명)에만 둔다.
+    // 전에는 aria-label에 제목 풍선 글을 넣어, 번역된 화면에서 보이는 이름이 접근 이름에 없었다(영어 「Fit to view」 ↔ 「Fit the whole drawing」 등).
+    // aria-label은 보이는 이름이 없는 단추(더 보기)에만
     const btn = (ico: string, label: string, title: string, run: () => void): HTMLButtonElement =>
-      h('button', { class: 'vb-btn', type: 'button', title, 'aria-label': title, html: icon(ico), onclick: run }, h('span', { class: 'vb-lbl' }, label));
+      h('button', { class: 'vb-btn', type: 'button', title, 'aria-label': label ? undefined : title, html: icon(ico), onclick: run }, h('span', { class: 'vb-lbl' }, label));
     const fit = btn('extents', '전체 보기', '도면 전체 보기', () => void app.run('ZOOMEXTENTS'));
     const measures = MEASURES.map((m) => {
       const b = btn(m.ico, m.label, m.title, () => this.startMeasure(m.name));
