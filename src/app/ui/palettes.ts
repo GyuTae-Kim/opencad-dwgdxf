@@ -29,6 +29,9 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'dims', label: '치수' },
   { key: 'find', label: '찾기' },
 ];
+/** 탭 몸과 탭의 id(팔레트는 앱에 하나 — 리본 ribbon-panel·ribbon-tab-N 꼴) */
+const PANEL_ID = 'palette-panel';
+const tabId = (key: Tab) => `palette-tab-${key}`;
 
 export class Palette {
   readonly el: HTMLDivElement;
@@ -47,7 +50,8 @@ export class Palette {
     this.tabs = h('div', { class: 'palette-tabs', role: 'tablist' });
     const close = h('button', { class: 'icon-btn', title: '팔레트 닫기', 'aria-label': '팔레트 닫기', html: icon('close2') });
     close.addEventListener('click', () => this.close());
-    this.body = h('div', { class: 'palette-body' });
+    // 탭 몸(253차 — 리본 ribbon-panel 꼴): 탭이 aria-controls로 가리키고, 이름은 고른 탭(refresh)
+    this.body = h('div', { class: 'palette-body', id: PANEL_ID, role: 'tabpanel' });
     // 휴대폰 보기 모드의 특성 탭은 값을 보이기만 한다(247차): 칸·단추는 그릴 때 막고(refresh), 막힌 칸으로 온 고치기 사건(change·input·click)도
     // 여기서 멈춰 칸마다의 처리기(특성·주석·사용자화·배열·표 셀)에 닿지 않게 한다 — 한 자리 검사로 모든 묶음을 덮는다.
     // 보이는 값만 바꾸는 칸(표지 data-display-only — 표 「셀」 고르기)은 그대로 둔다(248차)
@@ -123,11 +127,15 @@ export class Palette {
   refresh(): void {
     if (this.el.hidden) return;
     this.tabs.innerHTML = '';
+    // 고른 탭을 알린다(253차 — WCAG 4.1.2, 리본 탭 꼴): aria-selected와 탭 ↔ 몸 이음. 휴대폰 보기 시트와 데스크톱 팔레트가 같은 코드다.
+    // 보이는 표시(class active)와 Tab 차례(로빙 tabindex·화살표 옮기기 없음)는 그대로
     for (const t of TABS) {
-      const b = h('button', { class: `palette-tab ${t.key === this.tab ? 'active' : ''}`, role: 'tab' }, t.label);
+      const on = t.key === this.tab;
+      const b = h('button', { class: `palette-tab ${on ? 'active' : ''}`, role: 'tab', id: tabId(t.key), 'aria-selected': on ? 'true' : 'false', 'aria-controls': PANEL_ID }, t.label);
       b.addEventListener('click', () => this.open(t.key));
       this.tabs.append(b);
     }
+    this.body.setAttribute('aria-labelledby', tabId(this.tab));
     const scroll = this.body.scrollTop;
     // 편집 중이던 칸으로 포커스를 되돌린다(Tab으로 옮긴 칸 포함)
     const focused = (document.activeElement as HTMLElement | null)?.closest?.('[data-field]') as HTMLElement | null;
