@@ -1021,6 +1021,12 @@ export class Shell implements UiHooks {
 
   async openFiles(files: File[]): Promise<void> {
     for (const f of files) {
+      // 휴대폰 보기 모드는 보기만(250차): 스크립트·AutoLISP는 명령을 돌려 도면을 고칠 수 있어 돌리지 않고 알린다.
+      // 끌어 놓기·파일 고르기·홈 화면 공유가 모두 이 길이다. 도면 파일(새 도면 탭)은 그대로 연다
+      if (this.app.viewOnly && /\.(scr|lsp|mnl)$/i.test(f.name)) {
+        toast('휴대폰 보기 모드에서는 스크립트·AutoLISP 파일을 실행하지 않습니다. 편집 화면(제목 막대의 연필 단추)에서 여십시오.', 'warn');
+        continue;
+      }
       // 스크립트 파일은 도면으로 열지 않고 명령행에 차례로 넣는다
       if (/\.scr$/i.test(f.name)) {
         await runScriptFile(this.app, f);

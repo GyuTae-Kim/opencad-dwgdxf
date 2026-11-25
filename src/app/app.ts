@@ -3155,9 +3155,10 @@ export class App {
     if (t?.closest?.('.dialog-back, .menu, .language-list')) return;
     // 명령행 입력란의 키는 명령행이 먼저 처리했다(intercept). 여기서는 막힌 키를 다시 보지 않는다
     if (inCmd && ev.defaultPrevented && (ev.key === ' ' || ev.key === 'Tab')) return;
-    // Ctrl 제도 보조·입력 키(글을 고치는 다른 입력란에서는 그 입력란의 키)
+    // Ctrl 제도 보조·입력 키(글을 고치는 다른 입력란에서는 그 입력란의 키).
+    // 휴대폰 보기 모드는 보기만(250차): Ctrl+K 하이퍼링크 넣기는 도면을 고쳐 받지 않는다(아무것도 하지 않고 기본 동작도 막지 않음 — 247차 Ctrl+X·V 꼴)
     const ca = !typing || inCmd ? ctrlAction(ev) : null;
-    if (ca) {
+    if (ca && !(this.viewOnly && 'run' in ca && ca.run === 'HYPERLINK')) {
       ev.preventDefault();
       this.ctrlKey(ca, inCmd);
       return;
@@ -3219,7 +3220,8 @@ export class App {
         void this.run('SAVEAS');
         return;
       }
-      if (k === 'l' && !typing) {
+      // 도면층 상태 관리자(저장·복원이 도면을 고침)는 보기 모드에서 열지 않는다(250차)
+      if (k === 'l' && !typing && !this.viewOnly) {
         ev.preventDefault();
         void this.run('LAYERSTATE');
         return;
@@ -3297,8 +3299,8 @@ export class App {
         this.cmd.el.hidden = !this.cmd.el.hidden;
         return;
       }
-      if (k === '2' && !typing) {
-        // 디자인센터 열기·닫기(AutoCAD와 같다)
+      if (k === '2' && !typing && !this.viewOnly) {
+        // 디자인센터 열기·닫기(AutoCAD와 같다). 다른 도면의 블록·스타일을 넣는 창이라 보기 모드에서는 열지 않는다(250차)
         ev.preventDefault();
         void this.run('ADCENTER');
         return;

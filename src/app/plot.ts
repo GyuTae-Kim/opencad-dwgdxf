@@ -632,13 +632,18 @@ function plotDialog(app: App, ctx: CommandContext, v: PlotDialogState): Promise<
     bind: (s) => (submitNow = s),
     extra: [
       { label: '플롯 스타일 불러오기…', run: () => void loadCtb() },
-      {
-        label: '배치에 적용(U)',
-        run: () => {
-          action = 'apply';
-          submitNow?.();
-        },
-      },
+      // 배치에 적용은 페이지 설정을 도면에 저장한다 — 휴대폰 보기 모드(보기만)는 두지 않는다(250차). 플롯(출력)은 그대로
+      ...(app.viewOnly
+        ? []
+        : [
+            {
+              label: '배치에 적용(U)',
+              run: () => {
+                action = 'apply';
+                submitNow?.();
+              },
+            },
+          ]),
     ],
     submit: () => {
       const n = numOf(copies);

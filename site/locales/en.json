@@ -8402,6 +8402,7 @@
   "휠을 굴리거나 가운데 버튼으로 끌어 확대·이동하십시오.": "Scroll the wheel or drag with the middle mouse button to zoom and pan.",
   "휴대폰 보기 모드로": "Switch to phone view mode",
   "휴대폰 보기 모드로(보기·치수 확인)": "Switch to phone view mode (view and check dimensions)",
+  "휴대폰 보기 모드에서는 스크립트·AutoLISP 파일을 실행하지 않습니다. 편집 화면(제목 막대의 연필 단추)에서 여십시오.": "Script and AutoLISP files are not run in phone view mode. Open them from the editing screen (pencil button in the title bar).",
   "휴대폰에서 DWG·DXF 도면을 열어 보고 치수를 확인하는 무료 2D 웹 캐드입니다. 설치나 회원가입 없이 브라우저에서 바로 쓰며, 도면 파일은 서버로 보내지 않고 이 기기에서 처리합니다.": "A free 2D web CAD for opening DWG/DXF drawings and checking dimensions on your phone. It runs right in the browser with no installation or sign-up, and drawing files are processed on this device, never sent to a server.",
   "휴대폰에서 할 수 있는 것": "What you can do on a phone",
   "흐리기": "Blur",

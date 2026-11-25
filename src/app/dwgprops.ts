@@ -150,15 +150,24 @@ async function dwgPropsDialog(app: App, ctx: CommandContext): Promise<void> {
     props.splice(props.indexOf(p), 1);
     refresh();
   };
+  const addBtn = btn('추가·고치기(A)', add);
+  const delBtn = btn('삭제(D)', del);
   const custom = h(
     'div',
     { class: 'mgr-dlg' },
     list.el,
     h('div', { class: 'mgr-cols' }, row('이름(N)', nameIn), row('값(V)', valueIn)),
-    h('div', { class: 'mgr-btns' }, btn('추가·고치기(A)', add), btn('삭제(D)', del)),
+    h('div', { class: 'mgr-btns' }, addBtn, delBtn),
     cerr,
   );
   refresh();
+  // 휴대폰 보기 모드는 보기만(250차): 값은 그대로 보이되 글 칸은 읽기 전용(골라 복사할 수 있게), 사용자 정의 추가·삭제는 막고
+  // 단추는 「닫기」 하나 — 닫아도 도면에 쓰지 않는다. 탭 바꾸기·사용자 정의 목록 고르기(값 보이기)는 그대로
+  const viewOnly = app.viewOnly;
+  if (viewOnly) {
+    for (const el of [title, subject, author, keywords, comments, hyper, revision, nameIn, valueIn]) el.readOnly = true;
+    addBtn.disabled = delBtn.disabled = true;
+  }
   const t = tabs(
     [
       { label: '일반', body: general },
@@ -170,7 +179,10 @@ async function dwgPropsDialog(app: App, ctx: CommandContext): Promise<void> {
   );
   const next = await resultDialog<DrawingProps>(`${st.name} 특성`, t.el, {
     width: 560,
+    ...(viewOnly ? { ok: '닫기', cancel: null } : {}),
     submit: () => {
+      // 보기 모드의 닫기는 값을 거르지 않는다(파일에 같은 이름의 사용자 정의 특성이 있어도 닫힘)
+      if (viewOnly) return cur;
       const names = props.map((p) => p.name.toUpperCase());
       if (new Set(names).size !== names.length) return fail('같은 이름의 사용자 정의 특성이 있습니다.');
       return {
@@ -186,7 +198,7 @@ async function dwgPropsDialog(app: App, ctx: CommandContext): Promise<void> {
       };
     },
   });
-  if (!next) return;
+  if (!next || viewOnly) return;
   const ops = drawingPropsOps(doc, next, () => st.session.newHandle());
   if (!ops.length) return;
   st.session.commit({ label: 'DWGPROPS', ops, group: ctx.group });
