@@ -17,6 +17,7 @@ import { DRAWING_ACCEPT, loadedDrawings, pickFiles, readDrawingFile } from './dr
 import { PT_PER_MM, baseName, download, exportPageSvg, pdfDocument } from './export';
 import { PAPERS, type PlotSettings, lastSettings, plotPages, styleSheetPlotStyle } from './plot';
 import { mediaName, paperKeyOfSize, paperOf, userPaperKey } from './papers';
+import { plotViewRect } from './pagesetup-ui';
 import { fileNameMode } from './script';
 import { ask, form } from './ui/dom';
 import { ft } from './filetext';
@@ -285,8 +286,15 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
       s.what = 'layout';
       s.area = area === 'E' ? 'extents' : area === 'D' ? 'display' : area === 'W' ? 'window' : 'layout';
       if (area === 'V') {
-        await askWord(ctx, '뷰 이름 입력:');
-        ctx.print('배치의 이름 있는 뷰는 쓰지 않고 배치 전체를 플롯합니다.');
+        // 뷰(231차, -PLOT 도움말: VIEW로 저장한 뷰를 플롯): PLOT 대화 상자의 플롯 영역 뷰(74 = 3)와 같은 규칙(plotViewRect — 종이 공간 뷰만,
+        // 중심 + 대상)으로 그 범위를 창으로 플롯한다. 없는 이름·모형 뷰·Enter는 전처럼 한 번만 묻고 배치 전체(다시 묻지 않아 스크립트 흐름 그대로)
+        const t = await askWord(ctx, '뷰 이름 입력:');
+        const r = t ? plotViewRect(st.doc, t, false) : null;
+        if (r && t) {
+          s.area = 'window';
+          s.window = r;
+          s.view = st.doc.views.get(tableKey(t))?.name ?? t;
+        } else if (t) ctx.print(`뷰 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
       }
       if (area === 'W') {
         const xy = (t: string | null) => {
