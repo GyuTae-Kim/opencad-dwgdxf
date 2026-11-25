@@ -59,9 +59,11 @@ export interface AnnoStatus {
   refresh(): void;
 }
 
-/** 긴 메뉴(축척 33개)는 화면 안에서 스크롤. opener는 연 단추(닫으면 초점을 돌려준다 — 262차) */
+/** 긴 메뉴(축척 33개)는 화면 안에서 스크롤. opener는 연 단추(닫으면 초점을 돌려준다 — 262차, 열림 상태 aria-expanded를 맞춘다 — 263차) */
 function scrollableMenu(x: number, y: number, items: MenuItem[], opener?: HTMLElement): void {
-  showMenu(x, y, items, { opener });
+  showMenu(x, y, items, { opener, onClose: () => opener?.setAttribute('aria-expanded', 'false') });
+  // 연 뒤에 true(showMenu가 앞 메뉴를 닫으며 그 onClose를 먼저 부른다)
+  opener?.setAttribute('aria-expanded', 'true');
   const menus = document.querySelectorAll('.menu');
   const m = menus[menus.length - 1] as HTMLElement | undefined;
   if (!m) return;
@@ -73,7 +75,8 @@ function scrollableMenu(x: number, y: number, items: MenuItem[], opener?: HTMLEl
 export function annoStatus(app: App): AnnoStatus {
   styles();
   const label = h('span', {}, '1:1');
-  const scaleBtn = h('button', { class: 'as-scale-btn', title: '주석 축척', 'aria-label': '주석 축척', type: 'button' }, h('span', { class: 'as-cap', html: S('<path d="M4 18l4-12 4 12M5.5 14h5"/><path d="M15 7h5M15 12h5M15 17h5"/>') }), label, h('span', { class: 'as-cap' }, '▾')) as HTMLButtonElement;
+  // 메뉴 단추(263차 — 응용프로그램 메뉴 A 꼴): 메뉴를 연다고 알리고 열림 상태는 scrollableMenu가 맞춘다
+  const scaleBtn = h('button', { class: 'as-scale-btn', title: '주석 축척', 'aria-label': '주석 축척', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, h('span', { class: 'as-cap', html: S('<path d="M4 18l4-12 4 12M5.5 14h5"/><path d="M15 7h5M15 12h5M15 17h5"/>') }), label, h('span', { class: 'as-cap' }, '▾')) as HTMLButtonElement;
   (scaleBtn.firstElementChild as HTMLElement).style.cssText = 'width:16px;height:16px;display:inline-block';
   const visBtn = h('button', { class: 'icon-btn', type: 'button', title: '주석 객체 표시 (ANNOALLVISIBLE) · 켜면 현재 주석 축척을 지원하지 않는 주석 객체도 보입니다', 'aria-label': '주석 객체 표시', html: ICON_VISIBLE }) as HTMLButtonElement;
   const autoBtn = h('button', { class: 'icon-btn', type: 'button', title: '주석 축척 변경 시 축척 추가 (ANNOAUTOSCALE) · 켜면 주석 축척을 바꿀 때 주석 객체에 새 축척을 더합니다', 'aria-label': '주석 축척 변경 시 축척 추가', html: ICON_AUTO }) as HTMLButtonElement;

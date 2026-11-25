@@ -107,11 +107,14 @@ describe('메뉴 키보드', () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  it('손가락·마우스로 연 메뉴(키보드 초점 없음)도 첫 켜진 항목에 초점, Esc는 닫고 넘긴 연 단추로(262차 — 전에는 옮기지 않았다). 커서를 올려 연 메뉴는 키보드 초점이 있을 때만, 꺼진 항목뿐이면 옮기지 않는다', () => {
+  it('손가락·마우스로 연 메뉴(키보드 초점 없음)도 첫 켜진 항목에 초점, Esc는 닫고 넘긴 연 단추로(262차 — 전에는 옮기지 않았다). 커서를 올려 연 메뉴는 키보드 초점이 있을 때만, 꺼진 항목뿐이면 메뉴 자체에(263차)', () => {
     const opener = document.createElement('button');
     opener.textContent = '⋯';
     document.body.append(opener);
-    const at = () => (document.activeElement === document.body ? 'body' : document.activeElement === opener ? 'opener' : (document.activeElement!.textContent ?? '').trim());
+    const at = () => {
+      const a = document.activeElement!;
+      return a === document.body ? 'body' : a === opener ? 'opener' : a.classList.contains('menu') ? 'menu' : (a.textContent ?? '').trim();
+    };
     // 누르기로 초점을 받지 않은 단추(Safari·iOS — 시험 환경의 click도 같다): 연 단추는 opener로 넘긴다. 제목·꺼진 항목은 건너뛴다
     showMenu(10, 10, [{ heading: '편집' }, { label: '잘라내기', disabled: true }, { label: '복사' }, { label: '붙여넣기' }], { opener });
     const got: unknown[] = [at()];
@@ -132,12 +135,14 @@ describe('메뉴 키보드', () => {
     showMenu(0, 0, [{ label: '스트레치' }], { hover: true });
     visible.mockRestore();
     got.push(at());
-    // 꺼진 항목뿐인 메뉴는 옮기지 않는다
+    // 꺼진 항목뿐인 메뉴는 메뉴 자체(tabindex -1)에 초점(263차 — 전에는 옮기지 않아 메뉴의 키 처리가 Esc를 받지 못했다). Esc는 닫고 넘긴 연 단추로
     closeMenu();
-    showMenu(0, 0, [{ label: '저장', disabled: true }]);
-    got.push(at());
+    showMenu(0, 0, [{ label: '저장', disabled: true }], { opener });
+    got.push(at(), document.querySelector('.menu')!.getAttribute('tabindex'));
+    key(document.activeElement!, 'Escape');
+    got.push(document.querySelector('.menu') === null, at());
     closeMenu();
-    expect(got).toEqual(['복사', '붙여넣기', true, 'opener', 'body', '스트레치', 'body']);
+    expect(got).toEqual(['복사', '붙여넣기', true, 'opener', 'body', '스트레치', 'menu', '-1', true, 'opener']);
   });
 
   it('onClose는 메뉴가 닫힐 때 한 번: 항목을 고르면 run보다 먼저, Esc·다른 메뉴로 닫혀도(오른쪽 끌어 놓기 미리보기 치우기)', () => {
