@@ -4,7 +4,29 @@ on:
     branches: [main]
 permissions:
   contents: read
+# 같은 PR에 새 커밋을 올리면 앞 실행을 멈춘다
+concurrency:
+  group: mobile-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 jobs:
+  test:
+    # 시험 파일 528개(한 러너에서 약 3~4분)를 휴대폰 로딩 비교와 따로, 러너 세 대에 나눠 동시에 돈다
+    # (vitest --shard — 파일 경로 해시로 섞어 나눠 무거운 파일이 한 조각에 몰리지 않는다)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    name: test (${{ matrix.shard }}/3)
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run --shard=${{ matrix.shard }}/3
   validate-mobile:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -15,7 +37,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
       - run: npm run test:seo
       - uses: actions/upload-artifact@v4
         with:
