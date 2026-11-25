@@ -50,9 +50,9 @@ export function listBlocks(ctx: CommandContext, pattern: string): void {
 /**
  * 블록 기준점 base가 삽입점 p에 오도록 실제 삽입점(블록 정의 기준점 기준). z = 찍은 삽입점의 Z(207차 — 명령은 현재 고도를 준다).
  * 기준점(B)은 X·Y만 옮긴다: -INSERT 도움말은 기준점의 Z를 적지 않고, 정의 기준점의 Z가 삽입점에 오는 것은 INSERT 대화 상자(206차)와 같게 둔다
- * (찍은 기준점에 고도를 대면 고도 0 도면에서도 정의 기준점 Z가 0이 아닌 블록의 결과가 바뀐다)
+ * (찍은 기준점에 고도를 대면 고도 0 도면에서도 정의 기준점 Z가 0이 아닌 블록의 결과가 바뀐다). MINSERT 기준점(B)도 이 규칙을 쓴다(213차)
  */
-function insertPointFor(def: BlockDef, base: Vec3, p: Pt, scale: Vec3, rot: number, z = 0): Vec3 {
+export function insertPointFor(def: BlockDef, base: Vec3, p: Pt, scale: Vec3, rot: number, z = 0): Vec3 {
   const dx = (base.x - def.basePoint.x) * scale.x;
   const dy = (base.y - def.basePoint.y) * scale.y;
   const c = Math.cos(rot);

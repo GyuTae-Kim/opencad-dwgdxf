@@ -26,6 +26,7 @@ import { ScaleIndex, attribHeightK, explodeView, factorOf } from '../edit/annosc
 import type { App, CommandContext } from './app';
 import { scaleForSpace } from './annoscale-core';
 import { userBlocks } from './blocks';
+import { insertPointFor } from './dashcmds-insert';
 import { addEntities, currentElevation, currentProps } from './draw';
 import { baseName, download } from './export';
 import { unlockedOnly } from './layers';
@@ -474,33 +475,44 @@ export function registerUtil2BlockCommands(app: App): void {
       let sx = 1;
       let sy = 1;
       let rot = 0;
+      // 213차: 기준점(B)으로 고른 블록 점(없으면 정의 기준점 — 삽입점 = 찍은 점 그대로, 전과 같다)
+      let base: Vec3 | null = null;
       const outline = (p: Pt, scx: number, scy: number, r: number) => {
         if (!box) return [];
         const c = Math.cos(r);
         const s = Math.sin(r);
+        const b = base ?? bd.basePoint;
         const pts = [
           [box.minX, box.minY],
           [box.maxX, box.minY],
           [box.maxX, box.maxY],
           [box.minX, box.maxY],
         ].flatMap(([x, y]) => {
-          const dx = (x! - bd.basePoint.x) * scx;
-          const dy = (y! - bd.basePoint.y) * scy;
+          const dx = (x! - b.x) * scx;
+          const dy = (y! - b.y) * scy;
           return [p.x + dx * c - dy * s, p.y + dx * s + dy * c];
         });
         return [{ pts, closed: true, dashed: true }];
       };
       let ins: Pt | null = null;
       while (!ins) {
-        const r = await ctx.getPoint('삽입점 지정 또는 [축척(S)/회전(R)]:', {
+        // Autodesk MINSERT 도움말: 삽입점 프롬프트에서 미리 정하는 옵션에 기준점이 있다(-INSERT와 같은 글 — 블록을 지금 자리에 잠시 두고
+        // 끌어 놓을 새 기준점을 고른다, 정의의 기준점은 그대로). 전에는 B를 「점이 올바르지 않습니다.」로 거절했다(213차).
+        // X·Y·Z 옵션은 넣지 않았다 — Z는 지금 투명 ZOOM으로 받는 글자라 넣으면 그 결과가 바뀐다(ROADMAP)
+        const r = await ctx.getPoint('삽입점 지정 또는 [기준점(B)/축척(S)/회전(R)]:', {
           keywords: [
+            { key: 'B', label: '기준점' },
             { key: 'S', label: '축척' },
             { key: 'R', label: '회전' },
           ],
           rubber: (p) => outline(p, sx, sy, rot),
         });
         if ('point' in r) ins = r.point;
-        else if ('keyword' in r && r.keyword === 'S') {
+        else if ('keyword' in r && r.keyword === 'B') {
+          // -INSERT 기준점(207차)과 같은 규칙: 받은 점을 블록 정의 좌표로 보고 X·Y만 쓴다. Enter면 그대로
+          const b = await ctx.getPoint('기준점 지정:');
+          if ('point' in b) base = { x: b.point.x, y: b.point.y, z: 0 };
+        } else if ('keyword' in r && r.keyword === 'S') {
           const v = await askNumber(ctx, '모든 축에 대한 축척 비율 지정 <1>:', 1, (x) => x !== 0);
           if (v !== null) sx = sy = v;
         } else if ('keyword' in r && r.keyword === 'R') {
@@ -582,15 +594,18 @@ export function registerUtil2BlockCommands(app: App): void {
         if (v) ask.forEach((d, i) => values.set(d.tag.toUpperCase(), String(v[`a${i}`])));
       }
       const handle = st.session.newHandle();
+      const scale = { x: sx, y: sy, z: 1 };
+      const z = currentElevation(app);
       const e: InsertEntity = {
         ...entityDefaults(),
         ...currentProps(app),
         type: 'INSERT',
         handle,
         block: bd.name,
-        // 207차: 찍은 삽입점의 Z는 현재 고도(Autodesk ELEV 도움말 — 전에는 늘 0). DXF 참조서: MINSERT도 INSERT 개체라 10의 30이 삽입점 Z, 속성은 이 Z에서 옮긴다
-        insert: { x: p0.x, y: p0.y, z: currentElevation(app) },
-        scale: { x: sx, y: sy, z: 1 },
+        // 207차: 찍은 삽입점의 Z는 현재 고도(Autodesk ELEV 도움말 — 전에는 늘 0). DXF 참조서: MINSERT도 INSERT 개체라 10의 30이 삽입점 Z, 속성은 이 Z에서 옮긴다.
+        // 213차: 기준점(B)을 골랐으면 그 블록 점이 찍은 점에 오도록 축척·회전한 차만큼 삽입점(정의 기준점 자리)을 옮긴다(-INSERT와 같은 함수)
+        insert: base ? insertPointFor(bd, base, p0, scale, rot, z) : { x: p0.x, y: p0.y, z },
+        scale,
         rotation: rot,
         columnCount: cols,
         rowCount: rows,

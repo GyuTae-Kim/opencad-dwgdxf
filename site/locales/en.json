@@ -4352,6 +4352,7 @@
   "삽입점 지정 <0,0>:": "Specify insertion point <0,0>:",
   "삽입점 지정 또는 [": "Specify insertion point or [",
   "삽입점 지정 또는 [기준점(B)/축척(S)/X/Y/Z/회전(R)]:": "Specify insertion point or [Base point (B)/Scale (S)/X/Y/Z/Rotation (R)]:",
+  "삽입점 지정 또는 [기준점(B)/축척(S)/회전(R)]:": "Specify insertion point or [Base point (B)/Scale (S)/Rotation (R)]:",
   "삽입점 지정 또는 [축척(S)/회전(R)]:": "Specify insertion point or [Scale(S)/Rotation(R)]:",
   "삽입점 지정:": "Specify insertion point:",
   "삽입점 화면상에 지정": "Specify insertion point on screen",
