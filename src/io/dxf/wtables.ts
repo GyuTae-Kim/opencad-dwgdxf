@@ -2,6 +2,7 @@
 import type { DimStyle, Layer, Linetype, TableRecordBase, TextStyle, UcsRecord, ViewRecord, VPortRecord, XData } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { DIM_VAR_CODES } from '../../core/dimvars';
+import { viewRenderModeOf } from '../../core/finalize';
 import type { TagSink } from './tagwriter';
 import { kindOf } from './tagwriter';
 import type { PlannedRecord, TableName, WriteContext } from './wcontext';
@@ -216,7 +217,8 @@ function view(w: TagOut, p: PlannedRecord<ViewRecord>): void {
   w.deg(50, v.twist);
   w.t(71, 0);
   if (ver >= 1015) {
-    w.t(281, 0);
+    // 렌더 모드(232차): 읽은 1~6, 없거나 참조서 범위 밖이면 전처럼 0
+    w.t(281, viewRenderModeOf(v.renderMode));
     w.t(72, 0);
   }
   if (ver >= 1021) w.t(73, 0);

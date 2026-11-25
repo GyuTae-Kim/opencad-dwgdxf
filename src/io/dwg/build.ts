@@ -28,7 +28,7 @@ import {
   createDocument,
   tableKey,
 } from '../../core/model';
-import { finalizeDocument } from '../../core/finalize';
+import { finalizeDocument, viewRenderModeOf } from '../../core/finalize';
 import { HandleMap } from '../../core/handlemap';
 import { HandleSet } from '../../core/handleset';
 import { PolyAccum } from '../../core/polyverts';
@@ -535,6 +535,9 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   for (const h of live(refs.viewControl, views)) {
     const v = views.get(h)!;
     const rec: ViewRecord = { name: v.name, handle: hex(h), flags: v.flags, center: v.center, width: v.width, height: v.height, viewDirection: v.direction, viewTarget: v.target, twist: v.twist };
+    // 렌더 모드(232차): 참조서 범위 1~6만 둔다(0·범위 밖은 칸 없음 — 쓰기는 전처럼 0)
+    const renderMode = viewRenderModeOf(v.renderMode);
+    if (renderMode) rec.renderMode = renderMode;
     applyRecordExtras(rec, v, names);
     doc.views.set(tableKey(v.name), rec);
   }

@@ -15,6 +15,7 @@ import type {
 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { DIM_VAR_CODES } from '../../core/dimvars';
+import { viewRenderModeOf } from '../../core/finalize';
 import type { DxfRecord } from './records';
 import { DEG, Tags, findXData, handle, int, name, num, parseXData, str } from './tagutil';
 
@@ -245,7 +246,7 @@ function vport(rec: DxfRecord): VPortRecord {
 function view(rec: DxfRecord): ViewRecord {
   const { base, tags: t } = split(rec);
   const c = t.point(10);
-  return {
+  const v: ViewRecord = {
     ...base,
     // 70(1 종이 공간 뷰, 16·32 외부 참조 의존)은 R2000+ 꼴에서 AcDbViewTableRecord 하위 클래스 표지 뒤에 있어 split이 담지 않는다.
     // 전에는 R12 꼴만 읽어 종이 공간 뷰가 모형 뷰가 됐다(153차 — 쓰기는 70을 늘 쓴다)
@@ -257,6 +258,12 @@ function view(rec: DxfRecord): ViewRecord {
     viewTarget: t.point(12),
     twist: t.num(50) * DEG,
   };
+  // 렌더 모드 281(232차): 참조서 범위 1~6만 둔다. 0(이 앱이 써 온 값)·범위 밖은 칸이 없다(쓰기는 전처럼 0)
+  if (t.has(281)) {
+    const mode = viewRenderModeOf(t.int(281));
+    if (mode) v.renderMode = mode;
+  }
+  return v;
 }
 
 function ucs(rec: DxfRecord): UcsRecord {

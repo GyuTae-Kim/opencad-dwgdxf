@@ -1036,6 +1036,11 @@ export interface ViewRecord extends TableRecordBase {
   viewDirection: Vec3;
   viewTarget: Vec3;
   twist: number;
+  /**
+   * 렌더 모드(DXF 281·DWG R2000+ RC — 232차): 1 와이어프레임·2 숨은선·3 평면 음영·4 고러드 음영·5 평면 음영 + 와이어프레임·6 고러드 음영 + 와이어프레임.
+   * 없으면 0(2D 최적화 — 이 앱이 만든 뷰). 쓸 값은 `core/finalize.ts` viewRenderModeOf
+   */
+  renderMode?: number;
 }
 
 export interface UcsRecord extends TableRecordBase {

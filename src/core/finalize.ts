@@ -75,6 +75,14 @@ export function viewportShadePlotOf(mode: number | undefined): number {
 }
 
 /**
+ * 명명된 뷰의 렌더 모드(R2000+ DXF VIEW 281, DWG RC — 232차). DXF 참조서 VIEW가 적은 0~6(SHADEMODE와 같은 값)의 정수만, 없거나 그 밖이면
+ * 전처럼 0(2D 최적화). 리더도 이것으로 걸러 0이 아니면 둔다
+ */
+export function viewRenderModeOf(mode: number | undefined): number {
+  return pickInt(mode, 0, 6, 0);
+}
+
+/**
  * 쓸 플롯 뷰(DXF PLOTSETTINGS 6, DWG R2000 글·R2004+ VIEW 레코드 핸들 — 229차). 플롯 설정의 이름이 쓰는 VIEW 표(views — 쓰기 문맥이 정한 레코드와 핸들)에
  * 있으면(대소문자 가리지 않음) 그 레코드, 이름이 없거나 표에 없으면 undefined(전처럼 ''·핸들 0). 뷰를 지우거나 이름을 바꾸면 가리킬 것이 없어 빈 이름이 된다
  */
