@@ -104,11 +104,11 @@ R2004+ MTEXT 배경 색은 63·421·431(색상표 이름 — DXF 참조서 430~4
 | VIEWPORT | R2000+ 전체 자료, 동결 도면층 이름 → 341 핸들. R2004+ 음영 플롯 방식 170은 읽은 1~3, 없거나 참조서 범위 밖이면 0(228차, `core/finalize.ts` `viewportShadePlotOf` — DWG BS도 같음). R12~R14에서 읽은 ACAD MVIEW 묶음은 R2000+에서 뺀다(141차 — AutoCAD가 쓴 R2000+ DXF에 0/78쌍). 그 묶음이 있고 0x8000이 없는 뷰포트의 90은 빠른 확대 128을 빼고 0x8000을 더한다(143차, `io/mview.ts` `viewportFlagsR2000` — AutoCAD 판 표본, 원본에 없는 격자 비트는 더하지 않음). R12는 ACAD MVIEW 확장 자료(142차, `io/mview.ts`): 읽은 묶음이 있으면 다시 읽은 값이 모델과 다른 칸만 모델 값으로 고치고(바꾸지 않은 뷰포트는 묶음 그대로, 꼴이 다른 묶음도 그대로), 없으면 모델로 만든다 — 플래그 칸(보기 모드·UCS 아이콘·스냅·격자·스냅 방식·등각 쌍·숨은선 출력)은 90 플래그에서, 빠른 확대는 늘 1(AutoCAD R12 판 표본) |
 | MLINE | 스타일 핸들(없으면 Standard), 정점마다 요소 매개변수 |
 | TOLERANCE·SHAPE | 그대로. SHAPE 이름을 모르면(DWG는 번호만 있다) AutoCAD처럼 2 대신 쉐이프 번호를 70에 쓴다(R12는 자리가 없어 `entity.shape_dropped`) |
-| ACAD_TABLE | 블록 참조 부분은 모델에서. 표 자료는 같은 형식 계열(R2004까지 / R2007+)의 원본 태그가 있으면 그대로(342 표 스타일·343 블록 레코드는 다시 정함), 없으면 셀 배치(`io/tablecells.ts`)로 만든다: 병합(173 덮인 셀, 175·176 기준 셀의 열·행), 셀 재지정(R2007+ 91 / 그 전 177 플래그, 170 정렬, 63 배경색 + 283 0, 64 문자 색, 7 문자 스타일, 140 높이). 앱 표는 OPENCAD_TABLE + 표 스타일(행 종류)에서, AutoCAD 표는 원본 태그에서 온다. `table.synthesized`는 앱 표가 아닐 때만(다른 형식 계열로 옮겨 테두리 재지정이 빠지거나 셀 서식을 모를 때) |
+| ACAD_TABLE | 블록 참조 부분은 모델에서. 표 자료는 같은 형식 계열(R2004까지 / R2007+)의 원본 태그가 있으면 그대로(342 표 스타일·343 블록 레코드는 다시 정함), 없으면 셀 배치(`io/tablecells.ts`)로 만든다: 병합(173 덮인 셀, 175·176 기준 셀의 열·행), 셀 재지정(R2007+ 91 / 그 전 177 플래그, 170 정렬, 63 배경색 + 283 0, 64 문자 색, 7 문자 스타일, 140 높이). 앱 표는 OPENCAD_TABLE + 표 스타일(행 종류)에서, AutoCAD 표는 원본 태그에서 온다. `table.synthesized`는 앱 표가 아닐 때만(다른 형식 계열로 옮겨 테두리 재지정이 빠지거나 셀 서식을 모를 때). DWG에서 읽은 표의 원본 태그도 DWG 리더가 같은 배치(`100 AcDbTable`부터)로 만들어 하위 클래스 표지 둘(AcDbBlockReference·AcDbTable)이 한 번씩 나간다(238차 확인) |
 | MESH | AcDbSubDMesh(R2010+) |
 | PDF·DWF·DGN UNDERLAY | 정의 객체가 있고 버전이 지원할 때(PDF R2010+, DWF·DGN R2007+) |
-| ACIS(REGION·3DSOLID·BODY·…SURFACE) | 같은 계열(R2010까지 SAT 문자 / R2013+ SAB) 원본 태그가 있으면 그대로. 없으면 와이어가 있으면 3D 폴리선(`entity.acis_as_wires`), 아니면 뺀다(`entity.acis_dropped`). ACIS 자료를 만들지 않으므로 AutoCAD가 읽지 못하는 빈 ACIS 객체는 쓰지 않는다 |
-| OLE2FRAME·OLEFRAME | 모델에 OLE 자료가 없어 뺀다(`entity.ole_dropped`) |
+| ACIS(REGION·3DSOLID·BODY·…SURFACE) | 같은 계열(R2010까지 SAT 문자 / R2013+ SAB) 원본 태그가 있으면 그대로. DWG 본문에서 읽은 REGION·3DSOLID·BODY의 SAT 글(판 4.0 이상)은 R2000~R2010 DXF에 `100 AcDbModelerGeometry`·70 1·줄마다 1(255자 넘으면 3)로 쓰고, 3DSOLID는 R2007+에서 `100 AcDb3dSolid`·350 0을 붙인다(`io/acis.ts` satDxfTags — R2000·R2004에 없는 것은 AutoCAD 표본 꼴). 그 밖에는 와이어가 있으면 3D 폴리선(`entity.acis_as_wires`), 아니면 뺀다(`entity.acis_dropped`). ACIS 자료를 새로 만들지 않으므로 AutoCAD가 읽지 못하는 빈 ACIS 객체는 쓰지 않는다 |
+| OLE2FRAME·OLEFRAME | DXF에서 읽은 원본 태그(OLE 자료 310 포함)는 R2000+에 그대로(모서리 10·11은 지금 자리로). DWG(R2000+)에서 읽은 OLE2FRAME은 그 자료로 `100 AcDbOle2Frame`·70·3·10·11·71·72·73·90·310·1을 만든다(73차). 둘 다 없으면 뺀다(`entity.ole_dropped`) |
 | 모르는 객체·프록시 | 원본 태그(+ 프록시 그림 92/160·310)가 있으면 그대로, 없으면 뺀다 |
 
 ## 버전 변환(wconvert.ts)
@@ -202,7 +202,8 @@ ezdxf 결과는 파일 내용 해시로 `.runtime/dxfw-cache`에 캐시하고, �
 
 ## 알려진 한계
 
-- ACIS 자료를 만들지 않는다(다른 계열 버전으로 쓰거나 DWG에서 온 ACIS 객체는 빠진다). OLE 자료가 없다.
+- ACIS 자료를 새로 만들지 않는다(다른 계열 버전으로 쓰거나, SAT 글을 옮기지 못하는 DWG ACIS 객체 — SURFACE 계열·R13·R14의 판 1.x·R2013+ DWG — 는 와이어로 쓰거나 빠진다).
+  OLE 자료도 읽은 것만 옮긴다(새로 만들지 않음).
 - ACAD_TABLE을 다른 형식 계열로 쓰면 셀 테두리 재지정·표 수준 재지정(93~96)·블록 셀이 빠진다(병합·정렬·문자 높이·색·채우기는
   남는다, 그림 블록은 그대로라 보이는 모양은 같다). 앱 표는 잃는 것이 없다.
 - 표 항목의 모델에 없는 값(LAYER 347 재질·348 시각 스타일, VPORT 348, BLOCK_RECORD 310 미리 보기 그림 등)은 쓰지 않는다

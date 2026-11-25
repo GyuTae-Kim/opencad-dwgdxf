@@ -1398,7 +1398,16 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
 - [ ] 237차에 보고 두 것 — (1) 표지 없이 저장된 DXF(236차 이하 이 앱이 DWG에서 바꾼 것·다른 프로그램)를 열어 다시 쓰면 표지 없는 원본 태그를 그대로 쓴다
   (DXF에서 연 것은 읽은 그대로 지키는 규칙 — DXF 쓰기에서 덧대면 DXF → DXF 결과가 바뀌어 따로, 실물 필요). 변수 값은 잃지 않는다.
   (2) 이번 표는 OBJECTS 절 객체만 보았다 — DWG 리더가 원본 태그로 푸는 도형(ACAD_TABLE 등)의 표지는 표 밖.
+  **238차가 봄**(빠지는 도형 없음 — 아래 238차 항목).
   (3) AutoCAD가 표지 없는 DICTIONARYVAR를 어떻게 받는지는 그대로 실물 필요(이 앱 출력에는 이제 없음).
+- [x] DWG에서 연 도형을 DXF로 쓸 때의 하위 클래스 표지 표(238차, Autodesk DXF 참조서 3DSOLID·OLE2FRAME 쪽과 208차가 읽은 ACAD_TABLE 쪽):
+  DWG 리더가 도형에 만드는 태그 배열은 ACAD_TABLE 하나(100 AcDbTable부터 — 쓰기가 앞에 AcDbBlockReference)이고, DWG 자료로 쓰기가 만드는 OLE2FRAME(AcDbOle2Frame)·
+  ACIS(AcDbModelerGeometry, 3DSOLID R2007+ AcDb3dSolid) 태그도 표지를 담는다. 나머지 도형은 출처와 상관없이 쓰기가 표지를 직접 쓴다 — 고칠 도형이 없어 코드는 그대로(표는 CHANGELOG 238차 절).
+  쓰기 메모의 낡은 줄(OLE2FRAME 「모델에 OLE 자료가 없어 뺀다」, DWG ACIS 「빠진다」)은 지금 동작으로 고침
+- [ ] 238차에 보고 두 것 — (1) REGION 참조서 쪽을 찾지 못했다(검색 두 번) — BODY·3DSOLID와 같은 AcDbModelerGeometry로 쓰지만 REGION 쪽 근거는 없음.
+  (2) 3DSOLID의 AcDb3dSolid·350을 R2000·R2004 DXF에 쓰지 않는 것은 AutoCAD 표본 꼴이고 참조서는 판을 가르지 않는다 — 실물 필요.
+  (3) DWG의 SURFACE 계열(SAT를 풀지 않음)·R13·R14 판 1.x·R2013+ ACIS는 DXF에 와이어로 쓰거나 빠진다(표지가 아니라 값 잃음 — 쓰기 메모 알려진 한계, 새 ACIS 쓰기가 들어 작지 않음).
+  (4) DWG의 ACAD_PROXY_ENTITY·LIGHT 등 모르는 도형은 원본 태그가 없어 DXF에 프록시로 남지 않고 그림 도형으로 바뀌거나 빠진다(지금 길 그대로 — 프록시 자료를 DXF 태그로 옮기는 근거 없음).
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다

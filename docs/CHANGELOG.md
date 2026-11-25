@@ -3,6 +3,36 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-26(238차): DWG에서 연 도형을 DXF로 쓸 때의 하위 클래스 표지 — 빠지는 도형이 없어 표만 남김
+
+### 근거와 표
+237차가 「보고 두 것」 (2)로 남긴 도형 쪽입니다. 237차는 OBJECTS 절 객체만 보았고, 이번에는 DWG 리더가 태그 배열로 푸는 도형과
+DWG 자료로 DXF 쓰기가 태그 배열을 만드는 도형을 코드에서 모두 찾아 하위 클래스 표지(AcDbEntity 뒤)를 보았습니다.
+Autodesk DXF 참조서 3DSOLID(100 AcDbModelerGeometry, 70, 1, 3, 100 AcDb3dSolid, 350)·OLE2FRAME(100 AcDbOle2Frame 뒤 70·3·10·11·71·72·90·310·1) 쪽을 한 번씩 읽었고,
+ACAD_TABLE은 208차가 읽은 쪽(삽입점은 AcDbBlockReference, 가로 방향은 AcDbTable 아래)을 썼습니다. 실제 도면 표본 없음.
+
+| 도형 | 표지 | DWG에서 연 것 | DXF에서 연 것 | 이 앱이 만든 것 |
+| --- | --- | --- | --- | --- |
+| ACAD_TABLE | AcDbBlockReference·AcDbTable(참조서) | 쓰기가 AcDbBlockReference, DWG 리더의 원본 태그가 100 AcDbTable부터 — 있음 | 원본 태그의 AcDbTable부터(한 번) | 있음(같은 함수) |
+| OLE2FRAME | AcDbOle2Frame(참조서) | DWG 자료로 만든 태그에 있음 | 원본 태그 그대로 | 만들지 않음 |
+| 3DSOLID | AcDbModelerGeometry·AcDb3dSolid(참조서) | SAT 글로 만든 태그에 있음(AcDb3dSolid는 R2007+ — AutoCAD 표본 꼴) | 원본 태그 그대로 | 만들지 않음 |
+| REGION·BODY | AcDbModelerGeometry(REGION 쪽은 찾지 못함 — 근거 없음) | SAT 글로 만든 태그에 있음 | 원본 태그 그대로 | 만들지 않음 |
+| MULTILEADER·MESH·HELIX·UNDERLAY·치수·IMAGE·WIPEOUT 등 | 쓰기가 아는 이름 | 모델 값 — 쓰기가 표지를 직접 씀 | 같은 길 | 같은 길 |
+| SURFACE 계열·R2013+ DWG의 ACIS | — | SAT 글이 없어 와이어(3D 폴리선)로 쓰거나 뺌 | 원본 태그 그대로 | — |
+| ACAD_PROXY_ENTITY·LIGHT·MPOLYGON(DWG)·모르는 도형 | — | 원본 태그 없음 — 프록시 그림을 보통 도형으로 바꾸거나 뺌 | 원본 태그 그대로 | — |
+
+### 판단
+DWG 리더가 도형에 만드는 태그 배열은 ACAD_TABLE 하나이고 표지가 들어 있습니다. DWG 자료로 만드는 OLE2FRAME·ACIS 태그도 표지를 담고,
+나머지 도형은 출처와 상관없이 쓰기가 표지를 직접 씁니다. 237차와 같은 한 자리 고침을 할 도형이 없어 코드는 고치지 않았습니다.
+
+### 덤으로 고친 문서
+- `src/io/dxf/WRITER_NOTES.md`의 OLE2FRAME 줄이 「모델에 OLE 자료가 없어 뺀다」로, ACIS 줄과 알려진 한계 한 줄이 DWG에서 온 ACIS 객체는 빠진다고 적고 있었습니다.
+  DWG OLE 옮기기(2026-11-04)와 DWG SAT 글 옮기기(2026-10-22)부터 둘 다 DXF로 씁니다. 그 줄들을 지금 동작으로 고치고, ACAD_TABLE 줄에 DWG에서 읽은 표의 표지를 한 줄 더했습니다.
+
+### 확인
+- 앱 소스를 고치지 않아 새 시험·tsc·바이트 고정 시험을 돌리지 않았습니다. 앱 빌드가 바뀌지 않아 콘텐츠 수정일도 그대로입니다.
+- 실도면 표본 없음: AutoCAD가 저장한 실제 DWG를 이 앱으로 DXF로 바꾼 결과와는 견주지 않았습니다.
+
 ## 2026-11-26(237차): DWG에서 연 DICTIONARYVAR를 DXF로 쓸 때 빠지던 하위 클래스 표지
 
 ### 근거와 표
