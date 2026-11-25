@@ -1388,7 +1388,17 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   (2) LAYOUT 76·345·346과 DWG R2004+ 뷰포트 수·뷰포트 핸들 목록(리더는 BL을 읽고 버리고 쓰기는 0, 목록 없음): 새 핸들 잇기·되풀이 핸들이라 작지 않음(232차 보고 (5) 그대로).
   (3) DWG에서 연 DICTIONARYVAR를 DXF로 쓰면 참조서의 하위 클래스 표지(100 DictionaryVariables) 없이 280·1만 나간다(DWG 리더가 표지를 만들지 않음 — 값은 잃지 않음).
   고치면 DWG → DXF 결과가 한 줄 늘어 기존 결과가 바뀌므로 따로(AutoCAD가 표지 없는 것을 어떻게 받는지는 실물 필요). 쓰기 메모의 낡은 문구(「DWG 리더가 해석하지 않아 빠진다」)는 236차가 고침.
+  **237차가 고침**(DWG 리더가 표지를 넣음 — 아래 237차 항목).
   (4) DIMASSOC 301·302(참조 도면 핸들 글)는 DWG 배치(표본으로 정한 자리)에 둘 곳이 없어 DXF → DWG에서 빠질 수 있다 — DWG 자리 근거 없음.
+- [x] DWG에서 연 DICTIONARYVAR를 DXF로 쓸 때 하위 클래스 표지(237차, Autodesk DXF 참조서 DICTIONARYVAR — 330 소유 사전 뒤 100 DictionaryVariables, 280, 1):
+  DWG 리더가 RC·TV를 280·1로만 풀어 DWG → DXF 출력에 표지가 빠졌다 — 이제 DWG 리더(`io/dwg/build.ts`)가 RASTERVARIABLES·WIPEOUTVARIABLES처럼 원본 태그 앞에 표지를 둔다.
+  DWG 리더가 원본 태그로 풀어 DXF 쓰기가 그대로 내보내는 다른 객체(RASTERVARIABLES·WIPEOUTVARIABLES·FIELD·FIELDLIST·DIMASSOC·주석 축척 레코드·동적 블록·연관 망·TABLESTYLE·MLEADERSTYLE)는
+  표지를 이미 넣어 DICTIONARYVAR 하나만 고쳤다(표는 CHANGELOG 237차 절). DXF에서 연 것은 그대로(표지 한 번), 값·DWG 출력·새 도면 바이트는 같다.
+  바뀐 결과: DWG에서 연 도면을 DXF로 쓴 출력의 DICTIONARYVAR마다 100 줄 하나
+- [ ] 237차에 보고 두 것 — (1) 표지 없이 저장된 DXF(236차 이하 이 앱이 DWG에서 바꾼 것·다른 프로그램)를 열어 다시 쓰면 표지 없는 원본 태그를 그대로 쓴다
+  (DXF에서 연 것은 읽은 그대로 지키는 규칙 — DXF 쓰기에서 덧대면 DXF → DXF 결과가 바뀌어 따로, 실물 필요). 변수 값은 잃지 않는다.
+  (2) 이번 표는 OBJECTS 절 객체만 보았다 — DWG 리더가 원본 태그로 푸는 도형(ACAD_TABLE 등)의 표지는 표 밖.
+  (3) AutoCAD가 표지 없는 DICTIONARYVAR를 어떻게 받는지는 그대로 실물 필요(이 앱 출력에는 이제 없음).
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다

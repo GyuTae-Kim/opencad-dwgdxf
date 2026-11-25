@@ -3,6 +3,40 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-26(237차): DWG에서 연 DICTIONARYVAR를 DXF로 쓸 때 빠지던 하위 클래스 표지
+
+### 근거와 표
+236차가 「보고 두 것」 (3)으로 남긴 꼴입니다. Autodesk DXF 참조서 DICTIONARYVAR는 소유 사전(330) 뒤에 하위 클래스 표지 100 DictionaryVariables,
+280 객체 스키마 번호, 1 값을 적습니다(236차가 읽은 쪽 — 다시 받지 않음). 하위 클래스 표지는 DXF 읽기 프로그램이 칸 묶음을 가르는 자리입니다.
+DWG 리더가 「원본 태그」로 풀어 DXF 쓰기가 그대로 내보내는 객체를 코드에서 모두 찾아 표지를 보았습니다. 실제 도면 표본 없음.
+
+| 객체 | 표지 | DWG에서 만든 원본 태그 | DXF에서 연 것 | 이 앱이 만든 것 |
+| --- | --- | --- | --- | --- |
+| **DICTIONARYVAR** | DictionaryVariables(참조서) | **없음 — 280·1만** | 있음(그대로) | 있음 |
+| RASTERVARIABLES·WIPEOUTVARIABLES | AcDbRasterVariables·AcDbWipeoutVariables | 있음 | 있음 | — |
+| FIELD·FIELDLIST | AcDbField, AcDbIdSet·AcDbFieldList | 있음 | 있음 | 있음(같은 함수) |
+| DIMASSOC | AcDbDimAssoc | 있음 | 있음 | — |
+| 주석 축척 레코드 14종·동적 블록 객체·연관 망 객체 | 코덱 표의 이름 | 있음 | 있음 | 있음(같은 꼴) |
+| TABLESTYLE·MLEADERSTYLE | AcDbTableStyle·AcDbMLeaderStyle | 있음 | 있음 | 있음 |
+
+XRECORD·IMAGEDEF_REACTOR·DBCOLOR·SCALE은 원본 태그가 아니라 DXF 쓰기가 표지를 직접 씁니다. 표지가 빠지는 객체는 DICTIONARYVAR 하나였습니다.
+
+### 고친 것
+- DWG 리더(`src/io/dwg/build.ts`)가 이웃 RASTERVARIABLES·WIPEOUTVARIABLES와 같은 꼴로 DICTIONARYVAR 원본 태그 앞에 `100 DictionaryVariables`를 둡니다.
+  DXF 리더·이 앱이 만든 변수와 모델의 원본 태그가 같아지고, DXF에서 연 것(이미 표지 있음)은 손대지 않아 표지가 겹치지 않습니다.
+- 280·1 값과 순서는 그대로입니다. DWG 쓰기는 280·1을 코드로 찾아 표지를 보지 않으므로 DWG 출력은 같습니다
+  (같은 판 DWG의 원본 본문 다시 쓰기도 표지를 넣은 뒤 뜬 지문을 써서 전처럼 맞습니다). 변수 값을 읽고 바꾸는 주석 축척·PURGE도 코드 1만 봅니다.
+- 바뀐 결과: DWG에서 연 도면을 DXF로 저장한 출력의 DICTIONARYVAR마다 100 줄이 하나 늡니다. 새 도면·DXF에서 연 도면·DWG 출력의 바이트는 같습니다.
+
+### 확인
+- 시험: `tests/dwg/dictvar237.test.ts` 3건 — 이 앱이 CANNOSCALE·CMLEADERSTYLE을 만든 새 도면을 DWG(R2000·R2004·R2010·R2018)로 쓰고 읽어
+  원본 태그가 [100, 280, 1], DXF(R2000·R2004·R2018)로 쓰면 소유자 뒤에 100 한 번·280·1, 다시 읽은 값 같음.
+  DXF에서 연 것은 DXF로 다시 써도·DWG를 거쳐 DXF로 써도 표지가 한 번. 표지를 뺀 문서와 DWG 바이트가 같음(다른 판으로 쓰기 셋).
+  고치기 전 판에서 2건 실패(원본 태그 [280, 1]), 1건 통과. 고친 뒤 바이트 고정 `tests/dxf/dxfsave126.test.ts`·`tests/dwg/dwgsave126.test.ts`와 함께
+  3파일 49건 통과(고정값 그대로), tsc 오류 0. DWG를 열어 DXF로 쓰는 결과 고정 시험은 없어 바꾼 고정값이 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다: 전체 시험, 결과 같음 묶음, 헤드리스 화면 확인, 첫 화면·편집기 조각 크기 전·후 비교.
+- 실도면 표본 없음: AutoCAD가 저장한 실제 DWG를 이 앱으로 DXF로 바꾼 결과와는 견주지 않았습니다.
+
 ## 2026-11-26(236차): OBJECTS 절 객체에서 읽고도 저장에서 잃는 칸 — 고를 칸이 없어 표만 남김
 
 ### 근거와 표
