@@ -94,11 +94,18 @@ export function tabKeyTarget(ev: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey
 /** 키보드로 옮겨 다닐 수 있는(보이는) 요소들 */
 export function focusables(root: ParentNode): HTMLElement[] {
   const sel = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
-  return [...root.querySelectorAll<HTMLElement>(sel)].filter((el) => {
-    if (el.closest('[hidden], [inert]')) return false;
-    const cs = getComputedStyle(el);
-    return cs.display !== 'none' && cs.visibility !== 'hidden';
-  });
+  return [...root.querySelectorAll<HTMLElement>(sel)].filter(shown);
+}
+
+/**
+ * 보이는지: [hidden]·[inert] 안이거나 display none·visibility hidden이면 숨음(focusables·메뉴를 닫을 때 연 단추 — 264차).
+ * 계산된 꼴을 읽지 못하는 환경(window만 가짜인 시험)은 속성만 본다(overlay-place.ts 꼴)
+ */
+function shown(el: HTMLElement): boolean {
+  if (el.closest('[hidden], [inert]')) return false;
+  if (typeof getComputedStyle !== 'function') return true;
+  const cs = getComputedStyle(el);
+  return cs.display !== 'none' && cs.visibility !== 'hidden';
 }
 
 export interface MenuItem {
@@ -116,15 +123,25 @@ export interface MenuItem {
 let openMenu: HTMLDivElement | null = null;
 /** 연 단추(showMenu opt.opener), 없으면 메뉴를 열기 전에 초점이 있던 곳(Esc·Tab·항목 고르기로 닫으면 돌려준다) */
 let menuOpener: HTMLElement | null = null;
+/** 연 단추가 숨었을 때 대신 돌려줄 곳: 메뉴를 열기 전에 초점이 있던 곳(264차 — 좁은 화면에서 상태 막대 「⋯」 메뉴로 연 「▾」·주석 축척 메뉴는 그 「⋯」) */
+let menuFallback: HTMLElement | null = null;
 /** 지금 메뉴가 닫힐 때 부를 것(항목을 고르든 Esc·바깥 누르기·다른 메뉴로 닫히든) */
 let menuClosed: (() => void) | null = null;
+/** 메뉴 이름을 잇는 id(연 단추·머리글에 id가 없을 때) */
+let menuNameSeq = 0;
 
 export function closeMenu(restoreFocus = false): void {
   const had = !!openMenu;
   openMenu?.remove();
   openMenu = null;
-  if (had && restoreFocus && menuOpener?.isConnected) menuOpener.focus({ preventScroll: true });
+  if (had && restoreFocus && menuOpener?.isConnected) {
+    // 연 단추가 붙어 있지만 보이지 않으면(좁은 화면에서 「⋯」 메뉴로 옮겨 숨은 단추 — 그 단추에는 초점을 줄 수 없어 본문으로 빠졌다) 열기 전 초점(그 「⋯」)으로.
+    // 그것도 없거나 숨었으면 지금처럼 연 단추
+    const back = !shown(menuOpener) && menuFallback?.isConnected && shown(menuFallback) ? menuFallback : menuOpener;
+    back.focus({ preventScroll: true });
+  }
   menuOpener = null;
+  menuFallback = null;
   const done = menuClosed;
   menuClosed = null;
   done?.();
@@ -136,7 +153,9 @@ export function closeMenu(restoreFocus = false): void {
  * 전에는 키보드로 연 메뉴만 옮겨, 화면 읽기 프로그램의 두 번 톡(click)으로 연 메뉴는 초점이 밖에 남았다). 보이는 초점 표시는 :focus-visible 규칙대로
  * (styles.css — 손가락·마우스로 연 메뉴에는 그리지 않는다). opt.hover(커서를 올리면 뜨는 메뉴 — 다기능 그립)는 지금처럼 키보드로 옮긴 초점이 있을 때만.
  * 켜진 항목이 없는 메뉴는 메뉴 자체에 초점을 둔다(263차 — Esc·Tab으로 닫을 수 있게).
- * opt.opener는 연 단추: 누르기로 초점을 받지 않는 브라우저(Safari·iOS)에서도 닫을 때 그 단추로 돌려준다(없으면 열 때의 초점).
+ * opt.opener는 연 단추: 누르기로 초점을 받지 않는 브라우저(Safari·iOS)에서도 닫을 때 그 단추로 돌려준다(없으면 열 때의 초점). 그 단추가 숨었으면
+ * 열 때의 초점으로(264차 — 상태 막대 「⋯」 메뉴로 옮긴 「▾」·주석 축척). 메뉴 이름도 그 단추로 잇는다(264차 — aria-labelledby, W3C APG 메뉴 단추 꼴).
+ * 연 단추가 없는 메뉴는 맨 앞 머리글이 그 메뉴의 하나뿐인 머리글이면 그것이 이름이다(여럿이면 묶음 이름이라 이름 없음).
  * 메뉴 단추(aria-haspopup="menu")는 onClose로 aria-expanded를 false로 되돌리고 연 뒤에 true로 둔다(253·254·263차 — 부르는 쪽).
  * onClose는 메뉴가 닫힐 때 한 번(항목의 run보다 먼저)
  */
@@ -145,13 +164,16 @@ export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose
   const active = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
   const opener = opt.opener ?? active;
   const m = h('div', { class: 'menu', role: 'menu' });
+  const heads: HTMLElement[] = [];
   for (const it of items) {
     if (it.separator) {
       m.append(h('hr', { role: 'separator' }));
       continue;
     }
     if (it.heading) {
-      m.append(h('div', { class: 'label', role: 'presentation' }, it.heading));
+      const head = h('div', { class: 'label', role: 'presentation' }, it.heading);
+      heads.push(head);
+      m.append(head);
       continue;
     }
     const b = h(
@@ -172,6 +194,13 @@ export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose
       it.kbd ? h('kbd', {}, it.kbd) : null,
     );
     m.append(b);
+  }
+  // 메뉴 이름(264차 — WCAG 4.1.2): 연 단추(id가 없으면 새로), 없으면 하나뿐인 맨 앞 머리글. 열 때의 초점(오른쪽 클릭 길)은 이름에 쓰지 않는다.
+  // 숨은 연 단추도 aria-labelledby가 직접 가리키면 이름 셈에 든다(접근 이름 계산 규칙)
+  const named = opt.opener ?? (heads.length === 1 && m.firstElementChild === heads[0] ? heads[0] : null);
+  if (named) {
+    if (!named.id) named.id = `menu-name-${++menuNameSeq}`;
+    m.setAttribute('aria-labelledby', named.id);
   }
   const enabled = () => [...m.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not([disabled])')];
   m.addEventListener('keydown', (ev) => {
@@ -209,6 +238,7 @@ export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose
   m.style.top = `${pos.top + oy}px`;
   openMenu = m;
   menuOpener = opener;
+  menuFallback = opt.opener && active !== opt.opener ? active : null;
   menuClosed = opt.onClose ?? null;
   // 메뉴 안 첫 켜진 항목으로. 커서를 올려 연 메뉴는 키보드로 옮긴 초점이 있던 곳에서만 — 누르지 않고 뜨는 메뉴가 치던 자리의 초점을 빼앗지 않게.
   // 켜진 항목이 없으면 메뉴 자체(tabindex -1)에(263차 — 위 키 처리는 메뉴 안의 초점만 받아, 초점이 밖에 남으면 Esc로 닫을 수 없었다. 화살표는 옮길 곳이 없어 그대로).
