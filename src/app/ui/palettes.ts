@@ -51,6 +51,30 @@ function focusedElement(): HTMLElement | null {
   return a && a !== document.body ? a : null;
 }
 
+/** 초점을 받는 요소(다시 그린 뒤 같은 뜻의 요소를 찾는 범위 — 256차) */
+const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]';
+
+/**
+ * 다시 그려도 같은 뜻인 요소의 열쇠(256차): 특성 칸 data-field, 탭 id(253차), 도면층 행 단추 data-act(켜기·동결·잠금 — 접근 이름이 상태로 바뀜),
+ * 그 밖은 접근 이름(aria-label, 없으면 글 — 「모두 켜기」 등)
+ */
+function focusKey(el: HTMLElement): string {
+  const field = el.closest<HTMLElement>('[data-field]')?.dataset.field;
+  if (field !== undefined) return `field:${field}`;
+  if (el.id) return `id:${el.id}`;
+  if (el.dataset.act) return `act:${el.dataset.act}`;
+  return `${el.tagName}:${el.getAttribute('aria-label') ?? el.textContent?.trim() ?? ''}`;
+}
+
+/** 다시 그리기 전 초점 자리(256차) */
+interface FocusMark {
+  key: string;
+  /** 도면층 행(data-layer — 도면층 열쇠 이름): 같은 요소가 없으면 그 행의 첫 단추 */
+  layer: string | null;
+  /** 특성 칸 밖 글 칸(도면층 찾기 등)의 커서·고른 범위 */
+  range: [number, number, 'forward' | 'backward' | 'none'] | null;
+}
+
 export class Palette {
   readonly el: HTMLDivElement;
   private readonly tabs: HTMLDivElement;
@@ -172,6 +196,8 @@ export class Palette {
 
   refresh(): void {
     if (this.el.hidden) return;
+    // 탭 줄과 몸을 통째로 새로 만든다 — 그 안에 있던 초점은 다시 그린 뒤 같은 뜻의 요소로 돌려준다(256차, restoreFocus)
+    const mark = this.focusMark();
     this.tabs.innerHTML = '';
     // 고른 탭을 알린다(253차 — WCAG 4.1.2, 리본 탭 꼴): aria-selected와 탭 ↔ 몸 이음. 휴대폰 보기 시트와 데스크톱 팔레트가 같은 코드다.
     // 보이는 표시(class active)와 Tab 차례(로빙 tabindex·화살표 옮기기 없음)는 그대로
@@ -183,13 +209,11 @@ export class Palette {
     }
     this.body.setAttribute('aria-labelledby', tabId(this.tab));
     const scroll = this.body.scrollTop;
-    // 편집 중이던 칸으로 포커스를 되돌린다(Tab으로 옮긴 칸 포함)
-    const focused = (document.activeElement as HTMLElement | null)?.closest?.('[data-field]') as HTMLElement | null;
-    const focusKey = focused && this.body.contains(focused) ? focused.dataset.field : null;
     this.body.innerHTML = '';
     const st = this.app.active;
     if (!st) {
       this.body.append(h('div', { class: 'empty' }, '열린 도면이 없습니다.'));
+      this.restoreFocus(mark);
       return;
     }
     switch (this.tab) {
@@ -209,11 +233,57 @@ export class Palette {
         break;
     }
     this.body.scrollTop = scroll;
-    if (focusKey) {
-      const el = [...this.body.querySelectorAll<HTMLElement>('[data-field]')].find((x) => x.dataset.field === focusKey);
-      el?.focus();
-      if (el instanceof HTMLInputElement) el.select();
+    this.restoreFocus(mark);
+  }
+
+  /** 다시 그리기 전 초점 자리(256차): 탭 줄·몸(다시 그리는 곳) 안일 때만 — 닫기 단추·팔레트 밖이면 null */
+  private focusMark(): FocusMark | null {
+    const a = document.activeElement as HTMLElement | null;
+    if (!a || !(this.tabs.contains(a) || this.body.contains(a))) return null;
+    const key = focusKey(a);
+    let range: FocusMark['range'] = null;
+    // 특성 칸은 지금처럼 다시 골라 두므로 커서를 두지 않는다
+    if (!key.startsWith('field:') && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) {
+      const t = a as HTMLInputElement;
+      try {
+        if (t.selectionStart !== null && t.selectionEnd !== null) range = [t.selectionStart, t.selectionEnd, t.selectionDirection ?? 'none'];
+      } catch {
+        /* 고른 범위가 없는 칸(확인란 등) */
+      }
     }
+    return { key, layer: a.closest<HTMLElement>('[data-layer]')?.dataset.layer ?? null, range };
+  }
+
+  /**
+   * 다시 그린 뒤 초점을 돌려준다(256차 — 255차 보고 (1)·(3), WCAG 2.4.3 초점 순서): 전에는 특성 칸만 되돌려 누른 도면층 단추·탭의 초점이 본문으로 빠졌다
+   * (키보드 사용자가 자리를 잃고, 휴대폰 시트는 그 뒤 Esc가 시트 밖 Esc라 닫히지 않음). 데스크톱 팔레트·휴대폰 시트 모두.
+   * 같은 열쇠의 요소(도면층 행 요소는 같은 행 안에서) → 없거나 받지 못하면(사라짐·꺼짐) 그 도면층 행의 첫 단추 → 고른 탭.
+   * 다시 그리는 동안 다른 곳이 초점을 가져갔으면 그대로 둔다. 새로 돌려주는 초점은 화면을 옮기지 않는다(몸 스크롤은 위에서 되돌림)
+   */
+  private restoreFocus(m: FocusMark | null): void {
+    if (!m) return;
+    const now = document.activeElement;
+    if (now && now !== document.body && now.isConnected) return;
+    const take = (el: HTMLElement | null | undefined): boolean => {
+      if (!el) return false;
+      el.focus({ preventScroll: true });
+      return document.activeElement === el;
+    };
+    const row = m.layer === null ? null : ([...this.body.querySelectorAll<HTMLElement>('[data-layer]')].find((r) => r.dataset.layer === m.layer) ?? null);
+    const scope = m.layer === null ? [...this.tabs.querySelectorAll<HTMLElement>(FOCUSABLE), ...this.body.querySelectorAll<HTMLElement>(FOCUSABLE)] : [...(row?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
+    const same = scope.find((el) => focusKey(el) === m.key);
+    if (same && m.key.startsWith('field:')) {
+      // 특성 칸은 지금처럼(편집 중이던 칸 — Tab으로 옮긴 칸 포함): 글 칸은 다시 골라 둔다
+      same.focus();
+      if (same.tagName === 'INPUT') (same as HTMLInputElement).select();
+      if (document.activeElement === same) return;
+    } else if (take(same)) {
+      // 도면층 찾기 칸 등: 글마다 다시 그려도 커서 자리를 지킨다(전에는 글 끝으로)
+      if (m.range) (same as HTMLInputElement).setSelectionRange(...m.range);
+      return;
+    }
+    if (row && [...row.querySelectorAll<HTMLElement>(FOCUSABLE)].some((el) => take(el))) return;
+    take(this.tabs.querySelector<HTMLElement>('[aria-selected="true"]'));
   }
 
   private props(): void {
@@ -437,10 +507,8 @@ export class Palette {
     const search = h('input', { class: 'search', placeholder: '도면층 이름 찾기', value: this.layerFilter, 'aria-label': '도면층 찾기' });
     search.addEventListener('input', () => {
       this.layerFilter = search.value;
+      // 다시 그린 찾기 칸에 초점과 커서 자리를 돌려준다(refresh — 256차: 전에는 커서를 글 끝으로 옮겼다)
       this.refresh();
-      const s = this.body.querySelector('input.search') as HTMLInputElement | null;
-      s?.focus();
-      s?.setSelectionRange(s.value.length, s.value.length);
     });
     const used = layerUsage(app);
     const q = this.layerFilter.trim().toUpperCase();
@@ -472,8 +540,9 @@ export class Palette {
     const tbody = h('tbody');
     for (const [k, lay] of rows) {
       const color = lay.color.rgb !== undefined ? lay.color.rgb : aciToRgb(lay.color.aci, true);
+      // data-act: 다시 그린 뒤 같은 단추로 초점을 돌려주는 표지(256차 — 접근 이름은 「켜짐」·「꺼짐」처럼 상태로 바뀜). 켜기 off·동결 frozen·잠금 locked
       const tog = (ic: string, title: string, off: boolean, patch: LayerPatch) => {
-        const b = h('button', { class: `toggle ${off ? 'off' : ''}`, title, 'aria-label': `${ft(lay.name)} ${title}`, html: icon(ic) });
+        const b = h('button', { class: `toggle ${off ? 'off' : ''}`, title, 'aria-label': `${ft(lay.name)} ${title}`, 'data-act': Object.keys(patch)[0], html: icon(ic) });
         b.addEventListener('click', (ev) => {
           ev.stopPropagation();
           if (patch.frozen && k === clayer) {
@@ -504,9 +573,10 @@ export class Palette {
         if (app.viewOnly) return;
         this.renameInline(nameCell, k, lay.name);
       });
+      // data-layer(도면층 열쇠 이름): 다시 그린 뒤 같은 행 안에서 초점을 돌려주는 표지(256차)
       const tr = h(
         'tr',
-        { class: `${k === clayer ? 'current' : ''} ${k === sel ? 'selected' : ''}` },
+        { class: `${k === clayer ? 'current' : ''} ${k === sel ? 'selected' : ''}`, 'data-layer': k },
         h('td', { class: 'cur', title: k === clayer ? '현재 도면층' : '' }, k === clayer ? '✓' : ''),
         h('td', {}, tog(lay.off ? 'eyeOff' : 'eye', lay.off ? '꺼짐' : '켜짐', lay.off, { off: !lay.off })),
         h('td', {}, tog(lay.frozen ? 'snow' : 'sun', lay.frozen ? '동결' : '동결 해제', lay.frozen, { frozen: !lay.frozen })),
