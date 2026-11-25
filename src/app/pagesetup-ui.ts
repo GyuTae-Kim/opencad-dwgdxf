@@ -23,7 +23,7 @@ import { ft } from './filetext';
 // 값 변환(대화상자 칸 ↔ PLOTSETTINGS)
 // ---------------------------------------------------------------------------
 
-export type PlotArea = 'layout' | 'extents' | 'display' | 'window' | 'limits';
+export type PlotArea = 'layout' | 'extents' | 'display' | 'view' | 'window' | 'limits';
 
 export interface PageForm {
   /** PAPERS 열쇠, 목록에 없는 지금 용지면 'KEEP' */
@@ -34,6 +34,8 @@ export interface PageForm {
   styleSheet: string;
   area: PlotArea;
   window?: [number, number, number, number];
+  /** 플롯 뷰 이름(DXF 6 — 230차). 영역이 뷰일 때만 적용하고, 그 밖이면 플롯 설정의 이름을 그대로 둔다(229차 — 74와 무관하게 지킴) */
+  view?: string;
   /** 'fit' 또는 "용지:단위" */
   scale: string;
   offsetX: number;
@@ -55,7 +57,7 @@ const STD_SCALES: Record<number, string> = { 16: '1:1', 17: '1:2', 18: '1:4', 19
 
 export const PAGE_SCALES = ['fit', '1:1', '1:2', '1:4', '1:5', '1:8', '1:10', '1:16', '1:20', '1:25', '1:30', '1:40', '1:50', '1:100', '1:200', '1:500', '1:1000', '2:1', '4:1', '5:1', '8:1', '10:1', '100:1'];
 
-const AREA_TYPE: Record<PlotArea, number> = { display: 0, extents: 1, limits: 2, window: 4, layout: 5 };
+const AREA_TYPE: Record<PlotArea, number> = { display: 0, extents: 1, limits: 2, view: 3, window: 4, layout: 5 };
 
 function isLandscapeOf(p: PageSettings): boolean {
   const w = p.rotation & 1 ? p.paperHeight : p.paperWidth;
@@ -75,7 +77,9 @@ export function pageFormOf(p: PageSettings, model: boolean): PageForm {
   const d = p.scaleDenominator || 1;
   const fit = p.flags & 16 ? p.standardScaleType === 0 : false;
   const scale = fit ? 'fit' : p.flags & 16 && STD_SCALES[p.standardScaleType] ? STD_SCALES[p.standardScaleType]! : `${+n.toFixed(6)}:${+d.toFixed(6)}`;
-  const area: PlotArea = model ? (p.plotType === 1 ? 'extents' : p.plotType === 2 ? 'limits' : p.plotType === 4 ? 'window' : 'display') : p.plotType === 1 ? 'extents' : p.plotType === 0 ? 'display' : p.plotType === 4 ? 'window' : 'layout';
+  // 74 = 3(뷰 — 230차): 전에는 모형 화면표시·배치 배치로 보여 적용하면 0·5가 됐다
+  const area: PlotArea =
+    p.plotType === 3 ? 'view' : model ? (p.plotType === 1 ? 'extents' : p.plotType === 2 ? 'limits' : p.plotType === 4 ? 'window' : 'display') : p.plotType === 1 ? 'extents' : p.plotType === 0 ? 'display' : p.plotType === 4 ? 'window' : 'layout';
   return {
     paper: paperKeyOf(p) || 'KEEP',
     landscape: isLandscapeOf(p),
@@ -83,6 +87,7 @@ export function pageFormOf(p: PageSettings, model: boolean): PageForm {
     styleSheet: p.styleSheet ?? '',
     area,
     window: p.plotType === 4 ? [p.windowMin.x, p.windowMin.y, p.windowMax.x, p.windowMax.y] : undefined,
+    view: p.plotViewName,
     scale: model ? scale : scale === 'fit' ? 'fit' : '1:1',
     offsetX: p.plotOrigin.x,
     offsetY: p.plotOrigin.y,
@@ -115,6 +120,7 @@ export function pageSettingsOf(base: PageSettings, v: PageForm, model: boolean):
   p.paperUnits = v.paperUnits === 'in' ? 0 : 1;
   p.styleSheet = v.styleSheet;
   p.plotType = AREA_TYPE[v.area];
+  if (v.area === 'view' && v.view) p.plotViewName = v.view;
   if (v.area === 'window' && v.window) {
     p.windowMin = { x: v.window[0], y: v.window[1] };
     p.windowMax = { x: v.window[2], y: v.window[3] };
@@ -142,6 +148,26 @@ export function pageSettingsOf(base: PageSettings, v: PageForm, model: boolean):
   p.flags = flags;
   p.plotOrigin = v.centered ? { x: 0, y: 0 } : { x: v.offsetX, y: v.offsetY };
   return p;
+}
+
+/**
+ * 플롯 영역 「뷰」로 고를 수 있는 저장된 뷰 이름(230차 — 페이지 설정 대화 상자 도움말: VIEW로 저장한 이름 있는 뷰 목록, 없으면 뷰를 쓸 수 없음).
+ * 모형은 모형 뷰, 배치는 종이 공간 뷰(VIEW 플래그 1 — VIEW 복원과 같은 가름. 다른 공간 뷰의 좌표로 자르면 틀린 영역이다), 이름 차례
+ */
+export function plotViewNames(doc: CadDocument, model: boolean): string[] {
+  return [...doc.views.values()]
+    .filter((v) => v.name !== '' && ((v.flags & 1) === 0) === model)
+    .map((v) => v.name)
+    .sort((a, b) => a.localeCompare(b, 'ko'));
+}
+
+/** 그 공간에 저장된 뷰의 범위(도면 좌표 — VIEW 복원처럼 DCS 중심 + 대상, 비틀림은 무시). 이름이 없거나 표에 없거나 다른 공간의 뷰면 null */
+export function plotViewRect(doc: CadDocument, name: string | undefined, model: boolean): [number, number, number, number] | null {
+  const v = name ? doc.views.get(tableKey(name)) : undefined;
+  if (!v || ((v.flags & 1) === 0) !== model) return null;
+  const cx = v.center.x + v.viewTarget.x;
+  const cy = v.center.y + v.viewTarget.y;
+  return [cx - v.width / 2, cy - v.height / 2, cx + v.width / 2, cy + v.height / 2];
 }
 
 // ---------------------------------------------------------------------------
@@ -278,8 +304,11 @@ export function realScaleNote(scale: string, paperUnits: 'mm' | 'in', insunits: 
   return `도면 단위가 ${UNIT_NAMES[insunits] ?? insunits}이므로 실제 크기 기준 ${txt}`;
 }
 
-/** keepLabel: 목록에 없는 지금 용지를 그대로 쓰는 항목의 이름(없으면 v.paper가 'KEEP'일 때만 "지금 용지") */
-export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?: string): { el: HTMLElement; read(): PageForm; set(f: PageForm): void; onWindow(f: () => void): void } {
+/**
+ * keepLabel: 목록에 없는 지금 용지를 그대로 쓰는 항목의 이름(없으면 v.paper가 'KEEP'일 때만 "지금 용지").
+ * views: 플롯 영역 「뷰」로 고를 수 있는 저장된 뷰 이름(plotViewNames)
+ */
+export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?: string, views: readonly string[] = []): { el: HTMLElement; read(): PageForm; set(f: PageForm): void; onWindow(f: () => void): void } {
   // 용지 목록 + 사용자 크기(폭 × 높이 mm, AutoCAD의 사용자 용지 크기)
   const userNow = v.paper.startsWith('USER_') ? paperOf(v.paper) : null;
   const keep = keepLabel ?? (v.paper === 'KEEP' ? '지금 용지' : undefined);
@@ -293,20 +322,34 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?
   const userRow = h('div', { class: 'paper-user' }, row('폭(mm)', uw), row('높이(mm)', uh));
   const sheets = [...new Set([...STYLE_SHEETS, ...ctbList().map((t) => t.name), v.styleSheet])];
   const style = selectIn(sheets.map((x) => ({ value: x, label: x || '없음' })), v.styleSheet, '플롯 스타일 테이블');
+  // 플롯 영역 「뷰」(230차): 저장된 뷰가 있거나 읽은 영역이 뷰(74 = 3)일 때만. 고르면 뷰 이름 목록 — 읽은 이름은 표에 없어도 지킨다(대소문자만 다르면 표의 이름)
+  const viewIs = (f: PageForm) => (f.view ? (views.find((x) => tableKey(x) === tableKey(f.view!)) ?? (f.area === 'view' ? f.view : undefined)) : undefined);
+  const view0 = viewIs(v);
+  const viewNames = view0 && !views.includes(view0) ? [...views, view0] : [...views];
+  const viewOpt = viewNames.length || v.area === 'view' ? [{ value: 'view', label: '뷰' }] : [];
   const areaOpts = model
     ? [
         { value: 'display', label: '화면표시' },
         { value: 'extents', label: '범위' },
         { value: 'limits', label: '한계' },
+        ...viewOpt,
         { value: 'window', label: '윈도우' },
       ]
     : [
         { value: 'layout', label: '배치' },
         { value: 'extents', label: '범위' },
         { value: 'display', label: '화면표시' },
+        ...viewOpt,
         { value: 'window', label: '윈도우' },
       ];
   const area = selectIn(areaOpts, v.area, '플롯 대상');
+  // 뷰 이름은 도면 글(ft — 화면 번역층이 옮기지 않게)
+  const viewIn = selectIn(
+    viewNames.map((x) => ({ value: x, label: ft(x) })),
+    view0 ?? viewNames[0] ?? '',
+    '뷰 이름',
+  );
+  const viewRow = row('뷰 이름', viewIn);
   const winBtn = btn('윈도우(O)<', () => windowCb?.());
   let windowCb: (() => void) | null = null;
   let win = v.window;
@@ -340,6 +383,7 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?
   const sync = () => {
     ox.disabled = oy.disabled = centered.checked;
     userRow.hidden = paper.value !== 'USER';
+    viewRow.hidden = area.value !== 'view';
     winBtn.disabled = area.value !== 'window';
     for (const o of scale.options) o.textContent = scaleLabel(o.value, units.value);
     real.textContent = realScaleNote(scale.value, units.value as 'mm' | 'in', insunits);
@@ -355,7 +399,7 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?
     'div',
     { class: 'mgr-dlg' },
     h('div', { class: 'mgr-cols' }, group('용지 크기(Z)', paper, userRow), group('플롯 스타일 테이블(펜 지정)(G)', style)),
-    h('div', { class: 'mgr-cols' }, group('플롯 영역', row('플롯 대상(W)', area), winBtn), group('도면 방향', land, row('대칭으로 플롯(-)', upside))),
+    h('div', { class: 'mgr-cols' }, group('플롯 영역', row('플롯 대상(W)', area), viewRow, winBtn), group('도면 방향', land, row('대칭으로 플롯(-)', upside))),
     h('div', { class: 'mgr-cols' }, group('플롯 간격띄우기(인쇄 가능 영역의 원점 기준)', row('X(mm)', ox), row('Y(mm)', oy), row('플롯의 중심(C)', centered)), group('플롯 축척', row('축척(S)', scale), row('용지 단위(N)', units), real, row('선가중치 축척(L)', slw))),
     group('플롯 옵션', row('객체의 선가중치 플롯', lw), row('투명도 플롯(T)', tr), ...(model ? [] : [row('도면 공간을 나중에 플롯(J)', psl)])),
   );
@@ -366,6 +410,7 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?
     styleSheet: style.value,
     area: area.value as PlotArea,
     window: win,
+    view: viewIn.value || undefined,
     scale: scale.value,
     offsetX: numOf(ox) || 0,
     offsetY: numOf(oy) || 0,
@@ -387,7 +432,12 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?
     } else if (f.paper !== 'KEEP' || keep) paper.value = f.paper;
     if (![...style.options].some((o) => o.value === f.styleSheet)) style.append(h('option', { value: f.styleSheet }, f.styleSheet || '없음'));
     style.value = f.styleSheet;
+    // 이름 있는 페이지 설정이 뷰(74 = 3)면 목록에 뷰가 없어도 더해 읽은 값을 지킨다
+    if (f.area === 'view' && ![...area.options].some((o) => o.value === 'view')) area.insertBefore(h('option', { value: 'view' }, '뷰'), [...area.options].find((o) => o.value === 'window') ?? null);
     if ([...area.options].some((o) => o.value === f.area)) area.value = f.area;
+    const fv = f.view ? ([...viewIn.options].find((o) => tableKey(o.value) === tableKey(f.view!))?.value ?? (f.area === 'view' ? f.view : undefined)) : undefined;
+    if (fv && ![...viewIn.options].some((o) => o.value === fv)) viewIn.append(h('option', { value: fv }, ft(fv)));
+    if (fv) viewIn.value = fv;
     win = f.window;
     units.value = f.paperUnits;
     tr.checked = f.plotTransparency;
@@ -407,8 +457,8 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?
 }
 
 /** 페이지 설정 대화상자(취소면 null). 윈도우(O)를 누르면 pickWindow로 닫는다 */
-export async function pageSetupDialog(title: string, v: PageForm, model: boolean, extraNote?: string, insunits = 0): Promise<PageDialogResult | null> {
-  const f = pageFields(v, model, insunits);
+export async function pageSetupDialog(title: string, v: PageForm, model: boolean, extraNote?: string, insunits = 0, views: readonly string[] = []): Promise<PageDialogResult | null> {
+  const f = pageFields(v, model, insunits, undefined, views);
   let pick = false;
   let submitNow: (() => void) | null = null;
   f.onWindow(() => {
@@ -441,8 +491,9 @@ export async function askPlotWindow(ctx: CommandContext): Promise<[number, numbe
 /** 대화상자로 페이지 설정 하나를 고친다(윈도우 고르기 왕복 포함) */
 async function editPage(ctx: CommandContext, title: string, plot: PageSettings, model: boolean): Promise<PageSettings | null> {
   let form = pageFormOf(plot, model);
+  const doc = ctx.app.active?.doc;
   for (;;) {
-    const r = await pageSetupDialog(title, form, model, undefined, Number(ctx.app.active?.doc.header.get('$INSUNITS') ?? 0));
+    const r = await pageSetupDialog(title, form, model, undefined, Number(doc?.header.get('$INSUNITS') ?? 0), doc ? plotViewNames(doc, model) : []);
     if (!r) return null;
     form = r.form;
     if (r.pickWindow) {

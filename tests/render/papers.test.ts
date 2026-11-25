@@ -94,6 +94,48 @@ describe('페이지 설정의 사용자 크기', () => {
   });
 });
 
+// 230차: 플롯 영역 「뷰」(Autodesk 페이지 설정 대화 상자 도움말 — 저장된 이름 있는 뷰를 목록에서 고름, 저장된 뷰가 없으면 쓸 수 없음).
+// 값 변환·PLOT 출력·VIEW 이름 바꾸기는 tests/manage/plotview230.test.ts
+describe('페이지 설정의 플롯 영역 뷰(230차)', () => {
+  const base: PageForm = { paper: 'A3', landscape: true, upsideDown: false, styleSheet: '', area: 'display', window: undefined, scale: 'fit', offsetX: 0, offsetY: 0, centered: true, lineweights: true, scaleLineweights: false, paperUnits: 'mm', plotTransparency: false, paperspaceLast: false };
+  const areaOf = (f: ReturnType<typeof pageFields>) => f.el.querySelector('select[aria-label="플롯 대상"]') as HTMLSelectElement;
+  const opts = (f: ReturnType<typeof pageFields>) => [...areaOf(f).options].map((o) => o.value);
+  const viewSel = (f: ReturnType<typeof pageFields>) => f.el.querySelector('select[aria-label="뷰 이름"]') as HTMLSelectElement | null;
+
+  it('저장된 뷰가 있을 때만 목록에 뷰가 있고, 고르면 뷰 이름 목록이 보인다', () => {
+    const m = pageFields(base, true, 0, undefined, ['Front', 'Side']);
+    // 전에는 화면표시·범위·한계·윈도우
+    expect(opts(m)).toEqual(['display', 'extents', 'limits', 'view', 'window']);
+    const vs = viewSel(m)!;
+    expect((vs.closest('label') as HTMLElement).hidden).toBe(true);
+    areaOf(m).value = 'view';
+    areaOf(m).dispatchEvent(new Event('change'));
+    expect((vs.closest('label') as HTMLElement).hidden).toBe(false);
+    expect([...vs.options].map((o) => o.value)).toEqual(['Front', 'Side']);
+    vs.value = 'Side';
+    expect(m.read()).toMatchObject({ area: 'view', view: 'Side' });
+    expect(opts(pageFields({ ...base, area: 'layout' }, false, 0, undefined, ['Sheet']))).toEqual(['layout', 'extents', 'display', 'view', 'window']);
+    // 저장된 뷰가 없으면 전과 같은 목록
+    expect(opts(pageFields(base, true))).toEqual(['display', 'extents', 'limits', 'window']);
+    expect(opts(pageFields({ ...base, area: 'layout' }, false))).toEqual(['layout', 'extents', 'display', 'window']);
+  });
+
+  it('읽은 뷰(74 = 3)와 이름을 그대로 보이고 읽는다 — 대소문자가 다른 이름, 표에 없는 이름, 이름 있는 페이지 설정으로 바꾸기', () => {
+    const a = pageFields({ ...base, area: 'view', view: 'front' }, true, 0, undefined, ['Front', 'Side']);
+    expect(viewSel(a)!.value).toBe('Front');
+    expect(a.read()).toMatchObject({ area: 'view', view: 'Front' });
+    // 저장된 뷰가 없어도 읽은 뷰는 지킨다
+    const b = pageFields({ ...base, area: 'view', view: 'Gone' }, true);
+    expect(opts(b)).toEqual(['display', 'extents', 'limits', 'view', 'window']);
+    expect(b.read()).toMatchObject({ area: 'view', view: 'Gone' });
+    // PLOT 대화 상자에서 이름 있는 페이지 설정을 고른 것(set)
+    const c = pageFields(base, true);
+    c.set({ ...base, area: 'view', view: 'Gone' });
+    expect(opts(c)).toEqual(['display', 'extents', 'limits', 'view', 'window']);
+    expect(c.read()).toMatchObject({ area: 'view', view: 'Gone' });
+  });
+});
+
 describe('PUBLISH 시트 목록', () => {
   it('열린 도면마다 모형과 배치(탭 순서)', () => {
     const a = new DocState(1, createNewDocument('metric'), 'a.dwg', 0, 0);

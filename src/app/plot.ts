@@ -11,7 +11,7 @@ import { type LayoutPlotView, type Page, type PageOptions, PT_PER_MM, baseName, 
 import { paperInfo } from './scene';
 import { dialog, h } from './ui/dom';
 import { namedPageSetups } from '../edit/script/pagesetup';
-import { type PageForm, layoutPlotOps, pageFields, pageFormOf, pageSettingsOf } from './pagesetup-ui';
+import { type PageForm, layoutPlotOps, pageFields, pageFormOf, pageSettingsOf, plotViewNames, plotViewRect } from './pagesetup-ui';
 import { checkIn, fail, group, numIn, numOf, resultDialog, row, selectIn } from './mgr-ui';
 import { inScript } from './script';
 import { ctbByName, pickCtbFiles } from './ctblib';
@@ -60,6 +60,8 @@ export interface PlotSettings {
   format: 'pdf' | 'svg';
   margin: number;
   window?: [number, number, number, number];
+  /** 플롯 영역 뷰의 저장된 뷰 이름(230차 — window가 그 뷰 범위). 다음 PLOT의 처음 칸을 뷰로 되돌린다 */
+  view?: string;
   /** 축척 "a:b"의 용지 단위(a mm 또는 a 인치 = 도면 단위 b). 없으면 mm */
   paperUnits?: 'mm' | 'in';
   /** 투명도 플롯 */
@@ -370,10 +372,14 @@ const DEVICES: { value: Device; label: string }[] = [
   { value: 'preview', label: '미리보기만(내려받지 않음)' },
 ];
 
-/** 플롯 대화상자 칸 → 출력 설정 */
-export function plotSettingsOfForm(f: PageForm, model: boolean, allLayouts: boolean, device: Device, copies: number, metric: boolean): PlotSettings {
+/**
+ * 플롯 대화상자 칸 → 출력 설정. viewRect: 플롯 영역이 뷰일 때 그 저장된 뷰의 범위(plotViewRect) — 그 범위를 창으로 그린다(230차, -PLOT 모형 뷰(V)와 같은 꼴).
+ * 찾지 못하면(null) 전처럼 모형 화면표시·배치 전체
+ */
+export function plotSettingsOfForm(f: PageForm, model: boolean, allLayouts: boolean, device: Device, copies: number, metric: boolean, viewRect: [number, number, number, number] | null = null): PlotSettings {
   const ctb = ctbByName(f.styleSheet);
-  const what: PlotSettings['what'] = !model ? (allLayouts ? 'layouts' : 'layout') : f.area === 'extents' ? 'extents' : f.area === 'window' || f.area === 'limits' ? 'window' : 'display';
+  const vr = f.area === 'view' ? viewRect : null;
+  const what: PlotSettings['what'] = !model ? (allLayouts ? 'layouts' : 'layout') : f.area === 'extents' ? 'extents' : f.area === 'window' || f.area === 'limits' || vr ? 'window' : 'display';
   return {
     what,
     paper: f.paper === 'KEEP' ? (metric ? 'A3' : 'TABLOID') : f.paper,
@@ -384,12 +390,13 @@ export function plotSettingsOfForm(f: PageForm, model: boolean, allLayouts: bool
     lineweights: f.lineweights,
     format: device === 'svg' ? 'svg' : 'pdf',
     margin: 5,
-    window: f.window,
+    window: vr ?? f.window,
+    ...(vr && f.view ? { view: f.view } : {}),
     paperUnits: f.paperUnits,
     transparency: f.plotTransparency,
     paperspaceLast: f.paperspaceLast,
     scaleLineweights: f.scaleLineweights,
-    area: model ? undefined : f.area === 'limits' ? 'layout' : f.area,
+    area: model ? undefined : vr ? 'window' : f.area === 'limits' || f.area === 'view' ? 'layout' : f.area,
     keepPaper: !model && f.paper === 'KEEP' ? true : undefined,
     centered: f.centered,
     offset: { x: f.offsetX, y: f.offsetY },
@@ -421,8 +428,9 @@ function formOfSettings(s: PlotSettings, base: PageForm): PageForm {
     landscape: s.landscape,
     scale: s.scale,
     styleSheet: s.ctb ?? (s.plotStyle === 'mono' ? 'monochrome.ctb' : s.plotStyle === 'gray' ? 'Grayscale.ctb' : base.styleSheet),
-    area: s.what === 'extents' ? 'extents' : s.what === 'window' ? 'window' : s.what === 'display' ? 'display' : (s.area ?? base.area),
+    area: s.view ? 'view' : s.what === 'extents' ? 'extents' : s.what === 'window' ? 'window' : s.what === 'display' ? 'display' : (s.area ?? base.area),
     window: s.window ?? base.window,
+    view: s.view ?? base.view,
     lineweights: s.lineweights,
     paperUnits: s.paperUnits ?? base.paperUnits,
     plotTransparency: !!s.transparency,
@@ -523,7 +531,7 @@ async function runPlot(app: App, ctx: CommandContext): Promise<void> {
     const hi = st.doc.header.get('$LIMMAX') as { x: number; y: number } | undefined;
     form = { ...form, window: lo && hi ? [lo.x, lo.y, hi.x, hi.y] : form.window };
   }
-  const s = plotSettingsOfForm(form, model, allLayouts, device, copies, metric);
+  const s = plotSettingsOfForm(form, model, allLayouts, device, copies, metric, form.area === 'view' ? plotViewRect(st.doc, form.view, model) : null);
   lastSettings.set(st, s);
   if (device === 'preview') {
     await showPreview(app, st, s);
@@ -584,7 +592,7 @@ function plotDialog(app: App, ctx: CommandContext, v: PlotDialogState): Promise<
   const st = app.active!;
   const named = namedPageSetups(st.doc).items.filter((x) => x.model === v.model);
   const setup = selectIn([{ value: '', label: '<없음>' }, ...named.map((x) => ({ value: x.name, label: x.name }))], v.setupName, '페이지 설정 이름');
-  const fields = pageFields(v.form, v.model, Number(st.doc.header.get('$INSUNITS') ?? 0), v.keepLabel);
+  const fields = pageFields(v.form, v.model, Number(st.doc.header.get('$INSUNITS') ?? 0), v.keepLabel, plotViewNames(st.doc, v.model));
   setup.addEventListener('change', () => {
     const it = named.find((x) => x.name === setup.value);
     if (it) fields.set(pageFormOf(it.plot, v.model));
