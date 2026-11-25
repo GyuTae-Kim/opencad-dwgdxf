@@ -135,7 +135,9 @@ export function closeMenu(restoreFocus = false): void {
  * 열면 첫 켜진 항목에 초점을 둔다 — 키보드로 연 메뉴도, 손가락·마우스로 누르거나 오른쪽 클릭해 연 메뉴도(262차 — W3C APG 메뉴 단추 꼴, WCAG 2.4.3.
  * 전에는 키보드로 연 메뉴만 옮겨, 화면 읽기 프로그램의 두 번 톡(click)으로 연 메뉴는 초점이 밖에 남았다). 보이는 초점 표시는 :focus-visible 규칙대로
  * (styles.css — 손가락·마우스로 연 메뉴에는 그리지 않는다). opt.hover(커서를 올리면 뜨는 메뉴 — 다기능 그립)는 지금처럼 키보드로 옮긴 초점이 있을 때만.
+ * 켜진 항목이 없는 메뉴는 메뉴 자체에 초점을 둔다(263차 — Esc·Tab으로 닫을 수 있게).
  * opt.opener는 연 단추: 누르기로 초점을 받지 않는 브라우저(Safari·iOS)에서도 닫을 때 그 단추로 돌려준다(없으면 열 때의 초점).
+ * 메뉴 단추(aria-haspopup="menu")는 onClose로 aria-expanded를 false로 되돌리고 연 뒤에 true로 둔다(253·254·263차 — 부르는 쪽).
  * onClose는 메뉴가 닫힐 때 한 번(항목의 run보다 먼저)
  */
 export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose?: () => void; opener?: HTMLElement; hover?: boolean } = {}): void {
@@ -208,8 +210,17 @@ export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose
   openMenu = m;
   menuOpener = opener;
   menuClosed = opt.onClose ?? null;
-  // 메뉴 안 첫 켜진 항목으로(꺼진 항목뿐이면 그대로). 커서를 올려 연 메뉴는 키보드로 옮긴 초점이 있던 곳에서만 — 누르지 않고 뜨는 메뉴가 치던 자리의 초점을 빼앗지 않게
-  if (!opt.hover || (active && focusVisible(active))) enabled()[0]?.focus();
+  // 메뉴 안 첫 켜진 항목으로. 커서를 올려 연 메뉴는 키보드로 옮긴 초점이 있던 곳에서만 — 누르지 않고 뜨는 메뉴가 치던 자리의 초점을 빼앗지 않게.
+  // 켜진 항목이 없으면 메뉴 자체(tabindex -1)에(263차 — 위 키 처리는 메뉴 안의 초점만 받아, 초점이 밖에 남으면 Esc로 닫을 수 없었다. 화살표는 옮길 곳이 없어 그대로).
+  // 초점 표시는 대화 상자(tabindex -1 상자)처럼 브라우저 기본 — 앱의 :focus-visible 규칙은 tabindex -1을 빼고, 키보드로 연 메뉴에만 그려진다
+  if (!opt.hover || (active && focusVisible(active))) {
+    const first = enabled()[0];
+    if (first) first.focus();
+    else {
+      m.tabIndex = -1;
+      m.focus();
+    }
+  }
   setTimeout(() => {
     const off = (ev: Event) => {
       if (openMenu && !openMenu.contains(ev.target as Node)) {
