@@ -1,7 +1,7 @@
 /** 표 제어 객체와 표 레코드 쓰기(사양 20.4.51~20.4.70, objects/tables.ts의 짝) */
 import type { DimStyle, Layer, Linetype, TableRecordBase, TextStyle, UcsRecord, ViewRecord, VPortRecord, XData } from '../../../core/model';
 import { DIM_VAR_DEFAULTS } from '../../../core/dimvars';
-import { viewProjectionOf, viewRenderModeOf } from '../../../core/finalize';
+import { ucsElevationOf, viewProjectionOf, viewRenderModeOf } from '../../../core/finalize';
 import { R2000, R2004, R2007, R2010 } from '../version';
 import type { PBlock, PRec, TableName, WCtx } from './context';
 import { eedOf, wcolor } from './common';
@@ -446,7 +446,8 @@ export class TableWriter {
     d.BD3(u.xAxis);
     d.BD3(u.yAxis);
     if (ver >= R2000) {
-      d.BD(0);
+      // 고도(DXF 146 — 235차): 읽은 유한한 값, 없거나 유한하지 않으면 전처럼 0. 뒤 BS 둘(직교 유형 등)은 전처럼 0
+      d.BD(ucsElevationOf(u.elevation));
       d.BS(0);
       d.BS(0);
     }

@@ -107,6 +107,14 @@ export function viewProjectionRead(p: ViewProjection): ViewProjection | undefine
 }
 
 /**
+ * UCS 표 레코드의 고도(R2000+ DXF UCS 146, DWG Y 축 뒤 BD — 235차). DXF 참조서 UCS가 범위를 적지 않아 유한한 수면 그 값, 없거나 유한하지 않으면
+ * 전처럼 0(이 앱이 써 온 상수). 리더도 이것으로 걸러 0이 아니면 둔다
+ */
+export function ucsElevationOf(elevation: number | undefined): number {
+  return finiteOr(elevation, 0);
+}
+
+/**
  * 쓸 플롯 뷰(DXF PLOTSETTINGS 6, DWG R2000 글·R2004+ VIEW 레코드 핸들 — 229차). 플롯 설정의 이름이 쓰는 VIEW 표(views — 쓰기 문맥이 정한 레코드와 핸들)에
  * 있으면(대소문자 가리지 않음) 그 레코드, 이름이 없거나 표에 없으면 undefined(전처럼 ''·핸들 0). 뷰를 지우거나 이름을 바꾸면 가리킬 것이 없어 빈 이름이 된다
  */
