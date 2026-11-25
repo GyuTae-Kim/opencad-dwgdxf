@@ -59,9 +59,9 @@ export interface AnnoStatus {
   refresh(): void;
 }
 
-/** 긴 메뉴(축척 33개)는 화면 안에서 스크롤 */
-function scrollableMenu(x: number, y: number, items: MenuItem[]): void {
-  showMenu(x, y, items);
+/** 긴 메뉴(축척 33개)는 화면 안에서 스크롤. opener는 연 단추(닫으면 초점을 돌려준다 — 262차) */
+function scrollableMenu(x: number, y: number, items: MenuItem[], opener?: HTMLElement): void {
+  showMenu(x, y, items, { opener });
   const menus = document.querySelectorAll('.menu');
   const m = menus[menus.length - 1] as HTMLElement | undefined;
   if (!m) return;
@@ -114,7 +114,7 @@ export function annoStatus(app: App): AnnoStatus {
       },
     );
     const r = scaleBtn.getBoundingClientRect();
-    scrollableMenu(Math.max(4, r.left), ev.clientY - 40 - items.length * 30, items);
+    scrollableMenu(Math.max(4, r.left), ev.clientY - 40 - items.length * 30, items, scaleBtn);
   });
   visBtn.addEventListener('click', () => {
     const st = app.active;

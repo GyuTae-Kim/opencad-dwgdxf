@@ -2308,7 +2308,8 @@ export class App {
     if (!items.length) return;
     h.shown = true;
     this.view.el.title = '';
-    showContextMenu(x + 6, y + 6, items);
+    // 누르지 않고 뜨는 메뉴: 치던 자리(명령행 등)의 초점을 메뉴로 옮기지 않는다(262차 — 누르기·오른쪽 클릭으로 연 메뉴만 옮김)
+    showContextMenu(x + 6, y + 6, items, { hover: true });
   }
 
   /** 이 점 요청에서 명령의 끌기 미리보기(ghost·rubber)를 보이는지: 자동(2)이거나, 켜기(1)이고 이 요청에서 DRAG를 입력했을 때 */

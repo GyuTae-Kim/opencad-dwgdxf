@@ -107,9 +107,37 @@ describe('메뉴 키보드', () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  it('마우스로 연 메뉴(키보드 초점 없음)는 초점을 옮기지 않는다', () => {
-    showMenu(10, 10, [{ label: '복사' }]);
-    expect(document.activeElement).toBe(document.body);
+  it('손가락·마우스로 연 메뉴(키보드 초점 없음)도 첫 켜진 항목에 초점, Esc는 닫고 넘긴 연 단추로(262차 — 전에는 옮기지 않았다). 커서를 올려 연 메뉴는 키보드 초점이 있을 때만, 꺼진 항목뿐이면 옮기지 않는다', () => {
+    const opener = document.createElement('button');
+    opener.textContent = '⋯';
+    document.body.append(opener);
+    const at = () => (document.activeElement === document.body ? 'body' : document.activeElement === opener ? 'opener' : (document.activeElement!.textContent ?? '').trim());
+    // 누르기로 초점을 받지 않은 단추(Safari·iOS — 시험 환경의 click도 같다): 연 단추는 opener로 넘긴다. 제목·꺼진 항목은 건너뛴다
+    showMenu(10, 10, [{ heading: '편집' }, { label: '잘라내기', disabled: true }, { label: '복사' }, { label: '붙여넣기' }], { opener });
+    const got: unknown[] = [at()];
+    key(document.activeElement!, 'ArrowUp');
+    got.push(at());
+    key(document.activeElement!, 'Escape');
+    got.push(document.querySelector('.menu') === null, at());
+    // 커서를 올려 연 메뉴(다기능 그립): 키보드로 옮긴 초점이 없으면 옮기지 않는다 — 치던 자리를 빼앗지 않는다
+    opener.blur();
+    showMenu(0, 0, [{ label: '스트레치' }], { hover: true });
+    got.push(at());
+    // 키보드로 옮긴 초점이 있으면 지금처럼 첫 항목
+    opener.focus();
+    const visible = vi.spyOn(Element.prototype, 'matches').mockImplementation(function (this: Element, sel: string) {
+      if (sel === ':focus-visible') return this === opener;
+      return Element.prototype.closest.call(this, sel) === this;
+    });
+    showMenu(0, 0, [{ label: '스트레치' }], { hover: true });
+    visible.mockRestore();
+    got.push(at());
+    // 꺼진 항목뿐인 메뉴는 옮기지 않는다
+    closeMenu();
+    showMenu(0, 0, [{ label: '저장', disabled: true }]);
+    got.push(at());
+    closeMenu();
+    expect(got).toEqual(['복사', '붙여넣기', true, 'opener', 'body', '스트레치', 'body']);
   });
 
   it('onClose는 메뉴가 닫힐 때 한 번: 항목을 고르면 run보다 먼저, Esc·다른 메뉴로 닫혀도(오른쪽 끌어 놓기 미리보기 치우기)', () => {

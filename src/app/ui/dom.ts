@@ -114,7 +114,7 @@ export interface MenuItem {
 }
 
 let openMenu: HTMLDivElement | null = null;
-/** 메뉴를 열기 전에 초점이 있던 곳(Esc로 닫으면 돌려준다) */
+/** 연 단추(showMenu opt.opener), 없으면 메뉴를 열기 전에 초점이 있던 곳(Esc·Tab·항목 고르기로 닫으면 돌려준다) */
 let menuOpener: HTMLElement | null = null;
 /** 지금 메뉴가 닫힐 때 부를 것(항목을 고르든 Esc·바깥 누르기·다른 메뉴로 닫히든) */
 let menuClosed: (() => void) | null = null;
@@ -132,11 +132,16 @@ export function closeMenu(restoreFocus = false): void {
 
 /**
  * 바로가기 메뉴. 키보드: 위·아래 화살표·Home·End로 옮기고 Enter·Space로 고르며, Esc는 닫고 연 곳으로 초점을 돌린다(Tab도 닫는다).
- * 키보드로 연 메뉴(초점이 단추 등에 있을 때)는 첫 항목에 초점을 둔다. onClose는 메뉴가 닫힐 때 한 번(항목의 run보다 먼저)
+ * 열면 첫 켜진 항목에 초점을 둔다 — 키보드로 연 메뉴도, 손가락·마우스로 누르거나 오른쪽 클릭해 연 메뉴도(262차 — W3C APG 메뉴 단추 꼴, WCAG 2.4.3.
+ * 전에는 키보드로 연 메뉴만 옮겨, 화면 읽기 프로그램의 두 번 톡(click)으로 연 메뉴는 초점이 밖에 남았다). 보이는 초점 표시는 :focus-visible 규칙대로
+ * (styles.css — 손가락·마우스로 연 메뉴에는 그리지 않는다). opt.hover(커서를 올리면 뜨는 메뉴 — 다기능 그립)는 지금처럼 키보드로 옮긴 초점이 있을 때만.
+ * opt.opener는 연 단추: 누르기로 초점을 받지 않는 브라우저(Safari·iOS)에서도 닫을 때 그 단추로 돌려준다(없으면 열 때의 초점).
+ * onClose는 메뉴가 닫힐 때 한 번(항목의 run보다 먼저)
  */
-export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose?: () => void } = {}): void {
+export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose?: () => void; opener?: HTMLElement; hover?: boolean } = {}): void {
   closeMenu();
-  const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+  const active = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+  const opener = opt.opener ?? active;
   const m = h('div', { class: 'menu', role: 'menu' });
   for (const it of items) {
     if (it.separator) {
@@ -203,8 +208,8 @@ export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose
   openMenu = m;
   menuOpener = opener;
   menuClosed = opt.onClose ?? null;
-  // 키보드로 연 메뉴는 첫 항목으로(마우스로 연 메뉴는 초점을 옮기지 않아 그리던 자리의 키 입력이 그대로 간다)
-  if (opener && focusVisible(opener)) enabled()[0]?.focus();
+  // 메뉴 안 첫 켜진 항목으로(꺼진 항목뿐이면 그대로). 커서를 올려 연 메뉴는 키보드로 옮긴 초점이 있던 곳에서만 — 누르지 않고 뜨는 메뉴가 치던 자리의 초점을 빼앗지 않게
+  if (!opt.hover || (active && focusVisible(active))) enabled()[0]?.focus();
   setTimeout(() => {
     const off = (ev: Event) => {
       if (openMenu && !openMenu.contains(ev.target as Node)) {
