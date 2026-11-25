@@ -15,7 +15,7 @@ import type {
   UnderlayDefObject,
   XRecordObject,
 } from '../../core/model';
-import { shadePlotOf } from '../../core/finalize';
+import { plotViewOf, shadePlotOf } from '../../core/finalize';
 import type { TagSink } from './tagwriter';
 import { type PlannedLayout, type PlannedObject, type WriteContext, standardTableStyle } from './wcontext';
 import { TagOut, appGroups, cadColorToRaw, validLineweight, writeXData } from './wentities';
@@ -41,7 +41,8 @@ function plotSettings(w: TagOut, p: PlotSettings): void {
   w.t(1, p.pageSetupName ?? '');
   w.t(2, p.printerName || 'none_device');
   w.t(4, p.paperName ?? '');
-  w.t(6, '');
+  // 플롯 뷰 이름(229차): 쓰는 VIEW 표에 있을 때만 그 레코드 이름, 아니면 전처럼 빈 글
+  w.t(6, plotViewOf(p, w.ctx.views)?.rec.name ?? '');
   w.t(40, p.margins[0] ?? 0);
   w.t(41, p.margins[1] ?? 0);
   w.t(42, p.margins[2] ?? 0);

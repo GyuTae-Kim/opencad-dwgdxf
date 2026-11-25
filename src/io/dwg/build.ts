@@ -18,6 +18,7 @@ import {
   type Layer,
   type Layout,
   type Linetype,
+  type PlotSettings,
   type TableRecordBase,
   type TextStyle,
   type UcsRecord,
@@ -151,6 +152,8 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
   const ucss = new Map<number, UcsRec>();
   const appids = new Map<number, RecordCommon>();
   const layoutsRaw: LayoutRaw[] = [];
+  /** R2004+ 플롯 뷰 핸들을 지닌 플롯 설정(PLOTSETTINGS 객체·배치) — VIEW 표를 만든 뒤 이름으로 푼다(229차) */
+  const plotViews: [PlotSettings, number][] = [];
   const mlineStyles = new Map<number, MLineStyleRaw>();
   const objects = new Map<string, CadObject>();
   const crcBad: Record<string, number> = {};
@@ -238,9 +241,12 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
         case 'LAYOUT':
           layoutsRaw.push(readLayout(or));
           break;
-        case 'PLOTSETTINGS':
-          objects.set(hex(h), readPlotSettingsObject(or));
+        case 'PLOTSETTINGS': {
+          const { obj, plotView } = readPlotSettingsObject(or);
+          objects.set(hex(h), obj);
+          if (plotView) plotViews.push([(obj as { plot: PlotSettings }).plot, plotView]);
           break;
+        }
         case 'MLINESTYLE': {
           const m = readMLineStyle(or);
           mlineStyles.set(h, m);
@@ -825,11 +831,21 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
       plot: lr.plot,
     };
     if (lr.viewport) lay.viewport = hex(lr.viewport);
+    if (lr.plotView) plotViews.push([lay.plot, lr.plotView]);
     doc.layouts.push(lay);
     const lo = { type: 'LAYOUT', handle: hex(lr.handle), owner: hex(lr.owner), layout: lay } as CadObject;
     if (lr.xdict) lo.xdict = hex(lr.xdict);
     if (lr.reactors.length) lo.reactors = lr.reactors.map(hex);
     objects.set(hex(lr.handle), lo);
+  }
+  // 플롯 뷰(R2004+ VIEW 레코드 핸들 — 229차): 살아 있는 VIEW 레코드(doc.views)면 그 이름을 둔다. 못 풀면 전처럼 칸 없음
+  if (plotViews.length) {
+    const viewName = new Map<string, string>();
+    for (const v of doc.views.values()) viewName.set(v.handle, v.name);
+    for (const [p, h] of plotViews) {
+      const n = viewName.get(hex(h));
+      if (n) p.plotViewName = n;
+    }
   }
 
   // 배치 블록의 도형은 DXF처럼 종이 공간(67)으로 표시한다

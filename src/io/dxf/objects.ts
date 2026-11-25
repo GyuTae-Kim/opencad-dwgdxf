@@ -129,6 +129,9 @@ function plotSettings(t: Tags): PlotSettings {
     styleSheet: t.str(7, '', sub),
     standardScaleType: t.int(75, 16, sub),
   };
+  // 플롯 뷰 이름 6(229차): 빈 글(이 앱이 써 온 값)이면 칸을 두지 않는다. VIEW 표에 있는지는 쓰기가 본다(plotViewOf)
+  const view = name(t.str(6, '', sub));
+  if (view) p.plotViewName = view;
   // 음영 플롯 76~78(221차): LAYOUT의 AcDbLayout에도 76(UCS 직교 유형)이 있어 하위 클래스 표지가 있을 때만 읽는다
   if (has) {
     if (t.find(76, s) >= 0) p.shadePlotMode = t.int(76, 0, s);

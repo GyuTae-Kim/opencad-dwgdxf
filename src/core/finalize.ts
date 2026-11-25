@@ -74,6 +74,17 @@ export function viewportShadePlotOf(mode: number | undefined): number {
   return pickInt(mode, 0, 3, 0);
 }
 
+/**
+ * 쓸 플롯 뷰(DXF PLOTSETTINGS 6, DWG R2000 글·R2004+ VIEW 레코드 핸들 — 229차). 플롯 설정의 이름이 쓰는 VIEW 표(views — 쓰기 문맥이 정한 레코드와 핸들)에
+ * 있으면(대소문자 가리지 않음) 그 레코드, 이름이 없거나 표에 없으면 undefined(전처럼 ''·핸들 0). 뷰를 지우거나 이름을 바꾸면 가리킬 것이 없어 빈 이름이 된다
+ */
+export function plotViewOf<T extends { rec: { name: string } }>(p: PlotSettings, views: readonly T[]): T | undefined {
+  const name = p.plotViewName;
+  if (!name) return undefined;
+  const k = tableKey(name);
+  return views.find((v) => v.rec.name !== '' && tableKey(v.rec.name) === k);
+}
+
 /** min~max의 정수면 그 값, 아니면 def */
 function pickInt(v: number | undefined, min: number, max: number, def: number): number {
   return Number.isInteger(v) && v! >= min && v! <= max ? v! : def;

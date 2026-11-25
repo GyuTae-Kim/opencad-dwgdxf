@@ -26,7 +26,7 @@ import { DYN_TYPES } from '../dyncodec';
 import { ASSOC_DWG_TYPES } from '../assoccodec';
 import { writeRawObject } from './rawobjects';
 import { tableKey } from '../../../core/model';
-import { shadePlotOf } from '../../../core/finalize';
+import { plotViewOf, shadePlotOf } from '../../../core/finalize';
 import { defaultIoTableStyle, parseTableStyleTags } from '../../tablestyle';
 import { tableStyleOld, tableStyleR24, writeIO } from '../tablecodec';
 import { styleToOld, styleToR24 } from '../tablemodel';
@@ -104,9 +104,11 @@ export class ObjectWriter {
       }
       case 'PLOTSETTINGS': {
         this.start(this.cls('PLOTSETTINGS'), po);
-        plotSettings(d, this.ver, (o as { plot: PlotSettings }).plot);
-        // 플롯 뷰(R2004+)·시각 스타일(R2007+) 핸들(AutoCAD 표본)
-        if (this.ver >= R2004) hd.H(HARD_PTR, 0);
+        const plot = (o as { plot: PlotSettings }).plot;
+        const view = plotViewOf(plot, ctx.views);
+        plotSettings(d, this.ver, plot, view?.rec.name ?? '');
+        // 플롯 뷰(R2004+ — 쓰는 VIEW 표에 그 이름이 있으면 그 레코드, 229차)·시각 스타일(R2007+) 핸들(AutoCAD 표본)
+        if (this.ver >= R2004) hd.H(HARD_PTR, view?.h ?? 0);
         if (this.ver >= R2007) hd.H(SOFT_PTR, 0);
         break;
       }
@@ -371,7 +373,8 @@ export class ObjectWriter {
     this.ow.commonObject({ owner: dict, reactors, xdict: ctx.ref(o.xdict) });
     const d = this.ow.dat;
     const hd = this.ow.hdl;
-    plotSettings(d, ver, lay.plot);
+    const view = plotViewOf(lay.plot, ctx.views);
+    plotSettings(d, ver, lay.plot, view?.rec.name ?? '');
     d.TV(lay.name);
     d.BL(lay.tabOrder);
     d.BS(lay.flags);
@@ -387,7 +390,8 @@ export class ObjectWriter {
     d.BD3(lay.extMax);
     // 뷰포트 수: 사양은 RL이라 하지만 AutoCAD 표본은 BL이다
     if (ver >= R2004) d.BL(0);
-    if (ver >= R2004) hd.H(HARD_PTR, 0);
+    // 플롯 뷰(229차 — 쓰는 VIEW 표에 그 이름이 있으면 그 레코드)·시각 스타일
+    if (ver >= R2004) hd.H(HARD_PTR, view?.h ?? 0);
     if (ver >= R2007) hd.H(SOFT_PTR, 0);
     hd.H(SOFT_PTR, blockRecord);
     hd.H(SOFT_PTR, ctx.ref(lay.viewport));
@@ -397,8 +401,8 @@ export class ObjectWriter {
   }
 }
 
-/** 플롯 설정(LAYOUT 앞부분, PLOTSETTINGS) */
-function plotSettings(d: BitWriter, ver: number, p: PlotSettings): void {
+/** 플롯 설정(LAYOUT 앞부분, PLOTSETTINGS). view는 R2000 글로 쓰는 플롯 뷰 이름(plotViewOf — R2004+는 부르는 쪽이 핸들로) */
+function plotSettings(d: BitWriter, ver: number, p: PlotSettings, view: string): void {
   d.TV(p.pageSetupName ?? '');
   d.TV(p.printerName ?? '');
   d.BS(p.flags);
@@ -412,7 +416,7 @@ function plotSettings(d: BitWriter, ver: number, p: PlotSettings): void {
   d.BS(p.plotType);
   d.BD2(p.windowMin);
   d.BD2(p.windowMax);
-  if (ver < R2004) d.T('');
+  if (ver < R2004) d.T(view);
   d.BD(p.scaleNumerator);
   d.BD(p.scaleDenominator);
   d.TV(p.styleSheet ?? '');

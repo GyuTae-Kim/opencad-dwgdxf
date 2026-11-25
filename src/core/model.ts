@@ -1102,6 +1102,12 @@ export interface PlotSettings {
   rotation: number;
   /** 74: 0 표시, 1 범위, 2 한계, 3 뷰, 4 창, 5 배치 */
   plotType: number;
+  /**
+   * 6 플롯 뷰 이름(229차 — DXF 참조서 PLOTSETTINGS: 74 = 3이면 6이 적은 뷰를 플롯). DXF는 이름, R2000 DWG는 글, R2004+ DWG는 VIEW 레코드 핸들이라
+   * 리더가 읽은 이름(R2004+ DWG는 핸들을 푼 VIEW 레코드 이름)을 두고, 쓰기는 쓰는 VIEW 표에 그 이름이 있을 때만 쓴다(plotViewOf — 없으면 전처럼 ''·핸들 0).
+   * 창 구석(48·49·140·141)처럼 74가 고르는 칸이라 74가 3이 아니어도 둔다
+   */
+  plotViewName?: string;
   styleSheet: string;
   standardScaleType: number;
   /**
