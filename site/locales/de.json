@@ -5480,6 +5480,7 @@
   "옵션 입력 [경계 세트(B)/유지(R)/섬 검출(I)/스타일(S)/연관(A)/틈 허용 공차(G)/개별 해치 작성(H)] <종료>:": "Option eingeben [Umgrenzungssatz (B)/Beibehalten (R)/Inselerkennung (I)/Stil (S)/Assoziativ (A)/Lückentoleranz (G)/Separate Schraffuren erstellen (H)] <Beenden>:",
   "옵션 입력 [다음(N)/이전(P)/설정(S)/가져오기(I)/내보내기(E)/정보(F)/닫기(C)] <다음>:": "Option auswählen [Nächstes(N)/Vorheriges(P)/Festlegen(S)/Importieren(I)/Exportieren(E)/Info(F)/Schließen(C)] <Nächstes>:",
   "옵션 입력 [다음(N)/이전(P)/실행(G)/종료(X)] <{0}>:": "Option [Nächstes(N)/Vorheriges(P)/Ausführen(G)/Beenden(X)] eingeben <{0}>:",
+  "옵션 입력 [닫기(C)/열기(O)/결합(J)/폭(W)/맞춤(F)/스플라인(S)/비곡선화(D)/선종류생성(L)/반전(R)/명령 취소(U)/종료(X)] <종료>:": "Option [Schließen (C)/Öffnen (O)/Kombinieren (J)/Breite (W)/Anpassen (F)/Spline (S)/Entkurven (D)/Linientyp erstellen (L)/Umkehren (R)/Rückgängig (U)/Beenden (X)] eingeben <Beenden>:",
   "옵션 입력 [도면층(L)/한계(LI)/단위(U)/외부 참조(X)] <종료>:": "Option [Layer(L)/Limiten(LI)/Einheiten(U)/Externe Referenzen(X)] eingeben <Beenden>:",
   "옵션 입력 [복원(R)/저장(S)/삭제(D)/?]:": "Option [Wiederherstellen(R)/Speichern(S)/Löschen(D)/?] eingeben:",
   "옵션 입력 [분산(D)/간격 설정(S)/현재 수직(V)/현재 수평(H)] <{0}>:": "Option [Verteilen(D)/Abstand festlegen(S)/Aktuelle Vertikale(V)/Aktuelle Horizontale(H)] eingeben <{0}>:",
