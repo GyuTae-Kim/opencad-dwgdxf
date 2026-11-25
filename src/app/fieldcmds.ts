@@ -8,7 +8,7 @@ import type { EditOp } from '../edit/session';
 import type { App, CommandContext, Keyword } from './app';
 import { CancelError } from './app';
 import type { DocState } from './docstate';
-import { currentProps } from './draw';
+import { currentElevation, currentProps } from './draw';
 import { dialog, h } from './ui/dom';
 import { objectField, varField } from '../edit/field/code';
 import { type FieldContext, evaluateTemplate, objectProperty } from '../edit/field/evaluate';
@@ -504,7 +504,8 @@ export function registerFieldCommands(app: App): void {
           ...currentProps(app),
           type: 'MTEXT',
           handle: st.session.newHandle(),
-          insert: { x: r.point.x, y: r.point.y, z: 0 },
+          // 찍은 시작점(X·Y만)의 Z는 현재 고도(ELEV 도움말 — 210차, MTEXT 명령과 같다). 전에는 늘 0이었다
+          insert: { x: r.point.x, y: r.point.y, z: currentElevation(app) },
           height,
           width: 0,
           attachment,

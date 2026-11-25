@@ -12,7 +12,7 @@ import { matchNameList } from '../edit/layercmd';
 import { INSUNITS_MM } from '../edit/util/calc';
 import type { App, CommandContext, Keyword } from './app';
 import { askOption, askReal, askWord, askYN, fmt4 } from './dashcmds-ask';
-import { currentProps } from './draw';
+import { currentElevation, currentProps } from './draw';
 import { expandXrefBounds, linkImageFiles, linkPdfFiles, linkXrefFiles, renderPdfPages, xrefOfDoc } from './refs';
 import { commandLineMode } from './script';
 import { sessionFile } from './sessionfiles';
@@ -163,10 +163,11 @@ async function runXattach(app: App, ctx: CommandContext): Promise<void> {
     placed.rotDeg = await askReal(ctx, `회전 각도 지정 <${placed.rotDeg}>:`, placed.rotDeg);
   }
   try {
+    // 화면에서 찍은 삽입점(X·Y만)의 Z는 현재 고도(ELEV 도움말 — 210차, INSERT·-INSERT와 같다). 전에는 늘 0이었다
     const r = xrefAttachOps(
       doc,
       { name, path: file.name, overlay, xdoc },
-      { space: st.space, insert: { x: placed.at.x, y: placed.at.y, z: 0 }, scale: { x: placed.scale, y: placed.scale, z: placed.scale }, rotation: deg(placed.rotDeg), props: currentProps(app) },
+      { space: st.space, insert: { x: placed.at.x, y: placed.at.y, z: currentElevation(app) }, scale: { x: placed.scale, y: placed.scale, z: placed.scale }, rotation: deg(placed.rotDeg), props: currentProps(app) },
       () => st.session.newHandle(),
     );
     st.selection.clear();
@@ -203,6 +204,9 @@ export async function attachImageFile(app: App, ctx: CommandContext, file: File,
   }
   let scale = defaultWidth > 0 ? defaultWidth : 1;
   let rotDeg = 0;
+  // IMAGEATTACH로 화면에서 찍은 삽입점(X·Y만)의 Z는 현재 고도(ELEV 도움말 — 210차). Enter의 <0,0>은 이미지 부착 도움말의
+  // 기본 삽입점 0,0,0(Z까지 준 값)이라 0 그대로. PASTESPEC 그림 붙여넣기는 붙여넣기 자리 꼴이라 따로 판단할 일(ROADMAP) — 0 그대로
+  const pickZ = label === 'IMAGEATTACH' ? currentElevation(app) : 0;
   if (!commandLineMode(app) && label === 'IMAGEATTACH') {
     const v = await form(
       `이미지 부착 — ${ft(file.name)}`,
@@ -218,15 +222,18 @@ export async function attachImageFile(app: App, ctx: CommandContext, file: File,
     rotDeg = Number(v.rot);
     if (!v.onscreen) {
       const p = await ctx.getPoint('삽입점 지정 <0,0>:', { rubber: (q) => imageRubber(q, w, hgt, scale, deg(rotDeg)) });
-      if ('enter' in p) return commitImage(app, ctx, file, w, hgt, { x: 0, y: 0 }, scale, rotDeg, label);
+      if ('enter' in p) return commitImage(app, ctx, file, w, hgt, { x: 0, y: 0 }, 0, scale, rotDeg, label);
       if (!('point' in p)) return false;
-      return commitImage(app, ctx, file, w, hgt, p.point, scale, rotDeg, label);
+      return commitImage(app, ctx, file, w, hgt, p.point, pickZ, scale, rotDeg, label);
     }
   }
   const p = await ctx.getPoint('삽입점 지정 <0,0>:', { rubber: (q) => imageRubber(q, w, hgt, scale, deg(rotDeg)) });
   let at: Pt;
-  if ('point' in p) at = p.point;
-  else if ('enter' in p) at = { x: 0, y: 0 };
+  let atZ = 0;
+  if ('point' in p) {
+    at = p.point;
+    atZ = pickZ;
+  } else if ('enter' in p) at = { x: 0, y: 0 };
   else return false;
   ctx.print(`기본 이미지 크기: 폭: ${fmt4(scale)}, 높이: ${fmt4((scale * hgt) / w)}${defaultWidth === 1 ? ', 단위 없음' : ''}`);
   for (;;) {
@@ -249,7 +256,7 @@ export async function attachImageFile(app: App, ctx: CommandContext, file: File,
     }
     ctx.print('0보다 큰 값이 필요합니다.', 'err');
   }
-  return commitImage(app, ctx, file, w, hgt, at, scale, rotDeg, label);
+  return commitImage(app, ctx, file, w, hgt, at, atZ, scale, rotDeg, label);
 }
 
 function imageRubber(q: Pt, w: number, hgt: number, width: number, rot: number) {
@@ -267,9 +274,10 @@ function imageRubber(q: Pt, w: number, hgt: number, width: number, rot: number) 
   return [{ pts, closed: true, dashed: true }];
 }
 
-function commitImage(app: App, ctx: CommandContext, file: File, w: number, hgt: number, at: Pt, width: number, rotDeg: number, label: string): boolean {
+/** z: 삽입점의 Z(IMAGEATTACH로 찍은 점은 현재 고도, Enter·PASTESPEC은 0) */
+function commitImage(app: App, ctx: CommandContext, file: File, w: number, hgt: number, at: Pt, z: number, width: number, rotDeg: number, label: string): boolean {
   const st = app.active!;
-  const r = imageAttachOps(st.doc, { fileName: file.name, widthPx: w, heightPx: hgt, space: st.space, insert: { x: at.x, y: at.y, z: 0 }, width, rotation: deg(rotDeg), props: currentProps(app) }, () => st.session.newHandle());
+  const r = imageAttachOps(st.doc, { fileName: file.name, widthPx: w, heightPx: hgt, space: st.space, insert: { x: at.x, y: at.y, z }, width, rotation: deg(rotDeg), props: currentProps(app) }, () => st.session.newHandle());
   st.selection.clear();
   st.session.commit({ label, ops: r.ops, group: ctx.group, rebuildNow: true });
   app.lastCreated = [r.image.handle];
@@ -368,7 +376,8 @@ async function placePdf(app: App, ctx: CommandContext, file: File, pdf: { numPag
     scale = await askReal(ctx, `축척 비율 지정 <${fmt4(scale)}>:`, scale, (v) => (v > 0 ? null : '축척은 0보다 커야 합니다.'));
     rotDeg = await askReal(ctx, `회전 지정 <${rotDeg}>:`, rotDeg);
   }
-  const r = pdfAttachOps(st.doc, { fileName: file.name, page, space: st.space, insert: { x: at.x, y: at.y, z: 0 }, scale, rotation: deg(rotDeg), insunits, props: currentProps(app) }, () => st.session.newHandle());
+  // 화면에서 찍은 삽입점(X·Y만)의 Z는 현재 고도(ELEV 도움말 — 210차, 언더레이 10은 고도 칸 없이 점의 Z). 전에는 늘 0이었다
+  const r = pdfAttachOps(st.doc, { fileName: file.name, page, space: st.space, insert: { x: at.x, y: at.y, z: currentElevation(app) }, scale, rotation: deg(rotDeg), insunits, props: currentProps(app) }, () => st.session.newHandle());
   st.selection.clear();
   st.session.commit({ label: 'PDFATTACH', ops: r.ops, group: ctx.group, rebuildNow: true });
   app.lastCreated = [r.underlay.handle];
