@@ -144,6 +144,8 @@ export class CadView {
   private aim: { id: number } | null = null;
   private aimTimer = 0;
   private aimRelease = false;
+  /** 손가락 하나를 누른 자리의 타일(touchTileAt): 다른 타일을 활성으로 바꾼 누르기면 'activate', 타일 고르기 중이면 그 번호 */
+  private touchTile: number | 'activate' | null = null;
   /** 길게 눌러 정밀 조준을 쓸지(앱: 휴대폰 보기 모드이거나 명령이 입력을 기다릴 때). 없으면 쓰지 않는다 */
   aimEnabled: (() => boolean) | null = null;
   /** 보기 위에 떠 있는 판(명령행·휴대폰 보기 모드의 측정 띠 …)의 보기 기준 상자(앱이 넣는다). 측정 결과 글·커서 툴팁이 비킨다 */
@@ -1510,7 +1512,9 @@ export class CadView {
           this.startPinch();
         } else if (this.touches.size === 1) {
           this.leftDown = { x: p.x, y: p.y, dragging: false };
-          this.armAim(ev);
+          // 타일 뷰포트(243차): 마우스 누르기처럼 손가락이 닿은 타일을 본다(다른 타일이면 활성으로만 — 조준하지 않는다)
+          this.touchTile = this.touchTileAt(p);
+          if (this.touchTile === null) this.armAim(ev);
         }
         return;
       }
@@ -1622,7 +1626,10 @@ export class CadView {
         }
         if (this.leftDown && !this.leftDown.dragging && this.touches.size === 0) {
           this.leftDown = null;
-          if (!cancel) this.events?.click(this.screenToWorld(p.x, p.y), p, ev);
+          // 타일 고르기 중이면 그 번호, 다른 타일을 활성으로 바꾼 톡은 누르기가 아니다(마우스 왼쪽 누르기와 같음)
+          const tt = this.touchTile;
+          if (!cancel && typeof tt === 'number') this.tilePick?.(tt);
+          else if (!cancel && tt === null) this.events?.click(this.screenToWorld(p.x, p.y), p, ev);
         }
         if (this.touches.size === 0) this.leftDown = null;
         return;
@@ -1744,9 +1751,26 @@ export class CadView {
     this.requestOverlay();
   }
 
+  /**
+   * 손가락 하나를 누른 자리의 타일(243차 — 마우스 누르기와 같은 규칙): 타일 고르기 중이면 그 번호(뗄 때 톡이면 넘긴다),
+   * 다른 타일이면 활성으로 바꾸고 'activate'(톡·길게 누르기는 누르기가 아니고, 끌면 가운데 버튼처럼 그 타일을 옮긴다), 아니면 null
+   */
+  private touchTileAt(p: Pt): number | 'activate' | null {
+    const tl = this.tiled();
+    if (!tl) return null;
+    const ti = this.tileAt(p);
+    if (this.tilePick) return ti;
+    if (ti < 0 || ti === tl.active) return null;
+    this.activateTile(ti);
+    return 'activate';
+  }
+
   private startPinch(): void {
     const [a, b] = [...this.touches.values()] as [Pt, Pt];
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    // 타일 뷰포트(243차): 휠처럼 두 손가락 가운데 아래 타일을 활성으로 하고 그 타일을 확대한다
+    const ti = this.tileAt(mid);
+    if (ti >= 0) this.activateTile(ti);
     this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mid, cam: { ...this.camera() }, world: this.screenToWorld(mid.x, mid.y) };
     this.panning = null;
   }
