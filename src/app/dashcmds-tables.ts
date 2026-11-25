@@ -489,20 +489,24 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
       return;
     }
     case 'R': {
-      const p = await pickStyle();
-      if (!p) return;
-      if (p.compare) {
-        const base = cur();
-        if (base) {
-          ctx.print(`"${ft(p.style.name)}"과(와) 현재 설정의 차이:`);
-          printVars(base, p.style);
+      for (;;) {
+        const p = await pickStyle();
+        if (!p) return;
+        if (p.compare) {
+          const base = cur();
+          if (base) {
+            ctx.print(`"${ft(p.style.name)}"과(와) 현재 설정의 차이:`);
+            printVars(base, p.style);
+          }
+          // 차이를 보인 뒤 앞 프롬프트(이름 입력)로 돌아간다(220차, Autodesk -DIMSTYLE 도움말 「복원」 — 명령을 끝내지 않음).
+          // 전에는 명령을 끝내 스크립트의 다음 낱말이 새 명령으로 갔다. 변수(V)의 ~이름은 도움말이 그 뒤를 적지 않아 그대로 끝낸다
+          continue;
         }
+        const ops = headerOps(doc, { $DIMSTYLE: p.style.name });
+        if (ops.length) st.session.commit({ label: 'DIMSTYLE', ops, group: ctx.group });
+        ctx.print(`현재 치수 스타일: ${ft(p.style.name)}`);
         return;
       }
-      const ops = headerOps(doc, { $DIMSTYLE: p.style.name });
-      if (ops.length) st.session.commit({ label: 'DIMSTYLE', ops, group: ctx.group });
-      ctx.print(`현재 치수 스타일: ${ft(p.style.name)}`);
-      return;
     }
     case 'A': {
       const hs = await ctx.getSelection('객체 선택:', { noPickfirst: true });
