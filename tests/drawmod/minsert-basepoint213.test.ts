@@ -74,7 +74,8 @@ describe('MINSERT 기준점(B)(213차)', () => {
     // 블록 이름, B, 기준점, 삽입점, X 축척 Enter, Y 축척 Enter, 회전 Enter, 행 Enter, 열 Enter
     await run(h, 'MINSERT', ['B1', 'B', '1,2', '10,20', '', '', '', '', '']);
     expect(rejected(h)).toEqual([]);
-    expect(h.out()).toContain('삽입점 지정 또는 [기준점(B)/축척(S)/회전(R)]: B');
+    // 214차에 X·Y 옵션이 더해진 프롬프트 글
+    expect(h.out()).toContain('삽입점 지정 또는 [기준점(B)/축척(S)/X/Y/회전(R)]: B');
     expect(h.out()).toContain('기준점 지정: 1,2');
     const [ins] = model<InsertEntity>(h.doc, 'INSERT');
     expect(ins).toMatchObject({ block: 'B1', rowCount: 1, columnCount: 1, scale: { x: 1, y: 1, z: 1 }, rotation: 0 });

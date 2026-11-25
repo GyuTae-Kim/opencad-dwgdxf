@@ -474,7 +474,20 @@ export function registerUtil2BlockCommands(app: App): void {
       const box = boundsOf(bd.entities, st.doc);
       let sx = 1;
       let sy = 1;
+      // Z 축척: 옵션 없이·축척(S)·구석은 전처럼 1(도움말은 축척(S)의 Z = |S| — 바꾸면 지금 결과가 바뀌어 213차에 보고 둠)
+      let sz = 1;
       let rot = 0;
+      // 214차: 삽입점 전에 미리 준 축척. X·Y는 -INSERT(app/dashcmds-insert.ts)와 같은 식 — 축마다 마지막 값, X = X ?? Y ?? 1, Y = Y ?? X, Z = Z ?? |X|.
+      // 축척(S)은 X·Y를 준 값으로, Z를 전처럼 1로 준 것으로 둔다(S 뒤 X면 X만 바뀐다)
+      const pre: { sx?: number; sy?: number; sz?: number } = {};
+      // X·Y로 미리 준 축척이 있으면 뒤 X·Y 축척을 묻지 않는다(-INSERT와 같다 — 1을 줘도). 없으면 전처럼 X·Y 축척이 둘 다 1일 때만 묻는다
+      let presetXY = false;
+      const applyPre = () => {
+        const ux = pre.sx ?? pre.sy ?? 1;
+        sx = ux;
+        sy = pre.sy ?? ux;
+        sz = pre.sz ?? Math.abs(ux);
+      };
       // 213차: 기준점(B)으로 고른 블록 점(없으면 정의 기준점 — 삽입점 = 찍은 점 그대로, 전과 같다)
       let base: Vec3 | null = null;
       const outline = (p: Pt, scx: number, scy: number, r: number) => {
@@ -498,11 +511,13 @@ export function registerUtil2BlockCommands(app: App): void {
       while (!ins) {
         // Autodesk MINSERT 도움말: 삽입점 프롬프트에서 미리 정하는 옵션에 기준점이 있다(-INSERT와 같은 글 — 블록을 지금 자리에 잠시 두고
         // 끌어 놓을 새 기준점을 고른다, 정의의 기준점은 그대로). 전에는 B를 「점이 올바르지 않습니다.」로 거절했다(213차).
-        // X·Y·Z 옵션은 넣지 않았다 — Z는 지금 투명 ZOOM으로 받는 글자라 넣으면 그 결과가 바뀐다(ROADMAP)
-        const r = await ctx.getPoint('삽입점 지정 또는 [기준점(B)/축척(S)/회전(R)]:', {
+        // X·Y는 그 축의 축척을 정한다 — 전에는 같은 글로 거절했다(214차). Z 옵션은 넣지 않았다 — Z는 지금 투명 ZOOM으로 받는 글자라 넣으면 그 결과가 바뀐다(ROADMAP)
+        const r = await ctx.getPoint('삽입점 지정 또는 [기준점(B)/축척(S)/X/Y/회전(R)]:', {
           keywords: [
             { key: 'B', label: '기준점' },
             { key: 'S', label: '축척' },
+            { key: 'X', label: 'X' },
+            { key: 'Y', label: 'Y' },
             { key: 'R', label: '회전' },
           ],
           rubber: (p) => outline(p, sx, sy, rot),
@@ -514,14 +529,32 @@ export function registerUtil2BlockCommands(app: App): void {
           if ('point' in b) base = { x: b.point.x, y: b.point.y, z: 0 };
         } else if ('keyword' in r && r.keyword === 'S') {
           const v = await askNumber(ctx, '모든 축에 대한 축척 비율 지정 <1>:', 1, (x) => x !== 0);
-          if (v !== null) sx = sy = v;
+          if (v !== null) {
+            pre.sx = pre.sy = v;
+            pre.sz = 1;
+            applyPre();
+          }
+        } else if ('keyword' in r && r.keyword === 'X') {
+          const v = await askNumber(ctx, 'X 축척 비율 지정 <1>:', 1, (x) => x !== 0);
+          if (v !== null) {
+            pre.sx = v;
+            presetXY = true;
+            applyPre();
+          }
+        } else if ('keyword' in r && r.keyword === 'Y') {
+          const v = await askNumber(ctx, 'Y 축척 비율 지정 <1>:', 1, (x) => x !== 0);
+          if (v !== null) {
+            pre.sy = v;
+            presetXY = true;
+            applyPre();
+          }
         } else if ('keyword' in r && r.keyword === 'R') {
           const v = await askNumber(ctx, '회전 각도 지정 <0>:', 0);
           if (v !== null) rot = (v * Math.PI) / 180;
         }
       }
       const p0 = ins;
-      if (sx === 1 && sy === 1) {
+      if (!presetXY && sx === 1 && sy === 1) {
         const rect = (p: Pt) => [{ pts: [p0.x, p0.y, p.x, p0.y, p.x, p.y, p0.x, p.y], closed: true, dashed: true }];
         let r = await ctx.getPoint('X 축척 비율 입력, 반대 구석 지정, 또는 [구석(C)/XYZ(XYZ)] <1>:', {
           base: p0,
@@ -594,7 +627,7 @@ export function registerUtil2BlockCommands(app: App): void {
         if (v) ask.forEach((d, i) => values.set(d.tag.toUpperCase(), String(v[`a${i}`])));
       }
       const handle = st.session.newHandle();
-      const scale = { x: sx, y: sy, z: 1 };
+      const scale = { x: sx, y: sy, z: sz };
       const z = currentElevation(app);
       const e: InsertEntity = {
         ...entityDefaults(),
