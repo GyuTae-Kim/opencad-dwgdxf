@@ -1532,7 +1532,7 @@ export class Shell implements UiHooks {
 
   /**
    * 도면 탭 이름 단추 키보드: 왼쪽·오른쪽 화살표·Home·End로 탭을 옮기고, Delete로 닫는다(Enter·Space는 단추가 받는다).
-   * 수정 키(Alt·Ctrl·Meta·Shift)와 함께 누른 화살표·Home·End는 넘긴다(259차 — tabKeyTarget, 브라우저·앱 단축키 그대로)
+   * 수정 키(Alt·Ctrl·Meta·Shift)와 함께 누른 화살표·Home·End는 넘긴다(259차 — tabKeyTarget, 브라우저·앱 단축키 그대로). Delete도 수정 키와 함께면 닫지 않고 넘긴다(260차)
    */
   private tabKeys(open: HTMLElement, close?: () => void): void {
     open.addEventListener('keydown', (ev) => {
@@ -1540,7 +1540,7 @@ export class Shell implements UiHooks {
       const tabs = [...this.fileTabs.querySelectorAll<HTMLElement>('.filetab-open')];
       const to = tabKeyTarget(k, tabs.indexOf(open), tabs.length);
       if (to >= 0) tabs[to]!.focus();
-      else if (k.key === 'Delete' && close) close();
+      else if (k.key === 'Delete' && close && !(k.altKey || k.ctrlKey || k.metaKey || k.shiftKey)) close();
       else return;
       k.preventDefault();
       k.stopPropagation();

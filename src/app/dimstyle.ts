@@ -19,7 +19,7 @@ import type { App } from './app';
 import { drawGeometry } from './blockpreview';
 import { dimensionBlockOps } from './dimcmds';
 import type { DocState } from './docstate';
-import { ask, dialog, form, h, showMenu } from './ui/dom';
+import { ask, dialog, form, h, showMenu, tabKeyTarget } from './ui/dom';
 import { ft } from './filetext';
 import { annotativeFlag, withAnnotativeFlag } from '../edit/annoscale/xdata';
 
@@ -553,15 +553,26 @@ function editDialog(app: App, title: string, base: DimStyle | undefined, start: 
     const tabs = h('div', { role: 'tablist', style: 'display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px' });
     const panel = h('div', { style: 'min-height:300px;max-height:52vh;overflow:auto;padding-right:6px' });
     let active = TABS[0]![0];
+    // 탭 줄은 Tab 한 자리(260차 — W3C APG 탭 꼴·리본 탭 꼴): 고른 탭만 tabindex 0, 왼쪽·오른쪽 화살표(끝에서 돌아감)·Home·End는 초점만 옮기고
+    // Enter·Space(단추 누르기)로 고른다(수정 키와 함께면 넘김 — tabKeyTarget). 고르면 탭 줄을 다시 그리므로 초점은 같은 자리 탭(새 고른 탭)에 돌려준다
     const showTab = (name: string) => {
       active = name;
+      const focusedAt = [...tabs.children].indexOf(document.activeElement as Element);
       tabs.replaceChildren(
-        ...TABS.map(([t]) => {
-          const b = h('button', { type: 'button', role: 'tab', class: `btn ${t === active ? 'primary' : ''}`, 'aria-selected': t === active ? 'true' : 'false' }, t);
+        ...TABS.map(([t], i) => {
+          const b = h('button', { type: 'button', role: 'tab', class: `btn ${t === active ? 'primary' : ''}`, 'aria-selected': t === active ? 'true' : 'false', tabindex: t === active ? 0 : -1 }, t);
           b.addEventListener('click', () => showTab(t));
+          b.addEventListener('keydown', (ev) => {
+            const to = tabKeyTarget(ev, i, TABS.length);
+            if (to < 0) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            (tabs.children[to] as HTMLElement | undefined)?.focus();
+          });
           return b;
         }),
       );
+      if (focusedAt >= 0) (tabs.children[focusedAt] as HTMLElement | undefined)?.focus();
       const fields = TABS.find(([t]) => t === name)![1];
       const p = tabPanel(st, vars, fields, redraw);
       if (name === FIT_TAB) {

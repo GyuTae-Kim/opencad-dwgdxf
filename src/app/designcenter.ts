@@ -23,7 +23,7 @@ import { ensureLtStyle, guardKeys } from './layertools-ui';
 import { layerSwatch } from './laywalk';
 import { Ghost } from './modify';
 import type { Affine } from './modify';
-import { form, h, showMenu } from './ui/dom';
+import { form, h, showMenu, tabKeyTarget } from './ui/dom';
 import { icon } from './ui/icons';
 import { ft } from './filetext';
 
@@ -138,6 +138,19 @@ class DesignCenter {
     };
     this.tabBtns.open.addEventListener('click', () => this.setTab('open'));
     this.tabBtns.history.addEventListener('click', () => this.setTab('history'));
+    // 탭 줄은 Tab 한 자리(260차 — W3C APG 탭 꼴·리본 탭 꼴, 고른 탭·tabindex는 markTab): 왼쪽·오른쪽 화살표(끝에서 돌아감)·Home·End는 초점만 옮기고
+    // Enter·Space(단추 누르기)로 고른다(수정 키와 함께면 넘김 — tabKeyTarget). 탭 위 Enter는 탭 고르기만 — 패널의 Enter(고른 항목 넣기)로 넘기지 않는다
+    const order = [this.tabBtns.open, this.tabBtns.history];
+    order.forEach((b, i) =>
+      b.addEventListener('keydown', (ev) => {
+        const to = tabKeyTarget(ev, i, order.length);
+        if (to >= 0) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          order[to]!.focus();
+        } else if (ev.key === 'Enter') ev.stopPropagation();
+      }),
+    );
     this.treeEl = h('div', { class: 'dc-tree', role: 'tree', 'aria-label': '도면과 종류' });
     this.contentEl = h('div', { class: 'dc-content', role: 'listbox', 'aria-multiselectable': 'true', 'aria-label': '내용', tabindex: 0 });
     this.previewCanvas = h('canvas', { 'aria-label': '미리보기' }) as HTMLCanvasElement;
@@ -217,10 +230,18 @@ class DesignCenter {
     if (this.signature() !== this.sig) this.refresh();
   }
 
+  /** 고른 탭 표시: 모양(class on)·화면 읽기 상태(aria-selected — 260차)·Tab 차례(고른 탭만 tabindex 0) */
+  private markTab(t: 'open' | 'history'): void {
+    for (const [k, b] of Object.entries(this.tabBtns) as ['open' | 'history', HTMLButtonElement][]) {
+      b.classList.toggle('on', k === t);
+      b.setAttribute('aria-selected', String(k === t));
+      b.tabIndex = k === t ? 0 : -1;
+    }
+  }
+
   private setTab(t: 'open' | 'history'): void {
     this.tab = t;
-    this.tabBtns.open.classList.toggle('on', t === 'open');
-    this.tabBtns.history.classList.toggle('on', t === 'history');
+    this.markTab(t);
     this.cur = null;
     const first = this.sources()[0];
     if (first) {
@@ -237,8 +258,7 @@ class DesignCenter {
     const src = `file:${got[0]!.serial}`;
     this.expanded.add(src);
     this.cur = { source: src, kind: 'block' };
-    this.tabBtns.open.classList.remove('on');
-    this.tabBtns.history.classList.add('on');
+    this.markTab('history');
     this.refresh();
   }
 

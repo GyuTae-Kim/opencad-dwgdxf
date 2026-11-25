@@ -2,7 +2,7 @@
  * 관리·출력 대화상자(BLOCK·DWGPROPS·OPTIONS·SYSVDLG·ALIASEDIT·PAGESETUP …)가 함께 쓰는 화면 도우미.
  * 탭·입력 칸·목록·결과를 돌려주는 대화상자. CSS 접두사는 mgr-.
  */
-import { dialog, h } from './ui/dom';
+import { dialog, h, tabKeyTarget } from './ui/dom';
 
 const STYLE = `
 .mgr-dlg{display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -93,14 +93,29 @@ export function numOf(el: HTMLInputElement): number {
   return t ? Number(t) : NaN;
 }
 
-/** 탭 묶음: 탭 단추와 쪽. 쪽은 순서대로 */
+/**
+ * 탭 묶음: 탭 단추와 쪽. 쪽은 순서대로.
+ * 탭 줄은 Tab 한 자리(260차 — W3C APG 탭 꼴·리본 탭 꼴): 고른 탭만 tabindex 0, 왼쪽·오른쪽 화살표(끝에서 돌아감)·Home·End는 초점만 옮기고
+ * Enter·Space(단추 누르기)로 고른다. 수정 키와 함께 누른 키는 넘긴다(tabKeyTarget — 259차)
+ */
 export function tabs(pages: { label: string; body: HTMLElement }[], start = 0): { el: HTMLElement; show(i: number): void } {
-  const btns = pages.map((p, i) => h('button', { type: 'button', role: 'tab', onclick: () => show(i) }, p.label) as HTMLButtonElement);
+  const btns = pages.map((p, i) => {
+    const b = h('button', { type: 'button', role: 'tab', onclick: () => show(i) }, p.label) as HTMLButtonElement;
+    b.addEventListener('keydown', (ev) => {
+      const to = tabKeyTarget(ev, i, pages.length);
+      if (to < 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      btns[to]!.focus();
+    });
+    return b;
+  });
   const wraps = pages.map((p) => h('div', { class: 'mgr-page', role: 'tabpanel' }, p.body));
   const show = (i: number) => {
     btns.forEach((b, j) => {
       b.classList.toggle('on', i === j);
       b.setAttribute('aria-selected', String(i === j));
+      b.tabIndex = i === j ? 0 : -1;
     });
     wraps.forEach((w, j) => (w.hidden = i !== j));
   };
