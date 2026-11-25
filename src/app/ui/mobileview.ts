@@ -307,10 +307,16 @@ export class MobileView {
         { label: '문자 찾기', icon: 'find', run: () => host.openPalette('find') },
         { label: '참조 파일 고르기(외부 참조·SHX 글꼴)', icon: 'folder', run: () => void this.pickRefFiles() },
         { label: '보기 링크 복사', icon: 'link', run: () => void copyViewLink(app) },
-      ]);
+      ], { onClose: () => more.setAttribute('aria-expanded', 'false') });
+      // 연 뒤에 true(showMenu가 앞 메뉴를 닫으며 그 onClose를 먼저 부른다)
+      more.setAttribute('aria-expanded', 'true');
     });
     more.classList.add('vb-more');
     more.querySelector('.vb-lbl')?.remove();
+    // 메뉴를 연다고 알리고 열림 상태를 알린다(253차 — WCAG 4.1.2): 데스크톱 상태 막대 「⋯」과 같은 aria-haspopup,
+    // 열림 상태는 표 셀 「도구 더 보기」 꼴(처음 false, 메뉴가 닫히면 — Esc·항목 고르기·바깥 누르기 — 다시 false)
+    more.setAttribute('aria-haspopup', 'menu');
+    more.setAttribute('aria-expanded', 'false');
     this.bar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': '보기 도구' }, fit, ...measures, layers, dims, more);
     this.card = h('div', { class: 'mview-card', role: 'status', 'aria-live': 'polite', hidden: true });
     app.cmd.watchers.add({
