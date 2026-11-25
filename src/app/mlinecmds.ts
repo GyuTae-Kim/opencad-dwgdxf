@@ -8,7 +8,7 @@ import { ACI_RGB } from '../core/color';
 import type { EditOp } from '../edit/session';
 import type { App, CommandContext, Keyword } from './app';
 import type { Pt } from './view';
-import { currentProps } from './draw';
+import { currentElevation, currentProps } from './draw';
 import { dialog, form, h } from './ui/dom';
 import { ft } from './filetext';
 import { type MLineStyleEntry, MAX_ELEMENTS, ML_END_INNER, ML_END_LINE, ML_END_OUTER, ML_FILL, ML_JOINTS, ML_START_INNER, ML_START_LINE, ML_START_OUTER, currentMLineStyle, findMLineStyle, listMLineStyles, mlineStyleUseCount, newMLineStyle, sortElements, validateMLineStyle } from '../edit/mline/style';
@@ -532,7 +532,9 @@ export function registerMLineCommands(app: App): void {
       }
       saveSettings();
       const sObj = style?.style ?? null;
-      const make = (): MLineEntity => ({ ...currentProps(app), type: 'MLINE', handle: handle ?? '', ...mlineGeometry({ points: pts, closed, style: sObj, scale, justification: just }) });
+      // 찍은 점은 X·Y뿐 — 시작점·정점의 Z는 현재 고도(ELEV 도움말, 배치는 PELEVATION). 한 번 읽어 구간마다 고치는 커밋·명령 취소·닫기가 같은 값을 쓴다
+      const z = currentElevation(app);
+      const make = (): MLineEntity => ({ ...currentProps(app), type: 'MLINE', handle: handle ?? '', ...mlineGeometry({ points: pts, closed, style: sObj, scale, justification: just, z }) });
       const commit = () => {
         const e = make();
         if (!handle) {

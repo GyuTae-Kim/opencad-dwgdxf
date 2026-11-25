@@ -98,20 +98,23 @@ export interface NewMLine {
   style: Pick<MLineStyleObject, 'elements' | 'startAngle' | 'endAngle' | 'name' | 'handle'> | null;
   scale: number;
   justification: number;
+  /** 시작점(DXF 10)과 정점(11)의 Z — MLINE 명령은 현재 고도(화면에서 찍은 점은 X·Y뿐). 없으면 0 */
+  z?: number;
 }
 
 /** 새 여러 줄 객체의 형상 부분 */
 export function mlineGeometry(o: NewMLine): Pick<MLineEntity, 'styleName' | 'styleHandle' | 'scale' | 'justification' | 'flags' | 'startPoint' | 'normal' | 'vertices' | 'elementCount'> {
   const offs = styleOffsets(o.style);
   const dist = elementDistances(offs, o.scale, o.justification);
-  const vertices = buildVertices(o.points, o.closed, dist, o.style?.startAngle ?? Math.PI / 2, o.style?.endAngle ?? Math.PI / 2);
+  const z = o.z ?? 0;
+  const vertices = buildVertices(o.points, o.closed, dist, o.style?.startAngle ?? Math.PI / 2, o.style?.endAngle ?? Math.PI / 2, z);
   return {
     styleName: o.style?.name ?? 'Standard',
     styleHandle: o.style?.handle || undefined,
     scale: o.scale,
     justification: o.justification,
     flags: (o.points.length ? 1 : 0) | (o.closed ? 2 : 0),
-    startPoint: p3(o.points[0] ?? { x: 0, y: 0 }),
+    startPoint: p3(o.points[0] ?? { x: 0, y: 0 }, z),
     normal: { x: 0, y: 0, z: 1 },
     vertices,
     elementCount: offs.length,

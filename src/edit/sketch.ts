@@ -54,15 +54,18 @@ export function simplify(pts: readonly P2[], tol: number): P2[] {
   return pts.filter((_, k) => keep[k]);
 }
 
-const v3 = (p: P2): Vec3 => ({ x: p.x, y: p.y, z: 0 });
+const v3 = (p: P2, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
-/** 획들을 객체로(handle은 ''). 점이 둘 미만인 획은 버린다 */
-export function sketchEntities(strokes: readonly P2[][], type: SketchType, props: Omit<EntityBase, 'type' | 'handle'>, tolerance: number): Entity[] {
+/**
+ * 획들을 객체로(handle은 ''). 점이 둘 미만인 획은 버린다.
+ * z: 점의 Z(SKETCH 명령은 현재 고도 — 찍은 점은 X·Y뿐). 선은 두 끝점, 폴리선은 고도(DXF 38), 스플라인은 맞춤점·조정점이 모두 이 값이다
+ */
+export function sketchEntities(strokes: readonly P2[][], type: SketchType, props: Omit<EntityBase, 'type' | 'handle'>, tolerance: number, z = 0): Entity[] {
   const out: Entity[] = [];
   for (const s of strokes) {
     if (s.length < 2) continue;
     if (type === 'line') {
-      for (let i = 1; i < s.length; i++) out.push({ ...props, type: 'LINE', handle: '', start: v3(s[i - 1]!), end: v3(s[i]!) } as Entity);
+      for (let i = 1; i < s.length; i++) out.push({ ...props, type: 'LINE', handle: '', start: v3(s[i - 1]!, z), end: v3(s[i]!, z) } as Entity);
     } else if (type === 'polyline') {
       out.push({
         ...props,
@@ -71,14 +74,17 @@ export function sketchEntities(strokes: readonly P2[][], type: SketchType, props
         closed: false,
         plinegen: false,
         constantWidth: 0,
-        elevation: 0,
+        elevation: z,
         ...packLwPoints(s),
       } as Entity);
     } else {
-      const fit = simplify(s, tolerance).map(v3);
+      // .map(v3)이면 배열 색인이 Z로 들어간다
+      const fit = simplify(s, tolerance).map((p) => v3(p, z));
       if (fit.length < 2) continue;
       // AutoCAD와 같은 맞춤점 보간(현 길이, 자연 끝) — DWG에 맞춤점 자료로 쓸 수 있다
       const sp = fitSplineAcad(fit, 0) ?? interpolateFitPoints(fit);
+      // 맞춤점이 모두 고도 평면에 있으니 조정점도 그 평면이다 — 풀이의 반올림 없이 고도 값 그대로(X·Y는 Z와 따로 풀려 고도 0과 같다, 고도 0은 전과 같은 값)
+      const ctrl = z ? sp.ctrl.map((c) => ({ ...c, z })) : sp.ctrl;
       out.push({
         ...props,
         type: 'SPLINE',
@@ -86,7 +92,7 @@ export function sketchEntities(strokes: readonly P2[][], type: SketchType, props
         flags: 8 | 1024 | 32,
         degree: sp.degree,
         knots: sp.knots,
-        controlVerts: pack3(sp.ctrl),
+        controlVerts: pack3(ctrl),
         fitVerts: pack3(fit),
         knotTolerance: 1e-10,
         controlTolerance: 1e-10,

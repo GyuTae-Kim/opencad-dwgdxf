@@ -5,7 +5,7 @@
 import { formatLength } from '../core/units';
 import { type P2, type SketchType, recordPoint, sketchEntities } from '../edit/sketch';
 import type { App } from './app';
-import { addEntities, currentProps } from './draw';
+import { addEntities, currentElevation, currentProps } from './draw';
 
 const TYPE_NAMES: Record<SketchType, string> = { line: '선', polyline: '폴리선', spline: '스플라인' };
 let tolerance = 0.5;
@@ -88,7 +88,8 @@ export function registerSketchCommands(app: App): void {
         info();
       }
       if (pen) strokes.push(pen);
-      const ents = sketchEntities(strokes, type, currentProps(app), tolerance);
+      // 찍은 점은 X·Y뿐 — 점의 Z(폴리선은 고도)는 현재 고도(ELEV 도움말, 배치는 PELEVATION)
+      const ents = sketchEntities(strokes, type, currentProps(app), tolerance, currentElevation(app));
       if (!ents.length) {
         ctx.print('기록한 스케치가 없습니다.');
         return;
