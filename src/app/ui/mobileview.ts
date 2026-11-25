@@ -220,6 +220,11 @@ const MEASURES: { name: string; ico: string; label: string; title: string }[] = 
 ];
 /** MEASURERADIUS는 MEASUREGEOM으로 돈다 */
 const RUNS_AS: Record<string, string> = { MEASURERADIUS: 'MEASUREGEOM' };
+/**
+ * 보기 모드가 여는 명령(248차): 보기 단추 줄의 전체 보기·재기 넷, 반지름이 도는 MEASUREGEOM, 더 보기의 점 좌표(ID).
+ * 보기 모드의 직전 명령 반복(Enter·Space — app.ts)은 이것만 다시 돌린다(편집 화면에서 쓴 편집 명령이 측정 띠로 돌지 않게)
+ */
+export const VIEW_COMMANDS: ReadonlySet<string> = new Set(['ZOOMEXTENTS', ...MEASURES.map((m) => m.name), ...Object.values(RUNS_AS), 'ID']);
 
 /**
  * 보기 단추 이름 글자 단계(styles.css): 기본 12px, .tight 11.5px, .tighter 10.5px, .tightest 10px에 단추 최소 폭 40px·옆 여백을 줄이고

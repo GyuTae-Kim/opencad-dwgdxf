@@ -185,7 +185,8 @@ export function tableCellGroup(app: App, handle: string): HTMLElement | null {
   const rt = tableFromEntity(e, st.doc);
   if (!rt) return null;
   const data = rt.data;
-  const sel = h('select', { 'aria-label': '셀', 'data-field': 'pf-셀' }) as HTMLSelectElement;
+  // 셀 고르기는 어느 셀 글을 볼지만 바꾼다(도면 그대로) — 휴대폰 보기 모드의 읽기 전용 특성 탭에서도 열어 둔다(248차 표지)
+  const sel = h('select', { 'aria-label': '셀', 'data-field': 'pf-셀', 'data-display-only': true }) as HTMLSelectElement;
   for (let r = 0; r < data.rows; r++)
     for (let c = 0; c < data.cols; c++) {
       const m = mergeAt(data, r, c);

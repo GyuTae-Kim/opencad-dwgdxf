@@ -49,12 +49,13 @@ export class Palette {
     close.addEventListener('click', () => this.close());
     this.body = h('div', { class: 'palette-body' });
     // 휴대폰 보기 모드의 특성 탭은 값을 보이기만 한다(247차): 칸·단추는 그릴 때 막고(refresh), 막힌 칸으로 온 고치기 사건(change·input·click)도
-    // 여기서 멈춰 칸마다의 처리기(특성·주석·사용자화·배열·표 셀)에 닿지 않게 한다 — 한 자리 검사로 모든 묶음을 덮는다
+    // 여기서 멈춰 칸마다의 처리기(특성·주석·사용자화·배열·표 셀)에 닿지 않게 한다 — 한 자리 검사로 모든 묶음을 덮는다.
+    // 보이는 값만 바꾸는 칸(표지 data-display-only — 표 「셀」 고르기)은 그대로 둔다(248차)
     for (const type of ['change', 'input', 'click'])
       this.body.addEventListener(
         type,
         (ev) => {
-          if (this.tab === 'props' && this.app.viewOnly) ev.stopPropagation();
+          if (this.tab === 'props' && this.app.viewOnly && !displayOnly(ev.target)) ev.stopPropagation();
         },
         true,
       );
@@ -628,10 +629,15 @@ export class Palette {
   }
 }
 
-/** 보기 모드 특성 탭(247차): 글 칸은 읽기 전용, 고르기·단추·확인란은 막는다 */
+/** 보기 모드 특성 탭(247차): 글 칸은 읽기 전용, 고르기·단추·확인란은 막는다(보이는 값만 바꾸는 칸은 빼고 — 248차) */
 function lockControls(root: HTMLElement): void {
-  for (const el of root.querySelectorAll<HTMLInputElement>('input:not([type=checkbox]):not([type=radio]), textarea')) el.readOnly = true;
-  for (const el of root.querySelectorAll<HTMLButtonElement>('select, button, input[type=checkbox], input[type=radio]')) el.disabled = true;
+  for (const el of root.querySelectorAll<HTMLInputElement>('input:not([type=checkbox]):not([type=radio]), textarea')) if (!displayOnly(el)) el.readOnly = true;
+  for (const el of root.querySelectorAll<HTMLButtonElement>('select, button, input[type=checkbox], input[type=radio]')) if (!displayOnly(el)) el.disabled = true;
+}
+
+/** 보이는 값만 바꾸는 칸(도면을 고치지 않음 — 표 「셀」 고르기, 표지 data-display-only)인지: 보기 모드 특성 탭에서도 막지 않는다(248차) */
+function displayOnly(t: EventTarget | null): boolean {
+  return !!(t as Element | null)?.closest?.('[data-display-only]');
 }
 
 /** 머리말 $CECOLOR(색 번호: 256 ByLayer, 0 ByBlock) → 색 */
