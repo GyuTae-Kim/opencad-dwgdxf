@@ -17,7 +17,7 @@ import { loadLispFile } from '../lisp';
 import { isoState, setIso } from '../viewtools-iso';
 import { maximized, maximizedLabel } from '../viewtools-vpmax';
 import { pickColor } from './colorpick';
-import { type MenuItem, dialog, formatBytes, h, iconSpan, showMenu, toast } from './dom';
+import { type MenuItem, dialog, formatBytes, h, iconSpan, showMenu, tabKeyTarget, toast } from './dom';
 import { icon } from './icons';
 import { MobileView, isCoarse, readMobileMode, startInViewMode } from './mobileview';
 import { RECENT_MAX_SIZE, RecentStore, recentTimeLabel } from '../recent';
@@ -1212,11 +1212,10 @@ export class Shell implements UiHooks {
         this.activeTab = i;
         this.buildRibbon();
       });
-      // 왼쪽·오른쪽 화살표·Home·End로 탭을 옮겨 다니고 Enter·Space로 연다(탭 목록은 Tab 한 번이면 지나간다)
+      // 왼쪽·오른쪽 화살표·Home·End로 탭을 옮겨 다니고 Enter·Space로 연다(탭 목록은 Tab 한 번이면 지나간다).
+      // 수정 키(Alt·Ctrl·Meta·Shift)와 함께 누른 키는 넘긴다(259차 — tabKeyTarget, 브라우저·앱 단축키 그대로)
       b.addEventListener('keydown', (ev) => {
-        const k = (ev as KeyboardEvent).key;
-        const n = RIBBON.length;
-        const to = k === 'ArrowRight' ? (i + 1) % n : k === 'ArrowLeft' ? (i - 1 + n) % n : k === 'Home' ? 0 : k === 'End' ? n - 1 : -1;
+        const to = tabKeyTarget(ev as KeyboardEvent, i, RIBBON.length);
         if (to < 0) return;
         ev.preventDefault();
         ev.stopPropagation();
@@ -1531,13 +1530,15 @@ export class Shell implements UiHooks {
     this.refreshRibbonState();
   }
 
-  /** 도면 탭 이름 단추 키보드: 왼쪽·오른쪽 화살표·Home·End로 탭을 옮기고, Delete로 닫는다(Enter·Space는 단추가 받는다) */
+  /**
+   * 도면 탭 이름 단추 키보드: 왼쪽·오른쪽 화살표·Home·End로 탭을 옮기고, Delete로 닫는다(Enter·Space는 단추가 받는다).
+   * 수정 키(Alt·Ctrl·Meta·Shift)와 함께 누른 화살표·Home·End는 넘긴다(259차 — tabKeyTarget, 브라우저·앱 단축키 그대로)
+   */
   private tabKeys(open: HTMLElement, close?: () => void): void {
     open.addEventListener('keydown', (ev) => {
       const k = ev as KeyboardEvent;
       const tabs = [...this.fileTabs.querySelectorAll<HTMLElement>('.filetab-open')];
-      const i = tabs.indexOf(open);
-      const to = k.key === 'ArrowRight' ? (i + 1) % tabs.length : k.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length : k.key === 'Home' ? 0 : k.key === 'End' ? tabs.length - 1 : -1;
+      const to = tabKeyTarget(k, tabs.indexOf(open), tabs.length);
       if (to >= 0) tabs[to]!.focus();
       else if (k.key === 'Delete' && close) close();
       else return;

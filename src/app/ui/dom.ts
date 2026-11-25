@@ -79,6 +79,17 @@ export function keyboardControl(t: Element | null): boolean {
   return t.matches('button, a[href], summary, select, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [tabindex]') && focusVisible(t);
 }
 
+/**
+ * 가로 탭 줄의 키보드 옮기기(W3C APG 탭 꼴 — 리본 탭·도면 탭·팔레트 탭이 함께 쓴다, 259차): 지금 탭 i(탭 n개)에서 왼쪽·오른쪽 화살표(끝에서 돌아감)·
+ * Home·End로 옮겨 갈 탭 차례, 아니면 -1. Alt·Ctrl·Meta·Shift와 함께 누른 키도 -1 — 탭이 가로채지 않아 Alt+←·→(브라우저 뒤로·앞으로)·Ctrl+Home 같은
+ * 브라우저·앱 단축키가 그대로 닿는다(APG 탭 꼴은 수정 키 없는 화살표만). 고르기(자동·수동)는 부르는 쪽이 정한다
+ */
+export function tabKeyTarget(ev: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>, i: number, n: number): number {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return -1;
+  const k = ev.key;
+  return k === 'ArrowRight' ? (i + 1) % n : k === 'ArrowLeft' ? (i - 1 + n) % n : k === 'Home' ? 0 : k === 'End' ? n - 1 : -1;
+}
+
 /** 키보드로 옮겨 다닐 수 있는(보이는) 요소들 */
 export function focusables(root: ParentNode): HTMLElement[] {
   const sel = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
