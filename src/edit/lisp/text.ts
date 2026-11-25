@@ -3,7 +3,7 @@
  * vl-string-subst vl-string-search vl-string-position vl-string-trim(left·right) vl-string->list vl-list->string vl-string-translate vl-string-elt snvalid.
  * rtos·angtos의 기본 단위·정밀도는 도면 변수(LUNITS·LUPREC·AUNITS·AUPREC), 끝 0 생략은 DIMZIN(8)을 따른다.
  */
-import { formatAngle, formatLength, parseAngle, parseLength } from '../../core/units';
+import { formatAngle, formatLength, parseAngle, parseBearing, parseLength } from '../../core/units';
 import type { Interp } from './interp';
 import { badValue } from './printer';
 import { int, num, str, arr } from './core';
@@ -64,20 +64,12 @@ export function distof(s: string): number | null {
   return parseLength(t);
 }
 
-/** 글 → 각도(라디안). units: 0 도, 1 도분초, 2 그라드, 3 라디안, 4 측량 */
+/**
+ * 글 → 각도(라디안). units: 0 도, 1 도분초, 2 그라드, 3 라디안, 4 측량. 측량 방위(N 45d E·N·S·E·W)는 units와 상관없이 읽는다
+ * (core/units parseBearing — 223차에 특성 칸·각도 프롬프트·명령행 극좌표와 함께 쓰려고 옮김, 결과 그대로)
+ */
 export function angtof(s: string, units: number): number | null {
-  const t = s.trim();
-  const sv = /^([NS])\s*(.*?)\s*([EW])$/i.exec(t);
-  let r: number | null;
-  if (sv) {
-    const b = sv[2] ? parseAngle(sv[2], 0) : 0;
-    if (b === null) return null;
-    const n = sv[1]!.toUpperCase() === 'N';
-    const e = sv[3]!.toUpperCase() === 'E';
-    const deg90 = Math.PI / 2;
-    r = n ? (e ? deg90 - b : deg90 + b) : e ? 3 * deg90 + b : 3 * deg90 - b;
-  } else if (/^[NSEW]$/i.test(t)) r = { N: Math.PI / 2, S: (3 * Math.PI) / 2, E: 0, W: Math.PI }[t.toUpperCase() as 'N']!;
-  else r = parseAngle(t, units === 1 || units === 4 ? 0 : units);
+  let r = parseBearing(s) ?? parseAngle(s, units === 1 || units === 4 ? 0 : units);
   if (r === null || !Number.isFinite(r)) return null;
   r %= TAU;
   return r < 0 ? r + TAU : r;

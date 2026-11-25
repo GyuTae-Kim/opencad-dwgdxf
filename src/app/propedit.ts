@@ -5,7 +5,7 @@
 import { pushAll, unshiftAll } from '../core/arrays';
 import type { AttribEntity, CadColor, CadDocument, DimensionEntity, Entity, InsertEntity, LwPolylineEntity, MLeaderEntity, MLeaderStyleObject, ToleranceEntity, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
-import { formatAngle, formatLength, parseAngle, parseLength, type UnitSettings } from '../core/units';
+import { formatAngle, formatLength, parseAngle, parseBearing, parseLength, type UnitSettings } from '../core/units';
 import type { EditOp } from '../edit/session';
 import { cloneEntity } from '../edit/session';
 import type { App } from './app';
@@ -558,7 +558,8 @@ export function parseValue(field: Field, text: string, u: UnitSettings): { value
       return { value: v };
     }
     case 'angle': {
-      const v = parseAngle(text, u.aunits);
+      // 측량 방위(formatValue AUNITS 4 꼴 — 223차)도: 칸의 표시·해석 모두 동쪽 0·반시계라 도면의 0 방향과 상관없다
+      const v = parseBearing(text) ?? parseAngle(text, u.aunits);
       if (v === null) return { error: '각도를 입력하십시오.' };
       return { value: v };
     }

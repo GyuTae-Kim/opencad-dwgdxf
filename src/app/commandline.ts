@@ -7,7 +7,8 @@
  */
 import { lispUnclosed } from '../edit/lisp/reader';
 import type { MeasureResult } from './measure-result';
-import { type AngleConvention, fromDrawingAngle } from './polar';
+import { type AngleConvention, angleBase, clockwise, fromDrawingAngle } from './polar';
+import { parseBearing } from '../core/units';
 import { unmark } from './filetext';
 /**
  * 차례로 이어 붙일 글 조각들: 도면 글 표시(ft — filetext.ts)가 조각 경계에서 나뉘면 그 조각 안에서 닫고 다음 조각에서 다시 연다
@@ -344,12 +345,27 @@ export interface PointInput {
   z?: number;
 }
 
-const NUM = '(-?[\\d.]+(?:e-?\\d+)?)';
+/** 좌표의 수. 지수는 e·E 뒤에 부호(+·-)를 붙여도 된다(223차 — 상태 막대 과학 단위 꼴 1.55E+01, 도움말 "About Coordinate Entry") */
+const NUM_BODY = '-?[\\d.]+(?:e[-+]?\\d+)?';
+const NUM = `(${NUM_BODY})`;
+/** 극좌표·원통·구 좌표의 XY 각도: 수(도) 또는 측량 방위(N45d0'0"E·정방위 글자 하나 — 223차, xyAngle) */
+const ANG = `(${NUM_BODY}|[NS][^<,]*[EW]|[NSEW])`;
 const RE_XY = new RegExp(`^${NUM},${NUM}(?:,${NUM})?$`, 'i');
 /** 극좌표 d<a, 원통 좌표 d<a,z */
-const RE_POLAR = new RegExp(`^${NUM}<${NUM}(?:,${NUM})?$`, 'i');
+const RE_POLAR = new RegExp(`^${NUM}<${ANG}(?:,${NUM})?$`, 'i');
 /** 구 좌표 d<a<b(b = XY 평면에서 올려 본 각) */
-const RE_SPHERE = new RegExp(`^${NUM}<${NUM}<${NUM}$`, 'i');
+const RE_SPHERE = new RegExp(`^${NUM}<${ANG}<${NUM}$`, 'i');
+
+/**
+ * 극좌표·원통·구 좌표의 XY 각도 글 → UCS X축에서 시계 반대 방향 라디안. 수는 도면 단위의 0 방향·양의 방향(conv)에서 잰 도.
+ * 측량 방위(도움말 "About Unit Format Conventions" 예 `@72'8"<n45d20'6"e`)는 동쪽 0·반시계 각(core/units parseBearing — AutoLISP angtof 4).
+ * 방위를 절대 방향으로 볼지 도면의 0 방향·방향에서 잰 수처럼 볼지 도움말이 적지 않아, 두 해석이 같은 ANGBASE 0·ANGDIR 0 도면에서만 받는다
+ * (그 밖은 NaN — 전처럼 점이 아니다)
+ */
+function xyAngle(t: string, conv: AngleConvention): number {
+  if (!/^[NSEW]/i.test(t)) return fromDrawingAngle((parseFloat(t) * Math.PI) / 180, conv);
+  return angleBase(conv) || clockwise(conv) ? NaN : (parseBearing(t) ?? NaN);
+}
 
 /**
  * 점 입력 해석(AutoCAD 좌표 입력): "x,y", "x,y,z", "@dx,dy[,dz]", "d<a", "@d<a", 원통 "d<a,z"·"@d<a,dz",
@@ -358,6 +374,8 @@ const RE_SPHERE = new RegExp(`^${NUM}<${NUM}<${NUM}$`, 'i');
  * 평면 상대 좌표에는 z가 없고, dz를 준 상대 좌표는 relZ0(고도)에서 잰다.
  * 극좌표·원통·구 좌표의 XY 평면 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로 잰다(conv — AutoCAD 도움말
  * "About Entering 2D Polar Coordinates": 기본은 시계 반대 방향, 각도 규칙은 UNITS로 바꾼다). 구 좌표의 올려 본 각은 그대로.
+ * 수는 지수 `1.55E+01`도, XY 각도는 측량 방위 `N45d0'0"E`·`N`도 받는다(223차 — ANGBASE 0·ANGDIR 0 도면만, xyAngle).
+ * 직접 거리(숫자 하나)의 지수는 전과 같다(`1E1`은 받고 `1E+01`은 점이 아니다 — 글을 받는 프롬프트에서 글 갈래가 따로 있어서).
  */
 export function parsePointInput(s: string, last: { x: number; y: number; z?: number } | null, cursorDir: { x: number; y: number } | null, relZ0 = 0, conv: AngleConvention = {}): PointInput | null {
   const t = s.trim().replace(/\s+/g, '');
@@ -375,7 +393,7 @@ export function parsePointInput(s: string, last: { x: number; y: number; z?: num
   const sph = RE_SPHERE.exec(body);
   if (sph) {
     const d = parseFloat(sph[1]!);
-    const a = fromDrawingAngle((parseFloat(sph[2]!) * Math.PI) / 180, conv);
+    const a = xyAngle(sph[2]!, conv);
     const b = (parseFloat(sph[3]!) * Math.PI) / 180;
     const h = d * Math.cos(b);
     return out(base.x + h * Math.cos(a), base.y + h * Math.sin(a), zOf(d * Math.sin(b)));
@@ -383,7 +401,7 @@ export function parsePointInput(s: string, last: { x: number; y: number; z?: num
   const polar = RE_POLAR.exec(body);
   if (polar) {
     const d = parseFloat(polar[1]!);
-    const a = fromDrawingAngle((parseFloat(polar[2]!) * Math.PI) / 180, conv);
+    const a = xyAngle(polar[2]!, conv);
     return out(base.x + d * Math.cos(a), base.y + d * Math.sin(a), zOf(polar[3] !== undefined ? parseFloat(polar[3]) : null));
   }
   const xy = RE_XY.exec(body);

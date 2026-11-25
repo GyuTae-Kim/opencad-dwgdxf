@@ -2,7 +2,7 @@
  * 특성 팔레트의 "배열(직사각형/원형/경로)" 묶음: 고르면 바로 배열을 다시 계산한다(AutoCAD 특성 팔레트 "기타" 범주의 배열 항목).
  * 팔레트(src/app/ui/palettes.ts)가 블록 참조 하나를 골랐을 때 arrayPaletteGroup을 부른다.
  */
-import { formatAngle, formatLength, parseAngle, parseLength } from '../core/units';
+import { formatAngle, formatLength, parseAngle, parseBearing, parseLength } from '../core/units';
 import { pathSpacingOf, polarWithAngle, polarWithFill, polarWithItems } from '../edit/assocarray/layout';
 import { arrayPath } from '../edit/assocarray/read';
 import { type ArrayParams, KIND_LABEL, cloneState } from '../edit/assocarray/types';
@@ -103,7 +103,7 @@ export function arrayPaletteGroup(app: App, handle: string): HTMLElement | null 
         if (row.kind === 'int') {
           const n = Number(t);
           v = Number.isInteger(n) && n >= 1 ? n : null;
-        } else if (row.kind === 'angle') v = parseAngle(t, u.aunits);
+        } else if (row.kind === 'angle') v = parseBearing(t) ?? parseAngle(t, u.aunits); // 측량 방위도(223차)
         else v = parseLength(t);
         if (v === null || !commit(v)) el.value = show;
       });
