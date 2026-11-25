@@ -8,7 +8,7 @@
 import { lispUnclosed } from '../edit/lisp/reader';
 import type { MeasureResult } from './measure-result';
 import { type AngleConvention, angleBase, clockwise, fromDrawingAngle } from './polar';
-import { parseBearing } from '../core/units';
+import { parseBearing, parseUnitAngle } from '../core/units';
 import { unmark } from './filetext';
 /**
  * 차례로 이어 붙일 글 조각들: 도면 글 표시(ft — filetext.ts)가 조각 경계에서 나뉘면 그 조각 안에서 닫고 다음 조각에서 다시 연다
@@ -348,23 +348,38 @@ export interface PointInput {
 /** 좌표의 수. 지수는 e·E 뒤에 부호(+·-)를 붙여도 된다(223차 — 상태 막대 과학 단위 꼴 1.55E+01, 도움말 "About Coordinate Entry") */
 const NUM_BODY = '-?[\\d.]+(?:e[-+]?\\d+)?';
 const NUM = `(${NUM_BODY})`;
-/** 극좌표·원통·구 좌표의 XY 각도: 수(도) 또는 측량 방위(N45d0'0"E·정방위 글자 하나 — 223차, xyAngle) */
-const ANG = `(${NUM_BODY}|[NS][^<,]*[EW]|[NSEW])`;
+/** 각 자리의 단위 글자 꼴(224차 — unitAngles): 도/분/초 45d30'15"·45°, 그라드 50g, 라디안 0.7854r(읽기는 core/units parseUnitAngle) */
+const UNIT_ANG = `[-+]?[\\d.]+(?:[d°][\\d.'"]*|[gr])`;
+/** 극좌표·원통·구 좌표의 XY 각도: 수(도), 측량 방위(N45d0'0"E·정방위 글자 하나 — 223차), 단위 글자 꼴(224차) — xyAngle */
+const ANG = `(${NUM_BODY}|[NS][^<,]*[EW]|[NSEW]|${UNIT_ANG})`;
+/** 구 좌표의 올려 본 각: 수(도) 또는 단위 글자 꼴(224차 — elevAngle) */
+const ELEV = `(${NUM_BODY}|${UNIT_ANG})`;
+const RE_NUM = new RegExp(`^${NUM_BODY}$`, 'i');
 const RE_XY = new RegExp(`^${NUM},${NUM}(?:,${NUM})?$`, 'i');
 /** 극좌표 d<a, 원통 좌표 d<a,z */
 const RE_POLAR = new RegExp(`^${NUM}<${ANG}(?:,${NUM})?$`, 'i');
 /** 구 좌표 d<a<b(b = XY 평면에서 올려 본 각) */
-const RE_SPHERE = new RegExp(`^${NUM}<${ANG}<${NUM}$`, 'i');
+const RE_SPHERE = new RegExp(`^${NUM}<${ANG}<${ELEV}$`, 'i');
 
 /**
  * 극좌표·원통·구 좌표의 XY 각도 글 → UCS X축에서 시계 반대 방향 라디안. 수는 도면 단위의 0 방향·양의 방향(conv)에서 잰 도.
  * 측량 방위(도움말 "About Unit Format Conventions" 예 `@72'8"<n45d20'6"e`)는 동쪽 0·반시계 각(core/units parseBearing — AutoLISP angtof 4).
  * 방위를 절대 방향으로 볼지 도면의 0 방향·방향에서 잰 수처럼 볼지 도움말이 적지 않아, 두 해석이 같은 ANGBASE 0·ANGDIR 0 도면에서만 받는다
- * (그 밖은 NaN — 전처럼 점이 아니다)
+ * (그 밖은 NaN — 전처럼 점이 아니다).
+ * 단위 글자 꼴(`45d30'`·`50g`·`0.7854r` — 224차, unitAngles일 때만)은 방향 글자가 없는 수 각도라 수와 같은 0 방향·방향에서 잰다
+ * (같은 도움말: 각도는 현재 단위와 상관없이 다른 꼴로도 넣는다. 극좌표 설정 추가 각도 parseAngleText도 방위만 절대 방향으로 읽는다)
  */
-function xyAngle(t: string, conv: AngleConvention): number {
-  if (!/^[NSEW]/i.test(t)) return fromDrawingAngle((parseFloat(t) * Math.PI) / 180, conv);
-  return angleBase(conv) || clockwise(conv) ? NaN : (parseBearing(t) ?? NaN);
+function xyAngle(t: string, conv: AngleConvention, unitAngles: boolean): number {
+  if (/^[NSEW]/i.test(t)) return angleBase(conv) || clockwise(conv) ? NaN : (parseBearing(t) ?? NaN);
+  if (RE_NUM.test(t)) return fromDrawingAngle((parseFloat(t) * Math.PI) / 180, conv);
+  const a = unitAngles ? parseUnitAngle(t) : null;
+  return a === null ? NaN : fromDrawingAngle(a, conv);
+}
+
+/** 구 좌표의 올려 본 각 글 → 라디안(0 방향 없음). 수는 도, 단위 글자 꼴은 unitAngles일 때만(224차) */
+function elevAngle(t: string, unitAngles: boolean): number {
+  if (RE_NUM.test(t)) return (parseFloat(t) * Math.PI) / 180;
+  return (unitAngles ? parseUnitAngle(t) : null) ?? NaN;
 }
 
 /**
@@ -376,8 +391,10 @@ function xyAngle(t: string, conv: AngleConvention): number {
  * "About Entering 2D Polar Coordinates": 기본은 시계 반대 방향, 각도 규칙은 UNITS로 바꾼다). 구 좌표의 올려 본 각은 그대로.
  * 수는 지수 `1.55E+01`도, XY 각도는 측량 방위 `N45d0'0"E`·`N`도 받는다(223차 — ANGBASE 0·ANGDIR 0 도면만, xyAngle).
  * 직접 거리(숫자 하나)의 지수는 전과 같다(`1E1`은 받고 `1E+01`은 점이 아니다 — 글을 받는 프롬프트에서 글 갈래가 따로 있어서).
+ * unitAngles(224차)면 극좌표·원통·구 좌표의 각 자리(XY 각·올려 본 각)에 단위 글자 꼴 `45d30'`·`45°`·`50g`·`0.7854r`도 받는다. App은 글을 받지 않는
+ * 점 프롬프트에서만 켠다 — 글을 받는 프롬프트(allowText)는 그 글을 전처럼 글로 넘긴다(CIRCLE 반지름 `10<45d` → parseFloat 10 등 결과 그대로).
  */
-export function parsePointInput(s: string, last: { x: number; y: number; z?: number } | null, cursorDir: { x: number; y: number } | null, relZ0 = 0, conv: AngleConvention = {}): PointInput | null {
+export function parsePointInput(s: string, last: { x: number; y: number; z?: number } | null, cursorDir: { x: number; y: number } | null, relZ0 = 0, conv: AngleConvention = {}, unitAngles = false): PointInput | null {
   const t = s.trim().replace(/\s+/g, '');
   if (!t) return null;
   const rel = t.startsWith('@');
@@ -393,15 +410,15 @@ export function parsePointInput(s: string, last: { x: number; y: number; z?: num
   const sph = RE_SPHERE.exec(body);
   if (sph) {
     const d = parseFloat(sph[1]!);
-    const a = xyAngle(sph[2]!, conv);
-    const b = (parseFloat(sph[3]!) * Math.PI) / 180;
+    const a = xyAngle(sph[2]!, conv, unitAngles);
+    const b = elevAngle(sph[3]!, unitAngles);
     const h = d * Math.cos(b);
     return out(base.x + h * Math.cos(a), base.y + h * Math.sin(a), zOf(d * Math.sin(b)));
   }
   const polar = RE_POLAR.exec(body);
   if (polar) {
     const d = parseFloat(polar[1]!);
-    const a = xyAngle(polar[2]!, conv);
+    const a = xyAngle(polar[2]!, conv, unitAngles);
     return out(base.x + d * Math.cos(a), base.y + d * Math.sin(a), zOf(polar[3] !== undefined ? parseFloat(polar[3]) : null));
   }
   const xy = RE_XY.exec(body);

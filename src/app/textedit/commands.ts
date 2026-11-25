@@ -4,7 +4,7 @@
  */
 import type { CadDocument, Entity, MTextColumns, MTextEntity, TextEntity, TextHAlign, TextVAlign } from '../../core/model';
 import { entityDefaults, tableKey } from '../../core/model';
-import { formatLength } from '../../core/units';
+import { formatLength, parseBearing } from '../../core/units';
 import { textStyleAnnotative } from '../../edit/annoscale/xdata';
 import { applyTemplate } from '../../edit/field/store';
 import type { App, CommandContext, Keyword } from '../app';
@@ -41,7 +41,10 @@ async function askLength(ctx: CommandContext, prompt: string, base: Pt | null, d
   }
 }
 
-/** 각도 입력(도, 또는 base에서 찍은 점의 방향) */
+/**
+ * 각도 입력(도, 또는 base에서 찍은 점의 방향). 수(parseFloat)가 아니면 측량 방위(N45d0'0"E·정방위 글자 — 224차, 수와 같은 동쪽 0·반시계 각.
+ * 이 프롬프트에는 키워드가 없다). 단위 글자 꼴(45d30'·50g)은 parseFloat가 앞 수를 받아 와 바꾸면 결과가 달라져 그대로 둔다
+ */
 async function askAngle(ctx: CommandContext, prompt: string, base: Pt | null, def = 0): Promise<number> {
   for (;;) {
     const r = await ctx.getPoint(`${prompt} <${+((def * 180) / Math.PI).toFixed(4)}>:`, { base, preferNumber: true });
@@ -50,6 +53,8 @@ async function askAngle(ctx: CommandContext, prompt: string, base: Pt | null, de
     if ('text' in r) {
       const v = parseFloat(r.text);
       if (Number.isFinite(v)) return (v * Math.PI) / 180;
+      const b = parseBearing(r.text);
+      if (b !== null) return b;
     }
     ctx.print('각도(도)를 입력하거나 점을 지정하십시오.', 'err');
   }

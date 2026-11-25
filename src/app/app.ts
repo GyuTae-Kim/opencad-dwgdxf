@@ -1127,8 +1127,9 @@ export class App {
     const lastW = base ?? this.lastPoint;
     const lastZ = lastW?.z;
     const last = lastW ? { ...(conv ? toUcs(u, lastW) : { x: lastW.x, y: lastW.y }), ...(lastZ !== undefined ? { z: lastZ } : {}) } : null;
-    // 극좌표의 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로
-    const pu = parsePointInput(wcs ? t.slice(1) : t, last, dir && conv ? dirToUcs(u, dir) : dir, this.elevation(), this.active?.units);
+    // 극좌표의 각도는 도면 단위의 0 방향(ANGBASE)에서 양의 방향(ANGDIR)으로. 각 자리의 단위 글자 꼴(45d30'·50g·0.7854r — 224차)은
+    // 글을 받지 않는 프롬프트만(글을 받는 프롬프트는 그 글을 전처럼 글로 넘긴다)
+    const pu = parsePointInput(wcs ? t.slice(1) : t, last, dir && conv ? dirToUcs(u, dir) : dir, this.elevation(), this.active?.units, !r?.allowText);
     if (!pu) return null;
     const w = conv ? toWcs(u, pu) : { x: pu.x, y: pu.y };
     return pu.z === undefined ? w : { ...w, z: pu.z };
