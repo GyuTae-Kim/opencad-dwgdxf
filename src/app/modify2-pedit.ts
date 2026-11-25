@@ -3,6 +3,7 @@
  * 옵션 하나가 명령 취소 한 단계(명령 취소(U))이고, 명령 전체는 U 한 번으로 되돌린다.
  */
 import type { Entity, SplineEntity, Vec2 } from '../core/model';
+import { parseAngleDegrees } from '../core/units';
 import { type EditResult, joinEntities, reverseEntity } from '../edit/geom';
 import { entityPath } from '../edit/geom/path';
 import { pathEnd, pathStart } from '../edit/geom/curve';
@@ -436,8 +437,10 @@ async function vertexEdit(app: App, ctx: CommandContext, t: Tools, h: string): P
         }
         const q = await ctx.getPoint('접선 방향 지정:', { base: cur, preferNumber: true });
         let a: number | null = null;
+        // 글은 도, 단위 글자 꼴(45d30'·50g·0.7854r)은 그 단위(225차 — parseFloat는 앞 수만 도로 읽었다)
+        const v = 'text' in q ? parseAngleDegrees(q.text) : null;
         if ('point' in q && Math.hypot(q.point.x - cur.x, q.point.y - cur.y) > 1e-12) a = Math.atan2(q.point.y - cur.y, q.point.x - cur.x);
-        else if ('text' in q && Number.isFinite(parseFloat(q.text))) a = (parseFloat(q.text) * Math.PI) / 180;
+        else if (v !== null) a = (v * Math.PI) / 180;
         if (a !== null) t.apply(e, setVertexTangent(e, i, a, segs));
       } else if (k === 'I') {
         const q = await ctx.getPoint('새 정점 위치 지정:', { base: cur, ghost: (p) => previewOf(app, [insertVertex(e, i, toOcs(e, p), segs)]) });

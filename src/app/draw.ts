@@ -4,7 +4,7 @@
  */
 import type { CadColor, Entity, EntityBase, LwVertex, Vec2, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
-import { formatLength } from '../core/units';
+import { formatLength, parseAngleDegrees } from '../core/units';
 import { arcPoints, bulgeArc, ccwSweep, clampedKnots, ellipsePoints, nurbsPoints, TAU } from '../geom/curves';
 import type { EditOp } from '../edit/session';
 import { registerUndoCommand } from './undocmd';
@@ -129,14 +129,15 @@ export async function getDistance(ctx: CommandContext, prompt: string, base: Pt 
   }
 }
 
+/** 각도 입력(라디안). 수는 도, 단위 글자 꼴(45d30'·50g·0.7854r)은 그 단위(225차 — parseAngleDegrees), 점은 base에서의 방향 */
 export async function getAngle(ctx: CommandContext, prompt: string, base: Pt | null, def = 0): Promise<number> {
   for (;;) {
     const r = await ctx.getPoint(`${prompt} <${((def * 180) / Math.PI).toFixed(0)}>:`, { base, preferNumber: true });
     if ('enter' in r) return def;
     if ('point' in r && base) return ang(base, r.point);
     if ('text' in r) {
-      const v = parseFloat(r.text);
-      if (Number.isFinite(v)) return (v * Math.PI) / 180;
+      const v = parseAngleDegrees(r.text);
+      if (v !== null) return (v * Math.PI) / 180;
     }
     ctx.print('각도(도)를 입력하거나 점을 지정하십시오.', 'err');
   }
@@ -192,7 +193,7 @@ function rectModeOf(st: DocState): RectMode {
   return m;
 }
 
-/** `회전 각도 지정 또는 [점 선택(P)] <기본>:` — 숫자는 도, 점은 base에서의 방향, P는 두 점 */
+/** `회전 각도 지정 또는 [점 선택(P)] <기본>:` — 숫자는 도(단위 글자 꼴은 그 단위 — 225차), 점은 base에서의 방향, P는 두 점 */
 async function rotationAngle(ctx: CommandContext, base: Pt, def: number): Promise<number> {
   for (;;) {
     const r = await ctx.getPoint(`회전 각도 지정 또는 [점 선택(P)] <${((def * 180) / Math.PI).toFixed(0)}>:`, { base, preferNumber: true, keywords: [{ key: 'P', label: '점 선택' }] });
@@ -206,8 +207,8 @@ async function rotationAngle(ctx: CommandContext, base: Pt, def: number): Promis
       return ang(p1, p2);
     }
     if ('text' in r) {
-      const v = parseFloat(r.text);
-      if (Number.isFinite(v)) return (v * Math.PI) / 180;
+      const v = parseAngleDegrees(r.text);
+      if (v !== null) return (v * Math.PI) / 180;
     }
     ctx.print('각도(도)를 입력하거나 점을 지정하십시오.', 'err');
   }
@@ -899,7 +900,8 @@ export function registerDrawCommands(app: App): void {
             },
           });
           let sw: number | null = null;
-          if ('text' in r && Number.isFinite(parseFloat(r.text))) sw = (parseFloat(r.text) * Math.PI) / 180;
+          const v = 'text' in r ? parseAngleDegrees(r.text) : null;
+          if (v !== null) sw = (v * Math.PI) / 180;
           else if ('point' in r) sw = r.ctrl ? ccwSweep(ang(c, sp), ang(c, r.point)) - TAU : ccwSweep(ang(c, sp), ang(c, r.point));
           const a = sw === null ? null : arcByCenterAngle(sp, c, sw);
           if (a) finish(sp, a.end, a.bulge);
@@ -971,7 +973,8 @@ export function registerDrawCommands(app: App): void {
           // 사이각: + 반시계, − 시계(점을 찍으면 시작점에서 그 점까지의 각도)
           const r = await ask('사이각 지정(방향 전환은 Ctrl 키):', { base: sp, preferNumber: true, rubber: (q) => preview(sp, ep, bulgeOfSweep(ang(sp, q))) });
           let sw: number | null = null;
-          if ('text' in r && Number.isFinite(parseFloat(r.text))) sw = (parseFloat(r.text) * Math.PI) / 180;
+          const v = 'text' in r ? parseAngleDegrees(r.text) : null;
+          if (v !== null) sw = (v * Math.PI) / 180;
           else if ('point' in r) sw = r.ctrl ? -ang(sp, r.point) : ang(sp, r.point);
           if (sw === null || Math.abs(sw) < 1e-12 || Math.abs(sw) >= TAU) ctx.print('호를 만들 수 없습니다.', 'err');
           else finish(sp, ep, bulgeOfSweep(sw));
@@ -979,7 +982,8 @@ export function registerDrawCommands(app: App): void {
           // 시작점의 접선 방향
           const r = await ask('호의 시작점에 대한 접선 방향 지정(방향 전환은 Ctrl 키):', { base: sp, preferNumber: true, rubber: (q) => preview(sp, ep, arcByDirection(sp, ang(sp, q), ep)) });
           let dir: number | null = null;
-          if ('text' in r && Number.isFinite(parseFloat(r.text))) dir = (parseFloat(r.text) * Math.PI) / 180;
+          const v = 'text' in r ? parseAngleDegrees(r.text) : null;
+          if (v !== null) dir = (v * Math.PI) / 180;
           else if ('point' in r) dir = ang(sp, r.point) + (r.ctrl ? Math.PI : 0);
           if (dir !== null) finish(sp, ep, arcByDirection(sp, dir, ep));
         } else if ('keyword' in cr && cr.keyword === 'R') {
@@ -1296,7 +1300,8 @@ export function registerDrawCommands(app: App): void {
       let p0 = 0;
       let p1 = TAU;
       if (arcMode) {
-        // 각도는 장축에서 잰다. 매개변수(P)는 p(u) = c + a·cos(u) + b·sin(u)의 u(도), 사이각(I)은 시작 각도부터 잰 각도
+        // 각도는 장축에서 잰다. 매개변수(P)는 p(u) = c + a·cos(u) + b·sin(u)의 u(도), 사이각(I)은 시작 각도부터 잰 각도.
+        // 각·매개변수 글은 수면 도, 단위 글자 꼴(45d30'·50g·0.7854r)은 그 단위(225차 — parseAngleDegrees)
         const axis = Math.atan2(mj.y, mj.x);
         const ml2 = Math.hypot(mj.x, mj.y);
         const toParam = (q: Pt) => ellipseAngleToParam(ang(center, q) - axis, ratio);
@@ -1310,10 +1315,11 @@ export function registerDrawCommands(app: App): void {
             keywords: [useParam ? { key: 'A', label: '각도' } : { key: 'P', label: '매개변수' }],
             rubber: (q) => [{ pts: [center.x, center.y, q.x, q.y], dashed: true }],
           });
+          const tv = 'text' in r ? parseAngleDegrees(r.text) : null;
           if ('keyword' in r) useParam = r.keyword === 'P';
           else if ('point' in r) start = toParam(r.point);
-          else if ('text' in r && Number.isFinite(parseFloat(r.text))) {
-            const v = (parseFloat(r.text) * Math.PI) / 180;
+          else if (tv !== null) {
+            const v = (tv * Math.PI) / 180;
             start = useParam ? v : ellipseAngleToParam(v, ratio);
           } else if ('enter' in r) return;
         }
@@ -1326,13 +1332,14 @@ export function registerDrawCommands(app: App): void {
             keywords: [useParam ? { key: 'A', label: '각도' } : { key: 'P', label: '매개변수' }, { key: 'I', label: '사이각' }],
             rubber: (q) => arcPreview(s0, toParam(q)),
           });
+          const tv = 'text' in r ? parseAngleDegrees(r.text) : null;
           if ('keyword' in r && r.keyword === 'I') {
             const inc = await getAngle(ctx, '호의 사이각 지정', null, Math.PI);
             end = ellipseAngleToParam(ellipseParamToAngle(s0, ratio) + inc, ratio);
           } else if ('keyword' in r) useParam = r.keyword === 'P';
           else if ('point' in r) end = toParam(r.point);
-          else if ('text' in r && Number.isFinite(parseFloat(r.text))) {
-            const v = (parseFloat(r.text) * Math.PI) / 180;
+          else if (tv !== null) {
+            const v = (tv * Math.PI) / 180;
             end = useParam ? v : ellipseAngleToParam(v, ratio);
           } else if ('enter' in r) return;
         }
@@ -1625,8 +1632,9 @@ export function registerDrawCommands(app: App): void {
               fixed = ang(a.point, p2);
               break;
             }
-            if ('text' in a && Number.isFinite(parseFloat(a.text))) {
-              fixed = (parseFloat(a.text) * Math.PI) / 180;
+            const v = 'text' in a ? parseAngleDegrees(a.text) : null;
+            if (v !== null) {
+              fixed = (v * Math.PI) / 180;
               break;
             }
             ctx.print('각도(도)를 입력하십시오.', 'err');
