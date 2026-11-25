@@ -48,6 +48,16 @@ export class Palette {
     const close = h('button', { class: 'icon-btn', title: '팔레트 닫기', 'aria-label': '팔레트 닫기', html: icon('close2') });
     close.addEventListener('click', () => this.close());
     this.body = h('div', { class: 'palette-body' });
+    // 휴대폰 보기 모드의 특성 탭은 값을 보이기만 한다(247차): 칸·단추는 그릴 때 막고(refresh), 막힌 칸으로 온 고치기 사건(change·input·click)도
+    // 여기서 멈춰 칸마다의 처리기(특성·주석·사용자화·배열·표 셀)에 닿지 않게 한다 — 한 자리 검사로 모든 묶음을 덮는다
+    for (const type of ['change', 'input', 'click'])
+      this.body.addEventListener(
+        type,
+        (ev) => {
+          if (this.tab === 'props' && this.app.viewOnly) ev.stopPropagation();
+        },
+        true,
+      );
     const grip = h('div', { class: 'palette-resize', 'aria-hidden': 'true' });
     this.el = h('div', { class: 'palette', hidden: true }, grip, h('div', { class: 'palette-head' }, this.tabs, close), this.body);
     parent.append(this.el);
@@ -130,6 +140,8 @@ export class Palette {
     switch (this.tab) {
       case 'props':
         this.props();
+        // 휴대폰 보기 모드(247차): 값을 보이기만 — 글 칸은 읽기 전용(값을 골라 복사할 수 있게), 고르기·단추·확인란은 막는다
+        if (this.app.viewOnly) lockControls(this.body);
         break;
       case 'layers':
         this.layers();
@@ -614,6 +626,12 @@ export class Palette {
   private find(): void {
     this.body.append(findPanel(this.app, this.findState));
   }
+}
+
+/** 보기 모드 특성 탭(247차): 글 칸은 읽기 전용, 고르기·단추·확인란은 막는다 */
+function lockControls(root: HTMLElement): void {
+  for (const el of root.querySelectorAll<HTMLInputElement>('input:not([type=checkbox]):not([type=radio]), textarea')) el.readOnly = true;
+  for (const el of root.querySelectorAll<HTMLButtonElement>('select, button, input[type=checkbox], input[type=radio]')) el.disabled = true;
 }
 
 /** 머리말 $CECOLOR(색 번호: 256 ByLayer, 0 ByBlock) → 색 */

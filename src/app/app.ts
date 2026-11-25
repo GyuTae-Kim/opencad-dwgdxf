@@ -3251,13 +3251,15 @@ export class App {
         void this.run('NEW');
         return;
       }
-      if ((k === 'c' || k === 'x') && !typing && this.active?.selection.size) {
+      // 휴대폰 보기 모드는 보기만(247차): 키보드가 붙은 태블릿에서도 잘라내지 않는다(복사는 그대로)
+      if ((k === 'c' || (k === 'x' && !this.viewOnly)) && !typing && this.active?.selection.size) {
         ev.preventDefault();
         // Ctrl+Shift+C = 기준점을 두고 복사(AutoCAD와 같다)
         void this.run(k === 'c' ? (ev.shiftKey ? 'COPYBASE' : 'COPYCLIP') : 'CUTCLIP');
         return;
       }
-      if (k === 'v' && !typing) {
+      // 보기 모드는 붙여넣지 않는다(247차 — 삽입점을 측정 띠로 물어 객체가 들어갔다)
+      if (k === 'v' && !typing && !this.viewOnly) {
         ev.preventDefault();
         // Ctrl+Shift+V = 블록으로 붙여넣기
         void this.run(ev.shiftKey ? 'PASTEBLOCK' : 'PASTECLIP');
@@ -3320,7 +3322,8 @@ export class App {
     }
     if (ev.key === 'Delete' || (ev.key === 'Backspace' && !this.request)) {
       ev.preventDefault();
-      if (!this.request && this.active?.selection.size) void this.run('ERASE');
+      // 보기 모드는 누른 객체를 지우지 않는다(247차)
+      if (!this.request && !this.viewOnly && this.active?.selection.size) void this.run('ERASE');
       return;
     }
     // 글자는 명령행으로

@@ -1561,6 +1561,8 @@ export class Shell implements UiHooks {
       b.addEventListener('click', () => void app.setSpace(l.blockName));
       b.addEventListener('contextmenu', (ev) => {
         ev.preventDefault();
+        // 휴대폰 보기 모드는 메뉴를 열지 않는다(247차 — 도면 영역·도면층 시트 행 메뉴와 같은 규칙). 누르기(배치 바꾸기)는 그대로
+        if (app.viewOnly) return;
         const paper = key !== MODEL_SPACE;
         const go = async (cmd: string, arg?: string) => {
           if (paper && st.displaySpace !== key) await app.setSpace(l.blockName);
