@@ -466,7 +466,8 @@ async function vertexEdit(app: App, ctx: CommandContext, t: Tools, h: string): P
   }
 }
 
-async function peditMulti(app: App, ctx: CommandContext, t: Tools, hs0: string[], accept: boolean): Promise<void> {
+/** exit: MPEDIT(Express Tools)의 종료(X) 옵션을 둔다(PEDIT 다중(M)은 두지 않는다 — 217차) */
+async function peditMulti(app: App, ctx: CommandContext, t: Tools, hs0: string[], accept: boolean, exit = false): Promise<void> {
   const doc = app.active!.doc;
   let hs = hs0.filter((h) => {
     const e = doc.entityIndex.get(h);
@@ -514,8 +515,11 @@ async function peditMulti(app: App, ctx: CommandContext, t: Tools, hs0: string[]
       ['R', '반전'],
       ['U', '명령 취소'],
     ];
-    const r = await ctx.getPoint(`옵션 입력 [${textOf(list)}]:`, { keywords: kwsOf(list) });
-    if (!('keyword' in r)) return;
+    // 217차: Autodesk MPEDIT 도움말(Express Tools)은 옵션 목록 끝에 종료(eXit)를 두고 기본값을 <종료>로 적는다 — X면 Enter처럼 끝낸다.
+    // 전에는 X를 「점이 올바르지 않습니다.」로 거절했다. PEDIT 다중(M)의 프롬프트·키워드는 그대로다
+    if (exit) list.push(['X', '종료']);
+    const r = await ctx.getPoint(`옵션 입력 [${textOf(list)}]${exit ? ' <종료>' : ''}:`, { keywords: kwsOf(list) });
+    if (!('keyword' in r) || r.keyword === 'X') return;
     const k = r.keyword;
     if (k === 'U') {
       const back = t.undo();
@@ -904,12 +908,12 @@ async function cvEdit(app: App, ctx: CommandContext, t: Tools, h: string): Promi
   }
 }
 
-/** MPEDIT(Express Tools): 고른 객체를 PEDIT 다중(M) 흐름으로 바로 편집한다(한 객체여도 다중 옵션) */
+/** MPEDIT(Express Tools): 고른 객체를 PEDIT 다중(M) 흐름으로 바로 편집한다(한 객체여도 다중 옵션, 끝에 종료(X) — 217차) */
 export async function peditMultiple(app: App, ctx: CommandContext, hs: string[], label = 'MPEDIT'): Promise<void> {
   const st = app.active!;
   const t = makeTools(app, ctx, label);
   try {
-    await peditMulti(app, ctx, t, unlockedOnly(app, hs), hnum(st.doc, '$PEDITACCEPT', 0) === 1);
+    await peditMulti(app, ctx, t, unlockedOnly(app, hs), hnum(st.doc, '$PEDITACCEPT', 0) === 1, true);
   } finally {
     app.view.overlay.marks = [];
     st.selection.clear();
