@@ -1550,7 +1550,12 @@ export class Shell implements UiHooks {
   refreshLayouts(): void {
     const app = this.app;
     const st = app.active;
+    // 다시 그리기 전 초점이 배치 탭에 있었으면 그 배치(data-layout 열쇠)를 둔다 — 아래에서 같은 배치의 탭에 돌려준다(261차)
+    const a = document.activeElement as HTMLElement | null;
+    const focusKey = a && this.layoutTabs.contains(a) ? (a.dataset.layout ?? null) : null;
     this.layoutTabs.innerHTML = '';
+    // 블록 편집기 줄(이름 글·동작 단추)은 탭 목록이 아니다
+    this.layoutTabs.removeAttribute('role');
     if (!st) return;
     if (st.blockEdit) {
       const be = st.blockEdit;
@@ -1561,11 +1566,26 @@ export class Shell implements UiHooks {
       this.layoutTabs.append(h('span', { class: 'layouttab active blockedit-label' }, `블록 편집기: ${ft(be.name)}`), save, close);
       return;
     }
-    for (const l of st.layouts) {
-      const key = tableKey(l.blockName);
+    // 보통 상태의 배치 탭 줄은 W3C APG 탭 꼴(261차 — 260차 보고 (1), 리본·팔레트 탭 꼴): tablist·tab·aria-selected, 고른 탭만 tabindex 0(Tab 한 자리 —
+    // 고른 탭이 없으면 첫 탭). 왼쪽·오른쪽 화살표(끝에서 돌아감)·Home·End는 초점만 옮기고 Enter·Space(단추 누르기)로 고른다(수동 — 누르기는 지금처럼 공간 바꾸기).
+    // 수정 키(Alt·Ctrl·Meta·Shift)와 함께 누른 화살표·Home·End는 넘긴다(tabKeyTarget — Alt+← 뒤로 같은 브라우저·앱 단축키 그대로).
+    // 공간 바꾸기는 비동기라 끝난 뒤 이 줄을 다시 그린다 — 초점은 위 열쇠로 같은 배치의 탭(누른 탭 = 새 고른 탭)에, 없으면 고른 탭에 돌려준다(256차 restoreFocus 꼴)
+    this.layoutTabs.setAttribute('role', 'tablist');
+    const keys = st.layouts.map((l) => tableKey(l.blockName));
+    const sel = Math.max(0, keys.indexOf(st.displaySpace));
+    st.layouts.forEach((l, i) => {
+      const key = keys[i]!;
       const label = key === MODEL_SPACE ? '모형' : l.name;
-      const b = h('button', { class: `layouttab ${st.displaySpace === key ? 'active' : ''}`, ...(key !== MODEL_SPACE ? { translate: 'no' } : {}) }, label);
+      const on = st.displaySpace === key;
+      const b = h('button', { class: `layouttab ${on ? 'active' : ''}`, role: 'tab', 'aria-selected': on ? 'true' : 'false', tabindex: i === sel ? 0 : -1, 'data-layout': key, ...(key !== MODEL_SPACE ? { translate: 'no' } : {}) }, label);
       b.addEventListener('click', () => void app.setSpace(l.blockName));
+      b.addEventListener('keydown', (ev) => {
+        const to = tabKeyTarget(ev, i, keys.length);
+        if (to < 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        (this.layoutTabs.children[to] as HTMLElement | undefined)?.focus();
+      });
       b.addEventListener('contextmenu', (ev) => {
         ev.preventDefault();
         // 휴대폰 보기 모드는 메뉴를 열지 않는다(247차 — 도면 영역·도면층 시트 행 메뉴와 같은 규칙). 누르기(배치 바꾸기)는 그대로
@@ -1594,6 +1614,10 @@ export class Shell implements UiHooks {
         ]);
       });
       this.layoutTabs.append(b);
+    });
+    if (focusKey !== null) {
+      const tabs = [...this.layoutTabs.children] as HTMLElement[];
+      (tabs.find((t) => t.dataset.layout === focusKey) ?? tabs[sel])?.focus({ preventScroll: true });
     }
     revealX(this.layoutTabs, this.layoutTabs.querySelector<HTMLElement>('.layouttab.active'));
   }
