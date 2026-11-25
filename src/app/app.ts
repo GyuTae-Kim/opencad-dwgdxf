@@ -1749,6 +1749,8 @@ export class App {
     if (on && this.running) this.cancel();
     this.refreshSelectionOverlay();
     this.view.requestOverlay();
+    // 열린 팔레트(도면층 시트 안내 등)를 그 모드로 다시 그린다(246차)
+    this.ui?.refreshPalette();
   }
 
   /**

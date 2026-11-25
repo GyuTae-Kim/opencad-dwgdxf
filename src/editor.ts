@@ -265,7 +265,7 @@ export function startEditor(root: HTMLElement): EditorActions {
         ['Ctrl+R', '최대화한 뷰포트에서 다음 뷰포트로'],
         ['Ctrl+1 · Ctrl+A · Ctrl+P · Ctrl+9', '특성 · 모두 선택 · 플롯 · 명령행 숨기기'],
         ['Ctrl+Tab · Ctrl+PgUp/PgDn', '다음 도면 · 배치 전환'],
-        ['터치', '한 손가락 = 이동, 두 손가락 = 확대·축소, 탭 = 선택'],
+        ['터치', '한 손가락 = 이동, 두 손가락 = 확대·축소, 탭 = 선택, 길게 누르기 = 정밀 조준'],
       ];
       const cmds = [...app.commands.values()]
         .filter((c) => !['MEASURERADIUS', 'ZOOMIN', 'ZOOMOUT', 'GRIPEDIT'].includes(c.name))
