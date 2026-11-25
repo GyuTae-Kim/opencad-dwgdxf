@@ -36,6 +36,8 @@ const SCOPES: { value: FindScope; label: string }[] = [
 /** 찾기 및 대치 탭 */
 export function findPanel(app: App, s: FindPanelState): HTMLElement {
   const q = (): FindQuery => ({ query: s.query, matchCase: s.matchCase, wholeWord: s.wholeWord, scope: s.scope, kinds: s.kinds });
+  // 휴대폰 보기 모드(더 보기 → 문자 찾기)는 찾기만 한다: 대치할 문자 칸·대치 단추를 두지 않는다(247차 — 보기 모드는 도면을 고치지 않는다)
+  const view = app.viewOnly;
   const find = h('input', { class: 'search', placeholder: '찾을 문자 (Enter)', 'aria-label': '찾을 문자', 'data-field': 'find-query' }) as HTMLInputElement;
   find.value = s.query;
   const rep = h('input', { class: 'search', placeholder: '대치할 문자', 'aria-label': '대치할 문자', style: 'margin-top:4px', 'data-field': 'find-replace' }) as HTMLInputElement;
@@ -111,7 +113,7 @@ export function findPanel(app: App, s: FindPanelState): HTMLElement {
   };
   const replace = (all: boolean) => {
     sync();
-    if (!s.query || !app.active) return;
+    if (!s.query || !app.active || app.viewOnly) return;
     found = findTargets(app, q());
     if (!found.length) return show();
     const list = all ? found : [found[s.picked >= 0 && s.picked < found.length ? s.picked : 0]!];
@@ -152,11 +154,11 @@ export function findPanel(app: App, s: FindPanelState): HTMLElement {
     'div',
     { class: 'find-panel' },
     find,
-    rep,
+    view ? null : rep,
     h('div', { style: 'display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap' }, h('span', { style: 'color:var(--text-dim)' }, '찾을 위치'), scope),
     h('div', { style: 'margin-top:6px' }, check('대소문자 일치', s.matchCase, (v) => (s.matchCase = v)), check('전체 단어만 찾기', s.wholeWord, (v) => (s.wholeWord = v))),
     kinds,
-    h('div', { style: 'display:flex;gap:6px;margin-top:8px' }, btnFind, btnRep, btnAll),
+    h('div', { style: 'display:flex;gap:6px;margin-top:8px' }, btnFind, view ? null : btnRep, view ? null : btnAll),
     results,
   );
   sync();
