@@ -1667,7 +1667,8 @@ export class Shell implements UiHooks {
     this.annoItems = annoStatus(app);
     // 주석 축척 항목: 동기화 경고, 축척 단추, 표시, 자동 추가 순서
     const annoPrio = [85, 65, 15, 15];
-    this.statusMore = h('button', { class: 'icon-btn status-more', title: '상태 막대의 나머지 항목', 'aria-label': '상태 막대의 나머지 항목', 'aria-haspopup': 'menu', hidden: true }, '⋯');
+    // 열림 상태도 알린다(254차 — WCAG 4.1.2, 253차 휴대폰 더 보기 꼴): 처음 false, 메뉴가 열리면 true, 닫히면 false(statusMoreMenu)
+    this.statusMore = h('button', { class: 'icon-btn status-more', title: '상태 막대의 나머지 항목', 'aria-label': '상태 막대의 나머지 항목', 'aria-haspopup': 'menu', 'aria-expanded': 'false', hidden: true }, '⋯');
     this.statusMore.addEventListener('click', () => this.statusMoreMenu());
     // 넘치면 prio가 낮은 것부터 "⋯" 메뉴로 옮긴다(데스크톱 폭에서는 다 들어간다)
     const items: [HTMLElement | undefined, number][] = [
@@ -1767,7 +1768,12 @@ export class Shell implements UiHooks {
         });
       } else if (el.textContent?.trim()) texts.push(el.textContent.trim());
     }
-    showMenu(r.left, r.top, [...(texts.length ? [{ heading: texts.join(' · ') }] : []), ...items]);
+    // 메뉴가 어떻게 닫히든(Esc·Tab·항목 고르기·바깥 누르기·다른 메뉴) onClose로 false
+    showMenu(r.left, r.top, [...(texts.length ? [{ heading: texts.join(' · ') }] : []), ...items], {
+      onClose: () => this.statusMore.setAttribute('aria-expanded', 'false'),
+    });
+    // 연 뒤에 true(showMenu가 앞 메뉴를 닫으며 그 onClose를 먼저 부른다)
+    this.statusMore.setAttribute('aria-expanded', 'true');
     // 단추 바로 위에 붙인다(메뉴 높이는 손가락 입력에서 더 크다)
     const m = [...document.querySelectorAll<HTMLElement>('.menu')].pop();
     if (m) m.style.top = `${Math.max(4, r.top - m.getBoundingClientRect().height - 4)}px`;

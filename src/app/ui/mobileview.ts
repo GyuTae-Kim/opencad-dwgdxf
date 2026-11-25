@@ -290,8 +290,11 @@ export class MobileView {
     const btn = (ico: string, label: string, title: string, run: () => void): HTMLButtonElement =>
       h('button', { class: 'vb-btn', type: 'button', title, 'aria-label': label ? undefined : title, html: icon(ico), onclick: run }, h('span', { class: 'vb-lbl' }, label));
     const fit = btn('extents', '전체 보기', '도면 전체 보기', () => void app.run('ZOOMEXTENTS'));
+    // 재기 단추는 재는 동안 눌린 상태를 알린다(254차 — WCAG 4.1.2): 스냅 칩과 같은 aria-pressed, 처음 false — render가 class on과 함께 맞춘다.
+    // 켜짐 상태가 없는 다른 보기 단추(전체 보기·도면층·치수·더 보기)에는 두지 않는다
     const measures = MEASURES.map((m) => {
       const b = btn(m.ico, m.label, m.title, () => this.startMeasure(m.name));
+      b.setAttribute('aria-pressed', 'false');
       this.measureBtns.set(m.name, b);
       return b;
     });
@@ -447,7 +450,12 @@ export class MobileView {
       app.view.zoomExtents();
     }
     const running = app.busyCommand;
-    for (const [name, b] of this.measureBtns) b.classList.toggle('on', running === name || running === RUNS_AS[name]);
+    // 재는 동안 보이는 표시(class on)와 화면 읽기 상태(aria-pressed)를 함께 — 끝나면(결과·Esc·다른 재기) 둘 다 꺼진다
+    for (const [name, b] of this.measureBtns) {
+      const on = running === name || running === RUNS_AS[name];
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
     card.replaceChildren();
     card.className = 'mview-card';
     // 보일 프롬프트(도면 글 표시 그대로 — 번역층이 지킨다)
