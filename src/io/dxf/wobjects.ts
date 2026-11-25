@@ -15,6 +15,7 @@ import type {
   UnderlayDefObject,
   XRecordObject,
 } from '../../core/model';
+import { shadePlotOf } from '../../core/finalize';
 import type { TagSink } from './tagwriter';
 import { type PlannedLayout, type PlannedObject, type WriteContext, standardTableStyle } from './wcontext';
 import { TagOut, appGroups, cadColorToRaw, validLineweight, writeXData } from './wentities';
@@ -63,9 +64,10 @@ function plotSettings(w: TagOut, p: PlotSettings): void {
   w.t(75, p.standardScaleType);
   if (ver >= 1018) {
     w.t(147, (p.scaleNumerator || 1) / (p.scaleDenominator || 1));
-    w.t(76, 0);
-    w.t(77, 2);
-    w.t(78, 300);
+    const [mode, res, dpi] = shadePlotOf(p);
+    w.t(76, mode);
+    w.t(77, res);
+    w.t(78, dpi);
     w.t(148, 0);
     w.t(149, 0);
   }

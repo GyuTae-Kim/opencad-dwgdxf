@@ -1099,6 +1099,15 @@ export interface PlotSettings {
   plotType: number;
   styleSheet: string;
   standardScaleType: number;
+  /**
+   * 음영 플롯(R2004+, DXF 참조서 PLOTSETTINGS 76~78 — DWG는 용지 이미지 원점 뒤 BS 셋). 리더가 읽은 값을 두고, 쓰기는 참조서 범위 밖이거나 없으면
+   * 0·2·300(shadePlotOf). 76 방식: 0 화면표시대로, 1 와이어프레임, 2 숨김, 3 렌더
+   */
+  shadePlotMode?: number;
+  /** 77 해상도 수준: 0 초안, 1 미리 보기, 2 보통, 3 프레젠테이션, 4 최대, 5 사용자 */
+  shadePlotResolution?: number;
+  /** 78 사용자 DPI(100~32767 — 해상도 수준이 5일 때만 씀) */
+  shadePlotDpi?: number;
 }
 
 export interface Layout {

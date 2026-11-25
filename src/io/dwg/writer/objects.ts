@@ -26,6 +26,7 @@ import { DYN_TYPES } from '../dyncodec';
 import { ASSOC_DWG_TYPES } from '../assoccodec';
 import { writeRawObject } from './rawobjects';
 import { tableKey } from '../../../core/model';
+import { shadePlotOf } from '../../../core/finalize';
 import { defaultIoTableStyle, parseTableStyleTags } from '../../tablestyle';
 import { tableStyleOld, tableStyleR24, writeIO } from '../tablecodec';
 import { styleToOld, styleToR24 } from '../tablemodel';
@@ -419,9 +420,11 @@ function plotSettings(d: BitWriter, ver: number, p: PlotSettings): void {
   d.BD(p.scaleDenominator ? p.scaleNumerator / p.scaleDenominator : 1);
   d.BD2({ x: 0, y: 0 });
   if (ver >= R2004) {
-    d.BS(0);
-    d.BS(2);
-    d.BS(300);
+    // 음영 플롯 방식·해상도 수준·사용자 DPI(DXF 76~78 — 221차, 없거나 참조서 범위 밖이면 0·2·300)
+    const [mode, res, dpi] = shadePlotOf(p);
+    d.BS(mode);
+    d.BS(res);
+    d.BS(dpi);
   }
 }
 

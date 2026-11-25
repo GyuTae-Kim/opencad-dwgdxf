@@ -116,9 +116,10 @@ function readPlotSettings(r: BitReader, ver: number): PlotSettings {
   r.BD(); // 축척 계수
   r.BD2(); // 용지 이미지 원점
   if (ver >= R2004) {
-    r.BS();
-    r.BS();
-    r.BS();
+    // 음영 플롯 방식·해상도 수준·사용자 DPI(DXF 76~78 — 221차)
+    p.shadePlotMode = r.BS();
+    p.shadePlotResolution = r.BS();
+    p.shadePlotDpi = r.BS();
   }
   return p;
 }
