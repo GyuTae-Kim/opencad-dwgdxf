@@ -45,6 +45,8 @@ export interface LayoutRaw {
   ucsXAxis: Vec3;
   ucsYAxis: Vec3;
   plot: PlotSettings;
+  /** R2004+ 플롯 뷰(VIEW 레코드) 핸들 — build가 VIEW 표로 이름을 푼다(229차), 없으면 0 */
+  plotView: number;
   blockRecord: number;
   viewport: number;
   owner: number;
@@ -108,7 +110,11 @@ function readPlotSettings(r: BitReader, ver: number): PlotSettings {
   p.plotType = r.BS();
   p.windowMin = r.BD2();
   p.windowMax = r.BD2();
-  if (ver < R2004) r.T(); // 플롯 뷰 이름
+  if (ver < R2004) {
+    // 플롯 뷰 이름(DXF 6 — 229차). R2004+는 핸들 흐름의 VIEW 레코드 핸들이라 build가 이름으로 푼다
+    const view = decodeCadEscapes(r.T());
+    if (view) p.plotViewName = view;
+  }
   p.scaleNumerator = r.BD();
   p.scaleDenominator = r.BD();
   p.styleSheet = r.TV();
@@ -145,7 +151,7 @@ export function readLayout(or: ObjectReader): LayoutRaw {
   if (ver >= R2004) r.BL(); // 뷰포트 수(사양은 RL, 실제는 BL)
   const hr = or.hdl;
   const hb = or.h.handle;
-  if (ver >= R2004) hr.H(hb); // 플롯 뷰
+  const plotView = ver >= R2004 ? hr.H(hb) : 0; // 플롯 뷰(229차 — build가 이름으로 푼다)
   if (ver >= R2007) hr.H(hb); // 시각 스타일
   const blockRecord = hr.H(hb);
   const viewport = hr.H(hb);
@@ -164,6 +170,7 @@ export function readLayout(or: ObjectReader): LayoutRaw {
     ucsXAxis,
     ucsYAxis,
     plot,
+    plotView,
     blockRecord,
     viewport,
     owner: or.h.owner,
@@ -172,10 +179,15 @@ export function readLayout(or: ObjectReader): LayoutRaw {
   };
 }
 
-export function readPlotSettingsObject(or: ObjectReader): CadObject {
+/**
+ * PLOTSETTINGS 객체. R2004+는 공통 핸들 다음이 플롯 뷰(VIEW 레코드) 핸들이다(쓰기와 같은 차례 — 그다음 R2007+ 시각 스타일).
+ * 그 핸들은 build가 VIEW 표를 다 읽은 뒤 이름으로 푼다(229차), 없으면 0
+ */
+export function readPlotSettingsObject(or: ObjectReader): { obj: CadObject; plotView: number } {
   or.commonObject();
   const plot = readPlotSettings(or.dat, or.ver);
-  return { ...base(or, 'PLOTSETTINGS'), plot } as CadObject;
+  const plotView = or.ver >= R2004 ? or.hdl.H(or.h.handle) : 0;
+  return { obj: { ...base(or, 'PLOTSETTINGS'), plot } as CadObject, plotView };
 }
 
 export function readMLineStyle(or: ObjectReader): MLineStyleRaw {
