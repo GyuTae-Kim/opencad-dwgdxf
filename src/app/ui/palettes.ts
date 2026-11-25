@@ -9,7 +9,7 @@ import { zoomToHandles } from '../commands';
 import { type Field, GENERAL_FIELDS, LINEWEIGHTS, applyField, attribFields, commonValue, formatValue, geometryFields, parseValue } from '../propedit';
 import { type LayerPatch, cannotDeleteLayer, createLayer, currentLayer, deleteLayer, layerUsage, newLayerName, patchLayers, renameLayer, setCurrentLayer } from '../layers';
 import { pickColor } from './colorpick';
-import { h, showMenu } from './dom';
+import { h, showMenu, tabKeyTarget } from './dom';
 import { icon } from './icons';
 import { NARROW_WIDTH, sheetFraction } from './layout';
 import { dynPaletteGroup } from '../dynblock';
@@ -220,15 +220,14 @@ export class Palette {
     // 고른 탭을 알린다(253차 — WCAG 4.1.2, 리본 탭 꼴): aria-selected와 탭 ↔ 몸 이음. 휴대폰 보기 시트와 데스크톱 팔레트가 같은 코드다.
     // 탭 줄은 Tab 한 자리(258차 — 253차 보고 (1), W3C APG 탭 꼴·리본 탭 꼴의 로빙 tabindex): 고른 탭만 0, 나머지 -1.
     // 왼쪽·오른쪽 화살표(끝에서 돌아감)·Home·End는 초점만 옮기고 Enter·Space(단추 누르기)로 고른다(리본처럼 수동 고르기 — 고르면 다시 그려 tabindex가 따라감).
-    // 다시 그려도 초점은 restoreFocus(탭 id — 256차)가 같은 탭에 돌려준다. 보이는 표시(class active)는 그대로
+    // 다시 그려도 초점은 restoreFocus(탭 id — 256차)가 같은 탭에 돌려준다. 보이는 표시(class active)는 그대로.
+    // 셈은 리본·도면 탭과 같은 tabKeyTarget — 수정 키(Alt·Ctrl·Meta·Shift)와 함께 누른 키는 넘긴다(259차 — 브라우저·앱 단축키 그대로)
     TABS.forEach((t, i) => {
       const on = t.key === this.tab;
       const b = h('button', { class: `palette-tab ${on ? 'active' : ''}`, role: 'tab', id: tabId(t.key), 'aria-selected': on ? 'true' : 'false', 'aria-controls': PANEL_ID, tabindex: on ? 0 : -1 }, t.label);
       b.addEventListener('click', () => this.open(t.key, true));
       b.addEventListener('keydown', (ev) => {
-        const k = ev.key;
-        const n = TABS.length;
-        const to = k === 'ArrowRight' ? (i + 1) % n : k === 'ArrowLeft' ? (i - 1 + n) % n : k === 'Home' ? 0 : k === 'End' ? n - 1 : -1;
+        const to = tabKeyTarget(ev, i, TABS.length);
         if (to < 0) return;
         ev.preventDefault();
         ev.stopPropagation();
