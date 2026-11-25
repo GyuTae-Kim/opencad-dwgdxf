@@ -19,6 +19,7 @@ import { layerFilterPanel } from '../layerfilter-ui';
 import { isTextEditable } from '../textedit/entity';
 import { findPanel, newFindState, tableCellGroup } from '../textedit/palette';
 import { cellSelectionGroup } from '../tablecell-palette';
+import { tableCellSelection } from '../tablecell';
 import { ft } from '../filetext';
 
 type Tab = 'props' | 'layers' | 'dims' | 'find';
@@ -66,13 +67,25 @@ function focusKey(el: HTMLElement): string {
   return `${el.tagName}:${el.getAttribute('aria-label') ?? el.textContent?.trim() ?? ''}`;
 }
 
+/** 특성 칸을 그린 대상(257차): 문서와 targetKey(탭·보기 모드·공간·고른 객체·고른 표 셀) */
+interface DrawnFor {
+  st: App['active'];
+  key: string;
+}
+
 /** 다시 그리기 전 초점 자리(256차) */
 interface FocusMark {
   key: string;
   /** 도면층 행(data-layer — 도면층 열쇠 이름): 같은 요소가 없으면 그 행의 첫 단추 */
   layer: string | null;
-  /** 특성 칸 밖 글 칸(도면층 찾기 등)의 커서·고른 범위 */
+  /** 글 칸의 커서·고른 범위(특성 칸은 257차부터) */
   range: [number, number, 'forward' | 'backward' | 'none'] | null;
+  /** 특성 칸(data-field 글 칸)의 글(257차) — 글 칸이 아니면 null */
+  text: string | null;
+  /** 그 글이 칸을 그릴 때의 값(도면 값)과 다른지(치는 중 — Enter·칸 떠남 전) */
+  dirty: boolean;
+  /** 그 칸을 그린 대상 */
+  drawnFor: DrawnFor | null;
 }
 
 export class Palette {
@@ -86,6 +99,11 @@ export class Palette {
   private width = 320;
   /** 시트를 연 곳(보기 단추·정보 카드 칩·명령행 등 — 255차: 휴대폰 시트를 닫을 때 초점을 돌려준다). 본문에서 열었으면 null */
   private opener: HTMLElement | null = null;
+  /** 지난번에 그린 특성 칸의 대상과 칸마다 그때의 값(도면 값) — 257차: 다시 그리기 전 글이 이 값과 다르면 치는 중 */
+  private drawnFor: DrawnFor | null = null;
+  private readonly drawn = new WeakMap<Element, string>();
+  /** 몸을 비우는 중(257차 — 그동안 칸이 받는 blur는 칸 떠남이 아니다) */
+  private redrawing = false;
 
   constructor(
     private readonly app: App,
@@ -209,10 +227,13 @@ export class Palette {
     }
     this.body.setAttribute('aria-labelledby', tabId(this.tab));
     const scroll = this.body.scrollTop;
+    this.redrawing = true;
     this.body.innerHTML = '';
+    this.redrawing = false;
     const st = this.app.active;
     if (!st) {
       this.body.append(h('div', { class: 'empty' }, '열린 도면이 없습니다.'));
+      this.noteDrawn();
       this.restoreFocus(mark);
       return;
     }
@@ -233,7 +254,24 @@ export class Palette {
         break;
     }
     this.body.scrollTop = scroll;
+    this.noteDrawn();
     this.restoreFocus(mark);
+  }
+
+  /**
+   * 특성 칸이 가리키는 대상(257차): 탭·보기 모드·공간·고른 객체 집합·고른 표 셀 — 문서까지 같으면 다시 그려도 칸의 뜻이 같다.
+   * refresh는 고른 것이 바뀐 뒤에 불리므로 다시 그리기 직전이 아니라 지난번에 그릴 때(noteDrawn) 잰 것과 견준다
+   */
+  private targetKey(): string {
+    const st = this.app.active;
+    const c = tableCellSelection(this.app)?.current();
+    return JSON.stringify([this.tab, this.app.viewOnly, st?.space ?? null, st ? [...st.selection].sort() : [], c ? [c.handle, c.r0, c.c0, c.r1, c.c1] : null]);
+  }
+
+  /** 그린 대상과 특성 칸(data-field 글 칸)마다 그린 값(도면 값)을 둔다(257차) */
+  private noteDrawn(): void {
+    this.drawnFor = { st: this.app.active, key: this.targetKey() };
+    for (const el of this.body.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[data-field], textarea[data-field]')) this.drawn.set(el, el.value);
   }
 
   /** 다시 그리기 전 초점 자리(256차): 탭 줄·몸(다시 그리는 곳) 안일 때만 — 닫기 단추·팔레트 밖이면 null */
@@ -241,24 +279,33 @@ export class Palette {
     const a = document.activeElement as HTMLElement | null;
     if (!a || !(this.tabs.contains(a) || this.body.contains(a))) return null;
     const key = focusKey(a);
+    const input = a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' ? (a as HTMLInputElement) : null;
     let range: FocusMark['range'] = null;
-    // 특성 칸은 지금처럼 다시 골라 두므로 커서를 두지 않는다
-    if (!key.startsWith('field:') && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) {
-      const t = a as HTMLInputElement;
+    if (input) {
       try {
-        if (t.selectionStart !== null && t.selectionEnd !== null) range = [t.selectionStart, t.selectionEnd, t.selectionDirection ?? 'none'];
+        if (input.selectionStart !== null && input.selectionEnd !== null) range = [input.selectionStart, input.selectionEnd, input.selectionDirection ?? 'none'];
       } catch {
         /* 고른 범위가 없는 칸(확인란 등) */
       }
     }
-    return { key, layer: a.closest<HTMLElement>('[data-layer]')?.dataset.layer ?? null, range };
+    // 특성 칸은 친 글과 그 칸을 그린 대상도 둔다(257차)
+    const field = input && key.startsWith('field:') ? input : null;
+    return {
+      key,
+      layer: a.closest<HTMLElement>('[data-layer]')?.dataset.layer ?? null,
+      range,
+      text: field ? field.value : null,
+      dirty: !!field && this.drawn.has(field) && field.value !== this.drawn.get(field),
+      drawnFor: this.drawnFor,
+    };
   }
 
   /**
    * 다시 그린 뒤 초점을 돌려준다(256차 — 255차 보고 (1)·(3), WCAG 2.4.3 초점 순서): 전에는 특성 칸만 되돌려 누른 도면층 단추·탭의 초점이 본문으로 빠졌다
    * (키보드 사용자가 자리를 잃고, 휴대폰 시트는 그 뒤 Esc가 시트 밖 Esc라 닫히지 않음). 데스크톱 팔레트·휴대폰 시트 모두.
    * 같은 열쇠의 요소(도면층 행 요소는 같은 행 안에서) → 없거나 받지 못하면(사라짐·꺼짐) 그 도면층 행의 첫 단추 → 고른 탭.
-   * 다시 그리는 동안 다른 곳이 초점을 가져갔으면 그대로 둔다. 새로 돌려주는 초점은 화면을 옮기지 않는다(몸 스크롤은 위에서 되돌림)
+   * 다시 그리는 동안 다른 곳이 초점을 가져갔으면 그대로 둔다. 새로 돌려주는 초점은 화면을 옮기지 않는다(몸 스크롤은 위에서 되돌림).
+   * 특성 칸은 그린 대상이 같으면 치던 글·커서도 되돌린다(257차)
    */
   private restoreFocus(m: FocusMark | null): void {
     if (!m) return;
@@ -273,9 +320,22 @@ export class Palette {
     const scope = m.layer === null ? [...this.tabs.querySelectorAll<HTMLElement>(FOCUSABLE), ...this.body.querySelectorAll<HTMLElement>(FOCUSABLE)] : [...(row?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
     const same = scope.find((el) => focusKey(el) === m.key);
     if (same && m.key.startsWith('field:')) {
-      // 특성 칸은 지금처럼(편집 중이던 칸 — Tab으로 옮긴 칸 포함): 글 칸은 다시 골라 둔다
+      // 특성 칸(257차 — 256차 보고 (1)·(2)): 그린 대상(문서·탭·보기 모드·공간·고른 객체·고른 셀)이 같으면 칸의 뜻이 같다 —
+      // 치던 글(Enter·칸 떠남 전)과 커서·고른 범위를 그대로 되돌린다(전에는 도면 값을 다시 그려 친 글을 잃고 전체를 골랐다). 치지 않은 칸은 새 도면 값이 같을 때 커서만.
+      // 고른 것이 바뀌었거나(다른 객체) 치지 않은 칸의 도면 값이 바뀌었으면 지금처럼 다시 골라 둔다(Tab으로 옮긴 칸 꼴). 읽기 전용 칸에는 글을 되돌리지 않는다
+      const t = same as HTMLInputElement;
+      const typed = same.tagName === 'INPUT' || same.tagName === 'TEXTAREA' ? m.text : null;
+      const was = m.drawnFor;
+      const drew = this.drawnFor;
+      const keep = typed !== null && !!was && !!drew && was.st === drew.st && was.key === drew.key && (m.dirty ? !t.readOnly : typed === t.value);
+      if (keep && typed !== null && t.value !== typed) {
+        t.value = typed;
+        this.commitOnBlur(t);
+      }
       same.focus();
-      if (same.tagName === 'INPUT') (same as HTMLInputElement).select();
+      if (keep) {
+        if (m.range) t.setSelectionRange(...m.range);
+      } else if (same.tagName === 'INPUT') t.select();
       if (document.activeElement === same) return;
     } else if (take(same)) {
       // 도면층 찾기 칸 등: 글마다 다시 그려도 커서 자리를 지킨다(전에는 글 끝으로)
@@ -284,6 +344,29 @@ export class Palette {
     }
     if (row && [...row.querySelectorAll<HTMLElement>(FOCUSABLE)].some((el) => take(el))) return;
     take(this.tabs.querySelector<HTMLElement>('[aria-selected="true"]'));
+  }
+
+  /**
+   * 되돌린 글(257차)은 스크립트가 넣은 값이라 브라우저가 칸을 떠날 때 change를 보내지 않을 수 있다(사용자가 고친 값만 보냄).
+   * 더 고치지 않고 떠나면(Enter·Tab·바깥 누르기) 글이 도면 값과 다를 때 change를 대신 보내 확정 규칙을 지킨다. 브라우저가 change를 보냈으면(더 고침) 그대로,
+   * Esc는 도면 값으로 되돌린 뒤 떠나 보내지 않는다. 다시 그리기가 칸을 떼어 내는 동안 받는 blur는 떠남이 아니다
+   */
+  private commitOnBlur(el: HTMLInputElement | HTMLTextAreaElement): void {
+    let sent = false;
+    el.addEventListener(
+      'change',
+      () => {
+        sent = true;
+      },
+      { once: true },
+    );
+    el.addEventListener(
+      'blur',
+      () => {
+        if (!sent && !this.redrawing && el.value !== this.drawn.get(el)) el.dispatchEvent(new Event('change', { bubbles: true }));
+      },
+      { once: true },
+    );
   }
 
   private props(): void {
