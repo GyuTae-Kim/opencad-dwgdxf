@@ -159,15 +159,16 @@ export const LINEWEIGHTS: readonly number[] = [0, 5, 9, 13, 15, 18, 20, 25, 30, 
 
 /**
  * 선가중치 입력(mm, `0.3`·`0.30mm`·`.3`) → 가장 가까운 표준 값(1/100 mm). `기본값`·`DEFAULT`·`D`는 −3.
- * 0 ~ 2.11mm 밖이거나 숫자가 아니면 null.
+ * 0 ~ 2.11mm 밖이거나 숫자가 아니면 null. `nearestAbove`면 2.11mm 넘는 값도 가장 가까운 표준 값(211)이다 —
+ * -LAYER 선가중치(219차, Autodesk -LAYER 도움말: 맞지 않는 선가중치는 가장 가까운 고정 값). 기본(거절)은 -LAYERSTATE가 쓴다
  */
-export function parseLineweight(text: string): number | null {
+export function parseLineweight(text: string, nearestAbove = false): number | null {
   const t = text.trim().toUpperCase();
   if (t === 'DEFAULT' || t === 'D' || t === '기본값' || t === '기본') return -3;
   const m = /^(\d*\.?\d+)\s*(MM)?$/.exec(t);
   if (!m) return null;
   const mm = Number(m[1]);
-  if (!Number.isFinite(mm) || mm < 0 || mm > 2.11 + 1e-9) return null;
+  if (!Number.isFinite(mm) || mm < 0 || (!nearestAbove && mm > 2.11 + 1e-9)) return null;
   return nearestLineweight(mm * 100);
 }
 

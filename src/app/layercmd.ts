@@ -283,7 +283,9 @@ export function registerDashLayerCommand(app: App): void {
             while (lw === null) {
               const t = await askWord(ctx, '선가중치 입력 (0.0mm - 2.11mm):');
               if (t === null) break;
-              lw = parseLineweight(t);
+              // 2.11mm 넘는 값은 가장 가까운 고정 값 2.11mm(219차, Autodesk -LAYER 도움말: 맞지 않는 선가중치를 넣으면 가장 가까운 고정 선가중치 값 —
+              // 범위·거절 말은 없다). 전에는 알림 뒤 다시 물었다. 숫자가 아닌 글·음수는 전처럼 알림 뒤 다시 묻는다
+              lw = parseLineweight(t, true);
               if (lw === null) ctx.print('0.0mm에서 2.11mm 사이의 선가중치를 입력하십시오.', 'err');
             }
             if (lw === null) break;
