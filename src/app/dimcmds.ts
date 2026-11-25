@@ -11,7 +11,7 @@
  */
 import type { BlockDef, BlockRecord, CadDocument, DimensionEntity, Entity, Layer, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
-import { formatLength, parseBearing, parseUnitAngle } from '../core/units';
+import { formatLength, numberAngleDegrees, parseBearing, parseUnitAngle } from '../core/units';
 import {
   createAlignedDimension,
   createAngular2LineDimension,
@@ -505,7 +505,8 @@ export function registerDimCommands(app: App): void {
       else if (r.keyword === 'V') rotation = Math.PI / 2;
       else if (r.keyword === 'R') {
         const a = await ctx.getPoint('치수선의 각도 지정 <0>:', { preferNumber: true });
-        rotation = 'text' in a ? ((Number(a.text) || 0) * Math.PI) / 180 : 0;
+        // 226차: Number가 못 읽은 단위 글자 꼴(`50g` 등)은 그 각(전에는 조용히 0). 못 읽는 글은 전처럼 0
+        rotation = 'text' in a ? ((numberAngleDegrees(a.text) || 0) * Math.PI) / 180 : 0;
       }
     }
   };

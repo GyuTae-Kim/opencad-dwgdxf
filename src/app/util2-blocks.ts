@@ -5,6 +5,7 @@
 import { pushAll } from '../core/arrays';
 import type { AttribEntity, BlockDef, BlockRecord, Entity, InsertEntity, Vec3 } from '../core/model';
 import { entityDefaults, tableKey } from '../core/model';
+import { numberAngleDegrees } from '../core/units';
 import type { EditOp } from '../edit/session';
 import { cloneEntity } from '../edit/session';
 import { boundsOf } from '../edit/geom/query';
@@ -549,7 +550,8 @@ export function registerUtil2BlockCommands(app: App): void {
             applyPre();
           }
         } else if ('keyword' in r && r.keyword === 'R') {
-          const v = await askNumber(ctx, '회전 각도 지정 <0>:', 0);
+          // 226차: 단위 글자 꼴(`50g` 등)도 그 각(전에는 「올바른 값을 입력하십시오.」 뒤 다시 물었다)
+          const v = await askNumber(ctx, '회전 각도 지정 <0>:', 0, undefined, numberAngleDegrees);
           if (v !== null) rot = (v * Math.PI) / 180;
         }
       }
@@ -578,7 +580,9 @@ export function registerUtil2BlockCommands(app: App): void {
       }
       if (rot === 0) {
         const r = await ctx.getPoint('블록 회전 각도 지정 <0>:', { base: p0, preferNumber: true, rubber: (p) => outline(p0, sx, sy, Math.atan2(p.y - p0.y, p.x - p0.x)) });
-        if ('text' in r && Number.isFinite(Number(r.text))) rot = (Number(r.text) * Math.PI) / 180;
+        // 226차: Number가 못 읽은 단위 글자 꼴(`50g` 등)은 그 각(전에는 조용히 0). 못 읽는 글은 전처럼 0
+        const rd = 'text' in r ? numberAngleDegrees(r.text) : NaN;
+        if (Number.isFinite(rd)) rot = (rd * Math.PI) / 180;
         else if ('point' in r) rot = Math.atan2(r.point.y - p0.y, r.point.x - p0.x);
       }
       const rows = await askInt(ctx, '행 수 입력 (---)', 1, 1, 32767);
@@ -814,12 +818,13 @@ export function registerUtil2BlockCommands(app: App): void {
   });
 }
 
-async function askNumber(ctx: CommandContext, prompt: string, def: number, check: (v: number) => boolean = () => true): Promise<number | null> {
+/** 수 하나 묻기. read: 글 → 수(기본 Number — 회전 각도는 numberAngleDegrees, 226차) */
+async function askNumber(ctx: CommandContext, prompt: string, def: number, check: (v: number) => boolean = () => true, read: (t: string) => number = Number): Promise<number | null> {
   for (;;) {
     const r = await ctx.getPoint(prompt, { preferNumber: true });
     if ('enter' in r) return def;
     if ('text' in r) {
-      const v = Number(r.text.trim());
+      const v = read(r.text.trim());
       if (Number.isFinite(v) && check(v)) return v;
     }
     if ('keyword' in r || 'point' in r) return null;

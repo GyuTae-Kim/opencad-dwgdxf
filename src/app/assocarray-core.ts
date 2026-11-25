@@ -5,6 +5,7 @@
 import type { CadDocument, InsertEntity } from '../core/model';
 import { maxOf, minOf } from '../core/arrays';
 import { entityDefaults, tableKey } from '../core/model';
+import { unitAngleDegrees } from '../core/units';
 import { insertAffine } from '../edit/dynblock/build';
 import { allocBlockName } from '../edit/geom/types';
 import { boundsOf } from '../edit/geom/query';
@@ -172,16 +173,24 @@ export function arrayPreview(app: App, info: ArrayInfo, next: ArrayState, ins: I
 
 const KW_E: Keyword = { key: 'E', label: '표현식' };
 
-/** 숫자 또는 CAL 식 */
-export function evalNumber(ctx: CommandContext, text: string): number | null {
+/**
+ * 숫자 또는 CAL 식. angle(각도 값 — 도)이면 식이 못 읽은 단위 글자 꼴(`45d30'`·`50g`·`0.7854r`)을 식 오류를 알리기 전에 그 각(도)으로 읽는다
+ * (226차 — 식이 먼저: 수·식이 읽는 글은 전과 같은 값. 단위 글자 꼴은 CAL이 늘 못 읽어 전에는 「잘못된 식입니다」 뒤 다시 물었다)
+ */
+export function evalNumber(ctx: CommandContext, text: string, angle = false): number | null {
   const t = text.trim();
   const n = Number(t);
   if (t && Number.isFinite(n)) return n;
+  const unit = () => (angle ? unitAngleDegrees(t) : null);
   try {
     const v = calculate(t);
     if (typeof v === 'number' && Number.isFinite(v)) return v;
+    const u = unit();
+    if (u !== null) return u;
     ctx.print('식의 결과가 숫자가 아닙니다.', 'err');
   } catch (e) {
+    const u = unit();
+    if (u !== null) return u;
     ctx.print(`잘못된 식입니다: ${e instanceof Error ? e.message : String(e)}`, 'err');
   }
   return null;
@@ -210,7 +219,8 @@ export async function askNumber(
       v = evalNumber(ctx, e.text);
       if (v !== null && opt.angle) v = (v * Math.PI) / 180;
     } else if ('text' in r) {
-      v = evalNumber(ctx, r.text);
+      // 각도 값은 단위 글자 꼴도(226차). 표현식(E·EX) 뒤 「표현식 입력:」은 식만 — 위 갈래 그대로
+      v = evalNumber(ctx, r.text, opt.angle);
       if (v !== null && opt.angle) v = (v * Math.PI) / 180;
     } else if ('point' in r) {
       let from = opt.base ?? null;

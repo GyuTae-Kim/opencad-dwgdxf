@@ -4,6 +4,7 @@
  */
 import type { AttribEntity, CadColor, Entity, FaceEntity, HeaderValue, InsertEntity, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
+import { numberAngleDegrees } from '../core/units';
 import { type EditOp, cloneEntity } from '../edit/session';
 import { type Affine, affApply, affDet, affInv, affLin, affMul, affRotate, affTranslate } from '../edit/geom/math';
 import { planProj } from '../edit/geom/ocs';
@@ -188,7 +189,9 @@ async function changePoint(app: App, ctx: CommandContext, hs: string[], p: Pt): 
       const na = await ctx.getPoint(`새 회전 각도 지정 <${((e.rotation * 180) / Math.PI).toFixed(0)}>:`, { allowText: true, preferNumber: true });
       const nt = await ctx.getPoint(`새 문자 입력 <${ft(e.text)}>:`, { allowText: true });
       const height = 'text' in nh && Number(nh.text) > 0 ? Number(nh.text) : e.height;
-      const rotation = 'text' in na && Number.isFinite(Number(na.text)) ? (Number(na.text) * Math.PI) / 180 : e.rotation;
+      // 226차: Number가 못 읽은 단위 글자 꼴(`50g` 등)은 그 각(전에는 조용히 앞 각). 못 읽는 글은 전처럼 앞 각
+      const ad = 'text' in na ? numberAngleDegrees(na.text) : NaN;
+      const rotation = Number.isFinite(ad) ? (ad * Math.PI) / 180 : e.rotation;
       const text = 'text' in nt ? nt.text : e.text;
       const after = { ...e, insert: pt, height, rotation, text } as Entity;
       // 맞춤점을 쓰는 자리맞추기면 맞춤점도 같은 만큼 옮긴다
@@ -196,7 +199,8 @@ async function changePoint(app: App, ctx: CommandContext, hs: string[], p: Pt): 
       modify(after);
     } else if (e.type === 'INSERT') {
       const na = await ctx.getPoint(`새 블록 회전 각도 지정 <${((e.rotation * 180) / Math.PI).toFixed(0)}>:`, { allowText: true, preferNumber: true });
-      const rotation = 'text' in na && Number.isFinite(Number(na.text)) ? (Number(na.text) * Math.PI) / 180 : e.rotation;
+      const ad = 'text' in na ? numberAngleDegrees(na.text) : NaN;
+      const rotation = Number.isFinite(ad) ? (ad * Math.PI) / 180 : e.rotation;
       const moved = relocateInsert(e, p, rotation);
       if (moved) modify(moved);
     }

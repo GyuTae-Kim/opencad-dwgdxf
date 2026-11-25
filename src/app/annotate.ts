@@ -6,6 +6,7 @@
 import type { AttribEntity, CadDocument, MLeaderEntity, MLeaderStyleObject, Vec3 } from '../core/model';
 import { attributeValues } from './blockinsert';
 import { entityDefaults, tableKey } from '../core/model';
+import { numberAngleDegrees } from '../core/units';
 import { boundsOf } from '../edit/geom/query';
 import type { App, CommandContext, Keyword } from './app';
 import { addEntities, currentElevation, currentProps, textDialog } from './draw';
@@ -310,7 +311,8 @@ async function askOptions(ctx: CommandContext, doc: CadDocument, s: MLeaderSessi
         for (;;) {
           const k = await ctx.getPoint(`${first ? '첫 번째' : '두 번째'} 각도 구속 입력 <${+((cur * 180) / Math.PI).toFixed(4)}>:`, { preferNumber: true });
           if ('text' in k) {
-            const deg = Number(k.text);
+            // 226차: Number가 못 읽은 단위 글자 꼴(`50g` 등)도 그 각(전에는 아래 오류 뒤 다시 물었다)
+            const deg = numberAngleDegrees(k.text);
             if (!Number.isFinite(deg) || deg < 0 || deg >= 360) {
               ctx.print('0에서 360 사이의 각도를 입력하십시오(0 = 구속 없음).', 'err');
               continue;
