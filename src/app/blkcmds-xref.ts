@@ -11,7 +11,7 @@ import { SYM_KINDS, SYM_LABEL, type SymKind, blockToXrefOps, dependentSymbols, x
 import { matchNameList } from '../edit/layercmd';
 import { INSUNITS_MM } from '../edit/util/calc';
 import type { App, CommandContext, Keyword } from './app';
-import { askOption, askReal, askWord, askYN, fmt4 } from './dashcmds-ask';
+import { askOption, askReal, askRealAngle, askWord, askYN, fmt4 } from './dashcmds-ask';
 import { currentElevation, currentProps } from './draw';
 import { expandXrefBounds, linkImageFiles, linkPdfFiles, linkXrefFiles, renderPdfPages, xrefOfDoc } from './refs';
 import { commandLineMode } from './script';
@@ -70,7 +70,8 @@ async function placeWithKeywords(ctx: CommandContext, rubber: (p: Pt, s: number,
     const r = await ctx.getPoint(prompt, { keywords: kws, rubber: (p) => rubber(p, scale, deg(rotDeg)) });
     if ('point' in r) return { at: r.point, scale, rotDeg };
     if ('keyword' in r && r.keyword === 'S') scale = await askReal(ctx, `축척 비율 지정 <${fmt4(scale)}>:`, scale, (v) => (v > 0 ? null : '축척은 0보다 커야 합니다.'));
-    else if ('keyword' in r && r.keyword === 'R') rotDeg = await askReal(ctx, `회전 각도 지정 <${rotDeg}>:`, rotDeg);
+    // 227차: 회전은 단위 글자 꼴(`50g` 등)도 그 각(전에는 「숫자 값이 필요합니다.」 뒤 다시) — 아래 명령행 판 회전·PDFATTACH도 같다
+    else if ('keyword' in r && r.keyword === 'R') rotDeg = await askRealAngle(ctx, `회전 각도 지정 <${rotDeg}>:`, rotDeg);
     else return null;
   }
 }
@@ -160,7 +161,7 @@ async function runXattach(app: App, ctx: CommandContext): Promise<void> {
   if (!placed) return;
   if (commandLineMode(app)) {
     placed.scale = await askReal(ctx, `X 축척 비율 입력 <${fmt4(placed.scale)}>:`, placed.scale, (v) => (v !== 0 ? null : '축척은 0일 수 없습니다.'));
-    placed.rotDeg = await askReal(ctx, `회전 각도 지정 <${placed.rotDeg}>:`, placed.rotDeg);
+    placed.rotDeg = await askRealAngle(ctx, `회전 각도 지정 <${placed.rotDeg}>:`, placed.rotDeg);
   }
   try {
     // 화면에서 찍은 삽입점(X·Y만)의 Z는 현재 고도(ELEV 도움말 — 210차, INSERT·-INSERT와 같다). 전에는 늘 0이었다
@@ -374,7 +375,7 @@ async function placePdf(app: App, ctx: CommandContext, file: File, pdf: { numPag
   const at = p.point;
   if (commandLineMode(app)) {
     scale = await askReal(ctx, `축척 비율 지정 <${fmt4(scale)}>:`, scale, (v) => (v > 0 ? null : '축척은 0보다 커야 합니다.'));
-    rotDeg = await askReal(ctx, `회전 지정 <${rotDeg}>:`, rotDeg);
+    rotDeg = await askRealAngle(ctx, `회전 지정 <${rotDeg}>:`, rotDeg);
   }
   // 화면에서 찍은 삽입점(X·Y만)의 Z는 현재 고도(ELEV 도움말 — 210차, 언더레이 10은 고도 칸 없이 점의 Z). 전에는 늘 0이었다
   const r = pdfAttachOps(st.doc, { fileName: file.name, page, space: st.space, insert: { x: at.x, y: at.y, z: currentElevation(app) }, scale, rotation: deg(rotDeg), insunits, props: currentProps(app) }, () => st.session.newHandle());
