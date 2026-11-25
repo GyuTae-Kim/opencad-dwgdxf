@@ -2502,7 +2502,9 @@ export class App {
       this.clearSubSelections();
     }
     const pickIt = (h: string) => {
-      const hs = this.expandPick([h]);
+      // 보기 모드는 누른 그 하나만(정보 카드는 고른 것이 하나일 때 — README 휴대폰 보기). 그룹(PICKSTYLE)·여러 단 문자 묶음으로 넓히지 않는다:
+      // 보기 모드에는 묶음으로 할 일(옮기기·복사·그립)이 없다(245차 — 전에는 그룹에 든 객체를 누르면 묶음 전체를 골라 카드가 뜨지 않았다)
+      const hs = this.viewOnly ? [h] : this.expandPick([h]);
       // PICKADD 1·2: 더하기(Shift로 누르면 고른 것은 빼고 아니면 더한다), 0: 바꾸기(Shift 더하기·빼기). 보기 모드는 누른 것 하나(정보 카드)
       this.setSelection(hs, this.viewOnly ? 'replace' : pickMode(this.settings.pickadd, { shift: ev.shiftKey, selected: st.selection.has(h) }));
       this.clearHover();
