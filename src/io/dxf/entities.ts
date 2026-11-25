@@ -50,6 +50,7 @@ import type { PolyAccum } from '../../core/polyverts';
 import { EDGE_ARC, EDGE_ELLIPSE, EDGE_LINE, packEdge } from '../../core/hatchedges';
 import { f64Of } from '../../core/f64pool';
 import { rawColorToCad } from '../../core/color';
+import { viewportShadePlotOf } from '../../core/finalize';
 import type { DxfRecord, TagValue } from './records';
 import { DEG, Tags, handle, hexToBytes, int, name, num, parseColor, parseDimOverrides, parseXData, str } from './tagutil';
 import { parseArcAlignedText } from './arctext';
@@ -1538,6 +1539,9 @@ function viewport(c: Common): ViewportEntity {
     e.ucsXAxis = t.point(111);
     e.ucsYAxis = t.point(112);
   }
+  // 음영 플롯 방식 170(228차): 1~3만 둔다(0·범위 밖은 쓰기가 0으로 써서 칸이 없어도 같다)
+  const shade = viewportShadePlotOf(t.int(170));
+  if (shade) e.shadePlotMode = shade;
   // R12는 보기 정보(12·45 등)를 쓰지 않고 ACAD 확장 자료 "MVIEW"에 둔다. 동결 도면층은 이름이다
   if (!t.has(12) && !t.has(45)) applyMviewXData(e, (v) => v);
   return e;

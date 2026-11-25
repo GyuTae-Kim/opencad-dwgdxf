@@ -170,6 +170,8 @@ export function compareEntity(e0: Entity, a0: Entity, o: CompareOptions): string
   const t = e.type;
   const skipType = new Set<string>();
   if (ver < 1018) {
+    // VIEWPORT 음영 플롯 방식(170 — 228차)은 R2004+에만 있다
+    skipType.add('shadePlotMode');
     skipType.add('transparency');
     skipType.add('backgroundFlags');
     skipType.add('backgroundColor');

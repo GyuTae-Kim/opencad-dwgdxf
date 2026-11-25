@@ -719,6 +719,11 @@ export interface ViewportEntity extends EntityBase {
   annotationScale?: string;
   /** 사용자 지정 축척 값(종이/모형) */
   customScale?: number;
+  /**
+   * 음영 플롯 방식(R2004+, DXF 참조서 VIEWPORT 170 — DWG는 UCS 직교 유형 다음 BS, 228차): 1 와이어프레임, 2 숨김, 3 렌더.
+   * 리더는 1~3일 때만 두고(0 화면표시대로·범위 밖은 칸 없음), 쓰기는 없거나 범위 밖이면 0(viewportShadePlotOf)
+   */
+  shadePlotMode?: number;
 }
 
 export interface MLineVertex {

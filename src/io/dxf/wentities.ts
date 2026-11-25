@@ -32,6 +32,7 @@ import type {
 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { cadColorToRaw } from '../../core/color';
+import { viewportShadePlotOf } from '../../core/finalize';
 import { lwCount, lwHasWidths, vertCount } from '../../core/lwpoly';
 import { polyBulge, polyCount, polyEndWidth, polyFace, polyFlags, polyIsFaceRecord, polyLoc, polyStartWidth, polyTangent, polyX, polyY, polyZ } from '../../core/polyverts';
 import { clampedKnots } from '../../geom/curves';
@@ -1241,7 +1242,8 @@ function writeViewport(w: TagOut, e: ViewportEntity): void {
   w.p3(112, e.ucsYAxis ?? { x: 0, y: 1, z: 0 });
   w.t(79, 0);
   w.t(146, 0);
-  if (ver >= 1018) w.t(170, 0);
+  // 음영 플롯 방식(228차 — 읽은 1~3, 없거나 참조서 범위 밖이면 전처럼 0)
+  if (ver >= 1018) w.t(170, viewportShadePlotOf(e.shadePlotMode));
   if (ver >= 1021) {
     w.t(61, 5);
     w.t(292, 1);
