@@ -1,9 +1,11 @@
 /**
  * TEXTMASK·TEXTUNMASK(Express Tools 문자 가리기) 계산(UI 없음).
- * 문자 상자를 간격띄우기 비율 × 문자 높이만큼 넓힌 사각형으로 가리기(WIPEOUT) 또는 솔리드(SOLID)를 만든다.
+ * 문자 상자를 간격띄우기 비율 × 문자 높이만큼 넓힌 사각형으로 가리기(WIPEOUT)·3D 면(3DFACE)·솔리드(SOLID)를 만든다.
  * 가리개는 문자와 같은 도면층·공간에 문자 바로 뒤(그리기 순서)에 놓고, 문자와 이름 없는 그룹으로 묶는다.
  * 문자와 가리개의 짝은 문자의 확장 데이터(이 앱의 기록 OPENCAD_TEXTMASK)에 적는다:
- *   1000 가리개 종류(wipeout·solid) · 1040 간격띄우기 비율 · 1005 가리개 핸들 · 1005 그룹 핸들(있으면).
+ *   1000 가리개 종류(wipeout·3dface·solid) · 1040 간격띄우기 비율 · 1005 가리개 핸들 · 1005 그룹 핸들(있으면).
+ * 3D 면(215차, Autodesk TEXTMASK 도움말 가리기 유형 3dface): 모서리를 모두 숨긴 3D 면이다. 숨기기로 플롯할 때 가리고 화면에서는 가려 보이지 않는다
+ * (이 앱의 3DFACE 그리기도 숨긴 모서리를 그리지 않는다). 도움말이 색을 적지 않아 가리기처럼 ByLayer로 둔다.
  */
 import type { CadColor, CadDocument, Entity, EntityBase, FaceEntity, ImageEntity, Vec2, XData } from '../../core/model';
 import { normalizeHandle } from '../../core/model';
@@ -12,9 +14,9 @@ import { boxCorners, hasTextBox, textBox } from './textbox';
 
 export const TEXTMASK_APP = 'OPENCAD_TEXTMASK';
 
-export type MaskType = 'wipeout' | 'solid';
+export type MaskType = 'wipeout' | '3dface' | 'solid';
 
-export const MASK_LABEL: Record<MaskType, string> = { wipeout: '가리기', solid: '솔리드' };
+export const MASK_LABEL: Record<MaskType, string> = { wipeout: '가리기', '3dface': '3D 면', solid: '솔리드' };
 
 export interface MaskLink {
   type: MaskType;
@@ -56,6 +58,19 @@ export function makeMask(e: Entity, opt: { type: MaskType; offset: number; color
   if (opt.type === 'wipeout') return makeWipeout(base, poly, b.z);
   const z = b.z;
   const [a, bb, c, d] = poly as [Vec2, Vec2, Vec2, Vec2];
+  // 3DFACE 점(WCS)은 둘레 차례 1·2·3·4 = 왼쪽 아래·오른쪽 아래·오른쪽 위·왼쪽 위, 70 = 1|2|4|8(모서리 넷을 모두 숨김)
+  if (opt.type === '3dface')
+    return {
+      ...base,
+      type: '3DFACE',
+      points: [
+        { x: a.x, y: a.y, z },
+        { x: bb.x, y: bb.y, z },
+        { x: c.x, y: c.y, z },
+        { x: d.x, y: d.y, z },
+      ],
+      invisibleEdges: 15,
+    } as FaceEntity;
   // SOLID 점 순서: 1·2·3·4 = 왼쪽 아래·오른쪽 아래·왼쪽 위·오른쪽 위
   return {
     ...base,
@@ -80,7 +95,7 @@ export function readMaskLink(e: { xdata?: XData[] }): MaskLink | null {
   const handles = x.items.filter((i) => i.code === 1005).map((i) => String(i.value));
   if (!handles[0]) return null;
   return {
-    type: type === 'solid' ? 'solid' : 'wipeout',
+    type: type === 'solid' || type === '3dface' ? type : 'wipeout',
     offset: typeof offset === 'number' ? offset : 0.35,
     mask: normalizeHandle(handles[0]),
     ...(handles[1] ? { group: normalizeHandle(handles[1]) } : {}),
