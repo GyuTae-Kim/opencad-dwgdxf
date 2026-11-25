@@ -12,7 +12,7 @@ import { type LayerPatch, patchLayers } from './layers';
 import { type ListFrame, entityLength, entityProperties, hatchArea, ringArea, ringPerimeter, typeName, zeroish } from './inquiry';
 import type { Pt } from './view';
 import { h } from './ui/dom';
-import { type MeasureFormat, angleResult, areaResult, distance3d, distanceResult, pointResult, radiusResult } from './measure-result';
+import { type MeasureFormat, angleResult, areaResult, distance3d, distanceResult, pointResult, radiusResult, totalAreaResult } from './measure-result';
 import { currentUcs, dirToUcs, toUcs } from './ucs';
 import { displayDirection } from './polar';
 import { type MultiHost, measureMultiple } from './distmulti';
@@ -828,14 +828,18 @@ async function measureArea(app: App, ctx: CommandContext): Promise<void> {
   let mode: 'A' | 'S' | null = null;
   let total = 0;
   const fmt = measureFormat(app);
-  const tally = (a: number) => {
-    if (!mode) return;
-    total += mode === 'A' ? a : -a;
-    ctx.print(`총 면적 = ${area(app, total)}`, 'res', areaResult(fmt, total, null));
-  };
+  // 더하기·빼기 모드는 면적·둘레 줄 뒤에 총 면적 줄. 두 줄이 같은 측정 값(총 면적과 방금 잰 면적·둘레)을 달아 휴대폰 보기의 결과 카드가 한 덩어리로 보인다
+  // (239차 — 전에는 따로 달아 카드가 총 면적만 「면적」 이름으로 보였다). 명령행 글·차례는 그대로
   const report = (a: number | null, per: number | null) => {
-    ctx.print(`면적 = ${a !== null ? area(app, a) : '-'},  둘레 = ${per !== null ? L(app, per) : '-'}`, 'res', areaResult(fmt, a, per));
-    if (a !== null) tally(a);
+    const line = `면적 = ${a !== null ? area(app, a) : '-'},  둘레 = ${per !== null ? L(app, per) : '-'}`;
+    if (!mode || a === null) {
+      ctx.print(line, 'res', areaResult(fmt, a, per));
+      return;
+    }
+    total += mode === 'A' ? a : -a;
+    const m = totalAreaResult(fmt, total, a, per);
+    ctx.print(line, 'res', m);
+    ctx.print(`총 면적 = ${area(app, total)}`, 'res', m);
   };
   for (;;) {
     const kws = mode
@@ -854,7 +858,7 @@ async function measureArea(app: App, ctx: CommandContext): Promise<void> {
       continue;
     }
     if (('keyword' in r && r.keyword === 'X') || ('enter' in r && mode)) {
-      if (mode) ctx.print(`총 면적 = ${area(app, total)}`, 'res', areaResult(fmt, total, null));
+      if (mode) ctx.print(`총 면적 = ${area(app, total)}`, 'res', totalAreaResult(fmt, total));
       return;
     }
     if ('keyword' in r || 'enter' in r) {

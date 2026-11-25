@@ -5,7 +5,7 @@
  */
 export interface MeasureResult {
   kind: 'distance' | 'radius' | 'angle' | 'area' | 'point';
-  /** 값의 이름(작은 글씨, 번역된다): 거리·반지름·각도·면적·둘레 */
+  /** 값의 이름(작은 글씨, 번역된다): 거리·반지름·각도·면적·둘레·총 면적 */
   label: string;
   /** 큰 글씨 값(단위 포함, 번역하지 않는다) */
   value: string;
@@ -63,6 +63,19 @@ export function areaResult(f: MeasureFormat, area: number | null, perimeter: num
   const per = perimeter !== null ? f.length(perimeter) + f.unit : null;
   if (area === null) return { kind: 'area', label: '둘레', value: per ?? '-', details: [] };
   return { kind: 'area', label: '면적', value: f.area(area) + (f.unit ? `${f.unit}²` : ''), details: per !== null ? [{ k: '둘레', v: per }] : [] };
+}
+
+/**
+ * 면적 추가(A)·빼기(S) 모드의 총 면적(239차): 큰 값은 총 면적, 보조 줄은 방금 잰 면적·둘레(주었을 때 — 끝에 다시 알리는 총 면적은 없다).
+ * 명령행의 「면적 = …, 둘레 = …」와 「총 면적 = …」 두 줄이 같은 값을 달아 결과 카드가 한 덩어리로 묶는다
+ * (도움말 MEASUREGEOM 면적: 정한 면적마다 면적과 둘레, 면적 추가는 총합을 이어 센다 — 보기 모드는 명령행을 숨겨 카드가 아니면 볼 수 없다)
+ */
+export function totalAreaResult(f: MeasureFormat, total: number, area: number | null = null, perimeter: number | null = null): MeasureResult {
+  const sq = f.unit ? `${f.unit}²` : '';
+  const details: { k: string; v: string }[] = [];
+  if (area !== null) details.push({ k: '면적', v: f.area(area) + sq });
+  if (perimeter !== null) details.push({ k: '둘레', v: f.length(perimeter) + f.unit });
+  return { kind: 'area', label: '총 면적', value: f.area(total) + sq, details };
 }
 
 /** 점 좌표(ID): 큰 값은 "X, Y", 보조 줄은 Z(0이 아닐 때) */
