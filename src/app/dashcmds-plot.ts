@@ -2,6 +2,7 @@
  * 명령행 출력: -PLOT, 페이지 설정 가져오기 PSETUPIN(대화상자)·-PSETUPIN(명령행).
  * -PLOT: `상세한 플롯 구성을 원하십니까? [예(Y)/아니오(N)] <아니오>:` 뒤로 AutoCAD 2026 한국어판 순서대로 묻고,
  * PLOT과 같은 출력(plotPages → PDF·SVG 내려받기)을 쓴다. 이 웹 버전의 장치는 PDF 다섯 이름·SVG·없음이다.
+ * 간단 구성의 페이지 설정 이름은 ?로 이름 있는 페이지 설정 목록을 본다(218차).
  * 할 수 없는 값(뒤집어 플롯, 간격띄우기, 음영 플롯 종류, 배치의 부분 영역)은 묻기는 하고 안내한다.
  */
 import type { CadDocument, Layout, PlotSettings as PageSettings } from '../core/model';
@@ -146,8 +147,14 @@ async function runDashPlot(app: App, ctx: CommandContext): Promise<void> {
   if (!detailed) {
     const { items } = namedPageSetups(st.doc);
     for (;;) {
-      const t = await askWord(ctx, `페이지 설정 이름 입력 <${ft(page?.pageSetupName ?? '')}>:`);
+      const t = await askWord(ctx, `페이지 설정 이름 또는 [?] 입력 <${ft(page?.pageSetupName ?? '')}>:`);
       if (t === null) break;
+      // ?: 이름 있는 페이지 설정 목록 뒤 다시 묻는다(218차, -PLOT 도움말). 이름 규칙(validSetupName)이 ?를 막아 실제 이름과 겹치지 않는다
+      if (t === '?') {
+        if (!items.length) ctx.print('이 도면에는 이름 있는 페이지 설정이 없습니다.');
+        for (const it of items) ctx.print(`  ${ft(it.name)}`);
+        continue;
+      }
       const hit = items.find((x) => x.name.toUpperCase() === t.toUpperCase());
       if (!hit) {
         ctx.print(`페이지 설정 "${ft(t)}"을(를) 찾을 수 없습니다.`, 'err');
