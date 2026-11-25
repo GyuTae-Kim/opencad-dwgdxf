@@ -6,7 +6,7 @@
 import type { BlockDef, BlockRecord, CadDocument, Entity, HatchEntity } from '../core/model';
 import { pushAll } from '../core/arrays';
 import { entityDefaults, tableKey } from '../core/model';
-import { formatLength } from '../core/units';
+import { formatLength, parseAngleDegrees } from '../core/units';
 import type { EditOp } from '../edit/session';
 import { cloneEntity } from '../edit/session';
 import { selectWithKeywords } from './util2-ui';
@@ -123,6 +123,8 @@ const num = (s: string) => {
   const v = parseFloat(s);
   return Number.isFinite(v) ? v : null;
 };
+/** 각도 글(도). 단위 글자 꼴(45d30'·50g·0.7854r)은 그 단위 — num(parseFloat)은 앞 수만 도로 읽어 50g가 50도였다(225차) */
+const angNum = parseAngleDegrees;
 
 // ---------------------------------------------------------------------------
 // 끌기 미리보기
@@ -571,7 +573,7 @@ async function askMove(ctx: CommandContext, ghost: Ghost, prompt: string, keywor
 /** 각도 입력(숫자는 도, 점은 기준점에서의 방향) */
 /**
  * ROTATE의 각도 입력(돌려주는 값은 도면 좌표의 시계 반대 방향 라디안). 점은 base에서의 방향(그대로).
- * 숫자(도)는 kind에 따라 도면 단위로 읽는다:
+ * 숫자(도 — 단위 글자 꼴 45d30'·50g·0.7854r은 그 단위, 225차)는 kind에 따라 도면 단위로 읽는다:
  *  - rotation(회전 각도 — 0 방향이 없는 크기): ANGDIR 1이면 시계 방향(도움말 "About Rotating Objects")
  *  - direction(참조의 새 각도 — 절대 각도): 지금 UCS X축 + ANGBASE에서 ANGDIR 쪽으로(도움말 "Direction Control": 0 방향은 각도 입력에)
  * 기본값도 같은 꼴로 보인다
@@ -593,7 +595,7 @@ async function askAngle(ctx: CommandContext, prompt: string, base: Pt, def: numb
     if ('keyword' in r) return { keyword: r.keyword };
     if ('point' in r) return ang(base, r.point);
     if ('text' in r) {
-      const v = num(r.text);
+      const v = angNum(r.text);
       if (v !== null) {
         const a = (v * Math.PI) / 180;
         return direction ? ua + fromDrawingAngle(a, conv) : signedAngle(a, conv);
@@ -886,7 +888,7 @@ export function registerModifyCommands(app: App): void {
           const ua = currentUcs(st).angle;
           const ref = await ctx.getPoint(`참조 각도 지정 <${deg(toDrawingAngle(Number(m.rotateRef ?? 0) - ua, st.units)).toFixed(0)}>:`, { preferNumber: true });
           let refAng = Number(m.rotateRef ?? 0);
-          if ('text' in ref) refAng = ua + fromDrawingAngle(((num(ref.text) ?? 0) * Math.PI) / 180, st.units);
+          if ('text' in ref) refAng = ua + fromDrawingAngle(((angNum(ref.text) ?? 0) * Math.PI) / 180, st.units);
           else if ('point' in ref) {
             const p2 = await ctx.getPoint('두 번째 점 지정:', { base: ref.point });
             if (!('point' in p2)) return;
@@ -1490,7 +1492,7 @@ export function registerModifyCommands(app: App): void {
           const v = await ctx.getPoint(`증분 길이 또는 [각도(A)] 입력 <${formatLength(Number(m.lenDelta ?? 0), st.units)}>:`, { preferNumber: true, keywords: [{ key: 'A', label: '각도' }] });
           if ('keyword' in v) {
             const a = await ctx.getPoint(`증분 각도 입력 <${deg(Number(m.lenAngle ?? 0)).toFixed(0)}>:`, { preferNumber: true });
-            const av = 'text' in a ? num(a.text) : deg(Number(m.lenAngle ?? 0));
+            const av = 'text' in a ? angNum(a.text) : deg(Number(m.lenAngle ?? 0));
             if (av === null) return;
             m.lenAngle = (av * Math.PI) / 180;
             mode = { angleDelta: (av * Math.PI) / 180 };
@@ -1510,7 +1512,7 @@ export function registerModifyCommands(app: App): void {
           const v = await ctx.getPoint(`전체 길이 또는 [각도(A)] 지정 <${formatLength(Number(m.lenTotal ?? 1), st.units)}>:`, { preferNumber: true, keywords: [{ key: 'A', label: '각도' }] });
           if ('keyword' in v) {
             const a = await ctx.getPoint(`전체 각도 지정 <${deg(Number(m.lenTotalAngle ?? Math.PI / 3)).toFixed(0)}>:`, { preferNumber: true });
-            const av = 'text' in a ? num(a.text) : deg(Number(m.lenTotalAngle ?? Math.PI / 3));
+            const av = 'text' in a ? angNum(a.text) : deg(Number(m.lenTotalAngle ?? Math.PI / 3));
             if (av === null) return;
             m.lenTotalAngle = (av * Math.PI) / 180;
             mode = { totalAngle: (av * Math.PI) / 180 };
@@ -1751,7 +1753,7 @@ export function registerModifyCommands(app: App): void {
       const r = await ctx.getPoint(`${prompt} <${angle ? deg(def).toFixed(0) : formatLength(def, st.units)}>:`, { preferNumber: true });
       if ('enter' in r) return def;
       if ('text' in r) {
-        const v = num(r.text);
+        const v = angle ? angNum(r.text) : num(r.text);
         if (v !== null && v >= 0) return angle ? (v * Math.PI) / 180 : v;
       }
       if ('point' in r && !angle) {
@@ -2147,7 +2149,7 @@ export function registerModifyCommands(app: App): void {
         const rr = await ctx.getPoint(`참조 각도 지정 <${deg(def).toFixed(0)}>:`, { preferNumber: true });
         let a = def;
         if ('text' in rr) {
-          const v = num(rr.text);
+          const v = angNum(rr.text);
           if (v === null) return null;
           a = (v * Math.PI) / 180;
         } else if ('point' in rr) {
@@ -2288,7 +2290,8 @@ export function registerModifyCommands(app: App): void {
             }
           }
         } else if ('text' in r) {
-          const v = num(r.text);
+          // 회전 모드의 글은 각도(단위 글자 꼴은 그 단위 — 225차), 신축·축척은 수 그대로
+          const v = mode === 'rotate' ? angNum(r.text) : num(r.text);
           if (v === null) continue;
           if (mode === 'stretch') {
             const one = single && singleEnt ? gripStretchValue(singleEnt, single.id, v, cursor, doc) : null;

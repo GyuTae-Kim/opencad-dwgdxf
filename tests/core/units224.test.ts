@@ -7,7 +7,8 @@
  *   수만 쓴 각과 같은 0 방향·방향(ANGBASE·ANGDIR)에서 잰다(극좌표 설정 추가 각도 parseAngleText와 같은 규칙). 글을 받는 점 프롬프트(allowText)는
  *   전처럼 글이 먼저다(CIRCLE 반지름 parseFloat 등 — 결과 그대로).
  * - 각도 프롬프트: 대시 명령 askAngleDeg(-INSERT·-ATTEDIT·-HATCH·-UNITS)와 치수 문자 각도(A — dimcmds textOption)는 방위·d/g/r,
- *   annot2-common·express-util askAngle은 d/g/r(방위는 223차), TEXT·MTEXT 회전은 방위만(d/g/r은 parseFloat가 앞 수를 받아 와 결과가 바뀌어 뺌).
+ *   annot2-common·express-util askAngle은 d/g/r(방위는 223차), TEXT·MTEXT 회전은 방위만(d/g/r은 parseFloat가 앞 수를 받아 와 결과가 바뀌어 뺌 —
+ *   225차가 그 앞 수 읽기를 틀린 값으로 보고 d/g/r도 그 단위로 받게 고침, tests/core/units225.test.ts).
  * 전에 받던 입력은 결과 그대로다.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -236,7 +237,7 @@ describe('진짜 App', () => {
     expect(ents<CircleEntity>(h, 'CIRCLE').map((e) => [e.center.x, e.center.y, e.radius])).toEqual([[5, 5, 10]]);
   });
 
-  it('TEXT 회전: 방위를 받고, d/g/r은 전처럼 앞 수(parseFloat — 이번에 바꾸지 않음)', async () => {
+  it('TEXT 회전: 방위를 받고, d/g/r은 그 단위로(225차 — 224차까지는 앞 수만 도로 읽어 50g가 50도)', async () => {
     const rot: number[] = [];
     for (const r of ['N', `S45d0'0"E`, '50g', '30']) {
       const h = setup();
@@ -247,6 +248,6 @@ describe('진짜 App', () => {
       rot.push(ts[0]!.rotation);
       activeEditor()?.cancel();
     }
-    expect(rot).toEqual([C(Math.PI / 2), C(315 * D), C(50 * D), C(30 * D)]);
+    expect(rot).toEqual([C(Math.PI / 2), C(315 * D), C(45 * D), C(30 * D)]);
   });
 });

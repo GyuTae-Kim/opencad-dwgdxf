@@ -266,6 +266,19 @@ export function parseUnitAngle(s: string): number | null {
 }
 
 /**
+ * 각도 프롬프트의 글을 도로 읽기(225차): 단위 글자 꼴(`45d30'`·`50g`·`0.7854r` — parseUnitAngle)은 그 단위의 각을 도로 바꾸고,
+ * 그 밖은 parseFloat(수만 쓴 각은 전처럼 그 수의 도, 못 읽는 꼴 `45d30`·`1e1d`는 전처럼 앞 수). 수가 없으면 null.
+ * parseFloat로 각을 읽던 프롬프트(TEXT 회전·ARC 사이각·ROTATE·LENGTHEN 등)는 단위 글자를 버리고 앞 수만 도로 읽어 `50g`를 50도로 썼다.
+ * 0 방향·방향(ANGBASE·ANGDIR·UCS)은 부르는 쪽이 수 각도에 하던 그대로 더한다
+ */
+export function parseAngleDegrees(s: string): number | null {
+  const u = parseUnitAngle(s);
+  if (u !== null) return (u * 180) / Math.PI;
+  const v = parseFloat(s);
+  return Number.isFinite(v) ? v : null;
+}
+
+/**
  * 측량 방위 읽기(라디안 — 동쪽에서 시계 반대 방향, 0 ≤ θ < 2π). formatAngle AUNITS 4의 거꾸로이고 AutoLISP angtof 4의 방위 규칙이다(223차에 angtof에서 옮김).
  * N·S + 북·남에서 E·W 쪽으로 잰 각(parseAngle의 도 — 비면 0) + E·W: `N 45d0'0" E`, 빈칸 없이 `N45d0'0"E`, 도움말 예 `n45d20'6"e`.
  * 정방위는 글자 하나(N·S·E·W). 빈칸·대소문자는 가리지 않고 도면의 0 방향·방향(ANGBASE·ANGDIR)은 쓰지 않는다.
