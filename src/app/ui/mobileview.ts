@@ -305,12 +305,13 @@ export class MobileView {
     // 이름 없이 아이콘만(좁은 화면에서 다른 단추 이름이 줄지 않게 — 접근 이름은 제목)
     const more = btn('more', '', '더 보기: 좌표·찾기·참조 파일·보기 링크', () => {
       const r = more.getBoundingClientRect();
+      // 톡으로 연 메뉴도 첫 항목에 초점, 닫으면 이 단추로(262차 — iOS Safari는 톡한 단추가 초점을 받지 않아 opener로 넘긴다)
       showMenu(r.left, r.bottom + 2, [
         { label: '점 좌표 (ID)', icon: 'id', run: () => this.startMeasure('ID') },
         { label: '문자 찾기', icon: 'find', run: () => host.openPalette('find') },
         { label: '참조 파일 고르기(외부 참조·SHX 글꼴)', icon: 'folder', run: () => void this.pickRefFiles() },
         { label: '보기 링크 복사', icon: 'link', run: () => void copyViewLink(app) },
-      ], { onClose: () => more.setAttribute('aria-expanded', 'false') });
+      ], { opener: more, onClose: () => more.setAttribute('aria-expanded', 'false') });
       // 연 뒤에 true(showMenu가 앞 메뉴를 닫으며 그 onClose를 먼저 부른다)
       more.setAttribute('aria-expanded', 'true');
     });

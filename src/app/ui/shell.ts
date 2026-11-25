@@ -1064,6 +1064,8 @@ export class Shell implements UiHooks {
     const appBtn = h('button', { class: 'app-button', title: '응용프로그램 메뉴', 'aria-label': '응용프로그램 메뉴' }, 'A');
     appBtn.addEventListener('click', () => {
       const r = appBtn.getBoundingClientRect();
+      // 메뉴 단추(이 단추·리본 펼침·상태 막대 「⋯」·「▾」·주석 축척·휴대폰 더 보기)는 연 단추를 넘긴다: 누르기로 연 메뉴도 첫 항목에 초점을 두고(ui/dom.ts showMenu),
+      // 닫으면 이 단추로 — 누른 단추가 초점을 받지 않는 Safari·iOS에서도(262차)
       showMenu(r.left, r.bottom + 2, [
         { label: '새로 만들기', icon: 'new', kbd: 'Ctrl+N', run: () => void app.run('NEW') },
         { label: '열기…', icon: 'open', kbd: 'Ctrl+O', run: () => this.pickFiles() },
@@ -1094,7 +1096,7 @@ export class Shell implements UiHooks {
         // 다른 웹페이지에 넣은(iframe) 화면은 방문 통계를 켜지 않으므로 설정도 감춘다
         ...(isFramed() ? [] : [{ label: '방문 통계 설정', icon: 'settings', run: showAnalyticsSettings }]),
         { label: 'OpenCAD 정보', icon: 'info', run: () => void app.run('ABOUT') },
-      ]);
+      ], { opener: appBtn });
     });
     const qat = h(
       'div',
@@ -1450,7 +1452,7 @@ export class Shell implements UiHooks {
           ...b.menu.map((m) => ({ label: m.label, icon: m.icon, run: () => go(m.cmd) })),
           { separator: true },
           { label: `${b.label} (${b.cmd})`, icon: b.icon, run: () => go(b.cmd!) },
-        ]);
+        ], { opener: el });
         return;
       }
       this.afterRibbonCommand();
@@ -1687,7 +1689,7 @@ export class Shell implements UiHooks {
       ]);
     });
     const caret = h('button', { class: 'icon-btn', title: '객체 스냅 종류', 'aria-label': '객체 스냅 종류', style: 'width:14px;padding:0', html: '▾' });
-    caret.addEventListener('click', (ev) => this.snapMenu(ev.clientX, ev.clientY - 260));
+    caret.addEventListener('click', (ev) => this.snapMenu(ev.clientX, ev.clientY - 260, caret));
     const sep = () => h('span', { class: 'status-sep' });
     this.annoItems = annoStatus(app);
     // 주석 축척 항목: 동기화 경고, 축척 단추, 표시, 자동 추가 순서
@@ -1795,6 +1797,7 @@ export class Shell implements UiHooks {
     }
     // 메뉴가 어떻게 닫히든(Esc·Tab·항목 고르기·바깥 누르기·다른 메뉴) onClose로 false
     showMenu(r.left, r.top, [...(texts.length ? [{ heading: texts.join(' · ') }] : []), ...items], {
+      opener: this.statusMore,
       onClose: () => this.statusMore.setAttribute('aria-expanded', 'false'),
     });
     // 연 뒤에 true(showMenu가 앞 메뉴를 닫으며 그 onClose를 먼저 부른다)
@@ -1804,7 +1807,8 @@ export class Shell implements UiHooks {
     if (m) m.style.top = `${Math.max(4, r.top - m.getBoundingClientRect().height - 4)}px`;
   }
 
-  private snapMenu(x: number, y: number): void {
+  /** 객체 스냅 메뉴(opener: 「▾」 단추로 열면 그 단추 — 닫으면 초점을 돌려준다) */
+  private snapMenu(x: number, y: number, opener?: HTMLElement): void {
     const app = this.app;
     showMenu(x, y, [
       { heading: '객체 스냅' },
@@ -1819,7 +1823,7 @@ export class Shell implements UiHooks {
       { separator: true },
       { label: '모두 켜기', run: () => (ALL_SNAPS.forEach((k) => app.snapModes.add(k)), this.refreshStatus()) },
       { label: '모두 끄기', run: () => (app.snapModes.clear(), this.refreshStatus()) },
-    ]);
+    ], { opener });
   }
 
   refreshStatus(): void {

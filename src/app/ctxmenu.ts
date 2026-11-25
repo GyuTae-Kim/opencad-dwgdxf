@@ -16,9 +16,9 @@ import { OVERRIDE_MENU } from './osnap-override';
 import { type MenuItem, showMenu, toast } from './ui/dom';
 import type { Pt } from './view';
 
-/** 하위 메뉴를 펼치는 항목으로 바꿔 메뉴를 띄운다 */
-export function showContextMenu(x: number, y: number, items: ContextMenuItem[]): void {
-  showMenu(x, y, toMenu(x, y, tidy(items)));
+/** 하위 메뉴를 펼치는 항목으로 바꿔 메뉴를 띄운다. hover는 커서를 올리면 뜨는 메뉴(다기능 그립 — 초점을 옮기지 않는다, ui/dom.ts showMenu) */
+export function showContextMenu(x: number, y: number, items: ContextMenuItem[], opt: { hover?: boolean } = {}): void {
+  showMenu(x, y, toMenu(x, y, tidy(items)), opt);
 }
 
 function toMenu(x: number, y: number, items: ContextMenuItem[]): MenuItem[] {
