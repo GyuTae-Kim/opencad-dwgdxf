@@ -1616,8 +1616,12 @@ export class CadView {
           this.finishAim(p, ev, cancel);
           return;
         }
+        const k = [...this.touches.keys()].indexOf(ev.pointerId);
         this.touches.delete(ev.pointerId);
+        // 확대 짝(앞 두 손가락)의 하나를 떼거나 취소해 둘 이상 남으면(244차 — 세 손가락 → 두 손가락): 남은 두 손가락·지금 카메라로
+        // 확대 기준을 다시 잡는다(옛 짝의 거리·가운데로 셈하면 다음 이동에서 화면이 튄다). 짝 밖 손가락을 떼면 그대로
         if (this.touches.size < 2) this.pinch = null;
+        else if (this.pinch && k >= 0 && k < 2) this.startPinch();
         if (this.panning && this.touches.size === 0) {
           this.panning = null;
           this.leftDown = null;
