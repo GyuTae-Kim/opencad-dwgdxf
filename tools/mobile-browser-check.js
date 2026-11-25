@@ -30,12 +30,12 @@ async (page) => {
   await page.getByRole('button',{name:'예제 도면 열기',exact:true}).click();
   await loaded();
   assert(await page.evaluate(() => window.opencad.docs.length === 1 && ['LINE','SAVEAS','DXFOUT','MEASUREGEOM','NEW'].every(name=>window.opencad.findCommand(name))), 'Sample and complete command registry');
-  await page.getByRole('button',{name:'두 점 사이 거리 재기',exact:true}).click();
+  await page.getByRole('button',{name:'거리',exact:true}).click();
   await page.locator('.mview-card .mv-prompt').filter({hasText:'첫 번째 점 지정:'}).waitFor();
   await page.locator('.mview-card').getByRole('button',{name:'취소',exact:true}).click();
   assert(await page.evaluate(() => !window.opencad.busyCommand), 'Measure bar cancels the command without a keyboard');
   assert(await page.evaluate(() => ['.app-button','.filetab .x'].every(selector => { const r = document.querySelector(selector).getBoundingClientRect(); return r.width >= 40 && r.height >= 36; })), 'Menu and tab close buttons have 40x36 touch targets');
-  await page.getByRole('button',{name:'두 점 사이 거리 재기',exact:true}).click();
+  await page.getByRole('button',{name:'거리',exact:true}).click();
   const canvas = await page.locator('.workspace canvas').first().boundingBox();
   await page.touchscreen.tap(canvas.x + canvas.width * 0.3, canvas.y + canvas.height * 0.4);
   await page.touchscreen.tap(canvas.x + canvas.width * 0.7, canvas.y + canvas.height * 0.6);
