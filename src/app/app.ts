@@ -41,7 +41,7 @@ import { kindName as entityKindName } from '../edit/extract';
 import { EditManager } from './edits';
 import { OverlayScene, type ViewportXf, layoutViewports, paperInfo } from './scene';
 import { expandXrefBounds } from './refs';
-import type { EditOp } from '../edit/session';
+import type { EditOp, EditSession, Transaction } from '../edit/session';
 import { isEditableTable } from '../edit/table/entity';
 import { type CommandFallback, type CommitHook, type ContextMenuItem, type ContextMenuMode, type ContextMenuProvider, type DblClickHandler, type EntityClickHandler, type GripMenuProvider, type InputFilter, type PendingInput, type PointFilter, type ResolvedPoint, type SubSelection, bindCommitHooks } from './hooks';
 import { cycleIsoPlane } from './viewtools-iso';
@@ -323,6 +323,11 @@ export class App {
    * 화면(리본·명령행 숨김, 보기 단추 줄)은 ui/mobileview.ts가 맡는다
    */
   viewOnly = false;
+  /**
+   * 보기 모드로 들어갈 때 도면마다의 명령 취소·다시 실행 맨 위 항목(251차). 보기 모드의 Ctrl+Z·Ctrl+Y는 이 위의 항목 —
+   * 보기 모드에서 한 단계(도면층 시트의 켜고 끄기 등)·보기 모드에서 되돌린 단계 — 만 되돌리고 다시 한다(viewStep)
+   */
+  private readonly viewFloor = new WeakMap<EditSession, { undo: Transaction | null; redo: Transaction | null }>();
   /** 정밀 조준 없이 손가락으로 찍은 점: 손가락이 가려 보지 못하므로 객체 스냅 조준창을 넓힌다 */
   private blindTouch = false;
   private acquired: Acquired[] = [];
@@ -1757,6 +1762,8 @@ export class App {
   setViewOnly(on: boolean): void {
     if (this.viewOnly === on) return;
     this.viewOnly = on;
+    // 여기까지가 편집 화면의 단계(251차 — 보기 모드의 Ctrl+Z·Y는 그 위만). 보기 모드에서 여는 도면은 기록이 없어 모두 보기 모드의 단계다
+    if (on) for (const d of this.docs) if (d.session) this.viewFloor.set(d.session, { undo: d.session.undoTop(), redo: d.session.redoTop() });
     if (on && this.running) this.cancel();
     this.refreshSelectionOverlay();
     this.view.requestOverlay();
@@ -3102,6 +3109,19 @@ export class App {
     return true;
   }
 
+  /**
+   * Ctrl+Z(redo 거짓)·Ctrl+Y·Ctrl+Shift+Z(참)가 명령 취소·다시 실행을 돌릴지. 편집 화면은 늘 참. 휴대폰 보기 모드는 그 맨 위가 보기 모드에서 쌓인 단계
+   * (보기 모드로 들어갈 때의 맨 위 — viewFloor — 와 다른 항목)일 때만(251차 — 편집 화면에서 한 편집·되돌린 편집을 보기 모드에서 되돌리고 다시 하던 것).
+   * 항목은 되돌리고 다시 할 때 같은 객체가 두 목록을 오간다(edit/session.ts)
+   */
+  private viewStep(redo: boolean): boolean {
+    const s = this.active?.session;
+    if (!this.viewOnly || !s) return true;
+    const top = redo ? s.redoTop() : s.undoTop();
+    const floor = this.viewFloor.get(s);
+    return !!top && top !== (redo ? floor?.redo : floor?.undo);
+  }
+
   /** Enter(Ctrl+J·Ctrl+M·도면 위 Enter): 명령 중이면 입력, 아니면 직전 명령 반복(보기 모드는 보기 모드가 여는 명령만 — repeatName) */
   private pressEnter(inCmd: boolean): void {
     const again = this.repeatName;
@@ -3178,10 +3198,11 @@ export class App {
         this.toggleOsnap();
         return;
       case 'F5':
-        // 등각평면 전환(도면이 없으면 브라우저 새로 고침을 막지 않는다)
+        // 등각평면 전환(도면이 없으면 브라우저 새로 고침을 막지 않는다). 휴대폰 보기 모드는 등각평면(VPORT SNAPISOPAIR — 파일에 저장되는 제도 설정)을
+        // 바꾸지 않는다(251차 — 도면을 고친 것으로 표시했다). 연 도면을 잃지 않게 새로 고침은 편집 화면처럼 막는다
         if (!this.active) break;
         ev.preventDefault();
-        cycleIsoPlane(this);
+        if (!this.viewOnly) cycleIsoPlane(this);
         return;
       case 'F7':
         ev.preventDefault();
@@ -3210,7 +3231,8 @@ export class App {
     }
     if (mod && ev.shiftKey && !ev.altKey) {
       const k = ev.key.toLowerCase();
-      if (k === 'z' && !typing) {
+      // 보기 모드는 보기 모드에서 되돌린 단계만 다시 한다(251차 — viewStep, 밖이면 아무것도 하지 않고 기본 동작도 막지 않음)
+      if (k === 'z' && !typing && this.viewStep(true)) {
         ev.preventDefault();
         void this.run('REDO');
         return;
@@ -3241,7 +3263,8 @@ export class App {
     }
     if (mod && !ev.shiftKey && !ev.altKey) {
       const k = ev.key.toLowerCase();
-      if (k === 'e' && !typing && this.active) {
+      // 등각평면 전환. 보기 모드는 바꾸지 않는다(251차 — F5와 같음, 아무것도 하지 않고 기본 동작도 막지 않음 — 250차 Ctrl+K 꼴)
+      if (k === 'e' && !typing && this.active && !this.viewOnly) {
         ev.preventDefault();
         cycleIsoPlane(this);
         return;
@@ -3262,12 +3285,13 @@ export class App {
         void this.run('PROPERTIES');
         return;
       }
-      if (k === 'z' && !typing) {
+      // 보기 모드는 보기 모드에서 한 단계(도면층 시트의 켜고 끄기 등)만 되돌리고 다시 한다(251차 — 편집 화면에서 한 편집은 건드리지 않음)
+      if (k === 'z' && !typing && this.viewStep(false)) {
         ev.preventDefault();
         void this.run('U');
         return;
       }
-      if (k === 'y' && !typing) {
+      if (k === 'y' && !typing && this.viewStep(true)) {
         ev.preventDefault();
         void this.run('REDO');
         return;
@@ -3350,8 +3374,9 @@ export class App {
       if (!this.request && !this.viewOnly && this.active?.selection.size) void this.run('ERASE');
       return;
     }
-    // 글자는 명령행으로
-    if (ev.key.length === 1 && !mod && !ev.altKey && ev.key !== ' ') {
+    // 글자는 명령행으로. 휴대폰 보기 모드는 보내지 않는다(251차): 명령행이 숨어 있어 쌓이기만 하고(Enter는 넣지 않음) 편집 화면으로 바꾸면
+    // 명령행에 남아 그 뒤에 친 글자와 엉뚱한 명령이 되었다(보기 모드의 x + 편집 화면의 l = XL). 아무것도 하지 않고 기본 동작도 막지 않는다
+    if (ev.key.length === 1 && !mod && !ev.altKey && ev.key !== ' ' && !this.viewOnly) {
       ev.preventDefault();
       this.cmd.typeChar(ev.key);
     }
