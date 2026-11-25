@@ -80,9 +80,10 @@ export interface ViewLinks {
 
 /**
  * VIEWLINK 명령을 등록하고 주소의 #view=를 기다린다.
- * keepView: 휴대폰 보기 모드가 처음 볼 때 전체 보기로 맞추지 않게(링크의 화면을 지키게) 알린다.
+ * keepView(st): 휴대폰 보기 모드가 처음 볼 때 전체 보기로 맞추지 않게(링크의 화면을 지키게) 알린다.
+ * keepView(st, false): 링크를 적용하지 못했다(배치가 없음·그사이 다른 도면) — 링크 없이 연 도면처럼 처음 볼 때 맞추게 되돌린다.
  */
-export function installViewLinks(app: App, keepView: (st: DocState) => void): ViewLinks {
+export function installViewLinks(app: App, keepView: (st: DocState, keep?: boolean) => void): ViewLinks {
   let pending: ViewLink | null = typeof location !== 'undefined' ? decodeViewLink(location.hash) : null;
   app.register({
     name: 'VIEWLINK',
@@ -106,11 +107,16 @@ export function installViewLinks(app: App, keepView: (st: DocState) => void): Vi
       pending = null;
       keepView(st);
       // 화면 크기가 정해진 뒤(시작 화면·진행 막대가 닫힌 뒤) 맞춘다
+      // 적용하지 못한 링크는 링크 없이 연 것과 같게(데스크톱은 연 화면 그대로, 휴대폰 보기는 처음 볼 때 도면 전체)
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
-          if (app.active !== st) return;
+          if (app.active !== st) {
+            keepView(st, false);
+            return;
+          }
           void applyViewLink(app, st, link).then((ok) => {
             if (ok) toast('주소의 보기(가운데·배율·배치 탭)를 적용했습니다.');
+            else keepView(st, false);
           });
         }),
       );

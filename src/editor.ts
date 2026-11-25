@@ -182,7 +182,7 @@ export function startEditor(root: HTMLElement): EditorActions {
     app.view.requestRender();
   });
   // 보기 링크(#view=): 지금 화면을 담은 주소 복사, 주소의 보기를 처음 연 도면에 적용
-  const viewLinks = installViewLinks(app, (st) => shell.mobile?.keepView(st));
+  const viewLinks = installViewLinks(app, (st, keep) => shell.mobile?.keepView(st, keep));
   app.onOpened = (st) => {
     viewLinks.opened(st);
     noteMissingShx(app, st);

@@ -362,9 +362,16 @@ export class MobileView {
     });
   }
 
-  /** 이 도면은 처음 볼 때 전체 보기로 맞추지 않는다(보기 링크로 연 화면을 지킨다) */
-  keepView(st: DocState): void {
-    this.fitted.add(st);
+  /**
+   * 이 도면은 처음 볼 때 전체 보기로 맞추지 않는다(보기 링크로 연 화면을 지킨다).
+   * keep false: 링크를 적용하지 못했다(배치가 없음 등) — 링크 없이 연 도면처럼 처음 볼 때 맞춘다(보기 모드면 곧, 편집 화면이면 들어갈 때)
+   */
+  keepView(st: DocState, keep = true): void {
+    if (keep) this.fitted.add(st);
+    else {
+      this.fitted.delete(st);
+      this.queue();
+    }
   }
 
   get viewMode(): boolean {
