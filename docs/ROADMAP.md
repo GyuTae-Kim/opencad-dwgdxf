@@ -1261,6 +1261,17 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   치수선의 각도(R) — 오류 없이 앞 값·0을 쓰는 곳, DesignCenter 삽입 회전, ARRAY 항목 사이·채울 각도)와 -STYLE 기울기(askReal)의 단위 글자 꼴, 방향 각 프롬프트(RECTANG 회전·
   PEDIT 접선·ARC 방향·XLINE 각도·ROTATE 등)의 측량 방위(ROTATE는 크기 각과 UCS·0 방향을 더하는 방향 각이라 223차와 같은 애매함), 글을 받는 점 프롬프트의 극좌표 단위 글자 꼴,
   수만 쓴 각을 도면 AUNITS로 읽을지(지금은 늘 도 — 도움말 근거 필요), 극좌표 거리의 피트-인치
+  — **226차가 고침: Number·식 계산으로 각을 읽는 프롬프트의 단위 글자 꼴(아래 226차 항목). 나머지는 「226차에 보고 두 것」**
+- [x] Number·식으로 각을 읽던 프롬프트가 단위 글자 꼴에 조용히 앞 값·0을 쓰거나 오류 뒤 다시 묻던 것(226차, Autodesk 도움말 "About Unit Format Conventions"):
+  -HATCHEDIT 사용자 정의 선 각도·무늬 각도, CHANGE 문자·블록 새 회전 각도, MINSERT 블록 회전 각도·회전(R), 옛 LEADER 주석 블록 회전, DIMLINEAR 회전(R), UCS Z,
+  MOCORO 회전 모드, INSERT 대화 상자 회전 「화면상에 지정」, MLEADER 첫 번째·두 번째 각도 구속, DesignCenter 삽입 회전(R), ARRAYPOLAR·ARRAYEDIT 항목 사이·채울 각도
+  (16 프롬프트)가 `core/units` numberAngleDegrees로 읽는다 — Number가 읽는 글은 그 값 그대로, NaN인 글만 단위 글자 꼴(`45d30'` 45.5도, `50g` 45도, `0.7854r`
+  0.7854 라디안). ARRAY는 CAL 식이 먼저(식이 못 읽은 글만 단위 글자 꼴). 못 읽는 글(`45x` — parseFloat 대체가 아님)·수·키워드(MOCORO C 등·ARRAY EX)는 그대로.
+  **바뀐 기존 결과**: 조용히 버리던 아홉 프롬프트의 단위 글자 꼴 각(앞 값·0 → 그 각). 표는 CHANGELOG 226차 절
+- [ ] 226차에 보고 두 것 — askReal(수 정규식 + Number, 못 읽으면 「숫자 값이 필요합니다.」 뒤 다시)로 읽는 각도 프롬프트(-STYLE 기울기, -ARRAY 채울 각도·항목 사이 각도,
+  XATTACH 회전, IMAGEATTACH·PDFATTACH 등 회전(R), TINSERT 회전)의 단위 글자 꼴, ARRAY 표현식(EX) 뒤 식 프롬프트의 단위 글자 꼴(식만 받음 — 그대로 둠),
+  방향 각 프롬프트(RECTANG 회전·PEDIT 접선·ARC 방향·XLINE 각도·ROTATE 등)의 측량 방위(ROTATE는 223차와 같은 애매함), 글을 받는 점 프롬프트의 극좌표 단위 글자 꼴,
+  수만 쓴 각을 도면 AUNITS로 읽을지(지금은 늘 도 — 도움말 근거 필요), 극좌표 거리의 피트-인치
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
