@@ -28,7 +28,7 @@ import {
   createDocument,
   tableKey,
 } from '../../core/model';
-import { finalizeDocument, viewRenderModeOf } from '../../core/finalize';
+import { finalizeDocument, viewProjectionRead, viewRenderModeOf } from '../../core/finalize';
 import { HandleMap } from '../../core/handlemap';
 import { HandleSet } from '../../core/handleset';
 import { PolyAccum } from '../../core/polyverts';
@@ -538,6 +538,9 @@ export function buildDocument(sec: DwgSections, opts: BuildOptions = {}): CadDoc
     // 렌더 모드(232차): 참조서 범위 1~6만 둔다(0·범위 밖은 칸 없음 — 쓰기는 전처럼 0)
     const renderMode = viewRenderModeOf(v.renderMode);
     if (renderMode) rec.renderMode = renderMode;
+    // 보기 모드·렌즈·앞뒤 자르기 묶음(233차): 넷 가운데 하나라도 기본(0·50·0·0)이 아닐 때만 둔다(범위 밖은 그 칸만 기본)
+    const projection = v.projection && viewProjectionRead(v.projection);
+    if (projection) rec.projection = projection;
     applyRecordExtras(rec, v, names);
     doc.views.set(tableKey(v.name), rec);
   }

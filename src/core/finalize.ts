@@ -13,6 +13,7 @@ import {
   type Entity,
   type Layout,
   type PlotSettings,
+  type ViewProjection,
   type XData,
   MODEL_SPACE,
   PAPER_SPACE,
@@ -83,6 +84,29 @@ export function viewRenderModeOf(mode: number | undefined): number {
 }
 
 /**
+ * 명명된 뷰의 보기 모드·렌즈·앞뒤 자르기(DXF VIEW 71·42·43·44, DWG 보기 모드 비트 넷·BD 셋 — 233차). 칸마다 보기 모드는 VIEWMODE 비트(1·2·4·8·16)의
+ * 0~31 정수, 렌즈 길이는 양수 유한, 자르기 면 거리는 유한일 때만 그 값이고, 없거나 그 밖이면 전처럼 0·50·0·0(이 앱이 써 온 상수)
+ */
+export function viewProjectionOf(p: ViewProjection | undefined): ViewProjection {
+  const lens = p?.lensLength;
+  return {
+    viewMode: pickInt(p?.viewMode, 0, 31, 0),
+    lensLength: lens !== undefined && Number.isFinite(lens) && lens > 0 ? lens : 50,
+    frontClip: finiteOr(p?.frontClip, 0),
+    backClip: finiteOr(p?.backClip, 0),
+  };
+}
+
+/**
+ * 리더가 뷰 레코드에 둘 묶음(233차): viewProjectionOf로 거른 값이 넷 모두 기본(0·50·0·0)이면 undefined(칸 없음 — 이 앱이 만든 뷰를 다시 읽은 모델·새 도면 바이트 그대로),
+ * 하나라도 다르면 넷을 함께 둔다
+ */
+export function viewProjectionRead(p: ViewProjection): ViewProjection | undefined {
+  const q = viewProjectionOf(p);
+  return q.viewMode === 0 && q.lensLength === 50 && q.frontClip === 0 && q.backClip === 0 ? undefined : q;
+}
+
+/**
  * 쓸 플롯 뷰(DXF PLOTSETTINGS 6, DWG R2000 글·R2004+ VIEW 레코드 핸들 — 229차). 플롯 설정의 이름이 쓰는 VIEW 표(views — 쓰기 문맥이 정한 레코드와 핸들)에
  * 있으면(대소문자 가리지 않음) 그 레코드, 이름이 없거나 표에 없으면 undefined(전처럼 ''·핸들 0). 뷰를 지우거나 이름을 바꾸면 가리킬 것이 없어 빈 이름이 된다
  */
@@ -96,6 +120,11 @@ export function plotViewOf<T extends { rec: { name: string } }>(p: PlotSettings,
 /** min~max의 정수면 그 값, 아니면 def */
 function pickInt(v: number | undefined, min: number, max: number, def: number): number {
   return Number.isInteger(v) && v! >= min && v! <= max ? v! : def;
+}
+
+/** 유한한 수면 그 값, 아니면 def */
+function finiteOr(v: number | undefined, def: number): number {
+  return v !== undefined && Number.isFinite(v) ? v : def;
 }
 
 export function defaultLayout(name: string, blockName: string, tabOrder: number): Layout {

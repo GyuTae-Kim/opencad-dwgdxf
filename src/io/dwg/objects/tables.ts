@@ -1,5 +1,5 @@
 /** 표 제어 객체와 표 레코드(사양 20.4.51~20.4.70) */
-import type { CadColor, LinetypeElement, Vec2, Vec3 } from '../../../core/model';
+import type { CadColor, LinetypeElement, Vec2, Vec3, ViewProjection } from '../../../core/model';
 import type { BitReader, DwgColor } from '../bitstream';
 import { decodeCadEscapes } from '../../../core/codepage';
 import { cmcToCad } from '../color';
@@ -109,6 +109,11 @@ export interface ViewRec extends RecordCommon {
   twist: number;
   /** R2000+ 렌더 모드 RC(DXF 281 — 232차). 본문을 종이 공간 비트까지 읽었을 때만, 아니면 0 */
   renderMode: number;
+  /**
+   * 렌즈·앞뒤 자르기 BD 셋과 보기 모드 비트 넷(DXF 42·43·44·71 — 233차, 거르기 전 값). 본문을 종이 공간 비트까지 읽었을 때만, 아니면 undefined.
+   * 범위·기본값은 build가 viewProjectionRead로 거른다
+   */
+  projection?: ViewProjection;
 }
 
 export interface UcsRec extends RecordCommon {
@@ -454,11 +459,14 @@ export function readView(or: ObjectReader): ViewRec {
   // R2007+ 조명 칸 — readVport) 뒤의 B다(쓰기 writer/tables.ts view와 같은 배치). 전에는 읽지 않아 종이 공간 뷰가 모형 뷰가 됐다(153차).
   // 본문이 짧아 읽지 못하면 전처럼 둔다
   let renderMode = 0;
+  let projection: ViewProjection | undefined;
   try {
-    r.BD();
-    r.BD();
-    r.BD();
-    viewMode(r);
+    // 렌즈·앞뒤 자르기·보기 모드(DXF 42·43·44·71 — 233차): 전에는 읽고 버렸다. 보기 모드 비트 넷은 R13~R14·R2000+ 모두 같은 배치(1·2·4·16의 반대 —
+    // DXF 71의 8(UCS 따라감)은 자리가 없다). 렌더 모드와 같이 종이 공간 비트까지 읽혔을 때만 둔다
+    const lensLength = r.BD();
+    const frontClip = r.BD();
+    const backClip = r.BD();
+    const vm = viewMode(r);
     // 렌더 모드(DXF 281 — 232차): 전에는 읽고 버렸다. 종이 공간 비트까지 읽혔을 때만 둔다(범위는 build가 viewRenderModeOf로 거른다)
     const mode = ver >= R2000 ? r.RC() : 0;
     if (ver >= R2007) {
@@ -470,10 +478,11 @@ export function readView(or: ObjectReader): ViewRec {
     }
     if (r.B()) rc.flags |= 1;
     renderMode = mode;
+    projection = { viewMode: vm, lensLength, frontClip, backClip };
   } catch {
-    /* 종이 공간 비트·렌더 모드 없이 전처럼 */
+    /* 종이 공간 비트·렌더 모드·보기 모드 묶음 없이 전처럼 */
   }
-  return { ...rc, height, width, center, target, direction, twist, renderMode };
+  return { ...rc, height, width, center, target, direction, twist, renderMode, projection };
 }
 
 export function readUcs(or: ObjectReader): UcsRec {
