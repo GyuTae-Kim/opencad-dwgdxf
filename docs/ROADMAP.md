@@ -1064,7 +1064,7 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   `app/dashcmds-insert.ts` -INSERT 삽입점(속성·분해해 넣기도 그 자리에서), `app/util2-blocks.ts` MINSERT 삽입점, `app/blockinsert.ts` ATTDEF 화면상에 지정의 시작점·둘째 끝점이
   Z를 늘 0으로 썼다 — 이제 `currentElevation`이다. -INSERT 기준점(B)은 X·Y만 옮긴다(도움말이 기준점의 Z를 적지 않음 — 정의 기준점의 Z가 삽입점에 오는 것은 INSERT와 같다).
   ATTDEF 대화 상자의 X·Y·Z 칸, 고도 0인 도면, 프롬프트 흐름은 같은 값이다
-- [ ] 207차에 보고 두 것: MINSERT에 기준점(B) 옵션이 없다(AutoCAD MINSERT 도움말에는 -INSERT와 같은 기준점 옵션이 있다 — 새 옵션·프롬프트 글이라 이번 범위 밖).
+- [ ] 207차에 보고 두 것: MINSERT 기준점(B) 옵션은 213차가 넣었다(아래 213차 항목).
   실물 표본 없이는 근거가 서지 않는 것: -INSERT 기준점(B)으로 찍은 점의 Z(도움말이 적지 않아 X·Y만 옮김 — 고도가 있는 도면에서 AutoCAD가 기준점에 고도를 대는지는 실물 필요)
 - [x] TABLE·TOLERANCE·REVCLOUD의 현재 고도(208차, 같은 ELEV 도움말 — DXF 참조서: ACAD_TABLE 10(블록 참조 부분)·TOLERANCE 10(WCS)은 고도 칸 없이 점의 Z,
   LWPOLYLINE은 꼭짓점이 X·Y뿐이고 고도 38 하나): `app/tablecmds.ts` TABLE 삽입점(삽입점 지정·윈도우 지정), `app/annot2-misc.ts` TOLERANCE 삽입점,
@@ -1080,7 +1080,7 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   `app/blkcmds-xref.ts` XATTACH 외부 참조 삽입점, IMAGEATTACH 화면에서 찍은 이미지 삽입점(`commitImage`의 z 인자), PDFATTACH 언더레이 삽입점, `app/fieldcmds.ts` FIELD로
   새로 넣는 여러 줄 문자 삽입점이 늘 0이었다 — 이제 `currentElevation`이다. IMAGEATTACH 「삽입점 지정 <0,0>」의 Enter는 도움말의 기본 삽입점 0,0,0이라 그대로다.
   고도 0인 도면, 프롬프트 흐름, 축척·회전·이미지 U·V 벡터는 같은 값이다
-- [ ] 210차에 보고 두 것 — 찍은 점이 붙여넣기 자리·기준점인 명령(현재 고도 규칙과 같은 꼴인지 먼저 볼 것, 다음 후보 — 코드 읽기): PASTESPEC 그림 붙여넣기
+- [ ] 210차에 보고 두 것 — 찍은 점이 붙여넣기 자리·기준점인 명령(현재 고도 규칙과 같은 꼴인지 먼저 볼 것 — 213차가 읽고 그대로 둠, 아래 213차 항목): PASTESPEC 그림 붙여넣기
   (`app/blkcmds-misc.ts` → IMAGEATTACH와 같은 `attachImageFile` — 라벨 PASTESPEC은 Z 0 그대로 둠), 블록으로 붙여넣기(`app/modify.ts` pasteAsBlock), 도면 비교 정보 표(`app/compare.ts`).
   실물 표본 없이는 근거가 서지 않는 것: IMAGEATTACH 명령행 꼴의 「삽입점 지정 <0,0>」 Enter를 AutoCAD가 고도에 놓는지(도움말은 대화 상자의 기본 삽입점 0,0,0만 적음 — Z 0 그대로)
 - [x] LEADER·QLEADER·MLEADER의 현재 고도(211차, 같은 ELEV 도움말 — DXF 참조서: LEADER 10은 꼭짓점마다 X·Y·Z이고 고도 38 없음, MLeader 문맥 데이터의
@@ -1103,7 +1103,20 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   (위 210차 항목 — 붙여넣기 자리 꼴), 치수 정의점(177차 판단 — 도움말에 Z 규칙 없음), 실물 필요: HATCH·GRADIENT·BOUNDARY의 해치 고도(`edit/hatch/create.ts` — 늘 0,
   경계 객체가 고도에 있을 때 경계 평면을 따를지는 다른 줄기), REVCLOUD 객체 모드(원본이 고도에 있어도 0 — 원본 평면을 따를지 도움말에 없음, WIPEOUT 폴리선(P)은 이미
   원본 Z), -INSERT 기준점(B)으로 찍은 점의 Z(위 207차 항목), IMAGEATTACH 명령행 「삽입점 지정 <0,0>」 Enter(위 210차 항목), LEADER 주석 복사(C)의 Z(위 211차 항목),
-  새 옵션: MINSERT 기준점(B)(위 207차 항목). 입력이 Z를 준 점은 위 「다른 2D 명령에 준 Z」 항목과 같은 빈칸이다
+  새 옵션 MINSERT 기준점(B)은 213차가 넣었다. 입력이 Z를 준 점은 위 「다른 2D 명령에 준 Z」 항목과 같은 빈칸이다
+- [x] MINSERT 기준점(B) 옵션(213차, Autodesk MINSERT 도움말: 삽입점 프롬프트에서 미리 정하는 옵션에 기준점·축척·X·Y·Z·회전 — 기준점은 블록을 지금 자리에
+  잠시 두고 끌어 놓을 새 기준점을 고르게 하고 정의의 기준점은 그대로, -INSERT와 같은 글): `app/util2-blocks.ts` MINSERT가 「[축척(S)/회전(R)]」만 받아 B를
+  「점이 올바르지 않습니다.」로 거절했다 — 이제 「삽입점 지정 또는 [기준점(B)/축척(S)/회전(R)]:」·「기준점 지정:」으로 받아 -INSERT 기준점(207차)과 같은
+  `insertPointFor`(받은 점을 블록 정의 좌표로 보고 X·Y만, 삽입점 Z는 현재 고도)로 삽입점을 옮긴다. 새 프롬프트 글은 네 언어 사전에 더했다.
+  B를 쓰지 않거나 기준점에서 Enter면 전과 같고, X·Y(거절)·Z(투명 ZOOM)도 전과 같다. 옵션 표는 CHANGELOG 213차 절
+- [ ] 213차에 보고 두 것 — 줄기 밖 후보 셋 가운데 MINSERT 기준점(B)만 넣었다. 지금 결과가 바뀌어 넣지 않은 것: MINSERT Z 옵션(Z는 지금 투명 ZOOM으로 받는 글자 —
+  -INSERT는 이미 Z 축척 키워드), 축척(S)·구석의 Z 축척(이 앱은 늘 1 — 도움말: 축척(S)의 Z는 준 값의 절댓값), XYZ(XYZ)(X·Z를 따로 묻지 않고 곧바로 Y 축척을 물음 —
+  도움말: X·Y·Z 따로), MLEADERALIGN 간격 지정(S)(위 205차 항목 — 기존 시험 [60, 70]이 바뀜), 도면 비교 정보의 삽입(`app/compare.ts` — 찍은 X·Y에 여러 줄 문자를
+  Z 0으로 넣음, MTEXT(206차)와 같은 꼴이지만 고도가 있는 도면의 결과가 바뀜). 다음 후보(새 옵션 — 지금 거절되는 입력): MINSERT X·Y(미리 준 X만일 때 Y·Z 값과
+  뒤 X·Y 축척 프롬프트를 건너뛸지 정해야 함 — -INSERT는 미리 준 축척이 있으면 묻지 않고 Y = X·Z = |X|, 프롬프트 글은 Z 없이 새로 필요).
+  실물 표본 없이는 근거가 서지 않는 것: 기준점을 고를 때 블록을 잠시 두는 자리(도움말: 지금 자리 — 이 앱은 -INSERT처럼 받은 점을 블록 정의 좌표로 보고 잠시 놓인 블록을
+  그리지 않음), MLEADERALIGN 내용 범위를 재는 방향, PASTESPEC 그림·블록으로 붙여넣기의 Z(PASTECLIP 도움말에 삽입점·Z 말이 없고 이 앱 PASTECLIP은 원본 Z를 지킴 —
+  같은 꼴(X·Y만 찍은 삽입점)이 아님)
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
