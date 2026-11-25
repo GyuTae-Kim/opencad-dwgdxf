@@ -1083,8 +1083,17 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
 - [ ] 210차에 보고 두 것 — 찍은 점이 붙여넣기 자리·기준점인 명령(현재 고도 규칙과 같은 꼴인지 먼저 볼 것, 다음 후보 — 코드 읽기): PASTESPEC 그림 붙여넣기
   (`app/blkcmds-misc.ts` → IMAGEATTACH와 같은 `attachImageFile` — 라벨 PASTESPEC은 Z 0 그대로 둠), 블록으로 붙여넣기(`app/modify.ts` pasteAsBlock), 도면 비교 정보 표(`app/compare.ts`).
   실물 표본 없이는 근거가 서지 않는 것: IMAGEATTACH 명령행 꼴의 「삽입점 지정 <0,0>」 Enter를 AutoCAD가 고도에 놓는지(도움말은 대화 상자의 기본 삽입점 0,0,0만 적음 — Z 0 그대로)
+- [x] LEADER·QLEADER·MLEADER의 현재 고도(211차, 같은 ELEV 도움말 — DXF 참조서: LEADER 10은 꼭짓점마다 X·Y·Z이고 고도 38 없음, MLeader 문맥 데이터의
+  내용 기준 10·문자 위치 12·블록 내용 위치 15·평면 원점 110과 지시선 선 꼭짓점 10도 고도 칸 없는 3D 점): `app/leaderold.ts` LEADER와 `app/annot2-leader.ts`
+  QLEADER의 꼭짓점(갈고리선 꼭짓점 포함)·여러 줄 문자·공차·블록 참조 삽입점, `app/annotate.ts` MLEADER(`makeMLeader` 내용의 z)의 문맥 데이터 점이 늘 0이었다 —
+  이제 명령마다 한 번 읽은 `currentElevation`이다(평면 축·법선은 그대로라 고도 위 XY와 나란한 평면). 고도 0인 도면, 프롬프트 흐름, 점의 X·Y, 편집 명령은 같은 값이다.
+  DXF·DWG 쓰기·읽기는 문맥 데이터와 꼭짓점의 Z를 그대로 쓰고 읽어(R2007 아래 다중 지시선 분해도 원래 Z) 쓰기 코드 후보는 없다
+- [ ] 211차에 보고 두 것 — 다음 후보(코드 읽기): MLINE(`edit/mline/geom.ts` mlineGeometry — buildVertices에 Z 인자가 있지만 시작점 `p3`와 명령의 새 객체가 Z 0,
+  `app/mlinecmds.ts`는 구간마다 고치는 커밋·닫기·명령 취소 갈래가 따로라 함께 봐야 함), SKETCH. 실물 표본 없이는 근거가 서지 않는 것: LEADER 주석 복사(C)는 원본을
+  X·Y만 옮겨 원본 Z에 둔다(도움말이 복사본의 Z를 적지 않음 — 고도 0 도면에서도 이미 원본 Z라 그대로). DXF 참조서 LEADER 쪽은 꼭짓점 좌표계(WCS/OCS)를 적지 않는다
+  (이 앱이 만드는 지시선은 법선이 0,0,1이라 둘이 같음 — 지시선 마디(LEADER{ 의 10) 쪽은 받지 않음)
 - [ ] 206차에 보고 두 것 — 현재 고도 입구 표에서 아직 Z 0을 쓰는 만들기 명령(다음 후보, 같은 `currentElevation`으로 맞출 수 있는 것 — ATTDEF·-INSERT·MINSERT는 207차,
-  TABLE·TOLERANCE·REVCLOUD 직사각형·폴리곤·프리핸드는 208차, Express BREAKLINE·WIPEOUT 점은 209차가 고침): LEADER·QLEADER·MLEADER(꼭짓점·주석·내용 블록 자리가 여럿 — 한 묶음으로),
+  TABLE·TOLERANCE·REVCLOUD 직사각형·폴리곤·프리핸드는 208차, Express BREAKLINE·WIPEOUT 점은 209차, LEADER·QLEADER·MLEADER는 211차가 고침):
   MLINE(`edit/mline/geom.ts`), SKETCH(`edit/sketch.ts`), HELIX(바닥 중심 — 3D 객체).
   치수 정의점은 177차 판단(도움말에 Z 규칙 없음) 그대로다. 실물 표본 없이는 근거가 서지 않는 것: HATCH·GRADIENT·BOUNDARY는 해치 고도를 늘 0으로 쓴다
   (`edit/hatch/create.ts` — 경계 객체가 고도에 있을 때 경계 평면을 따를지는 현재 고도와 다른 줄기, 이번에 도움말을 보지 않음), REVCLOUD 객체 모드는 원본이 고도에 있어도 0이다

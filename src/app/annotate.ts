@@ -8,7 +8,7 @@ import { attributeValues } from './blockinsert';
 import { entityDefaults, tableKey } from '../core/model';
 import { boundsOf } from '../edit/geom/query';
 import type { App, CommandContext, Keyword } from './app';
-import { addEntities, currentProps, textDialog } from './draw';
+import { addEntities, currentElevation, currentProps, textDialog } from './draw';
 import type { Pt } from './view';
 import { ft } from './filetext';
 
@@ -70,7 +70,7 @@ export function mleaderSession(doc: CadDocument): MLeaderSession {
   return s;
 }
 
-const v3 = (p: Pt): Vec3 => ({ x: p.x, y: p.y, z: 0 });
+const v3 = (p: Pt, z = 0): Vec3 => ({ x: p.x, y: p.y, z });
 
 /** 각도 구속: from → to 방향을 step의 배수로(거리는 그대로) */
 export function constrainAngle(from: Pt, to: Pt, step: number): Pt {
@@ -89,6 +89,8 @@ export interface MLeaderContent {
   width?: number;
   /** 화살촉과 연결 점 사이의 꼭짓점(최대 점 수가 2보다 클 때) */
   vertices?: Pt[];
+  /** 모든 점의 Z — 평면 원점·내용 기준·문자·블록 자리·지시선 점(MLEADER는 현재 고도, 기본 0) */
+  z?: number;
 }
 
 /** 화살촉·연결선 위치와 문자로 다중 지시선을 만든다 */
@@ -101,6 +103,8 @@ export function makeMLeader(app: App, arrow: Pt, landing: Pt, text: string, heig
   const arrowSize = (style?.arrowSize ?? (metric ? 4 : 0.18)) * scale;
   const gap = (style?.landingGap ?? (metric ? 2 : 0.09)) * scale;
   const right = landing.x >= arrow.x;
+  // 평면 높이(211차): 문맥 데이터의 점(DXF 10·12·15·110, 지시선 10)이 모두 이 Z — 평면 X·Y축(111·112)은 그대로라 고도 위 XY와 나란한 평면
+  const z = content.z ?? 0;
   const dv: Vec3 = { x: right ? 1 : -1, y: 0, z: 0 };
   const dl = opt.landing ? opt.doglegLength * scale : 0;
   const end = { x: landing.x + dv.x * dl, y: landing.y };
@@ -115,7 +119,7 @@ export function makeMLeader(app: App, arrow: Pt, landing: Pt, text: string, heig
     }
   }
   // 문자 첫 줄 가운데가 연결선 높이에 오게(맨 위 줄 가운데 부착)
-  const loc: Vec3 = { x: end.x + dv.x * gap, y: end.y + height / 2, z: 0 };
+  const loc: Vec3 = { x: end.x + dv.x * gap, y: end.y + height / 2, z };
   const props = currentProps(app);
   const e: MLeaderEntity = {
     ...entityDefaults(),
@@ -142,23 +146,23 @@ export function makeMLeader(app: App, arrow: Pt, landing: Pt, text: string, heig
     scale,
     context: {
       scale,
-      contentBase: { x: end.x, y: end.y, z: 0 },
+      contentBase: { x: end.x, y: end.y, z },
       textHeight: height,
       arrowSize,
       landingGap: gap,
       leaders: [
         {
-          lastLeaderPoint: v3(landing),
+          lastLeaderPoint: v3(landing, z),
           doglegVector: dv,
           doglegLength: dl,
           hasLastPoint: true,
           hasDogleg: opt.landing,
-          lines: [{ vertices: [v3(arrow), ...(content.vertices ?? []).map(v3)], index: 0 }],
+          lines: [{ vertices: [v3(arrow, z), ...(content.vertices ?? []).map((p) => v3(p, z))], index: 0 }],
           index: 0,
           attachmentDirection: 0,
         },
       ],
-      basePoint: { x: end.x, y: end.y, z: 0 },
+      basePoint: { x: end.x, y: end.y, z },
       baseDirection: { x: 1, y: 0, z: 0 },
       baseVertical: { x: 0, y: 1, z: 0 },
       normal: { x: 0, y: 0, z: 1 },
@@ -190,7 +194,7 @@ export function makeMLeader(app: App, arrow: Pt, landing: Pt, text: string, heig
     const sideX = b ? (right ? b.minX : b.maxX) - bp.x : 0;
     const midY = b ? (b.minY + b.maxY) / 2 - bp.y : 0;
     e.blockHandle = blk?.recordHandle;
-    e.context.block = { blockHandle: blk?.recordHandle, location: { x: end.x - sideX, y: end.y - midY, z: 0 }, normal: { x: 0, y: 0, z: 1 }, scale: { x: 1, y: 1, z: 1 }, rotation: 0, color: { aci: 0 } };
+    e.context.block = { blockHandle: blk?.recordHandle, location: { x: end.x - sideX, y: end.y - midY, z }, normal: { x: 0, y: 0, z: 1 }, scale: { x: 1, y: 1, z: 1 }, rotation: 0, color: { aci: 0 } };
   }
   return e;
 }
@@ -446,7 +450,8 @@ export function registerAnnotateCommands(app: App): void {
         if (toRight && landing.x < arrow.x) landing = { ...landing, x: arrow.x };
         if (!toRight && landing.x > arrow.x) landing = { ...landing, x: arrow.x };
       }
-      const e = makeMLeader(app, arrow!, landing!, text ?? '', h, s, { text, block: s.content === 'B' ? s.block || undefined : undefined, width, vertices: mids });
+      // 찍은 점(X·Y만)의 Z는 현재 고도(211차, ELEV 도움말 — DXF MLeader 문맥 데이터의 점은 고도 칸 없이 3D 점). 전에는 늘 0이었다
+      const e = makeMLeader(app, arrow!, landing!, text ?? '', h, s, { text, block: s.content === 'B' ? s.block || undefined : undefined, width, vertices: mids, z: currentElevation(app) });
       if (s.content === 'B' && !s.block) ctx.print('블록 이름이 없어 내용 없이 만듭니다. 옵션(O) › 내용 유형(C)에서 블록을 정하십시오.');
       // 블록 내용의 속성(풍선 번호 등): INSERT처럼 값을 받아 지시선에 둔다(상수 속성은 블록이 그린다)
       if (e.contentType === 1 && s.block) {
