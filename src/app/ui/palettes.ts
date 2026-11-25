@@ -218,13 +218,24 @@ export class Palette {
     const mark = this.focusMark();
     this.tabs.innerHTML = '';
     // 고른 탭을 알린다(253차 — WCAG 4.1.2, 리본 탭 꼴): aria-selected와 탭 ↔ 몸 이음. 휴대폰 보기 시트와 데스크톱 팔레트가 같은 코드다.
-    // 보이는 표시(class active)와 Tab 차례(로빙 tabindex·화살표 옮기기 없음)는 그대로
-    for (const t of TABS) {
+    // 탭 줄은 Tab 한 자리(258차 — 253차 보고 (1), W3C APG 탭 꼴·리본 탭 꼴의 로빙 tabindex): 고른 탭만 0, 나머지 -1.
+    // 왼쪽·오른쪽 화살표(끝에서 돌아감)·Home·End는 초점만 옮기고 Enter·Space(단추 누르기)로 고른다(리본처럼 수동 고르기 — 고르면 다시 그려 tabindex가 따라감).
+    // 다시 그려도 초점은 restoreFocus(탭 id — 256차)가 같은 탭에 돌려준다. 보이는 표시(class active)는 그대로
+    TABS.forEach((t, i) => {
       const on = t.key === this.tab;
-      const b = h('button', { class: `palette-tab ${on ? 'active' : ''}`, role: 'tab', id: tabId(t.key), 'aria-selected': on ? 'true' : 'false', 'aria-controls': PANEL_ID }, t.label);
+      const b = h('button', { class: `palette-tab ${on ? 'active' : ''}`, role: 'tab', id: tabId(t.key), 'aria-selected': on ? 'true' : 'false', 'aria-controls': PANEL_ID, tabindex: on ? 0 : -1 }, t.label);
       b.addEventListener('click', () => this.open(t.key, true));
+      b.addEventListener('keydown', (ev) => {
+        const k = ev.key;
+        const n = TABS.length;
+        const to = k === 'ArrowRight' ? (i + 1) % n : k === 'ArrowLeft' ? (i - 1 + n) % n : k === 'Home' ? 0 : k === 'End' ? n - 1 : -1;
+        if (to < 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        (this.tabs.children[to] as HTMLElement | undefined)?.focus();
+      });
       this.tabs.append(b);
-    }
+    });
     this.body.setAttribute('aria-labelledby', tabId(this.tab));
     const scroll = this.body.scrollTop;
     this.redrawing = true;

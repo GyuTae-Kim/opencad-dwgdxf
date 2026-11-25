@@ -3,7 +3,8 @@
  * (1) 더 보기(아이콘만)는 메뉴를 연다고 알리지 않았다 — 데스크톱 상태 막대 「⋯」(aria-haspopup="menu")과 같은 값을 두고,
  *     표 셀 「도구 더 보기」처럼 열림 상태(aria-expanded)를 메뉴가 열리고 닫힐 때마다 맞춘다.
  * (2) 시트 탭(특성·도면층·치수·찾기 — 데스크톱 오른쪽 팔레트와 같은 코드)은 role=tab뿐이라 어느 탭을 골랐는지 알리지 않았다 —
- *     리본 탭 꼴(aria-selected·aria-controls, 몸은 tabpanel·고른 탭 이름)로 맞춘다. 보이는 화면(class active)·Tab 차례는 그대로.
+ *     리본 탭 꼴(aria-selected·aria-controls, 몸은 tabpanel·고른 탭 이름)로 맞춘다. 보이는 화면(class active)은 그대로.
+ *     Tab 차례는 258차가 리본 탭 꼴 로빙 tabindex(고른 탭 0, 나머지 -1)로 바꿨다 — 화살표 옮기기는 viewtabs258.
  * 진짜 App·MobileView·Palette와 진짜 메뉴(showMenu), 화면·명령행·엔진·글꼴·토스트는 가짜(viewmode-round4·viewlayers246 꼴).
  */
 import { createRequire } from 'node:module';
@@ -103,7 +104,7 @@ describe('더 보기 단추는 메뉴를 연다고 알리고 열림 상태를 �
 });
 
 describe('시트 탭은 고른 탭을 알린다 — 리본 탭 꼴(253차)', () => {
-  it('보기 모드 시트: aria-selected는 고른 탭 하나, 탭 ↔ 몸(tabpanel) 이음 — 보이는 표시·Tab 차례 그대로, 데스크톱 팔레트도 같은 코드', () => {
+  it('보기 모드 시트: aria-selected는 고른 탭 하나, 탭 ↔ 몸(tabpanel) 이음 — 보이는 표시 그대로, Tab 차례는 고른 탭(258차), 데스크톱 팔레트도 같은 코드', () => {
     const h = makeApp();
     const root = document.getElementById('app')!;
     root.replaceChildren();
@@ -119,9 +120,9 @@ describe('시트 탭은 고른 탭을 알린다 — 리본 탭 꼴(253차)', () 
     expect(tabs().map((b) => b.textContent)).toEqual(['특성', '도면층', '치수', '찾기']);
     expect(tabs().every((b) => b.getAttribute('role') === 'tab')).toBe(true);
     expect(selected()).toEqual(['false', 'true', 'false', 'false']);
-    // 보이는 표시는 그대로(class active 하나), Tab 차례도 그대로(tabindex를 두지 않는다 — 로빙 tabindex는 넣지 않음)
+    // 보이는 표시는 그대로(class active 하나). Tab 차례는 고른 탭 하나(258차 — 리본 탭 꼴 로빙 tabindex, 253차는 tabindex를 두지 않았다)
     expect(tabs().map((b) => b.classList.contains('active'))).toEqual([false, true, false, false]);
-    expect(tabs().some((b) => b.hasAttribute('tabindex'))).toBe(false);
+    expect(tabs().map((b) => b.getAttribute('tabindex'))).toEqual(['-1', '0', '-1', '-1']);
     // 탭 ↔ 몸: 탭마다 겹치지 않는 id와 aria-controls(몸 id), 몸은 tabpanel이고 고른 탭이 이름(리본 ribbon-panel 꼴)
     const ids = tabs().map((b) => b.id);
     expect(new Set(ids).size).toBe(4);
