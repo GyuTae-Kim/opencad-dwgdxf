@@ -5,7 +5,7 @@
  */
 import type { AttribEntity, BlockDef, CadColor, Entity, InsertEntity, TextHAlign, TextVAlign, Vec3 } from '../core/model';
 import { entityDefaults, tableKey } from '../core/model';
-import { INSUNITS_NAMES } from '../core/units';
+import { INSUNITS_NAMES, numberAngleDegrees } from '../core/units';
 import { cloneEntity } from '../edit/session';
 import { explodeEntity } from '../edit/geom';
 import { insertUnitFactor } from '../edit/script/dash';
@@ -273,8 +273,10 @@ export async function runInsert(app: App, ctx: CommandContext, arg: string | und
           rot = Math.atan2(r.point.y - at.y, r.point.x - at.x);
           break;
         }
-        if ('text' in r && Number.isFinite(Number(r.text))) {
-          rot = Number(r.text) * D2R;
+        // 226차: Number가 못 읽은 단위 글자 꼴(`50g` 등)도 그 각(전에는 아래 오류 뒤 다시 물었다)
+        const rd = 'text' in r ? numberAngleDegrees(r.text) : NaN;
+        if (Number.isFinite(rd)) {
+          rot = rd * D2R;
           break;
         }
         ctx.print('각도 또는 점이 필요합니다.', 'err');

@@ -9,6 +9,7 @@
  */
 import type { AttribEntity, CadDocument, InsertEntity, Layer } from '../core/model';
 import { entityDefaults, tableKey } from '../core/model';
+import { numberAngleDegrees } from '../core/units';
 import { DEF_KIND_LABEL, type DefKind, DefinitionCopier, listDefinitions, mleaderStyles } from '../edit/layertools/clone';
 import { colorLabel, lineweightLabel } from '../edit/layertools/standards';
 import { listTableStyles } from '../edit/table/style';
@@ -467,12 +468,13 @@ function unitFactor(srcUnits: number, dstUnits: number): number {
   return srcUnits && dstUnits && a && b ? a / b : 1;
 }
 
-async function askNumber(ctx: CommandContext, prompt: string, def: number, ok: (v: number) => boolean): Promise<number> {
+/** 수 하나 묻기. read: 글 → 수(기본 Number — 회전 각도는 numberAngleDegrees, 226차) */
+async function askNumber(ctx: CommandContext, prompt: string, def: number, ok: (v: number) => boolean, read: (t: string) => number = Number): Promise<number> {
   for (;;) {
     const r = await ctx.getPoint(`${prompt} <${Math.round(def * 1e6) / 1e6}>:`, { preferNumber: true, allowText: true });
     if ('enter' in r) return def;
     if ('text' in r) {
-      const v = Number(r.text.trim());
+      const v = read(r.text.trim());
       if (Number.isFinite(v) && ok(v)) return v;
     }
     ctx.print('올바른 값을 입력하십시오.', 'err');
@@ -520,7 +522,8 @@ async function insertBlock(app: App, ctx: CommandContext, p: Pending): Promise<v
       break;
     }
     if ('keyword' in r && r.keyword === 'S') scale = await askNumber(ctx, 'XYZ 축에 대한 축척 비율 지정', scale, (v) => v !== 0);
-    else if ('keyword' in r && r.keyword === 'R') rotDeg = await askNumber(ctx, '회전 각도 지정', rotDeg, () => true);
+    // 226차: 회전 각도는 단위 글자 꼴(`50g` 등)도 그 각(전에는 「올바른 값을 입력하십시오.」 뒤 다시 물었다)
+    else if ('keyword' in r && r.keyword === 'R') rotDeg = await askNumber(ctx, '회전 각도 지정', rotDeg, () => true, numberAngleDegrees);
     else return;
   }
   // 정의(없으면 복사) → 삽입, 명령 취소 한 단계

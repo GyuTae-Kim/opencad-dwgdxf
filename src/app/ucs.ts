@@ -5,6 +5,7 @@
  */
 import type { CadDocument, Entity, HeaderValue, UcsRecord, Vec3 } from '../core/model';
 import { tableKey } from '../core/model';
+import { numberAngleDegrees } from '../core/units';
 import type { EditOp } from '../edit/session';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
@@ -206,7 +207,8 @@ export function registerUcsCommands(app: App): void {
         }
         case 'Z': {
           const a = await ctx.getPoint('Z축을 중심으로 회전 각도 지정 <90>:', { allowText: true, preferNumber: true });
-          const deg = 'text' in a ? Number(a.text) : 'enter' in a ? 90 : NaN;
+          // 226차: Number가 못 읽은 단위 글자 꼴(`50g` 등)은 그 각(전에는 조용히 명령 끝). 못 읽는 글은 전처럼 UCS 그대로
+          const deg = 'text' in a ? numberAngleDegrees(a.text) : 'enter' in a ? 90 : NaN;
           if (!Number.isFinite(deg)) return;
           applyUcs(app, st, { ...cur, angle: cur.angle + (deg * Math.PI) / 180 }, ctx);
           return;

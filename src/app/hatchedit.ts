@@ -4,6 +4,7 @@
  * 무늬 사전에 없는 무늬(파일에서 온 사용자 무늬)는 지금 무늬 선을 축척·각도만큼 바꾼다.
  */
 import type { HatchEntity, HatchPatternLine } from '../core/model';
+import { numberAngleDegrees } from '../core/units';
 import { PATTERNS, createHatch, estimatePatternLines, findPattern, reactorUnlinks } from '../edit/hatch';
 import type { EditOp } from '../edit/session';
 import { HATCH_CREATE_LIMIT } from '../render/hatch';
@@ -220,7 +221,9 @@ export function registerHatchEditCommands(app: App): void {
         } else if (!('enter' in name)) return;
         if (e.pattern === '_USER') {
           const a = await ctx.getPoint(`선 각도 지정 <${((c.angle * 180) / Math.PI).toFixed(0)}>:`, { preferNumber: true, allowText: true });
-          if ('text' in a && Number.isFinite(Number(a.text))) e.angle = (Number(a.text) * Math.PI) / 180;
+          // 226차: Number가 못 읽은 단위 글자 꼴(`50g` 등)은 그 각(전에는 조용히 앞 각). 못 읽는 글은 전처럼 앞 각
+          const ad = 'text' in a ? numberAngleDegrees(a.text) : NaN;
+          if (Number.isFinite(ad)) e.angle = (ad * Math.PI) / 180;
           const sp = await ctx.getPoint(`선 간격 지정 <${c.spacing}>:`, { preferNumber: true, allowText: true });
           if ('text' in sp && Number(sp.text) > 0) e.spacing = Number(sp.text);
           const d = await ctx.getPoint(`해치 영역을 이중 해치하시겠습니까? [예(Y)/아니오(N)] <${c.double ? '예' : '아니오'}>:`, {
@@ -234,7 +237,8 @@ export function registerHatchEditCommands(app: App): void {
           const sc = await ctx.getPoint(`무늬에 대한 축척 지정 <${c.scale}>:`, { preferNumber: true, allowText: true });
           if ('text' in sc && Number(sc.text) > 0) e.scale = Number(sc.text);
           const a = await ctx.getPoint(`무늬에 대한 각도 지정 <${((c.angle * 180) / Math.PI).toFixed(0)}>:`, { preferNumber: true, allowText: true });
-          if ('text' in a && Number.isFinite(Number(a.text))) e.angle = (Number(a.text) * Math.PI) / 180;
+          const ad = 'text' in a ? numberAngleDegrees(a.text) : NaN;
+          if (Number.isFinite(ad)) e.angle = (ad * Math.PI) / 180;
         }
       }
       const n = rebuildHatch(app, h, e);

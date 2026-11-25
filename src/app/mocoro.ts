@@ -4,6 +4,7 @@
  * 회전·축척 모드는 같은 옵션에 이동(M)이 더해진다. 복사(C)를 켜면 그다음부터 사본을 남기고(원본은 그대로), 끄면 원본을 바꾼다.
  * 이동하면 기준점도 따라간다. 단계마다 명령 취소(U), 명령 전체는 명령 취소 한 단계.
  */
+import { numberAngleDegrees } from '../core/units';
 import type { EditResult } from '../edit/geom';
 import type { App, CommandContext, Keyword } from './app';
 import { Ghost, commitResults, compose, rotateAbout, scaleAbout, translate, type Affine } from './modify';
@@ -82,7 +83,8 @@ export function registerMocoroCommand(app: App): void {
         let m: Affine | null = null;
         if ('point' in r) m = xf(r.point);
         else if ('text' in r) {
-          const v = Number(r.text);
+          // 226차: 회전 모드는 Number가 못 읽은 단위 글자 꼴(`50g` 등)도 그 각(전에는 조용히 다시 물었다). 축척 모드는 그대로 Number
+          const v = mode === 'rotate' ? numberAngleDegrees(r.text) : Number(r.text);
           if (Number.isFinite(v)) {
             if (mode === 'rotate') m = rotateAbout(base, (v * Math.PI) / 180);
             else if (mode === 'scale' && v > 0) m = scaleAbout(base, v);

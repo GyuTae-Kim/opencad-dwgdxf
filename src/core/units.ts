@@ -278,6 +278,23 @@ export function parseAngleDegrees(s: string): number | null {
   return Number.isFinite(v) ? v : null;
 }
 
+/** 단위 글자 꼴 각(parseUnitAngle)을 도로, 못 읽으면 null(226차 — CAL 식이 못 읽은 각도 값에도 쓴다) */
+export function unitAngleDegrees(s: string): number | null {
+  const u = parseUnitAngle(s);
+  return u === null ? null : (u * 180) / Math.PI;
+}
+
+/**
+ * Number로 각(도)을 읽던 프롬프트의 글 읽기(226차): Number가 읽는 글은 그 값 그대로(전과 같은 Number — `45`·`1e1`·`0x1d`·빈 글 0·`Infinity`),
+ * Number가 못 읽은(NaN) 글이 단위 글자 꼴(`45d30'`·`50g`·`0.7854r` — unitAngleDegrees)이면 그 각을 도로, 그 밖은 전처럼 NaN이라 부르는 곳이 하던
+ * 앞 값·0·오류 그대로다. parseFloat 대체가 아니다(`45x`는 전처럼 NaN — parseFloat면 45가 되어 앞 값을 쓰던 결과가 바뀐다).
+ * 전에는 -HATCHEDIT·CHANGE·MINSERT·옛 LEADER·DIMLINEAR 회전(R)·UCS Z·MOCORO가 단위 글자 꼴에 조용히 앞 값·0을 썼다. 0 방향·방향은 부르는 쪽이 수에 하던 그대로
+ */
+export function numberAngleDegrees(s: string): number {
+  const v = Number(s);
+  return Number.isNaN(v) ? (unitAngleDegrees(s) ?? v) : v;
+}
+
 /**
  * 측량 방위 읽기(라디안 — 동쪽에서 시계 반대 방향, 0 ≤ θ < 2π). formatAngle AUNITS 4의 거꾸로이고 AutoLISP angtof 4의 방위 규칙이다(223차에 angtof에서 옮김).
  * N·S + 북·남에서 E·W 쪽으로 잰 각(parseAngle의 도 — 비면 0) + E·W: `N 45d0'0" E`, 빈칸 없이 `N45d0'0"E`, 도움말 예 `n45d20'6"e`.

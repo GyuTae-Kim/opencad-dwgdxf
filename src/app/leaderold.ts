@@ -9,6 +9,7 @@
  */
 import type { Entity, InsertEntity, LeaderEntity, MTextEntity, ToleranceEntity, Vec3 } from '../core/model';
 import { entityDefaults, tableKey } from '../core/model';
+import { numberAngleDegrees } from '../core/units';
 import { dimVars } from '../edit/dim';
 import { buildLeader } from '../edit/annot/qleader';
 import { buildToleranceText, toleranceLayout } from '../edit/annot/tolerance';
@@ -239,7 +240,9 @@ async function askAnnotation(app: App, ctx: CommandContext, pts: Pt[], z: number
     const sx = await num('X 축척 비율 입력 <1>:', 1);
     const sy = await num('Y 축척 비율 입력 <X 축척 비율 사용>:', sx);
     const ra = await ctx.getPoint('회전 각도 지정 <0>:', { preferNumber: true, base: at });
-    const rot = 'text' in ra && Number.isFinite(Number(ra.text)) ? (Number(ra.text) * Math.PI) / 180 : 'point' in ra ? Math.atan2(ra.point.y - at.y, ra.point.x - at.x) : 0;
+    // 226차: Number가 못 읽은 단위 글자 꼴(`50g` 등)은 그 각(전에는 조용히 0). 못 읽는 글은 전처럼 0
+    const rd = 'text' in ra ? numberAngleDegrees(ra.text) : NaN;
+    const rot = Number.isFinite(rd) ? (rd * Math.PI) / 180 : 'point' in ra ? Math.atan2(ra.point.y - at.y, ra.point.x - at.x) : 0;
     const ins: InsertEntity = {
       ...entityDefaults(),
       ...currentProps(app),
