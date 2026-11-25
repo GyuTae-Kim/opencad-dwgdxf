@@ -2,7 +2,7 @@
  * 명명된 뷰: VIEW(V, 뷰 관리자 — 현재로 설정·새로 만들기·이름 바꾸기·경계 업데이트·삭제), -VIEW(-V, 명령행)
  * 모형 뷰는 모형 탭에서, 종이 공간 뷰(플래그 1)는 배치에서 복원한다. 프롬프트는 AutoCAD 2026 한국어판을 따른다.
  */
-import type { ViewRecord } from '../core/model';
+import type { PlotSettings, PlotSettingsObject, ViewRecord } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { MODEL_SPACE, tableKey } from '../core/model';
 import type { App, CommandContext } from './app';
@@ -129,7 +129,11 @@ export function registerViewCommands(app: App): void {
 
 const BAD_VIEW_NAME = /[<>/\\":;?*|,=`]/;
 
-/** 뷰 이름 바꾸기 작업(대소문자만 바꾸면 같은 열쇠). 같은 이름이 있으면 null */
+/**
+ * 뷰 이름 바꾸기 작업(대소문자만 바꾸면 같은 열쇠). 같은 이름이 있으면 null.
+ * 그 뷰를 쓰는 배치·이름 있는 페이지 설정의 플롯 뷰 이름(DXF 6 — 229차)도 같은 단계에서 새 이름으로 바꾼다(230차 — AutoCAD DWG는 VIEW 레코드 핸들로
+ * 가리켜 이름이 바뀌어도 같은 뷰다. 전에는 옛 이름이 남아 저장 때 VIEW 표에 없어 빈 이름이 됐다). 대소문자만 바꾸면 쓰기가 레코드 이름으로 쓰므로 뷰 연산 하나
+ */
 export function renameViewOps(st: DocState, oldName: string, newName: string): EditOp[] | null {
   const ok = tableKey(oldName);
   const nk = tableKey(newName);
@@ -138,10 +142,21 @@ export function renameViewOps(st: DocState, oldName: string, newName: string): E
   if (nk !== ok && st.doc.views.has(nk)) return null;
   const after: ViewRecord = { ...v, name: newName };
   if (nk === ok) return [{ kind: 'view', key: ok, before: v, after }];
-  return [
+  const ops: EditOp[] = [
     { kind: 'view', key: ok, before: v, after: null },
     { kind: 'view', key: nk, before: null, after },
   ];
+  const uses = (p: PlotSettings) => !!p.plotViewName && tableKey(p.plotViewName) === ok;
+  for (const l of st.doc.layouts) if (uses(l.plot)) ops.push({ kind: 'layout', key: tableKey(l.blockName), before: l, after: { ...l, plot: { ...l.plot, plotViewName: newName } } });
+  for (const o of st.doc.objects.values()) {
+    if (o.type !== 'PLOTSETTINGS') continue;
+    const ps = o as PlotSettingsObject;
+    if (!uses(ps.plot)) continue;
+    const oAfter: PlotSettingsObject = { ...ps, plot: { ...ps.plot, plotViewName: newName } };
+    delete oAfter.dwgRaw;
+    ops.push({ kind: 'object', key: o.handle, before: o, after: oAfter });
+  }
+  return ops;
 }
 
 type ViewAct = 'current' | 'new' | 'rename' | 'update' | 'delete' | 'close';
