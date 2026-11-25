@@ -17,7 +17,7 @@ import type { App, CommandContext } from './app';
 import { currentMLeaderStyle } from './annotate';
 import { commitChanged } from './annot2-common';
 import { toleranceDialog } from './annot2-misc';
-import { currentProps, textDialog } from './draw';
+import { currentElevation, currentProps, textDialog } from './draw';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { dialog, form, h } from './ui/dom';
@@ -159,6 +159,8 @@ export function registerAnnot2Leader(app: App): void {
       const right = last.x >= pts[pts.length - 2]!.x;
       const dimStyle = String(doc.header.get('$DIMSTYLE') ?? 'Standard') || 'Standard';
       const dv = dimVars(doc, { dimStyle });
+      // 찍은 점(X·Y만)의 Z는 현재 고도(211차 — LEADER와 같다). 꼭짓점·갈고리선 꼭짓점·주석(여러 줄 문자·공차·블록 참조)이 한 값을 쓴다. 전에는 늘 0이었다
+      const z = currentElevation(app);
       let annotation: Entity | null = null;
       if (s.annotation === 'M') {
         let width = 0;
@@ -187,7 +189,7 @@ export function registerAnnot2Leader(app: App): void {
           ...entityDefaults(),
           ...currentProps(app),
           type: 'MTEXT',
-          insert: { x: last.x + (right ? 1 : -1) * dv.gap, y: last.y + dv.txt / 2, z: 0 },
+          insert: { x: last.x + (right ? 1 : -1) * dv.gap, y: last.y + dv.txt / 2, z },
           height: dv.txt,
           width,
           attachment: right ? 1 : 3,
@@ -206,7 +208,7 @@ export function registerAnnot2Leader(app: App): void {
         const text = spec ? buildToleranceText(spec) : '';
         if (text) {
           const lay = toleranceLayout(text, dv.txt, dv.gap);
-          const t: ToleranceEntity = { ...entityDefaults(), ...currentProps(app), type: 'TOLERANCE', handle: '', dimStyle, insert: v3({ x: right ? last.x : last.x - lay.width, y: last.y }), text, direction: { x: 1, y: 0, z: 0 } };
+          const t: ToleranceEntity = { ...entityDefaults(), ...currentProps(app), type: 'TOLERANCE', handle: '', dimStyle, insert: v3({ x: right ? last.x : last.x - lay.width, y: last.y }, z), text, direction: { x: 1, y: 0, z: 0 } };
           annotation = t;
         }
       } else if (s.annotation === 'B') {
@@ -228,7 +230,7 @@ export function registerAnnot2Leader(app: App): void {
             ...currentProps(app),
             type: 'INSERT',
             block: b.name,
-            insert: v3(last),
+            insert: v3(last, z),
             scale: { x: 1, y: 1, z: 1 },
             rotation: 0,
             columnCount: 1,
@@ -248,7 +250,7 @@ export function registerAnnot2Leader(app: App): void {
         ...props,
         type: 'LEADER',
         dimStyle,
-        verts: pack3(geom.vertices.map((q) => v3(q))),
+        verts: pack3(geom.vertices.map((q) => v3(q, z))),
         arrowHead: s.arrow !== '_None',
         pathType: s.spline ? 1 : 0,
         creation: annotation?.type === 'MTEXT' ? 0 : annotation?.type === 'TOLERANCE' ? 1 : annotation?.type === 'INSERT' ? 2 : 3,

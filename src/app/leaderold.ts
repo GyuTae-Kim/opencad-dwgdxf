@@ -18,7 +18,7 @@ import { boundsOf } from '../edit/geom/query';
 import type { EditOp } from '../edit/session';
 import type { App, CommandContext, Keyword } from './app';
 import { toleranceDialog } from './annot2-misc';
-import { currentProps, textDialog } from './draw';
+import { currentElevation, currentProps, textDialog } from './draw';
 import { askText } from './util2-ui';
 import { registerLeaderAssoc } from './leaderassoc';
 import type { Pt } from './view';
@@ -112,15 +112,18 @@ export function registerLeaderCommand(app: App): void {
         if ('enter' in r || ('keyword' in r && r.keyword === 'A')) break;
         return;
       }
-      const annotation = await askAnnotation(app, ctx, pts);
+      // 찍은 점(X·Y만)의 Z는 현재 고도(211차, ELEV 도움말 — DXF LEADER 10은 꼭짓점마다 X·Y·Z이고 고도 칸이 없다). 전에는 늘 0이었다.
+      // 꼭짓점·갈고리선 꼭짓점·주석(여러 줄 문자·공차·블록 참조)이 한 값을 써서 서로 다른 Z가 되지 않는다. 복사(C)는 원본을 X·Y만 옮기는 그대로
+      const z = currentElevation(app);
+      const annotation = await askAnnotation(app, ctx, pts, z);
       if (annotation === undefined) return;
-      commitLeader(app, ctx, pts, annotation, fmt);
+      commitLeader(app, ctx, pts, annotation, fmt, z);
     },
   });
 }
 
-/** 주석 묻기. undefined = 취소, null = 주석 없음 */
-async function askAnnotation(app: App, ctx: CommandContext, pts: Pt[]): Promise<Entity | null | undefined> {
+/** 주석 묻기. undefined = 취소, null = 주석 없음. z = 새 주석의 Z(현재 고도) */
+async function askAnnotation(app: App, ctx: CommandContext, pts: Pt[], z: number): Promise<Entity | null | undefined> {
   const st = app.active!;
   const doc = st.doc;
   const last = pts[pts.length - 1]!;
@@ -131,7 +134,7 @@ async function askAnnotation(app: App, ctx: CommandContext, pts: Pt[]): Promise<
     ...entityDefaults(),
     ...currentProps(app),
     type: 'MTEXT',
-    insert: { x: last.x + (right ? 1 : -1) * dv.gap, y: last.y + height / 2, z: 0 },
+    insert: { x: last.x + (right ? 1 : -1) * dv.gap, y: last.y + height / 2, z },
     height,
     width: 0,
     attachment: right ? 1 : 3,
@@ -180,7 +183,7 @@ async function askAnnotation(app: App, ctx: CommandContext, pts: Pt[]): Promise<
     const text = spec ? buildToleranceText(spec) : '';
     if (!text) return null;
     const lay = toleranceLayout(text, dv.txt, dv.gap);
-    const t: ToleranceEntity = { ...entityDefaults(), ...currentProps(app), type: 'TOLERANCE', handle: '', dimStyle, insert: v3({ x: right ? last.x : last.x - lay.width, y: last.y }), text, direction: { x: 1, y: 0, z: 0 } };
+    const t: ToleranceEntity = { ...entityDefaults(), ...currentProps(app), type: 'TOLERANCE', handle: '', dimStyle, insert: v3({ x: right ? last.x : last.x - lay.width, y: last.y }, z), text, direction: { x: 1, y: 0, z: 0 } };
     return t;
   }
   if (k === 'C') {
@@ -242,7 +245,7 @@ async function askAnnotation(app: App, ctx: CommandContext, pts: Pt[]): Promise<
       ...currentProps(app),
       type: 'INSERT',
       block: b.name,
-      insert: v3(at),
+      insert: v3(at, z),
       scale: { x: sx, y: sy, z: 1 },
       rotation: rot,
       columnCount: 1,
@@ -255,8 +258,8 @@ async function askAnnotation(app: App, ctx: CommandContext, pts: Pt[]): Promise<
   }
 }
 
-/** LEADER 객체와 주석을 한 번에 넣는다(QLEADER와 같은 연결) */
-function commitLeader(app: App, ctx: CommandContext, pts: Pt[], annotation: Entity | null, fmt: LeaderFormat): void {
+/** LEADER 객체와 주석을 한 번에 넣는다(QLEADER와 같은 연결). z = 꼭짓점의 Z(현재 고도) */
+function commitLeader(app: App, ctx: CommandContext, pts: Pt[], annotation: Entity | null, fmt: LeaderFormat, z: number): void {
   const st = app.active!;
   const doc = st.doc;
   const dimStyle = String(doc.header.get('$DIMSTYLE') ?? 'Standard') || 'Standard';
@@ -270,7 +273,7 @@ function commitLeader(app: App, ctx: CommandContext, pts: Pt[], annotation: Enti
     ...currentProps(app),
     type: 'LEADER',
     dimStyle,
-    verts: pack3(geom.vertices.map((q) => v3(q))),
+    verts: pack3(geom.vertices.map((q) => v3(q, z))),
     arrowHead: fmt.arrow,
     pathType: fmt.spline ? 1 : 0,
     creation: link ? leaderCreationType(annotation) : 3,
