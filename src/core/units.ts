@@ -254,3 +254,27 @@ export function parseAngle(s: string, aunits = 0): number | null {
   }
   return null;
 }
+
+/**
+ * 측량 방위 읽기(라디안 — 동쪽에서 시계 반대 방향, 0 ≤ θ < 2π). formatAngle AUNITS 4의 거꾸로이고 AutoLISP angtof 4의 방위 규칙이다(223차에 angtof에서 옮김).
+ * N·S + 북·남에서 E·W 쪽으로 잰 각(parseAngle의 도 — 비면 0) + E·W: `N 45d0'0" E`, 빈칸 없이 `N45d0'0"E`, 도움말 예 `n45d20'6"e`.
+ * 정방위는 글자 하나(N·S·E·W). 빈칸·대소문자는 가리지 않고 도면의 0 방향·방향(ANGBASE·ANGDIR)은 쓰지 않는다.
+ * 방위 꼴이 아니거나 각을 읽지 못하면 null — 그런 글은 parseAngle도 읽지 못해 방위를 받는 칸은 `parseBearing(t) ?? parseAngle(t)`
+ */
+export function parseBearing(s: string): number | null {
+  const t = s.trim().replace(/\s+/g, '');
+  const sv = /^([NS])(.*?)([EW])$/i.exec(t);
+  let r: number;
+  if (sv) {
+    const b = sv[2] ? parseAngle(sv[2], 0) : 0;
+    if (b === null) return null;
+    const n = sv[1]!.toUpperCase() === 'N';
+    const e = sv[3]!.toUpperCase() === 'E';
+    const deg90 = Math.PI / 2;
+    r = n ? (e ? deg90 - b : deg90 + b) : e ? 3 * deg90 + b : 3 * deg90 - b;
+  } else if (/^[NSEW]$/i.test(t)) r = { N: Math.PI / 2, S: (3 * Math.PI) / 2, E: 0, W: Math.PI }[t.toUpperCase() as 'N']!;
+  else return null;
+  if (!Number.isFinite(r)) return null;
+  r %= TAU;
+  return r < 0 ? r + TAU : r;
+}

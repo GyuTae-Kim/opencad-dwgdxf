@@ -3,6 +3,7 @@
  */
 import type { Entity } from '../core/model';
 import { tableKey } from '../core/model';
+import { parseBearing } from '../core/units';
 import type { App, CommandContext, Keyword } from './app';
 import type { DocState } from './docstate';
 import type { Pt } from './view';
@@ -26,6 +27,9 @@ export async function askAngle(ctx: CommandContext, prompt: string, keywords: Ke
     if ('text' in r) {
       const v = Number(r.text);
       if (Number.isFinite(v)) return (v * Math.PI) / 180;
+      // 측량 방위(N45d0'0"E·정방위 글자 — 223차): 수와 같은 동쪽 0·반시계 각(AutoLISP angtof 4)
+      const b = parseBearing(r.text);
+      if (b !== null) return b;
       ctx.print('각도(도)를 입력하거나 두 점을 지정하십시오.', 'err');
       continue;
     }

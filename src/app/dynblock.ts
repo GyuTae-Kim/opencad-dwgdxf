@@ -5,7 +5,7 @@
  * 값을 바꾸면 참조가 새 익명 표현 블록(*U…)을 가리키고 참조 캐시가 바뀐다(명령 취소 한 단계).
  */
 import type { InsertEntity } from '../core/model';
-import { formatAngle, formatLength, parseAngle, parseLength } from '../core/units';
+import { formatAngle, formatLength, parseAngle, parseBearing, parseLength } from '../core/units';
 import {
   type AlignTarget,
   type DynChange,
@@ -80,12 +80,13 @@ function changeOf(app: App, p: DynProperty, input: string): DynChange | { error:
       return o ? { key: p.key, value: o.value } : { error: `"${ft(t)}"은(는) 목록에 없습니다.` };
     }
     case 'rotation': {
-      const a = parseAngle(t, app.active!.units.aunits);
+      // 측량 방위도(보이는 formatAngle AUNITS 4 꼴 — 223차)
+      const a = parseBearing(t) ?? parseAngle(t, app.active!.units.aunits);
       return a === null ? { error: '각도가 올바르지 않습니다.' } : { key: p.key, value: a };
     }
     default: {
       if (p.editor === 'angle') {
-        const a = parseAngle(t, app.active!.units.aunits);
+        const a = parseBearing(t) ?? parseAngle(t, app.active!.units.aunits);
         return a === null ? { error: '각도가 올바르지 않습니다.' } : { key: p.key, value: a };
       }
       if (p.editor === 'coord') {
