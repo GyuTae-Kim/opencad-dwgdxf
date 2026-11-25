@@ -3,6 +3,27 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-26(253차): 휴대폰 보기의 더 보기가 메뉴·열림 상태를, 시트 탭이 고른 탭을 알리지 않던 것
+
+### 근거와 표
+252차 접근성 표에서 「보고 둠」으로 남긴 둘을 데스크톱에 이미 있는 꼴로 맞췄습니다(WCAG 2.2 4.1.2 이름·역할·값 — 부품의 상태도 화면 읽기 프로그램이 알 수 있어야 함).
+
+| 요소 | 고치기 전 | 데스크톱 꼴 | 이번 차수 |
+| --- | --- | --- | --- |
+| 더 보기(⋯, 아이콘만) | aria-label만 — 메뉴를 연다는 표시(aria-haspopup)·열림 상태(aria-expanded) 없음 | 상태 막대 「⋯」은 aria-haspopup="menu"(열림 상태는 없음), 표 셀 「도구 더 보기」는 aria-expanded(처음 false) | aria-haspopup="menu", aria-expanded는 처음 false → 메뉴가 열리면 true → 닫히면 false |
+| 시트 탭(특성·도면층·치수·찾기) | tablist 안 role=tab뿐 — 고른 탭은 모양(class)으로만 보이고 aria-selected 없음, 탭과 몸을 잇지 않음 | 리본 탭: aria-selected·aria-controls, 몸은 tabpanel·aria-labelledby(고른 탭), 로빙 tabindex·화살표 옮기기 | aria-selected·aria-controls, 몸은 tabpanel·aria-labelledby(고른 탭). 로빙 tabindex·화살표 옮기기는 넣지 않음(Tab 차례가 바뀜) |
+
+### 고친 것
+- 더 보기는 메뉴를 연다고 알리고, 메뉴가 닫히는 모든 길(Esc·Tab·항목 고르기·바깥 누르기·다른 메뉴가 열림)에서 열림 상태를 되돌립니다(메뉴의 닫힘 알림 한 곳).
+- 시트 탭은 고른 탭을 알리고 탭 몸과 이어집니다. 시트는 데스크톱 오른쪽 팔레트(Ctrl+1)와 같은 코드라 **데스크톱 팔레트 탭도 함께** 고른 탭을 알립니다.
+- 보이는 화면·동작은 그대로입니다(스타일은 이 속성을 꾸미지 않고 고른 탭 표시도 그대로, Tab 차례 그대로). 새 UI 글은 없습니다.
+
+### 확인
+- `tests/direct/viewa11y253.test.ts` 2건(진짜 App·MobileView·Palette와 진짜 메뉴 — 더 보기의 aria-haspopup과 Esc·항목 고르기·바깥 누르기·다른 메뉴로 닫을 때마다의 aria-expanded,
+  보기 모드 시트와 편집 화면 팔레트의 aria-selected·탭 ↔ 몸 이음·고른 탭 표시·tabindex 없음): 고치기 전 2건 실패(aria-haspopup 없음, aria-selected 넷 모두 없음), 고친 뒤 통과.
+  `tests/direct/viewmode-round4.test.ts`·`tests/direct/viewlayers246.test.ts`와 함께 3파일 13건 통과. tsc 통과.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 실제 휴대폰·화면 읽기 프로그램 확인 없음.
+
 ## 2026-11-26(252차): 휴대폰 보기 단추의 보이는 이름이 번역된 화면에서 접근 이름에 없던 것
 
 ### 근거와 표
