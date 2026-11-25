@@ -22,7 +22,7 @@ import { currentElevation, currentProps } from './draw';
 import { download } from './export';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
-import { askNumber, choose, memOf, previewOf, undoStep, yesNo } from './modify2-util';
+import { askNumber, choose, hnum, memOf, previewOf, undoStep, yesNo } from './modify2-util';
 import { peditMultiple } from './modify2-pedit';
 import { dialog, form, h } from './ui/dom';
 import { askString, whenClosed } from './express-util';
@@ -65,7 +65,12 @@ async function runBreakline(app: App, ctx: CommandContext): Promise<void> {
     break;
   }
   const props = { ...currentProps(app), handle: '' };
-  const make = (a: Pt, b: Pt, at?: Pt, z = 0) => makeBreakline(props, a, b, { size, extension: ext, at }, z);
+  // 216차: 끊기 기호 크기 × 현재 DIMSCALE(Autodesk BREAKLINE 도움말 — DIMSCALE이 끊기선 요소의 최종 크기를 정함, 크기 0.5·DIMSCALE 48이면
+  // 정의점 사이 24). 시스템 변수 DIMSCALE = 머리말 $DIMSCALE, 0·음수·없음은 1(치수 그리기 dimVars와 같다 — DIMSCALE 도움말: 0은 뷰포트 축척,
+  // 도면 공간 기능을 쓰지 않으면 1). 확장 거리는 도움말이 곱한다고 적지 않아 그대로, 크기 옵션에 남는 값도 친 값 그대로다
+  const ds = hnum(st.doc, '$DIMSCALE', 1);
+  const symbol = size * (ds > 0 ? ds : 1);
+  const make = (a: Pt, b: Pt, at?: Pt, z = 0) => makeBreakline(props, a, b, { size: symbol, extension: ext, at }, z);
   const r2 = await ctx.getPoint('끊기선의 두 번째 점 지정:', {
     base: p1,
     ghost: (p) => {

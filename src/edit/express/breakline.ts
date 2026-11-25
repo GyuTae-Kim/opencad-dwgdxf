@@ -8,7 +8,7 @@ import type { EntityBase, LwPolylineEntity, Vec2 } from '../../core/model';
 import { packLwPoints } from '../../core/lwpoly';
 
 export interface BreaklineOptions {
-  /** 끊기 기호 크기(선 방향 길이) */
+  /** 끊기 기호 크기(선 방향 길이 — BREAKLINE 명령은 크기 옵션 × DIMSCALE을 넘긴다, 216차) */
   size: number;
   /** 두 점 밖으로 더 그리는 길이 */
   extension: number;
