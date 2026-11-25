@@ -420,6 +420,8 @@ export class Palette {
       const sw = h('button', { class: 'toggle', title: `색: ${colorText(lay.color)}`, 'aria-label': `${ft(lay.name)} 색 바꾸기` },h('span', { class: 'swatch', style: `background:${rgbToCss(color)}` }));
       sw.addEventListener('click', async (ev) => {
         ev.stopPropagation();
+        // 휴대폰 보기 모드의 도면층 시트는 켜고 끄기만(246차): 색 견본은 색을 보이기만 하고, 이름·행 두 번 누르기와 행 메뉴도 열지 않는다
+        if (app.viewOnly) return;
         const c = await pickColor(lay.color);
         if (c) patchLayers(app, 'LAYER', [[lay.name, { color: c }]]);
       });
@@ -432,6 +434,7 @@ export class Palette {
       const nameCell = h('td', { class: 'layer-name', title: `${lay.name}${lay.description ? ` — ${lay.description}` : ''}` }, lay.name);
       nameCell.addEventListener('dblclick', (ev) => {
         ev.stopPropagation();
+        if (app.viewOnly) return;
         this.renameInline(nameCell, k, lay.name);
       });
       const tr = h(
@@ -451,10 +454,15 @@ export class Palette {
         this.layerSel = k;
         this.refresh();
       });
-      tr.addEventListener('dblclick', () => setCurrentLayer(app, lay.name));
+      // 보기 모드: 현재 도면층(숨긴 칸)을 바꾸지 않는다 — 켜기 단추를 빨리 두 번 눌러도 행으로 올라온다
+      tr.addEventListener('dblclick', () => {
+        if (!app.viewOnly) setCurrentLayer(app, lay.name);
+      });
       lf.draggable(tr, lay.name);
       tr.addEventListener('contextmenu', (ev) => {
         ev.preventDefault();
+        // 보기 모드: 행 메뉴(안드로이드 길게 누르기도 여기로 온다)를 열지 않는다 — 도면 영역 메뉴와 같은 규칙. 브라우저 메뉴도 막은 채로
+        if (app.viewOnly) return;
         this.layerSel = k;
         showMenu(ev.clientX, ev.clientY, [
           { label: '현재 도면층으로', icon: 'layerCurrent', run: () => setCurrentLayer(app, lay.name) },
@@ -495,7 +503,12 @@ export class Palette {
         ),
       )),
       lf.footer(rows.length),
-      h('div', { style: 'margin-top:8px;color:var(--text-faint)' }, '행을 두 번 누르면 현재 도면층이 되고, 이름을 두 번 누르면 이름을 바꿉니다. 오른쪽 클릭으로 더 많은 기능을 씁니다.'),
+      // 보기 모드는 켜고 끄기만이라 데스크톱 조작(두 번 누르기·오른쪽 클릭) 안내 대신 보기 단추 "도면층"의 설명 글(모드를 바꾸면 setViewOnly가 다시 그린다)
+      h(
+        'div',
+        { style: 'margin-top:8px;color:var(--text-faint)' },
+        app.viewOnly ? '도면층 켜고 끄기' : '행을 두 번 누르면 현재 도면층이 되고, 이름을 두 번 누르면 이름을 바꿉니다. 오른쪽 클릭으로 더 많은 기능을 씁니다.',
+      ),
     );
   }
 
