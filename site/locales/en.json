@@ -3727,7 +3727,6 @@
   "배치에서 저장한 상태를 배치 탭에서 복원할 때 현재 뷰포트의 VP 동결을 복원합니다.": "Restore VP freeze in current viewport when restoring saved state in layout from layout tab.",
   "배치에서 저장한 상태의 현재 VP 가시성은 배치 탭에서 복원할 때만 적용됩니다.": "Current VP visibility in a state saved in a layout applies only when it is restored from a layout tab.",
   "배치의 뷰포트 안(MSPACE)에서만 고를 수 있습니다.": "You can only select within the viewport of the layout (MSPACE).",
-  "배치의 이름 있는 뷰는 쓰지 않고 배치 전체를 플롯합니다.": "Named views of a layout are not used; the whole layout is plotted.",
   "배치할 수 없는 원호 정렬 문자를 쓰지 않았습니다.": "Arc-aligned text that could not be placed was not written.",
   "백운석 암반": "Dolomite bedrock",
   "번호": "Number",
