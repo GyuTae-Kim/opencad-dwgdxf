@@ -130,6 +130,7 @@ R2004+ MTEXT 배경 색은 63·421·431(색상표 이름 — DXF 참조서 430~4
 - LAYER: 꺼짐은 음수 색, 동결·잠금 70, 플롯 290, 선가중치 370, 플롯 스타일 390(없으면 Normal), 투명도·설명은
   모델 값이 바뀌었을 때만 AcCmTransparency·AcAecLayerStandard 확장 자료를 다시 만든다.
 - STYLE: 트루타입 글꼴 이름·플래그는 ACAD 확장 자료(1000·1071).
+- VIEW: R2000+ 렌더 모드 281은 읽은 1~6, 없거나 참조서 범위(0~6) 밖이면 0(232차, `core/finalize.ts` `viewRenderModeOf` — DWG RC도 같음). 42·43·44·71·72·73은 상수.
 - BLOCK_RECORD: 340 배치, R2007+ 70 단위·280 분해 가능·281 축척 가능.
 - 객체: DICTIONARY·ACDBDICTIONARYWDFLT·LAYOUT(+AcDbPlotSettings)·PLOTSETTINGS·MLINESTYLE·MLEADERSTYLE(원본 태그 또는 모델 값)·
   TABLESTYLE(원본 태그, 배치(R2004 / R2007 / R2010+)가 대상 버전과 다르면 값(`io/tablestyle.ts`)으로 다시 만든다. 없으면 Standard)·
