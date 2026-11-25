@@ -35,6 +35,7 @@ import { columnGripsFor } from './mtextcols-grips';
 import { dynGrips, isDynamicReference } from '../edit/dynblock';
 import { spaceTolerance } from '../render/build';
 import { ask, closeMenu, keyboardControl, showMenu, toast } from './ui/dom';
+import { VIEW_COMMANDS } from './ui/mobileview';
 import { ft } from './filetext';
 import { kindName as entityKindName } from '../edit/extract';
 import { EditManager } from './edits';
@@ -417,7 +418,8 @@ export class App {
       suggest: (p) => this.suggest(p),
       keyword: (k) => this.onInput(k),
       repeat: () => {
-        if (this.lastCommand) void this.run(this.lastCommand);
+        const again = this.repeatName;
+        if (again) void this.run(again);
       },
     });
     // 도면 위 측정 결과 글·커서 툴팁이 비킬 떠 있는 판: 명령행과 셸이 더하는 것(휴대폰 보기 모드의 측정 띠·특성 시트)
@@ -654,6 +656,15 @@ export class App {
   /** 직전 명령(Enter·오른쪽 클릭 반복) */
   get lastCommandName(): string | null {
     return this.lastCommand;
+  }
+
+  /**
+   * Enter·Space·Ctrl+J·명령행 빈 Enter가 다시 돌릴 직전 명령. 휴대폰 보기 모드는 보기 모드가 여는 명령(전체 보기·재기·점 좌표 —
+   * VIEW_COMMANDS)만이고 밖이면 null(248차 — 편집 화면에서 쓴 편집 명령이 측정 띠로 다시 돌던 것). 편집 화면은 그대로
+   */
+  private get repeatName(): string | null {
+    const c = this.lastCommand;
+    return c && (!this.viewOnly || VIEW_COMMANDS.has(c)) ? c : null;
   }
 
   /** 명령 밖의 편집(끌어 옮기기 등)이 쓸 명령 취소 묶음 번호 */
@@ -3091,11 +3102,12 @@ export class App {
     return true;
   }
 
-  /** Enter(Ctrl+J·Ctrl+M·도면 위 Enter): 명령 중이면 입력, 아니면 직전 명령 반복 */
+  /** Enter(Ctrl+J·Ctrl+M·도면 위 Enter): 명령 중이면 입력, 아니면 직전 명령 반복(보기 모드는 보기 모드가 여는 명령만 — repeatName) */
   private pressEnter(inCmd: boolean): void {
+    const again = this.repeatName;
     if (inCmd) this.cmd.submitCurrent();
     else if (this.request) this.onInput('', true);
-    else if (this.lastCommand) void this.run(this.lastCommand);
+    else if (again) void this.run(again);
   }
 
   /** Ctrl 단축키(keys.ts)의 동작 */
