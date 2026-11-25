@@ -11,7 +11,7 @@ import { blockGeometry, drawGeometry } from './blockpreview';
 import { insertBlockFrom } from './designcenter';
 import { type LoadedDrawing, loadedDrawings, onLoadedDrawingsChange, pickAndReadDrawings } from './drawingfiles';
 import { guardKeys } from './layertools-ui';
-import { h } from './ui/dom';
+import { h, tabKeyTarget } from './ui/dom';
 import { icon } from './ui/icons';
 import { registerOnce } from './blkcmds-io';
 import { ft } from './filetext';
@@ -114,6 +114,18 @@ class BlocksPalette {
     this.tab = app.active ? 'current' : 'library';
     const mk = (t: Tab, label: string) => h('button', { type: 'button', role: 'tab', onclick: () => this.setTab(t) }, label) as HTMLButtonElement;
     this.tabBtns = { current: mk('current', '현재 도면'), recent: mk('recent', '최근 사용'), library: mk('library', '라이브러리') };
+    // 탭 줄은 Tab 한 자리(260차 — W3C APG 탭 꼴·리본 탭 꼴, 고른 탭만 tabindex 0 — setTab): 왼쪽·오른쪽 화살표(끝에서 돌아감)·Home·End는
+    // 초점만 옮기고 Enter·Space(단추 누르기)로 고른다(수정 키와 함께면 넘김 — tabKeyTarget)
+    const order = [this.tabBtns.current, this.tabBtns.recent, this.tabBtns.library];
+    order.forEach((b, i) =>
+      b.addEventListener('keydown', (ev) => {
+        const to = tabKeyTarget(ev, i, order.length);
+        if (to < 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        order[to]!.focus();
+      }),
+    );
     this.filter = h('input', { type: 'search', placeholder: '이름 필터(* ? 사용 가능)', 'aria-label': '블록 이름 필터' }) as HTMLInputElement;
     this.filter.addEventListener('input', () => this.render());
     this.libSelect = h('select', { 'aria-label': '라이브러리 파일' }) as HTMLSelectElement;
@@ -184,6 +196,7 @@ class BlocksPalette {
     for (const [k, b] of Object.entries(this.tabBtns) as [Tab, HTMLButtonElement][]) {
       b.classList.toggle('on', k === t);
       b.setAttribute('aria-selected', String(k === t));
+      b.tabIndex = k === t ? 0 : -1;
     }
     this.bar.innerHTML = '';
     if (t === 'library') {

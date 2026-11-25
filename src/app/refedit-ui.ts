@@ -5,7 +5,7 @@ import { uiText } from './i18n-text';
  */
 import type { App } from './app';
 import type { OverlayGeom } from './view';
-import { dialog, h } from './ui/dom';
+import { dialog, h, tabKeyTarget } from './ui/dom';
 import { ft } from './filetext';
 
 const STYLE = `
@@ -138,6 +138,9 @@ function drawPreview(cv: HTMLCanvasElement, g: OverlayGeom | null): void {
   c.stroke();
 }
 
+/** 탭·쪽 id 차례(대화 상자마다 새로) */
+let dialogSeq = 0;
+
 /** "참조 편집" 대화상자. 취소하면 null */
 export function refEditDialog(levels: readonly LevelView[], settings: RefEditSettings, mode: 'auto' | 'prompt'): Promise<RefEditChoice | null> {
   ensureStyle();
@@ -145,22 +148,35 @@ export function refEditDialog(levels: readonly LevelView[], settings: RefEditSet
     let done = false;
     let index = levels.findIndex((l) => !l.problem);
     if (index < 0) index = 0;
-    const tabId = h('button', { type: 'button', class: 'on' }, '참조 식별');
-    const tabSet = h('button', { type: 'button' }, '설정');
-    const pageId = h('div', { class: 're-page' });
-    const pageSet = h('div', { class: 're-page', hidden: true });
-    tabId.addEventListener('click', () => {
-      tabId.classList.add('on');
-      tabSet.classList.remove('on');
-      pageId.hidden = false;
-      pageSet.hidden = true;
+    // 탭(260차 — 253차 꼴): 줄만 tablist였고 단추·쪽에 역할이 없었다. 탭 role·aria-selected·aria-controls, 쪽 tabpanel·aria-labelledby.
+    // 탭 줄은 Tab 한 자리(W3C APG 탭 꼴·리본 탭 꼴): 고른 탭만 tabindex 0, 왼쪽·오른쪽 화살표(끝에서 돌아감)·Home·End는 초점만 옮기고
+    // Enter·Space(단추 누르기)로 고른다(수정 키와 함께면 넘김 — tabKeyTarget). 탭 위 Enter는 탭 고르기만 — 몸의 Enter(확인)로 넘기지 않는다
+    const seq = ++dialogSeq;
+    const tabId = h('button', { type: 'button', role: 'tab', id: `re-tab-${seq}-0`, 'aria-controls': `re-page-${seq}-0` }, '참조 식별');
+    const tabSet = h('button', { type: 'button', role: 'tab', id: `re-tab-${seq}-1`, 'aria-controls': `re-page-${seq}-1` }, '설정');
+    const pageId = h('div', { class: 're-page', role: 'tabpanel', id: `re-page-${seq}-0`, 'aria-labelledby': `re-tab-${seq}-0` });
+    const pageSet = h('div', { class: 're-page', role: 'tabpanel', id: `re-page-${seq}-1`, 'aria-labelledby': `re-tab-${seq}-1` });
+    const tabBtns = [tabId, tabSet];
+    const showPage = (i: number) => {
+      [pageId, pageSet].forEach((p, k) => (p.hidden = k !== i));
+      tabBtns.forEach((b, k) => {
+        b.classList.toggle('on', k === i);
+        b.setAttribute('aria-selected', String(k === i));
+        b.tabIndex = k === i ? 0 : -1;
+      });
+    };
+    tabBtns.forEach((b, i) => {
+      b.addEventListener('click', () => showPage(i));
+      b.addEventListener('keydown', (ev) => {
+        const to = tabKeyTarget(ev, i, tabBtns.length);
+        if (to >= 0) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          tabBtns[to]!.focus();
+        } else if (ev.key === 'Enter') ev.stopPropagation();
+      });
     });
-    tabSet.addEventListener('click', () => {
-      tabSet.classList.add('on');
-      tabId.classList.remove('on');
-      pageSet.hidden = false;
-      pageId.hidden = true;
-    });
+    showPage(0);
     const tree = h('div', { class: 're-tree', role: 'tree', 'aria-label': '참조 이름' });
     const cv = h('canvas', { class: 're-prev', 'aria-label': '미리보기' }) as HTMLCanvasElement;
     const path = h('div', { class: 're-path' });

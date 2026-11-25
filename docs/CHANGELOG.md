@@ -3,6 +3,48 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-26(260차): 대화 상자·패널 탭 목록이 탭마다 Tab 차례에 들고 화살표로 옮길 수 없던 것
+
+### 근거와 표
+258차 보고 (3)·259차 보고 (1)을 고쳤습니다. 근거는 W3C APG 탭 꼴(고른 탭 하나만 Tab 차례, 탭 사이는 수정 키 없는 왼쪽·오른쪽 화살표·Home·End)과 이 앱의 리본 탭입니다.
+코드에서 `role: 'tab'`·`tablist`·`aria-selected`·탭 클래스·인라인 탭 단추 묶음을 모두 찾았습니다.
+
+| 탭 목록 | 코드 | 고치기 전 역할 | Tab 차례·화살표 | 고르기 | 260차 |
+| --- | --- | --- | --- | --- | --- |
+| 관리 대화 상자 탭 묶음(OPTIONS·DWGPROPS·EATTEDIT 향상된 속성 편집기) | `mgr-ui.ts` tabs | tablist·tab·aria-selected·쪽 tabpanel | 탭마다·없음 | 누르면 바로 | 로빙 tabindex·화살표 |
+| 치수 스타일 대화 상자(7탭) | `dimstyle.ts` editDialog | tablist·tab·aria-selected | 탭마다·없음 | 누르면 바로 — 탭 줄을 다시 그려 초점이 본문으로 빠짐 | 같음 + 같은 자리 탭에 초점 |
+| 디자인센터(열린 도면·사용 내역) | `designcenter.ts` | tablist·tab(aria-selected 없음) | 탭마다·없음 | 누르면 바로 — 탭 위 Enter가 패널의 「고른 항목 넣기」에도 감 | aria-selected·로빙·화살표, 탭 위 Enter는 고르기만 |
+| 블록 팔레트(현재 도면·최근 사용·라이브러리) | `blkcmds-palette.ts` | tablist·tab·aria-selected | 탭마다·없음 | 누르면 바로 | 로빙·화살표 |
+| 참조 편집 대화 상자(참조 식별·설정) | `refedit-ui.ts` | 줄만 tablist — 단추·쪽 역할 없음 | 탭마다·없음 | 누르면 바로 — 탭 위 Enter가 대화 상자 확인 | tab·aria-selected·aria-controls, 쪽 tabpanel(253차 꼴), 로빙·화살표, 탭 위 Enter는 고르기만 |
+| 배치 탭(모형·배치) | `shell.ts` refreshLayouts | 역할 없음 | 탭마다·없음 | 누르면 공간 바꾸기 | 이번 차수 밖(아래) |
+| 도면 탭 | `shell.ts` tabKeys | 역할 없음(aria-current 꼴) | 탭마다(이름·닫기 단추)·있음(258·259차) | 누르면 엶 | Delete만 — 수정 키와 함께면 넘김 |
+
+- 고르기는 리본 꼴 수동입니다: 화살표는 초점만 옮기고 Enter·Space(단추 누르기)로 고릅니다. 다섯 목록 모두 지금은 누르면 바로 바뀌던 목록이라 누르기 동작은 그대로입니다.
+- 화살표는 다른 탭 줄처럼 막고 위로 넘기지 않습니다(대화 상자·패널·앱 키 처리에 닿지 않음). 수정 키 조합은 259차 `tabKeyTarget`이 넘깁니다.
+- 대화 상자 Tab 가둠은 상자 안 처음(머리 닫기 단추)·끝(바닥 단추)만 보므로 tabindex -1 탭이 사이에 있어도 그대로입니다.
+- 배치 탭은 블록 편집기 중에 같은 줄이 이름 글·동작 단추(블록 저장·닫기)라 탭 목록이 아니고, 다시 그릴 때 초점 돌려주기·비동기 공간 바꾸기·몸(도면 영역) 잇기가
+  함께 들어 작지 않아 남겼습니다.
+
+### 고친 것
+- 다섯 목록: 고른 탭만 tabindex 0(나머지 -1), 탭 keydown이 `tabKeyTarget`으로 옮길 탭에 초점만 줍니다. 고르는 함수(show·setTab·showPage·다시 그리기)가 tabindex를 옮깁니다.
+- 치수 스타일: 다시 그리기 전 탭 줄 안 초점 자리를 두었다가 다시 그린 뒤 같은 자리(새 고른 탭)에 초점을 줍니다(리본 탭 꼴).
+- 디자인센터: 고른 탭 표시(class·aria-selected·tabindex)를 한 함수로 — 탭 누르기와 로드(L) 뒤 사용 내역 탭이 함께 씁니다.
+- 참조 편집: 탭 id·aria-controls ↔ 쪽 id·aria-labelledby(대화 상자마다 새 차례 번호).
+- 도면 탭 Delete(닫기)는 Alt·Ctrl·⌘·Shift가 없을 때만 탭을 닫습니다.
+- 역할을 새로 단 곳은 참조 편집 탭 단추(button → tab)뿐입니다. tools/·tests/에서 그 단추를 role=button·이름으로 찾는 곳은 없습니다(`tools/mobile-browser-check.js`는 참조 편집을 쓰지 않음).
+
+### 바뀐 것(기존 결과)
+- 다섯 탭 목록이 Tab 차례에서 한 자리가 되고 화살표·Home·End로 옮깁니다. 보이는 화면은 그대로입니다.
+- 치수 스타일 대화 상자에서 키보드로 탭을 고르면 초점이 새 고른 탭에 남습니다(전에는 본문으로 빠져 다음 Tab이 상자 처음으로 감).
+- 디자인센터 탭에서 Enter는 탭만 고릅니다(전에는 내용에서 고른 항목이 있으면 그것도 넣음). 참조 편집 탭에서 Enter는 탭만 고릅니다(전에는 대화 상자를 확인해 닫음).
+- 도면 탭에서 Shift·Ctrl·Alt·⌘+Delete는 탭을 닫지 않고 앱의 Delete(고른 객체 지우기 — 다른 단추에 초점이 있을 때와 같음)로 갑니다.
+
+### 확인
+- `tests/direct/tabkeys260.test.ts` 6건(DWGPROPS 4탭·DIMSTYLE 수정 7탭·ADCENTER 2탭·BLOCKSPALETTE 3탭·참조 편집 2탭 — 고른 탭만 tabindex 0, Alt+← 넘김,
+  →·←·←·End·Home·←·→는 초점만 옮기고 막음, 누르면 고름·초점 그대로, 디자인센터·참조 편집 탭 위 Enter는 위로 가지 않음, 도면 탭 수정 키+Delete 넘김·Delete만 닫음):
+  고치기 전 6건 실패, 고친 뒤 통과. `tests/direct/tabkeys259.test.ts` 4건·`tests/manage/ui.test.ts` 13건과 함께 23건 통과. tsc 통과.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함).
+
 ## 2026-11-26(259차): 탭 화살표가 Alt+← 같은 수정 키 조합까지 가로채던 것과 세 벌 셈
 
 ### 근거와 표
