@@ -31,6 +31,11 @@ export function iconSpan(name: string, cls = 'ic'): HTMLSpanElement {
 }
 
 let toastWrap: HTMLDivElement | null = null;
+/**
+ * 단추 없는 알림의 종류와 부른 쪽 글(271차 — 같은 알림을 하나로). 번역층(i18n.ts)이 떠 있는 알림의 글 마디를 번역 글로 바꾸므로
+ * 화면 글이 아니라 이것으로 견준다
+ */
+const toastKeys = new WeakMap<Element, string>();
 
 /** 알림에 붙는 단추(예: 새 버전 → 새로 고침) */
 export interface ToastAction {
@@ -40,7 +45,8 @@ export interface ToastAction {
 
 /**
  * 잠깐 보이는 알림. 오류는 화면 읽기 프로그램이 바로 읽게 role="alert"로 둔다.
- * action이 있으면 단추와 닫기 단추를 붙인다. ms가 0이면 닫을 때까지 남는다
+ * action이 있으면 단추와 닫기 단추를 붙인다. ms가 0이면 닫을 때까지 남는다.
+ * 단추 없는 알림은 같은 종류·같은 글의 단추 없는 알림이 떠 있으면 그것을 지우고 새로 붙인다(271차 — 쌓이지 않고 하나만, 시간은 마지막 알림부터)
  */
 export function toast(text: string, kind: 'info' | 'warn' | 'error' = 'info', ms = 4200, action?: ToastAction): HTMLDivElement {
   if (!toastWrap || !toastWrap.isConnected) {
@@ -58,6 +64,13 @@ export function toast(text: string, kind: 'info' | 'warn' | 'error' = 'info', ms
     const close = h('button', { type: 'button', class: 'toast-close', 'aria-label': '알림 닫기', title: '알림 닫기', html: icon('close2') });
     close.addEventListener('click', () => t.remove());
     t.append(run, close);
+  } else {
+    // 같은 오류를 거듭 내면(보기 모드에서 비틀린 뷰포트를 거듭 두 번 누르기 등) 알림이 하나씩 쌓여 도면을 가렸다(271차). 옛 것의 시간만 늘리지 않고
+    // 지운 뒤 새로 붙이는 까닭: 알림 영역(aria-live)·오류 알림(role="alert")은 새로 들어온 마디를 화면 읽기 프로그램이 다시 읽는다.
+    // 옛 알림의 시간 재기는 그 요소만 지운다(이미 빠져 새 알림에 닿지 않음). 단추 있는 알림은 사용자가 처리할 때까지 쌓아 둔다
+    const key = `${kind}\n${text}`;
+    for (const old of Array.from(toastWrap.children)) if (toastKeys.get(old) === key) old.remove();
+    toastKeys.set(t, key);
   }
   toastWrap.append(t);
   if (ms > 0) setTimeout(() => t.remove(), ms);

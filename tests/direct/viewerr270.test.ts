@@ -2,7 +2,7 @@
  * 휴대폰 보기 모드에서 명령 밖의 오류(270차 — 269차 보고 (1)): 보기 모드는 명령행이 숨어 있어, 명령 밖에서 찍은 오류 줄(비틀린 뷰포트에 들어가지 못함,
  * 도면 없이 직전 명령 반복 등)은 바로 읽히는 오류 알림(toast 'error' — role="alert")으로 보이고 카드(명령의 안내·결과 띠)에는 넣지 않는다.
  * 전에는 카드 결과 띠에 남거나(닫은 적이 없을 때) 결과 띠를 닫은 뒤·도면이 없을 때는 보이지 않았다.
- * 명령 안의 오류는 카드 그대로, 편집 화면은 명령행 그대로, 따로 알리는 열기 실패는 그 알림 하나.
+ * 명령 안의 오류는 카드 그대로, 편집 화면은 명령행 그대로, 따로 알리는 열기 실패는 그 알림 하나. 같은 오류를 거듭 내면 화면의 알림은 하나(271차).
  * 진짜 App·MobileView(jsdom), 화면·명령행·엔진·글꼴은 가짜(measurecard.test.ts와 같은 틀, 배치는 viewonly.test.ts 269차 묶음 꼴)
  */
 import { createRequire } from 'node:module';
@@ -198,6 +198,30 @@ describe('보기 모드의 명령 밖 오류는 오류 알림으로(270차)', ()
     expect(calls()).toEqual([[openErrorText('깨진.dwg', info), 'error', 9000]]);
     // 전에는 알림과 함께 카드 결과 띠에도 「깨진.dwg — …」이 남았다
     expect(cardText(h)).not.toContain('깨진.dwg');
+  });
+
+  it('같은 오류를 거듭 내면 화면의 알림은 하나만 남는다(271차 — 전에는 두 번 누를 때마다 하나씩 쌓여 도면을 가렸다)', async () => {
+    // 이 시험만 가짜 알림을 진짜 알림(ui/dom.ts)으로 돌려 화면(DOM)에 뜬 알림을 센다
+    const { toast: real } = await vi.importActual<{ toast: typeof toast }>('../../src/app/ui/dom');
+    vi.mocked(toast).mockImplementation(real);
+    try {
+      const h = setup();
+      await settle();
+      for (let i = 0; i < 3; i++) {
+        dblclick(h, P(215, 60));
+        await settle();
+      }
+      expect(h.st.msVp).toBeNull();
+      expect(calls()).toEqual([
+        [TWIST, 'error', 9000],
+        [TWIST, 'error', 9000],
+        [TWIST, 'error', 9000],
+      ]);
+      expect(Array.from(document.querySelectorAll('.toast'), (t) => [t.getAttribute('role'), t.textContent])).toEqual([['alert', TWIST]]);
+    } finally {
+      vi.mocked(toast).mockReset();
+      document.querySelector('.toast-wrap')?.remove();
+    }
   });
 });
 

@@ -182,6 +182,71 @@ describe('알림', () => {
       vi.useRealTimers();
     }
   });
+
+  const TWIST = '비틀린 뷰포트는 아직 모형 공간으로 들어갈 수 없습니다.';
+  /** 떠 있는 알림의 [종류, 글] 차례 */
+  const shown = () =>
+    Array.from(document.querySelectorAll('.toast'), (t) => [t.classList.contains('error') ? 'error' : t.classList.contains('warn') ? 'warn' : 'info', t.textContent]);
+
+  it('같은 종류·같은 글의 단추 없는 알림은 쌓지 않고 하나만: 옛 알림을 지우고 새로 붙여 시간이 마지막 알림부터 흐른다(271차 — 전에는 하나씩 쌓였다)', () => {
+    vi.useFakeTimers();
+    try {
+      const a = toast(TWIST, 'error', 9000);
+      vi.advanceTimersByTime(5000);
+      const b = toast(TWIST, 'error', 9000);
+      expect(a.isConnected).toBe(false);
+      expect(b.isConnected).toBe(true);
+      // 새 마디라 화면 읽기 프로그램이 다시 읽는다(오류 알림 role="alert", 알림 영역 aria-live)
+      expect(b).not.toBe(a);
+      expect(b.getAttribute('role')).toBe('alert');
+      expect(b.parentElement!.getAttribute('aria-live')).toBe('polite');
+      expect(shown()).toEqual([['error', TWIST]]);
+      // 옛 알림의 시간(첫 알림부터 9초)은 새 알림을 지우지 않는다 — 새 알림부터 9초에 사라진다
+      vi.advanceTimersByTime(4000);
+      expect(b.isConnected).toBe(true);
+      vi.advanceTimersByTime(4999);
+      expect(b.isConnected).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(b.isConnected).toBe(false);
+      expect(shown()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('다른 종류·다른 글은 따로 쌓이고, 단추 있는 알림은 같은 글이어도 모두 남는다. 번역으로 글 마디가 바뀌어도 부른 쪽 글로 찾는다(271차)', () => {
+    vi.useFakeTimers();
+    try {
+      const other = '열린 도면이 없습니다. 먼저 파일을 여십시오.';
+      toast(TWIST, 'error', 9000);
+      toast(TWIST, 'warn', 9000);
+      toast(other, 'error', 9000);
+      toast(TWIST, 'error', 9000);
+      expect(shown()).toEqual([
+        ['warn', TWIST],
+        ['error', other],
+        ['error', TWIST],
+      ]);
+      // 단추 있는 알림(새 판 등)은 사용자가 처리할 때까지 쌓이고, 단추 없는 같은 글이 와도 지우지 않는다
+      const run = vi.fn();
+      const u1 = toast('새 버전이 있습니다.', 'info', 0, { label: '새로 고침', run });
+      const u2 = toast('새 버전이 있습니다.', 'info', 0, { label: '새로 고침', run });
+      const p1 = toast('새 버전이 있습니다.', 'info', 3000);
+      expect([u1.isConnected, u2.isConnected, p1.isConnected]).toEqual([true, true, true]);
+      const p2 = toast('새 버전이 있습니다.', 'info', 3000);
+      expect([u1.isConnected, u2.isConnected, p1.isConnected, p2.isConnected]).toEqual([true, true, false, true]);
+      expect(document.querySelectorAll('.toast.has-action')).toHaveLength(2);
+      // 번역층(i18n.ts)은 떠 있는 알림의 글 마디를 그 자리에서 번역 글로 바꾼다
+      const tr = toast(other, 'error', 9000);
+      tr.querySelector('.toast-text')!.firstChild!.nodeValue = 'No drawing is open. Open a file first.';
+      const tr2 = toast(other, 'error', 9000);
+      expect(tr.isConnected).toBe(false);
+      expect(tr2.isConnected).toBe(true);
+      expect(Array.from(document.querySelectorAll('.toast'), (t) => t.textContent).filter((t) => t === other || t?.startsWith('No drawing'))).toEqual([other]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('앱 단축키가 비켜 가는 컨트롤', () => {
