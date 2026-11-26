@@ -3,6 +3,51 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(290차): 도면층 명령 묶음의 번역 대조와 빠진 번역
+
+### 근거와 표
+도면층 묶음 — LAYER 팔레트 도면층 탭(휴대폰 시트도 같은 코드 `ui/palettes.ts`), -LAYER(`layercmd.ts`·옵션 `edit/layercmd.ts`), `layers.ts`, LAYOFF·LAYFRZ·LAYON·LAYTHW·LAYISO·LAYUNISO
+(`commands.ts`), LAYVPI(`vpcmds.ts`), 도면층 필터(`layerfilter-core.ts`·`layerfilter-ui.ts`), 도면층 상태 관리자·-LAYERSTATE(`layerstate-ui.ts`·`layerstate-cmd.ts`), LAYERP·LAYERPMODE·LAYCUR·SETBYLAYER
+(`layerstate-tools.ts`), LAYMCH·LAYDEL·LAYMRG(`laytools.ts`), COPYTOLAYER(`copytolayer.ts`), LAYWALK(`laywalk.ts`), LAYTRANS(`laytrans.ts`), 리본 도면층 패널(`ui/shell.ts`) — 의 보이는 글을 모아
+네 사전과 견줬습니다. 코드로 짜는 프롬프트(-LAYER 이름 리스트 `${prompt}${tail}:`, -LAYERSTATE 옵션 목록·`${what} 도면층 상태 이름 …`, 겹친 꼬리 틀)는 갈래마다 펼쳤습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 30·일본어 13·중국어 30·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 소거(PURGE — LAYWALK 소거 단추·확인 상자·PURGE 제목) | en Clear·Clear Layer·Cleared → Purge·Purge Layers·Purged; zh 橡皮擦(지우개) → 清除; de Klar(맑은)·Löschen (P) → Bereinigen | en 「…cannot be purged」 등 다수, 「도면층 소거」 清除图层·Layer bereinigen |
+| 소리 옮김·동음이의 | 대치 en·de Daechi → Replace·Ersetzen, 로드(L) en Rod·de Stab(막대) → Load·Laden, 검사(N) en Prosecutor·de Staatsanwalt(검찰) → Inspection·Inspektion, VP 동결 zh 副总裁(부사장)·de VP friert ein → VP 冻结·VP-Freeze, 현재 VP 가시성 zh 虚拟投影 → 当前 VP 可见性, 매핑 zh 地图(지도) 4곳 → 映射, 공간 ja スペース·de Leerzeichen(빈칸 글자) → 空間·Bereich, 식 zh 方程式·de Gleichung → 表达式·Ausdruck | 「대치(R)」·「<대치>:」, LAYTRANS 안내 「Load (L)」·「Laden (L)」, 「검사」, 「새 VP 동결」, 「동일 매핑(A)」 相同映射, 「모형 공간」 モデル空間·Modellbereich, 「AutoCAD 필터 식」 |
+| 격리 해제·LAYERP | 격리 해제 en Released from quarantine·de Aus der Quarantäne entlassen(검역) → Release isolation·Isolierung aufheben, 「도면층 격리를 풀었습니다.」 resolved·behoben → released·aufgehoben, de Release-Layer-Isolierung → Layer-Isolierung aufheben; 도면층 이전(LAYERP) en Layer transfer(옮김) → Layer Previous | 「도면층 격리 해제」 Release layer isolation, 「선택 해제」 Auswahl aufheben, 「이전 도면층 상태…」 Previous |
+| 특성(properties) | en·ja·de SETBYLAYER·그룹 필터·복원할 특성·새 특성 필터의 attribute·属性·Attribut(블록 속성) → properties·プロパティ·Eigenschaften | 「특성」 Properties·プロパティ, 「도면층 필터 특성」 Layer Filter Properties·Layer-Filtereigenschaften |
+| 깨진·뒤집힌 문장 | en·ja 「필터를 자기 아래 필터 안에 둘 수 없습니다.」 …nested within other filters None·配置できますありません → cannot be placed·配置することはできません, en 「…도면층 가운데에서」 middle → among, en·zh·de 「지금 도면층 설정으로」 Now·至图层设置·jetzt auf → current·当前·aktuellen, zh 「새로 만들기로 … 상태로 저장」 另存为新图层(새 도면층) → 保存为状态 | 「특성 필터 아래에는 …」, 「고른 도면층 가운데 …」 among, de 「die aktuellen Layereinstellungen」 |
+| 수를 이름으로·어순 | en Added layer {0}·Layer {0} removed → Added {0} layers·Removed {0} layers, zh 过滤器“{1}”·和对象 {1}·{0} 已移除 → {1} 个过滤器·上的 {1} 个对象·已排除 … {0} 个对象, zh 「현재로 만들 도면층 이름 입력 또는 <객체 선택>:」 어순 깨짐 → 输入要置为当前的图层名称或 <选择对象>：, zh 색상·투명도 이름 리스트 값 위치 | 「도면층 {0}개를 만들었습니다」 Created {0} layers, 「선가중치 {0}에 대한 …」 输入线宽 {0} 的… |
+| 그 밖 | ja 해제(R) 分解(분해) → 解除, ja LAYOFF 말풍선 ドラッグ(끌기) → オフにします, zh 선종류 行类型 5곳 → 线型, zh 현재 도면층으로 跳转(건너뛰기) → 置为当前图层·更改为, zh 「ON 또는 OFF를 입력」 开·关 → ON·OFF, en·de 가져오기(M) Get·Holen Sie sich → Import·Importieren, de 내보내기(X) Export → Exportieren, de LAYWALK 해제(R)·모두 해제(A) Aufgehoben·Alles löschen(모두 지우기와 같은 글) → Aufheben·Alle aufheben, de 변환 대상 Conversion-Ziel → Konvertierungsziel, de 플롯(P) Zeichnen → Plotten, de 만드시겠습니까 schaffen → erstellen, de 「Continuous로 두었습니다」 links(왼쪽) → auf Kontinuierlich gesetzt, en 도면층 지우기 Clear Layer → Delete Layer | 「모두 해제(A)」 すべて解除, 「끌 도면층의 객체 선택」 オフにする, 「선종류」 线型 85곳, 「동결된 도면층 … 置为当前图层」, 「가져온 도면층 상태」 imported, 「내보내기」 Exportieren, 「…이미 변환 대상에」 Konvertierungsziel, 「플롯 기본 설정 [플롯(P)…]」 Plotten (P), 「도면층 삭제」 Delete Layer |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 50, 열쇠 8504 → 8554):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| -LAYER 옵션 만들기(M)·이름 바꾸기(R)·선종류(L)·재료(MAT)·잠금(LO)·잠금 해제(U)·상태(A)·조정(E)과 첫 프롬프트 통째(명령행 키워드·바로 가기 메뉴·휴대폰 단추·기록 줄) | 9 | Enter option [?/Create (M)/…/Lock (LO)/Unlock (U)/State (A)/Description (D)/Adjust (E)]: | 「만들기」 作成·「선종류 만들기」 创建, 「도면층 상태」, 「조정(R)」 Adjust·Anpassen + 옵션 번역 |
+| -LAYERSTATE 편집·복원 특성 옵션(동결해제(T)·잠금해제(U)·켜기(O)·잠금(K)·새 VP 동결(N)·현재 VP 가시성(V)·플롯 스타일(S)), 뒤 조각 「] <종료>:」, 두 프롬프트 통째 | 10 | Enter property to turn on or off [On (O)/Freeze (F)/Lock (K)/…/Plot style (S)] <Exit>: | 낱말 열쇠 + 고를 글자, 「종료」 Exit |
+| 도면층 상태 이름 「복원할·편집할·이름을 바꿀·삭제할·내보낼 도면층 상태 이름 또는 [?] 입력:」(-LAYERSTATE R·E·N·D·EX — 틀 「{0} 도면층 상태 이름 또는 [」이 「복원할」을 잡아 한국어) 앞 조각 5·뒤 조각 「] 입력:」·통째 5 | 11 | Enter name of layer state to restore or [?]: | 「복원할」 to restore·復元する, 틀의 말투 |
+| -LAYER 이름 리스트 통째 「켤·끌·동결할·동결해제할·잠글·잠금해제할·설명을 적용할 … 이름 리스트 입력(또는 <객체 선택>):」 | 7 | Enter a list of layer names to turn off, or <select objects>: | 본문 열쇠 + 「조정할 … 또는 <객체 선택>:」 꼴 |
+| 그룹 필터 줄 「…의 도면층: 추가·대치 — 이름」, LAYDEL·LAYMRG 고른 도면층 꼬리 「] (선택한 도면층: {0}):」와 그 통째 2 | 5 | Layers in group filter "F1": Add — A-WALL · ] (selected layers: {0}): | 틀 번역 + 추가·대치, 앞 조각 + 옵션 |
+| 꼬리 글이 한국어로 남던 결과 줄: LAYWALK 「… · 선택 유지 {2}개」·소거 물음 「… 건너뜁니다」, 상태 편집 「(지워진 도면층 {1}개는 그대로 둡니다)」, LAYTRANS 「… 뺐습니다」·「만든·삭제한 도면층: …」 3, SETBYLAYER 「블록 정의 {1}개 안의 객체 {2}개도 수정했습니다」 | 8 | Showing {1} of {0} layers · Keep selected: {2} | 기존 꼬리 틀(「…{2}」)의 말투 |
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 103곳과 새 열쇠 50씩. 영어·일본어·중국어·독일어 화면의 도면층 팔레트·휴대폰 시트·-LAYER·-LAYERSTATE 명령행·바로 가기 메뉴·
+  휴대폰 단추·기록 줄·도면층 필터·도면층 상태 관리자·LAYWALK·LAYTRANS 상자가 한국어나 엉뚱한 낱말 대신 그 언어의 CAD 낱말로 보입니다. 같은 열쇠를 쓰는 PURGE 제목(소거)·
+  BLOCKREPLACE·문자 편집기 단추(대치)·디자인센터 로드(L)·매개변수 관리자 식·VIEW 목록 공간도 함께 바로잡혔습니다(모두 같은 뜻). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「290차에 보고 두 것」): -LAYERSTATE 편집의 이름 리스트 12꼴(한도 밖), 틀이 앱 낱말(색 이름·기본값·켜기 등)을 잡는 줄, 공유 열쇠, 다수 번역이 맞지 않아 보이는 것, 한도 밖 오역.
+
+### 확인
+- `tests/i18n-layer290.test.ts`(새 시험 3건 — 프롬프트는 소스의 dashLayerPrompt·askLayers·편집 kw·PROP_KEYS·askStateName·LAYDEL·LAYMRG에서 모음): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은
+  23 프롬프트의 입력 줄, 통째(친 입력 붙은 기록 줄 꼴 포함)·결과 줄(도면 이름 ft)·상자 글에 네 언어 모두 한글 없음, 고친 낱말과 새 통째 = 조각 + 옵션.
+- 고치기 전 3건 실패(한글 남은 입력 줄 68·통째 136, 영어 소거 Clear), 고친 뒤 `tests/i18n-layer290.test.ts`·`tests/i18n.test.ts`·`tests/i18n-prompts.test.ts` 3파일 33건 통과.
+  `npm run check:i18n` 통과(8554 항목).
+- tools/·tests/ grep: 옛 번역 낱말을 기대하는 곳 없음(tools/에는 도면층 글이 없음). 도면층 명령 시험은 한국어 원문 옵션을 봐 닿지 않음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-26(289차): 키보드로 누른 단추가 막히거나 숨을 때 초점이 문서로 빠지는 것
 
 ### 근거와 표
