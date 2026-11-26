@@ -1974,14 +1974,33 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   현재 사용 Currently in use·当前用途, 일본어 ㄱ형강 ㄱヒョンガン·가운데 の真ん中, 독일어 맨 뒤로(B) Zurück·해치 맨 뒤로 Zurück zur Schraffur 등).
   (나) 네 언어 모두 한국어로 보이던 48 열쇠(-HATCH 예/아니오 물음 여덟의 앞 조각·통째 16, 기본값 뒤 조각 「] <현재 사용>:」·「] <없음>:」, HATCH 현재 설정 줄 12, 결과 줄 4, ISO 무늬 설명 14)와
   새 통째가 덮어 쓰이지 않게 된 틀 넷을 지움(8703 → 8747). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 294차 절
-- [ ] 294차에 보고 두 것 — (1) 한도 밖 오역: 독일어 속성 Eigenschaft 약 30곳·결합 kombinieren(bind) 약 12곳(293차 출발점), 독일어 경계 Grenze·Rand 나머지(경계 뒤·앞·제거·그리기 경계·그리기 경계(W) Zeichnungsgrenzen·
+- [ ] 294차에 보고 두 것 — (1) 한도 밖 오역: 독일어 속성 Eigenschaft 약 30곳(**295차가 17곳 고침** — 나머지 17곳은 「295차에 보고 두 것」)·결합 kombinieren(bind) 약 12곳(293차 출발점 — **295차가 13곳 고침**), 독일어 경계 Grenze·Rand 나머지(경계 뒤·앞·제거·그리기 경계·그리기 경계(W) Zeichnungsgrenzen·
   새 경계·그리기 순서 통째 Hinter dem Rand·-BOUNDARY 옵션 통째·영역(R) Fläche 등), 독일어 「선 간격 지정」 Zeilenabstand(문자 줄 간격)·「연관(A)」 Assoziieren·연관 Zuordnung 넷·「현재 사용」 Aktuelle Verwendung·「주석(AN)」 Anmerkung,
-  영어 「경계 세트」 border set·「내부 점 선택 …」 통째 Set(T)(설정 Settings)·「일반(홀짝)」 General·「경계(명령행)」 소문자·「간격(사용자 정의)」 Interval·「십자 표시」 Crosshair·「반전 곡선」 Inversion curve,
-  중국어 「맨 앞으로」·「맨 앞으로(F)」·「맨 뒤로(B)」 正面·背面(면 — DRAWORDER 통째와 함께 바꿔야 해 한도 밖), 「경계 {0}개를 제거했습니다.」·「해치가 아닌 객체 {0}개는 뺐습니다.」 어순.
-  (2) 근거가 서지 않음: 영어 「색조」 Hue(tint — 같은 사전에 근거 낱말 없음), 「색상표(CO)」 Color Chart·Color palette·Color Book 섞임(공유 열쇠).
+  영어 「경계 세트」 border set·「내부 점 선택 …」 통째 Set(T)(설정 Settings)·「일반(홀짝)」 General(**295차가 고침** — 경계 모서리·XCLIP·IMAGECLIP 자르기 경계의 border도)·「경계(명령행)」 소문자·「간격(사용자 정의)」 Interval·「십자 표시」 Crosshair·「반전 곡선」 Inversion curve,
+  중국어 「맨 앞으로」·「맨 앞으로(F)」·「맨 뒤로(B)」 正面·背面(면 — DRAWORDER 통째와 함께 바꿔야 해 한도 밖 — **295차가 DRAWORDER 통째와 함께 前置·置于底层로 고침**), 「경계 {0}개를 제거했습니다.」·「해치가 아닌 객체 {0}개는 뺐습니다.」 어순.
+  (2) 근거가 서지 않음: 영어 「색조」 Hue(tint — 같은 사전에 근거 낱말 없음), 「색상표(CO)」 Color Chart·Color palette·Color Book 섞임(공유 열쇠 — 쓰는 곳이 모두 색상표(color book) 옵션이라 **295차가 영어·일본어·중국어를 Color Book·カラーブック·配色系统로 맞춤**, 독일어는 「295차에 보고 두 것」).
   (3) 코드 변경이 드는 것: -HATCH ? 목록 「이름 - 설명」(하이픈이라 조각으로 나뉘지 않아 무늬 설명 68개가 네 언어 모두 한국어), GRADIENT 현재 설정 줄(그라데이션 이름 9 × 색조·가운데·연관 — 틀이 앱 낱말을 잡음).
   (4) 쓰이지 않는 낱말 열쇠(화면에 나오지 않아 두는 것): ISO 무늬 제목 열둘(「대시 이점선」 Dash Lee Jeom-seon 등 오역 포함 — 이번 ISO 통째 열쇠가 덮음), 「, 연관」(틀이 잡던 글 — 중국어 协会·독일어 Verein).
   (5) 동의어 — 둠: 일본어 연관 関連付け(AutoCAD 일본어판 自動調整), 중국어 섬 岛屿(孤岛), 영어 「섬 검출 여부」·「연관 여부」 말투. 원어민 검토 없음
+- [x] 294차 한도 밖 오역과 선종류·선가중치·색·그리기 순서 묶음의 번역 대조·빠진 번역(295차, 290~294차 꼴 — 294차 보고 (1)·(2)): LINETYPE 선종류 관리자·-LINETYPE·LTSCALE·CELTSCALE·
+  PSLTSCALE·LWDISPLAY(LWEIGHT)·COLOR·CHPROP 색·선종류·선가중치·DRAWORDER·TEXTTOFRONT·HATCHTOBACK·색 고르기·CDORDER·MKLTYPE·STATUS 현재 색상·선종류·선가중치 줄·리본 고르기의 보이는 글.
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 21·일본어 8·중국어 30·독일어 30곳 — DRAWORDER 통째 Object up·上へ·对象顶部·正面·背面, 중국어 맨 앞으로·맨 뒤로 正面·背面 → 前置·置于底层,
+  색상표(color book) Color Chart·カラーパレット·调色板 → Color Book·カラーブック·配色系统, 중국어 선종류 行类型·线条类型 → 线型, MKLTYPE uniform shape·均等な形状, 영어 경계 border·Set(T)·General,
+  독일어 결합 kombinieren → binden 13곳·속성 Eigenschaft → Attribut 17곳 등). (나) 네 언어 모두 한국어로 보이던 21 열쇠(-LINETYPE·MKLTYPE 예/아니오 물음의 앞 조각·통째 4,
+  결과 줄 4, ? 목록 「(로드됨)」 1, STATUS 현재 색상·선종류·선가중치 줄 12)와 새 통째가 덮어 쓰이지 않게 된 틀 둘을 지움(8747 → 8766). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 295차 절
+- [ ] 295차에 보고 두 것 — (1) 한도 밖 오역(독일어 — 출발점 결합 13 + 속성 17로 한도가 참): 속성 Eigenschaft 나머지 17곳(분해(속성 유지)·속성 남기고 분해·「INSERT의 속성 값 입력을 대화상자로」·
+  「블록을 넣을 때 속성 값 묻기」·「블록만 표시(이름·속성)」·「, 속성 {0}개」·「속성 정의를 바꿨습니다. …」·「편집을 위한 속성 정의 표시」 둘레 작업 세트 줄·「속성 표시(0 끄기 …)」 등), 경계 Grenze·Rand 나머지
+  (경계 뒤·앞·제거·그리기 경계(W) Zeichnungsgrenzen·새 경계·그리기 순서 통째 Hinter dem Rand·-BOUNDARY 옵션 통째·경계 객체 유형 Fläche·경계 수 Grenznummer 등), 이 묶음의 독일어 오역(객체 위로 Up-Objekt·
+  객체 아래로 Objekt unten·해치 맨 뒤로 결과 ans Ende·다른 객체의 맨 뒤로 Rückseite·고른 객체를 놓을 자리·MKLTYPE einheitlicher Form·트루 컬러 Echte Farbe·새 객체의 선종류 축척 skalieren(동사)·
+  색상표 Farbpalette·Farbtabelle·Farbkarte·Color Table — 같은 사전의 「색상표(색상 책)」 Farbbuch 근거), 294차 나머지(독일어 선 간격 Zeilenabstand·연관(A) Assoziieren·현재 사용·주석(AN) Anmerkung,
+  영어 경계(명령행) 소문자·Interval·Crosshair·Inversion curve, 중국어 경계 제거 어순), 중국어 선종류 行类型·线条类型 나머지 다섯(특성 재지정 「선종류 {0}을(를) 찾을 수 없습니다. 먼저 로드하십시오.」·
+  RENAME 「선종류 {0}의 이름은 바꿀 수 없습니다.」·DWG 쓰기 경고·MLSTYLE 설명 줄·도면층 필터 도움말 — 중국어 한도 밖), 중국어 「로드된 선종류 이름 입력(또는 [?]) <Continuous>:」의 선종류 이름 Continuous 连续,
+  영어 「로드된 선종류 이름 입력 또는 [」 Enter name of linetype to load(로드된 — loaded).
+  (2) 공유 열쇠라 하지 않음: 「작성」(-LINETYPE 작성(C) 이름표 ↔ 도면 특성 작성자 Author), 「설정」(-LINETYPE 설정 Set ↔ Settings), 「만들었습니다」(made·gemacht), 「결합」 이름표(NCOPY bind ↔ VPORTS join).
+  (3) 코드 변경이 드는 것: CDORDER 결과 줄 「객체 {0}개를 색상 순서({1})로 맨 앞에·맨 뒤에 놓았습니다.」(색 이름 빨강 (1)·색상 30·트루컬러 …이 틀에 잡혀 열쇠로 다 덮지 못함),
+  STATUS 나머지 줄(현재 공간·삽입 기준점은·현재 고도·채우기 켜기·끄기·객체 스냅 모드 등 — 대부분 한국어, 틀이 앱 낱말을 잡음).
+  (4) 동의어 — 둠: 영어 Line weight·Lineweight 섞임, 일본어 맨 앞으로 一番前へ, 중국어 객체 위로·아래로 对象向上·向下, 중국어 「빨강,초록,파랑 값 입력:」 어순, 「바꿀 것이 없습니다.」 无需替换(DRAWORDER·CDORDER·LAYTRANS).
+  (5) 보지 않은 것: 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄(-LINETYPE 옵션·CHPROP 특성·RGB 입력 — 292차 꼴). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
