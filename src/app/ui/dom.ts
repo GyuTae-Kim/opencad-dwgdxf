@@ -1,6 +1,6 @@
 /** DOM 도우미: 요소 만들기, 알림, 메뉴, 대화상자 */
 import { icon } from './icons';
-import { clampBox } from './layout';
+import { SHORT_HEIGHT, clampBox } from './layout';
 
 export function h<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -36,6 +36,12 @@ let toastWrap: HTMLDivElement | null = null;
  * 화면 글이 아니라 이것으로 견준다
  */
 const toastKeys = new WeakMap<Element, string>();
+/**
+ * 한 번에 보이는 단추 없는 알림 수(280차). 알림 영역은 최대 높이 없이 아래로 쌓여, 두 줄 알림 셋이 세로 휴대폰 화면 위 31~40%까지 오고 다섯이면 작은 화면의
+ * 보기 모드 카드를 덮는다. 낮은 화면(가로로 눕힌 휴대폰 — CSS가 명령행 기록을 두 줄로 줄이는 높이)은 셋이면 66%라 둘
+ */
+const TOAST_LIMIT = 3;
+const TOAST_LIMIT_SHORT = 2;
 
 /** 알림에 붙는 단추(예: 새 버전 → 새로 고침) */
 export interface ToastAction {
@@ -46,7 +52,8 @@ export interface ToastAction {
 /**
  * 잠깐 보이는 알림. 오류는 화면 읽기 프로그램이 바로 읽게 role="alert"로 둔다.
  * action이 있으면 단추와 닫기 단추를 붙인다. ms가 0이면 닫을 때까지 남는다.
- * 단추 없는 알림은 같은 종류·같은 글의 단추 없는 알림이 떠 있으면 그것을 지우고 새로 붙인다(271차 — 쌓이지 않고 하나만, 시간은 마지막 알림부터)
+ * 단추 없는 알림은 같은 종류·같은 글의 단추 없는 알림이 떠 있으면 그것을 지우고 새로 붙인다(271차 — 쌓이지 않고 하나만, 시간은 마지막 알림부터).
+ * 글이 다른 단추 없는 알림이 TOAST_LIMIT(낮은 화면은 TOAST_LIMIT_SHORT)를 넘으면 가장 오래된 것부터 지운다(280차)
  */
 export function toast(text: string, kind: 'info' | 'warn' | 'error' = 'info', ms = 4200, action?: ToastAction): HTMLDivElement {
   if (!toastWrap || !toastWrap.isConnected) {
@@ -73,6 +80,14 @@ export function toast(text: string, kind: 'info' | 'warn' | 'error' = 'info', ms
     toastKeys.set(t, key);
   }
   toastWrap.append(t);
+  if (!action) {
+    // 글이 다른 알림(참조 파일 고르기·여러 파일 열기에서 파일마다 다른 오류 등)은 위에서 묶이지 않아 수 한도 없이 쌓였다(280차). 새 알림은 맨 뒤라 남아
+    // 화면 읽기 프로그램이 읽고, 오래된 것부터 빠진다. 오류 알림은 명령행 기록에도 남는다(보기 모드 명령 밖 오류 줄·열기 실패 — 부르는 쪽이 적음).
+    // 단추 있는 알림은 지우지도 세지도 않는다. 같은 글은 위에서 옛 것이 빠져 수가 그대로다
+    const plain = Array.from(toastWrap.children).filter((c) => toastKeys.has(c));
+    const limit = window.innerHeight < SHORT_HEIGHT ? TOAST_LIMIT_SHORT : TOAST_LIMIT;
+    for (const old of plain.slice(0, Math.max(0, plain.length - limit))) old.remove();
+  }
   if (ms > 0) setTimeout(() => t.remove(), ms);
   return t;
 }

@@ -176,3 +176,44 @@ describe('참조 파일 고르기의 결과 알림(272차)', () => {
     expect(translate('파일 2개를 연결했습니다(1개는 열지 못했습니다).', 'en')).toBe('Linked 2 file(s) (1 could not be opened).');
   });
 });
+
+describe('여러 파일이 실패해도 화면의 알림은 셋까지(280차 — 271차 보고 (1))', () => {
+  it('파일마다 다른 오류 알림은 오래된 것부터 빠지고 마지막 셋(요약 포함)만 보인다 — 빠진 오류는 명령행 기록에 남는다', async () => {
+    // 이 시험만 가짜 알림을 진짜 알림(ui/dom.ts)으로 돌려 화면(DOM)에 뜬 알림을 센다(viewerr270.test.ts 271차 시험 꼴)
+    const { toast: real } = await vi.importActual<{ toast: typeof toast }>('../../src/app/ui/dom');
+    vi.mocked(toast).mockImplementation(real);
+    try {
+      const h = setup();
+      await settle();
+      next.badImages.add('site.png');
+      await h.pick(file('base.dwg'), file('site.png'), file('Plan.PDF'), file('romans.shx'), file('other.png'));
+      const PDF_ERR = `참고: ${ft('Plan.PDF')}은(는) 읽을 수 없는 PDF입니다(암호가 걸렸거나 손상됨).`;
+      const SHX_ERR = 'SHX 글꼴로 읽을 수 있는 파일이 없습니다.';
+      const SUMMARY = '파일 1개를 연결했습니다(4개는 열지 못했습니다).';
+      expect(calls()).toEqual([
+        [XREF_ERR, 'error', 9000],
+        [`${ft('site.png')}: 이미지를 연결하지 못했습니다.`, 'error', 9000],
+        [PDF_ERR, 'error', 9000],
+        [SHX_ERR, 'error', 9000],
+        [SUMMARY, 'info'],
+      ]);
+      // 전에는 다섯 모두 쌓였다(오류는 9초씩 — 휴대폰에서 도면과 카드 단추를 가림)
+      expect(Array.from(document.querySelectorAll('.toast'), (t) => [t.getAttribute('role'), t.textContent])).toEqual([
+        ['alert', PDF_ERR],
+        ['alert', SHX_ERR],
+        [null, SUMMARY],
+      ]);
+      // 먼저 빠진 두 오류도 명령행(보기 모드는 숨김 — 편집 화면에서 보임)에 그대로 있다
+      for (const line of [
+        'base.dwg: 외부 참조를 열지 못했습니다(손상된 파일).',
+        'site.png: 이미지를 연결하지 못했습니다.',
+        '참고: Plan.PDF은(는) 읽을 수 없는 PDF입니다(암호가 걸렸거나 손상됨).',
+        SHX_ERR,
+      ])
+        expect(h.out()).toContain(line);
+    } finally {
+      vi.mocked(toast).mockReset();
+      document.querySelector('.toast-wrap')?.remove();
+    }
+  });
+});

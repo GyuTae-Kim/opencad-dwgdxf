@@ -184,9 +184,9 @@ describe('알림', () => {
   });
 
   const TWIST = '비틀린 뷰포트는 아직 모형 공간으로 들어갈 수 없습니다.';
-  /** 떠 있는 알림의 [종류, 글] 차례 */
-  const shown = () =>
-    Array.from(document.querySelectorAll('.toast'), (t) => [t.classList.contains('error') ? 'error' : t.classList.contains('warn') ? 'warn' : 'info', t.textContent]);
+  /** 떠 있는 알림(sel — 기본은 모두)의 [종류, 글] 차례 */
+  const shown = (sel = '.toast') =>
+    Array.from(document.querySelectorAll(sel), (t) => [t.classList.contains('error') ? 'error' : t.classList.contains('warn') ? 'warn' : 'info', t.textContent]);
 
   it('같은 종류·같은 글의 단추 없는 알림은 쌓지 않고 하나만: 옛 알림을 지우고 새로 붙여 시간이 마지막 알림부터 흐른다(271차 — 전에는 하나씩 쌓였다)', () => {
     vi.useFakeTimers();
@@ -244,6 +244,84 @@ describe('알림', () => {
       expect(tr2.isConnected).toBe(true);
       expect(Array.from(document.querySelectorAll('.toast'), (t) => t.textContent).filter((t) => t === other || t?.startsWith('No drawing'))).toEqual([other]);
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 280차: 파일마다 다른 오류(참조 파일 고르기·여러 파일 열기)는 글이 달라 하나로 묶이지 않는다
+  const A = 'a.dwg: 외부 참조를 열지 못했습니다(손상된 파일).';
+  const B = 'b.png: 이미지를 연결하지 못했습니다.';
+  const C = '큰 파일(120 MB)이라 여는 데 시간이 걸리고 메모리를 많이 씁니다. 다른 탭을 닫아 두면 좋습니다.';
+  const D = '파일 1개를 연결했습니다(2개는 열지 못했습니다).';
+  const E = '저장해 둔 파일을 찾지 못해 목록에서 지웠습니다.';
+  const PLAIN = '.toast:not(.has-action)';
+
+  it('글이 다른 단추 없는 알림은 셋까지만: 넘으면 가장 오래된 것부터 지우고, 단추 있는 알림은 지우지도 세지도 않는다(280차 — 전에는 수 한도 없이 쌓였다)', () => {
+    vi.useFakeTimers();
+    try {
+      const upd = toast('새 버전이 있습니다.', 'info', 0, { label: '새로 고침', run: vi.fn() });
+      const a = toast(A, 'error', 9000);
+      toast(B, 'error', 9000);
+      toast(C, 'warn', 8000);
+      expect(shown(PLAIN)).toEqual([
+        ['error', A],
+        ['error', B],
+        ['warn', C],
+      ]);
+      const d = toast(D, 'info', 3000);
+      // 넷째: 가장 오래된 A가 빠지고 새 알림은 맨 뒤에(알림 영역에 새 마디 — 화면 읽기 프로그램이 읽는다)
+      expect(a.isConnected).toBe(false);
+      expect(d.isConnected).toBe(true);
+      expect(shown(PLAIN)).toEqual([
+        ['error', B],
+        ['warn', C],
+        ['info', D],
+      ]);
+      // 떠 있는 B와 같은 글은 271차대로 B를 지우고 새로 붙인다 — 수가 그대로라 C를 지우지 않는다
+      toast(B, 'error', 9000);
+      expect(shown(PLAIN)).toEqual([
+        ['warn', C],
+        ['info', D],
+        ['error', B],
+      ]);
+      // 알림마다 시간: D(3초)가 사라져 자리가 비면 새 알림은 다른 것을 지우지 않는다
+      vi.advanceTimersByTime(3000);
+      toast(E, 'warn', 4200);
+      expect(shown(PLAIN)).toEqual([
+        ['warn', C],
+        ['error', B],
+        ['warn', E],
+      ]);
+      expect(upd.isConnected).toBe(true);
+      expect(document.querySelectorAll('.toast')).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('낮은 화면(높이 480px 아래 — 가로로 눕힌 휴대폰, 명령행 기록도 두 줄만)은 둘까지, 480px이면 셋(280차)', () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('innerHeight', 479);
+      toast(A, 'error', 9000);
+      toast(B, 'error', 9000);
+      toast(C, 'warn', 8000);
+      expect(shown()).toEqual([
+        ['error', B],
+        ['warn', C],
+      ]);
+      document.body.innerHTML = '';
+      vi.stubGlobal('innerHeight', 480);
+      toast(A, 'error', 9000);
+      toast(B, 'error', 9000);
+      toast(C, 'warn', 8000);
+      expect(shown()).toEqual([
+        ['error', A],
+        ['error', B],
+        ['warn', C],
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
       vi.useRealTimers();
     }
   });
