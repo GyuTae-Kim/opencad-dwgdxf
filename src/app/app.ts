@@ -2482,16 +2482,23 @@ export class App {
       this.finishWindow(this.windowStart.screen, s, ev);
       return;
     }
+    // 두 번 누르기의 두 번째 누르기로 칠 거리(화면 px): 마우스·펜은 4, 손가락은 손가락 톡 고르기 거리(위 tol)와 같은 PICKBOX × 3(267차 —
+    // README 표 셀 「휴대폰은 두 번 톡」: 첫 톡이 셀을 고르면 손가락 위·아래 그립 띠가 셀 안을 덮어, 4px 넘게 떨어진 두 번째 톡이 그립 편집을 시작하고
+    // 뒤따르는 dblclick은 명령 중이라 편집기를 열지 않았다)
+    const dblR = ev.pointerType === 'touch' ? Math.max(4, this.view.overlay.pickbox * 3) : 4;
     // 그립: 누르면 그립 편집, Shift+클릭은 핫 그립 더하기·빼기(보기 모드는 그립이 없다)
     if (!r && !this.viewOnly && st.selection.size && this.gripList.length && !this.busyCommand) {
       const g = this.gripAt(w, ev.pointerType === 'touch');
       // 방금 객체를 고른 클릭과 같은 자리를 곧바로 다시 누르면 두 번 누르기다(AutoCAD처럼 그립 편집 대신 dblclick이 맡는다)
       const lp = this.lastPickClick;
-      if (g && !ev.shiftKey && lp && isDoubleClickFollowUp(lp, performance.now(), s)) {
+      if (g && !ev.shiftKey && lp && isDoubleClickFollowUp(lp, performance.now(), s, dblR)) {
         this.lastPickClick = null;
         return;
       }
       if (g) {
+        // 그립을 누른 누르기는 고르기 누르기와의 짝을 쓴다(267차 — 두 번 누르기는 바로 이은 두 누르기: 그립 편집을 취소한 뒤 0.5초 안의
+        // 손가락 톡이 넓어진 거리로 앞 고르기 톡과 짝지어지지 않게)
+        this.lastPickClick = null;
         this.clickGrip(g.point, ev.shiftKey);
         return;
       }
@@ -2500,10 +2507,11 @@ export class App {
     const sg = !ev.shiftKey && !this.busyCommand ? this.subGripAt(w, ev.pointerType === 'touch') : null;
     if (sg) {
       const lp = this.lastPickClick;
-      if (lp && isDoubleClickFollowUp(lp, performance.now(), s)) {
+      if (lp && isDoubleClickFollowUp(lp, performance.now(), s, dblR)) {
         this.lastPickClick = null;
         return;
       }
+      this.lastPickClick = null;
       this.clearHover();
       sg.s.gripPress?.(sg.i, w);
       return;
@@ -3525,7 +3533,10 @@ export function dblClickCommand(e: Entity): string | null {
   }
 }
 
-/** 두 번 누르기 판정: 객체를 고른 클릭 뒤 500ms(Windows 기본 두 번 누르기 간격) 안에 4px 안쪽을 다시 눌렀는가 */
-export function isDoubleClickFollowUp(prev: { time: number; screen: Pt }, now: number, screen: Pt): boolean {
-  return now - prev.time <= 500 && Math.hypot(screen.x - prev.screen.x, screen.y - prev.screen.y) <= 4;
+/**
+ * 두 번 누르기 판정: 객체를 고른 클릭 뒤 500ms(Windows 기본 두 번 누르기 간격) 안에 radius px(기본 4 — Windows 마우스 기본) 안쪽을 다시 눌렀는가.
+ * 손가락 톡은 onClick이 손가락 고르기 거리(PICKBOX × 3)를 넘긴다(267차)
+ */
+export function isDoubleClickFollowUp(prev: { time: number; screen: Pt }, now: number, screen: Pt, radius = 4): boolean {
+  return now - prev.time <= 500 && Math.hypot(screen.x - prev.screen.x, screen.y - prev.screen.y) <= radius;
 }
