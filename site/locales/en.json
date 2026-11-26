@@ -7927,7 +7927,7 @@
   "한 가지 색": "Single color",
   "한 객체의 특성을 다른 객체에 복사합니다 (MA)": "Copy the properties of one object to another (MA)",
   "한 글자를 입력하십시오.": "Enter a single character.",
-  "한 손가락 = 이동, 두 손가락 = 확대·축소, 탭 = 선택, 길게 누르기 = 정밀 조준": "One finger = pan, two fingers = zoom, tap = select, press and hold = precise aim",
+  "한 손가락 = 이동, 두 손가락 = 확대·축소, 탭 = 선택, 길게 누르기 = 정밀 조준(보기 모드와 명령이 점·객체를 물을 때 — 그 밖에는 안드로이드 바로 가기 메뉴)": "One finger = pan, two fingers = zoom, tap = select, press and hold = precise aim (in view mode and when a command asks for a point or object — otherwise the shortcut menu on Android)",
   "한 줄 문자 {0}개를 여러 줄 문자로 바꿨습니다.": "Converted {0} single-line text object(s) into multi-line text.",
   "한 줄 문자(TEXT)나 속성 정의를 고르십시오.": "Select single-line text (TEXT) or attribute definitions.",
   "한 줄 문자를 여러 줄 문자로 결합 (TXT2MTXT)": "Combine single-line text into multi-line text (TXT2MTXT)",

@@ -132,9 +132,11 @@ describe('보기 모드 도면층 시트는 켜고 끄기만(246차)', () => {
   });
 });
 
-describe('F1 도움말 조작 표 「터치」(246차)', () => {
-  it('길게 누르기(정밀 조준) 한 칸, 네 언어 사전에 있다', () => {
-    const row = '한 손가락 = 이동, 두 손가락 = 확대·축소, 탭 = 선택, 길게 누르기 = 정밀 조준';
+describe('F1 도움말 조작 표 「터치」(246차 · 276차)', () => {
+  // 276차: 길게 누르기는 보기 모드와 명령이 점·객체를 물을 때만 정밀 조준이다(app.ts aimEnabled). 편집 화면 명령 밖은 안드로이드가 보내는
+  // contextmenu로 바로 가기 메뉴(onContext)이고 iOS는 톡이라, 「길게 누르기 = 정밀 조준」만 적은 글이 넓었다. 도움말은 보기 모드에도 보인다
+  it('길게 누르기(정밀 조준·그 밖에는 안드로이드 바로 가기 메뉴) 한 칸, 네 언어 사전에 있다', () => {
+    const row = '한 손가락 = 이동, 두 손가락 = 확대·축소, 탭 = 선택, 길게 누르기 = 정밀 조준(보기 모드와 명령이 점·객체를 물을 때 — 그 밖에는 안드로이드 바로 가기 메뉴)';
     expect(readFileSync(new URL('../../src/editor.ts', import.meta.url), 'utf8')).toContain(`['터치', '${row}']`);
     for (const lang of ['en', 'de', 'ja', 'zh-CN']) {
       const t = translate(row, lang);
@@ -144,5 +146,13 @@ describe('F1 도움말 조작 표 「터치」(246차)', () => {
       expect(t, lang).not.toMatch(/Tab/);
     }
     expect(translate(row, 'en')).toContain('press and hold');
+    // 옛 줄(「길게 누르기 = 정밀 조준」으로 끝남)은 소스·사전에 남지 않는다
+    const old = '한 손가락 = 이동, 두 손가락 = 확대·축소, 탭 = 선택, 길게 누르기 = 정밀 조준';
+    expect(readFileSync(new URL('../../src/editor.ts', import.meta.url), 'utf8')).not.toContain(`'${old}'`);
+    for (const lang of ['en', 'de', 'ja', 'zh-CN']) {
+      const t = translate(row, lang);
+      expect(t, lang).toContain('Android');
+      expect(readFileSync(new URL(`../../site/locales/${lang}.json`, import.meta.url), 'utf8'), lang).not.toContain(`"${old}"`);
+    }
   });
 });
