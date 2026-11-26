@@ -3,6 +3,53 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-26(287차): 치수(DIM) 명령 묶음의 번역 대조와 빠진 번역
+
+### 근거와 표
+치수 묶음 — DIM 스마트 치수(`src/app/dimsmart.ts`), DIMLINEAR·DIMALIGNED·DIMANGULAR·DIMRADIUS·DIMDIAMETER·DIMARC·DIMCONTINUE·DIMBASELINE·DIMORDINATE(`dimcmds.ts`),
+치수 스타일 관리자·수정 대화 상자(`dimstyle.ts`), DIMASSOC·DIMDISASSOCIATE·DIMREGEN·DIMREASSOCIATE(`dimassoc.ts`), 화살표 반전(`dimflip.ts`), DIMINSPECT(`diminspect.ts`),
+DIMCENTER·DIMHORIZONTAL·DIMVERTICAL(`editcmds2-dim.ts`), DIMEDIT·DIMTEDIT·DIMSPACE·DIMBREAK·DIMJOGLINE·DIMJOGGED·DIMOVERRIDE(`annot2.ts`), 치수 그립 메뉴(`gripmenu.ts`),
+리본 치수 단추(`ui/shell.ts`) — 의 보이는 글을 모아 네 사전과 견줬습니다. 옵션 목록을 코드로 짜 맞추는 프롬프트(`kws.map(...)`·`tail(kws)`·원·호 방식 고리)는 갈래마다 펼쳤습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역(같은 프롬프트의 조각·옵션·통째, 짝 열쇠)으로 고쳤습니다(영어 28·일본어 15·중국어 28·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 꺾기(jog — DIMJOGGED·DIMJOGLINE·DIM J·리본·LIST) | en Break·Bend radius·broken line·Select vertex → Jog·Jog radius dimension·Jogged linear·Select jog; de Pause·Biegeradiusmaß·Bruchposition·gestrichelte Linie → Verkürzung·Verkürzte Radiusbemaßung·Position der Verkürzung·Verkürzte lineare Bemaßung; zh 曲线 → 折弯 | 「꺾기를 추가할 치수 선택 또는 [」 add a jog to·Verkürzungslinie·折弯, 리본 「선형 치수에 꺾기선 (DJL)」 Jogged line·Verkürzte Linie |
+| 끊기(break — BREAK 제목·PEDIT B·DIMBREAK) | en Hang up → Break; de Legen Sie auf·Objekt zum Bemaßen·Haltepunkt → Unterbrechen·Objekt zum Unterbrechen der Bemaßung·Trennpunkt; ja 分割 → 切断 | 「치수 끊기」 Break Dimension·Bemaßungen unterbrechen·寸法の切断, 「첫 번째 끊기점 지정:」 Trennpunkt |
+| DIMEDIT·DIMTEDIT 홈(H)·기울기(O) | 홈(H) ja 溝(도랑)·zh 原点·de Startpunkt·DIMEDIT de Pos1(키보드 키) → ホーム·默认·Ausgangsposition; 기울기(O) en Orientation·ja 角度 → Oblique·傾斜; 기울기 en Slope·zh 坡度 → Oblique·倾斜 | DIMEDIT·DIMTEDIT 통째의 옵션 낱말 |
+| 기준 치수·첫 치수보조선·두 번째 선 | en·de 「기준 치수」 standard·Standard → base·Basis; de 첫 치수보조선 Bemaßungslinie(치수선)·「zuerst」 → Hilfslinie; de 두 번째 선 Zeile(글 줄) → Linie | 앞 조각 「기준 치수 선택 또는 [」·「첫 번째 치수보조선 원점 지정 또는 [」, 「선을 선택하십시오.」 |
+| 세로좌표·DIM 첫 프롬프트 | zh 垂直坐标·垂直 → 坐标, de Vertikale Koordinate·Ordinieren → Ordinate, ja 통째의 垂直座標·並べ替え·コマンドキャンセル → 옵션 座標·位置合わせ·元に戻す | 「…세로좌표 치수를 선택하십시오.」 坐标标注, 「세로좌표 치수」 Ordinatenbemaßung, 옵션 열쇠 |
+| 연관해제됨·현재 사용·다시 연관 | en {0} are unrelated·Disassociate (D) → {0} disassociated·Disassociated (D); de nichts miteinander zu tun → nicht assoziiert; 현재 사용(.) en Current Use·zh 当前用途·de Aktuelle Verwendung → Use current·使用当前·Aktuellen verwenden; 리본 「다시 연관」 en Re-related → Reassociate | 옵션 「연관해제됨(D)」, HATCH 「[Use current(.)]」·DIM L 통째, 말풍선 Reassociate |
+| 다중(M)·현재로 설정·분산 | zh 다중(M) 多段线(폴리선) → 多个(M), zh 「현재로 설정」 设置为当前图层(스타일 대화 상자) → 设置为当前, zh 분산 유형 分散 → 分布(de Streuung은 보고 두 것) | 다중(M) 든 통째 多个(M) 4곳, PAGESETUP 设置为当前…, 「분산(D)」 分布 |
+| 치수 스타일 단위·화살촉·공차 | 분수 en Fountain·de Brunnen → Fractional·Bruch, 과학·건축 en → Scientific·Architectural, zh 건축 施工 → 建筑, 닫고 채움 en Close and fill·ja 閉じて埋める·zh 关闭填充 → Closed filled·塗り潰し·实心闭合, 닫힌 공백 en closed space·zh 封闭样条曲线 → Closed blank·闭合空白, 건축 눈금 en Architectural scale → Architectural tick, 위 값 ja 上記の値·zh 最高值 → 上の値·顶部值, zh 고정 길이 已修复长度 → 固定长度 | 「분수(대각선)」 Fraction·Bruch, 「과학(S)」·「건축(A)」, 「…닫고 채운 화살촉만…」 closed filled·实心闭合, 「눈금 크기」 Tick size, 짝 「아래 값」 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어 네 언어 모두 한국어로 보이던 것(언어마다 29, 열쇠 8475 → 8504):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| DIMLINEAR·DIMALIGNED·DIMRADIUS·DIMDIAMETER 「치수선의 위치 지정 또는 [여러 줄 문자(M)/…]:」 통째(기록 줄·휴대폰 카드·커서 옆) | 2 | Specify location for dimension line or [Multiline (M)/Text (T)/Angle (A)/Horizontal (H)/Vertical (V)/Rotate (R)]: | 앞 조각 + 옵션 번역(전에는 일반 틀 「{0} 또는 {1}」이 한국어를 끼움) |
+| 스마트 치수 DIM 통째(각도·치수선·두 번째 선·원·호의 반지름·지름·호 길이·각도 방식 7·꺾기·기준선·세로좌표) | 13 | Specify location for radius dimension or [Diameter (D)/Jog (J)/Arc length (L)/Angle (A)/…/Text angle (N)/Undo (U)]: | 같음 |
+| DIM 도면층 「… [현재 사용(.)] <"현재 사용">:」 통째·뒤 조각, 결과 줄 「새 치수의 도면층 = 현재 사용」 | 3 | … [Use current (.)] <"Use current">: · Layer of new dimension = Use current | 고친 「현재 사용(.)」과 틀 「새 치수의 도면층 = {0}」 |
+| 명령행 앞 조각 「각도·반지름·지름 치수 위치 지정 또는 [」·「지시선 끝점 지정 또는 [」·「치수선 위치 지정 또는 각도에 대한 두 번째 선 지정 [」 | 5 | Specify location for radius dimension or [ | 틀 「… 또는 {0}」·이웃 조각(전에는 일반 틀 영어 「반지름 치수 위치 Specify or [」) |
+| 옵션 꺾기(J)·문자 각도(N)·호 길이(L)(명령행 키워드·바로 가기 메뉴·휴대폰 단추) | 3 | Jog (J) · Text angle (N) · Arc length (L) | 「꺾기」(고친 것)·「문자 각도」·「호 길이」 |
+| 기본값이 옵션이 아닌 뒤 조각 「] <다음>:」·「] <추가(A)>:」(DIMREASSOCIATE·-DIMINSPECT) | 2 | ] <Next>: · ] <Add (A)>: | <다음>은 PEDIT·-ATTEDIT·도면 비교가 옵션 다음(N)으로 옮기던 글과 같게(그 화면 그대로) |
+| 치수 스타일 관리자 목록 줄 「⁨이름⁩ (현재)」(「 · 수」 조각 포함) | 1 | {0} (current) | 「(현재)」·「현재 치수 스타일: {0}」 |
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 101곳과 새 열쇠 29씩. 영어·일본어·중국어·독일어 화면의 치수 명령행·바로 가기 메뉴·휴대폰 단추·기록 줄·휴대폰 카드·
+  치수 스타일 대화 상자·리본이 한국어나 엉뚱한 낱말 대신 그 언어의 CAD 낱말로 보입니다. 같은 열쇠를 쓰는 BREAK 제목(끊기)·문자 기울기 특성(기울기)·UNITS 단위 이름(분수·과학·건축)·
+  선택 다중(M)·스타일 대화 상자 「현재로 설정」·HATCH 「현재 사용(.)」도 함께 바로잡혔습니다(모두 같은 뜻). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「287차에 보고 두 것」): 독일어 한도(30곳) 밖, 파일 열기 단추와 같은 열쇠인 화살촉 「열기」, 같은 사전 근거가 없는 것, -DIMSTYLE·QDIM 등 범위 밖.
+
+### 확인
+- `tests/i18n-dim287.test.ts`(새 시험 3건 — 프롬프트는 소스의 KW_*·RADIAL_KW·RADIAL_HEAD·DIM_MAIN_PROMPT·선형 kws에서 모음): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은
+  20 프롬프트의 입력 줄, 통째(친 입력 붙은 기록 줄 꼴 포함)·결과 줄·스타일 목록 줄에 네 언어 모두 한글 없음, 꺾기·끊기·홈·기울기·기준 치수·치수보조선·세로좌표 낱말과 새 통째 = 조각 + 옵션.
+- 고치기 전 3건 실패(한글 남은 입력 줄 64·통째 84, 영어 꺾기 Break), 고친 뒤 `tests/i18n-dim287.test.ts`·`tests/i18n.test.ts`·`tests/i18n-prompts.test.ts` 3파일 33건 통과.
+  `npm run check:i18n` 통과(8504 항목).
+- tools/·tests/ grep: 옛 번역 낱말을 기대하는 곳 없음(tools/에는 치수 글이 없음). 치수 명령 시험은 한국어 원문 프롬프트를 봐 닿지 않음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-26(286차): ARRAY 묶음의 빠진 번역(키워드·그립·예/아니오 프롬프트)
 
 ### 근거와 표
