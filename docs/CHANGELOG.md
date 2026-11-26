@@ -3,6 +3,54 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(300차): 299차가 남긴 오역과 지시선·표·공차·필드 주석 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 299차 「보고 두 것」 (1)의 독일어 한도 밖 오역(기준 중심점·이등분 둘·원에 외접·매듭 Akkord·증분·도넛 <Ende>·3인칭 프롬프트·종료(X)·Speicherort·구름형 리비전 나머지)이고,
+그 뒤 지시선·표·공차·필드 주석 묶음 — LEADER(`leaderold.ts`), QLEADER·MLEADEREDIT·MLEADERALIGN·MLEADERCOLLECT·MLEADERSTYLE(`annot2-leader.ts`), MLEADER(`annotate.ts`),
+TOLERANCE 대화 상자(`annot2-misc.ts`·기호 이름 `edit/annot/tolerance.ts`), TABLE·TABLEDIT·TABLECELL·TABLESTYLE·CTABLESTYLE(`tablecmds.ts`·`tablecell.ts`·`tablecell-palette.ts`·`edit/table/style.ts`),
+TINSERT(`blkcmds-misc.ts`), TABLEEXPORT·MATCHCELL(`editcmds2-dim.ts`), FIELD·UPDATEFIELD(`fieldcmds.ts`) — 의 보이는 글을 네 사전과 견줬습니다.
+틀(`${…}`)·키워드 조합을 펴서 명령행 조각·기록 줄·결과 줄·대화 상자 글로 넣어 봤습니다. 277~299차가 이미 대조한 열쇠는 건너뛰었습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 18·일본어 8·중국어 30·독일어 29곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 독일어 출발점: HELIX·XLINE·POLYGON·SPLINE·LENGTHEN·DONUT·LINE 등·MEASUREGEOM·CAL·REVCLOUD·도면 비교 | 기준 중심점 Referenzmittelpunkt → Basismittelpunkt, 이등분·이등분(B) Bisektion·Teilung → Halbierung, 원에 외접 Umkreist → Umschrieben in einem Kreis, 매듭 통째 Akkord·einheitlich → Sehne·Gleichmäßig, 증분·LENGTHEN 통째 Inkrementell → Inkrement, 도넛 <Ende> → <Beenden>, 다음 점·각도의 첫 번째 끝점 Gibt … an(3인칭) → … angeben, 호 또는 원 선택 Ende (X) → Beenden (X), 자리 오류와 CAL 줄 Speicherort(저장 위치) → Position, 구름형 리비전 쉐이프·구름형 수정 기호(리본)·비교-구름형 리비전·구름형 리비전(R) → Revisionswolke | 「기준 반지름 지정」 Basisradius, XLINE 프롬프트 조각 「이등분(B)」 Halbierung, 「원에 외접(C)」, 「현(C)」·「균일(U)」, 「증분(I)」·「증분(DE)」, 「종료」 Beenden, 「다음 점 지정 또는 [」, 「종료(X)」, 「그 자리에 …」 An dieser Position, 「구름형 리비전」 Revisionswolke |
+| 독일어 묶음 | 빠른 지시선 Schneller Anführer → Schnelle Führungslinie, MLEADEREDIT 통째 Füllzeichen(채움 문자) → Führungslinie, 현재 스타일 삭제 Formatüberschreibung → Stil, 현재 간격두기 사용·(U) aktiviert·Benutzerabstand → Aktuellen Abstand verwenden, 정렬 입력 Sortierung → Ausrichtung, Enter 아래 셀 안내, 면의 윤곽도 Konturzeichnung des Gesichts → Flächenform, 원통도 Zylinder → Zylindrizität, MLEADERCOLLECT 앞 글 Mehrfachleiter → Multileader, QLEADER 앞 글 「[ [」 겹침, 지시선 연결선 먼저 | 「지시선」·「지시선 추가」 Führungslinie, 「사용 중인 스타일은 …」 Stil, 통째 프롬프트 기본값, 「셀 정렬」·「자리맞추기 입력 [」 Ausrichtung, 같은 글의 Alt+Eingabetaste, 「선의 윤곽도」 Linienform, 「동심도」 Konzentrizität, 「다중 지시선」 Multileader, 통째 「첫 번째 지시선 점 지정 또는 [설정(S)]…」, 「내용 먼저」 Inhalt zuerst |
+| 중국어 | 다중 지시선 다섯 多行引线(여러 줄) → 多重引线, 지시선 추가(A)·형식 옵션·최대 점 수 前导线 → 引线, 연결선 일곱 引线连接器·定位引线·使用引线 → 引线基线, 첫 번째 각도(F) 第一个角点(구석점) → 第一角度, 화살촉 셋 引导箭头 → 引线箭头, 줄바꿈 셋 换行符·行断点 → 环绕, 정렬 입력 输入排序条件 → 输入对齐方式, 현재 간격두기 사용 둘, 블록이 없습니다 无方块 → 没有块, GD&T 원주 흔들림 周长符文·원통도 圆柱体·면의 윤곽도 面部轮廓·선의 윤곽도 → 圆跳动·圆柱度·面轮廓度·线轮廓度 | 「새 다중 지시선 스타일 작성」 多重引线, 「지시선 추가」 添加引线, 「지시선 연결선 위치 지정」 基线, 통째 「…/첫 번째 각도(F)/…」 第一角度(F), 통째 「…줄바꿈(W)」 环绕(W), 「자리맞추기 입력 [」, 「블록」 块, 「온 흔들림」 全跳动·「동심도」 同心度 |
+| 영어 | 화살촉 30도 열기 30 degree heat → Open 30 degrees·닫고 비움 Close and empty → Closed blank, Ⓛ 최소 재료 Minimum ingredients → Minimum Material, (현재) (currently) → (current), 연결선 여덟 connecting line·connection·connector·attachment → landing, 정렬 입력 Align input → Enter alignment, 현재 간격두기 사용 Current spacing enabled → Use current spacing, 셀 일치 cell match → Match cell, 줄바꿈 셋 Line Break → Wrap | 「열기」 Open·「닫음」 Closed·「닫고 채움」 Closed filled, 「Ⓜ 최대 재료」, 「{0} (현재)」, 「지시선 연결선」 Leader landing, 「셀 정렬」, 통째 프롬프트 Use current spacing (U), 「특성 일치」 Match properties, 「줄바꿈(W)」 Wrap (W) |
+| 일본어 | 면·선의 윤곽도 輪郭図(그림) → 輪郭度, 현재 간격두기 사용, 줄바꿈 둘 改行 → 折り返し, MLEADERSTYLE 설명 줄 引出線 {3} → 接続線 {3}, 정렬 입력 整列入力 → 位置合わせを入力, 간격두기 지정 インターバル → 間隔を指定 | 「평행도」 平行度, 통째 프롬프트 기본값, 「줄바꿈(W)」 折り返し(W), 「연결선 거리」 接続線, 「자리맞추기 입력 [」, 「간격두기 지정(S)」 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 60):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| MLEADER 순서 옵션 「지시선 화살촉 먼저(H)」·「지시선 연결선 먼저(L)」·「내용 먼저(C)」, 앞 글 「지시선 화살촉·연결선 위치 지정 또는 [」, 통째(기록 줄) 셋, 「첫 번째·두 번째 각도 구속 입력 <{0}>:」 | 10 | Specify leader landing location or [ | 조각 열쇠 없음, 틀 「{0} 각도 구속 입력」이 「첫 번째」를 잡음 — 이름 + 고를 글자·「또는 [」 꼴 |
+| TABLECELL 옵션 「위에 행 삽입(RA)」~「문자 편집(E)」·「스타일 따름(S)」, 「행 높이·열 폭 입력 <{0}>:」 | 15 | Insert row above (RA) | 조각 열쇠 없음, 틀 「{0} 입력」이 「행 높이」를 잡음 |
+| 표 결과 줄 「위에 행 삽입: 표 {0}행 {1}열」 등(`${동작}: 표 R행 C열`) | 21 | Insert row above: table of {0} rows × {1} columns | 틀 「{0}: 표 {1}행 {2}열」 + 동작 이름 |
+| FIELD 자리맞추기 옵션 「왼쪽 위(TL)」~「오른쪽 아래(BR)」 | 8 | Top-left (TL) | 조각 열쇠 없음 |
+| MLEADERSTYLE 관리자 설명 줄 「내용: 여러 줄 문자, 문자 높이 {0}, …, 연결선 {2}, 축척 {3}」 등(내용 셋 × 연결선 있음·없음) | 6 | Content: Multiline text, text height {0}, arrowhead size {1}, landing {2}, scale {3} | 틀이 내용 종류·「없음」을 잡음 |
+
+지운 틀은 없습니다. 열쇠 8941 → 9001.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 85곳과 새 열쇠 60씩. 영어·일본어·중국어·독일어 화면의 MLEADER·TABLECELL·FIELD 명령행, 표 결과 줄, MLEADERSTYLE 관리자 설명 줄이
+  한국어 대신 그 언어로, 중국어 다중 지시선·연결선·공차 기호와 독일어 지시선·정렬·299차 출발점 글이 엉뚱한 낱말 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 독일어 「다음 점 지정:」(LINE·PLINE·SPLINE 등 다음 점 프롬프트 모두)·「증분」(SKETCH 증분(I)·LENGTHEN 키워드 이름), 영어 「(현재)」(스타일 목록의 「(현재)」 표시),
+  중국어 「다중 지시선」·「블록이 없습니다.」(다른 명령의 같은 글). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「300차에 보고 두 것」): 독일어·중국어 한도 밖 오역, 공유 열쇠 「평면도」·「계속」·「열기」·「머리글」, 표 스타일 편집기 오류 줄·기록 줄(열쇠 한도 밖), 표 스타일 요약 줄(코드 변경) 등.
+
+### 확인
+- `tests/i18n-leader300.test.ts`(새 시험 3건 — 프롬프트·결과 줄 꼴은 소스 글에서 확인): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 27 프롬프트의 입력 줄, 결과·안내 줄 33과 기록 줄 10에
+  네 언어 모두 한글 없음, 고친 낱말 = 같은 사전 근거, 새 열쇠 = 조각·틀 번역에서 만든 꼴.
+- 고치기 전 9건 가운데 3건 실패(한글 남은 입력 줄 44·결과 줄 128, 독일어 Referenzmittelpunkt). 고친 뒤 첫 실행은 시험 손셈 잘못 하나(중국어 명령행 뒤 글이 통째 번역의 전각 「：」)로 1건 실패 —
+  그 기대만 고쳐 다시 돌려 `tests/i18n-leader300.test.ts`·`tests/i18n-inquiry299.test.ts`·`tests/i18n-draw298.test.ts` 3파일 9건 통과. `npm run check:i18n` 통과(9001 항목).
+  사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어 규칙)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험 없음. 바꾼 열쇠를 보는 시험(299 CAL 자리 오류 — 「CAL: 」 + 오류 글 그대로, 298 도넛·매듭 — 영어·중국어 값, 284 중국어 지시선 형식 통째 — 바꾸지 않음,
+  287 「(현재)」 — 한글 없음, 한국어 원문을 보는 annotedit·table2·cmds2 등)은 기대 그대로 맞습니다. tools/에는 이 묶음 글 없음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(299차): 298차가 남긴 오역과 조회·측정 명령 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
