@@ -7501,6 +7501,7 @@
   "파일": "Dateien",
   "파일 \"{0}\"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 고른 파일만 이름으로 찾습니다.": "Datei \"{0}\" nicht gefunden. Diese Webversion kann Dateien nicht über den Pfad öffnen und sucht daher nur nach Dateien, die in dieser Sitzung anhand ihres Namens ausgewählt wurden.",
   "파일 \"{0}\"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 연 파일만 이름으로 로드합니다.": "Datei \"{0}\" nicht gefunden. Diese Webversion kann Dateien nicht über den Pfad öffnen und lädt daher nur Dateien, die in dieser Sitzung anhand ihres Namens geöffnet wurden.",
+  "파일 {0}개를 연결했습니다({1}개는 열지 못했습니다).": "{0} Datei(en) verknüpft ({1} konnten nicht geöffnet werden).",
   "파일 {0}개를 연결했습니다.": "{0} Datei(en) verknüpft.",
   "파일 {0}개를 연결했습니다: {1}{2}": "Verknüpfte {0} Dateien: {1}{2}",
   "파일 고르기": "Dateien wählen",
