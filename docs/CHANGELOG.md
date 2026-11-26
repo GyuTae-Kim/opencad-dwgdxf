@@ -3,6 +3,54 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(297차): 296차가 한도 밖으로 남긴 오역과 수정(편집) 명령 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 296차 「보고 두 것」 (1)·(2)의 한도 밖 오역(독일어 교차점 Kreuzung·중심 Mittelpunkt·스냅 Schnappschuss·등각 제도 Konformes System·기준점: Bezugspunkt, 공유 열쇠 「수직」)이고,
+그 뒤 수정(편집) 명령 묶음 — MOVE·COPY·ROTATE·SCALE·MIRROR·OFFSET·OFFSETGAPTYPE·TRIM·EXTEND·BREAK·BREAKATPOINT·LENGTHEN·EXPLODE·FILLET·CHAMFER·JOIN·STRETCH(`modify.ts`, ARRAYCLASSIC은 배열 묶음이라 뺌),
+ALIGN·BLEND·COPYM·EXTRIM(`modify2.ts`), 도우미(`modify2-util.ts`)·STRETCH 고르기(`editcmds2-stretch.ts`)와 편집 커널 결과 글(`edit/geom/types.ts` 등) — 의 보이는 글을 네 사전과 견줬습니다.
+277~296차가 이미 대조한 열쇠는 건너뛰었습니다. 「수직」은 코드로 가르니 그 글이 쓰이는 열아홉 자리 가운데 스냅(직교) 둘·세로 열일곱이라 그대로 두었습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 10·일본어 8·중국어 15·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 독일어 출발점: 스냅 이름(상태 막대 메뉴 켠 항목·추적 툴팁 열쇠 함께) | 교차점·가상 교차점 Kreuzung(길 교차로) → Schnittpunkt, 중심 Mittelpunkt(중간점과 같은 낱말) → Zentrum | 「객체 스냅: 교차점」 Schnittpunkt, 「객체 스냅: 중심」 Zentrum |
+| 독일어 출발점: 제도 설정 | 스냅 및 그리드·등각투영 스냅 Schnappschuss(사진) → Fang, 등각 제도·등각투영 제도·<등각투영 제도 끄기> Konformes System·Projektionssystem → Isometrisches Zeichnen, FROM 기준점: Bezugspunkt → Basispunkt | 「스냅 및 그리드(S)」 Fang und Raster, 「등각투영 제도 (ISODRAFT) · …」 Isometrisches Zeichnen, 293차 Basispunkt |
+| 독일어 묶음 | 모깎기 Filet(고기) → Abrunden, 걸치기 Anziehen(옷 입기) → Kreuzung, 부드럽게 Leise → Glätten, 폴리선 끝 모깎기 gefüllt → verrundet, 간격띄우기 결과 verschoben(이동) → versetzt·Versatz, 프로젝트 Projekte → Projektion, 첫 번째 모따기 거리 Fasenlänge → Fasenabstand, 끊기점 Haltepunkt → Trennpunkt, 원본(S) Ursprung → Quelle, 연장할 수 없음 erweitert → verlängert, 세 번째 근원점 Ursprung → Quellpunkt | 「모깎기(F)」 Abrundung, 279차 걸침 Kreuzung (C), 「부드럽게(S)」 Glätten, 「간격띄우기」 Versatz, 「투영 옵션 입력 [」, 「두 번째 모따기 거리」 Fasenabstand, 「첫 번째 끊기점 지정:」 Trennpunkt, 「원본에 결합할 호」 Quelle, 「연장」 Verlängern |
+| 영어 묶음 | TRIM·EXTEND 걸치기 Putting on → Crossing, 프로젝트 Projects → Projection, 분해 결과 disassembled·decomposed → exploded, EXTRIM clip → trim, 모드 mode → Mode, 근원점 origin → source point, 부드럽게 Softly → Smooth, 분할 Split → Divide | 「걸침 윈도우」 Crossing Window, 「투영 옵션 입력 [」, 「이 객체는 분해할 수 없습니다.」 exploded, 「자르기」 Trim, 「모드(O)」·「원본(S)」·「부드럽게(S)」·「분할(D)」 |
+| 일본어 묶음 | 걸치기 着る(옷 입기) → 交差, 프로젝트 プロジェクト → 投影, 같은 세그먼트 面取り・面取り → フィレット・面取り, EXTRIM 切り取る → トリム, 암시적 모서리 연장 コーナー → エッジ, 근원점 基点 → 源点, 경계 모서리 ボーダーエッジ → 境界エッジ | 279차 걸침 交差, 「투영 옵션 입력 [」 投影, 「모깎기」 フィレット, 「자르기」 トリム, 같은 프롬프트 통째의 エッジ, ALIGN 틀의 源点, 「경계 모서리 선택 ...」 |
+| 중국어 묶음 | 걸치기 悬挑(돌출) → 窗交, 프로젝트 项目 → 投影, 반복(마지막) 迭代 → 重复（上次）, 분할 分块 → 分割, 분해 결과 拆卸·模块 → 分解·块, 연장 扩展 → 延伸(연장(E)·연장 안 함(N)·암시적 모서리 연장 모드 포함), 자르기 결과 切割·裁剪 → 修剪, 원본(S) 原点 → 源, 근원점 起点 → 源点 | 279차 걸침 窗交, 조각 「반복(마지막)(R)」·「분할(D)」, 「외부 참조는 분해할 수 없습니다」 分解·「블록 정의」 块, 「연장」 延伸, 「자르기」 修剪, 「원본에 결합할 호」 源 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 60):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| TRIM·EXTEND 명령행 앞 글 둘과 옵션 조각 「절단 모서리(T)」·「경계 모서리(B)」·「걸치기(C)」·「프로젝트(P)」·「지우기(R)」·「울타리(F)」, 기록 줄 통째 여섯 | 14 | Select object to trim or shift-select to extend or [Cutting Edge (T)/Crossing (C)/…] | FILLET 「두 번째 객체 선택 또는 Shift 키를 …」 꼴, 키워드 이름 번역 + 고를 글자 |
+| 예/아니오 물음 셋(MIRROR 원본 지우기·OFFSET 지우기·ALIGN 축척)의 앞 글·통째 | 6 | Delete original object? [Yes (Y)/No (N)] <{0}>: | 사전의 물음 글 + 예·아니오 조각 |
+| OFFSET 통과점·면의 점(앞 글 둘·뒤 글 「] <다음 객체>:」·통째 넷), 연장 모드(앞 글·통째)·자르기 모드 통째, COPY 둘째 점 뒤 글, LENGTHEN 뒤 글 「] 지정 <{0}>:」 | 12 | Specify through point or [Exit (E)/Multiple (M)/Undo (U)] <next object>: | 조각 번역 + 「다음 객체」·「<첫 번째 점을 변위로 사용>:」 |
+| FILLET·CHAMFER 첫 객체(앞 글 하나·통째 둘), ALIGN 근원점 둘·대상점 셋(틀이 「첫 번째」를 잡음), COPYM 「간격 거리 지정:」 | 9 | Specify first source point: | 「대상점 지정:」 target point, 「간격 거리 지정」 |
+| 현재 설정 줄: COPY 복사 모드 둘, ROTATE 양의 각도 둘, OFFSET 넷, FILLET 둘, CHAMFER 넷, BLEND 연속성 둘 | 16 | Current settings: Erase source=Yes, Layer=Source, OFFSETGAPTYPE={0} | 옛 틀 + 옵션 조각에서 고를 글자를 뗀 낱말 |
+| LENGTHEN 「현재 길이: {0}, 사이각: {1}」, STRETCH 「{0}개를 찾음 ({1}개 중복)」, TRIM 블록 펼침 몫 안내 | 3 | {0} found ({1} duplicate) | 「현재 길이」·「{0}개를 찾음」 |
+
+새 열쇠가 덮어 쓰이지 않게 된 틀 11(현재 설정 줄 틀 여섯·「연속성 = {0}」·「{0} 근원점 지정:」·「{0} 대상점 지정:」·「{0} 모드 옵션 입력 [」와 그 통째)은 지웠습니다 — 소스에서 그 꼴을 내는 자리를 새 열쇠가 모두 덮습니다. 열쇠 8801 → 8850.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 63곳과 새 열쇠 60씩, 지운 틀 11. 영어·일본어·중국어·독일어 화면의 TRIM·EXTEND·OFFSET·MIRROR·ALIGN·CHAMFER 명령행과 기록 줄,
+  COPY·ROTATE·OFFSET·FILLET·CHAMFER·BLEND 현재 설정 줄이 한국어 대신 그 언어로, 독일어 스냅 이름·제도 설정과 편집 결과 글이 엉뚱한 낱말 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 독일어 「중심」(원·문자 자리맞추기·치수 중심 표식·LIST 등 중심 뜻 스물다섯 자리 — Zentrum), 「모드」(키워드 이름·ATTDEF 무리 이름·표 머리·LISP 오류 글 여덟 자리), 「부드럽게」(GCSMOOTH 구속·BLEND),
+  「원본(S)」(OFFSET·express 간격띄우기 도면층 옵션), 「연장(E)」(TRIM EDGEMODE·PEDIT 결합 유형), 「기준점:」(FROM). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「297차에 보고 두 것」): 독일어 한도 밖 오역, 「수직」(스냅 이름 원문을 가르는 소스 변경), TRIM·EXTEND 현재 설정 줄(열쇠 12개 — 한도 밖) 등.
+
+### 확인
+- `tests/i18n-edit297.test.ts`(새 시험 3건 — 프롬프트·설정 줄 꼴은 소스 글에서 확인): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 21 프롬프트의 입력 줄, 기록 줄(친 입력 붙은 꼴 포함)·현재 설정·결과 줄 19에
+  네 언어 모두 한글 없음, 고친 낱말과 새 열쇠 = 조각·이름 번역에서 만든 꼴, 지운 틀 없음.
+- 고치기 전 3건 실패(한글 남은 입력 줄 76·기록과 설정 줄 172, 독일어 Kreuzung), 고친 뒤 `tests/i18n-edit297.test.ts`·`tests/i18n-drafting296.test.ts`·`tests/i18n-prompts.test.ts` 3파일 30건 통과.
+  `npm run check:i18n` 통과(8850 항목). 사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어 규칙)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험 없음(279차 시험의 독일어 걸침 선택 「Kreuzung (C)」에 걸치기를 맞춤). 바꾼 열쇠를 보는 시험(296 ✓·툴팁 = 이름, 293 기준점: 영어·중국어, 121 스냅 및 그리드 중국어,
+  prompts 복사 모드·자르기(T)·도우미 프롬프트 끝)은 기대 그대로 맞습니다. tools/에는 이 묶음 글 없음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(296차): 295차가 한도 밖으로 남긴 오역과 제도 설정·객체 스냅·격자·스냅·극좌표·동적 입력 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
