@@ -324,6 +324,11 @@ export class App {
    */
   viewOnly = false;
   /**
+   * 지금 찍는 오류 줄을 부른 쪽이 알림(토스트·시작 화면 안내 상자)으로 따로 보인다(reportOpenError). 휴대폰 보기 모드는 명령 밖 오류 줄을
+   * 오류 알림으로 보이는데(270차 — 명령행이 숨어 있다, ui/mobileview.ts) 이 줄은 또 띄우지 않는다
+   */
+  errorNoticed = false;
+  /**
    * 보기 모드로 들어갈 때 도면마다의 명령 취소·다시 실행 맨 위 항목(251차). 보기 모드의 Ctrl+Z·Ctrl+Y는 이 위의 항목 —
    * 보기 모드에서 한 단계(도면층 시트의 켜고 끄기 등)·보기 모드에서 되돌린 단계 — 만 되돌리고 다시 한다(viewStep)
    */
@@ -1319,7 +1324,12 @@ export class App {
    */
   reportOpenError(name: string, info: OpenErrorInfo): void {
     const text = openErrorText(name, info);
-    this.cmd.print(`${ft(name)} — ${info.message}`, 'err');
+    this.errorNoticed = true;
+    try {
+      this.cmd.print(`${ft(name)} — ${info.message}`, 'err');
+    } finally {
+      this.errorNoticed = false;
+    }
     this.cmd.print(info.hint);
     if (!this.active && this.ui.showOpenError) this.ui.showOpenError(name, info);
     else toast(text, 'error', 9000);
