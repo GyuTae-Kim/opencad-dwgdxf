@@ -1989,18 +1989,39 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   독일어 결합 kombinieren → binden 13곳·속성 Eigenschaft → Attribut 17곳 등). (나) 네 언어 모두 한국어로 보이던 21 열쇠(-LINETYPE·MKLTYPE 예/아니오 물음의 앞 조각·통째 4,
   결과 줄 4, ? 목록 「(로드됨)」 1, STATUS 현재 색상·선종류·선가중치 줄 12)와 새 통째가 덮어 쓰이지 않게 된 틀 둘을 지움(8747 → 8766). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 295차 절
 - [ ] 295차에 보고 두 것 — (1) 한도 밖 오역(독일어 — 출발점 결합 13 + 속성 17로 한도가 참): 속성 Eigenschaft 나머지 17곳(분해(속성 유지)·속성 남기고 분해·「INSERT의 속성 값 입력을 대화상자로」·
-  「블록을 넣을 때 속성 값 묻기」·「블록만 표시(이름·속성)」·「, 속성 {0}개」·「속성 정의를 바꿨습니다. …」·「편집을 위한 속성 정의 표시」 둘레 작업 세트 줄·「속성 표시(0 끄기 …)」 등), 경계 Grenze·Rand 나머지
+  「블록을 넣을 때 속성 값 묻기」·「블록만 표시(이름·속성)」·「, 속성 {0}개」·「속성 정의를 바꿨습니다. …」·「편집을 위한 속성 정의 표시」 둘레 작업 세트 줄·「속성 표시(0 끄기 …)」 등 — **296차가 14곳 고침**,
+  「, 속성 {0}개」는 디자인 센터 줄의 틀이 통째로 잡아 쓰이지 않는 열쇠), 경계 Grenze·Rand 나머지
   (경계 뒤·앞·제거·그리기 경계(W) Zeichnungsgrenzen·새 경계·그리기 순서 통째 Hinter dem Rand·-BOUNDARY 옵션 통째·경계 객체 유형 Fläche·경계 수 Grenznummer 등), 이 묶음의 독일어 오역(객체 위로 Up-Objekt·
-  객체 아래로 Objekt unten·해치 맨 뒤로 결과 ans Ende·다른 객체의 맨 뒤로 Rückseite·고른 객체를 놓을 자리·MKLTYPE einheitlicher Form·트루 컬러 Echte Farbe·새 객체의 선종류 축척 skalieren(동사)·
-  색상표 Farbpalette·Farbtabelle·Farbkarte·Color Table — 같은 사전의 「색상표(색상 책)」 Farbbuch 근거), 294차 나머지(독일어 선 간격 Zeilenabstand·연관(A) Assoziieren·현재 사용·주석(AN) Anmerkung,
-  영어 경계(명령행) 소문자·Interval·Crosshair·Inversion curve, 중국어 경계 제거 어순), 중국어 선종류 行类型·线条类型 나머지 다섯(특성 재지정 「선종류 {0}을(를) 찾을 수 없습니다. 먼저 로드하십시오.」·
-  RENAME 「선종류 {0}의 이름은 바꿀 수 없습니다.」·DWG 쓰기 경고·MLSTYLE 설명 줄·도면층 필터 도움말 — 중국어 한도 밖), 중국어 「로드된 선종류 이름 입력(또는 [?]) <Continuous>:」의 선종류 이름 Continuous 连续,
-  영어 「로드된 선종류 이름 입력 또는 [」 Enter name of linetype to load(로드된 — loaded).
+  객체 아래로 Objekt unten·해치 맨 뒤로 결과 ans Ende(**296차가 고침**)·다른 객체의 맨 뒤로 Rückseite·고른 객체를 놓을 자리·MKLTYPE einheitlicher Form·트루 컬러 Echte Farbe·새 객체의 선종류 축척 skalieren(동사)·
+  색상표 Farbpalette·Farbtabelle·Farbkarte·Color Table — 같은 사전의 「색상표(색상 책)」 Farbbuch 근거 — **296차가 13곳 고침**), 294차 나머지(독일어 선 간격 Zeilenabstand·연관(A) Assoziieren·현재 사용·주석(AN) Anmerkung,
+  영어 경계(명령행) 소문자·Interval·Crosshair·Inversion curve, 중국어 경계 제거 어순 — **296차가 영어 넷·중국어 어순을 고침**), 중국어 선종류 行类型·线条类型 나머지 다섯(특성 재지정 「선종류 {0}을(를) 찾을 수 없습니다. 먼저 로드하십시오.」·
+  RENAME 「선종류 {0}의 이름은 바꿀 수 없습니다.」·DWG 쓰기 경고·MLSTYLE 설명 줄·도면층 필터 도움말 — 중국어 한도 밖 — **296차가 넷 고침**, 도면층 필터 도움말 조각은 통째 열쇠가 있어 쓰이지 않음), 중국어 「로드된 선종류 이름 입력(또는 [?]) <Continuous>:」의 선종류 이름 Continuous 连续,
+  영어 「로드된 선종류 이름 입력 또는 [」 Enter name of linetype to load(로드된 — loaded)(**296차가 고침** — Continuous는 넷 모두).
   (2) 공유 열쇠라 하지 않음: 「작성」(-LINETYPE 작성(C) 이름표 ↔ 도면 특성 작성자 Author), 「설정」(-LINETYPE 설정 Set ↔ Settings), 「만들었습니다」(made·gemacht), 「결합」 이름표(NCOPY bind ↔ VPORTS join).
   (3) 코드 변경이 드는 것: CDORDER 결과 줄 「객체 {0}개를 색상 순서({1})로 맨 앞에·맨 뒤에 놓았습니다.」(색 이름 빨강 (1)·색상 30·트루컬러 …이 틀에 잡혀 열쇠로 다 덮지 못함),
   STATUS 나머지 줄(현재 공간·삽입 기준점은·현재 고도·채우기 켜기·끄기·객체 스냅 모드 등 — 대부분 한국어, 틀이 앱 낱말을 잡음).
   (4) 동의어 — 둠: 영어 Line weight·Lineweight 섞임, 일본어 맨 앞으로 一番前へ, 중국어 객체 위로·아래로 对象向上·向下, 중국어 「빨강,초록,파랑 값 입력:」 어순, 「바꿀 것이 없습니다.」 无需替换(DRAWORDER·CDORDER·LAYTRANS).
   (5) 보지 않은 것: 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄(-LINETYPE 옵션·CHPROP 특성·RGB 입력 — 292차 꼴). 원어민 검토 없음
+- [x] 295차 한도 밖 오역과 제도 설정·객체 스냅·격자·스냅·극좌표·동적 입력 묶음의 번역 대조·빠진 번역(296차, 290~295차 꼴 — 295차 보고 (1)): GRID·SNAP·DSETTINGS(스냅 및 그리드·극좌표 추적·객체 스냅)·
+  OSNAP·-OSNAP·객체 스냅 재지정 메뉴·상태 막대 제도 단추(객체 스냅·격자·스냅·직교·등각·극좌표·추적·동적 입력)와 객체 스냅·증분 각도·등각평면 메뉴·극좌표·객체 스냅 추적 툴팁·OPTIONS 제도 탭·
+  제도 변수 설명·휴대폰 스냅 칩·ISODRAFT·ISOPLANE·등각원의 보이는 글(이 앱 DSETTINGS에 동적 입력 탭은 없음).
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 12·일본어 6·중국어 21·독일어 30곳 — 독일어 속성 Eigenschaft·Immobilienverwaltung → Attribut 14, 색상표 → Farbbuch 13, 객체 위로·아래로·해치 맨 뒤로 결과,
+  영어 「⋯」 단추 이름 끝 Select·등각 제도 Conformal system·Interval·Crosshair·Inversion curve·to load·소문자 endpoint·node, 일본어 교차점 交差点·<간격띄우기> ギャップオフ·조준창 ピックボックス,
+  중국어 간격 偏移量·등각 图标·虚拟交集·四分之一点·ISODRAFT 等距·선종류 行类型·Continuous 连续·결과 줄 어순 등). (나) 네 언어 모두 한국어로 보이던 36 열쇠(상태 막대 객체 스냅 메뉴의 켠 항목 「✓ 끝점」 등 14,
+  등각평면 메뉴 3, 객체 스냅 추적 툴팁 15, SNAP 통째 줄의 종횡비 1, -OSNAP <없음> 1, OPTIONS 검사 글 2)와 새 열쇠가 덮어 쓰이지 않게 된 틀 「{0}등각평면 {1}」을 지움(ISODRAFT 명령행 기본값도 함께 풀림 — 8766 → 8801).
+  원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 296차 절
+- [ ] 296차에 보고 두 것 — (1) 한도 밖 오역(독일어 — 출발점 30으로 한도가 참): 경계 Grenze·Rand 나머지(295차 보고 (1)의 목록), 다른 객체의 맨 뒤로 Rückseite·뒤(B) Rückseite·MKLTYPE einheitlicher Form·
+  새 객체의 선종류 축척 skalieren·트루 컬러 Echte Farbe·고른 객체를 놓을 자리(깨진 문장), 294차 나머지(Zeilenabstand·Assoziieren·Aktuelle Verwendung·Anmerkung), 이 묶음의 독일어 오역(스냅 및 그리드 Schnappschüsse·
+  등각투영 스냅 Schnappschuss·스냅 Y 간격 einrasten·스냅 켜기·스냅 유형·스냅 모드 Snap(같은 사전 Fang)·증분 각도 Inkrementell Winkel·간격 Intervall·교차점·가상 교차점 Kreuzung(「객체 스냅: 교차점」 Schnittpunkt)·
+  중심 Mittelpunkt(중간점과 같은 낱말 — 「객체 스냅: 중심」 Zentrum)·삽입 einfügen·기준점: Bezugspunkt·중간점의 첫·두 번째 점 Mittelpunkt·등각 제도 Konformes System·등각투영 제도 Projektionssystem·제도 탭 Zeichnung).
+  (2) 공유 열쇠라 하지 않음: 「수직」(스냅 수직 perpendicular ↔ 세로 vertical — 상태 막대 객체 스냅 메뉴·툴팁이 네 언어 모두 Vertical 꼴로 보임, 휴대폰 칩은 「수직 발」로 따로 씀 — 스냅 이름을 다른 열쇠로 가르는 코드 변경),
+  「직교」(ORTHO·ISODRAFT 직교 ↔ GCPERPENDICULAR 직교 구속), 「시작점」(FROM ↔ 시작점), 「대상:」. 새 「✓ 이름」·툴팁 열쇠는 이름 열쇠의 번역을 그대로 따라(켜고 끌 때 이름이 바뀌지 않게) 이름 열쇠를 고치면 함께 고친다(296차 시험이 같음을 봄).
+  (3) 시험이 고정한 것: 일본어 「주(M)」 主軸(M)(GRID 주 격자선 — 118차 `tests/i18n-defaults118.test.ts`가 主軸(M)을 고정, 같은 사전 「주 격자선」 主グリッド線 근거).
+  (4) 코드 변경이 드는 것: 두 정렬선이 만날 때의 추적 툴팁 「끝점: < 0°, 극좌표: < 90°」(이름 조합 — 쉼표로 이어 열쇠로 다 덮지 못함, 앞 이름만 옮겨짐), 「극좌표: {0} < {1}°」·새 툴팁 열쇠는 각도 단위가 도가 아니면(°가 없으면)
+  앞 열쇠가 맞지 않음, 디자인 센터 「…객체 {1}개, 속성 {2}개 · 기준점 …」(틀이 「, 속성 N개」를 잡음), OPTIONS 나머지 검사 글(저장 간격·십자선·확인란·그립·길게 누르기 — 칸 이름을 틀이 잡음).
+  (5) 근거가 서지 않음: 영어 연장선 Extension line(같은 사전에서 치수보조선과 같은 낱말 — Extension 근거 없음), 일본어 확인란 크기 チェックボックス(PICKBOX — 선택 탭, 이 묶음 밖).
+  (6) 동의어 — 둠: 영어 접점 Point of tangency·가상 교차점 Virtual intersection·Polar coordinate tracking, 일본어 끝점 終点·格子/グリッド·トレース/トラッキング, 중국어 极坐标/极轴·中心/圆心·瞄准窗口/靶框.
+  (7) 보지 않은 것: FROM 「<간격띄우기>:」에 친 입력을 붙인 기록 줄(292차 꼴). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
