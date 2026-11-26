@@ -3,6 +3,57 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(301차): 300차가 남긴 오역과 배치·출력(레이아웃·플롯) 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 300차 「보고 두 것」 (1)의 중국어 통째 기록 줄(MLEADER 다섯)·독일어 296·294차 나머지와 (4)의 표 스타일 편집기 오류 열둘이고,
+그 뒤 배치·출력 묶음 — LAYOUT·배치 탭 메뉴(`layoutcmds.ts`·`layoutcmds-file.ts`·`ui/shell.ts`), LAYOUTWIZARD·MVSETUP(`filecmds-layout.ts`), PAGESETUP(페이지 설정 관리자·대화 상자 `pagesetup-ui.ts`),
+PLOT·PREVIEW·PUBLISH·EXPORTPDF(`plot.ts`), -PLOT·PSETUPIN(`dashcmds-plot.ts`), VPORTS(`vports.ts`), MVIEW·MSPACE·PSPACE·CHSPACE·VPLAYER·VPCLIP(`vpcmds.ts`), PLOTSTAMP(`filecmds-stamp.ts`),
+PLOTSTYLE·CONVERTCTB·CONVERTPSTYLES(`filecmds-plot.ts`), EXPORTLAYOUT, VPMAX·VPSCALE·VPSYNC(`viewtools*.ts`) — 의 보이는 글 687개(294~300차가 본 글을 빼면 열쇠 599)를 네 사전과 견줬습니다.
+틀(`${…}`)·키워드 조합·예/아니오 물음(askYN)을 펴서 명령행 조각·기록 줄·결과 줄·대화 상자 글로 넣어 봤습니다(고치기 전 언어마다 한국어로 남는 줄 97).
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 16·일본어 20·중국어 30·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| PLOT 대화 상자 「매수」(부수) | Buy·ノット数(매듭 수)·采购(구매)·Kaufen → Number of copies·コピー数·副本数量·Anzahl der Kopien | 「매수: 1과(와) 99 …」 Number of copies·Anzahl der Kopien, 「복사본이 너무 많습니다」 コピー·副本数量 |
+| VPORTS 「셋: …」·「넷: 동일」 | セット·设置(설정)·Net·网络·Netz(그물) → 3つ·三个·Four·4つ·四个·Vier, 독일어 「셋: 오른쪽」 Richtig(옳음) → Rechts | 「(2D 도면이라 네 뷰포트 …)」 four·4つ·四个·vier, 「경계는 점이 셋 이상」 3つ·三个, 「오른쪽」 Rechts |
+| 플롯 낱말 | 독일어 상세한 플롯 구성 Handlungsstruktur(줄거리) → Plotkonfiguration, 플롯의 중심 Grundstücksmitte(땅) → Plot zentrieren, 객체의 선가중치 플롯 Linienstärkediagramm → Objektlinienstärken plotten; 중국어 平面图(평면도)·剧情预览(줄거리 미리 보기) → 打印 | 「현재 구성:」 Konfiguration, 「중심(C)」 Zentrieren, 「선가중치로 플롯?」, 「플롯」 打印·「모든 배치 플롯({0}쪽)」 （{0} 页） |
+| 용지 방향·한계 | 도면 방향 가로(N)·세로(A)와 -PLOT 세로(P) Horizontal·Vertical·水平·垂直·Vertikal → Landscape·Portrait·横向·纵向·縦·Querformat·Hochformat, 한계 Limitations·制限·局限·限界 → Limits·図面範囲·界限 | 「가로(L)」·「용지 방향 입력 [세로(P)/가로(L)]」, 플롯 영역 통째 Limits(L)·図面範囲(L)·界限(L) |
+| 독일어 공간·페이지 설정·동결 | 모형 공간으로 Zum Modellieren des Raums → In Modellbereich, 도면 공간을 사용(앞 조각·통째) Zeichenbereich·Platz auf dem Papier → Papierbereich verwenden, 공간 변경 Leerzeichen(빈칸) → Bereich, 용지 Dokument → Papier, 새 페이지 설정 Neue Seite festlegen → Neue Seiteneinrichtung, 새 동결·새 동결(N) Neuer Freeze·Neue Fixierung → Neu einfrieren, 기본 가시성 통째 freeze/unfreeze → Einfrieren/Auftauen | 「종이 공간으로」 In Papierbereich, 「도면 공간」 Papierbereich, 「공간」 Bereich, 「용지 크기」 Papier, 「페이지 설정」 Seiteneinrichtung, VPLAYER 통째 Neu einfrieren(N), 「동결(F)」·「동결 해제(T)」 |
+| 중국어·일본어·영어 나머지 | 중국어 용지 论文(논문) → 纸张, 불러온 표 装表 → 已加载的表, 건축 축척 施工 → 建筑比例尺, VPCLIP 통째 修剪(TRIM) → 裁剪, 구성 构造 → 配置, 뷰포트 축척 缩放(줌) → 比例, 이미 이 배치의 페이지 설정(뜻 바뀜); 일본어 線荷重(하중) → 線の太さ, 구성 設定 → 構成, (재정의) 財政(재정) → 再定義; 영어 새 페이지 설정 Set new page → New page setup, 뷰포트 자르기 Crop → Clip, 범위 range → extents, 간격띄우기 X Offset(X 빠짐), 과학 축척 | 「용지 크기」 纸张, 「STB 파일 불러오기」 加载, 「건축」 建筑, 「자르기 객체 선택 또는 [」 裁剪, 「현재 구성:」 配置·構成, 「선가중치 축척」 比例, 「선가중치로 플롯?」 線の太さ, 「재정의」 再定義, 「새 페이지 설정 이름(N)」, 「자를 뷰포트 선택:」 clip, 「범위(E)」 Extent, 「간격띄우기 Y」 |
+| 300차 출발점 | 중국어 MLEADER 통째 기록 줄 다섯 前导符·引线连接器·<使用间距(Use)>·多行引线·换行符 → 引线·引线基线·<使用当前间距>·多重引线·环绕; 독일어 트루 컬러 다섯 Echte Farbe·Echtfarben → True Color, 현재 사용 둘 Aktuelle Verwendung(쓰는 중) → Aktuellen verwenden, UNDO 뒤(B) Rückseite(뒷면) → Zurück, -HATCH 연관(A) Assoziieren → Assoziativ, MKLTYPE einheitlicher Form → ausgewählter Form | 300차 조각(添加引线·引线基线·使用当前间距·多重引线·指定环绕宽度或 [), 색 프롬프트 조각 True Color (T), 「현재 사용(.)」, UNDO·-HATCH 고급 통째, 「고른 주석 객체…」 ausgewählt |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 56):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| -PLOT 예/아니오 물음 앞 조각 「상세한 플롯 구성을 원하십니까? [」 등 | 9 | Proceed with plot? [ | 명령행 앞 글 열쇠가 없음 — 물음 번역 + 「 [」 |
+| MVSETUP 「] <작성>:」, -PLOT 「] 입력 (없는 경우 . 입력) <{0}>:」·「] 입력 <모형>:」·「배치 이름 또는 [?] 입력 <모형>:」, VPLAYER 「현재 제외(X)」, 플롯 축척 앞 조각 둘(밀리미터·인치) | 7 | ] (enter . for none) <{0}>: | 뒤 글·옵션 조각 열쇠가 없거나 틀이 「모형」·단위를 잡음 |
+| 페이지 설정 관리자 「*모형*」·「*모형 ({0})*」·「현재 배치: 모형」·「페이지 설정 - 모형」과 적용·바꿈·저장 결과 줄(모형·배치 "{0}") | 10 | Applied page setup "{0}" to layout "{1}". | 틀이 「모형」·「배치 "…"」를 잡음 |
+| MVSETUP·VPLAYER·CHSPACE·MVIEW 결과 줄(2D 평면 뷰·동결된 도면층 없음·종이·모형 공간으로 옮김·켬·끔) | 6 | Moved {0} objects to paper space. | 틀이 앱 낱말을 잡음 |
+| LAYOUTWIZARD 요약 「용지: {0}, 가로·세로, 밀리미터·인치」·「제목 블록: 없음」과 결과 줄(방향 × 제목 블록) | 9 | Layout "{0}" was created ({1}, Landscape). | 틀이 방향·단위·제목 블록 글을 잡음 |
+| PSETUPIN 「(재정의 {1}개)」·PLOTSTAMP 「(필드 없음)」 줄 | 3 | Imported {0} page setup(s) (override {1}). | 틀이 잡음 |
+| 300차 출발점: 표 스타일 편집기 오류 「제목·머리글·데이터 × 문자 높이·문자 색상·채우기 색상·테두리 색상」 | 12 | Title text height must be greater than 0. | 틀 + 행 종류 이름 |
+
+지운 틀은 없습니다. 열쇠 9001 → 9057.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 96곳과 새 열쇠 56씩. 영어·일본어·중국어·독일어 화면의 -PLOT 물음·MVSETUP·VPLAYER 명령행, 페이지 설정 관리자, 배치 마법사 요약과 결과 줄,
+  표 스타일 편집기 오류가 한국어 대신 그 언어로, PLOT 대화 상자 부수·VPORTS 구성 이름·플롯·용지 방향·한계 낱말이 엉뚱한 낱말 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「한계」(플롯 영역 목록·-PLOT·MVSETUP 옵션), 중국어 「뷰포트 축척」(리본·MVSETUP), 독일어 「트루 컬러·트루컬러」(색 고르기·색 프롬프트 옵션 단추),
+  「현재 사용」(HATCH·스마트 치수 도면층 기본값), 「뒤(B)」(UNDO), 「연관(A)」(-HATCH 고급). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「301차에 보고 두 것」): 언어별 한도 밖 오역, 공유 열쇠 「가로·세로」(용지 방향 ↔ 플롯 스탬프 글 방향)·「범위」, 근거가 없는 「밀」, 기록 줄·조합이 많은 줄(열쇠 한도 밖) 등.
+
+### 확인
+- `tests/i18n-plot301.test.ts`(새 시험 3건 — 프롬프트·결과 줄 꼴은 소스 글에서 확인): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 28 프롬프트의 입력 줄, 결과·이름표 줄 41과 기록 줄 8에
+  네 언어 모두 한글 없음, 고친 낱말 = 같은 사전 근거, 새 열쇠 = 조각·틀 번역에서 만든 꼴.
+- 고치기 전 9건 가운데 3건 실패(한글 남은 입력 줄 60·결과 줄 164, 영어·독일어 「매수」 Buy·Kaufen). 고친 뒤 `tests/i18n-plot301.test.ts`·`tests/i18n-leader300.test.ts`·`tests/i18n-hatch294.test.ts` 3파일 9건 통과.
+  `npm run check:i18n` 통과(9057 항목). 사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어 규칙)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험 없음. 바꾼 열쇠를 보는 시험(294 현재 사용 — 영어·일본어·중국어만 보고 독일어도 같은 낱말이 됨, 295 MKLTYPE — 영어·일본어, 300 중국어 MLEADER 통째 — 第一角度·环绕 그대로,
+  284 중국어 객체의 선가중치 플롯 — 바꾸지 않음, 한국어 원문을 보는 시험 — 원문 그대로)은 기대 그대로 맞습니다. tools/에는 이 묶음 글 없음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(300차): 299차가 남긴 오역과 지시선·표·공차·필드 주석 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
