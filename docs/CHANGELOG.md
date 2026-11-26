@@ -3,6 +3,52 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(292차): 블록·속성·외부 참조 묶음의 번역 대조와 빠진 번역
+
+### 근거와 표
+블록 — BLOCK·-BLOCK(`blockdefine.ts`), INSERT·ATTDEF·향상된 속성 편집기(`blockinsert.ts`), 블록 미리 보기(`blockpreview.ts`), EATTEDIT·BEDIT(`blocks.ts`), 동적 블록(`dynblock.ts`),
+BATTMAN·ATTSYNC·BCOUNT·BURST·MINSERT·WBLOCK(`util2-blocks.ts`), -WBLOCK(`wblockcmd.ts`), -INSERT·-ATTEDIT(`dashcmds-insert.ts`), 속성 파일 ATTOUT·ATTIN·ATTEXT·ATTREDEF(`blkcmds-att.ts`),
+ATTDISP·ATTIPEDIT —, 외부 참조 — XATTACH·IMAGEATTACH·PDFATTACH·XBIND·-XBIND·XOPEN·BLOCKTOXREF(`blkcmds-xref.ts`), -XREF(`dashcmds-misc.ts`), 외부 참조 팔레트(`refs.ts`) — 의 보이는 글
+(소스 글 771개, 사전 열쇠 589개)을 네 사전과 견줬습니다. 291차가 본 BLOCKREPLACE·BLOCKTOXREF 소거 물음은 다시 보지 않았습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 30·일본어 22·중국어 30·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 속성(attribute — 특성 property와 다름): ATTDEF·EATTEDIT·-ATTEDIT·ATTIN·ATTOUT·-ATTEXT·ATTREDEF·BURST·INSERT 속성 값 줄 | en Property definition·Edit properties·Enter property edit options·Get properties·{0} properties selected 등 19곳 → Attribute definition·Edit attributes·Enter attribute edit option·Import attributes·{0} attributes selected; de Eigenschaftsdefinition·Eigenschaften bearbeiten·Eigenschaften-Editor 등 9곳 → Attributdefinition·Attribute bearbeiten·Attribut-Editor; ja ATTREDEF 「プロパティが一致しませんでした」 → 属性を同期しませんでした | 「속성 값」 Attribute value·Attributwert, 「블록 속성 관리자」 Block Attribute Manager·Blockattribut-Manager, 「속성 추출」 Attribute extraction(영어 속성 74곳 attribute 대 43 property) |
+| 중첩(overlay)·결합(bind): XATTACH·BLOCKTOXREF 참조 유형, -XREF·NCOPY 옵션, XBIND·-XBIND | en 중첩 Overlap·(nested) → Overlay·(overlay), 결합(B) Combine → Bind, XBIND 「combine」 → bind; ja 重ね合わせ·ネスト → オーバーレイ, 結合 → バインド(-XREF·NCOPY 통째, XBIND 제목·줄·안내 7곳); zh 合并 → 绑定(XBIND 제목·줄, -XREF·NCOPY 결합(B)) | -XREF 통째 Overlay(O)·Bind(B), 「외부 참조를 중첩으로 부착…」 オーバーレイ, 「외부 참조 바인딩」 外部参照のバインド·绑定外部参照 |
+| 분해(explode) | en 분해(D) Disintegration → Explode (D), BURST 제목 Decomposition → Explode; de Desintegration → Zerlegen; zh 拆卸(뜯어냄)·模块(모듈) 6곳 → 分解·块 | 「분해」 Explode·分解, 「분해할 수 없는 블록입니다.」 zerlegt |
+| 독일어 소거(PURGE — 291차 보고 (4)) | löschen·Löschung·Entfernen 18곳(-PURGE 물음·첫 프롬프트·이름 입력, 「…소거할 수 없습니다」 다섯, BLOCKTOXREF·BLOCKREPLACE 확인란·물음, 291차 새 물음 열쇠 넷) → bereinigen | 「소거」 Bereinigen(290차), 「도면층 {0}개를 소거했습니다.」 bereinigt — 같은 값을 쓰던 「…지울 수 없습니다」(삭제)는 gelöscht 그대로 |
+| 외부 참조·참조 | ja 外部リファレンス·DWGリファレンス·PDFノート(메모)·PDFアンダーレイ付き·添付·付ける → 外部参照·DWG参照·PDF参照·アタッチ; zh 参考文献(참고 문헌) 열 머리 둘·XBIND 안내 → 参照 | ja 외부 참조 153곳 중 外部参照 151, 「외부 참조 부착」 アタッチ; zh 「블록 참조」 块参照 |
+| 그 밖 | en 「(see cycle)」 → (circular reference), PDF 「(side {1})」 → (page {1}), -BLOCK 「override it」 → Redefine it, 「Name Please enter.」 → Please enter a name.; zh 相等对象(같은 객체) → 选定对象, 多行插入 → 多重插入, 종류 输入(입력) → 类型, 화면상에 지정 屏幕上显示具体信息 → 在屏幕上指定 다섯, 재정의 覆盖 → 重新定义, 전체 도면 查找整个图形 → 整个图形, 「선택된 객체가 없습니다.」에 덧붙은 「参考编辑尚未开始。」 뺌, ATTSYNC 동기화 줄; de RESETBLOCK 「blockiert das Zurücksetzen」 → Blöcke zurückgesetzt, -BLOCK 재정의 überschreiben → neu definieren | 「순환 참조입니다: {0}」 circular reference, 「모든 배치 플롯({0}쪽)」 pages, 「블록 "{0}"은(는) 재정의할 수 없습니다.」 redefined·重新定义·neu definiert, 「고른 객체 가운데 주석 객체가 없습니다.」 选定对象, 「칸이 너무 많은 다중 삽입은…」 多重插入, 「객체 종류」 对象类型 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 51, 열쇠 8613 → 8664):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| 예/아니오 물음 여섯(-ATTEDIT 둘, BLOCKTOXREF 중첩, -BLOCK 재정의·배치 방향, ATTSYNC)의 앞 조각 「… [」과 통째 「… [예(Y)/아니오(N)] <{n}>:」(286·291차 꼴) | 12 | Block "{0}" already exists. Redefine it? [Yes (Y)/No (N)] <{1}>: | 대괄호 없는 물음 열쇠 + 「예(Y)」·「아니오(N)」 |
+| -WBLOCK 뒤 조각 「] <객체 선택 지정>:」(기본값이 옵션이 아니라 명령행이 옮기지 못함) | 1 | ] <specify object selection>: | 통째 프롬프트 번역 |
+| XATTACH 결과 「외부 참조 "{0}"을(를) 부착했습니다({1}).」·「… 중첩했습니다({1}).」 — 틀이 '부착'·'중첩'을 잡던 것 | 2 | Attached external reference "{0}" ({1}). | 고친 부착·중첩 낱말 |
+| XBIND·-XBIND 기호 종류 다섯(블록·치수 스타일·도면층·선종류·문자 스타일)마다 「N {0} → {1}」, 「N {0}은(는) 결합할 수 없습니다.」(블록은 「(참조 파일이 연결되지 않음)」 꼴 하나 더), 「종속 N 이름 입력:」, 「종속 N "{0}"을(를) 찾을 수 없습니다.」 | 21 | Block {0} cannot be bound. · Enter dependent layer name: | -XBIND 기호 유형 옵션 낱말, 고친 bind 낱말 |
+| IMAGEATTACH 「기본 이미지 크기: …, 단위 없음」, PDFATTACH 상자 「축척 1 = 실제 용지 크기(도면 단위 INSUNITS 없음 — 1인치 = 1 단위). …」, XBIND 상자 「{0} (파일 연결 안 됨)」 | 3 | Default image size: width: {0}, height: {1}, no units | 기존 틀 번역 + 꼬리 낱말 |
+| 꼬리를 붙인 결과 줄: BATTMAN 「…(참조 {1}개 동기화).」, BURST 셋(블록이 아닌 객체·분해할 수 없음·둘 다), WBLOCK 「… 옮길 수 없는 객체 {3}개는 뺐습니다.」, ATTIN 「…(그대로인 블록 {1}개).」, XATTACH 상자 「… 블록 단위 환산 축척 {1}을(를) 넣었습니다.」 | 7 | Exploded {0} blocks into {1} objects (…). Skipped {2} objects that are not blocks. {3} could not be exploded. | 기존 틀 번역 + 꼬리 말투 |
+| BCOUNT 「선택한 객체에·지금 공간 전체에 블록 참조가 없습니다.」, -XREF 결합 꼬리 셋(옮기지 못한 객체·중첩 참조 빠짐·둘 다) | 5 | Bound external reference "{0}" ({1} objects, {2} nested references left out). | 기존 틀 번역 |
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 112곳과 새 열쇠 51씩. 영어·일본어·중국어·독일어 화면의 블록·속성 명령 제목·대화 상자·명령행, -ATTEDIT·-BLOCK·ATTSYNC·BLOCKTOXREF 물음,
+  XATTACH·XBIND·-XREF 옵션·결과 줄, 외부 참조 팔레트 열 머리, BURST·BCOUNT·WBLOCK·ATTIN 결과 줄이 한국어나 엉뚱한 낱말 대신 그 언어의 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳: 「결합(B)」은 NCOPY의 결합(B)(외부 참조 결합 — 같은 뜻), 중국어 「종류」는 해치 그러데이션·LIST·측정 표, 「전체 도면」은 FIND 범위, 「선택된 객체가 없습니다.」는 여러 명령.
+  번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「292차에 보고 두 것」): 영어 기준점 Reference point 11곳 등 한도 밖 오역, 중국어·독일어 중첩(overlay) 근거 없음, 쉼표 목록·단위 이름처럼 코드 변경이 드는 줄.
+
+### 확인
+- `tests/i18n-block292.test.ts`(새 시험 3건 — 프롬프트는 소스의 `SYM_LABEL`·askYN·askYesNo 물음·-WBLOCK 프롬프트에서 모음): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 12 프롬프트의 입력 줄,
+  통째(친 입력 붙은 기록 줄 꼴 포함)·결과 줄·부착 상자 글에 네 언어 모두 한글 없음, 고친 낱말과 새 통째 = 앞 조각 + 예/아니오(291차 독일어 소거 물음 둘 포함).
+- 고치기 전 3건 실패(한글 남은 입력 줄 48·통째와 결과 줄 184, 영어 속성 정의 Property definition), 고친 뒤 `tests/i18n-block292.test.ts`·`tests/i18n.test.ts`·`tests/i18n-prompts.test.ts`
+  3파일 33건 통과. `npm run check:i18n` 통과(8664 항목).
+- tools/·tests/ grep: 옛 번역 낱말을 기대하는 곳 없음(나온 것은 변수 이름과 290·291차 시험 주석). 블록·속성·외부 참조 명령 시험은 한국어 원문을 봐 닿지 않음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(291차): 소거·블록 대치·객체 격리 묶음의 번역 대조와 빠진 번역
 
 ### 근거와 표

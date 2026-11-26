@@ -1920,14 +1920,31 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   (2) 틀이 앱 글을 잡는 줄: LAYWALK 「소거할 수 있는 도면층이 없습니다.{0}」의 까닭 꼬리 5꼴(까닭 열쇠의 중국어 擦除(지우기)·「객체가 있는 도면층은 …」 깨진 문장(包含无法擦除对象的图层)·
   「외부 참조 종속 …」 无法删除外部参照图层·독일어 gelöscht는 지금 보이지 않아 그때 함께), SETBYLAYER 「현재 활성 설정: {0}」의 설정 목록(기본 조합만 통째 열쇠).
   (3) BLOCKTOXREF 「외부 참조를 중첩으로 부착하시겠습니까? [」 앞 조각·통째는 열쇠가 없다 — 중첩(overlay)을 중국어 嵌套·독일어 verschachtelt(nested)로 옮긴 물음 열쇠와 공유 열쇠 「중첩」(영어 Overlap·
-  중국어 嵌套·독일어 Verschachtelt — 중첩된(nested) 객체와 섞임)·-XREF 통째 중국어 嵌套(O)라 같은 사전에 overlay 근거가 서지 않음.
-  (4) 다수·근거가 갈려 두는 것: 독일어 소거 프롬프트·물음·「…소거할 수 없습니다」의 löschen 약 14곳(이번에는 소거(명령행)만 — 290차의 Bereinigen 쪽으로 맞출지, -PURGE 확인 물음 「auf Löschung überprüfen」 포함),
+  중국어 嵌套·독일어 Verschachtelt — 중첩된(nested) 객체와 섞임)·-XREF 통째 중국어 嵌套(O)라 같은 사전에 overlay 근거가 서지 않음
+  (**292차가 고침**: 앞 조각·통째 열쇠를 더하고, 「중첩」이 소스에서 모두 overlay 뜻임을 확인해 영어 Overlay·일본어 オーバーレイ로 — 중국어·독일어 overlay 근거는 여전히 없어 「292차에 보고 두 것」).
+  (4) 다수·근거가 갈려 두는 것: 독일어 소거 프롬프트·물음·「…소거할 수 없습니다」의 löschen 약 14곳(이번에는 소거(명령행)만 — 290차의 Bereinigen 쪽으로 맞출지, -PURGE 확인 물음 「auf Löschung überprüfen」 포함 — **292차가 고침**, 291차 새 물음 열쇠 넷과 함께 18곳 bereinigen),
   일본어 「…소거할 수 없습니다」·「도면층 {0}개를 소거했습니다」 消去·削除(제목·프롬프트만 名前削除로)와 「소거(P)」(SPLINEDIT 맞춤 데이터 소거와 공유 — 削除(P) 그대로), 중국어 소거 移除·删除 섞임,
   중국어 「도면층 상태 {0}개를 가져왔습니다: {1}」 已导入的图层状态：{0} {1}(수가 목록 앞에), BLOCKTOXREF 기본 줄 중국어 「块参照 {0} 已替换…」(수를 이름으로 — 새 꼬리 열쇠는 바른 꼴),
   중국어 「0 길이 형상(Z)」 形状(형태(SH)와 같은 낱말), 「0 길이 형상 {0}개가 삭제되었습니다.」 영어 0 length features {0}·독일어 Längenmerkmale(수가 이름처럼), 독일어 「동결해제할 도면층의 이름 리스트 입력」 getaut,
   독일어 「다음으로 대치」 ersetzen(동사만), 독일어 「고른 객체만 보이기(UNISOLATEOBJECTS로 끝)」 endet mit.
   (5) 묶음 밖에서 본 것: 중국어 「동기화하려면 뷰포트가 둘 이상 있어야 합니다.」 一个(VPSYNC), 독일어 「요소가 없는 다중선 스타일에 요소 하나를 넣었습니다.」 Polylinienstil·명령문(MLSTYLE).
   (6) 동의어 — 둠: 결과 줄의 delete·削除·删除·gelöscht(AutoCAD 결과 줄 말투), 일본어 격리 끝 隔離終了, 영어 객체 격리 끝 End of object isolation, 독일어 Plot Stil (P) 띄어쓰기, 영어 Zero-length entity (Z). 원어민 검토 없음
+- [x] 블록·속성·외부 참조 묶음의 번역 대조와 빠진 번역(292차, 290·291차 꼴 — 291차 보고 (3)·(4)): BLOCK·INSERT·ATTDEF·-ATTEDIT·EATTEDIT·BATTMAN·ATTSYNC·ATTREDEF·ATTIN·ATTOUT·BURST·BCOUNT·
+  WBLOCK·동적 블록·XATTACH·IMAGEATTACH·PDFATTACH·XBIND·-XBIND·-XREF·외부 참조 팔레트의 보이는 글. (가) 오역을 같은 사전 안의 맞는 번역으로(영어 30·일본어 22·중국어 30·독일어 30곳 —
+  속성을 property·Eigenschaft·プロパティ로, 중첩(overlay)을 Overlap·ネスト·重ね合わせ로, 결합(bind)을 Combine·結合·合并으로, 분해를 Disintegration·拆卸로, 독일어 소거를 löschen으로,
+  중국어 참조를 参考文献·고른 객체를 相等对象·다중 삽입을 多行插入·종류를 输入로, 일본어 외부 참조를 リファレンス·PDF 참고를 ノート로 옮긴 것 등).
+  (나) 네 언어 모두 한국어로 보이던 51 열쇠(예/아니오 물음 여섯의 앞 조각·통째 12, -WBLOCK 뒤 조각, XATTACH 부착·중첩 줄 2, XBIND·-XBIND 기호 종류 줄 21, 부착 상자·결과 줄 꼬리 10,
+  BCOUNT 2, -XREF 결합 꼬리 3 — 8613 → 8664). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 292차 절
+- [ ] 292차에 보고 두 것 — (1) 한도 밖 오역: 영어 기준점 Reference point 11곳(BLOCK 대화 상자 기준점·X·Y·Z·화면상에 지정, 「삽입 기준점 지정 또는 [주석(A)]:」·「새 블록의 삽입 기준점 지정:」 insertion reference point,
+  WBLOCK 안내 — 277차 시험이 중국어 基点을 근거로 둠)과 독일어 Referenzpunkt·중국어 参考点 4곳, 영어 분해 disassembled·Decomposition 5곳, 영어 「블록 {0}의 참조 {1}개를 동기화했습니다.」·「ATTSYNC 완료: …」
+  references in block(블록 안 — 291차가 BLOCKREPLACE에서 고친 꼴), 영어 「동적 블록 특성」 characteristics, 영어 ATTOUT 「Block {0} attributes … as ATTIN」(수를 이름으로), 영어 「외부 파일 {0}개를 연결했습니다.」 attached(연결 = link),
+  영어·중국어·독일어 「동작」(BLOCK 대화 상자 Behavior 묶음) Operation·运动·Betrieb, 독일어 속성 Eigenschaft 나머지 약 15곳(가져오기·내보내기·추출·결과 줄 등), 독일어 결합 kombinieren(XBIND 제목·-XREF 통째·결합(B)),
+  독일어 「찾은 위치: … {1} jetzt leer」(BATTMAN), 「태그 {0}이(가) 이미 있습니다.」 {0} Tags(수처럼), 「참고: 블록에 없는 태그 열 …」 Beschriftungen, 「핸들 …」 Griff(그립), 「외부 참조 부착」 werden verknüpft,
+  중국어 「블록 "{0}"을(를) 다시 정의했습니다 …」 参考 {2}, PDF 「侧面 {1}」·「附有」, -XREF 결합 틀(꼬리 없는 줄 — 중국어 合并为对象·독일어 kombiniert).
+  (2) 근거가 서지 않음: 중국어·독일어 중첩(overlay) — 같은 사전의 「중첩」 번역이 모두 嵌套·verschachtelt(nested)뿐이라 새 열쇠도 그 낱말을 따름(291차와 같음). 독일어 -XREF 분리 Trennen 등 detach 낱말.
+  (3) 코드 변경이 드는 것: XBIND 「결합됨: {0}.」·외부 참조 팔레트 「참고: {0}의 파일을 찾지 못했습니다 …」의 쉼표 목록(종류 낱말이 섞여 열쇠로 못 덮음), BCOUNT 머리 줄(점 수가 바뀌는 「블록……개수 (…, 중첩 포함)」),
+  -INSERT·INSERT 「단위: {0}   변환: {1}」·「블록 단위: {0} · 비율: {1}」의 단위 이름(INSUNITS 20여 개), 외부 참조 팔레트 이름 칸 「파일 (3쪽)」.
+  (4) 동의어 — 둠: 중국어 外部参考 24곳(外部参照 129 — 뜻은 통함), 중국어 축척 缩放·比例 섞임, 결과 줄의 일본어 削除·독일어 gelöscht(소거 결과 — 291차와 같음). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
