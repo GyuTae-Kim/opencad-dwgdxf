@@ -3,6 +3,37 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-26(288차): 음수를 받는 숫자 칸의 휴대폰 소수 자판
+
+### 근거와 표
+`inputmode="decimal"` 소수 자판은 음수 기호를 약속하지 않습니다(HTML inputmode — 기기에 따라 음수 기호가 있을 수도 없을 수도 있음). 그래서 휴대폰·태블릿에서
+음수를 쳐야 하는 칸에 이 자판을 두면 그 값을 넣지 못할 수 있었습니다(OpenCAD STEP 123차·NC 119차가 같은 꼴을 고침). 저장소의 `inputmode` 10자리와 그 공용 칸을 쓰는 곳을
+칸마다 견줬습니다 — 받는 값은 코드의 검사(범위·`isFinite`·`> 0`), 검사가 없으면 AutoCAD 뜻으로 정했습니다.
+
+| 칸 묶음(자리) | 음수를 받는 칸 → inputmode 뺌 | 0보다 큰 값·0 이상만 → 소수 자판 그대로 |
+| --- | --- | --- |
+| 관리 대화 상자 공용 칸 `numIn`(`mgr-ui.ts` — 32칸) | 19: 플롯 간격띄우기 X·Y, BLOCK 기준점 X·Y·Z, INSERT 삽입점 X·Y·Z·축척 X·Y·Z(0이 아니면 됨 — 음수 = 거울)·각도, ATTDEF X·Y·Z·회전, EATTEDIT 회전·기울기 각도(−85~85)·선가중치(−1 도면층별·−2 블록별·−3 기본값) | 13: 사용자 용지 폭·높이, 문자 높이·높이·폭 비율, 매수(1~99), OPTIONS 크기·시간 7칸 |
+| 양식 대화 상자 `form` 숫자 칸(`ui/dom.ts` — 63칸) | 14: XATTACH·IMAGEATTACH·PDFATTACH·PDFIMPORT·표 셀 블록 삽입의 회전(검사 없음), ARRAYCLASSIC 행·열 사이 간격(음수 = 아래·왼쪽)·행 축 각도·채울 각도(음수 = 시계 방향), HATCH·GRADIENT·HATCHEDIT 각도, PLOTSTAMP X·Y 간격띄우기(음수 = 모서리 바깥쪽) | 49: 축척·페이지·행·열·항목 수·스냅·격자 간격·공차·밝기·주석 축척 단위·점 크기·색·투명도·지시선 크기·표 크기·줄 간격·단 |
+| 치수 스타일 수정 대화 상자(`dimstyle.ts` — 숫자 칸 29) | 6: 치수선·치수보조선 선가중치(−1·−2·−3), 중심 표식(음수 = 중심선), 측정 축척 비율(음수 = 도면 공간 치수에서만), 공차 위·아래 값(부호 있는 값) | 23: 크기·간격·배율·꺾기 각도(5~90)·정밀도(0 이상으로 자름)·색(0~256) |
+| 문자 편집기 도구 모음·STYLE·ARCTEXT | 4: 편집기 기울기 각도(−85~85 — 범위 아래 끝이 음수인 칸), STYLE 기울기 각도, ARCTEXT 문자 간격·호에서 간격띄우기(검사가 `isFinite`) | 문자 높이, 자간(0.75~4)·폭 비율, STYLE 높이(0 이상)·폭 비율, ARCTEXT 문자 높이·폭 비율·왼쪽·오른쪽 간격띄우기(0 이상), 도면층 상태 투명도(0~90, `numeric`) |
+
+- 뺀다는 것: 칸이 `type="text"`(치수 스타일·편집기·STYLE 칸은 type 없음 = text)라 inputmode를 빼면 브라우저가 일반 글 자판을 띄웁니다 — 음수 기호·소수점을 칠 수 있습니다
+  (기기에 따라 숫자 줄로 바꿔서). STEP·NC는 칸이 `type="number"`라 브라우저가 숫자 칸 자판을 고르는 꼴이었습니다.
+- 명령행·동적 입력·특성 팔레트·QSELECT 값 칸·표 셀 편집기에는 inputmode가 없어 그대로(일반 글 자판), 도면 비교 허용 오차는 `type="number"`(0~14) 그대로입니다.
+
+### 고친 것(바뀌는 것: 그 43칸의 휴대폰·태블릿 자판 꼴만 — 값 읽기·검사·마우스·키보드는 그대로)
+- `mgr-ui.ts` `numIn(value, aria, signed)` — signed면 inputmode를 두지 않습니다(부르는 곳 19). `ui/dom.ts` 양식 숫자 칸에 `signed`(부르는 곳 14).
+- `dimstyle.ts` 칸 정의에 `signed`(DIMCEN·DIMLFAC·DIMTP·DIMTM), 선가중치 칸은 늘 inputmode 없음. `textedit/editor.ts` 도구 모음 숫자 칸은 범위 아래 끝이 음수면 inputmode 없음.
+  `textedit/styledlg.ts` 기울기 각도 칸, `arctext.ts` 문자 간격·호에서 간격띄우기 칸.
+- 두는 것(ROADMAP 「288차에 보고 두 것」): 치수 스타일 DIMGAP·DIMEXO(음수 뜻의 근거·쓰임이 저장소에 없음), 정수 칸(DIMADEC −1 등)이 음수를 0으로 자르는 것, 실제 기기 자판.
+
+### 확인
+- `tests/direct/inputmode288.test.ts`(새 시험 7건 — 가짜 DOM, 진짜 App): `numIn`·`form`(음수 칸에 친 −30이 그대로 −30), ATTDEF·INSERT, PLOTSTAMP, STYLE, DIMSTYLE 수정(다섯 탭),
+  여러 줄 문자 편집기, ARCTEXT 작업장의 칸마다 inputmode.
+- 고치기 전 3파일(새 시험·`tests/manage/ui.test.ts`·`tests/direct/tabkeys260.test.ts`) 26건 중 7건 실패(새 시험 모두 — inputmode decimal ↔ 없음), 고친 뒤 26건 통과, tsc 통과.
+- tools/·tests/ grep: inputmode를 기대하는 곳 없음(`tools/mobile-browser-check.js` 포함 — 칸 이름·역할은 그대로).
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 실제 휴대폰 자판 확인 없음.
+
 ## 2026-11-26(287차): 치수(DIM) 명령 묶음의 번역 대조와 빠진 번역
 
 ### 근거와 표
