@@ -109,7 +109,8 @@ describe('참조 파일 고르기의 결과 알림(272차)', () => {
   it('① 형식이 하나도 맞지 않으면 「연결할 수 있는 파일이 없습니다」 그대로', async () => {
     const h = setup();
     await settle();
-    await h.pick(file('notes.txt'), file('scan.tif'));
+    // TIFF 같은 풀지 못하는 그림 형식은 273차부터 이 글 대신 데스크톱과 같은 참고 글(viewref273.test.ts) — 여기는 연결 함수가 받지 않는 파일만
+    await h.pick(file('notes.txt'), file('plan.zip'));
     expect(calls()).toEqual([[NO_FORMAT, 'warn']]);
   });
 
