@@ -3,6 +3,51 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(293차): 292차가 한도 밖으로 남긴 오역과 문자 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 292차 「보고 두 것」 (1)의 한도 밖 오역(영어 기준점·분해, 독일어 속성·결합, BLOCK 대화 상자 「동작」, 중국어 기준점 등)이고, 그 뒤 문자 묶음 —
+TEXT·DTEXT·MTEXT(`textedit/commands.ts`), 문자 편집기(`textedit/editor.ts`·`dom.ts`·`index.ts`·`entity.ts`), STYLE 대화 상자(`textedit/styledlg.ts`), -STYLE(`dashcmds-tables.ts`),
+TEXTEDIT·DDEDIT(`editcmds.ts`), FIND(`textedit/palette.ts`·`findreplace.ts`), SCALETEXT·JUSTIFYTEXT(`modify2.ts`), TXT2MTXT(`textools.ts`), 리본 문자 패널 — 의 보이는 글
+(소스 글 494개, 사전 열쇠 349개)을 네 사전과 견줬습니다. SPELL은 이 앱에 명령이 없습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 30·일본어 5·중국어 26·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 기준점(base point): BLOCK 대화 상자·-BLOCK·WBLOCK·ATTREDEF·SCALETEXT 앞 조각, 「기준점 지정:」(MOVE 등과 공유 — 같은 뜻) | en Reference point 13곳(「기준점 X」는 X도 빠짐) → Base point, 「[Annotation (A)]」 → [Annotative (A)]; zh 参考点 6곳 → 基点 | 「기준점(B)」 Base point (B), 「삽입 기준점 지정:」 insertion base point, 「기준점을 사용하여 복사」 基点 |
+| 분해(explode): BLOCK 대화 상자·INSERT·BURST·리본 EXPLODE | en Decomposition allowed·disassembled·Disintegration (X) 5곳 → Allow exploding·exploded·Explode (X) | 「분해」 Explode, 「분해(D)」 Explode (D) |
+| BLOCK 대화 상자 「동작」 묶음(Behavior) | en Operation·zh 运动·de Betrieb → Behavior·行为·Verhalten | 「Windows 표준 동작」 behavior·行为·Verhalten |
+| 독일어 속성·결합 | Eigenschaft(en) 14곳(속성 값 입력·확인·가져오기·내보내기·추출·ATTREDEF·BURST, 문자 묶음의 속성 정의 편집 등) → Attribut; 결합(B)·-XREF 통째·XBIND 제목 둘 Kombinieren → Binden | 「속성 값」 Attributwert, 「결합됨: {0}.」 Gebunden |
+| 중국어 블록·외부 참조 줄 | ATTREDEF 「参考 {2}」(수를 이름처럼) → {2} 个参照, PDF 「附有 … 侧面 {1}」(옆면) → 已附加 … 第 {1} 页, -XREF 결합 「合并为对象」 → 已绑定 | 「블록 {0}의 참조 {1}개를 동기화했습니다.」, 「모든 배치 플롯({0}쪽)」 页 |
+| 문자 묶음 | en 기호 「symbol Combining symbols」·de 「-Symbol Symbole kombinieren」 → Symbol, 반대로 Conversely·Umgekehrt·逆に → Backwards·Rückwärts·反転, 보통 Average·Durchschnitt → Normal, 속성 {0}·속성 정의 편집 property → attribute, 명령 복구 Command recovery → Redo, 눌러서 이동 「to move」 → Click to go to it, 단일 행 single row → Single line, 축척 비율 지정 scale ratio·尺度比率·比例尺 → scale factor·尺度係数·比例因子; de 대소문자 일치 Streichholzschachtel(성냥갑) → Groß-/Kleinschreibung beachten, 자간 Kerspace → Kerning, 새 문자 스타일 Charakterstil → Textstil, 단일 Single → Einzeln, 선 간격두기(L) Linie Abstand → Zeilenabstand; zh 중간 중심 中点(중간점) → 正中, 기울기 각도 坡度角 4곳 → 倾斜角度, 단일 单幅·单行(S) → 单个, 새 스타일 新款式 → 新样式, 대치할 문자 要替换的文本 → 替换为, 반대로 물음 倒置 → 反向; ja 거꾸로 물음(반대로 물음과 같은 글이던 것) → 逆さまに表示, 간격두기 비율 間隔置き比·厚さ比 → 間隔の倍率 | 「기호」 記号·符号, 「문자를 반대로 표시하시겠습니까?」 backwards, 「보통(N)」 Normal (N), 「다시 실행 (Ctrl+Y)」 Redo, 「축척 비율」 Scale factor, 「대소문자 선택 [」 Groß-/Kleinschreibung, 「문자의 중간 중심점 지정:」 正中点, 「형식 더 보기(기울기 각도·…)」 倾斜角度·Kerning, 「다음으로 대치」 替换为 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 39, 열쇠 8664 → 8703):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| 자리맞추기 옵션 「중간(M)」·「기존(E)」·「맨 위 왼쪽(TL)」~「맨 아래 오른쪽(BR)」 — TEXT 자리맞추기(J)·MTEXT 자리맞추기·SCALETEXT·JUSTIFYTEXT 명령행 옵션과 기본값 꼬리 | 11 | Top Left (TL) · Existing (E) | 「맨 위 왼쪽」 Top Left, 「기존」 Existing |
+| 옵션 프롬프트 통째(기록 줄·휴대폰 카드): TEXT 「옵션 입력 […]:」, MTEXT 「자리맞추기 입력 […] <{0}>:」, SCALETEXT·JUSTIFYTEXT 「… 옵션 입력 […] <{0}>:」 | 4 | Enter justification [Top Left (TL)/…/Bottom Right (BR)] <{0}>: | 앞 조각 + 옵션 번역 |
+| TEXT·MTEXT 머리 줄 「현재 문자 스타일: "{0}" 문자 높이: {1} 주석: 예·아니오」(틀이 예·아니오를 잡던 것), 기본값 없는 「폭 지정:」·「새 길이 지정:」 | 4 | Current text style: "{0}" Text height: {1} Annotative: No | 지금 틀 번역 |
+| -STYLE 높이 「(용지) 문자 높이 지정 또는 [」와 통째, 예/아니오 물음 넷(주석 문자 스타일 작성·반대로·거꾸로·수직?)의 앞 조각 「… [」과 통째(286·291·292차 꼴) | 12 | Display text upside down? [Yes (Y)/No (N)] <{0}>: | 물음 열쇠 + 「예(Y)」·「아니오(N)」 |
+| -STYLE ? 목록 「높이: {0} 폭 비율: {1} 기울기 각도: {2} 생성: 보통」 등 생성 여덟 꼴(틀이 보통·반대로·거꾸로·수직을 잡던 것) | 8 | Height: {0} Width ratio: {1} Oblique angle: {2} Effects: Backwards, Upside down | STYLE 대화 상자 「효과」·「반대로」·「거꾸로」 |
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 91곳과 새 열쇠 39씩. 영어·일본어·중국어·독일어 화면의 TEXT·MTEXT·SCALETEXT·JUSTIFYTEXT 자리맞추기 옵션, -STYLE 물음·목록,
+  문자 편집기·STYLE 대화 상자·FIND 팔레트 낱말, BLOCK 대화 상자 기준점·분해·동작, 독일어 속성·결합 글이 한국어나 엉뚱한 낱말 대신 그 언어의 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「기준점」·「기준점 지정:」(배열·MOVE·FROM 등), 「보통」(ATTMODE·EXOFFSET 간격), 「단일」·「단일(S)」(COPY 모드·VPORTS·선택),
+  중국어 「중간 중심」(표 셀 정렬·필드·LIST), 「사용 중인 스타일」(DIMSTYLE), 「눌러서 이동」(DIMLIST). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「293차에 보고 두 것」): 영어 기준점 나머지 12곳·독일어 Referenzpunkt 17곳·중국어 参考点 나머지, 독일어 속성·결합 나머지, 공유 열쇠 「다중」(Multiple ↔ QDIM Staggered) 등.
+
+### 확인
+- `tests/i18n-text293.test.ts`(새 시험 3건 — 옵션 목록은 소스의 TEXT_JUSTIFY·MTEXT_JUSTIFY·JUST_LABELS 줄에서, 프롬프트는 소스 글에서 모음): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은
+  15 프롬프트의 입력 줄, 통째(친 입력 붙은 기록 줄 꼴 포함)·머리 줄·목록 줄에 네 언어 모두 한글 없음, 고친 낱말과 새 통째 = 앞 조각 + 옵션(·예/아니오) + 뒤 조각.
+- 고치기 전 3건 실패(한글 남은 입력 줄 60·통째와 결과 줄 148, 영어 기준점 Reference point), 고친 뒤 `tests/i18n-text293.test.ts`·`tests/i18n.test.ts`·`tests/i18n-prompts.test.ts`
+  3파일 33건 통과. `npm run check:i18n` 통과(8703 항목).
+- tools/·tests/ grep: 옛 번역 낱말을 기대하는 곳 없음(나온 것은 MLEDIT 「Cut Single」뿐). 291차 시험이 독일어 「지정된 기준점 …」 Referenzpunkt를 고정해 그 열쇠는 이번에 두었습니다.
+  문자 명령 시험은 한국어 원문을 봐 닿지 않습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(292차): 블록·속성·외부 참조 묶음의 번역 대조와 빠진 번역
 
 ### 근거와 표

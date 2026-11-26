@@ -1936,15 +1936,34 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   (나) 네 언어 모두 한국어로 보이던 51 열쇠(예/아니오 물음 여섯의 앞 조각·통째 12, -WBLOCK 뒤 조각, XATTACH 부착·중첩 줄 2, XBIND·-XBIND 기호 종류 줄 21, 부착 상자·결과 줄 꼬리 10,
   BCOUNT 2, -XREF 결합 꼬리 3 — 8613 → 8664). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 292차 절
 - [ ] 292차에 보고 두 것 — (1) 한도 밖 오역: 영어 기준점 Reference point 11곳(BLOCK 대화 상자 기준점·X·Y·Z·화면상에 지정, 「삽입 기준점 지정 또는 [주석(A)]:」·「새 블록의 삽입 기준점 지정:」 insertion reference point,
-  WBLOCK 안내 — 277차 시험이 중국어 基点을 근거로 둠)과 독일어 Referenzpunkt·중국어 参考点 4곳, 영어 분해 disassembled·Decomposition 5곳, 영어 「블록 {0}의 참조 {1}개를 동기화했습니다.」·「ATTSYNC 완료: …」
+  WBLOCK 안내 — 277차 시험이 중국어 基点을 근거로 둠 — **293차가 고침**, 「기준점 지정:」·SCALETEXT 앞 조각과 함께 13곳)과 독일어 Referenzpunkt·중국어 参考点 4곳(**293차가 중국어 6곳 고침** — 독일어는 「293차에 보고 두 것」),
+  영어 분해 disassembled·Decomposition 5곳(**293차가 고침** — 리본 「분해 (X)」 포함), 영어 「블록 {0}의 참조 {1}개를 동기화했습니다.」·「ATTSYNC 완료: …」
   references in block(블록 안 — 291차가 BLOCKREPLACE에서 고친 꼴), 영어 「동적 블록 특성」 characteristics, 영어 ATTOUT 「Block {0} attributes … as ATTIN」(수를 이름으로), 영어 「외부 파일 {0}개를 연결했습니다.」 attached(연결 = link),
-  영어·중국어·독일어 「동작」(BLOCK 대화 상자 Behavior 묶음) Operation·运动·Betrieb, 독일어 속성 Eigenschaft 나머지 약 15곳(가져오기·내보내기·추출·결과 줄 등), 독일어 결합 kombinieren(XBIND 제목·-XREF 통째·결합(B)),
+  영어·중국어·독일어 「동작」(BLOCK 대화 상자 Behavior 묶음) Operation·运动·Betrieb(**293차가 고침**), 독일어 속성 Eigenschaft 나머지 약 15곳(가져오기·내보내기·추출·결과 줄 등 — **293차가 14곳 고침**),
+  독일어 결합 kombinieren(XBIND 제목·-XREF 통째·결합(B) — **293차가 고침**),
   독일어 「찾은 위치: … {1} jetzt leer」(BATTMAN), 「태그 {0}이(가) 이미 있습니다.」 {0} Tags(수처럼), 「참고: 블록에 없는 태그 열 …」 Beschriftungen, 「핸들 …」 Griff(그립), 「외부 참조 부착」 werden verknüpft,
-  중국어 「블록 "{0}"을(를) 다시 정의했습니다 …」 参考 {2}, PDF 「侧面 {1}」·「附有」, -XREF 결합 틀(꼬리 없는 줄 — 중국어 合并为对象·독일어 kombiniert).
+  중국어 「블록 "{0}"을(를) 다시 정의했습니다 …」 参考 {2}, PDF 「侧面 {1}」·「附有」, -XREF 결합 틀(꼬리 없는 줄 — 중국어 合并为对象·독일어 kombiniert)(**293차가 중국어 셋 고침** — 독일어 틀은 그대로).
   (2) 근거가 서지 않음: 중국어·독일어 중첩(overlay) — 같은 사전의 「중첩」 번역이 모두 嵌套·verschachtelt(nested)뿐이라 새 열쇠도 그 낱말을 따름(291차와 같음). 독일어 -XREF 분리 Trennen 등 detach 낱말.
   (3) 코드 변경이 드는 것: XBIND 「결합됨: {0}.」·외부 참조 팔레트 「참고: {0}의 파일을 찾지 못했습니다 …」의 쉼표 목록(종류 낱말이 섞여 열쇠로 못 덮음), BCOUNT 머리 줄(점 수가 바뀌는 「블록……개수 (…, 중첩 포함)」),
   -INSERT·INSERT 「단위: {0}   변환: {1}」·「블록 단위: {0} · 비율: {1}」의 단위 이름(INSUNITS 20여 개), 외부 참조 팔레트 이름 칸 「파일 (3쪽)」.
   (4) 동의어 — 둠: 중국어 外部参考 24곳(外部参照 129 — 뜻은 통함), 중국어 축척 缩放·比例 섞임, 결과 줄의 일본어 削除·독일어 gelöscht(소거 결과 — 291차와 같음). 원어민 검토 없음
+- [x] 292차 한도 밖 오역과 문자 묶음의 번역 대조·빠진 번역(293차, 290~292차 꼴 — 292차 보고 (1)): TEXT·DTEXT·MTEXT·문자 편집기·STYLE 대화 상자·-STYLE·TEXTEDIT(DDEDIT)·FIND·
+  SCALETEXT·JUSTIFYTEXT·TXT2MTXT·리본 문자 패널의 보이는 글(SPELL은 이 앱에 명령 없음). (가) 오역을 같은 사전 안의 맞는 번역으로(영어 30·일본어 5·중국어 26·독일어 30곳 —
+  기준점 Reference point·参考点 → Base point·基点, 분해 Disintegration·disassembled → Explode, BLOCK 「동작」 Operation·运动·Betrieb → Behavior·行为·Verhalten, 독일어 속성 Eigenschaft → Attribut·
+  결합 kombinieren → binden, 기호 깨짐, 반대로 Conversely·逆に, 보통 Average, 대소문자 일치 Streichholzschachtel, 자간 Kerspace, 중국어 중간 중심 中点·기울기 각도 坡度角·단일 单行(S) 등).
+  (나) 네 언어 모두 한국어로 보이던 39 열쇠(자리맞추기 옵션 11과 옵션 프롬프트 통째 4, TEXT·MTEXT 머리 줄 2, 「폭 지정:」·「새 길이 지정:」, -STYLE 높이 4·예/아니오 물음 8·? 목록 8 — 8664 → 8703).
+  원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 293차 절
+- [ ] 293차에 보고 두 것 — (1) 한도 밖 오역: 영어 기준점 Reference point 나머지 12곳(MOVE·COPY 「기준점 지정 또는 [변위(D)…]」 둘, ARRAY 「… [키 점(K)] <…>:」 둘·「대체 객체의 기준점 선택 …」,
+  「기준점을 두고 복사」, BASE 셋, 「삽입 기준점은」, COPYTOLAYER 「지정된 기준점 …」, 디자인 센터 줄), 독일어 Referenzpunkt 17곳(291차 시험이 「지정된 기준점 또는 [종료(X)] <종료>:」 Referenzpunkt를 고정 — 고치면 그 시험도),
+  중국어 参考点 나머지 8곳(MOVE·ARRAY·COPYTOLAYER 등), 영어 분해 나머지(「분해(속성 유지)」·「속성 남기고 분해」·「속성을 문자로 남기고 분해 (BURST)」·「{0}개를 분해해 …」·TXTEXP 둘),
+  독일어 속성 Eigenschaft 나머지 약 30곳(전역 속성 편집·속성 표시·편집할 속성 선택 등), 독일어 결합 kombinieren 나머지 약 10곳(XBIND 상자 안내·결과 줄 — 제목·옵션만 binden),
+  독일어 「태그·프롬프트·기본값 편집」 쪼개짐·「맨 위 중심 TC」 Top Center(영어)·「모드」 -Modus·「여러 줄 문자 내용이 있는 다중 지시선이 아닙니다.」 mehrzeiliger Text,
+  「명령 복구」 Command Recovery·Befehlswiederherstellung, 「높이는 0 이상이어야 합니다.」 영어·독일어 greater than 0(0도 받음), 독일어 「축척 비율 지정 또는 [참조(R)]」 Maßstabsverhältnis·「단일 행」 einreihig.
+  (2) 공유 열쇠라 하지 않음: 「다중」(복사·선택 Multiple ↔ QDIM 다중 Staggered — 중국어 多行은 둘 다 틀림), 「열」(표 열 ↔ MTEXT 단), 「주석」(Annotation ↔ Annotative).
+  (3) 쓰이지 않게 된 틀: 「{0} 또는 [주석(A)] <{1}>:」(Comment·コメント·Kommentar — 새 통째 둘이 덮음), 「높이: {0} … 생성: {3}」(Create·创建·Erstellen — 새 열쇠 여덟이 덮음). 중국어 「효과」 特效(특수 효과)는 근거 낱말이 없어 둠(새 목록 열쇠는 效果).
+  (4) 화면에 보이지 않아 두는 것: 글꼴 이름(굴림 Roll·바탕 Background 등 — 고르기 항목이 translate="no"이거나 값 = 글), 「AaBb123 가나다」(캔버스에 직접), 「pf-셀」(data-field).
+  (5) 동의어 — 둠: 영어 폭 비율 Width Ratio·기울기 각도 Tilt angle(사전에 Width factor·Oblique angle 근거 없음), 일본어 정렬(A) 位置合わせ.
+  (6) 보지 않은 것: 커서 옆 문구(동적 입력 — 「[」 앞)와 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄(292차 꼴). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
