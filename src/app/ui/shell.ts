@@ -17,7 +17,7 @@ import { loadLispFile } from '../lisp';
 import { isoState, setIso } from '../viewtools-iso';
 import { maximized, maximizedLabel } from '../viewtools-vpmax';
 import { pickColor } from './colorpick';
-import { type MenuItem, dialog, focusables, formatBytes, h, iconSpan, showMenu, tabKeyTarget, toast } from './dom';
+import { type MenuItem, dialog, focusables, formatBytes, h, iconSpan, moveMenuOpener, showMenu, tabKeyTarget, toast } from './dom';
 import { icon } from './icons';
 import { MobileView, isCoarse, readMobileMode, startInViewMode } from './mobileview';
 import { RECENT_MAX_SIZE, RecentStore, recentTimeLabel } from '../recent';
@@ -900,6 +900,21 @@ const RIBBON: { tab: string; panels: Panel[] }[] = [
 /** 이보다 큰 파일은 열기 전에 시간·메모리를 알린다 */
 const BIG_FILE_BYTES = 100 * 1024 * 1024;
 
+/**
+ * from 다음의 Tab 차례 요소에 초점을 준다(283차 — 접힌 리본 패널 팝업 끝에서 Tab): 문서 차례로 from 뒤의 보이는 켜진 컨트롤(focusables) 가운데
+ * tabindex -1(로빙 tabindex로 비운 탭·메뉴 항목)과 skip(팝업) 안을 뺀 첫 요소 — 조상이 숨어 초점을 받지 못하면 그다음으로(브라우저 Tab 차례와 같은 셈). 준 곳이 없으면 false
+ */
+function focusAfter(from: HTMLElement, skip: Element): boolean {
+  const all = focusables(document).filter((el) => el.tabIndex >= 0 && !skip.contains(el));
+  const i = all.indexOf(from);
+  if (i < 0) return false;
+  for (const el of all.slice(i + 1)) {
+    el.focus();
+    if (document.activeElement === el) return true;
+  }
+  return false;
+}
+
 export class Shell implements UiHooks {
   private readonly title: HTMLDivElement;
   private readonly ribbonTabs: HTMLDivElement;
@@ -1315,6 +1330,8 @@ export class Shell implements UiHooks {
     const inside = f.pop.contains(document.activeElement);
     window.removeEventListener('pointerdown', f.off, true);
     window.removeEventListener('click', f.off, true);
+    // 팝업 안 펼침 단추(▾)로 연 메뉴가 열려 있으면 그 메뉴를 닫을 때 이 단추로 돌려준다(283차 — 282차 보고 (1): 연 단추가 팝업과 함께 문서에서 빠져 본문으로 갔다)
+    moveMenuOpener(f.pop, f.btn);
     f.pop.remove();
     f.btn.setAttribute('aria-expanded', 'false');
     if (back && inside && f.btn.isConnected) f.btn.focus({ preventScroll: true });
@@ -1324,7 +1341,8 @@ export class Shell implements UiHooks {
    * 접힌 패널: 누르면 패널 내용을 아래 팝업(role=dialog — 단추·고르기 상자가 섞인 패널이라 메뉴가 아님)으로 펼치고, 열린 채 다시 누르면 닫는다
    * (282차 — 263차 보고 (1), W3C APG 공개 단추 꼴: aria-haspopup="dialog"·aria-expanded. 전에는 "true"(= 메뉴)에 열림 상태가 없고, 다시 누르면 다시 열었다).
    * 열면 초점을 팝업의 첫 켜진 컨트롤로(켜진 것이 없으면 팝업 자체 — 263차 메뉴 꼴) 옮긴다 — 손가락·마우스로 열어도(262차 메뉴·255차 시트 꼴, 보이는 표시는 :focus-visible 규칙대로).
-   * 팝업 안 Esc는 닫고 연 단추로(앱 취소로 넘기지 않음 — 255차 시트 꼴). 리본을 다시 그리면 buildRibbon이 닫는다
+   * 팝업 안 Esc는 닫고 연 단추로(앱 취소로 넘기지 않음 — 255차 시트 꼴). 리본을 다시 그리면 buildRibbon이 닫는다.
+   * Tab 차례는 팝업 내용이 연 단추 바로 뒤에 있는 것처럼(283차): 끝에서 Tab이면 닫고 연 단추 다음 요소로, 처음에서 Shift+Tab이면 닫고 연 단추로
    */
   private foldedPanel(p: Panel): HTMLDivElement {
     const ic = p.large?.[0]?.icon ?? p.cols?.[0]?.[0]?.icon ?? 'menu';
@@ -1358,9 +1376,28 @@ export class Shell implements UiHooks {
           }, 0);
       };
       pop.addEventListener('keydown', (ev) => {
-        if (ev.key !== 'Escape' || ev.defaultPrevented) return;
-        ev.preventDefault();
+        if (ev.defaultPrevented) return;
+        if (ev.key === 'Escape') {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this.closeFoldedPop(true);
+          return;
+        }
+        // Tab 차례(283차 — 282차 보고 (3)): 팝업은 본문 끝에 붙어, 끝 컨트롤에서 Tab이면 문서 끝(브라우저 화면)으로, 첫 컨트롤에서 Shift+Tab이면 문서의 앞 요소로 빠졌다.
+        // 팝업 내용이 연 단추 바로 뒤에 있는 차례로 옮긴다 — 끝(켜진 컨트롤이 없으면 팝업 자체)에서 Tab이면 닫고 연 단추 다음 요소로, 처음(또는 팝업 자체)에서 Shift+Tab이면
+        // 닫고 연 단추로(열어 두면 연 단추에서 다시 Tab이 문서 차례로 팝업을 건너뛴다 — 팝업은 초점이 안에 있는 동안만 연다). 연 단추 뒤가 문서 끝이면 연 단추로 두고
+        // 기본 동작을 막지 않아 브라우저가 거기서 이어 옮긴다. 가운데 컨트롤·수정 키(Ctrl+Tab 다음 도면 등)·입력기 조합 중은 넘긴다
+        if (ev.key !== 'Tab' || ev.altKey || ev.ctrlKey || ev.metaKey || ev.isComposing) return;
+        const list = focusables(pop);
+        const at = document.activeElement;
+        if (!(ev.shiftKey ? at === pop || at === list[0] : at === (list[list.length - 1] ?? pop))) return;
         ev.stopPropagation();
+        if (!ev.shiftKey && focusAfter(btn, pop)) {
+          ev.preventDefault();
+          this.closeFoldedPop(false);
+          return;
+        }
+        if (ev.shiftKey) ev.preventDefault();
         this.closeFoldedPop(true);
       });
       window.addEventListener('pointerdown', off, true);

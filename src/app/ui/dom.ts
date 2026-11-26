@@ -176,6 +176,17 @@ export function closeMenu(restoreFocus = false): void {
 }
 
 /**
+ * 열린 메뉴의 연 단추가 from 안이면 닫을 때(Esc·Tab·항목 고르기) 초점을 돌려줄 곳을 to로 바꾼다(283차 — 접힌 리본 패널 팝업 안 펼침 단추(▾)로 연 메뉴:
+ * 팝업이 닫히며 그 단추가 문서에서 빠져, 메뉴를 닫으면 초점이 본문으로 갔다. 위 「숨은 연 단추면 열기 전 초점」(264차)은 붙어 있는 단추만 다룬다 —
+ * 열기 전 초점도 같은 팝업 안이라 함께 빠지므로 비운다)
+ */
+export function moveMenuOpener(from: Node, to: HTMLElement): void {
+  if (!openMenu || !menuOpener || !from.contains(menuOpener)) return;
+  menuOpener = to;
+  if (menuFallback && from.contains(menuFallback)) menuFallback = null;
+}
+
+/**
  * 메뉴 항목의 이름: 단추 바로 아래 글 마디(번역층이 그 자리에서 바꾼 화면 글 — 아이콘·단축키 kbd는 뺌). 맨 앞의 켜짐 표시 「✓」는 상태라 뗀다.
  * 글 마디는 3으로 가린다(Node 전역이 없는 시험 환경)
  */
