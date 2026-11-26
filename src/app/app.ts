@@ -389,7 +389,8 @@ export class App {
   private lastPickClick: { time: number; screen: Pt } | null = null;
   /**
    * 마지막 누르기(onClick)가 손가락 톡이었는지(268차): 브라우저의 dblclick은 MouseEvent라 pointerType이 없다. 두 번 톡 뒤의 dblclick 바로 앞에는
-   * 두 번째 톡의 onClick이 돌므로(화면은 손가락을 뗄 때 누르기를 넘긴다) 그 종류로 두 번 누르기의 고르기 거리를 정한다
+   * 두 번째 톡의 onClick이 돌므로(화면은 손가락을 뗄 때 누르기를 넘긴다) 그 종류로 두 번 누르기의 고르기 거리를 정한다.
+   * 끌기로 끝나 onClick이 오지 않는 마우스·펜 누르기는 onDown이 적는다(269차)
    */
   private lastClickTouch = false;
   /** 핫 그립(Shift+클릭으로 여럿) */
@@ -2603,6 +2604,9 @@ export class App {
   /** 왼쪽 버튼을 눌렀을 때(명령이 없거나 객체 선택 중): 그립·끌어 옮기기·창 가운데 무엇인지 정해 둔다 */
   private onDown(w: Pt, s: Pt, ev: PointerEvent): void {
     this.press = null;
+    // 마지막 누르기의 종류(269차): 끌기로 끝난 누르기에는 onClick이 오지 않으므로 화면 누르기(마우스·펜 왼쪽 버튼)에서도 적는다 —
+    // 손가락 톡 뒤 마우스 누르기가 끌기로 끝나고 오는 dblclick이 앞 손가락 톡의 고르기 거리를 쓰지 않게
+    this.lastClickTouch = ev.pointerType === 'touch';
     const st = this.active;
     const r = this.request;
     if (!st || ev.pointerType === 'touch' || (r && r.kind !== 'select') || this.windowStart?.viaClick) return;
@@ -2908,9 +2912,8 @@ export class App {
     const st = this.active;
     if (!st || this.request) return;
     // 객체를 고르는 거리는 바로 앞 누르기와 같다(268차 — 손가락 두 번 톡은 톡 고르기의 PICKBOX × 3: 톡 한 번으로 고르는 객체를 두 번 톡 하면 그 편집.
-    // 전에는 × 1이라 5~15px 떨어진 두 번 톡이 편집을 열지 않고 표 빈 셀 찾기로 빠졌다). 보기 모드는 객체 편집이 없어 × 1 그대로
-    // (배치 갈래의 객체 확인은 그 자리 객체를 편집으로 넘기려는 것 — 넓히면 뷰포트에 들어가지도 고치지도 않는 자리만 는다)
-    const tol = this.pickTolerance(this.lastClickTouch && !this.viewOnly);
+    // 전에는 × 1이라 5~15px 떨어진 두 번 톡이 편집을 열지 않고 표 빈 셀 찾기로 빠졌다). 보기 모드는 아래에서 객체를 고르지 않는다(269차)
+    const tol = this.pickTolerance(this.lastClickTouch);
     // 배치: 뷰포트 안을 두 번 누르면 모형 공간으로, MSPACE에서 뷰포트 밖이면 종이 공간으로
     if (st.onLayout && !st.blockEdit) {
       const at = this.viewportAt(st, this.view.paperPoint(sp.x, sp.y));
@@ -2919,7 +2922,10 @@ export class App {
         return;
       }
       if (!st.msVp && at) {
-        const hit = this.picker()?.pick(w.x, w.y, tol);
+        // 그 자리 배치 객체(표제란 글·도면 공간 치수 등)가 있으면 그 객체 편집으로 넘긴다. 보기 모드는 그 편집이 없어 객체를 보지 않고 들어간다
+        // (269차 — README 「뷰포트 안을 두 번 눌러(MSPACE)」, 보기 모드는 두 번 눌러 고치기만 없다. 전에는 PICKBOX 안에 배치 객체가 있으면
+        // 들어가지도 고치지도 않았다)
+        const hit = this.viewOnly ? null : this.picker()?.pick(w.x, w.y, tol);
         if (!hit || hit === at.handle) {
           this.enterViewport(st, at);
           return;
