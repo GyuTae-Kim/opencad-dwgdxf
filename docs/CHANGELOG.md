@@ -3,6 +3,50 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(291차): 소거·블록 대치·객체 격리 묶음의 번역 대조와 빠진 번역
+
+### 근거와 표
+290차가 한도 밖으로 남긴 오역(ROADMAP 「290차에 보고 두 것」 (5))과 같은 사전에 근거가 서는 (4)에서 시작해, 소거 — PURGE 대화 상자(`editcmds.ts`)·-PURGE(`dashcmds-tables.ts`)·
+리본 —, 블록 대치 — BLOCKREPLACE(`util2-blocks.ts`)·FILTER 대화 상자의 대치(S)(`util2-select.ts`)·BLOCKTOXREF의 소거 자리(`blkcmds-xref.ts`) —, 객체 격리 — ISOLATEOBJECTS·HIDEOBJECTS·
+UNISOLATEOBJECTS(`isolate.ts`·바로 가기 메뉴·리본) — 와 LAYTHW·COPYTOLAYER·SETBYLAYER·도면층 상태·LAYWALK·LAYTRANS·필터 줄의 보이는 글을 네 사전과 견줬습니다. 결과 줄의
+「삭제」(deleted·削除·删除·gelöscht)는 AutoCAD -PURGE 결과 줄 말투라 그대로 두고, 프롬프트·제목·단추의 소거만 봤습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 16·일본어 15·중국어 30·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 소거(-PURGE 제목·물음·BLOCKTOXREF 확인란·BLOCKREPLACE 꼬리 꼴) | en Clear (command line)·items to erase·name to erase·Are you sure you want to erase·Clear unreferenced·has been cleared → Purge …·purge·purged; zh 橡皮擦（命令行）(지우개) → 清除（命令行）; de Löschen (Befehlszeile) → Bereinigen (Befehlszeile) | 「소거」 Purge·清除·Bereinigen(290차), 「…cannot be purged」 |
+| 일본어 소거 제목·프롬프트(PURGE 제목·확인 단추·리본, -PURGE 물음, BLOCKREPLACE·BLOCKTOXREF 확인란) 12곳 | 削除(AutoCAD 일본어판 ERASE 이름)·消去 → 名前削除 | 「재료·플롯 스타일·형태·비주얼 스타일·고립된 데이터 소거는 …」 …の名前削除 다섯, 「외부 참조 종속 …」 削除（パージ） |
+| -PURGE 옵션 | 고립된 데이터(O) en Isolated·zh 隔离·de Isolierte(격리) → Orphaned·孤立·Verwaiste; 다중선 스타일(M)·다중선 스타일 zh 多行(여러 줄 문자)·多段线(폴리선)·de Mehrzeilig → 多线样式·Multilinienstil(첫 프롬프트 통째 포함); zh 플롯 스타일(P) 样式(P) → 打印样式(P); zh 등록된 응용프로그램 注册申请(신청서)·de Bewerbungen(입사 지원) → 注册应用程序·Anwendungen; de 0 길이 형상(Z) Form(형태) → Geometrie | -PURGE 첫 프롬프트 통째(Orphaned Data·孤立数据·Verwaiste Daten·打印样式·注册应用程序), 「다중선 스타일 ({0})」 多线样式·Multilinienstile |
+| 블록 대치 | 대치(S) en·de Daechi(소리 옮김) → Replace (S)·Ersetzen (S); 「다음으로 대치」 en Replace with next·ja 次に置き換え(다음 것) → Replace with·置換後のブロック; 결과·오류 줄 en references in block·de im Block(블록 안의) → to block·auf Block; zh 「둘 이상」 一个 → 两个, 「(참조 {1}개)」 参考号(참고 번호) → {1} 个参照, 模块(모듈) → 块, 결과 줄 「…替换为 {2}、{3} 和 {4}」(꼬리를 목록으로) → 「…替换为 {2}。{3}{4}」 | 「대치(R)」 Replace·Ersetzen, 「대치할 문자」 Replace with, 「블록 {0}의 참조가 없습니다.」 to block·auf Block·参照, 「항목이 둘 이상이어야 합니다.」 两个 |
+| 객체 격리 | 격리 끝·격리 줄·「숨기거나 격리한 …」 en quarantine·de Quarantäne(검역) → Isolation·Isolierung; 「UNISOLATEOBJECTS로 (모두) 다시 보입니다」 en as·ja として·に戻ります·zh 在…中·以…的形式·de als(…로서·…안에서) → with·で·可用·Mit; 리본 말풍선 「(UNISOLATEOBJECTS로 끝)」 en ends with·zh 以…结尾(이름 끝) → end with·用…结束 | 「격리」 Isolation·Isolierung, 290차 「…LAYUNISO로 되돌립니다.」 with LAYUNISO·可用 LAYUNISO |
+| 290차 보고 (5) 줄 | de LAYTHW tauen·getaut → auftauen·aufgetaut, 리본 LAYER 말풍선 Frieren(춥다) → Einfrieren, COPYTOLAYER [Exit(X)] <Exit> → [Beenden (X)] <Beenden>, 「도면층 상태 {0}개를 가져왔습니다」 Abgerufene → importiert, SETBYLAYER·상태 복원 안내 Attribut → Eigenschaften, 필터 삭제 물음 어순, LAYWALK 「Anzeige von …」 → Zeigt … an; zh 「색상 종속 플롯 스타일 도면에서는 …」 基于颜色的打印样式不会恢复(스타일이 복원 안 됨) → 在颜色相关打印样式图形中不恢复打印样式, LAYWALK 안내 「右键单击以选中」 → 保持选区, LAYTRANS 대상 「一个或多个」 → 一个, 真实颜色 → 真彩色, COPYTOLAYER 앞 조각 「是否要如何创建图层？[」 → 是否创建？[ | 「동결 해제」 Auftauen, 「동결」 Einfrieren, 「종료」 Beenden, 「가져오기(M)」 Importieren(290차), 「특성」 Eigenschaften, 「선택 유지(H)」 保持选区, 「트루컬러」 真彩色 |
+| 290차 보고 (4) — 같은 사전에 근거가 서는 것 | de 특성 필터 Attributfilter(블록 속성 필터) 7곳 → Eigenschaftenfilter; zh 필터 滤镜(사진 필터) 10곳 → 过滤器(필터 반전·삭제·선택·이름·미리보기·FILTER 옵션·비교 필터 등) | 「도면층 필터 특성」 Layer-Filtereigenschaften·「특성」 Eigenschaften, 「필터」 过滤器·「도면층 필터」 图层过滤器(过滤 66곳) |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 59, 열쇠 8554 → 8613):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| -PURGE 확인 물음 「소거할 각 이름을 확인하시겠습니까? [」(명령행 앞 조각)과 통째 「… [예(Y)/아니오(N)] <{0}>:」(기록 줄·휴대폰 카드 — 286차 꼴, 기본값은 옵션 번역으로) | 2 | Would you like to check each name for purge? [Yes (Y)/No (N)] <Yes>: | 대괄호 없는 물음 열쇠 + 「예(Y)」·「아니오(N)」 |
+| -PURGE 명사 10(블록·치수 스타일·도면층·선종류·문자 스타일·그룹·다중 지시선 스타일·다중선 스타일·테이블 스타일·등록된 응용프로그램)마다 확인 앞 조각·통째, 「… "{0}"을(를) 삭제하는 중입니다.」, 「… {0}개가 삭제되었습니다.」, 「참조되지 않은 …이(가) 없습니다.」 — 틀 「{0} "{1}"을(를) …」이 명사를 잡아 한국어 명사가 남던 것 | 50 | Purge block "{0}"? [Yes (Y)/No (N)] <No>: · Deleting block "{0}". · Deleted {0} blocks. · There are no unreferenced blocks. | -PURGE 옵션·PURGE 대화 상자 낱말, 확인은 290차 소거 낱말(Purge·名前削除·清除·bereinigen), 결과는 AutoCAD 결과 줄 말투 |
+| BLOCKREPLACE 결과 꼬리 「… 블록 {3}을(를) 소거했습니다.」·「… {3}개는 자기 참조가 되어 건너뛰었습니다.」(둘이 함께는 생기지 않는다 — 건너뛴 참조가 남으면 정의를 지우지 않음) | 2 | Replaced {1} references to block {0} with {2}. Purged block {3}. | 고친 기본 줄 + 소거 낱말 |
+| BLOCKTOXREF 소거 물음 「끝나면 참조되지 않는 항목을 소거하시겠습니까? [」·통째, 결과 꼬리 셋(블록 정의 소거·속성 없어짐·둘 다) | 5 | Replaced {0} block references with external references {1} ({2}). {3} references lost their attributes. Block definition {4} has been purged. | 기본 줄의 말투 |
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 91곳과 새 열쇠 59씩. 영어·일본어·중국어·독일어 화면의 PURGE·-PURGE 명령행·바로 가기 메뉴·휴대폰 단추·기록 줄,
+  BLOCKREPLACE·FILTER·BLOCKTOXREF 대화 상자와 결과 줄, 객체 격리 메뉴·리본·결과 줄, LAYTHW·COPYTOLAYER·SETBYLAYER·도면층 상태·LAYWALK·LAYTRANS·도면층 필터 글이 한국어나 엉뚱한 낱말 대신
+  그 언어의 CAD 낱말로 보입니다. 일본어 「소거」 열쇠는 PURGE 제목·확인 단추·리본·LAYWALK 소거 확인 단추가 함께 쓰고(모두 소거 뜻), 「소거(P)」(SPLINEDIT 맞춤 데이터 소거와 공유)는 그대로입니다.
+  번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「291차에 보고 두 것」): -PURGE 커서 옆 문구의 명사, LAYWALK 소거 실패 까닭 꼬리, BLOCKTOXREF 중첩 물음, 독일어 소거 löschen 나머지 등.
+
+### 확인
+- `tests/i18n-purge291.test.ts`(새 시험 3건 — 프롬프트는 소스의 PURGE_KINDS·PURGE_EXTRA 명사·-PURGE 첫 프롬프트·askYN 꼴·BLOCKTOXREF 물음에서 모음): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은
+  15 프롬프트의 입력 줄, 통째(친 입력 붙은 기록 줄 꼴 포함)·결과 줄(명사 줄 30·BLOCKREPLACE·BLOCKTOXREF·객체 격리)에 네 언어 모두 한글 없음, 고친 낱말과 새 통째 = 앞 조각 + 예/아니오.
+- 고치기 전 3건 실패(한글 남은 입력 줄 48·통째·결과 줄 236, 영어 소거(명령행) Clear), 고친 뒤 `tests/i18n-purge291.test.ts`·`tests/i18n.test.ts`·`tests/i18n-prompts.test.ts` 3파일 33건 통과.
+  `npm run check:i18n` 통과(8613 항목).
+- tools/·tests/ grep: 옛 번역 낱말을 기대하는 곳 없음(290차 시험의 Daechi·橡皮擦·Quarantäne는 「없어야 한다」 기대). 소거·대치 명령 시험은 한국어 원문을 봐 닿지 않음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(290차): 도면층 명령 묶음의 번역 대조와 빠진 번역
 
 ### 근거와 표
