@@ -3,6 +3,53 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(295차): 294차가 한도 밖으로 남긴 오역과 선종류·선가중치·색·그리기 순서 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 294차 「보고 두 것」 (1)의 한도 밖 오역(독일어 결합·속성·경계, 중국어 맨 앞으로·맨 뒤로 正面·背面, 영어 「경계 세트」 border set·HATCH 「내부 점 선택 …」 Set(T)·
+「일반(홀짝)」 General)이고, 그 뒤 선종류·선가중치·색·그리기 순서 묶음 — LINETYPE 선종류 관리자·LTSCALE·CELTSCALE·PSLTSCALE(`tables.ts`), -LINETYPE(`dashcmds-tables.ts`),
+DRAWORDER·TEXTTOFRONT·HATCHTOBACK(`editcmds.ts`)과 바로 가기 메뉴, LWDISPLAY(별칭 LWEIGHT — `commands.ts`), COLOR와 CHPROP의 색·선종류·선가중치 물음(`propcmds.ts`),
+색 고르기 대화 상자(`ui/colorpick.ts`), 색 입력 도우미(`dashcmds-insert.ts`), STATUS 현재 색상·선종류·선가중치 줄(`util2-misc.ts`), 시스템 변수 설명(`sysvars.ts`),
+CDORDER·MKLTYPE(`express-draw.ts`), 리본 색·선종류·선가중치 고르기 — 의 보이는 글(소스 글 207개, 사전 열쇠 197개)을 네 사전과 견줬습니다.
+이 앱에 선가중치 설정 대화 상자·-LWEIGHT·-COLOR는 없습니다(LWEIGHT는 LWDISPLAY 별칭). 독일어는 출발점(결합 13 + 속성 17)으로 한도가 차 묶음의 독일어 오역은 다음 차수로 넘겼습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 21·일본어 8·중국어 30·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 그리기 순서: DRAWORDER 통째(기록 줄·휴대폰 카드)·바로 가기 메뉴·키워드 이름 | en Object up·Object down·To the front·To the back → Above Object·Below Object·Bring to Front·Send to Back; ja 前へ(F)·上へ(B)(위로)·<上へ> → 最前面へ·最背面へ; zh 对象顶部·对象底部·正面·背面(면) → 对象上移·对象下移·前置·置于底层, 맨 앞으로·맨 앞으로(F)·맨 뒤로(B) 正面·背面 → 前置·置于底层 | 조각 「객체 위로(A)」 Above Object (A)·「맨 앞으로(F)」 最前面へ(F), 「앞(F)」 前置(F)·「문자·치수 맨 앞으로」 文字和标注前置, 「맨 뒤로」 置于底层 |
+| 색상표(color book): 키워드 이름 「색상표(CO)」·「색상표」와 같은 옵션을 담은 프롬프트(-HATCH·GRADIENT·-ATTEDIT·-LAYER·CHPROP) | en Color Chart·Color palette·Color Palette·Color Index·Color Table → Color Book; ja カラーパレット·カラーチャート → カラーブック(해치 색상 통째의 <現在使用中>도 294차 「현재 사용」 現在使用으로); zh 调色板·色卡 → 配色系统(「真实颜色」도 真彩色) | CHPROP 통째 Color Book (CO)·カラーブック(CO), 「첫 번째 그라데이션 색상 …」 配色系统(CO), 「트루 컬러」 真彩色 |
+| 중국어 선종류 | 선종류 관리자·{0}개를 불러왔습니다·만들기·불러올 선종류·로드할 선종류 입력·로드된 선종류 이름 입력 둘·틀 「선종류 {0}」·「선종류 ({0})」의 行类型(행 유형)·线条类型 → 线型, 끝점 지정 端点线型定义(깨짐) → 指定线型定义的端点, 이름 지정 命名线型(이름 짓기) → 指定线型名称, -LINETYPE 「로드(L) 옵션으로」 Load(L)(영어) → 加载(L), CDORDER 다른 객체의 맨 뒤로 返回其他对象(돌아가기) → 其他对象的后方, 고른 색 选择颜色 → 所选颜色 | 「선종류」 线型, 「선종류 정의의 시작점 지정:」 指定线型定义的起点, 조각 「로드(L)」 加载(L), 「경계 뒤(E)」 边界后方 |
+| MKLTYPE·CELTSCALE·CDORDER | en·ja 「고른 형상으로 선종류 정의」 uniform shape·均等な形状(고른 = 고르게로 읽음) → selected geometry·選んだ形状; en 새 객체의 선종류 축척 Scale linetype(동사) → Linetype scale; ja CDORDER 객체 선택 今すぐスペース(지금 당장) → 現在の空間 | 「고른 색」 Selected color·選んだ色, 「선종류 축척」 Linetype scale, 「현재 공간:」 現在の空間 |
+| 영어 경계(boundary)·HATCH | 경계 세트 border set·경계 모서리(EXTEND)·자르기 경계(XCLIP·IMAGECLIP) border → boundary, 「내부 점 선택 또는 [」 internal → interior, 통째 Select Object(S)/Undo(U)/Set(T) → Select object (S)/Undo (U)/Settings (T), 일반(홀짝) General → Normal | 「경계 세트(B)」 Boundary set (B), 조각 「설정(T)」 Settings (T), 해치 스타일 통째 Normal (N) |
+| 독일어 결합(bind)·속성(attribute) | XBIND·ETRANSMIT·NCOPY·참조 편집의 결합 kombinieren·Kombination 13곳 → binden·gebunden; ATTEDIT·GATTE·ATTIPEDIT·ATTDISP·ATTIN·ATTOUT·참조 편집의 속성 Eigenschaft 17곳 → Attribut | 「결합(B)」 Binden (B)·「외부 참조 기호 결합」 binden, 「속성 편집」 Attribute bearbeiten·「속성 {0}개를 바꿨습니다.」 Attribute |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 21):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| -LINETYPE 「선종류 "{0}"이(가) 이미 로드되었습니다. 다시 로드하시겠습니까?」·MKLTYPE 「… 이미 있습니다. 다시 정의하겠습니까?」의 앞 조각 「… [」과 통째(이름을 잡는 물음이라 틀이어야 함) | 4 | Linetype "{0}" is already loaded. Would you like to reload? [Yes (Y)/No (N)] <{1}>: | 물음 열쇠 + 「예(Y)」·「아니오(N)」 |
+| -LINETYPE·MKLTYPE 결과 줄 「선종류 "{0}"이(가) (다시) 로드되었습니다.」·「선종류 "{0}"을(를) 만들었습니다·다시 정의했습니다: {1}」(틀이 앱 낱말을 잡던 것) | 4 | Linetype "{0}" reloaded. | 「다시 로드되었습니다」 Reloaded, 「다시 정의했습니다」 Redefined |
+| -LINETYPE ? 표준 선종류 목록의 로드된 줄 「{0} (로드됨) {1}」 | 1 | {0} (loaded) {1} | 「(로드됨)」 (loaded) |
+| STATUS 「현재 색상: {0}」과 색 이름 일곱(「… (빨간색)」~「(흰색)」 — BYLAYER -- 색도 같은 틀), 「현재 선종류: {0}」·「… -- "{1}"」, 「현재 선가중치: {0}」·「… 기본값」 | 12 | Current color: {0} (Red) | 「현재 색상:」 등, 「빨간색」~「흰색」, 「기본값」 |
+
+새 통째가 덮어 쓰이지 않게 된 틀 둘 — 「선종류 "{0}"이(가) {1}.」·「선종류 "{0}"을(를) {1}: {2}」(소스에서 이 꼴은 -LINETYPE·MKLTYPE 한 줄씩의 두 갈래뿐) — 은 지웠습니다. 열쇠 8747 → 8766.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 89곳과 새 열쇠 21씩, 지운 틀 둘. 영어·일본어·중국어·독일어 화면의 DRAWORDER·-LINETYPE·MKLTYPE 물음과 결과 줄,
+  색 프롬프트의 색상표 옵션, STATUS 현재 색상·선종류·선가중치 줄, XBIND·속성 편집 글이 한국어나 엉뚱한 낱말 대신 그 언어의 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「맨 앞으로(F)」·「맨 뒤로(B)」(-HATCH 그리기 순서 — 중국어), 「색상표(CO)」·「색상표」(-HATCH·GRADIENT·-ATTEDIT·-LAYER·CHPROP), 「내부 점 선택 또는 [」(HATCH·BOUNDARY),
+  「경계 모서리」(EXTEND), 「선종류 {0}」(중국어 — DIMSTYLE 가져오기 목록 등 「선종류 이름」 줄), 「고른 색」(색 고르기). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「295차에 보고 두 것」): 독일어 속성 나머지·경계 Grenze·Rand·이 묶음의 독일어 오역, 중국어 선종류 行类型 나머지 다섯, CDORDER 결과 줄(코드 변경), STATUS 나머지 줄 등.
+
+### 확인
+- `tests/i18n-ltcolor295.test.ts`(새 시험 3건 — 프롬프트·줄은 소스 글에서 확인, ? 목록은 STANDARD_LINETYPES에서 모음): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 10 프롬프트의 입력 줄,
+  통째(친 입력 붙은 기록 줄 꼴 포함)·결과 줄·? 목록 38줄·STATUS 24줄에 네 언어 모두 한글 없음, 고친 낱말과 DRAWORDER 통째 = 조각, 새 통째 = 앞 조각 + 예/아니오, 지운 틀 없음.
+- 고치기 전 3건 실패(한글 남은 입력 줄 8·통째와 줄 280, 영어 border 5열쇠), 고친 뒤 `tests/i18n-ltcolor295.test.ts`·`tests/i18n.test.ts`·`tests/i18n-prompts.test.ts` 3파일 33건 통과.
+  `npm run check:i18n` 통과(8766 항목). 사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어 규칙)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험 없음. 바꾼 열쇠를 보는 시험(294 해치 색 프롬프트·291 「색상표 색은 …」 真彩色·292 XBIND·293 독일어 속성·결합 목록)은 기대 그대로 맞습니다. tools/에는 이 묶음 글 없음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(294차): 293차가 한도 밖으로 남긴 기준점 오역과 해치 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
