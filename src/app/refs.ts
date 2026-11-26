@@ -286,7 +286,7 @@ export function docRefs(app: App, doc: CadDocument): RefItem[] {
   return out.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
 }
 
-/** 이 브라우저가 풀어 잇는 그림 형식(linkImageFiles — 휴대폰 보기 참조 파일 고르기가 실패 수를 셀 때도 쓴다) */
+/** 이 브라우저가 풀어 잇는 그림 형식(linkImageFiles — 휴대폰 보기 참조 파일 고르기가 고른 파일의 형식을 가를 때도 쓴다) */
 export const IMAGE_EXT = /\.(png|jpe?g|gif|bmp|webp)$/i;
 
 /** 열린 도면들이 찾는 참조 파일 열쇠(파일 이름 소문자): 외부 참조(연결한 참조 파일이 다시 찾는 것까지)·이미지·PDF 참고 */
@@ -296,10 +296,14 @@ export function wantedRefKeys(app: App): Set<string> {
   return keys;
 }
 
-/** 고른 파일 중 이미지를 연결한다. 연결한 수 */
-export async function linkImageFiles(app: App, files: File[]): Promise<{ linked: string[]; unsupported: string[] }> {
+/**
+ * 고른 파일 중 이미지를 연결한다. unsupported: 이 브라우저가 풀지 못하는 형식(TIFF·JP2·ECW·MrSID — 풀어 보지 않음),
+ * failed: 받는 형식(IMAGE_EXT)인데 풀거나 잇지 못한 파일(깨진·잘린 파일 — 형식 문제가 아니다, 274차에 unsupported에서 나눔)
+ */
+export async function linkImageFiles(app: App, files: File[]): Promise<{ linked: string[]; unsupported: string[]; failed: string[] }> {
   const linked: string[] = [];
   const unsupported: string[] = [];
+  const failed: string[] = [];
   const max = Math.min(8192, (app.view.renderer.gl.getParameter(app.view.renderer.gl.MAX_TEXTURE_SIZE) as number) || 4096);
   for (const f of files) {
     const key = f.name.toLowerCase();
@@ -323,14 +327,14 @@ export async function linkImageFiles(app: App, files: File[]): Promise<{ linked:
       app.imageKeys.add(key);
       linked.push(f.name);
     } catch {
-      unsupported.push(f.name);
+      failed.push(f.name);
     }
   }
   if (linked.length) {
     app.engine.images([...app.imageKeys], app.pdfPages);
     for (const st of app.docs) app.edits.rebuildEverything(st);
   }
-  return { linked, unsupported };
+  return { linked, unsupported, failed };
 }
 
 /** 고른 파일 중 PDF를 연결하고, 열린 도면들이 쓰는 페이지를 그린다 */
@@ -566,6 +570,8 @@ export function registerRefCommands(app: App): void {
         const n = names.length;
         ctx.print(n ? `파일 ${n}개를 연결했습니다: ${names.slice(0, 6).map(ft).join(', ')}${n > 6 ? ' …' : ''}` : '이 도면이 찾는 이름의 파일이 없습니다.', n ? undefined : 'err');
         if (pdf.failed.length) ctx.print(`참고: ${pdf.failed.slice(0, 4).map(ft).join(', ')}은(는) 읽을 수 없는 PDF입니다(암호가 걸렸거나 손상됨).`, 'err');
+        // 받는 형식인데 풀지 못한 그림(깨진 파일)은 형식 참고가 아니라 연결 실패 — 휴대폰 보기·IMAGEATTACH와 같은 글(274차)
+        for (const name of img.failed) ctx.print(`${ft(name)}: 이미지를 연결하지 못했습니다.`, 'err');
         if (img.unsupported.length) ctx.print(`참고: ${img.unsupported.slice(0, 4).map(ft).join(', ')}은(는) 이 브라우저가 읽을 수 없는 이미지 형식입니다(PNG·JPEG·GIF·BMP·WebP만).`);
         if (n) toast(`외부 파일 ${n}개를 연결했습니다.`, 'info', 3000);
       };

@@ -547,15 +547,15 @@ export class MobileView {
     const pdf = await refs.linkPdfFiles(app, files);
     const fonts = await shx.addShxFonts(app, shxFiles, true);
     // 열지 못한 외부 참조는 linkXrefFiles가 오류 줄을 적는다. 이미지·PDF·SHX 실패도 참조 관리자·IMAGEATTACH·SHXFONTS의 오류 글로 적는다(보기 모드는 오류 알림 — 270차)
-    const rasterBad = img.unsupported.filter((n) => refs.IMAGE_EXT.test(n));
+    const rasterBad = img.failed;
     for (const n of rasterBad) app.cmd.print(`${ft(n)}: 이미지를 연결하지 못했습니다.`, 'err');
     const pdfBad = pdfs.filter((f) => pdf.failed.includes(f.name.toLowerCase())).map((f) => f.name);
     if (pdfBad.length) app.cmd.print(`참고: ${pdfBad.slice(0, 4).map(ft).join(', ')}은(는) 읽을 수 없는 PDF입니다(암호가 걸렸거나 손상됨).`, 'err');
     if (shxPicked.length && !fonts) app.cmd.print('SHX 글꼴로 읽을 수 있는 파일이 없습니다.', 'err');
-    // 273차: 이 브라우저가 풀지 못하는 그림 형식(TIFF·JP2·ECW·MrSID — linkImageFiles가 풀어 보지 않고 unsupported에 넣은 것, 풀어 보다 실패한 rasterBad와 겹치지 않는다).
+    // 273차: 이 브라우저가 풀지 못하는 그림 형식(TIFF·JP2·ECW·MrSID — linkImageFiles가 풀어 보지 않고 unsupported에 넣은 것, 풀어 보다 실패한 failed(rasterBad)와 겹치지 않는다 — 274차부터 따로 돌려받음).
     // 데스크톱 참조 관리자와 같은 참고 글을 같은 보통 줄로 적고, 보기 모드는 명령행이 숨으므로 경고 알림으로도 보인다(보통 줄은 알림이 되지 않아 겹치지 않는다).
     // 잇기를 시도하지 않은 파일이라 열지 못한 수·찾는 이름에는 넣지 않는다
-    const fmtBad = img.unsupported.filter((n) => !refs.IMAGE_EXT.test(n));
+    const fmtBad = img.unsupported;
     const note = fmtBad.length ? `참고: ${fmtBad.slice(0, 4).map(ft).join(', ')}은(는) 이 브라우저가 읽을 수 없는 이미지 형식입니다(PNG·JPEG·GIF·BMP·WebP만).` : '';
     const n = xr.length + img.linked.length + pdf.linked.length + fonts;
     const bad = dwg.length - xr.length + rasterBad.length + pdfBad.length + shxPicked.length - fonts;
