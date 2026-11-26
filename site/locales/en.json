@@ -1421,7 +1421,7 @@
   "객체 스냅 설정...": "Object snap settings...",
   "객체 스냅 재지정": "Object snap override",
   "객체 스냅 점을 찾지 못했습니다. 다시 지정하십시오.": "Object snap point not found. Please specify again.",
-  "객체 스냅 조준창 크기(픽셀)": "Object snap sight window size (pixels)",
+  "객체 스냅 조준창 크기(픽셀)": "Object snap aperture size (pixels)",
   "객체 스냅 종류": "Object snap type",
   "객체 스냅 추적 (F11) · 스냅점 위에 잠시 머물면 그 점에서 정렬선을 씁니다": "Object Snap Tracking (F11) · Hover over the snap point for a moment to draw an alignment line at that point.",
   "객체 스냅 추적 켜기 (F11)": "Turn on object snap tracking (F11)",
