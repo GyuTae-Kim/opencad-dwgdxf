@@ -3,6 +3,57 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(296차): 295차가 한도 밖으로 남긴 오역과 제도 설정·객체 스냅·격자·스냅·극좌표·동적 입력 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 295차 「보고 두 것」 (1)의 한도 밖 오역(독일어 속성 Eigenschaft·색상표·그리기 순서, 영어 경계(명령행)·간격(사용자 정의)·십자 표시·반전 곡선·「로드된 선종류 이름 입력 또는 [」,
+중국어 선종류 行类型·线条类型 나머지·Continuous 连续·결과 줄 어순)이고, 그 뒤 제도 설정·객체 스냅·격자·스냅·극좌표·동적 입력 묶음 — GRID·SNAP·DSETTINGS(스냅 및 그리드·극좌표 추적·객체 스냅)·OSNAP·-OSNAP
+(`drafting.ts`), 스냅 이름(`snap.ts`), 객체 스냅 재지정 메뉴·FROM·M2P·점 필터(`osnap-override.ts`·`ctxmenu.ts`), 증분·추가 각도(`polar.ts`·`polar-addlist.ts`), 극좌표·객체 스냅 추적 툴팁(`tracking.ts`),
+F3·F7~F12 켜고 끄기 줄(`app.ts`), 상태 막대 제도 단추와 객체 스냅·증분 각도·등각평면 메뉴(`ui/shell.ts`), OPTIONS 제도 탭(`options.ts`), 제도 변수 설명(`sysvars.ts`), 휴대폰 스냅 칩, ISODRAFT·ISOPLANE·등각원
+(`viewtools-iso.ts`) — 의 보이는 글을 네 사전과 견줬습니다. 이 앱 DSETTINGS에 동적 입력 탭은 없고 동적 입력 칸(`dyninput.ts`)에는 한국어 글이 없습니다.
+독일어는 출발점(속성 14 + 색상표 13 + 그리기 순서 3)으로 한도가 차 묶음의 독일어 오역은 다음 차수로 넘겼습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 12·일본어 6·중국어 21·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 독일어 속성(attribute): INSERT·ATTREQ·ATTDISP 설명, TXTEXP·FIND 안내, 분해(속성 유지)·속성 남기고 분해(BURST), 데이터 추출, BATTMAN 리본, 참조 편집 셋 | Eigenschaft·Immobilienverwaltung(부동산 관리)·Zersetzt sich(썩는다) 14곳 → Attribut·Attributverwaltung·Zerlegen | 「편집할 수 있는 속성이 없습니다.」 Keine Attribute zum Bearbeiten, 「분해(속성 값 유지)」 Zerlegen (Attributwerte beibehalten), 「블록 속성 관리자」 Blockattribut-Manager |
+| 독일어 색상표(color book): 키워드 이름 둘·색 프롬프트 아홉·안내 둘 | Farbpalette·Farbtabelle·Farbkarte·Color Table 13곳 → Farbbuch(해치 색상 <Aktuell verwendet>도 조각 <Aktuellen verwenden>으로) | 「색상표(색상 책)」 (Farbbuch) |
+| 독일어 그리기 순서 | 객체 위로·아래로 Up-Objekt·Objekt unten → Objekt nach oben·nach unten, 해치 맨 뒤로 결과 ans Ende → in den Hintergrund | 조각 「객체 위로(A)」 Objekt nach oben (A), 「해치 맨 뒤로」 Schraffuren in den Hintergrund |
+| 영어 출발점 | 경계(명령행) boundary → Boundary, 간격(사용자 정의) Interval → Spacing, CROSS 무늬 「십자 표시」 Crosshair(커서 십자선) → Cross marks, INVCURVED 「반전 곡선」 Inversion curve → Inverted curve, 「로드된 선종류 이름 입력 또는 [」 to load → the name of the loaded linetype | 「경계」 Boundary, 「간격두기」 Spacing, 「닫힌 십자형」 Closed cross, 「반전 원통」 Inverted Cylinder, 통째 「… 또는 [?]」 loaded |
+| 중국어 출발점 | 특성 재지정·RENAME·DWG 쓰기 경고·MLSTYLE 설명의 行类型·线条类型 → 线型, -LAYER·도면층 상태 「로드된 선종류 …」·「Continuous로 두었습니다」의 连续(선종류 이름을 옮김) → Continuous, 「{0} 已移除边界。」 → 「已移除 {0} 个边界。」 등 어순 | 「선종류」 线型, 「{0}개를 지웠습니다.」 已删除 {0} 个项目 |
+| 영어 묶음 | 「⋯」 단추 이름 Rest of the items in the status bar Select → Remaining status bar items, 등각 제도 Conformal system(등각 사상)·등각투영 제도 Isometric projection system → Isometric Drafting, <등각투영 제도 끄기>, 간격 interval → spacing, 스냅 이름 endpoint·node → Endpoint·Node | 「등각투영 제도 (ISODRAFT) · …」 Isometric Drafting, 「격자 X 간격」 Grid X spacing, 「객체 스냅: 끝점」 Endpoint |
+| 일본어 묶음 | 교차점·가상 교차점 交差点(길 교차로) → 交点, FROM <간격띄우기> ギャップオフ → オフセット, 조준창 크기 ピックボックス(PICKBOX) → 照準ウィンドウサイズ, <등각투영 제도 끄기> | 「객체 스냅: 교차점」 交点, 「간격띄우기」 オフセット, 「객체 스냅 조준창 크기(픽셀)」 照準ウィンドウサイズ |
+| 중국어 묶음 | 간격 偏移量(간격띄우기) → 间距, 등각 제도·등각원 图标图·图标圆(아이콘) → 等轴测绘图·等轴测圆(중심 圆心, 반지름 프롬프트의 빠진 괄호), 가상 교차점 虚拟交集(교집합) → 虚拟交点, 사분점 四分之一点 → 象限点, ISODRAFT 통째 等距左·上·右 → 等轴测平面左侧·顶部·右侧 | 「수평 간격두기(X) 지정」 指定水平间距, 「등각투영 제도」 等轴测绘图, 「교차점」 交点, 「사분점(Q)」 象限点(Q), 조각 「등각평면 왼쪽(L)」 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 36):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| 상태 막대 객체 스냅 메뉴의 켠 항목 「✓ 끝점」~「✓ 평행」(꺼진 항목은 이름 열쇠로 옮겨지는데 켠 항목만 한국어) | 14 | ✓ Endpoint | 이름 열쇠의 번역 그대로(켜고 끌 때 이름이 바뀌지 않게) |
+| 상태 막대 등각평면 메뉴 「{0}등각평면 왼쪽」·「… 위」·「… 오른쪽」(옛 틀 「{0}등각평면 {1}」이 평면 이름을 잡음) | 3 | {0}Isoplane Left | 조각 「등각평면 왼쪽(L)」에서 고를 글자를 뗀 것 |
+| 객체 스냅 추적 툴팁 「끝점: {0} < {1}」~「평행: …」·「임시 추적점: …」(커서 옆 — 틀이 획득점 이름을 잡음) | 15 | Endpoint: {0} < {1} | 이름 열쇠 + 「: 」, 「극좌표: {0} < {1}°」 꼴 |
+| SNAP 「… [켜기(ON)/끄기(OFF)/종횡비(A)/스타일(S)/유형(T)] <{0}>:」, -OSNAP 「… <없음>:」(틀이 「종횡비(A)/」·「없음」을 잡음) | 2 | Enter object snap mode list <None>: | 그 틀의 번역 + 「종횡비(A)/」·「없음」 |
+| OPTIONS 제도 탭 검사 글 「AutoSnap 표식기 크기: …」·「조준창 크기: …」 | 2 | Aperture size: An integer between {0} and {1} is required. | 틀 「{0}: {1}과(와) {2} 사이의 정수가 필요합니다.」 |
+
+새 등각평면 메뉴 열쇠가 덮어 쓰이지 않게 된 틀 「{0}등각평면 {1}」(소스에서 이 꼴은 상태 막대 한 줄뿐)은 지웠습니다. 이 틀이 ISODRAFT 명령행 뒤 조각 「] <등각평면 왼쪽>:」도 잡아
+기본값이 「<Isoplane 왼쪽>」으로 남던 것이 함께 풀려, 이제 옵션 번역으로 바뀝니다. 열쇠 8766 → 8801.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 69곳과 새 열쇠 36씩, 지운 틀 하나. 영어·일본어·중국어·독일어 화면의 상태 막대 객체 스냅·등각평면 메뉴, 객체 스냅 추적 툴팁, SNAP·-OSNAP·ISODRAFT 기록 줄과 명령행,
+  OPTIONS 제도 탭 검사 글, 독일어 속성·색상표 글이 한국어나 엉뚱한 낱말 대신 그 언어의 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「끝점」·「노드」(영어 — LIST 줄·키워드 이름), 「교차점」(일본어 — 휴대폰 칩), 「사분점」(중국어 — DIMARC 사분점), 「간격은 0보다 커야 합니다.」(DSETTINGS만),
+  「<간격띄우기>:」(FROM만), 「색상표」·「색상표(CO)」(독일어 — -HATCH·GRADIENT·-ATTEDIT·-LAYER·CHPROP). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「296차에 보고 두 것」): 독일어 경계·이 묶음의 독일어 오역, 공유 열쇠 「수직」(스냅 perpendicular ↔ 세로), 일본어 「주(M)」 主軸(118차 시험이 고정), 두 정렬선 툴팁(코드 변경) 등.
+
+### 확인
+- `tests/i18n-drafting296.test.ts`(새 시험 3건 — 프롬프트·메뉴·툴팁 꼴은 소스 글에서 확인): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 10 프롬프트의 입력 줄, 상태 막대 메뉴 36줄(객체 스냅 켬·끔 28, 등각평면 6, 직교(끄기) 2),
+  추적 툴팁 15·통째 기록 줄(친 입력 붙은 꼴 포함)·검사 글 2에 네 언어 모두 한글 없음, 고친 낱말과 새 열쇠 = 이름·조각 번역에서 만든 꼴, 지운 틀 없음.
+- 고치기 전 3건 실패(한글 남은 입력 줄 8·메뉴와 줄 164, 영어 boundary), 고친 뒤 `tests/i18n-drafting296.test.ts`·`tests/i18n.test.ts`·`tests/i18n-prompts.test.ts` 3파일 33건 통과.
+  `npm run check:i18n` 통과(8801 항목). 사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어 규칙)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험은 `i18n-defaults118`의 일본어 主軸(M) 하나(그래서 그 열쇠는 두었음). 바꾼 열쇠를 보는 시험(290 중국어 线型·284 조준창·294 해치 색상·291 真彩色·prompts 색상표 쓰다·118 등각평면 줄)은 기대 그대로 맞습니다. tools/에는 이 묶음 글 없음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(295차): 294차가 한도 밖으로 남긴 오역과 선종류·선가중치·색·그리기 순서 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
