@@ -1529,7 +1529,8 @@ export class TextEditor {
     }
     if (init.mode === 'mtext') {
       const num = (label: string, title: string, get: (f: M.Fmt) => number | undefined, set: (f: M.Fmt, v: number) => M.Fmt, lo: number, hi2: number) => {
-        const i = h('input', { title, 'aria-label': title, inputmode: 'decimal' }) as HTMLInputElement;
+        // 음수도 받는 칸(lo < 0 — 기울기 각도)은 소수 자판을 두지 않는다(288차 — 그 자판은 음수 기호를 약속하지 않음)
+        const i = h('input', { title, 'aria-label': title, inputmode: lo < 0 ? undefined : 'decimal' }) as HTMLInputElement;
         i.addEventListener('change', () => {
           const v = Number(i.value.trim());
           if (!Number.isFinite(v) || v < lo || v > hi2) {

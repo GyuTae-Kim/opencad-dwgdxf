@@ -79,7 +79,7 @@ async function editSettings(st: DocState, s: HatchSettings): Promise<boolean> {
         options: [{ value: '_USER', label: '사용자 정의(평행선)' }, ...PATTERNS.map((p) => ({ value: p.name, label: `${p.name} — ${p.description}` }))],
       },
       { key: 'scale', label: '축척', type: 'number', value: s.scale },
-      { key: 'angle', label: '각도(도)', type: 'number', value: +((s.angle * 180) / Math.PI).toFixed(6) },
+      { key: 'angle', label: '각도(도)', type: 'number', value: +((s.angle * 180) / Math.PI).toFixed(6), signed: true },
       { key: 'userSpacing', label: '간격(사용자 정의)', type: 'number', value: s.userSpacing },
       { key: 'double', label: '이중(사용자 정의, 90° 교차)', type: 'check', value: s.double },
       {
@@ -154,7 +154,7 @@ async function editGradient(g: HatchGradient): Promise<boolean> {
       { key: 'single', label: '한 가지 색', type: 'check', value: g.singleColor },
       { key: 'color2', label: '색 2(두 가지 색일 때)', type: 'text', value: colorText(g.color2) },
       { key: 'tint', label: '색조(한 가지 색, 0 어둡게 ~ 1 밝게)', type: 'number', value: g.tint },
-      { key: 'angle', label: '각도(도)', type: 'number', value: +((g.angle * 180) / Math.PI).toFixed(6) },
+      { key: 'angle', label: '각도(도)', type: 'number', value: +((g.angle * 180) / Math.PI).toFixed(6), signed: true },
       { key: 'centered', label: '가운데', type: 'check', value: g.shift === 0 },
     ],
     {

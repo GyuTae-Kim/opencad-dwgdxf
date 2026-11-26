@@ -58,8 +58,13 @@ export function textIn(value: string, aria: string, list?: string): HTMLInputEle
   return el;
 }
 
-export function numIn(value: number, aria: string): HTMLInputElement {
-  const el = h('input', { type: 'text', inputmode: 'decimal', 'aria-label': aria }) as HTMLInputElement;
+/**
+ * 숫자 칸. 0보다 큰(0 이상) 값만 받는 칸은 휴대폰·태블릿에 소수 자판(inputmode="decimal")을 띄운다.
+ * signed: 음수도 받는 칸(좌표·각도·축척·간격띄우기·선가중치 −1~−3 등 — 288차). 소수 자판은 음수 기호를 약속하지 않아 그 칸에는 두지 않는다
+ * (type="text" 그대로 — 일반 글 자판). 값 읽기·검사는 같다
+ */
+export function numIn(value: number, aria: string, signed = false): HTMLInputElement {
+  const el = h('input', { type: 'text', inputmode: signed ? undefined : 'decimal', 'aria-label': aria }) as HTMLInputElement;
   el.value = String(+value.toFixed(8));
   return el;
 }

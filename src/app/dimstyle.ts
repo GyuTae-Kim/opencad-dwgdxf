@@ -29,6 +29,11 @@ interface VarField {
   label: string;
   kind: 'num' | 'int' | 'angle' | 'check' | 'select' | 'text' | 'style' | 'arrow' | 'color' | 'lw';
   options?: Opt[];
+  /**
+   * 음수도 받는 숫자 칸(288차 — DIMCEN 음수 = 중심선, DIMLFAC 음수 = 도면 공간 치수에서만, DIMTP·DIMTM 부호 있는 공차). 선가중치(lw — −1 도면층별·−2 블록별·
+   * −3 기본값)도 같다. 숫자 칸은 휴대폰·태블릿에 소수 자판(inputmode="decimal")을 띄우는데 그 자판은 음수 기호를 약속하지 않아 이 칸들에는 두지 않는다
+   */
+  signed?: true;
 }
 
 const ARROWS: Opt[] = [
@@ -87,7 +92,7 @@ const TABS: [string, VarField[]][] = [
       { v: 'DIMLDRBLK', label: '지시선 화살촉', kind: 'arrow' },
       { v: 'DIMASZ', label: '화살표 크기', kind: 'num' },
       { v: 'DIMTSZ', label: '눈금 크기(0이면 화살촉)', kind: 'num' },
-      { v: 'DIMCEN', label: '중심 표식(양수 표식, 음수 선, 0 없음)', kind: 'num' },
+      { v: 'DIMCEN', label: '중심 표식(양수 표식, 음수 선, 0 없음)', kind: 'num', signed: true },
       {
         v: 'DIMARCSYM',
         label: '호 길이 기호',
@@ -207,7 +212,7 @@ const TABS: [string, VarField[]][] = [
       },
       { v: 'DIMRND', label: '반올림', kind: 'num' },
       { v: 'DIMPOST', label: '머리말·꼬리말(<>가 값 자리)', kind: 'text' },
-      { v: 'DIMLFAC', label: '측정 축척 비율', kind: 'num' },
+      { v: 'DIMLFAC', label: '측정 축척 비율', kind: 'num', signed: true },
       { v: 'DIMZIN', label: '0 억제(DIMZIN: 4 선행, 8 후행, 12 둘 다)', kind: 'int' },
       {
         v: 'DIMAUNIT',
@@ -245,8 +250,8 @@ const TABS: [string, VarField[]][] = [
         ],
       },
       { v: 'DIMLIM', label: '한계 치수', kind: 'check' },
-      { v: 'DIMTP', label: '위 값', kind: 'num' },
-      { v: 'DIMTM', label: '아래 값', kind: 'num' },
+      { v: 'DIMTP', label: '위 값', kind: 'num', signed: true },
+      { v: 'DIMTM', label: '아래 값', kind: 'num', signed: true },
       { v: 'DIMTDEC', label: '공차 정밀도', kind: 'int' },
       { v: 'DIMTFAC', label: '높이 축척', kind: 'num' },
       {
@@ -516,7 +521,7 @@ function tabPanel(st: DocState, vars: Vars, tab: VarField[], change: () => void)
         break;
       }
       default: {
-        const i = h('input', { 'aria-label': f.label, style: `${CSS_IN};width:110px`, inputmode: f.kind === 'text' ? undefined : 'decimal' }) as HTMLInputElement;
+        const i = h('input', { 'aria-label': f.label, style: `${CSS_IN};width:110px`, inputmode: f.kind === 'text' || f.kind === 'lw' || f.signed ? undefined : 'decimal' }) as HTMLInputElement;
         i.value = f.kind === 'angle' ? String(+((Number(cur) * 180) / Math.PI).toFixed(6)) : f.kind === 'lw' ? String(Number(cur) < 0 ? Number(cur) : Number(cur) / 100) : String(cur);
         i.addEventListener('keydown', (ev) => ev.stopPropagation());
         i.addEventListener('change', () => {

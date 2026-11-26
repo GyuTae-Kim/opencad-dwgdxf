@@ -133,7 +133,7 @@ async function runXattach(app: App, ctx: CommandContext): Promise<void> {
           ],
         },
         { key: 'scale', label: '축척', type: 'number', value: +scale.toPrecision(12) },
-        { key: 'rot', label: '회전(도)', type: 'number', value: 0 },
+        { key: 'rot', label: '회전(도)', type: 'number', value: 0, signed: true },
       ],
       {
         ok: '확인',
@@ -216,7 +216,7 @@ export async function attachImageFile(app: App, ctx: CommandContext, file: File,
       `이미지 부착 — ${ft(file.name)}`,
       [
         { key: 'scale', label: '축척(이미지 폭, 도면 단위)', type: 'number', value: 1 },
-        { key: 'rot', label: '회전(도)', type: 'number', value: 0 },
+        { key: 'rot', label: '회전(도)', type: 'number', value: 0, signed: true },
         { key: 'onscreen', label: '축척을 화면에서 지정', type: 'check', value: true },
       ],
       { ok: '확인', note: `${w} × ${hgt} 화소. 해상도 정보를 쓰지 않으므로 축척 1 = 폭 1 도면 단위입니다(AutoCAD와 같다).`, validate: (x) => (Number(x.scale) > 0 ? null : '축척은 0보다 커야 합니다.') },
@@ -337,7 +337,7 @@ async function placePdf(app: App, ctx: CommandContext, file: File, pdf: { numPag
       [
         { key: 'page', label: `페이지(1~${pages.length})`, type: 'number', value: 1 },
         { key: 'scale', label: '축척', type: 'number', value: 1 },
-        { key: 'rot', label: '회전(도)', type: 'number', value: 0 },
+        { key: 'rot', label: '회전(도)', type: 'number', value: 0, signed: true },
       ],
       {
         ok: '확인',

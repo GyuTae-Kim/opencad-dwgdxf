@@ -64,16 +64,17 @@ function insertDialog(app: App, st: DocState, v: InsertDialog): Promise<InsertDi
   const canvas = h('canvas', { class: 'mgr-prev', width: 160, height: 120 }) as HTMLCanvasElement;
   const unitNote = h('div', { class: 'mgr-note' });
   const pScreen = checkIn(v.pointOnScreen, '삽입점 화면상에 지정');
-  const px = numIn(v.point.x, '삽입점 X');
-  const py = numIn(v.point.y, '삽입점 Y');
-  const pz = numIn(v.point.z, '삽입점 Z');
+  // 삽입점·축척(음수 = 거울)·회전은 음수도 받는다(288차 — 소수 자판을 두지 않음)
+  const px = numIn(v.point.x, '삽입점 X', true);
+  const py = numIn(v.point.y, '삽입점 Y', true);
+  const pz = numIn(v.point.z, '삽입점 Z', true);
   const sScreen = checkIn(v.scaleOnScreen, '축척 화면상에 지정');
-  const sx = numIn(v.scale.x, '축척 X');
-  const sy = numIn(v.scale.y, '축척 Y');
-  const sz = numIn(v.scale.z, '축척 Z');
+  const sx = numIn(v.scale.x, '축척 X', true);
+  const sy = numIn(v.scale.y, '축척 Y', true);
+  const sz = numIn(v.scale.z, '축척 Z', true);
   const uniform = checkIn(v.uniform, '단일 축척');
   const rScreen = checkIn(v.rotOnScreen, '회전 화면상에 지정');
-  const rot = numIn(v.rotDeg, '각도');
+  const rot = numIn(v.rotDeg, '각도', true);
   const repeat = checkIn(v.repeat, '반복 배치');
   const explode = checkIn(v.explode, '분해');
   const sync = () => {
@@ -356,9 +357,10 @@ function attdefDialog(st: DocState, v: AttdefForm, prevAtt: AttribEntity | null)
   const prompt = textIn(v.prompt, '프롬프트');
   const value = textIn(v.value, '기본값');
   const onScreen = checkIn(v.onScreen, '화면상에 지정');
-  const px = numIn(v.point.x, 'X');
-  const py = numIn(v.point.y, 'Y');
-  const pz = numIn(v.point.z, 'Z');
+  // 삽입점·회전은 음수도 받는다(288차 — 소수 자판을 두지 않음). 문자 높이는 0보다 커야 해 소수 자판
+  const px = numIn(v.point.x, 'X', true);
+  const py = numIn(v.point.y, 'Y', true);
+  const pz = numIn(v.point.z, 'Z', true);
   const just = selectIn(
     TEXT_JUSTIFY.map(([k, l]) => ({ value: k, label: l })),
     v.just,
@@ -367,7 +369,7 @@ function attdefDialog(st: DocState, v: AttdefForm, prevAtt: AttribEntity | null)
   const styles = [...st.doc.textStyles.values()].filter((s) => s.name && !(s.flags & 1)).map((s) => s.name);
   const style = selectIn(styles.map((n) => ({ value: n, label: n })), v.style, '문자 스타일');
   const height = numIn(v.height, '문자 높이');
-  const rot = numIn(v.rotDeg, '회전');
+  const rot = numIn(v.rotDeg, '회전', true);
   const below = checkIn(v.alignBelow && !!prevAtt, '이전 속성 정의 아래에 정렬');
   below.disabled = !prevAtt;
   const sync = () => {
@@ -572,10 +574,11 @@ export async function enhancedAttributeEditor(app: App, ctx: CommandContext | nu
   const styles = [...st.doc.textStyles.values()].filter((s) => s.name && !(s.flags & 1)).map((s) => s.name);
   const style = selectIn(styles.map((n) => ({ value: n, label: n })), cur.style, '문자 스타일');
   const just = selectIn(TEXT_JUSTIFY.map(([k, l]) => ({ value: k, label: l })), justKey(cur), '자리맞추기');
+  // 회전·기울기 각도(−85~85)·선가중치(−1 도면층별·−2 블록별·−3 기본값)는 음수도 받는다(288차 — 소수 자판을 두지 않음). 높이·폭 비율은 0보다 커 소수 자판
   const height = numIn(cur.height, '높이');
-  const rot = numIn(cur.rotation / D2R, '회전');
+  const rot = numIn(cur.rotation / D2R, '회전', true);
   const wf = numIn(cur.widthFactor || 1, '폭 비율');
-  const obl = numIn((cur.oblique || 0) / D2R, '기울기 각도');
+  const obl = numIn((cur.oblique || 0) / D2R, '기울기 각도', true);
   const back = checkIn((cur.generation & 2) !== 0, '반대로');
   const upside = checkIn((cur.generation & 4) !== 0, '거꾸로');
   // 특성 탭
@@ -584,7 +587,7 @@ export async function enhancedAttributeEditor(app: App, ctx: CommandContext | nu
   const lts = [...new Set(['ByLayer', 'ByBlock', ...[...st.doc.linetypes.values()].map((l) => l.name)])];
   const linetype = selectIn(lts.map((n) => ({ value: n, label: n })), cur.linetype || 'ByLayer', '선종류');
   const colorIn = textIn(colorText(cur.color), '색상');
-  const lw = numIn(cur.lineweight, '선가중치');
+  const lw = numIn(cur.lineweight, '선가중치', true);
   const err = h('div', { class: 'mgr-err' });
   function load(): void {
     valueIn.value = cur.mtext ? cur.mtext.text.replace(/\\P/g, '\n') : cur.text;

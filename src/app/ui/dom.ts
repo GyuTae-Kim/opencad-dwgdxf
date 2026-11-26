@@ -446,8 +446,12 @@ export function ask<T extends string>(title: string, text: string, buttons: { la
 }
 
 export type FormField =
-  /** list: 고를 수 있는 값(입력 칸에 목록으로 뜬다 — 다른 값도 칠 수 있다) */
-  | { key: string; label: string; type: 'text' | 'number'; value: string | number; placeholder?: string; wide?: boolean; list?: readonly string[] }
+  /**
+   * list: 고를 수 있는 값(입력 칸에 목록으로 뜬다 — 다른 값도 칠 수 있다).
+   * signed: 음수도 받는 숫자 칸(각도·간격띄우기 등 — 288차). 숫자 칸은 휴대폰·태블릿에 소수 자판(inputmode="decimal")을 띄우는데
+   * 그 자판은 음수 기호를 약속하지 않아 signed 칸에는 두지 않는다(일반 글 자판). 값 읽기·검사는 같다
+   */
+  | { key: string; label: string; type: 'text' | 'number'; value: string | number; placeholder?: string; wide?: boolean; list?: readonly string[]; signed?: boolean }
   | { key: string; label: string; type: 'select'; value: string; options: { value: string; label: string }[] }
   | { key: string; label: string; type: 'check'; value: boolean }
   | { key: string; label: string; type: 'textarea'; value: string }
@@ -481,7 +485,7 @@ export function form(title: string, fields: FormField[], opt: { ok?: string; not
         el = h('textarea', { 'aria-label': f.label, rows: 4 });
         el.value = f.value;
       } else {
-        el = h('input', { type: f.type === 'number' ? 'text' : 'text', inputmode: f.type === 'number' ? 'decimal' : undefined, 'aria-label': f.label, placeholder: f.placeholder ?? '' });
+        el = h('input', { type: f.type === 'number' ? 'text' : 'text', inputmode: f.type === 'number' && !f.signed ? 'decimal' : undefined, 'aria-label': f.label, placeholder: f.placeholder ?? '' });
         el.value = String(f.value);
       }
       // 고를 수 있는 값 목록(입력 칸 + datalist — 다른 값도 칠 수 있다)

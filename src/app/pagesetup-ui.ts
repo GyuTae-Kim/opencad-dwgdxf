@@ -354,8 +354,9 @@ export function pageFields(v: PageForm, model: boolean, insunits = 0, keepLabel?
   let windowCb: (() => void) | null = null;
   let win = v.window;
   const centered = checkIn(v.centered, '플롯의 중심');
-  const ox = numIn(v.offsetX, '간격띄우기 X');
-  const oy = numIn(v.offsetY, '간격띄우기 Y');
+  // 플롯 간격띄우기는 음수도 받는다(288차 — 소수 자판을 두지 않음)
+  const ox = numIn(v.offsetX, '간격띄우기 X', true);
+  const oy = numIn(v.offsetY, '간격띄우기 Y', true);
   const units = selectIn(
     [
       { value: 'mm', label: 'mm' },

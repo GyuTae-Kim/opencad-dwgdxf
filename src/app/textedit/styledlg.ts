@@ -207,7 +207,8 @@ export function textStyleDialog(app: App): Promise<void> {
     const back = h('input', { type: 'checkbox', 'aria-label': '반대로' }) as HTMLInputElement;
     const vert = h('input', { type: 'checkbox', 'aria-label': '수직' }) as HTMLInputElement;
     const widthIn = h('input', { 'aria-label': '폭 비율', style: `${CSS_IN};width:90px`, inputmode: 'decimal' }) as HTMLInputElement;
-    const oblIn = h('input', { 'aria-label': '기울기 각도', style: `${CSS_IN};width:90px`, inputmode: 'decimal' }) as HTMLInputElement;
+    // 기울기 각도는 −85~85라 소수 자판(음수 기호를 약속하지 않음)을 두지 않는다(288차). 높이(0 이상)·폭 비율(0.01~100)은 소수 자판
+    const oblIn = h('input', { 'aria-label': '기울기 각도', style: `${CSS_IN};width:90px` }) as HTMLInputElement;
     const err = h('div', { class: 'form-error', role: 'alert' });
     for (const i of [heightIn, widthIn, oblIn]) i.addEventListener('keydown', (ev) => ev.stopPropagation());
     const bigRow = h('label', { class: 'form-row' }, h('span', {}, '큰 글꼴'), bigSel);
