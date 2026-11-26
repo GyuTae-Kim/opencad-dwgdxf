@@ -1954,16 +1954,34 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   (나) 네 언어 모두 한국어로 보이던 39 열쇠(자리맞추기 옵션 11과 옵션 프롬프트 통째 4, TEXT·MTEXT 머리 줄 2, 「폭 지정:」·「새 길이 지정:」, -STYLE 높이 4·예/아니오 물음 8·? 목록 8 — 8664 → 8703).
   원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 293차 절
 - [ ] 293차에 보고 두 것 — (1) 한도 밖 오역: 영어 기준점 Reference point 나머지 12곳(MOVE·COPY 「기준점 지정 또는 [변위(D)…]」 둘, ARRAY 「… [키 점(K)] <…>:」 둘·「대체 객체의 기준점 선택 …」,
-  「기준점을 두고 복사」, BASE 셋, 「삽입 기준점은」, COPYTOLAYER 「지정된 기준점 …」, 디자인 센터 줄), 독일어 Referenzpunkt 17곳(291차 시험이 「지정된 기준점 또는 [종료(X)] <종료>:」 Referenzpunkt를 고정 — 고치면 그 시험도),
-  중국어 参考点 나머지 8곳(MOVE·ARRAY·COPYTOLAYER 등), 영어 분해 나머지(「분해(속성 유지)」·「속성 남기고 분해」·「속성을 문자로 남기고 분해 (BURST)」·「{0}개를 분해해 …」·TXTEXP 둘),
-  독일어 속성 Eigenschaft 나머지 약 30곳(전역 속성 편집·속성 표시·편집할 속성 선택 등), 독일어 결합 kombinieren 나머지 약 10곳(XBIND 상자 안내·결과 줄 — 제목·옵션만 binden),
+  「기준점을 두고 복사」, BASE 셋, 「삽입 기준점은」, COPYTOLAYER 「지정된 기준점 …」, 디자인 센터 줄 — **294차가 고침**), 독일어 Referenzpunkt 17곳(291차 시험이 「지정된 기준점 또는 [종료(X)] <종료>:」 Referenzpunkt를 고정 — 고치면 그 시험도
+  — **294차가 고침**, Einfügereferenzpunkt 등과 함께 23곳·291차 시험 기대도 Basispunkt로),
+  중국어 参考点 나머지 8곳(MOVE·ARRAY·COPYTOLAYER 등 — **294차가 고침**, 지금 사전에 남아 있던 6곳), 영어 분해 나머지(「분해(속성 유지)」·「속성 남기고 분해」·「속성을 문자로 남기고 분해 (BURST)」·「{0}개를 분해해 …」·TXTEXP 둘),
+  독일어 속성 Eigenschaft 나머지 약 30곳(전역 속성 편집·속성 표시·편집할 속성 선택 등), 독일어 결합 kombinieren 나머지 약 10곳(XBIND 상자 안내·결과 줄 — 제목·옵션만 binden)
+  (독일어 속성·결합은 294차도 독일어 한도(기준점 23 + 해치 7) 밖 — 「294차에 보고 두 것」),
   독일어 「태그·프롬프트·기본값 편집」 쪼개짐·「맨 위 중심 TC」 Top Center(영어)·「모드」 -Modus·「여러 줄 문자 내용이 있는 다중 지시선이 아닙니다.」 mehrzeiliger Text,
   「명령 복구」 Command Recovery·Befehlswiederherstellung, 「높이는 0 이상이어야 합니다.」 영어·독일어 greater than 0(0도 받음), 독일어 「축척 비율 지정 또는 [참조(R)]」 Maßstabsverhältnis·「단일 행」 einreihig.
   (2) 공유 열쇠라 하지 않음: 「다중」(복사·선택 Multiple ↔ QDIM 다중 Staggered — 중국어 多行은 둘 다 틀림), 「열」(표 열 ↔ MTEXT 단), 「주석」(Annotation ↔ Annotative).
-  (3) 쓰이지 않게 된 틀: 「{0} 또는 [주석(A)] <{1}>:」(Comment·コメント·Kommentar — 새 통째 둘이 덮음), 「높이: {0} … 생성: {3}」(Create·创建·Erstellen — 새 열쇠 여덟이 덮음). 중국어 「효과」 特效(특수 효과)는 근거 낱말이 없어 둠(새 목록 열쇠는 效果).
+  (3) 쓰이지 않게 된 틀: 「{0} 또는 [주석(A)] <{1}>:」(Comment·コメント·Kommentar — 새 통째 둘이 덮음), 「높이: {0} … 생성: {3}」(Create·创建·Erstellen — 새 열쇠 여덟이 덮음)
+  (**294차가 지움** — check:i18n·사전 시험은 쓰지 않는 열쇠를 보지 않고, 소스에서 이 꼴을 내는 줄은 새 통째가 모두 덮음). 중국어 「효과」 特效(특수 효과)는 근거 낱말이 없어 둠(새 목록 열쇠는 效果).
   (4) 화면에 보이지 않아 두는 것: 글꼴 이름(굴림 Roll·바탕 Background 등 — 고르기 항목이 translate="no"이거나 값 = 글), 「AaBb123 가나다」(캔버스에 직접), 「pf-셀」(data-field).
   (5) 동의어 — 둠: 영어 폭 비율 Width Ratio·기울기 각도 Tilt angle(사전에 Width factor·Oblique angle 근거 없음), 일본어 정렬(A) 位置合わせ.
   (6) 보지 않은 것: 커서 옆 문구(동적 입력 — 「[」 앞)와 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄(292차 꼴). 원어민 검토 없음
+- [x] 293차 한도 밖 기준점 오역과 해치 묶음의 번역 대조·빠진 번역(294차, 290~293차 꼴 — 293차 보고 (1)·(3)): HATCH·GRADIENT(해치 설정·그라데이션 설정 대화 상자, 현재 설정·결과 줄)·
+  -HATCH·-BOUNDARY·BOUNDARY·HATCHEDIT·-HATCHEDIT·HATCHGENERATEBOUNDARY·HATCHSETBOUNDARY·HATCHSETORIGIN·HATCHTOBACK·무늬 설명·리본 해치 단추의 보이는 글.
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 30·일본어 11·중국어 30·독일어 30곳 — 기준점 Reference point·Referenzpunkt·参考点 → Base point·Basispunkt·基点,
+  「경계를 유지하시겠습니까?」 remain alert·wachsam bleiben(경계심), 영어 경계 border·「Internal Specify a point」, 영역(REGION) Area·面积, 중국어 해치 孵化·이중 双精度浮点数·세 방향 격자 三维网格,
+  현재 사용 Currently in use·当前用途, 일본어 ㄱ형강 ㄱヒョンガン·가운데 の真ん中, 독일어 맨 뒤로(B) Zurück·해치 맨 뒤로 Zurück zur Schraffur 등).
+  (나) 네 언어 모두 한국어로 보이던 48 열쇠(-HATCH 예/아니오 물음 여덟의 앞 조각·통째 16, 기본값 뒤 조각 「] <현재 사용>:」·「] <없음>:」, HATCH 현재 설정 줄 12, 결과 줄 4, ISO 무늬 설명 14)와
+  새 통째가 덮어 쓰이지 않게 된 틀 넷을 지움(8703 → 8747). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 294차 절
+- [ ] 294차에 보고 두 것 — (1) 한도 밖 오역: 독일어 속성 Eigenschaft 약 30곳·결합 kombinieren(bind) 약 12곳(293차 출발점), 독일어 경계 Grenze·Rand 나머지(경계 뒤·앞·제거·그리기 경계·그리기 경계(W) Zeichnungsgrenzen·
+  새 경계·그리기 순서 통째 Hinter dem Rand·-BOUNDARY 옵션 통째·영역(R) Fläche 등), 독일어 「선 간격 지정」 Zeilenabstand(문자 줄 간격)·「연관(A)」 Assoziieren·연관 Zuordnung 넷·「현재 사용」 Aktuelle Verwendung·「주석(AN)」 Anmerkung,
+  영어 「경계 세트」 border set·「내부 점 선택 …」 통째 Set(T)(설정 Settings)·「일반(홀짝)」 General·「경계(명령행)」 소문자·「간격(사용자 정의)」 Interval·「십자 표시」 Crosshair·「반전 곡선」 Inversion curve,
+  중국어 「맨 앞으로」·「맨 앞으로(F)」·「맨 뒤로(B)」 正面·背面(면 — DRAWORDER 통째와 함께 바꿔야 해 한도 밖), 「경계 {0}개를 제거했습니다.」·「해치가 아닌 객체 {0}개는 뺐습니다.」 어순.
+  (2) 근거가 서지 않음: 영어 「색조」 Hue(tint — 같은 사전에 근거 낱말 없음), 「색상표(CO)」 Color Chart·Color palette·Color Book 섞임(공유 열쇠).
+  (3) 코드 변경이 드는 것: -HATCH ? 목록 「이름 - 설명」(하이픈이라 조각으로 나뉘지 않아 무늬 설명 68개가 네 언어 모두 한국어), GRADIENT 현재 설정 줄(그라데이션 이름 9 × 색조·가운데·연관 — 틀이 앱 낱말을 잡음).
+  (4) 쓰이지 않는 낱말 열쇠(화면에 나오지 않아 두는 것): ISO 무늬 제목 열둘(「대시 이점선」 Dash Lee Jeom-seon 등 오역 포함 — 이번 ISO 통째 열쇠가 덮음), 「, 연관」(틀이 잡던 글 — 중국어 协会·독일어 Verein).
+  (5) 동의어 — 둠: 일본어 연관 関連付け(AutoCAD 일본어판 自動調整), 중국어 섬 岛屿(孤岛), 영어 「섬 검출 여부」·「연관 여부」 말투. 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다

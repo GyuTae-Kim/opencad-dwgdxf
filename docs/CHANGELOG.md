@@ -3,6 +3,56 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(294차): 293차가 한도 밖으로 남긴 기준점 오역과 해치 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 293차 「보고 두 것」 (1)의 한도 밖 기준점 오역(영어 Reference point 12곳·독일어 Referenzpunkt·중국어 参考点)과 (3) 쓰이지 않게 된 틀 둘이고, 그 뒤 해치 묶음 —
+HATCH·GRADIENT(`hatchcmd.ts` — 해치 설정·그라데이션 설정 대화 상자, 현재 설정·결과 줄), -HATCH·-BOUNDARY(`dashcmds-hatch.ts`), HATCHEDIT·-HATCHEDIT(`hatchedit.ts`),
+HATCHGENERATEBOUNDARY·HATCHSETBOUNDARY·HATCHSETORIGIN(`editcmds2-hatch.ts`), BOUNDARY, HATCHTOBACK, 무늬 설명(`edit/hatch/patterns.ts`), 리본 해치 단추 — 의 보이는 글
+(소스 글 272개, 사전 열쇠 267개)을 네 사전과 견줬습니다. 독일어 속성·결합 나머지는 독일어 한도 밖이라 다음 차수로 넘겼습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 30·일본어 11·중국어 30·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 기준점(base point): MOVE·COPY·STRETCH 「기준점 지정 또는 [변위(D)…]」, ARRAY 키 점·대체 객체, COPYBASE, BASE, LIST, COPYTOLAYER, 디자인 센터, BLOCK 대화 상자·WBLOCK·-BLOCK | en Reference point 12곳 → Base point(디자인 센터 「{1}object」 띄어쓰기도); de Referenzpunkt·Einfügereferenzpunkt 23곳 → Basispunkt(「기준점 X」는 X가 빠져 있던 것, -BLOCK 「[Anmerkung (A)]」 → Beschriftung); zh 参考点 6곳 → 基点 | 「기준점(B)」 Base point (B)·Basispunkt (B), 「삽입 기준점 지정:」 Einfüge-Basispunkt, 「기준점」 基点 |
+| 「경계를 유지하시겠습니까?」(-HATCH 고급 유지(R)) | en Do you want to remain alert?·de Möchten Sie wachsam bleiben?(경계심) → Retain boundaries?·Sollen die Umgrenzungen beibehalten werden? | 「유지(R)」 Retain·Beibehalten, 「마지막 경계를 뺐습니다.」 Umgrenzung |
+| 경계(boundary): 리본 BOUNDARY·-HATCH 옵션·그리기 순서·새 경계 | en border 7곳 → boundary, 「Internal Specify a point or [」(깨짐) → Specify interior point or [, 그리기 경계(W) Drawing Boundary·ja 図面境界 → Draw boundary·境界の作成; de 경계 Rand → Umgrenzung, 경계 세트(B) Begrenzung setzen·zh 设置边界(경계 설정하기) → Umgrenzungssatz·边界集 | 「경계 뒤(E)」 Behind boundary, -HATCH 고급 통째 Umgrenzungssatz (B), 「경계 세트 지정 […]」 边界集 |
+| 영역(R)·경계 객체 유형(-BOUNDARY — REGION) | en Area·ja エリア·zh 面积(넓이) → Region·領域·面域 | 「영역」 Region·領域, 「영역(REGION)은 …」 面域 |
+| 주석(AN)·연관(A)·새 원점 설정(S)·현재 사용 | en Annotation (AN)·ja 注記 → Annotative (AN)·注釈, en Associate (A) → Associative (A), New Origin Settings → Set new origin, 현재 사용 Currently in use·現在使用中·当前用途 → Use current·現在使用·使用当前 | 「주석(A)」 Annotative·注釈, 고급 통째 Associative (A), 「현재 사용(.)」 Use current (.) |
+| 중국어 해치 | 해치 비교·색상·색상 입력 둘·설정·스타일 입력 둘의 孵化(알 깨기) 7곳 → 填充, 이중 双精度浮点数(배정밀도 부동소수) → 双向, 세 방향 격자 三维网格 → 三向网格, 강재 Steel·그라데이션({0}) Gradient(영어) → 钢材·渐变, 자갈 砾石节点 → 砾石, 새 경계 줄의 빠진 꺾쇠, 일반(홀짝) 通用 → 普通, 개별 해치 작성 여부 是否已创建 → 是否创建, 해치 맨 뒤로 返回填充 → 将填充置于底层, FILL·FILLMODE 实线 → 实体 | 「해치」 填充, 「해치 영역을 이중 해치…」 双向, 「맨 뒤로」 置于底层, 「솔리드 채우기」 实体填充 |
+| 일본어 해치 | ㄱ형강 ㄱヒョンガン(한국어 소리) → L形鋼材, 가운데·가운데 맞춤 の真ん中·の中央揃え(앞 조사 깨짐) → 中央·中央揃え, 줄눈 엇갈림 並ぶズレ → 交互目地, 무늬 이름 ハッチング名 → パターン名, 일반(홀짝) 一般 → 標準 | 「강재」 鋼材, 「가운데 버튼 …」 中央, 「줄눈 포함」 目地付き·「엇갈림 쌓기」 交互積み |
+| 독일어·영어 해치 | de 그라데이션 각도 Steigungswinkel(경사각) → Verlaufswinkel, 맨 뒤로(B) Zurück·맨 앞으로(F) Vorderseite → Nach hinten·Nach vorne, 해치 맨 뒤로 Zurück zur Schraffur → Schraffuren in den Hintergrund; en 점토(CLAY) Point → Clay | 「그라데이션」 Farbverlauf, DRAWORDER 통째 Nach hinten·Nach vorne, 「맨 뒤로」 In den Hintergrund, ja·zh 粘土 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 48):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| -HATCH·-BOUNDARY 예/아니오 물음 여덟(폴리선 경계 유지·경계 유지·섬 검출 여부·연관 여부·개별 해치 작성 여부·기본 원점 저장·주석 해치 작성·가운데 맞춤)의 앞 조각 「… [」과 통째 | 16 | Retain boundaries? [Yes (Y)/No (N)] <{0}>: | 물음 열쇠 + 「예(Y)」·「아니오(N)」 |
+| 기본값이 옵션 이름이 아닌 뒤 조각 「] <현재 사용>:」(해치 색상)·「] <없음>:」(해치 배경색) | 2 | ] <Use current>: | 「현재 사용(.)」·「없음」 |
+| HATCH 현재 설정 줄 「현재 설정: 무늬 = …, 섬 = 일반·외부·무시, 연관 = 예·아니오」와 무늬 = 사용자 정의 꼴(틀이 섬·연관·사용자 정의 낱말을 잡던 것) | 12 | Current settings: Pattern = {0}, Scale = {1}, Angle = {2}, Islands = Normal, Associative = Yes | 해치 스타일 통째의 섬 낱말, 「사용자 정의(U)」 |
+| HATCH·GRADIENT 결과 줄 「해치를·그라데이션를 만들었습니다(경계 {0}개(, 연관)).」 | 4 | Created hatch (boundaries: {0}, associative). | 「해치」·「그라데이션」 |
+| ISO 무늬 설명 「ISO 파선」~「ISO 대시 둘 삼점선」(ISO02W100~ISO15W100 — 해치 설정·해치 편집 무늬 고르기) | 14 | ISO dash double-dot line | 「파선」·「대시 점선」, 소스 주석의 대시·점 차례 |
+
+새 통째가 덮어 쓰이지 않게 된 틀 넷 — 293차의 「{0} 또는 [주석(A)] <{1}>:」·「높이: {0} … 생성: {3}」, 이번의 해치 결과 틀·현재 설정 틀 — 은 지웠습니다
+(check:i18n과 사전 시험은 쓰지 않는 열쇠를 보지 않습니다). 열쇠 8703 → 8747.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 101곳과 새 열쇠 48씩, 지운 틀 넷. 영어·일본어·중국어·독일어 화면의 -HATCH 물음·옵션, HATCH 현재 설정·결과 줄,
+  해치 설정 대화 상자 무늬 고르기(ISO 무늬), 리본 「경계」, 기준점 프롬프트가 한국어나 엉뚱한 낱말 대신 그 언어의 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「기준점」·「기준점 지정:」(MOVE·COPY 등), 「경계」(BOUNDARY 명령 이름), 「주석(AN)」(-DIMSTYLE), 「맨 뒤로(B)」·「맨 앞으로(F)」(DRAWORDER — 독일어),
+  「해치 비교」(COMPAREHATCH), 「현재 사용」(DIMSMART 이름표). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「294차에 보고 두 것」): 독일어 속성·결합 나머지, 독일어 경계 Grenze·Rand 나머지, 중국어 맨 앞으로·뒤로 正面·背面, -HATCH ? 목록·GRADIENT 현재 설정 줄(코드 변경) 등.
+
+### 확인
+- `tests/i18n-hatch294.test.ts`(새 시험 3건 — 물음·줄은 소스 글에서 확인, ISO 제목은 patterns.ts에서 모음): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 13 프롬프트의 입력 줄,
+  통째(친 입력 붙은 기록 줄 꼴 포함)·현재 설정·결과 줄·ISO 고르기 항목에 네 언어 모두 한글 없음, 고친 낱말과 새 통째 = 앞 조각 + 예/아니오, 지운 틀 없음.
+  `tests/i18n-purge291.test.ts`의 독일어 「지정된 기준점 …」 기대를 Basispunkt로 맞췄습니다.
+- 고치기 전 4건 실패(한글 남은 입력 줄 40·통째와 결과 줄 184, 영어 Reference point, 291 시험 Referenzpunkt), 고친 뒤 `tests/i18n-hatch294.test.ts`·`tests/i18n-purge291.test.ts`·
+  `tests/i18n.test.ts` 3파일 12건 통과. `npm run check:i18n` 통과(8747 항목). `tests/i18n-prompts.test.ts`(괄호 짝·앞 조각·중국어 규칙)는 시험 파일 한도로 돌리지 않고 jq로 같은 규칙을 사전 전체에 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 곳은 291 시험의 독일어 Referenzpunkt 하나(맞춤). 「세 방향 격자」 网格(121 시험)·「현재 사용(.)」(287 시험)은 그대로 맞습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(293차): 292차가 한도 밖으로 남긴 오역과 문자 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
