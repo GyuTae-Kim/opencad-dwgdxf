@@ -13,7 +13,7 @@ import { INSUNITS_MM } from '../edit/util/calc';
 import type { App, CommandContext, Keyword } from './app';
 import { askOption, askReal, askRealAngle, askWord, askYN, fmt4 } from './dashcmds-ask';
 import { currentElevation, currentProps } from './draw';
-import { expandXrefBounds, linkImageFiles, linkPdfFiles, linkXrefFiles, renderPdfPages, xrefOfDoc } from './refs';
+import { IMAGE_EXT, expandXrefBounds, linkImageFiles, linkPdfFiles, linkXrefFiles, renderPdfPages, xrefOfDoc } from './refs';
 import { commandLineMode } from './script';
 import { sessionFile } from './sessionfiles';
 import { dialog, form, h } from './ui/dom';
@@ -195,7 +195,10 @@ export async function attachImageFile(app: App, ctx: CommandContext, file: File,
     hgt = bmp.height;
     bmp.close();
   } catch {
-    ctx.print(`${ft(file.name)}: 이 브라우저가 읽을 수 없는 이미지 형식입니다(PNG·JPEG·GIF·BMP·WebP만).`, 'err');
+    // 받는 형식(그림 연결 함수와 같은 이름 기준 — PASTESPEC은 이름 확장자를 클립보드 형식에서 짓는다)인데 풀지 못한 것은 깨진·잘린 파일이라
+    // 형식 글이 틀리다: 참조 관리자·휴대폰 보기(274차)와 같은 연결 실패 글(275차). 받지 않는 형식(TIFF·SVG 등)만 형식 글
+    if (IMAGE_EXT.test(file.name)) ctx.print(`${ft(file.name)}: 이미지를 연결하지 못했습니다.`, 'err');
+    else ctx.print(`${ft(file.name)}: 이 브라우저가 읽을 수 없는 이미지 형식입니다(PNG·JPEG·GIF·BMP·WebP만).`, 'err');
     return false;
   }
   const res = await linkImageFiles(app, [file]);
