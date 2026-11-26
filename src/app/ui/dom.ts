@@ -148,7 +148,36 @@ export function closeMenu(restoreFocus = false): void {
 }
 
 /**
+ * 메뉴 항목의 이름: 단추 바로 아래 글 마디(번역층이 그 자리에서 바꾼 화면 글 — 아이콘·단축키 kbd는 뺌). 맨 앞의 켜짐 표시 「✓」는 상태라 뗀다.
+ * 글 마디는 3으로 가린다(Node 전역이 없는 시험 환경)
+ */
+function itemName(b: HTMLElement): string {
+  let s = '';
+  for (const n of Array.from(b.childNodes)) if (n.nodeType === 3) s += n.nodeValue ?? '';
+  return s.trim().replace(/^✓\s*/u, '');
+}
+
+/**
+ * 첫 글자 찾기(265차 — W3C APG 메뉴 꼴): 인쇄 가능한 한 글자 key로 이름이 시작하는 다음 항목의 차례(지금 i 다음부터 돌아 i까지 — 하나뿐이면 i), 없으면 -1.
+ * 대소문자는 가리지 않는다(APG 예제와 같음 — 영어 항목은 대문자로 시작하고 글자 키는 소문자를 낸다). 한글은 음절 그대로 견준다(초성 찾기 없음).
+ * 빈칸(Space는 고르기)·이름 키(Process 등 입력기 키)는 -1
+ */
+function typeAhead(list: HTMLElement[], i: number, key: string): number {
+  if ([...key].length !== 1 || !/\S/u.test(key)) return -1;
+  const want = key.toLowerCase();
+  const n = list.length;
+  for (let j = 1; j <= n; j++) {
+    const at = (i + j + n) % n;
+    const first = [...itemName(list[at]!)][0];
+    if (first !== undefined && first.toLowerCase() === want) return at;
+  }
+  return -1;
+}
+
+/**
  * 바로가기 메뉴. 키보드: 위·아래 화살표·Home·End로 옮기고 Enter·Space로 고르며, Esc는 닫고 연 곳으로 초점을 돌린다(Tab도 닫는다).
+ * 글자 한 자를 치면 그 글자로 이름이 시작하는 다음 켜진 항목으로 옮긴다(265차 — 같은 글자를 다시 치면 그다음, 끝에서 처음으로, 없으면 그대로.
+ * 고르지는 않는다. Ctrl·Alt·⌘와 함께 친 글자는 브라우저·앱 단축키로 넘긴다).
  * 열면 첫 켜진 항목에 초점을 둔다 — 키보드로 연 메뉴도, 손가락·마우스로 누르거나 오른쪽 클릭해 연 메뉴도(262차 — W3C APG 메뉴 단추 꼴, WCAG 2.4.3.
  * 전에는 키보드로 연 메뉴만 옮겨, 화면 읽기 프로그램의 두 번 톡(click)으로 연 메뉴는 초점이 밖에 남았다). 보이는 초점 표시는 :focus-visible 규칙대로
  * (styles.css — 손가락·마우스로 연 메뉴에는 그리지 않는다). opt.hover(커서를 올리면 뜨는 메뉴 — 다기능 그립)는 지금처럼 키보드로 옮긴 초점이 있을 때만.
@@ -220,7 +249,7 @@ export function showMenu(x: number, y: number, items: MenuItem[], opt: { onClose
     } else if (k.key === 'Tab') {
       closeMenu(true);
       return;
-    }
+    } else if (!k.ctrlKey && !k.altKey && !k.metaKey && !k.isComposing) next = typeAhead(list, i, k.key);
     if (next >= 0 && list.length) {
       k.preventDefault();
       k.stopPropagation();
