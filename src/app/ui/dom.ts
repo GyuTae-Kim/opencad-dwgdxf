@@ -82,7 +82,7 @@ export function toast(text: string, kind: 'info' | 'warn' | 'error' = 'info', ms
   toastWrap.append(t);
   if (!action) {
     // 글이 다른 알림(참조 파일 고르기·여러 파일 열기에서 파일마다 다른 오류 등)은 위에서 묶이지 않아 수 한도 없이 쌓였다(280차). 새 알림은 맨 뒤라 남아
-    // 화면 읽기 프로그램이 읽고, 오래된 것부터 빠진다. 오류 알림은 명령행 기록에도 남는다(보기 모드 명령 밖 오류 줄·열기 실패 — 부르는 쪽이 적음).
+    // 화면 읽기 프로그램이 읽고, 오래된 것부터 빠진다. 오류 알림은 명령행 기록에도 남는다(보기 모드 명령 밖 오류 줄·열기 실패·받기 실패(281차) — 부르는 쪽이 적음).
     // 단추 있는 알림은 지우지도 세지도 않는다. 같은 글은 위에서 옛 것이 빠져 수가 그대로다
     const plain = Array.from(toastWrap.children).filter((c) => toastKeys.has(c));
     const limit = window.innerHeight < SHORT_HEIGHT ? TOAST_LIMIT_SHORT : TOAST_LIMIT;

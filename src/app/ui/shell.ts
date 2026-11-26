@@ -2094,7 +2094,23 @@ export class Shell implements UiHooks {
       await this.app.openFile('opencad-sample.dxf', await r.arrayBuffer(), 'sample', attempt);
     } catch {
       attempt.error('fetch_error');
-      toast('예제 도면을 받지 못했습니다.', 'error');
+      this.app.reportFetchError('예제 도면을 받지 못했습니다.');
+    }
+  }
+
+  /** 주소의 ?open=으로 받은 도면을 연다(https나 같은 출처만). 받지 못하면 그 까닭을 알림과 명령행 기록에(281차) */
+  async openUrl(openUrl: string): Promise<void> {
+    const attempt = beginOpen('url', openUrl.split(/[?#]/)[0]!.split('.').pop() ?? 'other');
+    try {
+      const u = new URL(openUrl, document.baseURI);
+      if (u.protocol !== 'https:' && u.origin !== location.origin) throw new Error('https 주소만 열 수 있습니다.');
+      const r = await fetch(u);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const name = decodeURIComponent(u.pathname.split('/').pop() || 'drawing.dxf');
+      await this.app.openFile(name, await r.arrayBuffer(), 'url', attempt);
+    } catch (e) {
+      attempt.error('fetch_error');
+      this.app.reportFetchError(`파일을 받지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 7000);
     }
   }
 
