@@ -3,6 +3,7 @@
  * 보기 모드는 누른 객체 하나만 고르고, 그립·그립 편집·두 번 눌러 편집·도면 영역 메뉴를 열지 않는다.
  * 손가락으로 찍은 점은 객체 스냅 조준창을 넓히고, 정밀 조준(view.aiming) 중에는 마우스처럼 커서·미리보기를 보인다.
  * 손가락 두 번 톡(편집 화면)의 dblclick은 톡 고르기와 같은 거리(PICKBOX × 3)로 객체를 고른다(268차 — 아래 끝 묶음).
+ * 보기 모드의 배치 두 번 누르기는 그 자리 객체와 상관없이 뷰포트 드나들기만 한다(269차 — 끝 묶음 안).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Entity, LineEntity, ViewportEntity } from '../../src/core/model';
@@ -325,5 +326,86 @@ describe('손가락 두 번 톡의 객체 고르기(268차)', () => {
       expect(h.s.seen).toEqual([]);
       expect(h.s.ran).toEqual([]);
     }
+  });
+
+  /**
+   * 269차: 보기 모드의 배치 두 번 누르기는 뷰포트 드나들기만 한다(README 「뷰포트 안을 두 번 눌러(MSPACE)」 — 보기 모드는 두 번 눌러 고치기만 없다).
+   * 전에는 뷰포트 안 배치 객체가 PICKBOX 안이면 그 객체 편집으로 넘기려 들어가지 않았는데, 보기 모드에는 그 편집이 없어 아무것도 하지 않았다.
+   * 또 마지막 누르기의 종류는 화면 누르기(pointerdown → onDown — 마우스·펜)에서도 적는다: 끌기로 끝난 누르기에는 onClick이 오지 않는다
+   */
+  describe('보기 모드 배치 두 번 누르기와 끌기 뒤 두 번 누르기(269차)', () => {
+    it('보기 모드: 뷰포트 안 배치 선 가까이(3px — PICKBOX 안)를 손가락·마우스로 두 번 누르면 뷰포트로 들어간다(잠긴 뷰포트도)', async () => {
+      const cases: [Partial<PointerEvent> | undefined, boolean][] = [
+        [touch, false],
+        [undefined, false],
+        [touch, true],
+      ];
+      for (const [o, locked] of cases) {
+        const h = onLayout();
+        // 잠금(0x4000)은 뷰포트 안 확대·이동만 막는다 — 들어가기는 그대로(viewportAt가 거르지 않음)
+        if (locked) (h.doc.entityIndex.get(h.v) as ViewportEntity).flags |= 0x4000;
+        h.app.setViewOnly(true);
+        twice(h, P(215, 53), o);
+        expect([...h.st.selection]).toEqual([h.p]);
+        dblclick(h, P(215, 53));
+        await settle();
+        // 전에는 배치 선을 찾아 들어가지 않고, 보기 모드라 그 선의 편집도 없이 끝났다(msVp null)
+        expect(h.st.msVp).toEqual({ layout: PAPER_SPACE, handle: h.v });
+        expect(h.s.seen).toEqual([]);
+        expect(h.s.ran).toEqual([]);
+      }
+    });
+
+    it('그대로: 편집 화면은 그 배치 선의 편집, 보기 모드의 뷰포트 밖·꺼진 뷰포트는 아무것도 않고 MSPACE에서 뷰포트 밖은 종이 공간으로', async () => {
+      // 편집 화면: 마우스·손가락 모두 PICKBOX 안의 배치 선 → 그 선의 두 번 누르기 편집(뷰포트로 들어가지 않음)
+      for (const o of [undefined, touch]) {
+        const h = onLayout();
+        twice(h, P(215, 53), o);
+        dblclick(h, P(215, 53));
+        await settle();
+        expect(h.st.msVp).toBeNull();
+        expect(h.s.seen).toEqual([h.p]);
+        expect(h.s.ran).toEqual(['QUICKPROPERTIES']);
+      }
+      const h = onLayout();
+      h.app.setViewOnly(true);
+      // 뷰포트 V 밖(x 180..280 밖)의 종이
+      dblclick(h, P(300, 100));
+      await settle();
+      expect(h.st.msVp).toBeNull();
+      // MSPACE에서 뷰포트 밖 → 종이 공간
+      expect(h.app.enterViewport(h.st, h.doc.entityIndex.get(h.v) as ViewportEntity)).toBe(true);
+      dblclick(h, P(300, 100));
+      await settle();
+      expect(h.st.msVp).toBeNull();
+      expect(h.st.space).toBe(PAPER_SPACE);
+      // 꺼진 뷰포트(status 0)는 viewportAt가 거른다 — 빈 자리·배치 선 가까이 모두 들어가지 않는다
+      (h.doc.entityIndex.get(h.v) as ViewportEntity).status = 0;
+      for (const p of [P(215, 75), P(215, 53)]) {
+        dblclick(h, p);
+        await settle();
+        expect(h.st.msVp).toBeNull();
+      }
+      expect(h.s.seen).toEqual([]);
+      expect(h.s.ran).toEqual([]);
+    });
+
+    it('손가락 톡 뒤 마우스 누르기 둘이 끌기로 끝나고 오는 dblclick은 PICKBOX × 1(끌기에는 onClick이 오지 않는다)', async () => {
+      const h = setup();
+      const a = h.line(200, 50, 260, 50);
+      const s = spy(h);
+      h.click(P(215, 60), touch);
+      expect([...h.st.selection]).toEqual([a]);
+      // 브라우저는 누른 자리가 가까운 두 누르기를 끌었어도 dblclick으로 묶을 수 있다(누르기 → 끌기 → 떼기를 두 번)
+      for (let i = 0; i < 2; i++) {
+        h.view.events.down!(P(215, 70), P(215, 70), ev());
+        h.view.events.drag!(P(215, 70), P(215, 60), true, ev());
+      }
+      dblclick(h, P(215, 60));
+      await settle();
+      // 전에는 앞 손가락 톡의 거리(× 3 = 15 ≥ 10)로 골라 선의 편집을 열었다
+      expect(s.seen).toEqual([]);
+      expect(s.ran).toEqual([]);
+    });
   });
 });
