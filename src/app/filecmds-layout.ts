@@ -17,7 +17,7 @@ import { createLayoutOps, defaultPlot, mediaName, nextLayoutName } from './layou
 import { PAPERS, unitMm } from './plot';
 import { paperOf } from './papers';
 import { paperInfo } from './scene';
-import { dialog, h } from './ui/dom';
+import { dialog, h, refocusStuck } from './ui/dom';
 import { ft } from './filetext';
 import { packLw } from '../core/lwpoly';
 
@@ -730,8 +730,12 @@ function runWizard(st: DocState): Promise<WizardState | null> {
       {
         label: '< 뒤로',
         run: () => {
+          const held = document.activeElement;
           if (step > 0) step--;
           render();
+          // 첫 쪽에 닿아 「< 뒤로」가 막히면 「다음 >」으로(289차 — 초점이 문서로 빠지지 않게)
+          const btns = back.querySelectorAll<HTMLButtonElement>('footer .btn');
+          refocusStuck(held, [btns[0]], [btns[1]]);
           return true;
         },
       },

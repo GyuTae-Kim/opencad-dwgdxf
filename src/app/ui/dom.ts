@@ -136,6 +136,30 @@ function shown(el: HTMLElement): boolean {
   return cs.display !== 'none' && cs.visibility !== 'hidden';
 }
 
+/** 초점을 받을 수 있는지: 문서에 붙어 있고, 막히지 않았고(:disabled), 보인다(289차) */
+function canFocus(el: HTMLElement): boolean {
+  return el.isConnected && !el.matches(':disabled') && shown(el);
+}
+
+/**
+ * 누른 단추가 그 누름 때문에 막히거나(disabled) 숨거나(hidden) 문서에서 빠진 뒤의 초점(289차 — WCAG 2.4.3 초점 순서): 초점이 있던 요소가 막히거나 숨으면
+ * 브라우저의 focus fixup이 초점을 문서(body)로 옮기고, 떼어 낸 요소도 초점을 잃어 초점 표시가 사라지고 Enter·Space가 듣지 않으며 키보드 사용자가 제자리를 잃는다.
+ * held는 누르기 처리를 시작할 때 초점이 있던 요소(document.activeElement). held가 from 가운데 하나이고 이제 초점을 받을 수 없으며, 초점이 문서로 빠졌거나
+ * held에 남았을 때만 to에서 처음으로 초점을 받는 것에 준다(막혔거나 숨은 것은 건너뛴다, 화면은 옮기지 않음). 초점이 다른 곳(새로 연 상자 등)에 있거나
+ * held가 아직 초점을 받을 수 있으면 그대로 — 마우스로 눌러 단추가 초점을 받지 않는 브라우저(Safari·iOS)는 held가 그 단추가 아니라 그대로다. 준 곳이 있으면 true
+ */
+export function refocusStuck(held: Element | null, from: readonly (Element | null | undefined)[], to: readonly (HTMLElement | null | undefined)[]): boolean {
+  if (!held || !from.includes(held) || canFocus(held as HTMLElement)) return false;
+  const now = document.activeElement;
+  if (now && now !== document.body && now !== held && now.isConnected) return false;
+  for (const el of to) {
+    if (!el || !canFocus(el)) continue;
+    el.focus({ preventScroll: true });
+    if (document.activeElement === el) return true;
+  }
+  return false;
+}
+
 export interface MenuItem {
   label?: string;
   icon?: string;

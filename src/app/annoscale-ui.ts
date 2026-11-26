@@ -31,7 +31,7 @@ import {
 import type { App } from './app';
 import type { DocState } from './docstate';
 import { commitOwn, currentScaleName, ensureScaleList, envFor, isXrefScale, newGroup } from './annoscale-core';
-import { ask, form, h } from './ui/dom';
+import { ask, form, h, refocusStuck } from './ui/dom';
 import { button, ensureStyles, modal } from './util2-ui';
 import { ft } from './filetext';
 
@@ -217,15 +217,21 @@ export async function scaleListDialog(app: App, st: DocState, group = newGroup()
     if (i === undefined) return;
     const j = i + d;
     if (j < 0 || j >= work.length) return;
+    const held = document.activeElement;
     [work[i], work[j]] = [work[j]!, work[i]!];
     refresh(j);
+    // 맨 위·맨 아래에 닿아 누른 단추가 막히면 반대쪽 단추로(289차 — 초점이 문서로 빠지지 않게. 「아래로」 다음 켜진 단추는 「삭제」라 반대쪽이 안전)
+    refocusStuck(held, [btnUp, btnDown], [held === btnUp ? btnDown : btnUp]);
   };
   const del = () => {
     const i = list.selected()[0];
     const s = i !== undefined ? work[i] : undefined;
     if (!s || deleteBlock(s)) return;
+    const held = document.activeElement;
     work.splice(i!, 1);
     refresh(Math.min(i!, work.length - 1));
+    // 새로 고른 축척을 지울 수 없어(현재 축척·쓰는 축척) 「삭제」가 막히면 목록으로(289차 — 극좌표 추가 각도 목록 꼴)
+    refocusStuck(held, [btnDel], [list.el]);
   };
   const reset = async () => {
     const a = await ask('도면 축척 편집', '축척 리스트를 기본값으로 재설정하시겠습니까? 사용 중인 축척과 현재 축척은 남습니다.', [
@@ -371,6 +377,7 @@ export async function objectScaleDialog(app: App, st: DocState, handles: string[
     refresh();
   };
   const del = () => {
+    const held = document.activeElement;
     for (const i of list.selected()) {
       const k = names[i]!;
       if (adds.has(k)) adds.delete(k);
@@ -378,6 +385,8 @@ export async function objectScaleDialog(app: App, st: DocState, handles: string[
     }
     list.set([], []);
     refresh();
+    // 지우면 고른 것이 비어 「삭제」가 막힌다 — 목록으로(289차 — 초점이 문서로 빠지지 않게)
+    refocusStuck(held, [btnDel], [list.el, btnAdd]);
   };
   const radio = (k: 'L' | 'C', text: string) => {
     const r = h('input', { type: 'radio', name: 'as-mode', checked: mode === k }) as HTMLInputElement;

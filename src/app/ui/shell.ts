@@ -17,7 +17,7 @@ import { loadLispFile } from '../lisp';
 import { isoState, setIso } from '../viewtools-iso';
 import { maximized, maximizedLabel } from '../viewtools-vpmax';
 import { pickColor } from './colorpick';
-import { type MenuItem, dialog, focusables, formatBytes, h, iconSpan, moveMenuOpener, showMenu, tabKeyTarget, toast } from './dom';
+import { type MenuItem, dialog, focusables, formatBytes, h, iconSpan, moveMenuOpener, refocusStuck, showMenu, tabKeyTarget, toast } from './dom';
 import { icon } from './icons';
 import { MobileView, isCoarse, readMobileMode, startInViewMode } from './mobileview';
 import { RECENT_MAX_SIZE, RecentStore, recentTimeLabel } from '../recent';
@@ -2122,7 +2122,14 @@ export class Shell implements UiHooks {
       ),
     );
     if (this.guide) this.start.querySelector('.start-inner')!.append(this.guide);
-    this.recentClear.addEventListener('click', () => void this.recent.clear().then(() => this.refreshRecent()));
+    this.recentClear.addEventListener('click', () => {
+      // 다 지우면 이 단추가 숨는다 — 초점을 「아직 연 문서가 없습니다」 줄로(289차, 아래 줄 ✕의 마지막 줄 꼴 — 초점이 문서로 빠지지 않게)
+      const held = document.activeElement;
+      void this.recent
+        .clear()
+        .then(() => this.refreshRecent())
+        .then(() => refocusStuck(held, [this.recentClear], [this.recentList.querySelector<HTMLElement>('.recent-empty')]));
+    });
     // 날짜 표기(10월 27일 ↔ Oct 27)를 새 언어로
     this.root.addEventListener('languagechange', () => void this.refreshRecent());
   }
@@ -2133,7 +2140,8 @@ export class Shell implements UiHooks {
     if (seq !== this.recentSeq) return;
     this.recentClear.hidden = !list.length;
     if (!list.length) {
-      this.recentList.replaceChildren(h('li', { class: 'recent-empty' }, '아직 연 문서가 없습니다.'));
+      // 마지막 줄 ✕·「모두 지우기」 뒤 초점을 받는 줄(289차 — tabindex -1: 코드로만 받고 Tab 차례에는 들지 않는다. 전에는 li라 focus()가 듣지 않아 문서로 빠졌다)
+      this.recentList.replaceChildren(h('li', { class: 'recent-empty', tabindex: -1 }, '아직 연 문서가 없습니다.'));
       return;
     }
     const now = Date.now();
