@@ -2058,10 +2058,30 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   구름형 리비전 Cloud-Revision·「…완료했습니다」(→ Revisionswolke), 첫 번째 구석점 지정 Erste Ecke festlegen Punkt(깨짐), 기준 중심점 Referenzmittelpunkt(→ 기준 반지름 Basis), 이등분 Bisektion·이등분(B) Teilung(→ 프롬프트 Halbierung),
   원에 외접 Umkreist, 매듭 [현(C)…] Akkord(→ 「현」 Sehne), 증분 Inkrementell(→ 「증분(I)」 Inkrement), 도넛의 중심 <Ende>, PDMODE 안내(「PDMODE를 SETVAR로」 — 뜻이 거꾸로), 296·294차 나머지(Rückseite·MKLTYPE·skalieren·Echte Farbe 등);
   중국어 호의 사이각 지정 弧角, 삽입할 블록 模块(→ 块), 이등분 二分法(→ 二等分), 회전 수 줄 扭转次数, 매듭 [C 弦(C), 첫 번째 구석점 지정 角点点, PDMODE 안내(뜻이 거꾸로); 영어 광선 Rays.
+  (**299차가 고침**: 독일어 스냅 다섯 Fang, 결합할 객체 없음 verbunden, 경계 Rand·Grenze 아홉(경계 뒤·앞·제거·그리기 경계·그리기 경계(W)·새 경계의 시작점·경계의 폭과 높이·그리기 순서 통째·-HATCH 첫 줄 통째 — 같은 프롬프트 조각의 Begrenzung),
+  PEDIT 결합 유형 통째 넷 Verlängern, 구름형 리비전·완료 Revisionswolke, PDMODE 안내, 첫 번째 구석점 지정; 중국어 일곱 모두(이등분은 「이등분(B)」 二分 근거로 二分, 매듭은 「현(C)」 弦线(C)); 영어 광선 Ray —
+  독일어 나머지(기준 중심점·이등분 둘·원에 외접·매듭 Akkord·증분·도넛 <Ende>·구름형 리비전 쉐이프 등)는 독일어 한도로 「299차에 보고 두 것」)
   (2) 공유 열쇠라 하지 않음: 「사이각」(타원 사이각(I) included angle ↔ ARRAY 원형 사이각(A) 항목 사이 각도 — 286차 시험이 가름; 중국어 키워드 이름 角度는 그대로), 「영역」(RECTANG 영역(A) 넓이 ↔ REGION 객체),
   「치수」(RECTANG 치수(D) 크기 ↔ 치수 객체), 「회전」·「일반」·「수정」·「켜기」·「끝」.
   (3) 코드 변경이 드는 것: RECTANG 「현재 직사각형 모드: {0}」(모따기·고도·모깎기·두께·폭 조각을 빈칸 둘로 이어 틀이 통째로 잡음 — 조각 열쇠는 있으나 쓰이지 않고 조합이 서른하나), 297차 (2)의 「수직」·두 정렬선 툴팁 등.
   (4) 보지 않은 것: 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄·ARC 리본 순서 글(「호의 시작점 또는 [중심(C)] 지정: C」 — 292차 꼴), 등각원(viewtools-iso — 296차 묶음). 원어민 검토 없음
+- [x] 298차가 남긴 것과 조회·측정 명령 묶음의 번역 대조·빠진 번역(299차, 290~298차 꼴 — 298차 보고 (1)): DIST·MEASUREGEOM·AREA·MEASUREANGLE·MEASURERADIUS·MASSPROP·ID·LIST·TIME·DBLIST·CAL·QUICKCALC의
+  프롬프트·옵션·결과 줄·오류와 휴대폰 보기 결과 카드·리본 측정 단추.
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 5·일본어 9·중국어 20·독일어 30곳 — 298차 출발점 독일어 23·중국어 7·영어 1, 묶음의 나누는 값 分割线·Wert teilen, 거듭제곱 繰り返し二乗·Leistung,
+  TIME 작성 Created by·撰写人·Erstellt von, MEASUREGEOM 종료(X) 端点·终点·Ende, 독일어 면적 Bereich, 일본어 ドット·フォント·補償·エンドポイント, 중국어 角度测量单位·表达方式·清除录制 등).
+  (나) 네 언어 모두 한국어로 보이던 42 열쇠(MEASUREGEOM 다중 점(M), AREA 면적 추가·빼기 조각과 더하기·빼기 모드 앞 글, DBLIST 빈 도면, QuickCalc 변수 없음, CAL 오류 줄 스물다섯,
+  앱 낱말을 끼운 계산식 오류 다섯과 그 CAL 줄)를 더함(8899 → 8941, 지운 틀 없음). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 299차 절
+- [ ] 299차에 보고 두 것 — (1) 한도 밖 오역(독일어 — 출발점 23 + 묶음 7로 한도가 참): 기준 중심점 Referenzmittelpunkt(→ 「기준 반지름 지정」 Basis), 이등분 Bisektion·이등분(B) Teilung,
+  원에 외접 Umkreist(→ 「원에 내접」 einbeschrieben 꼴), 매듭 매개변수화 통째 Akkord·einheitlich(→ 「현」 Sehne), 증분 Inkrementell(→ 「증분(I)」 Inkrement), 도넛의 중심 <Ende>(→ 「종료」 Beenden),
+  「다음 점 지정:」·「각도의 첫 번째 끝점 지정:」 3인칭 Gibt … an(→ 「다음 점 지정 또는 [」 Nächsten Punkt angeben), 「호 또는 원 선택 [거리(D)/…/종료(X)]:」 통째 Ende (X), 「"{0}"이(가) 올바르지 않은 자리에 있습니다.」 Speicherort(저장 위치 — CAL 줄에도 이어짐),
+  구름형 리비전 나머지(구름형 리비전 쉐이프 Cloud-Revisionsform·구름형 수정 기호·비교-구름형 리비전·「구름형 리비전(R)」 Wolkenart Revision), 296·294차 나머지(Rückseite·MKLTYPE·skalieren·Echte Farbe 등).
+  (2) 근거가 서지 않음: 일본어 외적(&) 外側(바깥 — 外積 근거가 같은 사전에 없음; 「외적(&)에는 점이 필요합니다.」 CAL·QuickCalc 오류 줄도 그래서 열쇠를 더하지 않음).
+  (3) 공유 열쇠라 하지 않음: 「영역」(REGION 객체 ↔ RECTANG 영역(A) 넓이 — 중국어 区域·面域 섞임), 「기록」(영어 Record — QuickCalc 기록과 다른 기록), 298차의 「사이각」·「치수」.
+  (4) 코드 변경이 드는 것: LIST·DBLIST 객체 줄 「{0}  도면층: "{1}"  공간: {2}  핸들 = {3}」(틀이 객체 이름·모형/도면 공간을 잡음), TIME 현재 시간·작성·업데이트(`toLocaleString('ko-KR')` 날짜)와
+  총 편집 시간·경과 타이머(「0일 01:02:03」 — 틀이 잡음), CAL 스냅 점 고르기 「>> {0} 선택:」(스냅 이름 열하나 — 「수직」 공유 이름 문제와 함께), 298차 (3)의 RECTANG 현재 직사각형 모드 줄.
+  (5) 동의어 — 둠: 중국어 질량 특성 面域/质量特性·회전 반경 旋转半径, 일본어 합집합·차집합·교집합 和·差·交差, 독일어 거리 Abstand/Entfernung·관성 곱 Deviationsmoment, 영어 「각도 = {0}」 소문자 angle·모형 공간 소문자,
+  CAL 새 줄이 이어받은 기존 오류 글 말투(영어 「{0} Function requires…」 등).
+  (6) 보지 않은 것: 기본값 없는 프롬프트(「두 번째 점 지정 또는 [다중 점(M)]:」·「>> 표현식:」 등)에 친 입력을 붙인 기록 줄(292차 꼴), LIST 특성 줄의 특성 이름(290차 특성 묶음). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
