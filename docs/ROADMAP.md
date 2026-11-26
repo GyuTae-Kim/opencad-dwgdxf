@@ -2098,6 +2098,8 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   위치도 Positionsansicht, 연결선 Verbindung·Anschluss(→ 「지시선 연결선 위치 지정」 Führungslinien-Anbindung — 새 MLEADERSTYLE 설명 줄도 틀의 Anschluss를 따름), 「줄바꿈(W)」 Linie Trennen;
   중국어 통째 기록 줄(옵션 지정 前导符·옵션 입력 引线连接器·분산 <使用间距(Use)>·배치 多行引线·줄바꿈 폭 换行符), 새 스타일 이름 款式, Enter 아래 셀 输入, 테이블 셀 선택 또는 <끝>(꺾쇠 빠짐), 데이텀 식별자 数据,
   작성 날짜 撰写(→ 「만든 날짜」 创建日期), Ⓜ/Ⓛ 재료 素材, 30도 열기 高温, 연결선 자동 포함·거리·간격 连接, 마지막 저장자 时间, 필드 찾음·업데이트 어순, 대소문자 案例, 대칭도·위치도·경사도·직각도 「…度」 빠짐.
+  (**301차가 고침**: 중국어 통째 기록 줄 다섯 — 引线·引线基线·<使用当前间距>·多重引线·环绕宽度; 독일어 296·294차 나머지 가운데 트루 컬러 다섯 True Color·현재 사용 둘 Aktuellen verwenden·
+  MKLTYPE ausgewählter Form, 294차 연관(A) Assoziativ, UNDO 뒤(B) Zurück; (4)의 표 스타일 편집기 오류 열둘은 새 열쇠로 — 나머지는 「301차에 보고 두 것」)
   (2) 공유 열쇠라 하지 않음: 「평면도」(GD&T 평면도 ↔ 평면도 뷰), 「계속」(대화 상자 단추 ↔ DIM 스마트 계속(C) 연속 치수), 「열기」(화살촉 ↔ 파일 열기 — 287차와 같음),
   「머리글」(중국어 页眉, 「머리글(H)」 标题가 「제목(T)」 标题와 같음 — 같은 사전에 表头 근거 없음).
   (3) 근거가 서지 않음: 영어 GD&T 면의 윤곽도 Contour drawing of the face·선의 윤곽도·경사도 Slope(같은 사전에 profile·angularity 낱말 없음), FIELD 날짜 형식 「yyyy년 M월 d일」(형식 그림 — 화면 글은 날짜와 형식을 이어 붙여 이 열쇠가 통째로 쓰이지 않음).
@@ -2107,6 +2109,24 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   명령행 뒤 글 「]:」(번역층이 통째 열쇠 번역의 끝을 따라 독일어 「정렬 입력 […]」 뒤가 「] ein:」, 일본어 「] を入力:」로 보임).
   (6) 동의어 — 둠: 121차 독일어 LEADER 주석⁠ Maßtext(AutoCAD 독일어 LEADER 낱말), 독일어 「Geben Sie … an」 존댓말 명령꼴, 영어 소문자 data·text height·path only, 중국어 图块, 독일어 Mehrfache Führungslinie.
   (7) 보지 않은 것: 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄(292차 꼴), 필드 값(날짜·요일 — 도면 글). 원어민 검토 없음
+- [x] 300차가 남긴 것과 배치·출력(레이아웃·플롯) 묶음의 번역 대조·빠진 번역(301차, 290~300차 꼴 — 300차 보고 (1)·(4)): LAYOUT·배치 탭 메뉴·LAYOUTWIZARD·MVSETUP·PAGESETUP(페이지 설정 관리자·대화 상자)·
+  PLOT·PREVIEW·PUBLISH·-PLOT·PSETUPIN·VPORTS·MVIEW·MSPACE·PSPACE·CHSPACE·VPLAYER·VPCLIP·PLOTSTAMP·PLOTSTYLE·CONVERTCTB·EXPORTLAYOUT·VPSCALE의 프롬프트·옵션·대화 상자 이름표·결과 줄·오류.
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 16·일본어 20·중국어 30·독일어 30곳 — PLOT 부수 「매수」 Buy·ノット数·采购·Kaufen, VPORTS 셋·넷 セット·设置·Net·网络·Netz,
+  독일어 Handlungsstruktur·Grundstücksmitte·Zum Modellieren des Raums·Leerzeichen ändern·Neue Fixierung, 중국어 平面图·剧情预览·论文·装表·修剪·缩放, 용지 방향 Vertical·垂直 → Portrait·纵向, 한계 Limitations·制限·局限,
+  300차 출발점 중국어 MLEADER 통째 다섯·독일어 Echte Farbe·Aktuelle Verwendung·Rückseite·Assoziieren·einheitlicher Form 등).
+  (나) 네 언어 모두 한국어로 보이던 56 열쇠(-PLOT 예/아니오 물음 앞 조각 아홉, MVSETUP·-PLOT·VPLAYER 명령행 조각 일곱, 페이지 설정 관리자 열, MVSETUP·VPLAYER·CHSPACE·MVIEW 결과 줄 여섯,
+  LAYOUTWIZARD 아홉, PSETUPIN·PLOTSTAMP 셋, 300차가 남긴 표 스타일 편집기 오류 열둘)를 더함(9001 → 9057, 지운 틀 없음). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 301차 절
+- [ ] 301차에 보고 두 것 — (1) 한도 밖 오역(중국어·독일어 — 30으로 한도가 참): 독일어 다른 객체의 맨 뒤로 Rückseite·새 객체의 선종류 축척 skalieren(동사)·선 간격 지정 Zeilenabstand·VPORTS 구성 입력 [ Konstruktionseingabe(구성 — Konfiguration)·
+  뷰 이름 Name anzeigen(「뷰」 자체가 Anzeigen — 보이다)·도면 한계가 없어 … eingezeichnet·한 줄로 플롯 스탬프 darstellen.·타일 뷰포트 Kachelansicht·VPORTS Viewport-… 다섯(→ Ansichtsfenster)·자를 뷰포트 선택 Ansichtsbereich·
+  「Gibt … an」 3인칭 나머지·300차 묶음 독일어 나머지(Mindestzutaten·Datum·Hitze·Pausengröße·Multileitung·Positionsansicht·Verbindung·Linie Trennen 등); 중국어 VPORTS 구성 입력 통째 둘 构造·MVSETUP 통째 视口缩放(S)·
+  한계(L)·한계(LI)·限值(LI)(→ 界限)·뷰포트 축척 보기·「용지 {0} × {1}을(를) 축척 {2}(으)로 … 한계를 맞췄습니다.」 어순·종이 공간으로 纸张空间(→ 图纸空间)·300차 중국어 나머지(款式·输入·<끝> 꺾쇠·数据·撰写·素材·高温·连接 등);
+  일본어·중국어 UNDO 뒤(B) 背面(뒷면 — 독일어는 UNDO 통째 Zurück 근거로 고침, 일본어·중국어 통째도 背面이라 같은 사전 근거 없음).
+  (2) 공유 열쇠라 하지 않음: 「가로」·「세로」(용지 방향 가로·세로 ↔ PLOTSTAMP 글 방향 가로·세로 — `filecmds-stamp.ts` 162~163줄), 「범위」(플롯·ZOOM 범위 extents ↔ AutoLISP 「범위」 오류 range — `edit/lisp/text.ts`), 300차의 「평면도」·「계속」·「열기」·「머리글」.
+  (3) 근거가 서지 않음: 「밀」(단위 mil — 영어 Wheat·독일어 Weizen(밀 곡식)·중국어 毫米(밀리미터): 같은 사전에 mil 낱말이 없음, 일본어 ミル만 맞음).
+  (4) 열쇠 한도 밖(빠진 번역): -PLOT 예/아니오 기록 줄 아홉(통째 「물음 [예(Y)/아니오(N)] <{0}>:」), 플롯 축척 기록 줄(열쇠에 U+2060 둘), 페이지 설정 관리자 설명 줄 「장치: … · 용지: … (…, 가로) · 플롯 스타일: …」(없음·방향 조합 여덟),
+  LAYOUTWIZARD 「뷰포트: …, 축척 …」(뷰포트 종류 넷 × 맞춤 × 위치 고르기), PLOTSTYLE 안내 「원래 값: … · 활성 플롯 스타일 테이블: …」(조합 다섯).
+  (5) 코드 변경이 드는 것: 300차 (5)의 표 스타일 요약 줄·명령행 뒤 글 「]:」 그대로.
+  (6) 동의어 — 둠: 일본어 도면 공간 図面空間(ペーパー空間과 반반)·印刷スタイル/プロットスタイル, 영어 「화면 표시」 Screen display, 독일어 Skalierung/Maßstab·「주석(AN)」 Anmerkung(독일어 사전이 주석을 두루 Anmerkung으로 씀). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
