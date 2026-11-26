@@ -286,7 +286,15 @@ export function docRefs(app: App, doc: CadDocument): RefItem[] {
   return out.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
 }
 
-const IMAGE_EXT = /\.(png|jpe?g|gif|bmp|webp)$/i;
+/** 이 브라우저가 풀어 잇는 그림 형식(linkImageFiles — 휴대폰 보기 참조 파일 고르기가 실패 수를 셀 때도 쓴다) */
+export const IMAGE_EXT = /\.(png|jpe?g|gif|bmp|webp)$/i;
+
+/** 열린 도면들이 찾는 참조 파일 열쇠(파일 이름 소문자): 외부 참조(연결한 참조 파일이 다시 찾는 것까지)·이미지·PDF 참고 */
+export function wantedRefKeys(app: App): Set<string> {
+  const keys = wantedXrefKeys(app);
+  for (const st of app.docs) for (const r of docRefs(app, st.doc)) keys.add(r.key);
+  return keys;
+}
 
 /** 고른 파일 중 이미지를 연결한다. 연결한 수 */
 export async function linkImageFiles(app: App, files: File[]): Promise<{ linked: string[]; unsupported: string[] }> {
@@ -338,7 +346,8 @@ export async function linkPdfFiles(app: App, files: File[]): Promise<{ linked: s
     linked.push(f.name);
   }
   if (linked.length) failed.push(...(await renderPdfPages(app)).failed);
-  return { linked: linked.filter((n) => !failed.includes(n)), failed };
+  // failed는 파일 이름 소문자(열쇠) — 대문자 이름(Plan.PDF)도 거른다(272차: 전에는 이었다고 함께 셌다)
+  return { linked: linked.filter((n) => !failed.includes(n.toLowerCase())), failed };
 }
 
 /** 열린 도면들이 쓰는 PDF 페이지 중 파일이 있고 아직 그리지 않은 것을 그린다 */

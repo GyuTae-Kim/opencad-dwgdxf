@@ -7501,6 +7501,7 @@
   "파일": "Files",
   "파일 \"{0}\"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 고른 파일만 이름으로 찾습니다.": "File \"{0}\" could not be found. This web version cannot open files via a file path; it can only locate files by name if they were selected during the current session.",
   "파일 \"{0}\"을(를) 찾을 수 없습니다. 이 웹 버전은 경로로 파일을 열 수 없어 이번 세션에서 연 파일만 이름으로 로드합니다.": "File \"{0}\" could not be found. This web version cannot open files via a file path; it can only load files by name if they were opened during the current session.",
+  "파일 {0}개를 연결했습니다({1}개는 열지 못했습니다).": "Linked {0} file(s) ({1} could not be opened).",
   "파일 {0}개를 연결했습니다.": "Linked {0} file(s).",
   "파일 {0}개를 연결했습니다: {1}{2}": "{0} file(s) connected: {1}{2}",
   "파일 고르기": "Choose files",
