@@ -2075,6 +2075,9 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   원에 외접 Umkreist(→ 「원에 내접」 einbeschrieben 꼴), 매듭 매개변수화 통째 Akkord·einheitlich(→ 「현」 Sehne), 증분 Inkrementell(→ 「증분(I)」 Inkrement), 도넛의 중심 <Ende>(→ 「종료」 Beenden),
   「다음 점 지정:」·「각도의 첫 번째 끝점 지정:」 3인칭 Gibt … an(→ 「다음 점 지정 또는 [」 Nächsten Punkt angeben), 「호 또는 원 선택 [거리(D)/…/종료(X)]:」 통째 Ende (X), 「"{0}"이(가) 올바르지 않은 자리에 있습니다.」 Speicherort(저장 위치 — CAL 줄에도 이어짐),
   구름형 리비전 나머지(구름형 리비전 쉐이프 Cloud-Revisionsform·구름형 수정 기호·비교-구름형 리비전·「구름형 리비전(R)」 Wolkenart Revision), 296·294차 나머지(Rückseite·MKLTYPE·skalieren·Echte Farbe 등).
+  (**300차가 고침**: 기준 중심점 Basismittelpunkt, 이등분 둘 Halbierung(XLINE 프롬프트 조각), 원에 외접 Umschrieben in einem Kreis, 매듭 통째 Sehne·Gleichmäßig, 증분·LENGTHEN 통째 Inkrement,
+  도넛 <Beenden>, 다음 점·각도의 첫 번째 끝점 명령꼴 angeben(두 번째 끝점은 이미 「Geben Sie … an」이라 동의어 — 둠), 호 또는 원 선택 Beenden (X), 자리 오류와 CAL 줄 Position, 구름형 리비전 나머지 넷 Revisionswolke —
+  296·294차 나머지는 독일어 한도로 「300차에 보고 두 것」)
   (2) 근거가 서지 않음: 일본어 외적(&) 外側(바깥 — 外積 근거가 같은 사전에 없음; 「외적(&)에는 점이 필요합니다.」 CAL·QuickCalc 오류 줄도 그래서 열쇠를 더하지 않음).
   (3) 공유 열쇠라 하지 않음: 「영역」(REGION 객체 ↔ RECTANG 영역(A) 넓이 — 중국어 区域·面域 섞임), 「기록」(영어 Record — QuickCalc 기록과 다른 기록), 298차의 「사이각」·「치수」.
   (4) 코드 변경이 드는 것: LIST·DBLIST 객체 줄 「{0}  도면층: "{1}"  공간: {2}  핸들 = {3}」(틀이 객체 이름·모형/도면 공간을 잡음), TIME 현재 시간·작성·업데이트(`toLocaleString('ko-KR')` 날짜)와
@@ -2082,6 +2085,28 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   (5) 동의어 — 둠: 중국어 질량 특성 面域/质量特性·회전 반경 旋转半径, 일본어 합집합·차집합·교집합 和·差·交差, 독일어 거리 Abstand/Entfernung·관성 곱 Deviationsmoment, 영어 「각도 = {0}」 소문자 angle·모형 공간 소문자,
   CAL 새 줄이 이어받은 기존 오류 글 말투(영어 「{0} Function requires…」 등).
   (6) 보지 않은 것: 기본값 없는 프롬프트(「두 번째 점 지정 또는 [다중 점(M)]:」·「>> 표현식:」 등)에 친 입력을 붙인 기록 줄(292차 꼴), LIST 특성 줄의 특성 이름(290차 특성 묶음). 원어민 검토 없음
+- [x] 299차가 남긴 것과 지시선·표·공차·필드 주석 묶음의 번역 대조·빠진 번역(300차, 290~299차 꼴 — 299차 보고 (1)): LEADER·QLEADER(지시선 설정)·MLEADER·MLEADEREDIT·MLEADERALIGN·MLEADERCOLLECT·
+  MLEADERSTYLE(관리자·편집)·TABLE·TABLEDIT·TABLECELL(셀 메뉴·셀 특성)·TABLESTYLE·CTABLESTYLE·TINSERT·TABLEEXPORT·MATCHCELL·TOLERANCE(기하학적 공차 대화 상자)·FIELD·UPDATEFIELD의 프롬프트·옵션·대화 상자 이름표·결과 줄·오류.
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 18·일본어 8·중국어 30·독일어 29곳 — 299차 출발점 독일어 17, 중국어 다중 지시선 多行引线·前导线·引线连接器·第一个角点·换行符·排序·周长符文·面部轮廓,
+  독일어 Schneller Anführer·Füllzeichen·Sortierung·Mehrfachleiter·「[ [」 겹침, 영어 30 degree heat·Minimum ingredients·connector·(currently), 일본어 輪郭図·改行 등).
+  (나) 네 언어 모두 한국어로 보이던 60 열쇠(MLEADER 순서 옵션·앞 글·통째와 각도 구속 입력, TABLECELL 옵션 열셋·행 높이·열 폭 입력, 표 결과 줄 스물하나, FIELD 자리맞추기 옵션 여덟, MLEADERSTYLE 설명 줄 여섯)를
+  더함(8941 → 9001, 지운 틀 없음). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 300차 절
+- [ ] 300차에 보고 두 것 — (1) 한도 밖 오역(독일어 — 출발점 17 + 묶음 12로 한도가 참, 중국어 30으로 참): 독일어 296·294차 나머지(트루 컬러 Echte Farbe·Echtfarben 다섯(→ 프롬프트 조각 True Color),
+  새 객체의 선종류 축척 skalieren(동사 — 「새 선종류 축척 지정」 Linientypmaßstab), MKLTYPE einheitlicher Form(고른 — ausgewählt), 고른 객체를 놓을 자리(깨진 문장), 다른 객체의 맨 뒤로 Rückseite, 294차 Zeilenabstand·Assoziieren·
+  Aktuelle Verwendung·Anmerkung), 3인칭 Gibt … an 나머지(모서리의 첫 번째 끝점·다각형의 중심·등각원의 지름·도넛 지름·세그먼트 폭·문자 기준선 끝점 등), 구름형 수정 기호 (REVCLOUD) 툴팁 Revisionswolkensymbol,
+  묶음의 Ⓛ 최소 재료 Mindestzutaten(→ 「Ⓜ 최대 재료」 Maximales Material), 데이텀 Datum(날짜 — 「데이텀 삼각형」 Bezugsdreieck), 30도 열기 Hitze, 끊기 크기 Pausengröße, 첫 번째 행 셀 스타일 어순, 블록 정의 Multileitung,
+  위치도 Positionsansicht, 연결선 Verbindung·Anschluss(→ 「지시선 연결선 위치 지정」 Führungslinien-Anbindung — 새 MLEADERSTYLE 설명 줄도 틀의 Anschluss를 따름), 「줄바꿈(W)」 Linie Trennen;
+  중국어 통째 기록 줄(옵션 지정 前导符·옵션 입력 引线连接器·분산 <使用间距(Use)>·배치 多行引线·줄바꿈 폭 换行符), 새 스타일 이름 款式, Enter 아래 셀 输入, 테이블 셀 선택 또는 <끝>(꺾쇠 빠짐), 데이텀 식별자 数据,
+  작성 날짜 撰写(→ 「만든 날짜」 创建日期), Ⓜ/Ⓛ 재료 素材, 30도 열기 高温, 연결선 자동 포함·거리·간격 连接, 마지막 저장자 时间, 필드 찾음·업데이트 어순, 대소문자 案例, 대칭도·위치도·경사도·직각도 「…度」 빠짐.
+  (2) 공유 열쇠라 하지 않음: 「평면도」(GD&T 평면도 ↔ 평면도 뷰), 「계속」(대화 상자 단추 ↔ DIM 스마트 계속(C) 연속 치수), 「열기」(화살촉 ↔ 파일 열기 — 287차와 같음),
+  「머리글」(중국어 页眉, 「머리글(H)」 标题가 「제목(T)」 标题와 같음 — 같은 사전에 表头 근거 없음).
+  (3) 근거가 서지 않음: 영어 GD&T 면의 윤곽도 Contour drawing of the face·선의 윤곽도·경사도 Slope(같은 사전에 profile·angularity 낱말 없음), FIELD 날짜 형식 「yyyy년 M월 d일」(형식 그림 — 화면 글은 날짜와 형식을 이어 붙여 이 열쇠가 통째로 쓰이지 않음).
+  (4) 열쇠 한도 밖(빠진 번역): TABLECELL 기록 줄(통째 「셀 {0} 옵션 입력 […] <문자 편집>:」), TABLESTYLE 목록 「⁨이름⁩ (사용 중)」, 표 스타일 편집기 오류 열둘(「제목 문자 높이는 0보다 커야 합니다.」 등 — 틀이 제목·머리글·데이터를 잡음)과
+  「표 방향: 아래로·위로, 여백 …」 둘, FIELD 자리맞추기 기록 줄(기본값 「<왼쪽 위(TL)>」), MLEADER 통째 넷째(블록의 삽입점 지정 … — 내용 먼저 + 블록 내용).
+  (5) 코드 변경이 드는 것: 표 스타일 요약 줄(행 종류·글꼴·높이·정렬·「채우기」 조합), 표 스타일 편집기·공차 대화 상자 접근 이름(「제목 정렬」·「1행 공차 1 지름」 — 틀이 행 종류·「공차 1」을 잡음, 화면에 안 보임),
+  명령행 뒤 글 「]:」(번역층이 통째 열쇠 번역의 끝을 따라 독일어 「정렬 입력 […]」 뒤가 「] ein:」, 일본어 「] を入力:」로 보임).
+  (6) 동의어 — 둠: 121차 독일어 LEADER 주석⁠ Maßtext(AutoCAD 독일어 LEADER 낱말), 독일어 「Geben Sie … an」 존댓말 명령꼴, 영어 소문자 data·text height·path only, 중국어 图块, 독일어 Mehrfache Führungslinie.
+  (7) 보지 않은 것: 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄(292차 꼴), 필드 값(날짜·요일 — 도면 글). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
