@@ -17,6 +17,8 @@ export interface MeasureResult {
 export interface MeasureFormat {
   length(v: number): string;
   angle(a: number): string;
+  /** XY 평면으로부터의 각도(기운 각도) 글 — 명령행 DIST와 같은 셈(측량 단위는 방위가 아니라 도/분/초, 266차). 없으면 angle */
+  rise?(a: number): string;
   area(v: number): string;
   /** 길이 단위(" mm"처럼 앞에 빈칸, 단위 없는 도면·피트-인치 글(건축·공학 단위)은 빈 글) */
   unit: string;
@@ -40,15 +42,19 @@ export function distance3d(dx: number, dy: number, dz: number): { d: number; ris
   return { d: Math.hypot(flat, dz), rise };
 }
 
-/** 두 점 사이: 큰 값은 거리, 보조 줄은 XY 평면 각도·ΔX·ΔY(ΔZ는 0이 아닐 때만). angle을 주면 그 각도(도면 단위의 0 방향·방향으로 잰 값) */
+/**
+ * 두 점 사이: 큰 값은 거리, 보조 줄은 명령행 DIST 차례로 XY 평면 각도·XY 평면으로부터의 각도·ΔX·ΔY·ΔZ — 기운 각도와 ΔZ는 ΔZ가 0이 아닐 때만
+ * (266차 — 전에는 기운 각도가 없었다. 명령행은 같은 높이면 둘 다 0을 적지만 카드는 0인 줄을 뺀다). angle을 주면 그 각도(도면 단위의 0 방향·방향으로 잰 값)
+ */
 export function distanceResult(f: MeasureFormat, dx: number, dy: number, dz = 0, angle?: number): MeasureResult {
   let ang = angle ?? Math.atan2(dy, dx);
   if (ang < 0) ang += Math.PI * 2;
-  const details = [
-    { k: '각도', v: f.angle(ang) },
-    { k: 'ΔX', v: f.length(dx) },
-    { k: 'ΔY', v: f.length(dy) },
-  ];
+  const details = [{ k: '각도', v: f.angle(ang) }];
+  if (dz !== 0) {
+    const { rise } = distance3d(dx, dy, dz);
+    details.push({ k: 'XY 평면으로부터의 각도', v: f.rise ? f.rise(rise) : f.angle(rise) });
+  }
+  details.push({ k: 'ΔX', v: f.length(dx) }, { k: 'ΔY', v: f.length(dy) });
   if (dz !== 0) details.push({ k: 'ΔZ', v: f.length(dz) });
   return { kind: 'distance', label: '거리', value: f.length(Math.hypot(dx, dy, dz)) + f.unit, details };
 }

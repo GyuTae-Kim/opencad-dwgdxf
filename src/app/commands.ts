@@ -135,12 +135,18 @@ const unitSuffix = (app: App) => {
   const a = unitAbbr(u.insunits);
   return a ? ` ${a}` : '';
 };
+/** DIST·MEASUREGEOM 거리의 XY 평면으로부터의 각도 글: 기운 각도라 측량 단위(방위)가 아니라 도/분/초로. 명령행과 결과 카드가 함께 쓴다(266차) */
+const riseAngle = (app: App, a: number) => {
+  const u = app.active!.units;
+  return formatAngle(a, u.aunits === 4 ? { aunits: 1, auprec: u.auprec } : u);
+};
 /** 측정 결과 값(휴대폰 보기 모드의 결과 카드)을 명령행 글과 같은 단위 형식으로 */
 const measureFormat = (app: App): MeasureFormat => {
   const abbr = unitAbbr(app.active!.units.insunits);
   return {
     length: (v) => L(app, v),
     angle: (a) => formatAngle(a, app.active!.units),
+    rise: (a) => riseAngle(app, a),
     area: (v) => area(app, v),
     unit: unitSuffix(app),
     // 면적 글은 건축·공학 단위도 소수(area)라 제곱 단위는 길이 꼬리와 따로 그대로 붙인다(240차)
@@ -656,9 +662,9 @@ function reportDistance(app: App, ctx: CommandContext, a: Pt3, b: Pt3, projected
   const { d, rise } = distance3d(dx, dy, dz);
   const u = st.units;
   const ang = displayDirection(Math.atan2(dy, dx), u);
-  // XY 평면으로부터의 각도: 기운 각도라 측량 단위(방위)가 아니라 도/분/초로
-  const riseText = formatAngle(rise, u.aunits === 4 ? { aunits: 1, auprec: u.auprec } : u);
-  // 두 줄이 같은 값을 단다(결과 카드는 한 덩어리로 묶는다)
+  // XY 평면으로부터의 각도: 기운 각도라 측량 단위(방위)가 아니라 도/분/초로(결과 카드도 같은 riseAngle — 266차)
+  const riseText = riseAngle(app, rise);
+  // 두 줄이 같은 값을 단다(결과 카드는 한 덩어리로 묶는다 — 카드 보조 줄은 ΔZ가 0이 아닐 때 이 기운 각도도)
   const m = distanceResult(measureFormat(app), dx, dy, dz, ang);
   ctx.print(`거리 = ${L(app, d)}${unitSuffix(app)},  XY 평면에서의 각도 = ${formatAngle(ang, u)},  XY 평면으로부터의 각도 = ${riseText}`, 'res', m);
   ctx.print(`X 증분 = ${L(app, dx)},  Y 증분 = ${L(app, dy)},  Z 증분 = ${L(app, dz)}`, 'res', m);
