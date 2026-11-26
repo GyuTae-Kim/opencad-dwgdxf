@@ -419,6 +419,11 @@ export class MobileView {
       const name = m[1]!;
       if (MEASURES.some((x) => x.name === name || RUNS_AS[x.name] === name)) this.lastMeasure = MEASURES.find((x) => x.name === name)?.name ?? (name === 'MEASUREGEOM' ? 'MEASURERADIUS' : name);
       else if (name === 'ID') this.lastMeasure = 'ID';
+    } else if (cls === 'err' && !m && this.app.viewOnly && !this.app.busyCommand) {
+      // 명령 밖의 오류(270차 — 비틀린 뷰포트에 들어가지 못함, 도면 없이 직전 명령 반복, Ctrl+누르기 하이퍼링크, 참조 파일 고르기 실패 등):
+      // 보기 모드는 명령행이 숨어 있어 바로 읽히는 오류 알림(role="alert")으로 보이고, 카드(명령의 안내·결과 띠)에는 넣지 않는다.
+      // 전에는 카드 결과 띠에 남아 정보 카드를 가리거나, 결과 띠를 닫은 뒤·도면이 없을 때는 보이지 않았다. 부른 쪽이 따로 알리는 줄(열기 실패)은 띄우지 않는다
+      if (!this.app.errorNoticed) toast(text, 'error', 9000);
     } else if (cls && !m) {
       // 줄마다 따로 그리므로 줄 경계에서 나뉜 표시는 줄마다 닫고 다시 연다
       for (const line of balanceMarks(text.split('\n'))) this.lines.push({ text: line, cls, measure });
