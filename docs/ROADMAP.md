@@ -2036,14 +2036,32 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   「자를 객체가 없습니다.」 Zuschneiden(→ Stutzen), 연장(E)·연장 안 함(N) Erweitern·암시적 모서리 연장 모드 앞 조각·통째 Rand·Erweiterung·aktivieren과 기본값 <Dehnen>(→ 「연장」 Verlängern·「모서리」 Kante), 「모드」 -Modus(하이픈 — 「모드(O)」 Modus),
   JOIN 결과 kombiniert·zusammengefasst(→ 「결합」 Verbinden), 296차 (1) 나머지(스냅 Y 간격 einrasten·스냅 켜기 (F9)·스냅 유형·스냅 모드 Snap(같은 사전 Fang)·증분 각도 Inkrementell Winkel·간격 Intervall, 경계 Grenze·Rand 나머지,
   Rückseite·MKLTYPE einheitlicher Form·skalieren·Echte Farbe·고른 객체를 놓을 자리, 294차 나머지 Zeilenabstand·Assoziieren·Aktuelle Verwendung·Anmerkung).
+  (**298차가 고침**: 끊기·자르기 결과 셋(unterbrochen·gestutzt·Stutzen), 연장(E)·연장 안 함(N)·암시적 모서리 연장 모드 앞 조각·통째·「] <연장>:」(Verlängern·Kantenverlängerungsmodus eingeben), 「모드」 Modus,
+  JOIN 결과 셋 verbunden, 스냅 Y 간격 Fang-Y-Abstand·증분 각도 Inkrementwinkel·경계 세트 Umgrenzungssatz — 나머지는 독일어 한도로 「298차에 보고 두 것」)
   (2) 코드 변경이 드는 것: 「수직」(297차가 코드로 가름 — 「수직」 글 열아홉 자리 가운데 snap.ts per·osnap-override.ts PER 둘만 직교(perpendicular), 구속·치수·뷰포트 배열·문자 스타일 등 열일곱은 세로(vertical).
   「✓ 수직」·「수직: {0} < {1}」은 스냅에만 쓰이지만 꺼진 메뉴 항목·AutoSnap 이름·재지정 메뉴는 「수직」 열쇠라 둘만 바꾸면 켜고 끌 때 이름이 바뀜 — 스냅 이름 원문을 가르는 소스 변경(예: UI 용어 「수직점」)이 필요),
   296차 (4)의 두 정렬선 툴팁·도 아닌 각도 단위 툴팁·디자인 센터 「, 속성 N개」·OPTIONS 나머지 검사 글.
-  (3) 열쇠 한도 밖(빠진 번역): TRIM·EXTEND 현재 설정 줄 「현재 설정: 투영={0}, 모서리={1}, 모드={2}」(틀이 투영 UCS·없음·뷰, 모서리 없음·연장, 모드 빠른 작업·표준을 잡아 한국어 — 통째 열쇠 12개가 듦).
-  (4) 시험이 고정한 것: 일본어 「주(M)」 主軸(M)(296차 보고 (3) 그대로).
+  (3) 열쇠 한도 밖(빠진 번역): TRIM·EXTEND 현재 설정 줄 「현재 설정: 투영={0}, 모서리={1}, 모드={2}」(틀이 투영 UCS·없음·뷰, 모서리 없음·연장, 모드 빠른 작업·표준을 잡아 한국어 — 통째 열쇠 12개가 듦). (**298차가 고침** — 통째 열쇠 12개, 틀 지움)
+  (4) 시험이 고정한 것: 일본어 「주(M)」 主軸(M)(296차 보고 (3) 그대로). (**298차가 고침** — 「주」 主·「주 격자선」 主グリッド線 근거로 主(M), 118차 시험 기대도 함께)
   (5) 동의어 — 둠: 영어 빠른 작업 Quick operation/Quick Action·JOIN 결과 combined, 일본어 끊기점 ブレーク点/切断点/破断点 섞임·곡선 혼합 曲線ミックス, 중국어 통과점 穿透点·지우기(E) 清除·「다중」 多行(292차 보고 공유 열쇠),
   독일어 합계 Total/Gesamt·「뷰」 Anzeigen(뷰 탭 공유)·사이각 Inklusive Winkel(새 LENGTHEN 줄도 같은 낱말을 따름).
   (6) 보지 않은 것: 기본값 없는 프롬프트(TRIM·FILLET 첫 객체 등)에 친 입력을 붙인 기록 줄(292차 꼴), GRIPEDIT·클립보드 명령(COPYCLIP·PASTECLIP — 이 묶음 밖). 원어민 검토 없음
+- [x] 297차가 남긴 것과 그리기 명령 묶음의 번역 대조·빠진 번역(298차, 290~297차 꼴 — 297차 보고 (1)·(3)·(4)): LINE·PLINE·CIRCLE·ARC·RECTANG·POLYGON·ELLIPSE·SPLINE·POINT·XLINE·RAY·DONUT·
+  DIVIDE·MEASURE·BOUNDARY·REVCLOUD·WIPEOUT·SKETCH·HELIX·3DPOLY·3DFACE·TRACE의 프롬프트·옵션·현재 설정 줄·결과 글.
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 16·일본어 8·중국어 30·독일어 30곳 — 독일어 297차 출발점 15, 반폭 Half width Receive·Erhalten Sie, 차수 Order·差分·排序·Reihenfolge,
+  SPLINE 접촉부(접선) contact·接触·Kontakt beenden, 중국어 3점 3分·두께 粗细·타원 사이각(I) 角度·구름형 리비전 云端·도넛 甜甜圈·트레이스 폭 描边, 영어 고도 Altitude·나선 Spiral, 일본어 주(M) 主軸 등).
+  (나) 네 언어 모두 한국어로 보이던 58 열쇠(TRIM·EXTEND 현재 설정 줄 12, PLINE 호 반지름·현 길이, SPLINE 접촉부 조각·다음 점 통째·현재 설정, DIVIDE 정렬 물음·세그먼트·결과, BOUNDARY 섬 검출,
+  REVCLOUD 첫 프롬프트·현재 설정·방향 반전, WIPEOUT 폴리선 지우기, SKETCH 현재 설정·기록 결과, HELIX 기준·상단 반지름, 3DFACE 넷째 점 뒤 글)와 새 열쇠가 덮어 쓰이지 않게 된 틀 9를 지움(8850 → 8899).
+  원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 298차 절
+- [ ] 298차에 보고 두 것 — (1) 한도 밖 오역(독일어 — 출발점 15 + 묶음 15로 한도가 참, 중국어 30으로 참): 독일어 스냅 모드·스냅 유형·스냅 켜기 (F9)·<스냅 {0}>·스냅 해상도는 Snap(→ 「스냅 X 간격」 Fang),
+  「결합할 수 있는 객체가 없습니다.」 kombiniert(→ verbunden), 경계 Rand 나머지(경계 제거·그리기 경계·경계 뒤·경계 앞·새 경계의 시작점·경계의 폭과 높이), PEDIT 결합 유형 통째 넷 Dehnen(연장(E) 조각은 이제 Verlängern — 기록 줄만 Dehnen),
+  구름형 리비전 Cloud-Revision·「…완료했습니다」(→ Revisionswolke), 첫 번째 구석점 지정 Erste Ecke festlegen Punkt(깨짐), 기준 중심점 Referenzmittelpunkt(→ 기준 반지름 Basis), 이등분 Bisektion·이등분(B) Teilung(→ 프롬프트 Halbierung),
+  원에 외접 Umkreist, 매듭 [현(C)…] Akkord(→ 「현」 Sehne), 증분 Inkrementell(→ 「증분(I)」 Inkrement), 도넛의 중심 <Ende>, PDMODE 안내(「PDMODE를 SETVAR로」 — 뜻이 거꾸로), 296·294차 나머지(Rückseite·MKLTYPE·skalieren·Echte Farbe 등);
+  중국어 호의 사이각 지정 弧角, 삽입할 블록 模块(→ 块), 이등분 二分法(→ 二等分), 회전 수 줄 扭转次数, 매듭 [C 弦(C), 첫 번째 구석점 지정 角点点, PDMODE 안내(뜻이 거꾸로); 영어 광선 Rays.
+  (2) 공유 열쇠라 하지 않음: 「사이각」(타원 사이각(I) included angle ↔ ARRAY 원형 사이각(A) 항목 사이 각도 — 286차 시험이 가름; 중국어 키워드 이름 角度는 그대로), 「영역」(RECTANG 영역(A) 넓이 ↔ REGION 객체),
+  「치수」(RECTANG 치수(D) 크기 ↔ 치수 객체), 「회전」·「일반」·「수정」·「켜기」·「끝」.
+  (3) 코드 변경이 드는 것: RECTANG 「현재 직사각형 모드: {0}」(모따기·고도·모깎기·두께·폭 조각을 빈칸 둘로 이어 틀이 통째로 잡음 — 조각 열쇠는 있으나 쓰이지 않고 조합이 서른하나), 297차 (2)의 「수직」·두 정렬선 툴팁 등.
+  (4) 보지 않은 것: 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄·ARC 리본 순서 글(「호의 시작점 또는 [중심(C)] 지정: C」 — 292차 꼴), 등각원(viewtools-iso — 296차 묶음). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다

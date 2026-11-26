@@ -3,6 +3,56 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(298차): 297차가 남긴 오역·빠진 번역과 그리기 명령 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 297차 「보고 두 것」 (1) 독일어 한도 밖 오역(끊기·자르기 결과, TRIM 연장 모드, 「모드」 하이픈, JOIN 결과, 스냅 나머지, 경계), (3) TRIM·EXTEND 현재 설정 줄(열쇠 12개), (4) 일본어 「주(M)」 主軸이고,
+그 뒤 그리기 명령 묶음 — LINE·PLINE·CIRCLE·ARC·RECTANG·POLYGON·ELLIPSE·SPLINE·POINT·XLINE·RAY·DONUT(`draw.ts`), DIVIDE·MEASURE·BOUNDARY·REVCLOUD·WIPEOUT(`modify2.ts`), SKETCH(`sketch.ts`), HELIX(`helix.ts`),
+3DPOLY·3DFACE·TRACE(`draw3d.ts`) — 의 보이는 글을 네 사전과 견줬습니다. 도우미가 붙이는 「:」·「 <값>:」·예/아니오 꼬리와 틀(`${…}`)을 펴서 명령행 조각·기록 줄·결과 줄로 넣어 봤습니다. 277~297차가 이미 대조한 열쇠는 건너뛰었습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 16·일본어 8·중국어 30·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 독일어 출발점: TRIM·BREAK·JOIN 결과, TRIM 연장 모드, 키워드 이름, 제도 설정 | 끊을 수 없음 geteilt → unterbrochen, 자를 수 없음·자를 객체 없음 geschnitten·Zuschneiden → gestutzt·Stutzen, 연장(E)·연장 안 함(N)·<연장> Erweitern·<Dehnen> → Verlängern, 암시적 모서리 연장 모드 Randerweiterungsmodus aktivieren → Kantenverlängerungsmodus eingeben, 모드 -Modus → Modus, JOIN 결과 zusammengefasst → verbunden, 스냅 Y 간격 Y-Abstand einrasten → Fang-Y-Abstand, 증분 각도 Inkrementell Winkel → Inkrementwinkel, 경계 세트 Randsatz → Umgrenzungssatz | 「끊기」 Unterbrechen, 「자르기」 Stutzen, 「연장」 Verlängern·「모서리」 Kante, 「모드(O)」 Modus, 「결합」 Verbinden, 「스냅 X 간격」 Fang-X-Abstand, 「증분 각도는 …」 Inkrementwinkel, 「경계 세트(B)」 |
+| 독일어 묶음 | 반폭 Halbe Breite Erhalten Sie(깨짐) → Halbe Breite, 원 지름 첫 끝점 …Bezeichnung(깨짐), 차수 Reihenfolge(차례) → Grad, SPLINE 접촉부 Startkontakt·Kontakt beenden(접촉 끝내기) → Starttangente·Endtangente, 등분할·길이 분할 오류 begradigt(곧게)·verlängert(늘이기) → geteilt, 트레이스 폭 Linienstärke(선가중치) → Spurbreite, 구름 고치기 fixiert·behoben → geändert, 블록 -Block → Block, 나선 Spirale → Helix | 「반폭(H)」·「차수(D)」, 「원 지름의 두 번째 끝점 지정:」, 「접선」 Tangente, 「등분할」·「길이 분할」, 「트레이스 폭 지정 <{0}>:」, 「구름형 리비전을 고칠 수 없습니다.」, 「블록(B)」, 「나선 높이 지정 …」 Helixhöhe |
+| 영어 | 반폭 Half width Receive → Half-width, 차수 Order → Degree, 고도·고도={0} Altitude → Elevation, SPLINE 접촉부 contact → tangency, 비틀기(W) Warp → Twist, 나선 Spiral → Helix, 기준 중심점 reference → base, 구름형 리비전 Cloud revision·Fixed → Revision cloud·Modified, 도넛 중심 Specifying … <End> → Specify … <Exit>, 영역 치수 계산 기준 region → area | 「반폭(H)」·「차수(D)」, RECTANG 「…고도(E)…」 Elevation, 「접선」 Tangent, 「비틀기」 Twist, 「나선 높이 지정」 helix, 「기준 반지름 지정」 base, 「구름형 리비전을 만들 수 없습니다.」, 「] <종료>:」, 앞 조각 「영역 치수 계산 기준 [」 area |
+| 일본어 | 차수 差分(차이) → 次数, 비틀기 回転(회전) → ねじれ, SPLINE 접촉부 開始接点·終点接触部 → 始点接線·終点接線, GRID 주(M)·통째 主軸(M)(주축) → 主(M) | 「차수(D)」, 「비틀기(W)」, 「접선」 接線, 「주」 主·「주 격자선」 主グリッド線 |
+| 중국어 | 3점·2점 3分·2分 → 3 个点·2 个点, 원 지름 첫 끝점 「编号：」(깨짐), 타원 사이각(I)·끝 프롬프트 둘 角度 → 夹角, 사이각 지정 角度 → 夹角, 차수 排序·角度(D)·度(D)·顺序 → 阶数, 두께 粗细 → 厚度, 직사각형 모깎기 倒角(모따기) → 圆角, 다음 점 입력 点数 → 点, 등분할·길이 분할 오류 等边变换·拉长 → 等分·按长度分割, 구름형 리비전 결과 다섯 云端(클라우드)·修复·固定 → 云状修订·修改, 비틀기 变形 → 扭转, 트레이스 폭 描边 → 轨迹, SPLINE 접촉부 接触 → 切线, 도넛 甜甜圈 → 圆环 | 「3점(3P)」, 「사이각 지정(방향 전환은 Ctrl 키):」 夹角, 「스플라인 차수 입력」 阶数, RECTANG 「厚度(T)」, 「모깎기」 圆角, 「등분할」·「길이 분할」, 「구름형 리비전」 云状修订, 나선 프롬프트 扭转, 「트레이스 폭 지정」 轨迹宽度, 「접선」 切线, 「도넛의 내부 지름 지정」 圆环 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 58):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| TRIM·EXTEND 현재 설정 줄(투영 셋 × 모서리 둘 × 모드 둘 — 297차 보고 (3)) | 12 | Current settings: Projection = UCS, Edge = Extend, Mode = Standard | 옛 틀 + 「없음(N)」·「뷰(V)」·「연장(E)」·「빠른 작업(Q)」·「표준(S)」에서 고를 글자를 뗀 낱말 |
+| PLINE 호 반지름(R)·호 길이(L) — 기본값 없는 「…:」 | 2 | Specify the radius of the arc: | 본문 번역 + 콜론 |
+| SPLINE 접촉부 옵션 조각 둘과 다음 점 통째 다섯, 맞춤 현재 설정 셋 | 10 | Enter the next point or [End tangency (T)/Tolerance (L)/Undo (U)/Close (C)]: | 앞 글 「다음 점 입력 또는 [」 + 옵션 조각, 옛 틀 + 매듭 이름 |
+| DIVIDE·MEASURE 정렬 물음(앞 글·통째)·세그먼트 넷·결과 줄 둘(점·블록) | 8 | Placed {0} points. | 물음 글 + 예·아니오 조각, 본문 + 콜론 |
+| BOUNDARY 섬 검출 = 예·아니오 | 2 | Island detection = Yes | 옛 틀 + 「예」·「아니오」 |
+| REVCLOUD 첫 프롬프트 셋(틀이 「첫 번째 구석점 지정」을 잡음)·현재 설정 여섯·방향 반전(앞 글·통째) | 11 | Minimum arc length: {0} Maximum arc length: {1} Style: Calligraphy Type: Polygon | 옛 틀 + 옵션 조각 낱말 |
+| WIPEOUT 폴리선 지우기(앞 글·통째) | 2 | Delete the polyline? [Yes (Y)/No (N)] <{0}>: | 물음 글 + 예·아니오 조각 |
+| SKETCH 현재 설정 셋·기록 결과 셋 | 6 | {0} splines were recorded. | 옛 틀 + 유형 이름(「증분(I)」·「공차(L)」 낱말) |
+| HELIX 기준·상단 반지름(앞 글·통째 — 틀이 첫 글을 잡음), 3DFACE 넷째 점 뒤 글 | 5 | Specify base radius or [Diameter (D)] <{0}>: | 본문 번역 + 「지름(D)」, 통째 열쇠의 꼬리 |
+
+새 열쇠가 덮어 쓰이지 않게 된 틀 9(TRIM 현재 설정 줄, SPLINE 맞춤 설정 줄, 「{0} {1}개를 놓았습니다.」, 「섬 검출 = {0}」, REVCLOUD 첫 프롬프트·현재 설정, SKETCH 현재 설정·기록 결과, HELIX 「{0} 또는 [지름(D)] <{1}>:」)은
+지웠습니다 — 소스에서 그 꼴을 내는 자리를 새 열쇠가 모두 덮습니다. 열쇠 8850 → 8899.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 84곳과 새 열쇠 58씩, 지운 틀 9. 영어·일본어·중국어·독일어 화면의 SPLINE·DIVIDE·REVCLOUD·WIPEOUT·HELIX·3DFACE 명령행과 기록 줄,
+  TRIM·SPLINE·REVCLOUD·SKETCH 현재 설정 줄, DIVIDE·BOUNDARY·SKETCH 결과 줄이 한국어 대신 그 언어로, 그리기 명령의 옵션 이름·결과 글이 엉뚱한 낱말 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 영어 「고도」(특성 팔레트·LIST·조회 — Elevation), 중국어 「두께」(특성·선택 필터 — 厚度)·「3점」·「2점」(리본·구속 키워드), 독일어 「블록」(이름 표 종류·키워드)·「모드」(키워드·ATTDEF 무리 이름)·
+  「연장(E)」·「] <연장>:」(TRIM EDGEMODE·PEDIT 결합 유형), 「나선」(리본·LIST 객체 이름). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「298차에 보고 두 것」): 독일어·중국어 한도 밖 오역, 공유 열쇠 「사이각」·「영역」·「치수」, RECTANG 현재 직사각형 모드 줄(코드 변경) 등.
+
+### 확인
+- `tests/i18n-draw298.test.ts`(새 시험 3건 — 프롬프트·설정 줄 꼴은 소스 글에서 확인): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 28 프롬프트의 입력 줄, 기록 줄(친 입력 붙은 꼴 포함)·현재 설정·결과 줄 33에
+  네 언어 모두 한글 없음, 고친 낱말 = 같은 사전 근거, 새 열쇠 = 조각·이름 번역에서 만든 꼴, 지운 틀 없음. `tests/i18n-defaults118.test.ts`의 일본어 주(M) 기대를 主(M)으로 맞춤.
+- 고치기 전 17건 가운데 4건 실패(한글 남은 입력 줄 52·기록과 설정 줄 228, 독일어 geteilt, 118 主軸(M)), 고친 뒤 `tests/i18n-draw298.test.ts`·`tests/i18n-edit297.test.ts`·`tests/i18n-defaults118.test.ts` 3파일 17건 통과.
+  `npm run check:i18n` 통과(8899 항목). 사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어 규칙)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험 없음. 바꾼 열쇠를 보는 시험(118 주(M) — 함께 고침, 297 연장·모드 — 다른 언어 값만, i18n.test 블록 금지어, 294 경계 세트(B), prompts 도넛 지름)은 기대 그대로 맞습니다.
+  tools/에는 이 묶음 글 없음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(297차): 296차가 한도 밖으로 남긴 오역과 수정(편집) 명령 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
