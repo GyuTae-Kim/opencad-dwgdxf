@@ -324,7 +324,7 @@ export class App {
    */
   viewOnly = false;
   /**
-   * 지금 찍는 오류 줄을 부른 쪽이 알림(토스트·시작 화면 안내 상자)으로 따로 보인다(reportOpenError). 휴대폰 보기 모드는 명령 밖 오류 줄을
+   * 지금 찍는 오류 줄을 부른 쪽이 알림(토스트·시작 화면 안내 상자)으로 따로 보인다(reportOpenError·reportFetchError). 휴대폰 보기 모드는 명령 밖 오류 줄을
    * 오류 알림으로 보이는데(270차 — 명령행이 숨어 있다, ui/mobileview.ts) 이 줄은 또 띄우지 않는다
    */
   errorNoticed = false;
@@ -1333,6 +1333,21 @@ export class App {
     this.cmd.print(info.hint);
     if (!this.active && this.ui.showOpenError) this.ui.showOpenError(name, info);
     else toast(text, 'error', 9000);
+  }
+
+  /**
+   * 도면 파일을 받지 못했을 때(예제 도면·주소 ?open= — Shell.openSample·openUrl): 오류 알림과 같은 글을 명령행 기록에도 남긴다(281차 — 전에는 알림뿐이라
+   * 280차 수 한도에 밀리거나 시간이 지나 사라지면 무슨 일이었는지 남지 않았다). 열기 실패처럼 그 줄은 보기 모드의 명령 밖 오류 알림(270차)으로 또 띄우지 않는다.
+   * 할 일 안내가 없는 글이라 시작 화면 안내 상자(showOpenError)는 쓰지 않는다
+   */
+  reportFetchError(text: string, ms?: number): void {
+    this.errorNoticed = true;
+    try {
+      this.cmd.print(text, 'err');
+    } finally {
+      this.errorNoticed = false;
+    }
+    toast(text, 'error', ms);
   }
 
   /** 워커가 읽었거나 받아 둔 문서를 탭으로 연다 */
