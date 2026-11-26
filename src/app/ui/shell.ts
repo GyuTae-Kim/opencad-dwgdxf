@@ -17,7 +17,7 @@ import { loadLispFile } from '../lisp';
 import { isoState, setIso } from '../viewtools-iso';
 import { maximized, maximizedLabel } from '../viewtools-vpmax';
 import { pickColor } from './colorpick';
-import { type MenuItem, dialog, formatBytes, h, iconSpan, showMenu, tabKeyTarget, toast } from './dom';
+import { type MenuItem, dialog, focusables, formatBytes, h, iconSpan, showMenu, tabKeyTarget, toast } from './dom';
 import { icon } from './icons';
 import { MobileView, isCoarse, readMobileMode, startInViewMode } from './mobileview';
 import { RECENT_MAX_SIZE, RecentStore, recentTimeLabel } from '../recent';
@@ -1207,6 +1207,11 @@ export class Shell implements UiHooks {
   }
 
   private buildRibbon(): void {
+    // 펼친 접힌 패널 팝업은 연 단추가 새로 바뀌므로 닫는다(282차 — 전에는 팝업과 바깥 누르기 지켜보기가 남았다). 초점이 그 팝업 안이었으면
+    // 다시 그린 뒤 같은 패널의 새 접힌 단추로, 그 패널이 더는 접히지 않으면(창이 넓어짐) 고른 리본 탭으로
+    const open = this.foldedPop;
+    const back = open?.pop.contains(document.activeElement) ? open.panel : null;
+    this.closeFoldedPop(false);
     // 탭을 다시 만들어도 키보드 초점은 같은 자리의 탭에 남긴다
     const focusedTab = [...this.ribbonTabs.children].indexOf(document.activeElement as Element);
     this.ribbonTabs.innerHTML = '';
@@ -1246,11 +1251,12 @@ export class Shell implements UiHooks {
       return el;
     });
     // 자리가 모자라면 오른쪽 패널부터 단추 하나로 접는다(겹침 리본은 줄을 바꿔 다 보인다)
+    let folds: HTMLDivElement[] = [];
     if (!this.overlayMode && this.ribbonOpen() && this.ribbon.scrollWidth > this.ribbon.clientWidth + 1) {
       const cs = getComputedStyle(this.ribbon);
       const avail = this.ribbon.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
       const full = els.map((e) => e.getBoundingClientRect().width);
-      const folds = tab.panels.map((p) => this.foldedPanel(p));
+      folds = tab.panels.map((p) => this.foldedPanel(p));
       for (const f of folds) this.ribbon.append(f);
       const folded = folds.map((f) => f.getBoundingClientRect().width);
       const k = foldCount(full, folded, avail);
@@ -1273,6 +1279,10 @@ export class Shell implements UiHooks {
         }
       });
     }
+    if (back) {
+      const f = folds[tab.panels.indexOf(back)];
+      ((f?.isConnected ? f.querySelector<HTMLElement>('button.folded') : null) ?? (this.ribbonTabs.children[this.activeTab] as HTMLElement | undefined))?.focus({ preventScroll: true });
+    }
     this.refreshRibbonState();
   }
 
@@ -1289,12 +1299,42 @@ export class Shell implements UiHooks {
     return h('div', { class: 'rpanel' }, this.panelBody(p), h('div', { class: 'rpanel-title' }, p.title));
   }
 
-  /** 접힌 패널: 누르면 패널 내용을 아래로 펼친다 */
+  /** 펼친 접힌 패널 팝업(282차): 연 단추·그 패널·바깥 누르기 지켜보기. 닫기는 closeFoldedPop 하나로 모은다 */
+  private foldedPop: { pop: HTMLElement; btn: HTMLButtonElement; panel: Panel; off: (ev: Event) => void } | null = null;
+
+  /**
+   * 접힌 패널 팝업 닫기 — 닫는 길(Esc·팝업 안 리본 단추·연 단추 다시 누르기·바깥 누르기·다른 접힌 패널 열기·리본 다시 그리기)이 모두 여기로 온다(282차):
+   * 팝업을 지우고 바깥 누르기 지켜보기를 풀고 연 단추를 aria-expanded="false"로 둔다. back이면 초점이 팝업 안이었을 때 연 단추로 돌려준다 — 키보드로 열었으면 늘,
+   * 손가락·마우스로 열어도 열 때 초점을 팝업 안으로 옮겼으므로(255차 시트·262차 메뉴 꼴, 돌려주지 않으면 팝업과 함께 본문으로 빠진다).
+   * 바깥 누르기·다른 접힌 패널 열기는 누른 곳이 초점을 받으므로 돌려주지 않는다(262차 메뉴 꼴)
+   */
+  private closeFoldedPop(back: boolean): void {
+    const f = this.foldedPop;
+    if (!f) return;
+    this.foldedPop = null;
+    const inside = f.pop.contains(document.activeElement);
+    window.removeEventListener('pointerdown', f.off, true);
+    window.removeEventListener('click', f.off, true);
+    f.pop.remove();
+    f.btn.setAttribute('aria-expanded', 'false');
+    if (back && inside && f.btn.isConnected) f.btn.focus({ preventScroll: true });
+  }
+
+  /**
+   * 접힌 패널: 누르면 패널 내용을 아래 팝업(role=dialog — 단추·고르기 상자가 섞인 패널이라 메뉴가 아님)으로 펼치고, 열린 채 다시 누르면 닫는다
+   * (282차 — 263차 보고 (1), W3C APG 공개 단추 꼴: aria-haspopup="dialog"·aria-expanded. 전에는 "true"(= 메뉴)에 열림 상태가 없고, 다시 누르면 다시 열었다).
+   * 열면 초점을 팝업의 첫 켜진 컨트롤로(켜진 것이 없으면 팝업 자체 — 263차 메뉴 꼴) 옮긴다 — 손가락·마우스로 열어도(262차 메뉴·255차 시트 꼴, 보이는 표시는 :focus-visible 규칙대로).
+   * 팝업 안 Esc는 닫고 연 단추로(앱 취소로 넘기지 않음 — 255차 시트 꼴). 리본을 다시 그리면 buildRibbon이 닫는다
+   */
   private foldedPanel(p: Panel): HTMLDivElement {
     const ic = p.large?.[0]?.icon ?? p.cols?.[0]?.[0]?.icon ?? 'menu';
-    const btn = h('button', { class: 'rbtn-lg folded', 'data-i18n-ui-copy': '', title: `${p.title} 패널 펼치기`, 'aria-haspopup': 'true' }, iconSpan(ic), h('span', {}, `${p.title} ▾`));
+    const btn = h('button', { class: 'rbtn-lg folded', 'data-i18n-ui-copy': '', title: `${p.title} 패널 펼치기`, 'aria-haspopup': 'dialog', 'aria-expanded': 'false' }, iconSpan(ic), h('span', {}, `${p.title} ▾`));
     btn.addEventListener('click', () => {
-      document.querySelector('.ribbon-pop')?.remove();
+      if (this.foldedPop?.btn === btn) {
+        this.closeFoldedPop(true);
+        return;
+      }
+      this.closeFoldedPop(false);
       const pop = h('div', { class: 'ribbon-pop', role: 'dialog', 'aria-label': p.title }, this.panelBody(p), h('div', { class: 'rpanel-title' }, p.title));
       document.body.append(pop);
       const r = btn.getBoundingClientRect();
@@ -1302,18 +1342,37 @@ export class Shell implements UiHooks {
       pop.style.left = `${Math.max(4, Math.min(r.left, window.innerWidth - pr.width - 4))}px`;
       pop.style.top = `${r.bottom + 2}px`;
       this.refreshRibbonState();
+      // 바깥 누르기는 닫는다. 팝업 안은 닫지 않고, 안 리본 단추만 그 단추의 click이 명령을 돌린 뒤 닫는다 — 전에는 누르기(pointerdown)에서 지울 차례를 잡아
+      // 손을 뗄 때 그 단추가 문서에 없었다(click은 누른 곳·뗀 곳의 공통 조상으로 가 단추에 닿지 않을 수 있음). 연 단추는 제 click이 닫는다(토글).
+      // 연 click은 창 capture 단계를 이미 지났으므로 곧바로 지켜본다
       const off = (ev: Event) => {
         const t = ev.target as Node;
-        if (pop.contains(t) && !(t as HTMLElement).closest?.('button.rbtn-lg, button.rbtn-sm')) return;
         if (btn.contains(t)) return;
-        setTimeout(() => pop.remove(), 0);
-        window.removeEventListener('pointerdown', off, true);
-        window.removeEventListener('click', off, true);
+        if (!pop.contains(t)) {
+          this.closeFoldedPop(false);
+          return;
+        }
+        if (ev.type === 'click' && (t as HTMLElement).closest?.('button.rbtn-lg, button.rbtn-sm'))
+          setTimeout(() => {
+            if (this.foldedPop?.pop === pop) this.closeFoldedPop(true);
+          }, 0);
       };
-      setTimeout(() => {
-        window.addEventListener('pointerdown', off, true);
-        window.addEventListener('click', off, true);
+      pop.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Escape' || ev.defaultPrevented) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.closeFoldedPop(true);
       });
+      window.addEventListener('pointerdown', off, true);
+      window.addEventListener('click', off, true);
+      this.foldedPop = { pop, btn, panel: p, off };
+      btn.setAttribute('aria-expanded', 'true');
+      const first = focusables(pop)[0];
+      if (first) first.focus({ preventScroll: true });
+      else {
+        pop.tabIndex = -1;
+        pop.focus({ preventScroll: true });
+      }
     });
     return h('div', { class: 'rpanel' }, h('div', { class: 'rpanel-body' }, btn), h('div', { class: 'rpanel-title' }, p.title));
   }
