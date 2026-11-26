@@ -3,6 +3,52 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(299차): 298차가 남긴 오역과 조회·측정 명령 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 298차 「보고 두 것」 (1)의 한도 밖 오역(독일어 스냅 Snap 나머지, 해치 경계 Rand·Grenze, PEDIT 결합 유형 통째 Dehnen, 구름형 리비전 Cloud-Revision, PDMODE 안내,
+중국어 弧角·模块·二分法·扭转次数·「C 弦(C)」·角点点·PDMODE 안내, 영어 광선 Rays)이고, 그 뒤 조회·측정 명령 묶음 — DIST·MEASUREGEOM·MASSPROP·AREA·MEASUREANGLE·MEASURERADIUS·ID·LIST(`commands.ts`),
+휴대폰 보기 결과 카드(`measure-result.ts`), 다중 점(`distmulti.ts`), TIME(`propcmds.ts`), DBLIST(`editcmds2-query.ts`), CAL·QUICKCALC(`util2-misc.ts`)와 계산식 오류(`edit/util/calc.ts`) — 의 보이는 글을 네 사전과 견줬습니다.
+도우미가 붙이는 「 <값>:」·「:」 꼬리와 틀(`${…}`)을 펴서 명령행 조각·기록 줄·결과 줄로 넣어 봤습니다. 277~298차가 이미 대조한 열쇠는 건너뛰었습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 5·일본어 9·중국어 20·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 독일어 출발점: 제도 설정 스냅, JOIN 결과, 해치·IMAGECLIP 경계, PEDIT 결합 유형, REVCLOUD, POINT 안내 | 스냅 모드·유형·켜기 (F9)·<스냅 {0}>·해상도 Snap → Fang, 결합할 객체 없음 kombiniert → verbunden, 경계 뒤·앞·제거·그리기 경계·그리기 경계(W)(Zeichnungsgrenzen — 도면 한계 뜻)·새 경계의 시작점·경계의 폭과 높이·그리기 순서 통째·-HATCH 첫 줄 통째 Rand·Grenze → Begrenzung, 결합 유형 = 연장·결합 유형 입력 통째 셋 Dehnen → Verlängern, 구름형 리비전·완료 Cloud-Revision → Revisionswolke, PDMODE 안내 「PDMODE auf SETVAR」(뜻 거꾸로) → mit SETVAR, 첫 번째 구석점 지정(깨짐) → Ersten Eckpunkt angeben | 「스냅 X 간격」 Fang-X-Abstand, 「결합」 Verbinden, 같은 프롬프트 조각 「경계 뒤(E)」·「경계 제거(B)」 Begrenzung, 「연장(E)」 Verlängern (E), 「구름형 리비전을 고쳤습니다.」 Revisionswolke, 「첫 번째 구석점 지정:」 |
+| 독일어 묶음 | 거듭제곱 Leistung → Potenz, 나누는 값 Wert teilen → Divisor, 면적 {0}·면적(AR) Bereich → Fläche, 다음 점 지정 <합계> folgende Punkte → Nächsten Punkt angeben, TIME 작성 Erstellt von → Erstellt, MEASUREGEOM 첫 줄 Ende(X) → Beenden(X) | 「분모는 2의 거듭제곱」 Potenz, 「0으로 나누기」 Division, 「면적」 Fläche, 「다음 점 지정 또는 [」, 「만든 날짜: {0}」 Erstellungsdatum, 「종료(X)」 Beenden (X) |
+| 영어 | 광선 Rays → Ray, MEASUREGEOM 첫 줄 First Specify first point(겹침) → Specify first point, TIME 작성 Created by → Created, 삼각 함수 안내 are converted to degree units → use degrees, 나누는 값 Dividing value → Divisor | 「구성선」 Construction line, 「첫 번째 점 지정:」, 「만든 날짜: {0}」 Date created, 「0으로 나누기」 division |
+| 일본어 | 0으로 나눌 수 없음 分割 → で割る, >> 점 지정·{0}에는 점이 필요 ドット → 点, cvunit·getvar 꼴 フォント → 形式, 거듭제곱 繰り返し二乗 → 累乗, 보각 補償 → 補角, 각도의 첫·두 번째 끝점 エンドポイント·終点(「…を指定します。」) → 端点を指定: | 「(ゼロで割るなど)」, 「점 지정:」 点の指定:, 「원호 캐시 꼴」 形式, 「분모는 2의 거듭제곱」 累乗, 「보각」 補角, 「호의 끝점 지정:」 |
+| 중국어 출발점 | 호의 사이각 弧角 → 圆弧夹角, 삽입할 블록 模块 → 块, 이등분 二分法 → 二分, 회전 수 줄 扭转次数 → 扭转, 매듭 통째 「C 弦(C)」 → 弦线(C), 첫 번째 구석점 角点点 → 角点, PDMODE 안내(뜻 거꾸로) → 用 SETVAR 更改 PDMODE | 「사이각 지정」 夹角, 「블록」 块, 「이등분(B)」, 「비틀기」 扭转, 「현(C)」 弦线(C), 「첫 번째 구석점 지정:」 |
+| 중국어 묶음 | 각도 측정 角度测量单位 → 测量角度, 나누는 값 分割线 → 除数, >> 표현식 表达方式 → 表达式, 면적을 잴 수 없는 객체(깨짐) → 此对象无法测量面积, 다음 점 지정 <합계> 点数 → 点, 수 결과… Mut(깨짐), 변수: {0} 「变量“{0}”」 → 变量：{0}, 기록 지우기 清除录制 → 清除历史记录, TIME 작성 撰写人 → 创建时间, MEASUREGEOM·호 또는 원 선택 종료(X) 端点·终点 → 退出, 객체 {0}개 「对象 {0} {1}」 → {0} 个对象, 삼각 함수 안내 | 「반지름 측정」 测量半径, 「0으로 나누기」 除以零, 「식이 비어 있습니다.」 表达式, 「면적」 面积, 「다음 점 지정:」, 「기록」 历史记录, 「만든 날짜」 创建日期, 「종료(X)」 退出(X) |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 42):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| MEASUREGEOM 「다중 점(M)」, AREA 「면적 추가(A)」·「면적 빼기(S)」, 더하기·빼기 모드 앞 글 | 5 | (ADD mode) Specify first corner point or [ | 명령행은 앞 글·옵션·뒤 글 조각으로 찾는데 통째 열쇠만 있었음 — 통째 번역의 조각 |
+| DBLIST 빈 도면 줄, QuickCalc 「변수: 없음」 | 2 | 0 objects — Drawing is empty. | 틀 + 「— 도면이 비어 있습니다」·「없음」 |
+| CAL 오류 줄(`CAL: ${오류}`) | 25 | CAL: Unknown function "{0}" | 「CAL: 」 + 계산식 오류 글 번역 |
+| 앱 낱말을 끼운 계산식 오류(거듭제곱·나누는 값·점의 좌표·단위·…의 인수)와 그 CAL 줄 | 10 | Divisor requires a number, not a point. | 틀 「{0}에는 점이 아니라 수가 필요합니다.」 + 이름 번역 |
+
+지운 틀은 없습니다. 열쇠 8899 → 8941.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 64곳과 새 열쇠 42씩. 영어·일본어·중국어·독일어 화면의 MEASUREGEOM·AREA 명령행, CAL 오류 줄, QuickCalc 오류·변수 줄, DBLIST 빈 도면 줄이
+  한국어 대신 그 언어로, 조회·측정 결과와 독일어 스냅·해치 경계·PEDIT·구름형 리비전 글이 엉뚱한 낱말 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 독일어 「면적(AR)」(MEASUREGEOM 모든 갈래)·「스냅 모드」(상태 막대 툴팁 조각)·「그리기 경계」·「경계 제거」(-HATCH 바로 가기·휴대폰 단추), 영어 「광선」(리본·LIST 객체 이름),
+  중국어 「첫 번째 구석점 지정」·독일어 같은 열쇠(REVCLOUD 등). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「299차에 보고 두 것」): 독일어 한도 밖 오역, 일본어 외적(&) 外側(같은 사전에 근거 없음), LIST·DBLIST 객체 줄·TIME 날짜·CAL 스냅 고르기(코드 변경) 등.
+
+### 확인
+- `tests/i18n-inquiry299.test.ts`(새 시험 3건 — 프롬프트·결과 줄 꼴은 소스 글에서 확인): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 21 프롬프트의 입력 줄, 결과·안내 줄 89와 기록 줄 14에
+  네 언어 모두 한글 없음, 고친 낱말 = 같은 사전 근거, 새 열쇠 = 조각·틀·오류 글 번역에서 만든 꼴.
+- 고치기 전 9건 가운데 3건 실패(한글 남은 입력 줄 16·결과 줄 140, 독일어 Snap-Modus), 고친 뒤 `tests/i18n-inquiry299.test.ts`·`tests/i18n-hatch294.test.ts`·`tests/i18n-draw298.test.ts` 3파일 9건 통과.
+  `npm run check:i18n` 통과(8941 항목). 사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어 규칙)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험 없음. 바꾼 열쇠를 보는 시험(294 해치 경계 — 영어 값만, 298 구름형 리비전·첫 번째 구석점 — 영어·중국어 값만, 한국어 원문을 보는 join·measurecard·mobileview 등)은 기대 그대로 맞습니다.
+  tools/에는 이 묶음 글 없음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(298차): 297차가 남긴 오역·빠진 번역과 그리기 명령 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
