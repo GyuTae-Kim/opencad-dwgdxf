@@ -3,6 +3,51 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-26(278차): 사전에서 뜻이 틀린 핵심 CAD 용어 번역
+
+### 근거와 표
+277차 보고 (3)입니다. 이 앱 화면에 자주 보이는 용어 20개(걸침·올가미·윈도우·빠른 특성·직교·극좌표 추적·객체 스냅·재지정·그립·신축·대칭·축척·도면층·블록·치수·배치·뷰포트·
+특성 팔레트·명령행·바로 가기 메뉴)가 든 열쇠를 네 사전(`site/locales/*.json`, 8420 항목)에서 모아, 언어마다 가장 많이 쓰는 번역(다수)과 다른 번역(소수)을 셌습니다.
+작은 묶음은 모두 눈으로, 큰 묶음(축척 221·도면층 361·블록 387·치수 300·배치 152·뷰포트 145·명령행 46 열쇠)은 다수 번역 낱말이 없는 열쇠만 뽑아 봤습니다.
+낱말 뜻이 CAD 뜻과 다른 소수 번역만 그 사전의 다수 번역으로 고쳤고, 뜻이 맞는 다른 말투(동의어)는 그대로 두었습니다.
+「스냅 재지정」은 열쇠가 둘뿐이라 「재지정」 묶음으로 셌고, 「배치」는 레이아웃 뜻 열쇠만(반복·문자·지시선 배치 같은 놓기 뜻은 뺌), 「대칭」은 MIRROR 뜻과 대칭성 뜻을 나눠 셌습니다.
+
+| 용어 | 언어 | 다수(열쇠 수) | 고친 소수 | 동의어 — 둠 |
+| --- | --- | --- | --- | --- |
+| 걸침 | en | Crossing(5) | Overlap/Engagement·step·Hanging noose(교수형 올가미) | — |
+| 〃 | zh-CN | 重叠(4) | 悬挑(외팔 돌출) 3 | 跨 |
+| 〃 | de | Kreuzung(3) | Überstand(돌출)·Hängeschlinge·Schritt(걸음)·Spann 4 | Überlappung |
+| 빠른 특성 | en | Quick Properties(5) | Fast Characteristics·Quick attribute(속성) | — |
+| 〃 | zh-CN · de | 快速属性(6) · Schnelleigenschaften(5) | 快速特征(특징) · Schnelle Attribut…(속성) | Schnelle Eigenschaften |
+| 직교 | zh-CN | 正交(10) | 正交投影(정투영) 5 | — |
+| 극좌표 추적 | zh-CN | 极轴追踪(5) | 极坐标轨迹(궤적) 2·极坐标描边(테두리 그리기) 1 | 极轴跟踪·极坐标跟踪 |
+| 객체 스냅 | zh-CN · de | 对象捕捉(42) · Objektfang(41) | 추적 描边 · 「실행 중인 객체 스냅」 Snapshot des laufenden Objekts | Osnap, トレース |
+| 재지정 | en · zh-CN · de | Override(22) · 覆盖(19) · Überschreib-(23) | Reassignment 2 · 重新分配 2 · Neuzuweisung·neu zuweisen 2(모두 재할당) | ja 再指定·優先·オーバーライド, zh 替代, en relocation |
+| 그립 | zh-CN | 夹点(16) | 控制点 11(이 사전에서 스플라인 「조정점」의 번역 — 낱말이 겹침) | — |
+| 〃 | de | Griff(26) | Halt(멈춤) | — |
+| 신축 | en · ja · de | Stretch(14) · ストレッチ(10) · Streck-(14) | newly constructed · 新築(새로 지음)·「신축점」 伸縮の基点(기준점) 2 · neu erstellt | ja 伸縮 |
+| 대칭(MIRROR) | en | Mirror(5) | 리본 툴팁 「대칭 (MI)」 Symmetry | line of symmetry, ja 対称 |
+| 축척 | zh-CN | 比例·缩放(218) | 级别(등급)·音阶(음계) 2 | — |
+| 〃 | de | Maßstab·Skalier-(212) | Waage(저울) 4 | Linientypfaktor, Mustergröße |
+| 치수 | de | Bemaßung·Maß-(285) | Abmessung(크기) 13 | RECTANG 치수(D)·영역 치수 계산 2(크기 뜻이 맞음) |
+| 배치(레이아웃) | en · zh-CN · de | Layout · 布局 · Layout | placement 2 · 位置 · Position | — |
+| 뷰포트 | de | Ansichtsfenster(131) | Sichtfeld(카메라 시야) | Viewport 8, Ansichtsbereich, Kachelansicht |
+| 특성 팔레트 | de | Eigenschaftenpalette(2) | Attributpalette(속성) | zh “属性”选项板 |
+| 명령행 | de | Befehlszeile(43) | Befehlslinie(Linie = 선 객체) | Kommandozeile |
+| 윈도우·올가미·도면층·블록·바로 가기 메뉴, ja·en의 대부분 | 넷 | — | — | ja 窓·zh 窗·投げ縄, 제목 블록 标题栏·Schriftfeld |
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 위 표의 번역 74곳(영어 11·일본어 3·중국어 30·독일어 30). 한 번에 언어마다 30곳 이하라 중국어·독일어는 뜻이 가장 덜 어긋난 것부터 남겼습니다
+  (zh 「대칭 (MI)」 对称·「가운데 버튼으로 끌거나…」 居中按钮, de 「대칭 (MI)」 Symmetrie·「치수 {0} = {1}」 Abmessung — ROADMAP 「278차에 보고 두 것」).
+- 고치지 않은 것: 일본어 「걸침」은 다수 번역 吊り(매달림 4곳)가 틀려 보여(交差 3곳), 「대칭으로 플롯」은 코드가 거꾸로 플롯인데 네 언어 모두 대칭으로 옮겨 — 다수가 틀린 것이라 보고만.
+
+### 확인
+- `tests/i18n-terms278.test.ts`(새 시험): 용어가 든 열쇠 전체에서 옛 오역 낱말 23규칙(en noose·characteristic·reassign·construct, ja 新築·基点, zh 悬挑·投影·控制点·音阶 등,
+  de Waage·Attribut·Befehlslinie·Sichtfeld 등 — 치수 Abmessung은 크기 뜻 열쇠가 있어 고친 줄로만 봄)을 막고, 고친 줄 20개가 다수 번역 낱말을 쓰는지 봅니다. 고치기 전 2건 실패, 고친 뒤 2건 통과.
+  사전 규칙 시험 `tests/i18n.test.ts`(부정 낱말·고를 글자·괄호 짝·de 치수 Dimension 금지 등)와 277차 `tests/i18n-help277.test.ts`를 함께 돌려 전·뒤 모두 통과(3파일 11건). check:i18n 통과(카탈로그 8420 항목).
+- 바꾼 번역을 기대하는 다른 시험·도구: `tests/i18n-help277.test.ts`가 다른 열쇠의 de에 Neuzuweisung이 없기를 볼 뿐(그대로 맞음). tools/에는 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-26(277차): 도움말(F1) 조작 표의 두 번 클릭 줄과 뜻에서 벗어난 번역
 
 ### 근거와 표
