@@ -48,7 +48,7 @@ import {
 } from './layerstate-core';
 import { type ListItem, PickList, ensureLtStyle, guardKeys, wideDialog } from './layertools-ui';
 import { LINEWEIGHTS } from './propedit';
-import { ask, form, h } from './ui/dom';
+import { ask, form, h, refocusStuck } from './ui/dom';
 import { pickColor } from './ui/colorpick';
 
 const STYLE = `
@@ -460,6 +460,7 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
   addSide('rename', '이름 바꾸기', renameSel);
   addSide('delete', '삭제(D)', async () => {
     if (!selected) return;
+    const held = document.activeElement;
     const a = await ask('도면층 상태', `도면층 상태 "${ft(selected)}"을(를) 삭제하시겠습니까?`, [
       { label: '예(Y)', value: 'yes', primary: true },
       { label: '아니오(N)', value: 'no' },
@@ -468,6 +469,8 @@ export async function openLayerStateManager(app: App, ctx: CommandContext): Prom
     deleteLayerState(app, selected, group);
     selected = null;
     refresh();
+    // 고른 상태가 없어져 「삭제」가 막힌다 — 묻는 상자가 닫히며 돌려주려던 이 단추가 초점을 받지 못해 문서로 빠졌다. 늘 켜진 「새로 만들기」로(289차)
+    refocusStuck(held, [sideButtons.delete], [sideButtons.new]);
   });
   side.append(h('div', { style: 'height:6px' }));
   addSide('import', '가져오기(M)...', async () => {
