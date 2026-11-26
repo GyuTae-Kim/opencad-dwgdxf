@@ -109,13 +109,14 @@ describe('SCALETEXT·치수 스타일·GRID·주 뷰포트·가리기 프레임 
   });
 
   it('주(major·main)를 주석(annotation)으로 옮기지 않는다', () => {
-    expect(LANGS.map((l) => translate('주(M)', l))).toEqual(['Major (M)', 'Haupt (M)', '主軸(M)', '主(M)']);
+    // 일본어 GRID 주(M)은 「주」 主·「주 격자선」 主グリッド線의 主(298차 — 主軸 주축이 아니다)
+    expect(LANGS.map((l) => translate('주(M)', l))).toEqual(['Major (M)', 'Haupt (M)', '主(M)', '主(M)']);
     for (const k of ['주', '주 격자선 간격(격자선 수)', '주 격자선 사이의 격자선 수 지정 <{0}>:', '주 도면: {0}', '주 뷰포트 선택 <현재 뷰포트>:']) expect(translate(k, 'zh-CN')).not.toContain('注释');
     expect(translate('주 뷰포트 선택 <현재 뷰포트>:', 'zh-CN')).toContain('主视口');
     expect(translate('참고', 'de')).toBe('Hinweis');
     const grid = '격자 간격두기(X) 지정 또는 [켜기(ON)/끄기(OFF)/스냅(S)/주(M)/종횡비(A)] <{0}>:';
     expect(translate(grid, 'de')).toContain('Haupt (M)');
-    expect(translate(grid, 'ja')).toContain('主軸(M)');
+    expect(translate(grid, 'ja')).toContain('/主(M)/');
     expect(translate(grid, 'zh-CN')).toContain('捕捉(S)');
   });
 
