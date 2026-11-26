@@ -182,7 +182,8 @@ describe('소거·블록 대치·객체 격리 묶음의 번역(291차)', () => 
     // 290차 보고 (5) 둘레: LAYTHW auftauen, 리본 Einfrieren, COPYTOLAYER Beenden, 가져오기 importiert, SETBYLAYER·상태 복원 Eigenschaften, LAYWALK·LAYTRANS·색상표
     expect([dict.de['모든 도면층 동결 해제'], dict.de['모든 도면층의 동결을 풀었습니다.']]).toEqual(['Alle Layer auftauen', 'Alle Layer wurden aufgetaut.']);
     expect(dict.de['도면층 목록에서 켜기·동결·잠금·색을 바꿉니다 (LA)']).toContain('Einfrieren');
-    expect(dict.de['지정된 기준점 또는 [종료(X)] <종료>:']).toBe('Angegebener Referenzpunkt oder [Beenden (X)] <Beenden>:');
+    // 294차: 기준점은 같은 사전의 Basispunkt(「기준점(B)」 Basispunkt (B)) — Referenzpunkt가 아니다
+    expect(dict.de['지정된 기준점 또는 [종료(X)] <종료>:']).toBe('Angegebener Basispunkt oder [Beenden (X)] <Beenden>:');
     expect(dict.de['도면층 상태 {0}개를 가져왔습니다: {1}']).toBe('{0} Layerstatus importiert: {1}');
     for (const k of ['SETBYLAYER 특성', 'ByLayer로 바꿀 특성을 고릅니다(SETBYLAYERMODE).', '이 웹 버전은 뷰포트 재지정을 지원하지 않습니다. 이 옵션으로 복원하면 색상·선종류·선가중치·투명도·플롯 스타일은 건너뛰고 나머지 특성만 복원합니다.'])
       expect(dict.de[k], k).toContain('Eigenschaften');
