@@ -141,7 +141,7 @@ export function registerHatchEditCommands(app: App): void {
           ],
         },
         { key: 'scale', label: '축척', type: 'number', value: c.scale },
-        { key: 'angle', label: '각도(도)', type: 'number', value: +((c.angle * 180) / Math.PI).toFixed(6) },
+        { key: 'angle', label: '각도(도)', type: 'number', value: +((c.angle * 180) / Math.PI).toFixed(6), signed: true },
         { key: 'spacing', label: '간격(사용자 정의)', type: 'number', value: c.spacing },
         { key: 'double', label: '이중(사용자 정의, 90° 교차)', type: 'check', value: c.double },
         {

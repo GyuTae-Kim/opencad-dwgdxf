@@ -224,9 +224,10 @@ function blockDialog(app: App, s: BlockDialogState): Promise<{ action: DialogAct
   const listId = `mgr-blocknames-${Math.random().toString(36).slice(2, 8)}`;
   const dl = h('datalist', { id: listId }, ...names.map((n) => h('option', { value: n })));
   const name = textIn(s.name, '이름', listId);
-  const bx = numIn(s.base.x, '기준점 X');
-  const by = numIn(s.base.y, '기준점 Y');
-  const bz = numIn(s.base.z, '기준점 Z');
+  // 좌표는 음수도 받는다(288차 — 소수 자판을 두지 않음)
+  const bx = numIn(s.base.x, '기준점 X', true);
+  const by = numIn(s.base.y, '기준점 Y', true);
+  const bz = numIn(s.base.z, '기준점 Z', true);
   const baseScreen = checkIn(s.baseOnScreen, '기준점 화면상에 지정');
   const objScreen = checkIn(s.objsOnScreen, '객체 화면상에 지정');
   const modeSel = selectIn(

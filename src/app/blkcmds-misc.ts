@@ -228,7 +228,7 @@ function registerTinsert(app: App): void {
             { key: 'name', label: '이름', type: 'select', value: name, options: blocks.map((b) => ({ value: b.name, label: b.name })) },
             { key: 'autofit', label: '자동 맞춤', type: 'check', value: true },
             { key: 'scale', label: '축척(자동 맞춤이 아닐 때)', type: 'number', value: 1 },
-            { key: 'rot', label: '회전 각도(도)', type: 'number', value: 0 },
+            { key: 'rot', label: '회전 각도(도)', type: 'number', value: 0, signed: true },
             {
               key: 'align',
               label: '전체 셀 정렬',

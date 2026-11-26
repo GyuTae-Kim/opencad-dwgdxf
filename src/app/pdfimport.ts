@@ -55,7 +55,7 @@ export function registerPdfImportCommands(app: App): void {
       const v = await form('PDF 가져오기', [
         { key: 'page', label: `쪽(1~${pages})`, type: 'number', value: 1 },
         { key: 'scale', label: `축척(1 = 실제 크기, ${metric ? 'mm' : '인치'})`, type: 'number', value: 1 },
-        { key: 'rotation', label: '회전(도)', type: 'number', value: 0 },
+        { key: 'rotation', label: '회전(도)', type: 'number', value: 0, signed: true },
         { key: 'geometry', label: '벡터 형상', type: 'check', value: true },
         { key: 'fills', label: '솔리드 채우기', type: 'check', value: true },
         { key: 'text', label: '트루타입 문자', type: 'check', value: true },

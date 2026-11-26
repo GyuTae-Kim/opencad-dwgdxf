@@ -163,8 +163,9 @@ export function registerPlotStampCommand(app: App, reg: (c: Parameters<App['regi
               { value: 'V', label: '세로' },
             ],
           },
-          { key: 'offsetX', label: 'X 간격띄우기(mm)', type: 'number', value: cur.offsetX },
-          { key: 'offsetY', label: 'Y 간격띄우기(mm)', type: 'number', value: cur.offsetY },
+          // 간격띄우기는 음수(모서리 바깥쪽)도 받는다(288차 — 소수 자판을 두지 않음)
+          { key: 'offsetX', label: 'X 간격띄우기(mm)', type: 'number', value: cur.offsetX, signed: true },
+          { key: 'offsetY', label: 'Y 간격띄우기(mm)', type: 'number', value: cur.offsetY, signed: true },
           {
             key: 'relative',
             label: '간격띄우기 기준',

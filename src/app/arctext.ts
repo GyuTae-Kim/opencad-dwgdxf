@@ -56,8 +56,9 @@ function workshop(app: App, title: string, base: ArcTextEntity): Promise<ArcText
     const styleName = st.doc.textStyles.get(tableKey(base.style))?.name ?? base.style;
     if (!styles.some((s) => s.name === styleName)) styles.unshift({ ...styles[0]!, name: styleName });
     const fields = new Map<string, Field>();
-    const text = (key: string, value: string | number, numeric = false): HTMLInputElement => {
-      const el = h('input', { type: 'text', inputmode: numeric ? 'decimal' : undefined }) as HTMLInputElement;
+    /** numeric: 숫자 칸(소수 자판). signed: 음수도 받는 숫자 칸 — 소수 자판은 음수 기호를 약속하지 않아 두지 않는다(288차) */
+    const text = (key: string, value: string | number, numeric = false, signed = false): HTMLInputElement => {
+      const el = h('input', { type: 'text', inputmode: numeric && !signed ? 'decimal' : undefined }) as HTMLInputElement;
       el.value = String(value);
       fields.set(key, el);
       return el;
@@ -110,8 +111,8 @@ function workshop(app: App, title: string, base: ArcTextEntity): Promise<ArcText
       { class: 'form' },
       row('문자 높이', text('height', base.height, true)),
       row('폭 비율', text('widthFactor', base.widthFactor, true)),
-      row('문자 간격', text('charSpacing', base.charSpacing, true)),
-      row('호에서 간격띄우기', text('offset', base.offset, true)),
+      row('문자 간격', text('charSpacing', base.charSpacing, true, true)),
+      row('호에서 간격띄우기', text('offset', base.offset, true, true)),
       row('왼쪽에서 간격띄우기', text('leftOffset', base.leftOffset, true)),
       row('오른쪽에서 간격띄우기', text('rightOffset', base.rightOffset, true)),
     );

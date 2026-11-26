@@ -1611,9 +1611,10 @@ export function registerModifyCommands(app: App): void {
         [
           { key: 'rows', label: '행 수', type: 'number', value: 3 },
           { key: 'cols', label: '열 수', type: 'number', value: 4 },
-          { key: 'dy', label: '행 사이 간격', type: 'number', value: +(hgt * 1.5).toPrecision(6) },
-          { key: 'dx', label: '열 사이 간격', type: 'number', value: +(w * 1.5).toPrecision(6) },
-          { key: 'angle', label: '행 축 각도(도)', type: 'number', value: 0 },
+          // 간격(음수 = 아래·왼쪽으로)·각도는 음수도 받는다(288차 — 소수 자판을 두지 않음)
+          { key: 'dy', label: '행 사이 간격', type: 'number', value: +(hgt * 1.5).toPrecision(6), signed: true },
+          { key: 'dx', label: '열 사이 간격', type: 'number', value: +(w * 1.5).toPrecision(6), signed: true },
+          { key: 'angle', label: '행 축 각도(도)', type: 'number', value: 0, signed: true },
           { key: 'assoc', label: '연관', type: 'check', value: arrayAssociativity() },
         ],
         {
@@ -1659,7 +1660,7 @@ export function registerModifyCommands(app: App): void {
         '원형 배열',
         [
           { key: 'n', label: '항목 수', type: 'number', value: 6 },
-          { key: 'fill', label: '채울 각도(도, 음수는 시계 방향)', type: 'number', value: 360 },
+          { key: 'fill', label: '채울 각도(도, 음수는 시계 방향)', type: 'number', value: 360, signed: true },
           { key: 'rotate', label: '배열할 때 항목 회전', type: 'check', value: true },
           { key: 'assoc', label: '연관', type: 'check', value: arrayAssociativity() },
         ],
