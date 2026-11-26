@@ -535,11 +535,12 @@ export class MobileView {
     if (!files.length) return;
     const [refs, shx] = await Promise.all([import('../refs'), import('../shxfonts')]);
     const app = this.app;
-    // 고를 수 있는 형식(네 연결 함수가 받는 확장자 — SHX는 읽은 것)
+    // 고를 수 있는 형식(네 연결 함수가 받는 확장자). SHX는 확장자로 센다 — 16 MB 넘는 것은 readShx가 읽지 않고 빼 형식 없음으로 셌다(273차 — 이제 SHX 실패)
     const of = (re: RegExp) => files.filter((f) => re.test(f.name));
     const dwg = of(/\.(dwg|dxf)$/i);
     const raster = of(refs.IMAGE_EXT);
     const pdfs = of(/\.pdf$/i);
+    const shxPicked = of(/\.shx$/i);
     const shxFiles = await shx.readShx(files);
     const xr = await refs.linkXrefFiles(app, files);
     const img = await refs.linkImageFiles(app, files);
@@ -550,17 +551,28 @@ export class MobileView {
     for (const n of rasterBad) app.cmd.print(`${ft(n)}: 이미지를 연결하지 못했습니다.`, 'err');
     const pdfBad = pdfs.filter((f) => pdf.failed.includes(f.name.toLowerCase())).map((f) => f.name);
     if (pdfBad.length) app.cmd.print(`참고: ${pdfBad.slice(0, 4).map(ft).join(', ')}은(는) 읽을 수 없는 PDF입니다(암호가 걸렸거나 손상됨).`, 'err');
-    if (shxFiles.length && !fonts) app.cmd.print('SHX 글꼴로 읽을 수 있는 파일이 없습니다.', 'err');
+    if (shxPicked.length && !fonts) app.cmd.print('SHX 글꼴로 읽을 수 있는 파일이 없습니다.', 'err');
+    // 273차: 이 브라우저가 풀지 못하는 그림 형식(TIFF·JP2·ECW·MrSID — linkImageFiles가 풀어 보지 않고 unsupported에 넣은 것, 풀어 보다 실패한 rasterBad와 겹치지 않는다).
+    // 데스크톱 참조 관리자와 같은 참고 글을 같은 보통 줄로 적고, 보기 모드는 명령행이 숨으므로 경고 알림으로도 보인다(보통 줄은 알림이 되지 않아 겹치지 않는다).
+    // 잇기를 시도하지 않은 파일이라 열지 못한 수·찾는 이름에는 넣지 않는다
+    const fmtBad = img.unsupported.filter((n) => !refs.IMAGE_EXT.test(n));
+    const note = fmtBad.length ? `참고: ${fmtBad.slice(0, 4).map(ft).join(', ')}은(는) 이 브라우저가 읽을 수 없는 이미지 형식입니다(PNG·JPEG·GIF·BMP·WebP만).` : '';
     const n = xr.length + img.linked.length + pdf.linked.length + fonts;
-    const bad = dwg.length - xr.length + rasterBad.length + pdfBad.length + shxFiles.length - fonts;
+    const bad = dwg.length - xr.length + rasterBad.length + pdfBad.length + shxPicked.length - fonts;
     // 열린 도면들이 찾는 이름(외부 참조·이미지·PDF·SHX 글꼴 — 파일 이름 소문자)
     const want = refs.wantedRefKeys(app);
     for (const d of app.docs) for (const k of shx.usedShxFonts(d.doc)) want.add(k);
-    const named = [...dwg, ...raster, ...pdfs, ...shxFiles].some((f) => want.has(f.name.toLowerCase()));
-    // 272차: 형식이 맞지 않음 / 찾는 이름이 없음(참조 관리자의 글 — 파일은 이어 둔다) / 이음(실패 수) — 모두 열지 못했으면 오류 알림만(형식 안내를 겹치지 않는다)
-    if (!dwg.length && !raster.length && !pdfs.length && !shxFiles.length) toast('연결할 수 있는 파일이 없습니다(DWG·DXF·이미지·PDF·SHX).', 'warn');
-    else if (!named) toast('이 도면이 찾는 이름의 파일이 없습니다.', 'warn');
+    const named = [...dwg, ...raster, ...pdfs, ...shxPicked].some((f) => want.has(f.name.toLowerCase()));
+    // 272차: 형식이 맞지 않음 / 찾는 이름이 없음(참조 관리자의 글 — 파일은 이어 둔다) / 이음(실패 수) — 모두 열지 못했으면 오류 알림만(형식 안내를 겹치지 않는다).
+    // 273차: 풀지 못하는 그림 형식만 골랐으면 형식 없음 글 대신 그 참고 글, 섞였으면 요약 알림과 따로
+    if (!dwg.length && !raster.length && !pdfs.length && !shxPicked.length) {
+      if (!note) toast('연결할 수 있는 파일이 없습니다(DWG·DXF·이미지·PDF·SHX).', 'warn');
+    } else if (!named) toast('이 도면이 찾는 이름의 파일이 없습니다.', 'warn');
     else if (n) toast(bad ? `파일 ${n}개를 연결했습니다(${bad}개는 열지 못했습니다).` : `파일 ${n}개를 연결했습니다.`, 'info');
+    if (note) {
+      app.cmd.print(note);
+      toast(note, 'warn');
+    }
     for (const d of app.docs) this.missing.delete(d);
     this.queue();
   }
