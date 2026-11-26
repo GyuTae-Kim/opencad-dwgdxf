@@ -387,6 +387,11 @@ export class App {
   private rightPress: { world: Pt; ghost?: DragGhost; menu?: boolean } | null = null;
   /** 명령 없이 객체를 고른 마지막 클릭(두 번 누르기의 두 번째 클릭이 막 생긴 그립을 눌러도 그립 편집으로 가지 않게) */
   private lastPickClick: { time: number; screen: Pt } | null = null;
+  /**
+   * 마지막 누르기(onClick)가 손가락 톡이었는지(268차): 브라우저의 dblclick은 MouseEvent라 pointerType이 없다. 두 번 톡 뒤의 dblclick 바로 앞에는
+   * 두 번째 톡의 onClick이 돌므로(화면은 손가락을 뗄 때 누르기를 넘긴다) 그 종류로 두 번 누르기의 고르기 거리를 정한다
+   */
+  private lastClickTouch = false;
   /** 핫 그립(Shift+클릭으로 여럿) */
   private hotGrips: Pt[] = [];
   /** 커서가 올라간 그립과 다기능 그립 메뉴 타이머 */
@@ -1920,7 +1925,7 @@ export class App {
     const px = this.view.pixelSize();
     const tol = gripPickRadius(this.settings.gripSize, touch) * px;
     // 객체 고르기 허용 거리(onClick과 같다 — 터치는 세 배)
-    const pickTol = this.view.overlay.pickbox * px * (touch ? 3 : 1);
+    const pickTol = this.pickTolerance(touch);
     for (const s of this.subSelections) {
       if (!s.active() || !s.gripAt) continue;
       const i = s.gripAt(w, tol, pickTol, touch);
@@ -2383,9 +2388,18 @@ export class App {
     return null;
   }
 
+  /**
+   * 누른 자리의 객체를 고르는 허용 거리(도면 단위): PICKBOX 화면 px, 손가락은 세 배(손가락이 가려 정확히 누르기 어렵다).
+   * 누르기(onClick)·표 셀 그립(subGripAt)·두 번 누르기(onDblClick — 268차)가 같은 거리를 쓴다
+   */
+  private pickTolerance(touch: boolean): number {
+    return this.view.overlay.pickbox * this.view.pixelSize() * (touch ? 3 : 1);
+  }
+
   private onClick(w: Pt, s: Pt, ev: PointerEvent): void {
     closeMenu();
     this.press = null;
+    this.lastClickTouch = ev.pointerType === 'touch';
     const st = this.active;
     if (!st) return;
     if (st.msVp) {
@@ -2430,7 +2444,7 @@ export class App {
     }
     const pk = this.picker();
     if (!pk) return;
-    const tol = this.view.overlay.pickbox * this.view.pixelSize() * (ev.pointerType === 'touch' ? 3 : 1);
+    const tol = this.pickTolerance(ev.pointerType === 'touch');
     const shift = ev.shiftKey ? { shift: true as const } : {};
     if (r?.kind === 'entity') {
       const h = pk.pick(w.x, w.y, tol);
@@ -2893,6 +2907,10 @@ export class App {
   private onDblClick(w: Pt, sp: Pt): void {
     const st = this.active;
     if (!st || this.request) return;
+    // 객체를 고르는 거리는 바로 앞 누르기와 같다(268차 — 손가락 두 번 톡은 톡 고르기의 PICKBOX × 3: 톡 한 번으로 고르는 객체를 두 번 톡 하면 그 편집.
+    // 전에는 × 1이라 5~15px 떨어진 두 번 톡이 편집을 열지 않고 표 빈 셀 찾기로 빠졌다). 보기 모드는 객체 편집이 없어 × 1 그대로
+    // (배치 갈래의 객체 확인은 그 자리 객체를 편집으로 넘기려는 것 — 넓히면 뷰포트에 들어가지도 고치지도 않는 자리만 는다)
+    const tol = this.pickTolerance(this.lastClickTouch && !this.viewOnly);
     // 배치: 뷰포트 안을 두 번 누르면 모형 공간으로, MSPACE에서 뷰포트 밖이면 종이 공간으로
     if (st.onLayout && !st.blockEdit) {
       const at = this.viewportAt(st, this.view.paperPoint(sp.x, sp.y));
@@ -2901,7 +2919,7 @@ export class App {
         return;
       }
       if (!st.msVp && at) {
-        const hit = this.picker()?.pick(w.x, w.y, this.view.overlay.pickbox * this.view.pixelSize());
+        const hit = this.picker()?.pick(w.x, w.y, tol);
         if (!hit || hit === at.handle) {
           this.enterViewport(st, at);
           return;
@@ -2911,7 +2929,7 @@ export class App {
     // 보기 모드: 뷰포트 들어가고 나가기만, 객체 편집은 열지 않는다
     if (this.viewOnly) return;
     const pk = this.picker();
-    const h = pk?.pick(w.x, w.y, this.view.overlay.pickbox * this.view.pixelSize());
+    const h = pk?.pick(w.x, w.y, tol);
     if (!h) {
       // 27차: 표의 빈 셀 안은 격자선·문자에서 멀어 잡히지 않는다 — 그 자리를 셀로 품은 표가 있으면 그 셀 제자리 편집(없으면 예전처럼 아무것도 않는다)
       void import('./tablecmds').then((m) => m.editTableCellAt(this, w));
