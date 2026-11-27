@@ -23,10 +23,14 @@ vi.mock('../../src/app/engine', async (orig) => ({ ...(await orig<object>()), En
 vi.mock('../../src/text/fonts', async (orig) => ({ ...(await orig<object>()), OutlineLibrary: (await import('../polish/fakes')).FakeFonts }));
 vi.mock('../../src/app/ui/dom', async (orig) => ({ ...(await orig<object>()), showMenu: vi.fn(), closeMenu: vi.fn(), toast: vi.fn() }));
 
-beforeAll(() => {
+beforeAll(async () => {
   const g = browserGlobals();
   vi.stubGlobal('window', g.window);
   vi.stubGlobal('document', g.document);
+  // 빈 곳 dblclick이 기다리지 않고 띄우는 표 셀 편집 가져오기(app.ts — `void import('./tablecmds')`)를 미리 불러 둔다.
+  // 처음 가져오기는 settle()보다 오래 걸려, 시험 파일이 끝난 뒤 모듈을 평가하다 TDZ 오류(Unhandled Rejection —
+  // `Cannot access '__vite_ssr_import_9__' before initialization`, tablecmds.ts editTableCellAt)가 날 수 있었다(CI 2차 #362 조각 1, 같은 조각 파일에 따라 갈림)
+  await import('../../src/app/tablecmds');
 });
 afterAll(() => {
   vi.unstubAllGlobals();
