@@ -2444,6 +2444,16 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   영어 「PNG로 내보내기」 Export as PNG ↔ 틀 Export to {0}(JPEG·BMP). (2) 뜻이 갈리는 공유 열쇠 — 하지 않음: 「복구」(REDO 제목·RECOVER 둘 다 — 영어 Recovery·독일어 Wiederherstellung), 「회전」(ROTATE 제목 ↔ 특성 칸 — 독일어 Drehung)·「축척」,
   「개수」(COUNT ↔ ARRAY 옵션 — 영어 Number). (3) 앞 차수가 대조한 열쇠(그 차수 시험·문서에 있음 — 다시 보지 않음): 「명령 복구」 영어 Command Recovery·독일어 Befehlswiederherstellung(293차), 「단일 행 문자」·「격자」·「블록 대치」 영어 소문자 시작(306·296·291차),
   「속성 표시」 영어 Show properties(295·296차), 「원형 배열」 중국어 圆形排列(286차), 「도면층 창(기존)」 중국어 已打开(290차 근거 없음), 「명령(명령행에 입력)」 영어 소문자 command(320차 묶음), 비교 변수 제목의 중국어·독일어 뜻 깨짐(COMPAREFRONT 등 — 309차 묶음). 원어민 검토 없음
+- [x] 공통 질문(예/아니오·덮어쓰기·재정의·변경 내용 버리기) 묶음의 번역 대조와 빠진 번역(323차, 290~322차 꼴 — 320차가 본 13 밖): 작업 공간(WORKSPACE)은 화면 원문 0, 시각 스타일(VSCURRENT·SHADEMODE)은 명령 없음(「비주얼 스타일」은 301·291·314차 묶음뿐).
+  (나) 빠진 번역 언어마다 32(9410 → 9442 — 도우미 askYN·askYesNo·yesNo·yn이 묻는 SETBYLAYER·-DIMSTYLE·DIMIM·TINSERT·-OVERKILL·GATTE·-LAYERSTATE·UNDO·FLATTEN·EXOFFSET·-PSETUPIN 물음 16의 입력 줄 앞 조각 「물음 [」과 통째 「… <{n}>:」 — 291차 꼴).
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 7·일본어 4·중국어 11·독일어 14 값 — REVERT·XCLIP 앞 조각과 통째를 같은 문장으로, DIMIM 칸 Overrides·Überschreibt, 파일 삽입 재정의 图块“{1}”·es, 도면층 상태 가져오기 检索,
+  참조 편집 띠 풍선 REFCLOSE Save·Stornierung, SETBYLAYER 블록 포함, 치수 스타일 재지정 Format, 이미 정의된 외부 참조·이미지 알림 명령꼴, OVERKILL 칸 3인칭·零件, GATTE bewältigen, 페이지 설정 재정의 上書き). 재발 막기 `tests/i18n-ask323.test.ts`. 표는 CHANGELOG 323차 절
+- [ ] 323차에 보고 두 것 — (1) 뜻이 갈리는 공유 열쇠 — 하지 않음: 「확인」 영어 Confirm(319차 보고 그대로), 「계속」 영어 continued·독일어 Fortsetzung(명사 — 301차 공유 열쇠, 다중 지시선 상자 단추에도 씀),
+  「취소(D)」 일본어 キャンセル·독일어 Abbrechen(REFCLOSE·ARRAYCLOSE의 버리기 뜻이나 320차가 배열 편집 저장 물음을 맞음으로 봄 — 두 물음 통째와 함께 볼 일), 「블록 재정의」 단추 영어 Block redefinition·독일어 Neudefinition(명사 — BLOCK 재정의 상자와 함께 씀).
+  (2) 앞 차수 묶음 안의 어긋남(다시 보지 않음 — 적어만 둠): IMAGECLIP 「이전 경계를 삭제하시겠습니까?」 앞 조각과 통째가 다른 문장(네 언어 — 309차 묶음), REFCLOSE 「참조에 대한 변경 사항 [」 앞 조각과 통째가 다름(중국어 更改参考 동사 꼴 — 308차 「참조」 갈래),
+  선종류 다시 정의 독일어 「Möchten Sie es」(Linientyp은 남성 — 295차 시험이 지킴), AUDIT 「검출된 오류를 수정하시겠습니까?」 일본어 통째 전각（Y）·：(316차 묶음), OVERKILL 「부분 겹침 결합」 중국어 零件·「부분 겹침 결합(T)」 독일어 어순.
+  (3) 동의어·말투 — 둠: 영어 「Shall we redefine it with the contents of {1}?」, 독일어 「Sind Sie sicher, dass Sie … löschen möchten?」(도면층 상태·문자 스타일 삭제 물음), 「· 저장하지 않은 변경 있음」 영어·독일어 문장 꼴.
+  (4) 시각 스타일 열쇠 「개념 모델」·「음영+윤곽」은 src에 없음(쓰이지 않음 — 지우지 않음). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
