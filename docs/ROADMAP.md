@@ -2121,12 +2121,32 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   「Gibt … an」 3인칭 나머지·300차 묶음 독일어 나머지(Mindestzutaten·Datum·Hitze·Pausengröße·Multileitung·Positionsansicht·Verbindung·Linie Trennen 등); 중국어 VPORTS 구성 입력 통째 둘 构造·MVSETUP 통째 视口缩放(S)·
   한계(L)·한계(LI)·限值(LI)(→ 界限)·뷰포트 축척 보기·「용지 {0} × {1}을(를) 축척 {2}(으)로 … 한계를 맞췄습니다.」 어순·종이 공간으로 纸张空间(→ 图纸空间)·300차 중국어 나머지(款式·输入·<끝> 꺾쇠·数据·撰写·素材·高温·连接 등);
   일본어·중국어 UNDO 뒤(B) 背面(뒷면 — 독일어는 UNDO 통째 Zurück 근거로 고침, 일본어·중국어 통째도 背面이라 같은 사전 근거 없음).
+  (**302차가 고침**: 독일어 Rückseite·skalieren·뷰 이름 Name anzeigen·타일 뷰포트 Kachelansicht 둘·「Gibt … an」 3인칭 나머지 열셋; 중국어 VPORTS 구성 입력 통째 둘·MVSETUP 통째 视口缩放(S)·限值(LI)·
+  한계(L)·한계(LI)·뷰포트 축척 보기(·동기화·비율)·용지 … 한계를 맞췄습니다 어순·종이 공간으로(·종이 공간), 300차 나머지 가운데 款式·案例 — 나머지는 「302차에 보고 두 것」)
   (2) 공유 열쇠라 하지 않음: 「가로」·「세로」(용지 방향 가로·세로 ↔ PLOTSTAMP 글 방향 가로·세로 — `filecmds-stamp.ts` 162~163줄), 「범위」(플롯·ZOOM 범위 extents ↔ AutoLISP 「범위」 오류 range — `edit/lisp/text.ts`), 300차의 「평면도」·「계속」·「열기」·「머리글」.
   (3) 근거가 서지 않음: 「밀」(단위 mil — 영어 Wheat·독일어 Weizen(밀 곡식)·중국어 毫米(밀리미터): 같은 사전에 mil 낱말이 없음, 일본어 ミル만 맞음).
   (4) 열쇠 한도 밖(빠진 번역): -PLOT 예/아니오 기록 줄 아홉(통째 「물음 [예(Y)/아니오(N)] <{0}>:」), 플롯 축척 기록 줄(열쇠에 U+2060 둘), 페이지 설정 관리자 설명 줄 「장치: … · 용지: … (…, 가로) · 플롯 스타일: …」(없음·방향 조합 여덟),
   LAYOUTWIZARD 「뷰포트: …, 축척 …」(뷰포트 종류 넷 × 맞춤 × 위치 고르기), PLOTSTYLE 안내 「원래 값: … · 활성 플롯 스타일 테이블: …」(조합 다섯).
+  (**302차가 고침**: -PLOT 예/아니오 기록 줄 아홉 — 통째 열쇠 「물음 [예(Y)/아니오(N)] <{0}>:」. 나머지 넷은 「302차에 보고 두 것」)
   (5) 코드 변경이 드는 것: 300차 (5)의 표 스타일 요약 줄·명령행 뒤 글 「]:」 그대로.
   (6) 동의어 — 둠: 일본어 도면 공간 図面空間(ペーパー空間과 반반)·印刷スタイル/プロットスタイル, 영어 「화면 표시」 Screen display, 독일어 Skalierung/Maßstab·「주석(AN)」 Anmerkung(독일어 사전이 주석을 두루 Anmerkung으로 씀). 원어민 검토 없음
+- [x] 301차가 남긴 것과 뷰·좌표계(화면 보기) 묶음의 번역 대조·빠진 번역(302차, 290~301차 꼴 — 301차 보고 (1)·(4)): ZOOM·ZOOMEXTENTS·ZOOMPREVIOUS·ZOOMIN·ZOOMOUT·PAN·REGEN·REDRAW·VIEWRES·PLAN·
+  UCS·UCSICON·UCSMAN·VIEW(뷰 관리자)·-VIEW·VIEWLINK·뷰 탭 탐색·뷰·좌표 패널·줌 바로 가기 메뉴·ISODRAFT 등각원의 프롬프트·옵션·대화 상자 이름표·결과 줄·오류(NAVBAR·DVIEW·VPOINT·VIEWBASE는 이 앱에 없음).
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 10·일본어 5·중국어 30·독일어 30곳 — 확대·축소 ZOOMIN·ZOOMOUT(중국어·독일어 축소가 放大·Vergrößern 「확대」), 초점이동 PAN Focus shift·フォーカス移動·平移焦点·Fokus schwenken,
+  ZOOM 제목 Zoom/Pan·범위 줌 Range Zoom, 재생성 再生·Regeneriert sich, UCS 관리자 Administrator·管理员, 독일어 뷰 Anzeigen → Ansicht·이전 Vorheriges Koordinatensystem, 중국어 이전(P) 上一页·열린 도면이 없습니다 无法打开,
+  301차 출발점 중국어 VPORTS 줄기·독일어 「Gibt … an」 열셋·Rückseite·Kachelansicht 등). 공유 열쇠 「이전」·「확대」·「축소」·「초점이동」·「뷰」·「구성」은 쓰는 곳을 코드로 갈라 모두 같은 뜻임을 확인하고 고침.
+  (나) 네 언어 모두 한국어로 보이던 20 열쇠(-PLOT·VIEWRES 예/아니오 통째와 VIEWRES 앞 조각, ZOOM 뒤 조각 「] <실시간>:」, PLAN 「모형·배치 재생성 중.」, UCS 현재 이름 둘, -VIEW 목록 둘, 뷰 관리자 현재 뷰 둘)를
+  더함(9057 → 9077, 지운 틀 없음). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 302차 절
+- [ ] 302차에 보고 두 것 — (1) 한도 밖 오역(중국어·독일어 — 30으로 한도가 참): 독일어 묶음 나머지(화면 그리는 중 Zeichenbildschirm·글꼴 받는 중 Empfangsschriftart·뷰 재정의 물음 ändern(→ ersetzen)·휠 안내 「… ziehen Zum」 대문자·
+  뷰 이름에 쓸 수 없는 문자 unbrauchbare), 독일어 301차 나머지(VPORTS 구성 입력 [ Konstruktionseingabe·도면 한계가 없어 … eingezeichnet·한 줄로 플롯 스탬프 darstellen.·자를 뷰포트 선택·자를 수 있는 객체 Ansichtsbereich·
+  VPORTS Viewport-… 다섯·선 간격 Zeilenabstand·대소문자 Fall·300차 묶음 Mindestzutaten·Datum·Hitze·Pausengröße·Multileitung·Positionsansicht·Verbindung·Linie Trennen); 중국어 화면 그리는 중 绘图屏幕·
+  300차 나머지(데이텀 식별자 둘 数据·작성 날짜 撰写·테이블 셀 <끝> 꺾쇠·Enter 아래 셀 输入·연결선 넷 连接·대칭도 등 「…度」 빠짐·필드 어순·UCS 객체(OB) 物体); 일본어·중국어 UNDO 뒤(B) 背面(근거 없음 — 301차와 같음).
+  (2) 공유 열쇠라 하지 않음: 「표준」(UCS·PLAN·UCSMAN의 WCS ↔ TRIM·EXTEND 모드 표준 ↔ 제도 설정), 「범위」(ZOOM·플롯 extents ↔ AutoLISP range), 「평면도」(PLAN ↔ GD&T), 「가로·세로」(용지 방향 ↔ PLOTSTAMP 글 방향), 300차의 「계속」·「열기」·「머리글」.
+  (3) 근거가 서지 않음: UCS 「표준(W)」·「*표준*」(WCS — 같은 사전에 World·ワールド·世界·Welt 좌표계 낱말이 없음; 「3D 월드 공간」은 다른 원문 낱말), 중국어·독일어 「30도 열기」(화살촉 「열기」가 파일 열기와 공유 — 근거 낱말 없음),
+  중국어 Ⓜ/Ⓛ 재료 素材·마지막 저장자 时间(같은 사전에 실체·저장자 낱말 없음), 「밀」(301차와 같음). 소스에 보이는 자리가 없음: 「뷰{0}」(새 뷰 이름 칸의 값 — 입력 칸 값은 번역층이 옮기지 않음).
+  (4) 열쇠 한도 밖·보지 않은 것: 301차 (4)의 플롯 축척 기록 줄·페이지 설정 관리자 설명 줄·LAYOUTWIZARD 뷰포트 줄·PLOTSTYLE 안내 줄, 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄(292차 꼴 — 「UCS 이름 입력 또는 [?]: ?」·「저장할 뷰 이름 입력: V1」 등).
+  (5) 코드 변경이 드는 것: 300차 (5)의 표 스타일 요약 줄·명령행 뒤 글 「]:」 그대로.
+  (6) 동의어 — 둠: 영어 「재생성」 Regeneration·「빠른 줌을 원하십니까?」 Want a quick zoom?(같은 사전의 「Want a …?」 꼴), 일본어 뷰 관리자 ビュー管理, 독일어 ZOOM 범위(E) Bereich, 중국어 「축척」 缩放(SCALE 이름)·팔레트 调色板(사전 전체가 같은 낱말). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다

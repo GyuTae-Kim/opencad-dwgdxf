@@ -3,6 +3,53 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(302차): 301차가 남긴 오역과 뷰·좌표계(화면 보기) 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 301차 「보고 두 것」 (1)의 독일어 Rückseite·skalieren·Name anzeigen·Kachelansicht·「Gibt … an」 3인칭 나머지와 중국어 VPORTS 줄기, (4)의 -PLOT 예/아니오 기록 줄이고,
+그 뒤 뷰·좌표계 묶음 — ZOOM·ZOOMEXTENTS·ZOOMPREVIOUS·ZOOMIN·ZOOMOUT·PAN·REGEN(`commands.ts`), REDRAW(`util2-misc.ts`), VIEWRES·PLAN(`editcmds2-query.ts`), UCS·UCSICON·UCSMAN(`ucs.ts`),
+VIEW(뷰 관리자)·-VIEW(`viewcmds.ts`), VIEWLINK, 뷰 탭 탐색·뷰·좌표 패널(`ui/shell.ts`), 줌·초점이동 바로 가기 메뉴(`ctxmenu.ts`), ISODRAFT·ISOPLANE·등각원(`viewtools-iso.ts`) — 의 보이는 글 239개
+(290~301차가 본 글을 빼면 열쇠 140)를 네 사전과 견줬습니다. NAVBAR·DVIEW·VPOINT·VIEWBASE는 이 앱에 없습니다. 틀(`${…}`)·키워드·예/아니오 물음을 펴서 명령행 조각·기록 줄·결과 줄로 넣어 봤습니다
+(고치기 전 언어마다 한국어로 남는 줄 42). 공유 열쇠 「이전」·「확대」·「축소」·「초점이동」·「뷰」·「구성」은 쓰는 곳을 코드로 갈라 모두 같은 뜻임을 확인했습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 10·일본어 5·중국어 30·독일어 30곳).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| ZOOMIN·ZOOMOUT·ZOOM 제목(뷰 탭 확대·축소 단추) | 중국어 축소 放大·독일어 축소 Vergrößern(둘 다 「확대」) → 缩小·Verkleinern, 확대 缩放·Zoom → 放大·Vergrößern, 영어 Zoom·Scale down·Zoom/Pan → Zoom In·Zoom Out·Zoom, 범위 줌 Range Zoom → Zoom Extents | 「확대/축소」 放大/缩小·Vergrößern/Verkleinern, 「선택한 객체로 확대」 Zoom in, 「줌」 Zoom, ZOOM 통째 Extents(E) |
+| PAN 초점이동(뷰 탭·바로 가기 메뉴) | Focus shift·フォーカス移動·平移焦点·Fokus schwenken(초점) → Pan·画面移動·平移·Verschieben, UNDO 결합 물음 함께 | 도면층 탐색 「확대·초점이동」 zoom and pan·缩放和平移, 「화면 이동」 画面移動, UNDO 결합 물음 平移·„Verschieben“ |
+| 재생성·뷰·UCS | {0} 재생성 중. 再生(재생)·Regeneriert sich·{0} Regenerating. → 再生成·重新生成·wird regeneriert·Regenerating {0}., 독일어 뷰 Anzeigen(보이다)·뷰 이름 Name anzeigen → Ansicht·Ansichtsname, 뷰 해상도 Auflösung anzeigen·查看 → Ansichtsauflösung·视图, UCS 관리자 Administrator·管理员 → Manager·管理器·BKS-Manager, 일본어 UCS 정렬 ソート(차례) → 位置合わせ, 영어 UCSICON None(N) → No origin(N) | 「재생성」, 「새 뷰」 Neue Ansicht·「뷰(V)」 Ansicht (V), 「뷰」 视图, 「뷰 관리자」 View Manager·视图管理器, 「정렬점 획득」 位置合わせ, 「원점 없음(N)」 |
+| 명령행 조각·통째 | 중국어 이전(P) 上一页(이전 쪽) → 上一个(P), 독일어 이전 Vorheriges Koordinatensystem → Vorheriges, 일본어 ZOOM 통째 図面範囲(E)(한계 낱말) → 範囲(E), 중국어 ZOOM 통째 缩放(S) → 比例(S) | 같은 사전 통째 上一个(P), 「이전(P)」 Vorheriges, 「범위(E)」 範囲(E), 「축척(S)」 比例(S) |
+| 뷰 관리자·바로 가기 메뉴·알림 | 중국어 현재로 설정(C) 当前图层(도면층) → 设置为当前(C), 휠 두 번 滚轮倍增·Rad verdoppeln(곱절) → 双击滚轮·Rad zweimal drücken, 열린 도면이 없습니다 셋 无法打开(열 수 없음) → 没有已打开的图形, 휠 안내 초점이동 빠짐 → 缩放和平移, 독일어 선택한 객체로 확대 Vergrößern Sie das Objekt(객체를 키움) → zoomen, 빠른 줌 Lust auf(입맛) → Möchten Sie, 영어 뷰 재정의 물음 change → replace | 「현재로 설정」, 「가운데 버튼 두 번 누르기」 双击·zweimal, 「열린 도면 목록」 已打开的, 「전체 보기 …」 zoomen, 「상세한 플롯 구성을 원하십니까?」 Möchten Sie, 「"{0}"을(를) 무엇으로 바꾸겠습니까」 Replace |
+| 301차 출발점 | 중국어 VPORTS 구성 입력 통째 둘·구성 构造(구조) → 输入配置·配置, MVSETUP 통째 视口缩放(S)·限值(LI)·한계(L)·한계(LI) 限制 → 视口比例·界限, 뷰포트 축척 보기·동기화·비율 缩放 → 比例, 용지 … 한계를 맞췄습니다(어순), 종이 공간·종이 공간으로 纸张空间 → 图纸空间, 300차 款式·案例 → 样式·大小写; 독일어 「Gibt … an」(3인칭) 열셋 → 이웃 열쇠의 「… angeben」·「Geben Sie … an」, 다른 객체의 맨 뒤로 Rückseite(뒷면) → Hinter einem anderen Objekt, 새 객체의 선종류 축척 skalieren → Linientypskala neuer Objekte, 타일 뷰포트 둘 Kachelansicht → Kachel-Ansichtsfenster | 「구성 입력 [」·「현재 구성:」 配置, 「뷰포트 축척(S)」 视口比例, 「한계」 界限, 「도면 공간」 图纸空间·「모형 공간으로」 进入, 「스타일 이름」·「대소문자 일치」, 「시작 폭 지정」·300차 「도넛의 중심 지정」·「등각원의 반지름 지정」, 「다른 객체의 맨 앞으로」, 「선종류 축척」, 「최대화된 타일 뷰포트」 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 20):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| -PLOT 예/아니오 기록 줄 통째 「상세한 플롯 구성을 원하십니까? [예(Y)/아니오(N)] <{0}>:」 등(301차 보고 (4)) | 9 | Proceed with plot? [Yes (Y)/No (N)] <{0}>: | 기록 줄은 통째 열쇠를 먼저 찾는다 — 앞 조각 번역 + 예(Y)·아니오(N) 조각 |
+| VIEWRES 「빠른 줌을 원하십니까? [」·통째 | 2 | Want a quick zoom? [ | askYN 앞 글 열쇠가 없음 |
+| ZOOM 뒤 조각 「] <실시간>:」 | 1 | ] <Real-time>: | 기본값이 옵션 이름이 아님 — ZOOM 첫 프롬프트가 네 언어 모두 「] <실시간>:」이었다 |
+| PLAN 「모형·배치 재생성 중.」, UCS 「현재 UCS 이름: *표준*·*이름 없음*」, -VIEW 목록 「{0} 종이·모형 폭 {1}, 높이 {2}」, 뷰 관리자 「현재 뷰: 배치·모형」 | 8 | Regenerating model. | 틀이 앱 낱말을 잡음 — 틀 번역 + 앱 낱말 |
+
+지운 틀은 없습니다. 열쇠 9057 → 9077. 중국어 예/아니오 통째는 같은 사전 꼴(29 : 4)대로 전각 「：」로 끝납니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 75곳과 새 열쇠 20씩. 영어·일본어·중국어·독일어 화면의 ZOOM 첫 프롬프트·VIEWRES·-PLOT 예/아니오 기록 줄, PLAN·UCS·-VIEW·뷰 관리자 결과 줄이
+  한국어 대신 그 언어로, 뷰 탭 확대·축소·초점이동·뷰 낱말과 UCS 관리자·재생성이 엉뚱한(또는 거꾸로인) 낱말 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 독일어 「뷰」(뷰 리본 탭·UCS·-PLOT·TRIM 투영 뷰(V)·페이지 설정 플롯 영역), 「이전」(ZOOM·UCS·LAYERP·PEDIT·도면 비교), 중국어 「이전(P)」(ZOOM·UCS·PEDIT·선택 명령행),
+  중국어 「한계(L)·(LI)」(-PLOT 플롯 영역·MVSETUP), 「구성」(STANDARDS 리본 단추), 「종이 공간」(리본·CHSPACE). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「302차에 보고 두 것」): 언어별 한도 밖 오역, 공유 열쇠 「표준」(UCS의 WCS ↔ TRIM 모드)·「범위」·「평면도」·「가로·세로」, 같은 사전에 World 좌표계 낱말이 없는 UCS 「표준」, 기본값 없는 프롬프트의 기록 줄 등.
+
+### 확인
+- `tests/i18n-view302.test.ts`(새 시험 3건 — 프롬프트·결과 줄 꼴은 소스 글에서 확인): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 11 프롬프트의 입력 줄, 결과·이름표 줄 8과 기록 줄 13에
+  네 언어 모두 한글 없음, 고친 낱말 = 같은 사전 근거(사전 전체에 「Gibt …」로 시작하는 독일어 값이 남지 않음 포함), 새 열쇠 = 조각·틀 번역에서 만든 꼴.
+- 고치기 전 9건 가운데 3건 실패(한글 남은 입력 줄 8·결과·기록 줄 72, 영어 「확대/축소」 Zoom/Pan). 고친 뒤 `tests/i18n-view302.test.ts`·`tests/i18n-plot301.test.ts`·`tests/i18n-draw298.test.ts` 3파일 9건 통과.
+  `npm run check:i18n` 통과(9077 항목). 사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어 규칙)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험 없음. 바꾼 열쇠를 보는 시험(301 중국어 구성 입력·MVSETUP — 일본어 통째와 명령행 조각만, 298 TRIM 투영=뷰 통째 — 독일어 Ansicht 그대로, 295·296·300·prompts — 바꾸지 않은 언어이거나
+  「Gibt로 시작하지 않음」만 봄, 한국어 원문을 보는 시험 — 원문 그대로)은 기대 그대로 맞습니다. tools/mobile-browser-check.js는 한국어 이름만 찾습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(301차): 300차가 남긴 오역과 배치·출력(레이아웃·플롯) 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
