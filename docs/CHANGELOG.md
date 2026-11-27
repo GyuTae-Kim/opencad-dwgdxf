@@ -3,6 +3,47 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(318차): 317차가 남긴 핸들 낱말·쓰기 경고 도형·감사 대상 첫 글자와 단위·좌표 표시·각도 형식 묶음의 번역 대조
+
+### 근거와 표
+먼저 317차 「보고 두 것」 (2)·(3)을 풀었습니다. 「핸들」이 든 열쇠는 쓰는 곳이 모두 객체 핸들입니다 — AUDIT(`edit/util/audit.ts` — 대상 틀 「{0}(핸들 없음)」·「핸들이 없습니다.」·고침 「새 핸들」·핸들 시드 줄),
+DXF 쓰기 경고(`io/dxf/wcontext.ts` 「핸들이 겹친 객체에…」), HANDSEED 설명(`app/sysvars.ts` 「다음 핸들」), 블록 참조 찾기(`app/blkcmds-att.ts`), 핸들 고갈(`app/annoscale-core.ts` 「새 핸들 없음」).
+중국어 手柄·독일어 Griff는 같은 사전에서 그립(grip) 낱말이라(「그립이 없습니다.」 Griff·夹点 — 원문이 「그립」), 같은 사전 「핸들」 句柄·Handle(309차 도면 비교 꼴)로 맞췄습니다.
+쓰기 경고의 도형은 316차 읽기 경고와 같은 근거이고, 감사 대상 「도면층 {0}」·「블록 {0}」은 쓰는 곳이 감사 대상 자리(`audit.ts`)뿐이라(갈라야 할 공유가 아님) 줄 머리 이름표 꼴(독일어 Layer {0}·Block {0})로 영어 첫 글자를 맞췄습니다.
+
+그 뒤 묶음: UNITS 대화 상자(`app/tables.ts`)·-UNITS(`app/dashcmds-tables.ts`)는 303차가 대조하고 304차가 독일어 목록 낱말을 고쳐 건너뛰고, 남은 것(숫자 꼴·일본어 5번·중국어 1번·측량 단위·삽입 축척 단위)만 봤습니다.
+상태 막대 좌표 표시(`app/coords.ts` 알림 셋·`app/ui/shell.ts` 풍선)·F10 극좌표 알림·거리·각도 입력 오류 줄(`app/dashcmds-ask.ts`·`app/app.ts`·`app/osnap-override.ts`·`app/util2-blocks.ts`·`app/dimcmds.ts`·`app/dynblock.ts` 등)·
+MVSETUP 단위 유형(`app/filecmds-layout.ts`)을 네 언어 대조했습니다. 앱이 보이는 길이·각도 글은 `core/units.ts` toFixed라 소수점은 늘 「.」입니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(중국어 13·독일어 20·영어 5·일본어 2 열쇠, 출발점 몫 포함).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 출발점 — 핸들(AUDIT·DXF 쓰기·HANDSEED·블록 참조 찾기) | 중국어 手柄 → 句柄(핸들 시드·핸들 없음·{0}(핸들 없음)·핸들이 없습니다·핸들이 겹친 — 物体 → 对象, 겹친 = 중복), 독일어 Griff → Handle(다음·새·새 없음·핸들 {0}{1}·핸들 시드 Griffkern → Handle-Startwert·핸들 없음 셋·핸들이 겹친 überlappend → doppelt) | 「핸들」 句柄·Handle, 「같은 핸들을 가진 객체가 있습니다.」 相同句柄·demselben Handle, 「데이터베이스 핸들」 数据库句柄·Datenbankhandle |
+| 출발점 — DWG 쓰기 경고 「쓸 수 없는 도형 {0}」·「이 버전으로 쓸 수 없는 도형 {0}개를 뺐습니다(…)」 | shape·shape(s)·形状·Form·Formen → entity·entities·图形·grafisches Objekt·grafische Objekte | 「도형을 쓰지 못해 뺐습니다.」 an entity·图形·Ein grafisches Objekt(316차) |
+| 출발점 — 감사 대상 「도면층 {0}」·「블록 {0}」 | 영어 layer {0}·block {0} → Layer {0}·Block {0} | 줄 머리 이름표, 독일어 Layer {0}·Block {0} |
+| MVSETUP 단위 유형(앞 조각·통째·조각 다섯) | 「건축(A)」 構築·建筑物·Gebäude → 建築·建筑·Architektur (A), 독일어 「과학(S)」·「공학(E)」 Science·Engineering(영어 그대로) → Wissenschaft·Ingenieurwesen, 「미터법(M)」 Metrisch(M) 빈칸, 중국어 「십진(D)」 小数点(소수점) → 十进制, 중국어 통째 科学计数法·工程计数法(공학 표기법)·建筑计数法 → 조각 꼴, 영어 앞 조각 Enter the unit type [·독일어 통째 Geben Sie … ein [ → 통째가 앞 조각으로 시작 | 낱말 열쇠 「과학」·「십진」·「공학」·「건축」·「미터법」, 일본어 통째 建築(A), 285차 규칙(통째 = 앞 조각 + 옵션) |
+| -UNITS 목록·UNITS 대화 상자 | 독일어 보기 15,50·1'-3,50"·0,7854r → 15.50·1'-3.50"·0.7854r, 일본어 「5. 측량 단위」 測定単位(측정) → 測量単位, 중국어 「1. 십진 도수」 十进制(도수 빠짐 — 길이 목록 2번과 같은 이름) → 十进制角度, 중국어 「측량 단위」 测量单元(칸) → 测量单位, 독일어 「삽입 축척 단위」 Maßstabseinheit einfügen(명령꼴) → Einheit des Einfügemaßstabs | 숫자 꼴은 옮기지 않음(앱 출력 toFixed, 같은 목록 1번 1.55E+01), 「측량 단위」 測量単位·「미국 측량 피트」 米国測量フィート, 「십진 도수」 十进制角度, -UNITS 목록 测量单位, 「삽입점」 Einfügepunkt |
+| 각도 입력 오류 | 중국어 「각도 또는 점이 필요합니다.」 需要一个角度或多个点(여러 점) → 需要角度或点。 | 「0이 아닌 거리 또는 점이 필요합니다.」 需要非零距离或点。 |
+
+(나) 빠진 번역 — 없음. 묶음 파일(coords·dashcmds-ask·filecmds-layout·dashcmds-tables·tables·sysvars·polar·keys·commandline·audit·DWG 쓰기 context)의 따옴표 글·템플릿 글(`${…}` → `{n}`)을 사전 열쇠와 맞대 보면,
+사전에 없는 것은 빈칸을 줄이기 전 꼴(-UNITS·MVSETUP 목록 — 사전은 빈칸을 줄인 열쇠)·코드 조각·묶음 밖 줄뿐입니다. 열쇠 9394 그대로.
+바꾼 값마다 같은 값 열쇠를 jq로 찾았습니다(네 사전): 다른 열쇠와 같은 값은 없고, 거꾸로 찾기(`sourceMessage`)가 제 원문으로 돌아옵니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 40곳(새 열쇠 0). 중국어·독일어 화면의 감사 줄·쓰기 경고·HANDSEED 설명에서 핸들이 그립 낱말 대신 핸들 낱말로, 저장 경고의 도형이 쉐이프 대신 도형(엔티티)으로,
+  영어 감사 대상이 Layer·Block으로, MVSETUP 단위 유형·-UNITS 목록·UNITS 대화 상자의 측량 단위·삽입 축척 단위가 같은 사전의 낱말과 앱이 보이는 숫자 꼴로 보입니다.
+- 317차 시험의 영어 감사 줄 기대(「  block LOOP …」)를 318차 근거 주석과 함께 「  Block LOOP …」로 고쳤습니다.
+- 두는 것(ROADMAP 「318차에 보고 두 것」): 그라디안(같은 사전 근거 없음 — 303차와 같음)·「건축 눈금」(287차)·독일어 「2: 표준 공학」, 동의어, 317차 보고 (1)·(4).
+
+### 확인
+- `tests/i18n-units318.test.ts`(새 시험 6건 — 글 꼴은 소스에서 확인): 핸들 열쇠(중국어 句柄·독일어 Handle, 手柄·Griff 없음, 317차 대상 틀 = 「핸들 없음」 값, 그립 열쇠 그대로), 쓰기 경고 도형 = 316차 낱말, 감사 대상 첫 글자,
+  MVSETUP(통째 = 앞 조각으로 시작·조각을 품음·조각 = 낱말 열쇠 꼴), -UNITS 목록 열 줄의 보기 꼴이 네 언어에 그대로·측량 단위·십진 도수·삽입 축척 단위·각도 입력 오류, 거꾸로 찾기 40.
+- 고치기 전 3파일 14건 가운데 6건 실패(새 시험 다섯, 317차 하나), 고친 뒤 `tests/i18n-units318.test.ts`·`tests/i18n-auditline317.test.ts`·`tests/i18n-readwarn316.test.ts` 3파일 14건 통과(한 번에). `npm run check:i18n` 통과(9394 항목).
+- tools/·tests/ grep(바꾼 열쇠·옛 값 — Griff·手柄·Cannot write shape·shape(s)·layer {0}·block {0}·감사 줄 「  block 」·Enter the unit type·Gebäude·構築·建筑物·小数点·工程计数法·Science (S)·Metrisch(M)·測定単位·测量单元·需要一个角度·15,50·0,7854·Maßstabseinheit):
+  317차 시험 182줄 하나(고침). 핸들을 보는 앞 차수 시험(ribbon306·options305·imgcmp309·select304)은 바꾸지 않은 값(zh 句柄·ja ハンドル·de 「핸들」 Handle)을, terms278은 그립 열쇠 Griff를 보아 그대로 맞습니다(손셈). tools/에는 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(317차): 틀이 잡은 경고 글을 화면 언어로 — 감사 줄·도면 정보 경고·저장 경고
 
 ### 근거와 표
