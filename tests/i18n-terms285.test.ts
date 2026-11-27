@@ -83,9 +83,10 @@ describe('ARRAY 명령 묶음 번역(285차)', () => {
       for (const key of ['행 고도 증분', ROW_ELEV]) expect(dict[lang][key], `${lang}: ${key}`).not.toMatch(height[lang]!);
       expect(startsWithHead(dict[lang], ROW_ELEV), lang).toBe(true);
     }
-    expect(ja['행 고도 증분']).toContain('標高');
-    expect(zh['행 고도 증분']).toContain('高程');
-    expect(de['행 고도 증분']).toBe('Höhenunterschied zwischen Zeilen');
+    // 315차 리드 결정: 고도 낱말을 사전마다 하나로(ja 高度·zh 标高·de Erhebung — 같은 사전의 다른 고도 열쇠·AutoCAD 각 언어판 ELEVATION 낱말, 「높이」 高さ·高度·Höhe와 갈림)
+    expect(ja['행 고도 증분']).toContain('高度');
+    expect(zh['행 고도 증분']).toContain('标高');
+    expect(de['행 고도 증분']).toBe('Erhebungsunterschied zwischen Zeilen');
     // de: 영어로 남은 옵션(Expression·Total)과 「~을 지정한다」 서술 대신 같은 프롬프트 앞 조각
     for (const key of ['경로를 따라 항목 사이의 거리 지정 또는 [표현식(E)] <{0}>:', '경로를 따라 항목 수 지정 또는 [표현식(E)] <{0}>:', TOTAL_T[2]!]) {
       expect(de[key], key).toContain('Ausdruck(E)');

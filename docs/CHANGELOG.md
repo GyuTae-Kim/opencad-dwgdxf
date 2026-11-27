@@ -3,6 +3,41 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(315차): 한 사전 안에서 갈린 CAD 낱말 통일 — 세 언어의 「고도」
+
+### 근거와 표
+WCAG 3.2.4(일관된 식별 — 같은 기능은 같은 이름)에 맞춰, 세 언어 사전 안에서 「고도」(elevation — Z 높이)가 둘로 갈린 것을 리드 결정으로 언어마다 하나로 맞췄습니다(308·313차 꼴 — 언어마다 한 규칙). 314차 「보고 두 것」 (1)을 풀었습니다.
+원문에 「고도」가 든 열쇠는 16개이고 모두 CAD 고도입니다(쓰는 곳: 특성 팔레트 `app/propedit.ts`·LIST·정보 카드 `app/inquiry.ts`, ELEV `app/editcmds2-query.ts`, ELEVATION·OSNAPZ 설명 `app/sysvars.ts`, RECTANG `app/draw.ts`,
+FLATTEN 리본 풍선·결과 줄, OPTIONS OSNAPZ, STATUS `app/util2-misc.ts`, 배열 행 고도 증분 `app/assocarray-ui.ts`·`app/assocarray.ts`). 「고도화」 같은 다른 뜻 열쇠, 「고도」와 「높이」가 함께 든 열쇠는 없습니다.
+
+| 언어 | 섞인 번역(314차 머리) | 맞춘 낱말과 근거 | 바꾼 열쇠 |
+| --- | --- | --- | --- |
+| 독일어 | Höhe 11·Erhebung 3·Standardhöhe 1·Erhöhung 1 | **Erhebung** — AutoCAD 독일어판 ELEVATION 낱말, 같은 사전 OSNAPZ 세 열쇠. Höhe는 「높이」(height)와 같은 이름 | 13 |
+| 일본어 | 高度 9·標高 7 | **高度** — AutoCAD 일본어판 ELEVATION 특성 낱말, 같은 사전 9(고도·고도(E)·RECTANG 통째·OSNAPZ·FLATTEN). 「높이」는 高さ | 7 |
+| 중국어 | 标高 7·高程 9 | **标高** — AutoCAD 중국어판 ELEVATION 특성 낱말, 같은 사전 7(314차 FLATTEN 결과 줄·RECTANG 통째·OSNAPZ·STATUS). 「높이」는 高度 | 9 |
+
+- 독일어: 고도·고도(E)·고도={0}(RECTANG 현재 모드 줄)·새 객체의 고도(ELEVATION)·새 기본 고도 지정(ELEV — Standardhöhe → Standarderhebung, 짝 Standarddicke)·직사각형의 고도 지정·RECTANG 통째(Erhöhung(E))·
+  FLATTEN 리본 풍선·결과 줄·행 고도 증분 셋(Höhenunterschied → Erhebungsunterschied)·현재 고도:(STATUS). 둘 다 여성 명사라 관사·형용사 어미(Aktuelle) 그대로.
+- 일본어: 새 객체의 고도·새 기본 고도 지정·직사각형의 고도 지정·행 고도 증분 셋·현재 고도:(標高 → 高度).
+- 중국어: 고도·고도(E)·고도={0}·새 객체의 고도·새 기본 고도 지정·직사각형의 고도 지정·행 고도 증분 셋(高程 → 标高).
+- 그대로 둔 고도 열쇠: 이미 맞춘 낱말인 것(독일어 3·일본어 9·중국어 7). 옵션 글자 (E)와 조각·통째의 빈칸 꼴은 원문 그대로.
+
+바꾼 값마다 같은 값 열쇠를 jq로 찾았습니다(네 사전): 다른 일을 하는 칸과 같은 이름이 되는 것은 없고, 오히려 독일어 「고도」·「고도(E)」·「고도={0}」이 「높이」·「높이(E)」(ATTDEF 문자 옵션)·「높이={0}」(값 줄)과
+**값이 똑같던 것**이 갈렸습니다(특성 팔레트의 LWPOLYLINE 고도 칸과 문자 높이 칸, RECTANG 현재 모드 줄과 높이 줄). 거꾸로 찾기(`sourceMessage`)가 제 원문으로 돌아옵니다(고치기 전에는 독일어 고도 값이 「높이」로 돌아감).
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 세 사전(`site/locales/{de,ja,zh-CN}.json`)의 29곳. 열쇠 수 그대로(9344). 특성 팔레트·LIST·RECTANG·ELEV·STATUS·FLATTEN·배열 특성 칸·ARRAYEDIT에서 고도가 언어마다 한 낱말로 보입니다.
+- 285차 시험의 행 고도 증분 기대(일본어 標高·중국어 高程·독일어 Höhenunterschied)를 리드 결정 근거 주석과 함께 새 낱말로 고쳤습니다(「표의 행 높이가 아니다」 규칙은 그대로 맞음).
+- 두는 것(ROADMAP 「315차에 보고 두 것」): 앞부터 있던 일본어 「고도」 高度 = 중국어 「높이」 高度 거꾸로 찾기 겹침, 통일 밖 중국어 ARRAY 레벨 프롬프트의 标高, 짝 꼴이 다른 두 줄.
+
+### 확인
+- `tests/i18n-unify315.test.ts`(새 시험 5건): 고도 열쇠 16 = 쓰는 곳(소스), 독일어 값에 Höhe 꼴 없음·Erhebung, 일본어 값에 標高 없음·高度, 중국어 값에 高程 없음·标高(대표 값·짝 열쇠 꼴·RECTANG 통째 = 옵션 조각),
+  「높이」는 Höhe·高さ·高度 그대로, 거꾸로 찾기.
+- 고치기 전 3파일 11건 가운데 5건 실패(새 시험 넷, 285차 하나), 고친 뒤 `tests/i18n-unify315.test.ts`·`tests/i18n-terms285.test.ts`·`tests/i18n-solid314.test.ts` 3파일 11건 통과(한 번에). `npm run check:i18n` 통과(9344 항목).
+- tools/·tests/ grep: 옛 값을 기대한 것은 285차 행 고도 증분 셋뿐(고침). 298차(영어 고도·중국어 RECTANG 통째 — 바꾸지 않은 값)·314차(중국어 FLATTEN 标高 그대로, 독일어 결과 줄 머리 Abgeflacht 그대로)·
+  118·293·302차 「높이」 Höhe 줄은 손셈으로 맞음. tools/에는 걸리는 것이 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(314차): 3D 객체·두께·고도·영역 묶음의 번역 대조와 빠진 번역
 
 ### 근거와 표
