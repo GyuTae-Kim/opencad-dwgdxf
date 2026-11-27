@@ -96,7 +96,8 @@ describe('세 언어 사전 안에서 갈린 고도 낱말 통일(315차 리드 
     // RECTANG 통째 프롬프트(같은 사전의 근거)와 옵션 조각이 같은 낱말
     expect(zh[RECT]).toContain(`/${zh['고도(E)']}/`);
     expect(zh[ELEV_ASK]).toBe(zh['새 기본 두께 지정 <{0}>:']!.replace(zh['두께']!, zh['고도']!));
-    expect([zh[NEW_OBJ], zh[RECT_ASK], zh[ROW_CELL], zh[ROW_HEAD]]).toEqual(['新的对象标高', '指定矩形标高', '行间标高增量', '指定行间增量标高或 [']);
+    // 316차: 「새 객체의 고도」는 짝 열쇠 「새 객체의 두께」 新建对象厚度와 같은 꼴(新的对象 → 新建对象 — 315차에 보고 둔 짝 꼴)
+    expect([zh[NEW_OBJ], zh[RECT_ASK], zh[ROW_CELL], zh[ROW_HEAD]]).toEqual(['新建对象标高', '指定矩形标高', '行间标高增量', '指定行间增量标高或 [']);
     expect(zh[ROW]).toBe(`${zh[ROW_HEAD]}表达式(E)] <{0}>:`);
     expect(zh['높이']).toBe('高度');
     expect(zh['고도']).not.toBe(zh['높이']);
