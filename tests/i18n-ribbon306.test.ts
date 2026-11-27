@@ -170,7 +170,7 @@ describe('리본 묶음의 번역과 305차가 남긴 것(306차)', () => {
       expect(de[k], k).toContain(de['특성']!.replace(/en$/, ''));
       expect(de[k], k).not.toMatch(/Attribut|Sortier/);
     }
-    // 부착 anhängen(Anhang 첨부물이 아니다), ATTOUT 블록 속성(blockieren 막다가 아니다), 비교 닫기 schließen, 구속 Einschränkung(Auto Constraint·Rückhaltestange가 아니다), 끊기선 Bruchlinie,
+    // 부착 anhängen(Anhang 첨부물이 아니다), ATTOUT 블록 속성(blockieren 막다가 아니다), 비교 닫기 schließen, 구속 Abhängigkeit(308차 리드 결정 — AutoCAD 독일어판 낱말, 구속 막대 Abhängigkeitsleiste. Auto Constraint·Rückhaltestange·Einschränkung이 아니다), 끊기선 Bruchlinie,
     // 결합(JOIN) Verbinden, 기본 모드 = 「기본값」 Standard, 단일 행 einzeilig(「단일 행 문자」). 「정리」 패널은 같은 패널 「소거」 Bereinigen과 같은 이름이 되어 그대로 둔다
     expect([de['DWG 부착'], de['래스터 이미지 부착 (IAT)']]).toEqual([de['PDF 부착']!.replace('PDF', 'DWG'), `${de['이미지 부착']!.replace('Bild', 'Rasterbild')} (IAT)`]);
     expect(de['블록 속성을 탭 구분 파일로 (ATTOUT)']).toContain(de['블록 속성 관리자']!.split('-')[0]!);
