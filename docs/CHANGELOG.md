@@ -3,6 +3,53 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(310차): 309차가 남긴 묶음 밖 오역과 동적 블록(블록 편집기)·그룹 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 309차 「보고 두 것」 (3) 묶음 밖 오역이고, 묶음은 BEDIT·BSAVE·BCLOSE·블록 저작 안내 아홉 명령(`app/blocks.ts`), 동적 블록 그립·특성 팔레트 「사용자화」 묶음·-DYNPROPS·DYNPROPS·RESETBLOCK
+(`app/dynblock.ts`, 모형 `edit/dynblock/`), GROUP·UNGROUP·PICKSTYLE(`app/util2-select.ts`), GROUPEDIT(`app/editcmds2-query.ts`·`edit/editcmds2/groupedit.ts`·`edit/util/groups.ts`),
+선택 그룹(G)·리본 블록·그룹 단추·블록 편집기 탭 줄(`app/app.ts`·`app/ui/shell.ts`)의 보이는 글입니다. 이 앱에는 블록 저작 팔레트·매개변수 세트·가시성 상태 관리자·블록 특성 표·테스트 블록 화면이 없고
+BPARAMETER 등 아홉 명령은 안내 한 줄입니다(그 줄은 네 언어에 이미 있습니다). 앞 차수 표에 있는 열쇠(292차 블록·RESETBLOCK 결과 줄, 304차 GROUP·GROUPEDIT·PICKSTYLE, 306차 리본)는 건너뛰었습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 11·독일어 22·일본어 10·중국어 13 열쇠).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 출발점: REFEDIT 흐림 정도(XFADECTL 제목)·LIMITS 도면 공간 한계 | 독일어 Weichzeichnen·중국어 模糊 → Abblenden·淡入度, 독일어 Papierplatzbeschränkungen → Papierbereichsgrenzen | 309차 「흐리기」, 「모형 공간 한계 재설정:」 Modellraumgrenzen·「도면 공간」 Papierbereich |
+| 출발점: TRIM·EXTEND 앞 글(`app/modify.ts` 삼항의 앞 글) | 영어 clip, 독일어 Zuschneiden·Auswahl zu erweitern·「auswählen Beim Drücken …: Trimmen」, 일본어 切り取る·トリミング, 중국어 裁剪·扩展·按住鼠标左键 → 앞 조각 「… 또는 [」의 앞부분 | 297차 앞 조각(stutzen·トリム·修剪·延伸), 「자를 쪽 지정:」 trim |
+| 출발점: 비교 설정·고르기 대화 상자 | 독일어 구름형 리비전 켜기 「Aktivieren Sie …」(명령꼴) → Revisionswolke aktivieren, 중국어 DWG 비교 工程图比较 → DWG 比较 | 「플롯 스탬프 켜기」 Plotstempel aktivieren, 「비교」 比较·「DWG 부착」 附加 DWG |
+| 정렬 그립 머리 | 「** 정렬 **」 Sort·Sortieren·ソート·排序(정렬하기 sort) → ** ALIGN **·** AUSRICHTEN **·** 整列 **·** 对齐 ** | 「정렬」 Align·整列·对齐(306차 「정렬 (AL)」), 「** 신축 **」 꼴 |
+| 매개변수의 동작·고칠 | 「이 매개변수의 동작은 …」 behavior·Verhalten·動作·行为 → action·Aktion·アクション·动作, 「읽을 수 없는 자료 … 고칠 수 없습니다」 둘 repaired·repariert → edited·bearbeitet, 「고칠 수 있는 동적 블록 특성이 없습니다」 fixed·behoben·動的ブロック特性·可用于修复 → changed·geändert·ダイナミックブロックのプロパティ·可修改, BCLOSE 「블록 {0}을(를) 고쳤습니다」 fixed·behoben → Modified·geändert | 「블록 동작」, 동적 블록 정의 안내(「형상은 고칠 수 있지만 매개변수·동작·…」 edit·bearbeitet·actions), 「동적 블록 특성」, BEDIT 안내 Modify·Ändern |
+| -DYNPROPS 「고칠 특성 입력」 | 통째 「attribute to fix … <end>」·「zu reparierende Attribut … <Ende>」·特性·修复, 조각 Feature·特征 → 조각 + {0} + 「] <종료>:」 | 영어·일본어 조각 property·プロパティ, 「] <종료>:」 |
+| 상태·조회·반전 | 독일어 「목록에서 상태를」 Staat(나라) → Status, 일본어 可視性ステータス → 可視性状態, 조회 값 Suchwert·検索値·查找值(찾기) → Nachschlagewert·ルックアップ値·查寻值, 중국어 반전됨·반전되지 않음 倒置(위아래 뒤집기) → 已反转·未反转 | 「가시성 상태」, 「조회 테이블」 Nachschlagetabelle·ルックアップ テーブル·查寻表, 「반전 상태」 反转状态 |
+| BEDIT·BCLOSE·RESETBLOCK·BSAVE | BEDIT 안내 「모든 참조가 바뀝니다」 replace·Verweise … ersetzt·此块中的…替换 → updates·Referenzen dieses Blocks aktualisiert·此块的…更新, RESETBLOCK 리본 풍선 Define … as default·Definieren Sie … → Reset … to definition defaults·zurücksetzen, 제목 Block-Reset → Block zurücksetzen, BSAVE 풍선 Block Save·Blockspeicherung → Save block·Block speichern (BSAVE), BCLOSE 물음 제목 werden nicht gespeichert·保存されません → Nicht gespeicherte Änderungen·保存されていない変更, 독일어 「고른 객체 중 …」 zwischen → Unter | 일본어 같은 열쇠 更新·リセット, 「블록 {0}개를 재설정했습니다.」 zurückgesetzt, 단추 글 「블록 저장」, 「저장하지 않은 변경이 있습니다.」, 「고른 객체 가운데 주석 객체가 없습니다.」 |
+| 이름 글자 안내(GROUP·GROUPEDIT·블록·외부 참조 이름 등 공유 — 같은 뜻) | 독일어 「Hinweise zu Namen: Es gibt Zeichen …」 → Der Name enthält Zeichen, die nicht verwendet werden dürfen. | 「뷰 이름에 쓸 수 없는 문자가 있습니다.」 |
+
+(나) 빠진 번역 — 네 언어 모두 한국어로 보이던 것(언어마다 6):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| 동적 블록 특성 값 오류 줄 「{0}: 각도가 올바르지 않습니다.」·좌표·「0보다 큰 거리를 입력하십시오.」·「"{1}"은(는) 목록에 없습니다.」(특성 팔레트 「사용자화」 칸·DYNPROPS 대화 상자 확인) | 4 | {0}: Enter a distance greater than 0. | 「{이름}: {오류}」 틀이 없어 줄 통째가 한국어 — 뒤 글은 그 오류 열쇠의 번역, 앞은 같은 사전 「{0}: …」 꼴 |
+| GROUPEDIT 이름 없는 그룹의 추가·제거 줄 | 2 | Added {1} objects to group {0}(unnamed). | 틀 {0}이 「(이름 없음)」을 잡음 — 304차 「그룹 {0}(이름 없음)이(가) 분해되었습니다.」 꼴 |
+
+지운 틀은 없습니다. 열쇠 9275 → 9281. 바꾼 값 18개는 네 사전을 통틀어 한 곳씩이라 다른 칸과 같은 이름이 되지 않습니다(동적 블록 「정렬」 ALIGN ↔ 「** 신축 **」 STRETCH, 「조회」 lookup ↔ 조회·측정 명령은 다른 열쇠).
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 56곳과 새 열쇠 6씩. 동적 블록 정렬 그립·매개변수 동작·-DYNPROPS·조회·뒤집기 값·BEDIT·BCLOSE·RESETBLOCK·BSAVE 글이 엉뚱한 낱말
+  (정렬하기·행동·수리·나라·찾기·위아래 뒤집기·바꿔치기·정의하다) 대신 CAD 낱말로, 동적 블록 특성 값 오류 줄과 이름 없는 그룹 편집 줄이 한국어 대신 그 언어로 보입니다.
+- 공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「블록 재설정」(RESETBLOCK 제목·리본 단추·바로 가기 메뉴), 「이름에 쓸 수 없는 문자가 있습니다.」(그룹·블록·외부 참조·페이지 설정·다중 지시선 스타일 이름 등).
+  TRIM·EXTEND 앞 글은 삼항 상수라 화면에는 옵션 앞 조각·통째가 보입니다(사전 안 짝을 맞춤).
+- 두는 것(ROADMAP 「310차에 보고 두 것」): 공유 열쇠 「사용자화」·「사용자」, 코드 변경이 드는 -DYNPROPS 값 줄·읽을 수 없는 자료 목록·각도 이름표, 앞 차수 대조 열쇠.
+
+### 확인
+- `tests/i18n-dynblock310.test.ts`(새 시험 3건 — 글 꼴은 소스에서 확인): 출발점 다섯(흐리기·한계·TRIM·EXTEND 앞 글 = 앞 조각의 앞부분·구름형 리비전 켜기·DWG 비교), 동적 블록·블록 편집기 낱말 = 같은 사전 근거·거꾸로 찾기,
+  진짜 번역층(guardedTranslate·translateTail)으로 오류 줄·이름 없는 그룹 줄 일곱이 네 언어 모두 한국어 없이 + 새 열쇠 = 오류 열쇠·304차 꼴.
+- 고치기 전 3파일 13건 가운데 4건 실패(독일어 흐림 Weichzeichnen, 영어 ** Sort **, 한글 남은 줄 28 = 네 언어 × 일곱, 309차 LIMITS 새 기대), 고친 뒤 `tests/i18n-dynblock310.test.ts`·
+  `tests/i18n-imgcmp309.test.ts`·`tests/i18n.test.ts` 3파일 13건 통과(한 번에). `npm run check:i18n` 통과(9281 항목).
+- tools/·tests/ grep: 옛 값을 기대한 곳은 309차 시험의 LIMITS 「그대로」 한 줄뿐이라 같은 커밋에서 새 값으로 고쳤습니다. 303차 시험(「이름에 쓸 수 없는 문자」의 die nicht verwendet werden dürfen)은 새 값에도 있고,
+  292차(고른 객체 중 동적 블록 참조)·307차(구름형 리비전 켜기)는 중국어만 보아 닿지 않습니다. tools/에는 걸리는 것이 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(309차): 독일어 파라메트릭 구속 통일(리드 결정)과 이미지·PDF 언더레이·도면 비교·계산기 묶음의 번역 대조·빠진 번역
 
 ### 리드 결정 — 독일어 구속의 셋째 갈래 Beschränkung

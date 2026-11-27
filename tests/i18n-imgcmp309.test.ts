@@ -77,9 +77,9 @@ describe('이미지·PDF 언더레이·도면 비교·계산기 묶음의 번역
     for (const k of ['치수 구속조건', '수평 치수 구속조건', '각도 치수 구속조건', '첫 번째 각도 구속점 지정:', '참조 구속조건 만들기', '동적 치수 구속 표시·숨기기']) {
       expect(sourceMessage(de[k]!), k).toBe(k);
     }
-    // 그대로: QLEADER 각도 구속 입력(300차)·LIMITS 「도면 공간 한계」(한계 — 구속이 아니다, 309차에 보고 두 것)
+    // 그대로: QLEADER 각도 구속 입력(300차). LIMITS 「도면 공간 한계」(한계 — 구속이 아니다)는 310차가 「모형 공간 한계」 꼴 Grenzen으로 고쳤다
     expect(de['첫 번째 각도 구속 입력 <{0}>:']).toBe('Erste Winkelbeschränkung eingeben <{0}>:');
-    expect(de['도면 공간 한계 재설정:']).toBe('Papierplatzbeschränkungen zurücksetzen:');
+    expect(de['도면 공간 한계 재설정:']).toBe('Papierbereichsgrenzen zurücksetzen:');
   });
 
   it('-COMPARE 설정·앞에 표시·PDFADJUST 단색·반전 자르기·-IMAGEADJUST 값·비교 결과와 요약·PDFLAYERS 제목이 네 언어 모두 한국어 없이 보인다', () => {
