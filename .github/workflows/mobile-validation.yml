@@ -10,7 +10,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    # 시험 파일(609개 — 한 러너에서 약 4~5분)을 휴대폰 로딩 비교와 따로, 러너 세 대에 나눠 동시에 돈다(vitest --shard).
+    # 시험 파일(614개 — 한 러너에서 약 4~5분)을 휴대폰 로딩 비교와 따로, 러너 네 대에 나눠 동시에 돈다(vitest --shard).
+    # CI 9차: 세 대(조각마다 88~98초)가 휴대폰 검사(약 85초)보다 길어 네 대로, 무게표는 #371 시험 기록 601개로 새로(없는 파일은 앞 표 값)
     # CI 2차: 조각은 파일 무게표(tests/shard-weights.json)로 무거운 것부터 가장 가벼운 조각에 넣는다(tests/weighted-sequencer.ts —
     # 전에는 경로 해시로 같은 수씩이라 무거운 파일이 조각 2에 몰려 시험 시간 합 84·180·137초)
     runs-on: ubuntu-latest
@@ -18,8 +19,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
-    name: test (${{ matrix.shard }}/3)
+        shard: [1, 2, 3, 4]
+    name: test (${{ matrix.shard }}/4)
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -27,7 +28,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx vitest run --shard=${{ matrix.shard }}/3
+      - run: npx vitest run --shard=${{ matrix.shard }}/4
   validate-mobile:
     runs-on: ubuntu-latest
     timeout-minutes: 20
