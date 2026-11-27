@@ -6283,6 +6283,8 @@
   "장치 \"{0}\"을(를) 찾을 수 없습니다. ?로 목록을 보십시오(이 웹 버전은 PDF·SVG 파일로만 출력합니다).": "Device \"{0}\" not found. Use \"?\" to view the list (this web version only supports output to PDF or SVG files).",
   "장치 이름": "Device name",
   "장치: {0} · 용지: {1} ({2}, {3}) · 플롯 스타일: {4}": "Device: {0} · Paper: {1} ({2}, {3}) · Plot style: {4}",
+  "장치: {0} · 용지: {1} ({2}, 가로) · 플롯 스타일: {3}": "Device: {0} · Paper: {1} ({2}, Landscape) · Plot style: {3}",
+  "장치: {0} · 용지: {1} ({2}, 세로) · 플롯 스타일: {3}": "Device: {0} · Paper: {1} ({2}, Portrait) · Plot style: {3}",
   "재료": "Material",
   "재료 소거는 이 웹 버전에서 지원하지 않습니다(재료·플롯 스타일·형태·비주얼 스타일·고립된 데이터는 이 앱이 만들거나 고치지 않습니다).": "Purging materials is not supported in this web version (this app does not create or edit materials, plot styles, shapes, visual styles or orphaned data).",
   "재료 이름 입력 또는 [": "Enter material name or [",

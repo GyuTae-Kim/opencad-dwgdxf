@@ -18,6 +18,7 @@ import { ctbList } from './ctblib';
 import { ask, h } from './ui/dom';
 import { btn, checkIn, fail, group, numIn, numOf, pickList, resultDialog, row, selectIn, textIn } from './mgr-ui';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 // ---------------------------------------------------------------------------
 // 값 변환(대화상자 칸 ↔ PLOTSETTINGS)
@@ -515,7 +516,9 @@ type Row = { kind: 'layout'; name: string; layout: Layout } | { kind: 'named'; n
 function describe(p: PageSettings): string {
   const size = `${+p.paperWidth.toFixed(2)} × ${+p.paperHeight.toFixed(2)} ${p.paperUnits === 0 ? 'in' : 'mm'}`;
   const ori = isLandscapeOf(p) ? '가로' : '세로';
-  return `장치: ${p.printerName ? ft(p.printerName) : '없음'} · 용지: ${p.paperName ? ft(p.paperName) : size} (${size}, ${ori}) · 플롯 스타일: ${p.styleSheet ? ft(p.styleSheet) : '없음'}`;
+  // 「없음」(앱 낱말)은 틀 자리라 먼저 옮긴다(328차). 방향은 사전의 「가로」(Horizontal — 다른 뜻과 함께 쓰는 열쇠)로 옮기지 않고 방향을 품은 틀(가로·세로 둘)로 옮긴다
+  const none = uiText('없음');
+  return `장치: ${p.printerName ? ft(p.printerName) : none} · 용지: ${p.paperName ? ft(p.paperName) : size} (${size}, ${ori}) · 플롯 스타일: ${p.styleSheet ? ft(p.styleSheet) : none}`;
 }
 
 type ManagerAction = { act: 'current' | 'new' | 'modify' | 'rename' | 'delete' | 'import' | 'close'; row: Row | null };

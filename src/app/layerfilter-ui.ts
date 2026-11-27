@@ -38,6 +38,7 @@ import {
 import { PickList, ensureLtStyle, guardKeys, wideDialog } from './layertools-ui';
 import { loadPref, savePref } from './util2-ui';
 import { pickColor } from './ui/colorpick';
+import { uiText } from './i18n-text';
 import { ft } from './filetext';
 import { type MenuItem, ask, h, showMenu } from './ui/dom';
 import { icon } from './ui/icons';
@@ -309,7 +310,9 @@ export function layerFilterPanel(app: App, refresh: () => void): LayerFilterPane
         setFilterView(st, { invert: box.checked });
         refresh();
       });
-      return h('div', { class: 'lf-foot' }, h('label', { title: '필터 조건에 맞지 않는 도면층을 보여 줍니다' }, box, '필터 반전(I)'), h('span', { role: 'status' }, filterStatusText(res.label, res.total, shown, res.invert)));
+      // 틀 「{0}{1}: …개 도면층 중 …개 표시」의 잡은 이름(328차): 사용자 필터·외부 참조 하나는 도면 글(위 트리와 같은 가름), 모두·사용된 모든 도면층 같은 기본 노드는 앱 글이라 먼저 옮긴다
+      const label = isUserRef(res.ref) || res.ref.startsWith('XREF:') ? ft(res.label) : uiText(res.label);
+      return h('div', { class: 'lf-foot' }, h('label', { title: '필터 조건에 맞지 않는 도면층을 보여 줍니다' }, box, '필터 반전(I)'), h('span', { role: 'status' }, filterStatusText(label, res.total, shown, res.invert)));
     },
     rowMenu(layerName) {
       const groups = filters.filter((f) => f.kind === 'group');
