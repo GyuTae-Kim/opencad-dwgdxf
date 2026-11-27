@@ -82,7 +82,8 @@ describe('명령행 맞춤·지시선 주석 옵션 열쇠(121차)', () => {
     expect(translate(p, 'de')).toContain('[Einpassen(F)] <1=1>:');
     expect(translate(p, 'zh-CN')).toContain('[布满(F)] <1=1>:');
     const bad = '축척은 "1=100"처럼 입력하거나 맞춤(F)을 입력하십시오.';
-    expect([translate(bad, 'de'), translate(bad, 'zh-CN')]).toEqual(['Skalierung als „1=100“ eingeben oder „Einpassen(F)“ eingeben.', '输入比例“1=100”或输入“布满(F)”。']);
+    // 313차 리드 결정: 플롯 축척은 도면 축척 뜻이라 독일어 Maßstab(같은 흐름 「플롯 축척」 Plotmaßstab — Skalierung은 크기 바꾸기)
+    expect([translate(bad, 'de'), translate(bad, 'zh-CN')]).toEqual(['Maßstab als „1=100“ eingeben oder „Einpassen(F)“ eingeben.', '输入比例“1=100”或输入“布满(F)”。']);
   });
 
   it('LEADER 주석(A)는 Annotation·Maßtext·注釈·注释, 주석 특성의 주석(A)은 그대로', () => {
