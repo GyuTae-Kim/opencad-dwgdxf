@@ -6,6 +6,7 @@ import { serviceWorker } from 'opencad-site-kit/pwa/sw-plugin';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { offline, site } from './tools/site.mjs';
+import { WeightedSequencer } from './tests/weighted-sequencer';
 
 /**
  * pdf.js가 필요할 때 받아 가는 자료(표준 글꼴, CMap, 그림 해독 wasm, ICC)를 `pdfjs/` 아래로 낸다.
@@ -58,5 +59,7 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     setupFiles: ['tests/setup.ts'],
     testTimeout: 120_000,
+    // CI 2차: --shard 조각을 파일 무게(tests/shard-weights.json)로 고르게 나눈다(tests/weighted-sequencer.ts)
+    sequence: { sequencer: WeightedSequencer },
   },
 });
