@@ -18,6 +18,7 @@ import { prefGet, resultDialog } from './mgr-ui';
 import { type SaveLoss, saveLosses, saveLossLines } from './saveloss';
 import { commandLineMode, inScript } from './script';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 interface SaveTarget {
   format: SaveFormat;
@@ -122,7 +123,8 @@ async function write(app: App, ctx: CommandContext, st: DocState, t: SaveTarget,
   document.title = `${st.saveName} - OpenCAD DWG·DXF`;
   const label = t.ext === 'dwt' ? TEMPLATE_TYPE.label : (SAVE_TYPES.find((x) => x.format === t.format && x.version === t.version)?.label ?? t.version);
   ctx.print(`${ft(name)}을(를) ${label}${t.binary ? ' 이진' : ''} 형식으로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB, ${Math.round(res.ms)}ms).`);
-  for (const w of res.warnings.slice(0, 5)) ctx.print(`참고: ${w.message}${w.count ? ` (${w.count})` : ''}`);
+  // 「참고: {0}」 틀은 「글 (개수)」를 통째로 잡아 옮기지 않는다(317차) — 쓰기 경고 글을 먼저 화면 언어로(MATCHPROP 꼴, 한국어는 그대로)
+  for (const w of res.warnings.slice(0, 5)) ctx.print(`참고: ${uiText(w.message)}${w.count ? ` (${w.count})` : ''}`);
   return true;
 }
 

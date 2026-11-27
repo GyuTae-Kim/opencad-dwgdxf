@@ -36,6 +36,7 @@ import { SAVE_TYPES } from './save';
 import { form, h } from './ui/dom';
 import type { Pt } from './view';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 import { askInt, askKeyword, askYesNo, button, checkbox, modal, padWide, rememberErased, select, textWidth } from './util2-ui';
 
 const BAD_BLOCK_NAME = /[<>/\\":;?*|,=`]/;
@@ -739,7 +740,8 @@ export function registerUtil2BlockCommands(app: App): void {
           download(new Blob([out.data as BlobPart], { type: type.format === 'dxf' ? 'application/dxf' : 'application/acad' }), fileName);
           saved = true;
           ctx.print(`${ft(fileName)}을(를) 썼습니다(객체 ${built.entities}개, ${(out.data.byteLength / 1024).toFixed(0)} KB).${built.skipped ? ` 옮길 수 없는 객체 ${built.skipped}개는 뺐습니다.` : ''}`);
-          for (const w of out.warnings.slice(0, 3)) ctx.print(`참고: ${w.message}${w.count ? ` (${w.count})` : ''}`);
+          // 쓰기 경고 글은 먼저 화면 언어로(317차 — save.ts와 같음)
+          for (const w of out.warnings.slice(0, 3)) ctx.print(`참고: ${uiText(w.message)}${w.count ? ` (${w.count})` : ''}`);
         } finally {
           app.engine.closeDoc(res.docId);
         }
