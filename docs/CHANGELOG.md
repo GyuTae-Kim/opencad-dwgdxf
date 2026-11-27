@@ -3,6 +3,43 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(313차): 한 사전 안에서 갈린 CAD 낱말 통일 — 독일어 주석·도면 축척
+
+### 근거와 표
+WCAG 3.2.4(일관된 식별 — 같은 기능은 같은 이름)에 맞춰, 독일어 사전 안에서 같은 CAD 낱말이 둘로 갈린 것을 리드 결정으로 하나로 맞췄습니다(308차 꼴 — 결정마다 한 규칙, 열쇠 수가 30을 넘어도 이번 차수에 한해 됨).
+312차 「보고 두 것」의 독일어 한도 밖 줄 가운데 이 두 낱말에 드는 것(주석 객체 무리·리본 풍선 둘·ANNOAUTOSCALE 풍선·뷰포트 축척 동기화·외부 참조 축척 숨기기·DIMSTYLE 주석 확인란)도 이번에 풀었습니다.
+
+| 원문 낱말 | 섞인 번역(312차 머리) | 맞춘 낱말과 근거 | 바꾼 열쇠 |
+| --- | --- | --- | --- |
+| 주석(주석 특성 annotative·주석 객체) | Anmerkung 16 열쇠·Beschriftung 62 열쇠 | **Beschriftung** — AutoCAD 독일어판 낱말(Beschriftungsobjekt·Beschriftungsmaßstab). 같은 사전 62 열쇠, 119차 시험(주석 열쇠에 Anmerkung 금지) | 15 |
+| 축척 — 도면·주석·뷰포트·플롯 축척(1:50 같은 비율 이름) | Skal… 99 열쇠(Skalierung·Skala·skaliert)·Maßstab | **Maßstab** — AutoCAD 독일어판 Beschriftungsmaßstab·Ansichtsfenstermaßstab·Maßstabsliste. 같은 사전 「주석 축척」·「플롯 축척」 Plotmaßstab·「축척 리스트」 Maßstabsliste | 15(셋은 주석과 겹침) |
+
+- 주석: 주석 객체 선택(조각·통째·「주석 객체 선택:」)·주석 객체 표시와 그 풍선(ANNOALLVISIBLE), -SCALELISTEDIT 삭제 막힘 둘, 객체 축척 대화 상자 「선택한 주석 객체 {0}개」,
+  리본 풍선 셋(현재 주석 축척 추가·삭제, ANNOUPDATE 「문자를 문자 스타일의 주석 설정에 맞춤」), HATCH 주석(AN) 옵션 조각과 통째 프롬프트(-DIMSTYLE 통째가 이미 Beschriftung (AN)), 특성 팔레트 칸 id 둘(pf-).
+  둘 다 여성 명사라 관사가 그대로입니다(형용사 꼴 annotativ는 사전에 없어 명사 꼴만).
+- 도면 축척: HIDEXREFSCALES 「외부 참조 축척 숨기기」와 켜진 메뉴 틀(✓), 축척 목록 메뉴 「비율 축척 백분율」, MVSETUP 축척 목록 제목 셋(과학·미터법·십진 — 같은 목록 「공학 축척」 Technischer Maßstab·「건축 축척」 Architektonischer Maßstab 꼴),
+  ANNORESET 풍선 「축척 표현」 Maßstabsdarstellungen, VPSCALE 「뷰포트 축척 보기」·동기화 단추 이름(같은 단추 풍선의 Ansichtsfenstermaßstab), ANNOALLVISIBLE·ANNOAUTOSCALE 풍선(제목 열쇠 「주석 축척 변경 시 축척 추가」 Maßstab — 312차),
+  DIMSTYLE 맞춤 탭 「주석(축척은 주석 축척을 따름)」의 뒤 「주석 축척」, -PLOT 잘못 친 축척 「축척은 "1=100"처럼 …」. Maßstab은 남성 명사라 4격 어미를 맞췄습니다(Aktuellen·Externen, 형용사 + Maßstab).
+- 그대로 둔 것: 공유 열쇠 「주석」(홀로 — 주석 특성 자리와 함께 FIELD 문서 특성 Comments·DWGPROPS 설명 칸이 써서 뜻이 갈림).
+  「축척」 84 열쇠 — 축척 비율(X·Y·Z·모든 축·뷰포트 XP 비율), SCALE·그립 크기 바꾸기, 블록·이미지·PDF 삽입 축척, 선종류·선가중치·해치 축척, 치수 축척(DIMSCALE·DIMTFAC), ZOOM·MLINE·ALIGN·SCALETEXT·ARCTEXT·동적 블록 축척 동작,
+  MVSETUP 뷰포트 크기 맞추기(통째가 Ansichtsfenster skalieren), 공유 조각 「축척(S)」, 312차가 「추가할·삭제할」 열쇠를 따로 넣어 화면에 닿지 않는 틀 둘, 주석 해치 안내의 「주석 축척은 특성 팔레트에서 켜십시오」(비율 이름이 아니라 주석 특성 켜기 — 영어도 annotative property).
+  DIMSTYLE 확인란의 앞 「축척」도 치수 피처 축척 비율이라 Skalierung 그대로입니다.
+- 바꾼 값마다 같은 값 열쇠를 jq로 찾았습니다: 다른 일을 하는 칸과 같은 이름이 되는 것은 없습니다(「뷰포트 동기화」 VPSYNC Ansichtsfenster-Synchronisierung과 「뷰포트 축척 동기화」는 다름). 거꾸로 찾기(`sourceMessage`)가 제 원문으로 돌아옵니다.
+
+열쇠 수는 그대로(9343).
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- `site/locales/de.json` 27 열쇠(주석 15·도면 축척만 12). 독일어 화면의 주석 객체 명령·상태 막대 주석 단추·리본 주석 풍선·축척 목록 메뉴·MVSETUP 축척 목록·플롯 축척 알림이 한 낱말 Beschriftung·Maßstab으로 보입니다.
+
+### 확인
+- `tests/i18n-unify313.test.ts`(새 시험 3건): 원문에 주석이 든 열쇠의 독일어 값에 Anmerkung 없음(공유 열쇠 「주석」 빼고)과 대표 값·거꾸로 찾기, 도면 축척 뜻 열쇠(목록으로 고정)에 Skal 없음·Maßstab 있음과 대표 값·거꾸로 찾기,
+  축척 비율 뜻 표본·주석 해치 안내·공유 열쇠 「주석」(소스 글 확인)은 그대로.
+- 고치기 전 14건 가운데 3건 실패. 고친 뒤 첫 실행에서 1건 실패 — 사전 고침 한 곳에서 「· Wenn」의 빈칸이 빠진 것을 새 시험이 잡아 바로잡았고, 다시 돌려 `tests/i18n-unify313.test.ts`·`tests/i18n-keys121.test.ts`·`tests/i18n-annoscale312.test.ts` 3파일 14건 통과.
+  `npm run check:i18n` 통과(9343 항목).
+- tools/·tests/ grep: 옛 값을 정확히 기대하던 곳은 121차 시험의 「1=100」 독일어 한 줄 — Maßstab으로 고치고 리드 결정 근거를 주석에 적었습니다. 312차 시험(✓ 틀 = {0} + 꺼진 이름, 주석 축척 Anmerkung 금지)·119차 시험(Anmerkung 금지)은 같은 방향이라 그대로 통과하고,
+  HATCH 통째(294·299차 — 한글 남음만 봄)·prompts(쓰기 낱말만 봄)·305·302·301차(영어·중국어만)는 닿지 않습니다. tools/에는 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(312차): 311차가 남긴 「옮길 수 없는 객체」·중국어 「추가할 축척」과 주석 축척·축척 목록 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
