@@ -3,6 +3,48 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(306차): 305차가 남긴 오역과 리본(탭·패널·단추 이름·풍선) 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+305차 「보고 두 것」 (1)의 한도 밖 오역(독일어 세로좌표(X)·(Y)와 304차 치수 제목 넷, 중국어 확장 데이터·응용 프로그램·핸들 나머지, 기본 모드·주석 축척 실패 줄)과
+리본(`app/ui/shell.ts` RIBBON — 탭 아홉·패널 35 제목·단추 이름·풍선·펼침 메뉴 항목, 리본 UI — 리본 펼치기·접힌 패널 팝업·고르기 상자·도면 탭)의 보이는 글 606개(앞 차수가 본 글을 뺀 383개 — 열쇠 379)를
+네 언어 값 모두 대조했습니다. 휴대폰 편집 화면은 같은 리본을 겹쳐 펼치는 꼴이라 따로 대체 메뉴 글이 없습니다. 「종류 (개수)」는 305차가 아홉을 더해 남은 것이 없습니다(속성·표는 기존 틀이 옮김).
+번역층(opencad-site-kit `translate`)은 `data-i18n-ui-copy` 안의 글이면 틀이 잡은 값도 옮기고 「▾」 꼬리를 떼고 옮깁니다 — 접힌 패널 단추(「{0} 패널 펼치기」 풍선·「{0} ▾」)는 그 안이라 패널 이름까지 옮겨지고, 펼침 메뉴 항목은 그 밖입니다.
+「동일」(구속 EQUAL ↔ 도면층 상태 표 머리 ↔ DIM 옵션)·「일치」(구속 ↔ 치수 검사 표 머리)·「홈」(리본 탭 ↔ 문자 정렬 옵션)·「개수」는 쓰는 곳이 갈려 하지 않았습니다.
+「세로좌표」(DIM·QDIM 옵션)·「고정」(구속 FIX)·「격리」(리본·바로 가기 메뉴)·「여러 줄로(변환)」(TXT2MTXT)·「여러 줄 (ML)·스타일·편집」(MLINE)은 뜻이 하나라 고쳤습니다.
+독일어 「정리」 패널은 Bereinigen으로 하면 같은 패널의 「소거」 Bereinigen과 같은 이름이 되어 두었습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 24·일본어 8·중국어 30·독일어 30곳). 중국어·독일어는 30에서 한도가 찹니다.
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 305차 남은 독일어 | 세로좌표·세로좌표(X)·(Y)와 304차 치수 제목 넷 Vertikale Koordinate → Ordinate(영어 「세로좌표」도) | 「세로좌표(O)」 Ordinate (O), 「세로좌표 치수」 Ordinatenbemaßung — 치수 제목은 「치수 ({0})」 + 종류 낱말 |
+| 305차 남은 중국어 | 확장 간격띄우기·확장 자료 크기 扩展名(확장자) → 扩展, 「{0} 적용」 申请(신청) → 应用, 새 핸들 둘·핸들 없음 줄 控制柄 → 句柄, 기본 모드 基本模式 → 默认模式, 주석 축척 실패 셋 标注比例尺 → 注释比例 | 「확장 데이터」 扩展数据, 「구속조건을 적용할 수 없습니다」 应用, 「핸들」 句柄, 「기본값」 默认, 「주석 축척」 注释比例 |
+| 리본 부착·분해·속성 | 영어 DWG Attachment·Raster Image Attachment → Attach DWG·Attach raster image, Decomposition·decompose → Explode, 속성 properties → attributes(가져오기·내보내기·관리·바로 편집·남기고 분해·BURST), 일본어 DWG付·取付け → アタッチ, 중국어 拆卸·解构·离开 → 分解, 독일어 DWG-Anhang·Rasterbildanhang → anhängen, Zerfall → Auflösen, ATTOUT blockieren → Blockattribute | 「PDF 부착」 Attach PDF·PDF anhängen, 「이미지 부착」 イメージ アタッチ, 「분해(속성 값 유지)」 Explode (keep attribute values)·分解（保留属性值）, 「분해」 Auflösen, 「블록 속성 관리자」 Blockattribut- |
+| 리본 구속·파라메트릭 | 영어 구속 막대·구속 삭제 Restraint → Constraint, 중국어·독일어 고정 已修复·Behoben(고쳐짐) → 固定·Fest, 독일어 자동 구속 Auto Constraint·구속 막대 Rückhaltestange → Automatische Einschränkung·Einschränkungsbalken | CBAR 풍선 constraint bars·Einschränkungsbalken, 「고정 구속」 固定约束·Feste Abhängigkeit, 「자동 구속(A)」 |
+| 리본 수정·그리기 | 정렬 (AL) 排序·Sortieren(정렬하기 sort) → 对齐·Ausrichten, 결합 (J) Combine·Kombinieren → Join·Verbinden, 호 (A) 拱形 → 圆弧, 구름형 수정 기호 票形 → 云状修订, 독일어 여러 줄 (ML)·여러 줄 스타일·편집 Mehrzeilig(여러 줄 문자) → Multilinie, 끊기선 Linie unterbrechen → Bruchlinie, 단일 행 einreihig → Einzeilig | 「정렬」 对齐·Ausrichten, 「결합」 Join·Verbinden, 「호(A)」 圆弧, 「구름형 리비전」 云状修订, 「여러 줄」 Multilinie·「다중선 스타일」 Multilinienstil, 「끊기선 기호」 Bruchliniensymbol, 「단일 행 문자」 Einzeiliger |
+| 리본 참조·비교·스크립트 | 중국어 참조 열기·참조 선택:·참조 이름(R): 参考文献(참고 문헌) → 参照, REFEDIT 原地反射 → 在位编辑, 비교 닫기 紧密比较·Genauer Vergleich → 关闭比较·Vergleich schließen, RSCRIPT 重写·neu schreiben(다시 쓰기) → 重新启动·neu starten, 독일어 XR·REDIR Externer Verweis: … → Externe Referenz, … | 「참조 이름」 参照名称, 「비교 닫기(COMPARECLOSE)」, 「도면 비교 닫기」 … schließen, 「스크립트 처음부터 다시」 重新启动脚本·Skript neu starten, 「외부 참조」 Externe Referenz |
+| 리본 그 밖 | 영어 블록 팔레트 Pallet → Palette, 「{0} 닫기」 {0} Close → Close {0}(일본어 {0}を閉じる), 「{0} 패널 펼치기」 {0} Expand panel → Expand {0} panel, 동적·XLIST 특성 characteristics → properties, TXT2MTXT 여러 줄로 multiline·マルチライン → multiline text·マルチテキスト, 일본어 격리 分離(= XREF 분리) → 隔離, 특성으로 선택 属性 → プロパティ, 중국어 옛 지시선 领导层文件夹 → 旧版引线, 정리 组织 → 清理, 표 셀 편집 풍선에 붙은 「（完成）」를 뺌, 독일어 W Teilbild → Zeichnungsdatei, 특성으로 선택·QSELECT Attribut·Sortieren → Eigenschaft | 「블록 팔레트 닫기」 Close Block Palette, 「참조 닫기」 参照を閉じる, 「특성」 Properties·プロパティ·Eigenschaften, 「여러 줄 문자」 Multiline text·マルチテキスト, 「격리 해제」 隔離解除, 「지시선」 引线, 「중복 정리」 清理重复项, 「새 도면」 Neue Zeichnung |
+
+(나) 빠진 번역 — 틀이 앱 낱말을 잡아 네 언어 모두 한국어로 보이던 것(언어마다 8):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| 리본 펼침 메뉴 끝 항목 「3D 폴리선 (3DPOLY)」·「복사 (COPY)」·「자르기 (TRIM)」·「배열 (ARRAYRECT)」·「폴리선 편집 (PEDIT)」·「측정 (MEASUREGEOM)」·「신속 선택 (QSELECT)」·「뷰포트 구성 (VPORTS)」 | 8 | Copy (COPY) | ribbonButton의 `${b.label} (${b.cmd})`(메뉴 항목은 ui-copy 밖) — 「뷰포트 구성」은 「View포트 구성」으로 깨져 보였습니다. 값은 같은 사전의 단추 이름 + 「 (명령)」(이미 옮겨지는 「원 (CIRCLE)」 Circle (CIRCLE) 꼴) |
+
+지운 틀은 없습니다. 열쇠 9191 → 9199.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 92곳과 새 열쇠 8씩. 리본 펼침 메뉴의 끝 항목이 한국어 대신 화면 언어로, 리본 단추 이름·풍선과 305차가 남긴 줄이 엉뚱한 낱말(첨부물·분해(拆卸)·고쳐짐·정렬하기·참고 문헌·지도자 폴더 등) 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「세로좌표」(DIM·QDIM 옵션), 「고정」(구속 단추·명령행), 「격리」(리본·바로 가기 메뉴), 「여러 줄 스타일」·「여러 줄 편집」(리본·MLSTYLE·MLEDIT), 「속성 바로 편집」(리본·ATTIPEDIT), 중국어 참조 선택·참조 이름(REFEDIT 대화 상자).
+- 두는 것(ROADMAP 「306차에 보고 두 것」): 중국어 外部参考 나머지 13·참조 수·참조 이름 경로 参考文献·도넛 (DO) 甜甜圈 등, 독일어 정리 Organisieren·「{0} 닫기」 등, 공유 열쇠 「동일」·「일치」·「홈」·「개수」.
+
+### 확인
+- `tests/i18n-ribbon306.test.ts`(새 시험 3건 — 글 꼴은 소스에서 확인): 펼침 메뉴 끝 항목 열셋·접힌 패널 단추(ui-copy 번역층)에 네 언어 모두 한글 없음과 대표 값, 고친 낱말 = 같은 사전 근거, 새 열쇠 = 단추 이름 번역 + 「 (명령)」.
+- 고치기 전 12건 가운데 3건 실패(한글 남은 줄 32, 「Vertical coordinate」, 「3D 폴리선 (3DPOLY)」 열쇠 없음). 고친 뒤 `tests/i18n-ribbon306.test.ts`·`tests/i18n-select304.test.ts`·`tests/i18n.test.ts` 3파일 12건 통과(한 번에). `npm run check:i18n` 통과(9199 항목).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험·도구는 없습니다. 바꾼 열쇠를 보는 다른 시험(304 치수 제목 = 「치수 ({0})」 + 「세로좌표(X)」 — 독일어 일곱을 함께 바꿔 맞음, 296·295 독일어 속성 Attribut, 293 영어 분해 explode, 291 「격리」 영어·독일어, 305 기본 모드 영어·일본어)은 바꾸지 않은 언어를 보거나 손셈으로 맞습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(305차): 304차가 남긴 오역과 옵션 대화 상자·상태 막대 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
