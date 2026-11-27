@@ -3,6 +3,42 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(321차): 정적 안내(index.html #viewer-guide)·정적 소개의 번역 대조와 빌드 없이 도는 정적 번역 시험
+
+### 근거와 표
+첫 화면 `index.html`의 `<main>`(정적 소개와 정적 안내 `#viewer-guide`)은 빌드가 다섯 언어 쪽(`dist/<언어>/index.html`)으로 옮기는 글이고, 앱이 뜬 뒤 시작 화면도 `#viewer-guide`를 그대로 씁니다.
+번역층은 코드로 읽었습니다(공용 사이트 도구 — 읽기만): 빌드의 `localizeHtml`은 body를 태그와 글 마디로 나눠 글 마디마다 빈칸을 하나로 모은 글을 열쇠로 옮기고(alt·title·aria-label·placeholder도), 옮긴 글에 원래 마디의 앞뒤 빈칸을 붙입니다.
+앱의 `app/i18n.ts`는 같은 글 마디를 다시 옮깁니다. 그래서 `<a>`로 나뉜 문단은 조각마다 열쇠이고, 조각은 한국어 어순 그대로 빈칸 없이 이어집니다.
+`check:i18n`은 빌드한 다른 언어 쪽의 main(언어 고르기 줄 뺌)에 한글이 남는지를 봅니다 — 빌드한 dist를 읽으므로 빌드 뒤에만 잡습니다.
+`<main>`의 한글 글 마디 36(정적 소개 20·안내 16)과 속성 3(aria-label)은 네 사전에 모두 열쇠가 있었습니다(빠진 번역 0).
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 5·일본어 3·중국어 6·독일어 7 값, 새 열쇠 0).
+
+| 열쇠(보이는 곳) | 전 → 후 | 같은 사전 근거 |
+| --- | --- | --- |
+| 「선·폴리선·원·호 그리기, 이동·복사·자르기·모깎기 같은 수정, 그립 편집」(지원 형식과 기능 목록) | 영어 cutting → trimming, 중국어 倒角(모따기) → 圆角, 독일어 Schneiden und Verrunden → Stutzen und Abrunden | 「자르기」 Trim·修剪·Stutzen, 「모깎기」 圆角·Abrunden, 「모따기」 倒角 |
+| 같은 목록 「DWG R2.6~R2018, DXF R12~R2018(ASCII·이진) 열기, 새 도면 만들기」·「DWG R2000~R2018, DXF R12~R2018 저장, 거리·각도·면적 측정」 | 독일어 명령꼴 Öffnen Sie …·Speichern Sie …, messen Sie … → … öffnen, neue Zeichnung erstellen·… speichern, Abstand/Winkel/Fläche messen | 320차 시작 화면 목록 「DWG R2.6~R2018 öffnen, R2000~R2018 speichern」, 같은 목록 「… bearbeiten」 |
+| 소개 끝 문단 「프로그램이 준비되면 ‘새 도면’으로 …」 | 영어 ‘New Drawing’·‘Open File’·‘Example Drawing’ → ‘New drawing’·‘Open file’·‘Open an example drawing’, 중국어 新建绘图·打开示例绘图 → 新建图形·打开示例图形 | 바로 위 단추 셋의 번역 — 가리키는 이름이 단추와 같아야 함(WCAG 3.2.4) |
+| 안내 쪽 이름 「DWG·DXF 파일 열기와 표시 문제 점검」 | 일본어 ファイルを開くと…(열면 …) → DWG・DXFファイルのオープンと表示の問題の確認 | 「DXF R12~R2018(ASCII·이진) 열기·저장」 オープン・保存 |
+| 「누가 만들고 관리하나요?」 답의 조각 넷(「의 개인 오픈소스 프로젝트입니다.」·「를 확인하고, … 개선 의견은」·「GitHub 이슈」·「로 알려 주세요.」) | 영어 자리 글 [Author/Creator]·「Please let us know via...」, 독일어 「Sean Kim ist ein … Projekt」(개발자가 프로젝트), 중국어 「Sean Kim这是…」·어순, 일본어 「～で教えてください」, 이슈를 「문제」(問題·问题·Probleme)로 → 이어 읽어 그 언어 문장 | 같은 사전 열기 오류 안내(`app/openerror.ts` 「…GitHub 이슈로 알려 주십시오.」)의 GitHub の Issue·GitHub Issue·GitHub-Issue와 맺음(でお知らせください。·告诉我们。) |
+
+이어 읽은 답(영어): 「AI·CAD/CAM developer Sean Kim’s personal open-source project. Source code and usage instructions on GitHub: check them out, and report drawings that do not open or suggestions for improvement through GitHub Issues, please.」
+조각 값은 앞뒤 빈칸 없이 둡니다(네 사전에 그런 값 0) — 링크 바로 뒤 조각은 문장 부호로 시작하고, 「.」만 남는 값은 만들지 않습니다(거꾸로 찾기가 다른 자리의 「.」 글 마디를 이 열쇠로 되돌릴 수 있음).
+바꾼 값마다 네 사전에서 같은 값을 가진 열쇠를 jq로 찾았습니다: 자기 하나뿐이고, 거꾸로 찾기(`sourceMessage`)가 제 원문으로 돌아옵니다.
+320차가 남긴 통째 HTML 열쇠 둘(ABOUT·시작 화면 바닥 글 — 일본어 ABOUT 문장 빠짐, 중국어·독일어 바닥 글 오역)은 다시 확인해도 **쓰이지 않습니다**: `ui/dom.ts`가 innerHTML로 넣어 글 마디 열쇠로 보이고, 빈칸을 모은 `index.html` 글에도 없습니다. 고치지 않고 지우지 않습니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 21값. 다른 언어 첫 화면(정적 쪽)과 시작 화면 안내에서 수정 기능 목록·독일어 지원 목록·소개 끝 문단의 단추 이름·일본어 안내 쪽 이름·「누가 만들고 관리하나요?」 답이 원문 뜻대로 보입니다.
+- 재발 막기: `tests/i18n-static321.test.ts` — `index.html` `<main>`의 한글 글 마디·속성(빈칸을 모은 글, `[data-static-languages]` 뺌)이 네 사전 열쇠에 모두 있는지, 공용 번역기 `localizeHtml`로 만든 쪽의 main에 한글이 없는지를 **빌드 없이** 봅니다(check:i18n 「untranslated static introduction」을 시험이 먼저 잡음).
+- 두는 것(ROADMAP 「321차에 보고 두 것」): 동의어·말투, 홈 화면 이름 「OpenCAD 도면」(앱 정보 짧은 이름과 같아야 하는 설치 글).
+
+### 확인
+- `tests/i18n-static321.test.ts`(새 시험 5건): 글 마디 열쇠, 정적 쪽 main 한글 없음, 오역 열쇠의 같은 사전 낱말, 이어 읽은 답(네 언어 — 조각 사이 빈칸은 원문 그대로), 거꾸로 찾기·같은 값 없음(바꾼 21).
+- 고치기 전 3파일 15건 가운데 2건 실패(오역·답 — 영어 「Sean KimA personal open-source project by [Author/Creator]. …」), 고친 뒤 `tests/i18n-static321.test.ts`·`tests/i18n.test.ts`(사전 규칙)·`tests/i18n-start320.test.ts` 3파일 15건 통과(한 번에). `tsc --noEmit` 통과.
+- `npm run check:seo`·`npm run check:i18n`은 콘텐츠 수정일을 고친 뒤 다시 빌드한 dist로 돌립니다(결과는 수정일 커밋 글).
+- tools/·tests/ grep(바꾼 열쇠·옛 값): 기대하는 곳 없음.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-28(320차): 시작 화면·ABOUT·앱 메뉴 묶음과 공통 질문 일부의 번역 대조와 빠진 번역
 
 ### 근거와 표
