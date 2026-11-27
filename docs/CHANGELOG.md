@@ -3,6 +3,58 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(312차): 311차가 남긴 「옮길 수 없는 객체」·중국어 「추가할 축척」과 주석 축척·축척 목록 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+출발점은 311차 「보고 두 것」 (2)의 두 가지 — 「옮길 수 없는 객체」 여섯 열쇠와 중국어 「추가할 축척(Ctrl·Shift로 여러 개)」 — 입니다.
+여섯 열쇠는 쓰는 곳을 코드로 갈랐습니다: ETRANSMIT 결합(`app/transmit.ts` bindXrefOps — 외부 참조 도면의 객체를 이 도면 블록으로), 디자인센터 블록 삽입·가져오기와 파일로 블록 만들기(`DefinitionCopier` — 다른 도면의 정의·모형 객체를 이 도면으로),
+WBLOCK(`app/wblockcmd.ts`·`util2-blocks.ts` — 고른 객체를 새 파일로)는 모두 **다른 도면·파일로 복사해 넣지 못한 객체**이고 도면 안 이동(MOVE)이 아닙니다. 그래서 네 언어를 이미 복사 뜻인 WBLOCK 열쇠의 낱말로 맞췄습니다.
+묶음은 CANNOSCALE·CANNOSCALEVALUE·SCALELISTEDIT·-SCALELISTEDIT·OBJECTSCALE·-OBJECTSCALE·AIOBJECTSCALEADD/REMOVE·ANNORESET·ANNOUPDATE·ANNOALLVISIBLE·ANNOAUTOSCALE·HIDEXREFSCALES(`app/annoscale.ts`),
+축척 목록·축척 추가/편집·객체 축척 대화 상자(`app/annoscale-ui.ts`), 축척 목록 검사 오류(`edit/annoscale/scales.ts`), 상태 막대 주석 축척 단추 풍선·목록 메뉴(`app/annoscale-status.ts`), 특성 팔레트 주석 묶음(`app/annoscale-palette.ts`)의 보이는 글입니다.
+SELECTSIMILAR에는 주석 축척 갈래가 없습니다(설정 칸 여덟 — 304차가 봄). 앞 차수 표에 있는 열쇠(305차 상태 막대 켜고 끄기 단추 풍선, 306차 리본 주석 축척 패널, 119차 주석 객체 축척 낱말)는 건너뛰었고,
+305·307차가 「보고 두 것」으로 남긴 독일어 「주석 축척 Anmerkung 무리(→ Beschriftungsmaßstab)」 가운데 묶음 열쇠만 함께 고쳤습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 8·독일어 30·일본어 8·중국어 27 열쇠).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 출발점: 「옮길 수 없는 객체」 다섯 열쇠(결합·디자인센터 둘·WBLOCK 꼬리·파일 블록) | could not be moved·nicht verschiebbar·移動/移行できない·不可移动 → could not be copied·nicht übernommen werden konnten·移せない·无法复制, 뺐습니다 removed·entfernt·差し引いた(빼기 셈)·移除 → left out·ausgelassen·除外·已排除, 영어·독일어 「블록 안의 …({0})」 Left out {0} objects(목록 {0}을 수로 읽음) → 괄호 자리 | WBLOCK 열쇠 「… 옮길 수 없는 객체 {3}개는 뺐습니다.」(그대로) |
+| 출발점: 중국어 「추가할 축척(Ctrl·Shift로 여러 개)」 | 缩放（按住 Ctrl/Shift 键可缩放）(뜻 깨짐) → 要添加的比例（按住 Ctrl 或 Shift 键可多选）, 독일어 Skalierung (… Strg/Umschalt) → Hinzuzufügende Maßstäbe (Strg oder Umschalt für mehrere) | 「축척 추가」 添加比例·Maßstab, 311차 「항목을 고르십시오(Ctrl·Shift로 여러 개, …)」 |
+| 상태 막대 축척 목록 | 「사용자...」(SCALELISTEDIT를 엶) User...·Benutzer...·ユーザー...·用户... → Custom...·Benutzerdefiniert...·ユーザー定義...·用户自定义..., 켜진 「✓ 외부 참조 축척 숨기기」 영어·일본어·중국어가 꺼진 항목과 다른 이름 → 같은 이름 | 「사용자 정의」, 같은 항목 「외부 참조 축척 숨기기」 |
+| 뷰포트 잠김·축척 수·이름 겹침 | 「뷰포트가 잠겨 있어 축척을 바꿀 수 없습니다」 cannot be scaled·kann nicht skaliert·无法缩放(크기 바꾸기) → 축척을 바꿀 수 없음, 「축척은 {0}개를 넘을 수 없습니다」 독일어·중국어 축척 값이 {0}을 넘음 → 축척 수, 「축척 이름 {0}이(가) 겹칩니다」 überschneidet sich·重叠(도형 겹침) → Doppelter Maßstabsname·重复 | 「블록 편집기에서는 주석 축척을 바꿀 수 없습니다」 cannot be changed, 영어·일본어 같은 열쇠 number·個, 「이름 "{0}"이(가) 겹칩니다」 Doppelter Name, 「중복된 정의」 重复 |
+| 독일어 축척·주석 축척 | 축척 Skalierung(크기 바꾸기)·Skala(눈금) → Maßstab(축척 편집·객체에 축척 추가·주석 축척 변경 시 축척 추가·축척 리스트 다섯·{0}개의 축척), 주석 축척 Anmerkungsmaßstab·Anmerkungsskala → Beschriftungsmaßstab(뷰포트 주석 축척 셋·도면 공간 1:1·블록 편집기·OBJECTSCALE 결과·삭제 막힘), 「현재 주석 축척 값」 = 「현재 주석 축척」과 같은 이름 → Wert des aktuellen Beschriftungsmaßstabs, 축척 특성 안내 1(무엇인지 빠짐) → 1 Papiereinheit, 비율 줄 Zeicheneinheit(글자 단위) → Zeichnungseinheiten, 같지 않음 풍선 「Klicken Sie hier, um … Synchronisieren」(깨짐) → Zum Synchronisieren klicken | 「축척 추가」 Maßstab hinzufügen, 「축척 리스트」 Maßstabsliste, 「주석 축척」 Beschriftungsmaßstab(119차 시험), 「도면 단위(W)」 Zeichnungseinheiten |
+| 일본어 재정의 | 「{0}이(가) 이미 있습니다. 축척을 재정의하시겠습니까?」 スケールをオーバーライド(덮어쓰기) → 尺度を再定義 | 「재정의」 再定義 |
+| 중국어 주석·수·축척 | 현재 주석 축척·값·(CANNOSCALE)·선택한 주석 객체 标注(치수) → 注释, 결과 줄 다섯 「{0} 已删除比例尺」·「{0} 已更新对象」 등(수가 이름처럼 읽힘) → 已删除 {0} 个比例·已更新 {0} 个对象 등, 축척 缩放(확대·크기 바꾸기) → 比例(새 축척 이름·객체 축척 리스트·비율 축척 백분율), 图块编辑器 → 块编辑器, 도면 축척 편집 셋 图纸(용지) → 图形 | 「주석 축척」 注释比例(305차), 「블록 {0}개가 삭제되었습니다」 已删除 {0} 个块·311차 已重置 {0} 个块, 「축척 추가」 添加比例, 「블록 편집기」 块编辑器, 「도면」 图形 |
+
+(나) 빠진 번역 — 사전에 열쇠가 없거나 틀이 앱 낱말을 잡아 네 언어 모두 한국어로 보이던 것(언어마다 13).
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| -SCALELISTEDIT 삭제 막힘 「축척 {0}은(는) 현재 주석 축척이므로 / 사용 중이므로 삭제할 수 없습니다.」 | 2 | Scale {0} cannot be deleted because it is in use. | 틀 「축척 {0}은(는) {1} 삭제할 수 없습니다」가 {1}의 앱 글을 옮기지 않음 — 「{0}은(는) 현재 주석 축척이므로 …」·「축척 {0}을(를) 찾지 못했습니다」 꼴 |
+| -OBJECTSCALE 「추가할·삭제할 명명된 축척 입력 또는 [」 앞 조각과 기록 줄 「… [?] <종료>:」·「… [?] <{0}>:」 | 6 | Enter a named scale to add or [?] <Exit>: | 틀 「{0}할 명명된 축척 …」이 「추가·삭제」를 옮기지 않음 — 앞 조각 + ? + 「] <종료>:」 |
+| -SCALELISTEDIT 물음 「축척 리스트를 기본값으로 재설정하시겠습니까? [」·「{0}이(가) 이미 있습니다. 축척을 재정의하시겠습니까? [」와 기록 줄 「… [예(Y)/아니오(N)] <아니오>:」 | 4 | Reset the scale list to default values? [Yes (Y)/No (N)] <No>: | 물음 열쇠 + 「예(Y)」·「아니오(N)」(286차 꼴) |
+| 특성 팔레트 주석 축척 단추 「*여러 개* …」(축척이 서로 다른 여러 객체) | 1 | *Multiple* … | 「*여러 개*」 |
+
+열쇠 9330 → 9343. 켜진 메뉴 「✓ 외부 참조 축척 숨기기」·「✓ 비율 축척 백분율」은 틀 「{0}…」이 이미 옮겨 더하지 않았습니다.
+쓰이지 않게 된 틀(「축척 {0}은(는) {1} 삭제할 수 없습니다.」·「{0}할 명명된 축척 입력 또는 [?] <{1}>:」)은 지우지 않았습니다. 바꾼·새 값이 같은 사전의 다른 열쇠와 같아진 것은 없습니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 73곳과 새 열쇠 13씩. 결합·디자인센터·WBLOCK·파일 블록의 「옮길 수 없는 객체」가 이동이 아니라 복사하지 못한 객체로, 축척 목록 메뉴 「사용자...」가 사용자 정의로,
+  독일어 축척·주석 축척이 Maßstab·Beschriftungsmaßstab로, 중국어 주석 축척·결과 줄·축척이 注释·「已… {0} 个…」·比例로 보이고, -SCALELISTEDIT·-OBJECTSCALE 물음·삭제 막힘 줄과 「*여러 개* …」가 한국어 대신 그 언어로 보입니다.
+- 공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「주석 축척 변경 시 축척 추가」(ANNOAUTOSCALE 제목·상태 막대 단추 접근 이름), 「뷰포트 주석 축척」(상태 막대 메뉴 머리·특성 팔레트 칸 풍선),
+  「{0}개의 객체를 업데이트했습니다.」·「{0}개의 객체를 재설정했습니다.」(ANNOUPDATE·ANNORESET·-OBJECTSCALE), 「도면 축척 편집 (SCALELISTEDIT)」(리본 풍선 — 명령 제목과 함께).
+- 두는 것(ROADMAP 「312차에 보고 두 것」): 독일어 한도 밖(주석 객체 Anmerkungsobjekt 무리·리본 풍선 둘·ANNOAUTOSCALE 풍선 Skalierung·뷰포트 축척 동기화·외부 참조 축척 숨기기 Skala·-SCALELISTEDIT 통째 기록 줄),
+  동의어(일본어 注釈スケール·縮尺 등), 묶음 밖(독일어 주석 해치 안내·DIMSTYLE 주석 칸, 일본어 「주석 객체 선택 또는 [」 注記).
+
+### 확인
+- `tests/i18n-annoscale312.test.ts`(새 시험 3건 — 글 꼴은 소스에서 확인): 출발점 여섯 열쇠의 복사·빼놓음 낱말과 WBLOCK 꼬리 꼴·중국어 추가할 축척, 묶음 오역 = 같은 사전 근거·거꾸로 찾기,
+  진짜 번역층(guardedTranslate·translateTail)으로 -SCALELISTEDIT·-OBJECTSCALE 앞 조각·기록 줄·삭제 막힘 줄과 「*여러 개* …」가 네 언어 모두 한국어 없이 + 새 열쇠 = 앞 조각·옵션·뒤 조각·물음 열쇠 꼴.
+- 고치기 전 3파일 12건 가운데 3건 실패(영어 결합 줄 could not be moved, 「사용자...」 User..., 한글 남은 줄 52 = 네 언어 × 13줄), 고친 뒤 `tests/i18n-annoscale312.test.ts`·`tests/i18n.test.ts`·
+  `tests/i18n-options305.test.ts` 3파일 12건 통과(한 번에). `npm run check:i18n` 통과(9343 항목).
+- tools/·tests/ grep: 바꾼 열쇠를 기대하는 앞 차수 시험은 295·304차(결합 줄 — 독일어 Binden·중국어 绑定이 새 값에도 있고 kombin·组合 등 없음, 손셈), 305차(중국어 「{0}외부 참조 축척 숨기기」의 外部参照·독일어 잠긴 뷰포트 풍선 = 틀 + 「(잠긴 뷰포트)」 — 위 시험으로 확인),
+  119차(독일어 주석 열쇠에 Anmerkung 금지 — 같은 방향)뿐입니다. tools/에는 걸리는 것이 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(311차): 310차가 남긴 RESETBLOCK 중국어와 스크립트·명령 별칭·디자인센터 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
