@@ -219,7 +219,7 @@ describe('파라메트릭 구속 묶음의 번역과 306차가 남긴 것(307차
     expect(de['고정 연결선 거리 지정 <{0}>:']).toContain(de['연결선 거리']!);
     expect(de['새로 그리기']).toBe(de['새 도면']);
     expect(de['새로 그리기']).not.toBe(de['다시 그리기']);
-    // 독일어 묶음: 구속점 = 「구속점 선택」 Einschränkungspunkt(Fixierungspunkt 고정점이 아니다), 각도 구속점, 구속 Einschränkung(Randbedingungen·Zurückhaltung이 아니다), 일치 구속 koinzidente,
+    // 독일어 묶음: 구속점 = 「구속점 선택」 Abhängigkeitspunkt(Fixierungspunkt 고정점이 아니다), 각도 구속점, 구속 Abhängigkeit(Randbedingungen·Zurückhaltung이 아니다 — 308차 리드 결정으로 Einschränkung도 Abhängigkeit로 통일), 일치 구속 koinzidente,
     // 첫 번째(객체) Objekt(Knoten이 아니다), 원·호·타원 가운데 하나(oder), 겹침 = 「중복」 Doppelte(überlappen이 아니다), 식 Ausdruck(Formel·Gleichung이 아니다), 직교 = 「직교 구속」 Senkrechte(Ortho가 아니다)
     const pt = de['구속점 선택:']!.split(' ')[0]!;
     for (const k of ['첫 번째 구속점 지정 또는 [', '첫 번째 구속점 지정 또는 [객체(O)] <객체>:', '첫 번째 구속점 지정 또는 [객체(O)/점과 선(P)/2선(2L)] <객체>:']) {
