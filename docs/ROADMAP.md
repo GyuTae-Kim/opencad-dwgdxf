@@ -2435,6 +2435,15 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   독일어 「(ASCII/Binär)」 ↔ 「(ASCII/binär)」 대소문자, 독일어 「Registrierung einer Mitgliedschaft」, 영어 안내 쪽 이름 「Checking DWG·DXF file opening and display problems」·지원 목록 「create new drawing」(관사).
   (2) 묶음 밖: 홈 화면 이름(apple-mobile-web-app-title) 「OpenCAD 도면」 영어·독일어 OpenCAD DWG — 앱 정보 짧은 이름과 같아야 하는 설치 글이라 앱 정보와 함께 볼 일, noscript 글은 main 밖(네 사전에 있음).
   (3) 320차 (5)의 통째 HTML 열쇠 둘은 쓰이지 않음 — 지울지는 다른 차수(지우면 네 사전 열쇠 맞춤과 src 글을 모으는 시험이 보는지 먼저). 원어민 검토 없음
+- [x] 도움말(F1) 대화 상자의 명령 표 — 명령 제목의 번역 대조(322차, 290~321차 꼴): 머리 글(320차)·조작 표(277차) 밖의 명령 표(이름·별칭 옆 제목 칸 — data-i18n-ui-copy, 통째 열쇠가 없으면 「: 」 조각마다 틀까지)와
+  단축키 목록을 만드는 곳(앱 메뉴·제목 막대 F1 — 320차 글, 기능 키·Ctrl 키 처리 — 글 없음)을 대조. (나) 빠진 번역 0(소스의 name·title 짝 494와 실행 중 제목 — 내보내기·시스템 변수·AutoLISP 명령·구속조건·비교 변수·동적 블록 작성 — 모두 열쇠·틀 있음).
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 4·일본어 5·중국어 8·독일어 11 값 — 영어 시스템 변수 틀 복수·-LAYER 소문자·끝 마침표, AutoLISP 「함수라고 불러라」(네 언어)·일본어 C：·（c：） 전각,
+  플롯 스타일 모드 변환 切り替え·切换, 중국어 MLINE 多行·QTEXT 输入·XCLIP 修剪, 독일어 XATTACH 알림 문장·DIMDISASSOCIATE·UNDEFINE·MVSETUP·FILLMODE·-MLEDIT·-BOUNDARY·끝 마침표). 재발 막기 `tests/i18n-help322.test.ts`(명령 제목 빠진 번역 지킴). 표는 CHANGELOG 322차 절
+- [ ] 322차에 보고 두 것 — (1) 동의어·말투 — 둠(앞 차수 꼴): 독일어 명령꼴 제목(「Konvertieren Sie den Block …」·「Schließen Sie das Layerfenster」·「Laden Sie die AutoLISP-Datei」·「Ändern Sie die Groß-/Kleinschreibung」·
+  「Erstellen Sie einen Auswahlsatz …」·CONVERTCTB·도면 복구 관리자 닫기 — 304차가 「Schließen Sie die Schnelleigenschaften」을 둔 꼴), 영어 동명사 제목(Attaching PDF underlays·Creating a viewport·Creating linetypes·Flattening — 311차 Continuing 꼴),
+  영어 「PNG로 내보내기」 Export as PNG ↔ 틀 Export to {0}(JPEG·BMP). (2) 뜻이 갈리는 공유 열쇠 — 하지 않음: 「복구」(REDO 제목·RECOVER 둘 다 — 영어 Recovery·독일어 Wiederherstellung), 「회전」(ROTATE 제목 ↔ 특성 칸 — 독일어 Drehung)·「축척」,
+  「개수」(COUNT ↔ ARRAY 옵션 — 영어 Number). (3) 앞 차수가 대조한 열쇠(그 차수 시험·문서에 있음 — 다시 보지 않음): 「명령 복구」 영어 Command Recovery·독일어 Befehlswiederherstellung(293차), 「단일 행 문자」·「격자」·「블록 대치」 영어 소문자 시작(306·296·291차),
+  「속성 표시」 영어 Show properties(295·296차), 「원형 배열」 중국어 圆形排列(286차), 「도면층 창(기존)」 중국어 已打开(290차 근거 없음), 「명령(명령행에 입력)」 영어 소문자 command(320차 묶음), 비교 변수 제목의 중국어·독일어 뜻 깨짐(COMPAREFRONT 등 — 309차 묶음). 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다

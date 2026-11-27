@@ -3,6 +3,47 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(322차): 도움말(F1) 대화 상자의 명령 표 — 명령 제목의 번역 대조
+
+### 근거와 표
+도움말(F1, `src/editor.ts` HELP)은 머리 글(320차가 대조)·조작 표(277차)·**명령 표**·점 입력 안내로 이루어집니다. 명령 표는 줄마다 명령 이름·별칭(영문 — 옮기지 않음) 옆에 제목(`c.title`)을 보이고,
+제목 칸은 `data-i18n-ui-copy`라 번역층(`app/i18n.ts`)이 통째 열쇠를 찾고, 없으면 「: 」 조각마다 틀(`{0}`)이 잡은 값까지 옮깁니다.
+단축키 목록을 만드는 곳(앱 메뉴 「단축키·도움말」 F1, 제목 막대 「도움말 (F1)」, 기능 키·Ctrl 키 처리)은 320차가 본 글이거나 글이 없습니다 — 글쇠 이름은 그대로 보이고 독일어 Strg ↔ Ctrl는 320차 보고 그대로 둡니다.
+소스의 명령 제목(name·title 짝 494)과 실행 중에 만드는 제목(PNG·JPEG·BMP 내보내기, `시스템 변수 {0}`, `AutoLISP 명령 C:{0}`, 기하학적 구속조건 12, 외부 참조·도면 비교 변수, 동적 블록 작성 9 등)은 네 사전에 모두 열쇠나 틀이 있었습니다(빠진 번역 0).
+앞 차수가 대조한 열쇠(그 차수 시험·문서에 나온 것)는 건너뛰었습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 4·일본어 5·중국어 8·독일어 11 값, 새 열쇠 0).
+
+| 열쇠(보이는 곳) | 전 → 후 | 같은 사전 근거 |
+| --- | --- | --- |
+| 「시스템 변수 {0}」(변수 이름을 치면 등록되는 명령의 제목) | 영어 System Variables {0} → System variable {0} | 「{0} 변수는 읽기 전용입니다.」 The {0} variable(이름 하나는 단수 — 복수는 목록 대화 상자 SYSVDLG·SETVAR 이름) |
+| 「도면층(명령행)」(-LAYER)·「객체의 도면층을 현재로」(LAYMCUR) | 영어 layer (command line) → Layer (command line), 끝 마침표 뺌 | 다른 「…(명령행)」 제목(Layer state (command line))·이웃 제목(마침표 없음) |
+| 「AutoLISP 명령 {0}은(는) … (c:{1})처럼 함수로 부르십시오.」 | 「함수라고 불러라」(Call it a function like·関数と呼んで·称为·Nennen Sie es) → 함수로 불러라(Invoke it as a function·関数として呼び出して·作为函数调用·Rufen Sie ihn als Funktion auf) | 「{0} 명령을 되돌렸습니다. AutoLISP 명령은 (c:{1})로 부르십시오.」 Invoke … as·调用为·Rufen Sie … auf |
+| 「AutoLISP 명령 C:{0}」(LISP 명령 제목)과 LISP 알림 셋 | 일본어 C：{0}·（c：{1}）(치는 함수 이름을 전각으로) → C:{0}·(c:{1}) | 다른 세 언어, 같은 사전 「….{2}」として呼び出す(치는 이름은 그대로)·옵션 글자 괄호 반각(285차) |
+| 「플롯 스타일 모드 변환」(CONVERTPSTYLES) | 일본어 切り替え·중국어 切换(바꾸어 놓기) → 変換·转换 | 「플롯 스타일 변환」 プロットスタイルの変換·转换打印样式 |
+| 「여러 줄 스타일」·「여러 줄 편집」·「여러 줄 편집(명령행)」(MLSTYLE·MLEDIT·-MLEDIT) | 중국어 多行(여러 줄 문자 MTEXT 多行文本의 낱말) → 多线 | 「여러 줄」 多线·「여러 줄 편집 도구」 多线编辑工具·「다중선 스타일」 多线样式 |
+| 「빠른 문자」(QTEXT) | 중국어 快速文本输入(입력) → 快速文本 | 「빠른 문자 변수(0 끄기, 1 켜기)」 快速文本变量 |
+| 「블록 자르기」(XCLIP)·XCLIP 「자르기 경계 지정 또는 [폴리선 선택(S)/…] <직사각형>:」 | 중국어 修剪(TRIM의 자르기) → 裁剪 | XCLIP 조각 「자르기 경계 지정 또는 [」 指定裁剪边界或 [·「뷰포트 자르기」 裁剪视口 |
+| 「외부 참조 부착」(XATTACH)·「외부 참조 부착 — {0}」(대화 상자 이름) | 독일어 Externe Referenzen werden verknüpft(알림 문장) → Externe Referenz anhängen | 「이미지 부착」 Bild anhängen·「DWG 부착」 DWG anhängen |
+| 「치수 연관 해제」(DIMDISASSOCIATE)·「명령 정의 해제」(UNDEFINE) | 독일어 Bemaßung aufheben·Befehl aufheben(치수·명령을 없애는 뜻) → Bemaßungsassoziativität aufheben·Befehlsdefinition aufheben | 「치수 연관성」 Bemaßungsassoziativität·「명령 정의 되돌리기」 Befehlsdefinition zurücksetzen |
+| 「모형 탭」(MODEL)·「뷰포트 최소화(복원)」(VPMIN) | 독일어 끝 마침표 → 뺌 | 이웃 제목 |
+| 「뷰 설정(MVSETUP)」·「채우기 모드 변수(0 끄기, 1 켜기)」(FILLMODE) | 독일어 Einstellungen anzeigen(설정 보이기)·Füllmodus variabel(형용사) → Ansichtseinstellungen·Variable für Füllmodus | 「뷰 해상도」 Ansichtsauflösung·「빠른 문자 변수(…)」 Variable für Quicktext |
+| 「여러 줄 편집(명령행)」(-MLEDIT)·「경계(명령행)」(-BOUNDARY) | 독일어 Mehrzeilig·Grenze → Multilinie bearbeiten·Umgrenzung + (Befehlszeile) | 「여러 줄 편집」 Multilinie bearbeiten·「경계」 Umgrenzung |
+
+바꾼 값마다 네 사전에서 같은 값을 가진 열쇠를 jq로 찾았습니다: 중국어 「여러 줄 스타일」이 같은 일을 하는 「다중선 스타일」(MLSTYLE)과 같은 이름이 된 것(306차 독일어 꼴 — 뜻한 것) 밖에는 자기 하나뿐이고, 거꾸로 찾기(`sourceMessage`)가 제 원문으로 돌아옵니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 28값. 다른 언어 도움말 명령 표와 같은 열쇠를 쓰는 리본·메뉴·명령행·대화 상자 이름에서 위 제목·LISP 알림이 원문 뜻대로 보입니다(같은 열쇠 — 모두 같은 뜻).
+- 재발 막기: `tests/i18n-help322.test.ts` — 소스의 명령 제목과 실행 중에 만드는 제목이 제목 칸의 번역 길로 네 언어 모두 한국어 없이 보이는지(새 명령이 열쇠 없이 들어오면 잡음), 위 오역, 바뀐 값의 거꾸로 찾기.
+- 두는 것(ROADMAP 「322차에 보고 두 것」): 동의어·말투(독일어 명령꼴 제목·영어 동명사 제목), 뜻이 갈리는 공유 열쇠(「복구」·「회전」·「축척」·「개수」), 앞 차수가 대조한 열쇠.
+
+### 확인
+- `tests/i18n-help322.test.ts`(새 시험 3건): 명령 제목 빠진 번역 0(소스 짝 400 넘음 + 실행 중 제목), 오역 열쇠의 같은 사전 낱말, 거꾸로 찾기.
+- 고치기 전 3파일 12건 가운데 1건 실패(오역 — 영어 「System Variables {0}」), 고친 뒤 `tests/i18n-help322.test.ts`·`tests/i18n.test.ts`(사전 규칙)·`tests/i18n-constraint307.test.ts`(같은 LISP 열쇠의 독일어 「aufgerufen」) 3파일 12건 통과(한 번에). `tsc --noEmit` 통과.
+- `npm run check:seo`·`npm run check:i18n`은 콘텐츠 수정일을 고친 뒤 다시 빌드한 dist로 돌립니다(결과는 수정일 커밋 글).
+- tools/·tests/ grep(바꾼 열쇠·옛 값): 기대하는 곳은 위 307차 시험(독일어 「aufgerufen」 — 그대로)뿐, 296·prompts·306차 시험은 다른 언어·다른 열쇠만 봄. 정적 첫 화면(`index.html`, 빈칸 모은 글)에 바꾼 열쇠 0.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-28(321차): 정적 안내(index.html #viewer-guide)·정적 소개의 번역 대조와 빌드 없이 도는 정적 번역 시험
 
 ### 근거와 표
