@@ -6283,6 +6283,8 @@
   "장치 \"{0}\"을(를) 찾을 수 없습니다. ?로 목록을 보십시오(이 웹 버전은 PDF·SVG 파일로만 출력합니다).": "Gerät „{0}“ nicht gefunden. Siehe Liste mit ? (Diese Webversion gibt nur PDF- oder SVG-Dateien aus.)",
   "장치 이름": "Gerätename",
   "장치: {0} · 용지: {1} ({2}, {3}) · 플롯 스타일: {4}": "Gerät: {0} · Papier: {1} ({2}, {3}) · Plotstil: {4}",
+  "장치: {0} · 용지: {1} ({2}, 가로) · 플롯 스타일: {3}": "Gerät: {0} · Papier: {1} ({2}, Querformat) · Plotstil: {3}",
+  "장치: {0} · 용지: {1} ({2}, 세로) · 플롯 스타일: {3}": "Gerät: {0} · Papier: {1} ({2}, Hochformat) · Plotstil: {3}",
   "재료": "Material",
   "재료 소거는 이 웹 버전에서 지원하지 않습니다(재료·플롯 스타일·형태·비주얼 스타일·고립된 데이터는 이 앱이 만들거나 고치지 않습니다).": "Das Bereinigen von Materialien wird in dieser Webversion nicht unterstützt (diese App erstellt oder bearbeitet keine Materialien, Plotstile, Formen, visuellen Stile oder verwaisten Daten).",
   "재료 이름 입력 또는 [": "Materialnamen eingeben oder [",

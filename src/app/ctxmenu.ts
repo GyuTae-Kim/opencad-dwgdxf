@@ -12,6 +12,7 @@
  */
 import type { App } from './app';
 import type { ContextMenuItem, ContextMenuMode } from './hooks';
+import { uiText } from './i18n-text';
 import { OVERRIDE_MENU } from './osnap-override';
 import { type MenuItem, showMenu, toast } from './ui/dom';
 import type { Pt } from './view';
@@ -25,8 +26,9 @@ function toMenu(x: number, y: number, items: ContextMenuItem[]): MenuItem[] {
   return items.map((it) => {
     if (!it.items) return it;
     const sub = it.items;
+    // 하위 메뉴 이름(앱 낱말)은 「▸」를 붙이기 전에 옮긴다(328차): 붙인 뒤에는 번역층이 「객체 {0} {1}」 같은 틀로 잡아 「Object 스냅 재지정 ▸」처럼 한국어가 남았다
     return {
-      label: `${it.label ?? ''} ▸`,
+      label: `${uiText(it.label ?? '')} ▸`,
       icon: it.icon,
       disabled: it.disabled || !sub.length,
       run: () => showContextMenu(x, y, [{ heading: it.label }, ...sub]),

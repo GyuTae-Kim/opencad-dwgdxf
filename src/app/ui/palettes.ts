@@ -21,6 +21,7 @@ import { findPanel, newFindState, tableCellGroup } from '../textedit/palette';
 import { cellSelectionGroup } from '../tablecell-palette';
 import { tableCellSelection } from '../tablecell';
 import { ft } from '../filetext';
+import { uiText } from '../i18n-text';
 
 type Tab = 'props' | 'layers' | 'dims' | 'find';
 
@@ -646,7 +647,8 @@ export class Palette {
         });
         return b;
       };
-      const sw = h('button', { class: 'toggle', title: `색: ${colorText(lay.color)}`, 'aria-label': `${ft(lay.name)} 색 바꾸기` },h('span', { class: 'swatch', style: `background:${rgbToCss(color)}` }));
+      // 틀 「색: {0}」의 잡은 값은 번역층이 옮기지 않는다(328차): 색 이름(ACI 빨간색…흰색·색상 n·ByLayer — 앱 낱말)은 먼저 옮기고, 색책 이름이 붙은 RGB는 도면 글 그대로
+      const sw = h('button', { class: 'toggle', title: `색: ${lay.color.name ? ft(colorText(lay.color)) : uiText(colorText(lay.color))}`, 'aria-label': `${ft(lay.name)} 색 바꾸기` },h('span', { class: 'swatch', style: `background:${rgbToCss(color)}` }));
       sw.addEventListener('click', async (ev) => {
         ev.stopPropagation();
         // 휴대폰 보기 모드의 도면층 시트는 켜고 끄기만(246차): 색 견본은 색을 보이기만 하고, 이름·행 두 번 누르기와 행 메뉴도 열지 않는다

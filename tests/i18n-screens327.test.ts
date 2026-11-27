@@ -8,6 +8,8 @@
  *   (번역층이 옮기지 않는 칸 — i18n.ts의 SKIP·translate="no"와 같은 규칙) 밖의 글 마디·title·aria-label에 한글이 남지 않는지 본다.
  *   한국어 화면은 같은 훑기가 한글을 찾는지(시험이 눈멀지 않았는지)만 본다. 도면 글(합성 도면의 도면층 이름·문자 내용)은 번역층 밖이라 지우고 센다.
  *   지금 고치지 못한 자리는 「아직 둔 것」(PENDING) — 목록에 있는데 이제 한글이 없으면 실패.
+ * - 328차: 그리지 않던 화면 넷을 더했다 — 배치 공간(배치 탭·MVIEW 맞춤 뷰포트의 특성·LIST·배치 탭 메뉴), 바로 가기 메뉴(그리기 영역 오른쪽 누름 —
+ *   기본·편집·명령 모드), 리본 펼친 메뉴(탭마다 펼침 메뉴 단추), 대화 상자(문자 스타일·치수 스타일·페이지 설정 관리자·플롯).
  * - 화면·엔진·글꼴은 가짜(i18n-mobileview·infocard241·menutype265 꼴), 홈 화면 앱(서비스 워커·새 판 알림)은 화면이 아니라 가짜.
  */
 import { readFileSync } from 'node:fs';
@@ -25,6 +27,7 @@ import { prefSet } from '../src/app/mgr-ui';
 import { EditSession } from '../src/edit/session';
 import { installLocalization } from '../src/app/i18n';
 import type { Shell } from '../src/app/ui/shell';
+import { closeMenu } from '../src/app/ui/dom';
 import { startEditor } from '../src/editor';
 import { translate } from '../site/i18n.mjs';
 import { settle } from './polish/real-app';
@@ -51,7 +54,8 @@ vi.mock('../src/app/engine', async (orig) => {
   return { ...(await orig<object>()), EngineClient: StartEngine };
 });
 vi.mock('../src/text/fonts', async (orig) => ({ ...(await orig<object>()), OutlineLibrary: (await import('./polish/fakes')).FakeFonts }));
-vi.mock('../src/app/ui/dom', async (orig) => ({ ...(await orig<object>()), showMenu: vi.fn(), closeMenu: vi.fn(), toast: vi.fn() }));
+// 메뉴(showMenu)는 진짜를 쓴다(328차 — 리본 펼친 메뉴·바로 가기 메뉴·배치 탭 메뉴를 그려 본다). 알림(toast)만 가짜
+vi.mock('../src/app/ui/dom', async (orig) => ({ ...(await orig<object>()), toast: vi.fn() }));
 vi.mock('../src/app/pwa-app', () => ({ installPwa: vi.fn(), handleLaunchQuery: vi.fn(async () => {}) }));
 
 // 보기 모드 안내(renderNotice)가 기다리지 않고 나눠 받는 모듈을 미리 받아 둔다(공용 규칙 5번 — 시험 파일이 끝난 뒤 모듈을 평가하지 않게)
@@ -68,15 +72,14 @@ const SKIP = readFileSync(new URL('../src/app/i18n.ts', import.meta.url), 'utf8'
 const FILE_TEXT = ['한빛벽체', '두레설비', '한빛 주택 평면도', '두레 메모 글'];
 
 /**
- * 아직 둔 것(327차): 이 시험이 찾았는데 이번 차수에 고치지 않은 자리 — 「단계 · 칸: 남은 한글 (언어)」.
+ * 아직 둔 것: 이 시험이 찾았는데 그 차수에 고치지 않은 자리 — 「단계 · 칸: 남은 한글 (언어)」.
  * 목록에 있는데 이제 한글이 없으면 실패한다(고쳤으면 목록에서 지운다).
+ * 328차가 모두 고쳤다 — 327차의 둘(도면층 창 색 견본 title 「흰색」·필터 상태 줄 「모두」)과 새 걸음이 찾은 둘
+ * (명령 모드 바로 가기 메뉴 「객체 스냅 재지정 ▸」의 「스냅 재지정」·페이지 설정 관리자 설명 줄의 방향 「가로」·「없음」).
  */
-const PENDING: string[] = [
-  // 도면층 창 색 견본 title 「색: {0}」(palettes.ts) — 틀이 잡은 색 이름(colorText, 앱 낱말)을 번역층이 옮기지 않는다(코드 몫)
-  '도면층 창 · title: 흰색 (en, ja, zh-CN, de)',
-  // 도면층 필터 상태 줄 「{0}: …개 도면층 중 …개 표시」(layerfilter-core.ts) — 기본 필터 이름 「모두」(앱 낱말)도 사용자 필터 이름(도면 글)과 같은 자리라 옮기지 않는다(코드 몫)
-  '도면층 창 · 글: 모두 (en, ja, zh-CN, de)',
-];
+const PENDING: string[] = [];
+/** 328차 새 걸음 — 한국어 화면에서 걸음마다 새 앱 글(한글)이 보여야 그 화면을 실제로 그린 것이다 */
+const NEW_STEPS = ['배치 공간(MVIEW)', '배치 탭 메뉴', '바로 가기 메뉴(기본)', '바로 가기 메뉴(명령)', '리본 펼친 메뉴', '대화 상자(STYLE)', '대화 상자(DIMSTYLE)', '대화 상자(PAGESETUP)', '대화 상자(PLOT)'];
 
 const realSetInterval = globalThis.setInterval;
 const realClearInterval = globalThis.clearInterval;
@@ -87,6 +90,8 @@ const stubDom = (lang: string) => {
     url: `https://gyutae-kim.github.io/opencad-dwgdxf/${lang === 'ko' ? '' : `${lang}/`}`,
   });
   const w = dom.window as unknown as Record<string, unknown>;
+  // 대화 상자의 미리보기 캔버스는 jsdom에 그리기가 없다(tabkeys260 꼴 — 그리기 없이 글만 본다)
+  dom.window.HTMLCanvasElement.prototype.getContext = (() => null) as never;
   for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'HTMLInputElement', 'HTMLAnchorElement', 'MouseEvent', 'KeyboardEvent', 'MutationObserver', 'location', 'history', 'localStorage', 'CustomEvent'])
     vi.stubGlobal(name, w[name]);
   vi.stubGlobal('getComputedStyle', (el: Element, pseudo?: string) => dom.window.getComputedStyle(el, pseudo));
@@ -248,7 +253,81 @@ async function screens(lang: string): Promise<{ steps: [string, string][]; fileT
     await settle();
     look('도움말(F1)');
     const text = document.body.textContent ?? '';
-    return { steps, fileTextShown: text.includes('두레설비') && text.includes('house.dxf') };
+    const fileTextShown = text.includes('두레설비') && text.includes('house.dxf');
+    // 대화 상자는 바탕(.dialog-back)을 지우면 닫힌다(ui/dom.ts dialog). 다음 app.run은 앞 명령을 취소하고 돈다(app.ts run)
+    const closeDialogs = () => {
+      for (const b of Array.from(document.querySelectorAll('.dialog-back'))) b.remove();
+    };
+    closeDialogs();
+    app.cancel(true);
+    await settle();
+    // 328차 ① 배치 공간: 배치 탭을 눌러 들어간다. 가짜 엔진은 장면을 짓지 않으므로(FakeEngine.build 거절) 장면 짓기만 건너뛴다 — 화면 글만 본다
+    app.ensureScene = async () => {};
+    document.querySelector<HTMLButtonElement>(`button.layouttab[data-layout]:not([data-layout="${MODEL_SPACE}"])`)!.click();
+    await settle();
+    look('배치 공간');
+    void app.run('MVIEW');
+    await settle();
+    look('배치 공간(MVIEW)');
+    // 뷰포트 구석 프롬프트에서 Enter = 맞춤(vpcmds.ts MVIEW — 진짜 명령행 입력 칸)
+    app.cmd.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await settle();
+    const vp = [...app.active!.doc.entityIndex.values()].find((e) => e.type === 'VIEWPORT' && e.id > 1);
+    expect(vp, 'MVIEW 맞춤 뷰포트').toBeTruthy();
+    app.setSelection([vp!.handle], 'replace');
+    shell.openPalette('props');
+    await settle();
+    look('배치 공간(뷰포트 특성 창)');
+    void app.run('LIST');
+    await settle();
+    look('배치 공간(뷰포트 LIST)');
+    document.querySelector<HTMLButtonElement>('button.layouttab.active[data-layout]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 560 }));
+    await settle();
+    look('배치 탭 메뉴');
+    closeMenu();
+    // ② 바로 가기 메뉴: 그리기 영역 오른쪽 누름(CadView가 on({ context })로 넘기는 처리기 — app.ts onContext) — 기본·편집·명령 모드
+    const view = app.view as unknown as { events: Record<string, (...a: unknown[]) => void> };
+    const rightClick = async (step: string) => {
+      view.events.context!({ x: 300, y: 300 }, { x: 300, y: 300 }, new MouseEvent('contextmenu', { clientX: 300, clientY: 300 }));
+      await settle();
+      look(step);
+      closeMenu();
+    };
+    app.cancel(true);
+    app.setSelection([], 'replace');
+    await rightClick('바로 가기 메뉴(기본)');
+    app.setSelection([vp!.handle], 'replace');
+    await rightClick('바로 가기 메뉴(편집)');
+    app.setSelection([], 'replace');
+    void app.run('CIRCLE');
+    await settle();
+    await rightClick('바로 가기 메뉴(명령)');
+    app.cancel(true);
+    await settle();
+    // ③ 리본 펼친 메뉴: 탭마다 펼침 메뉴가 있는 단추(aria-haspopup="menu")를 눌러 연다. 지금 탭을 다시 누르면 리본이 접히므로 둘째 탭부터, 끝에 첫 탭
+    const ribbonTabs = () => Array.from(document.querySelectorAll<HTMLButtonElement>('.ribbon-tab'));
+    for (const i of [...ribbonTabs().keys()].slice(1).concat(0)) {
+      ribbonTabs()[i]!.click();
+      await settle();
+      look('리본 탭');
+      for (const b of Array.from(document.querySelectorAll<HTMLButtonElement>('button.rbtn-lg[aria-haspopup="menu"], button.rbtn-sm[aria-haspopup="menu"]'))) {
+        b.click();
+        await settle();
+        look('리본 펼친 메뉴');
+        closeMenu();
+      }
+    }
+    // ④ 자주 쓰는 대화 상자: 문자 스타일·치수 스타일·페이지 설정 관리자·플롯(배치에서)
+    for (const name of ['STYLE', 'DIMSTYLE', 'PAGESETUP', 'PLOT']) {
+      void app.run(name);
+      await vi.waitFor(() => expect(document.querySelector('[role="dialog"][aria-modal="true"]'), name).not.toBeNull(), { timeout: 5000 });
+      await settle();
+      look(`대화 상자(${name})`);
+      closeDialogs();
+      app.cancel(true);
+      await settle();
+    }
+    return { steps, fileTextShown };
   } finally {
     app.cancel(true);
     app.cmd.watchers.clear();
@@ -293,12 +372,13 @@ describe('번역층의 첫 언어 알림 차례(327차, SKP 214차 꼴)', () => 
 
 describe('다섯 언어 주요 화면의 한글 0(327차)', () => {
   it(
-    '처음 화면·명령행·도면층/특성 창·정보 카드·상태 막대·도움말(F1)(합성 DXF 둘) — 파일 글 칸 밖에 한글이 없다(아직 둔 것 빼고)',
+    '처음 화면·명령행·도면층/특성 창·정보 카드·상태 막대·도움말(F1)·배치 공간·바로 가기 메뉴·리본 펼친 메뉴·대화 상자(합성 DXF 둘) — 파일 글 칸 밖에 한글이 없다(아직 둔 것 빼고)',
     async () => {
       // 한국어 화면: 같은 훑기가 앱 글의 한글을 찾는다(시험이 눈멀지 않음)
       const ko = await screens('ko');
       expect(ko.steps.length).toBeGreaterThan(20);
       expect(ko.fileTextShown).toBe(true);
+      for (const step of NEW_STEPS) expect(ko.steps.some(([s]) => s === step), step).toBe(true);
       const left = new Map<string, string[]>();
       for (const lang of LANGS) {
         const r = await screens(lang);

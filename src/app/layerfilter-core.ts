@@ -16,6 +16,7 @@ import type { DocState } from './docstate';
 import { currentViewport } from './layerstate-core';
 import { currentLayer, patchLayers } from './layers';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 export type Print = (text: string, cls?: 'err' | 'res') => void;
 
@@ -69,9 +70,9 @@ export function currentFilterResult(st: DocState): FilterResult {
   return { ref: v.ref, label: r.label, invert: v.invert, keys: r.keys, visible: visibleLayerKeys(st.doc, r.keys, v.invert), total: st.doc.layers.size };
 }
 
-/** 상태 줄 글: "모두: 12개 도면층 중 5개 표시" */
+/** 상태 줄 글: "모두: 12개 도면층 중 5개 표시". 틀 자리 「(반전)」은 앱 글이라 먼저 옮긴다(328차 — 번역층은 잡은 값을 옮기지 않는다) */
 export function filterStatusText(label: string, total: number, shown: number, invert = false): string {
-  return `${label}${invert ? '(반전)' : ''}: ${total}개 도면층 중 ${shown}개 표시`;
+  return `${label}${invert ? uiText('(반전)') : ''}: ${total}개 도면층 중 ${shown}개 표시`;
 }
 
 /** 필터 참조의 도면층(반전하지 않은 결과). 없으면 null */
