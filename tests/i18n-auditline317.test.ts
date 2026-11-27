@@ -179,7 +179,8 @@ describe('틀이 잡은 경고 글을 화면 언어로(317차)', () => {
     const en = (await auditLines('en', 'Y')).lines;
     expect(en).toContain('  CLAYER  Current layer "GONE" does not exist.  → Set to 0');
     expect(en).toContain('  LINE(No handle)  No handle exists.  → New handle');
-    expect(en).toContain('  block LOOP  Block "LOOP" reference contains self.  → Delete object');
+    // 318차: 감사 대상 「블록 {0}」은 줄 머리 이름표라 영어도 첫 글자 대문자(de Block {0} 꼴 — i18n-units318)
+    expect(en).toContain('  Block LOOP  Block "LOOP" reference contains self.  → Delete object');
     const no = await auditLines('en', 'N');
     expect(no.lines).toContain(`  HANDSEED  The handle seed (none) is smaller than the largest handle ${no.max}.  Not fixed`);
     expect((await auditLines('de', 'Y')).lines).toContain('  CLAYER  Aktueller Layer „GONE“ existiert nicht.  → Auf 0 setzen');
