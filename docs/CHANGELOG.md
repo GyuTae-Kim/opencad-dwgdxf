@@ -3,6 +3,72 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(309차): 독일어 파라메트릭 구속 통일(리드 결정)과 이미지·PDF 언더레이·도면 비교·계산기 묶음의 번역 대조·빠진 번역
+
+### 리드 결정 — 독일어 구속의 셋째 갈래 Beschränkung
+308차가 남긴 Beschränkung 17 열쇠(ROADMAP 「308차에 보고 두 것」 (1)) 가운데 **파라메트릭 구속**을 308차와 같은 근거(AutoCAD 독일어판 Bemaßungsabhängigkeit·Abhängigkeit, 같은 사전 Abhängigkeit 91곳)로
+Abhängigkeit로 맞췄습니다(한 규칙 — 이 차수의 한도 예외). 둘 다 여성 명사라 관사·형용사 어미가 그대로이고, 복수 -beschränkungen → -abhängigkeiten입니다.
+
+| 열쇠(쓰는 곳) | 전 | 후 |
+| --- | --- | --- |
+| 치수 구속조건·만들지 않음·과도하게 구속·「치수 구속·사용자 매개변수 (PAR)」·선형·수평·수직·정렬 치수 구속(여덟 — DIMCONSTRAINT·DC*·리본) | Bemaßungsbeschränkung(en) | Bemaßungsabhängigkeit(en) |
+| 각도 치수 구속조건(DCANGULAR 제목) | Winkelbemaßungsbeschränkungen | Winkelbemaßungsabhängigkeiten |
+| 첫 번째·두 번째 각도 구속점 지정:(DCANGULAR — `app/constraints.ts`) | Winkelbeschränkungspunkt | Winkelabhängigkeitspunkt |
+| 동적 치수 구속 표시·숨기기(리본) | Maßbeschränkungen | Bemaßungsabhängigkeiten(같은 사전의 「치수 구속」 낱말 Bemaßungs- — 한 물건 한 이름) |
+| 스플라인 위의 점 구속조건은 지원하지 않습니다. · 참조 구속조건 만들기 | Punkt-·Referenzbeschränkung | Punkt-·Referenzabhängigkeit |
+
+- 그대로: QLEADER 지시선 각도 구속 입력 셋(`app/annotate.ts` — 세그먼트 각 제한, 파라메트릭 구속이 아님. 300차 시험이 Winkelbeschränkung으로 고정)과 같은 흐름의 「0 = 구속 없음」,
+  LIMITS 「도면 공간 한계 재설정:」 Papierplatzbeschränkungen(한계 — 구속이 아님, ROADMAP 「309차에 보고 두 것」). 「과도하게 구속」의 Überbeanspruchung은 307차 (3) 그대로.
+- 이제 독일어 치수 구속 이름이 한 낱말입니다(「Abhängigkeit der Radiusbemaßung」·「Lineare Bemaßungsabhängigkeiten」·「Horizontale Bemaßungsabhängigkeit」). 원문에 구속이 든 독일어 값의 Beschränkung은 QLEADER 셋뿐입니다.
+
+### 묶음 — 이미지·PDF 언더레이·도면 비교·계산기
+IMAGECLIP·PDFCLIP·CLIP(`app/imageclip.ts`), IMAGEADJUST·-IMAGEADJUST·IMAGEQUALITY·TRANSPARENCY·PDFADJUST·PDFLAYERS(`app/editcmds2-image.ts`), IMAGEFRAME(`app/modify2.ts`),
+COMPARE·-COMPARE·비교 도구 막대·설정·정보·고르기 대화 상자·변수 명령(`app/compare*.ts`·`edit/compare/settings.ts`), XCOMPARE(`app/xcompare.ts`·`edit/viewtools/xcompare.ts`), QUICKCALC 대화 상자(`app/util2-misc.ts`)의
+보이는 글을 네 언어로 대조했습니다. 앞 차수가 대조한 열쇠(IMAGEATTACH·PDFATTACH 292·304차, PDFIMPORT 303차, CAL 오류·QuickCalc 줄 299차, 리본 306차, 「구름형 리비전(R)」·「구름형 리비전 쉐이프」 299차, 「비교 필터」 291차)는 건너뛰었습니다.
+명령 제안·F1 명령 표의 명령 제목(「도면 비교: 문자 비교」 등 변수 명령)은 ui-copy라 번역층이 「: 」로 나눠 이미 옮깁니다(`app/i18n.ts`). 명령행 기록 줄은 틀이 잡은 한국어를 옮기지 않습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 15·독일어 28·일본어 18·중국어 30 열쇠 — 중국어는 30에서 한도가 찹니다).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 흐리기(IMAGEADJUST·PDFADJUST fade — `render/webgl.ts`가 바탕색으로 섞는다) 조각·홀로·값 입력·통째 둘 | Blur·Weichzeichnen·Unschärfe·ぼかし·模糊(흐림) → Fade·Abblenden·フェード·淡入度 | 「<흐리기>:」 Fade·フェード, XFADECTL 안내 abgeblendet·淡入显示 |
+| 대비·단색·높음 | 대비 comparison·Vergleich → Contrast·Kontrast, 단색(M) Solid·Vollflächig·实心·단색 纯色 → Monochrome·Monochrom·单色, 높음(H) Height·高さ → High·高 | 「대비(0-100)」, PDF 언더레이·IMAGEQUALITY 통째 |
+| 자르기(CLIP) | 일본어 자를 PDF 언더레이·객체·이미지 선택 切り取る → クリップする, 독일어 Ausschneiden → Zuschneiden, 중국어 자르기 경계 修剪 → 剪裁 | 잘라내기(CUT) 切り取り·Ausschneiden, TRIM 修剪, 「자르기⁠」 クリップ·剪裁 |
+| 도면 비교 결과·설정 | 계보 꼬리 fit by handle·fit durch Griff·通过手柄安装 → matched by handle·nach Handle abgeglichen·按句柄匹配, 맞추기 fit·anpassen·拟合 → match·abgleichen·匹配, 설정 통째 Characteristics·Merkmale·雲マーク·云图修订·前表面 → 조각 낱말 | 핸들 Handle·句柄, 「주석 축척 맞추기」 Abgleich, 조각 「특성(P)」·「앞(F)」·「구름형 리비전」 |
+| 도면 비교 대화 상자·정보 | 저장한 사람 Speichern bis → Gespeichert von, 앞에 표시 Vorauszeichnung·显示待绘制内容 → Im Vordergrund anzeigen·前置显示, 찾아보기(B) Suchen·搜索 → Durchsuchen·浏览, 열린 도면 Zeichnung öffnen·打开图形 → Geöffnete Zeichnungen·已打开的图形, 가져왔습니다 were brought·gebracht → Imported·importiert | 「작성자」 Erstellt von, 「<찾아보기>」, 「열린 도면 목록」, 「도면층 상태 … 가져왔습니다」 |
+| 외부 참조 비교 | 요약·변경 알림의 「없음」 in …·存在于·也存在于(뜻 거꾸로) → nicht in …·不在, 변경 세트 Änderungsgruppe·变更集 → Änderungssatz·更改集, 現在、 → 現在の, 닫기 단추 geschlossen → schließen | 「현재 외부 참조에 없음」, 「변경 세트」, 「도면 비교 닫기」 |
+| 이미지 테두리·계산기 | IMAGEFRAME Image Border·Bild Rahmen·画像の境界線 → Image frames·Bildrahmen·イメージ フレーム, 계산기(명령행) 計算機（コマンド行） → 電卓（コマンドライン） | 「가리기 테두리」, 「계산기」·「(명령행)」 |
+
+(나) 빠진 번역 — 틀이 앱 글을 잡아 네 언어 모두 한국어로 보이던 것(언어마다 25):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| -COMPARE 설정 명령행 앞 조각(문자 비교·해치 비교·구름형 리비전·구름형 리비전 쉐이프·앞에 표시)과 옵션 현재 도면(C)·비교 도면(O) | 7 | Text comparison [ | 이름 + 「 [」·고를 글자 |
+| 그 통째 프롬프트(커서 옆·휴대폰 카드) | 5 | Text comparison [ON/OFF] <{0}>: | 「{0} [켜기(ON)/끄기(OFF)] <{1}>:」·앞 조각 + 옵션 |
+| PDFADJUST 단색 물음 조각·통째 | 2 | Monochrome? [Yes (Y)/No (N)] <{0}>: | 「경계를 유지하시겠습니까?」 꼴 |
+| IMAGECLIP 반전 자르기 켜짐·꺼짐, -IMAGEADJUST 밝기·흐리기 값 | 4 | Invert clip is On. · Enter fade value (0-100) <{0}>: | 「반전 자르기 상태가 {0}입니다.」·「대비 값 입력 (0-100) <{0}>:」 |
+| COMPARE·XCOMPARE 결과의 같은 계보 꼬리 | 2 | … (match {2}ms, draw {3}ms, same lineage — matched by handle). | 결과 틀 + 꼬리 |
+| 비교 요약(걸러 낸 문자·해치)과 다시 비교 줄 셋 | 4 | Comparison again: {0} only in current external reference, … | 요약 틀 + 괄호·「다시 비교했습니다: {0}」 |
+| PDFLAYERS 대화 상자 제목(2쪽 이상) | 1 | PDF underlay layer — {0} (page {1}) | 「PDF 언더레이 {0}({1}쪽)을(를) 부착했습니다.」의 쪽 |
+
+지운 틀은 없습니다. 열쇠 9250 → 9275.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 리드 결정 14(독일어)·오역 91곳과 새 열쇠 25씩. 이미지·PDF 언더레이 조정의 흐리기가 흐림이 아니라 페이드로, -COMPARE 설정·PDFADJUST 단색·
+  반전 자르기·-IMAGEADJUST 값·비교 결과와 요약·PDFLAYERS 제목이 한국어 대신 그 언어로 보입니다.
+- 공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「열린 도면」(디자인센터 탭·비교 고르기 대화 상자), 「{0}개를 가져왔습니다.」(COMPAREIMPORT — 다른 「…개를 가져왔습니다」는 제 열쇠).
+  같은 값이 된 것: 독일어 「선형 치수 구속」 = 「선형 치수 구속조건」(같은 DCLINEAR), 「열린 도면」 = 「열린 도면 목록」, 중국어 「가져오기(I)」 = -LAYER 「불러오기(I)」(같은 뜻·다른 명령), 「단색」 = 해치 「한 가지 색」(다른 화면).
+- 두는 것(ROADMAP 「309차에 보고 두 것」): 중국어 「저장한 사람」 保存·일본어 맞추기 フィット(같은 사전에 근거 없음), 「({0}쪽)」 side 꼴, 앞 차수 대조 열쇠, 묶음 밖(LIMITS 한계·REFEDIT 흐림 정도 등).
+
+### 확인
+- `tests/i18n-imgcmp309.test.ts`(새 시험 4건 — 글 꼴은 소스에서 확인): 리드 결정(구속 열쇠의 Beschränkung은 QLEADER 셋뿐·대표 값·거꾸로 찾기·LIMITS 그대로), 조각·통째·기록 줄이 네 언어 모두 한국어 없이,
+  고친 낱말 = 같은 사전 근거, 새 열쇠 = 조각·틀 번역에서 만든 꼴.
+- 고치기 전 10건 가운데 4건 실패(구속 열쇠의 Beschränkung 17, 남은 한국어 104 = 네 언어 × 26, en 흐리기 Blur, 새 열쇠 없음). 고친 뒤 `tests/i18n-imgcmp309.test.ts`·`tests/i18n-constraint307.test.ts`·
+  `tests/i18n-unify308.test.ts` 3파일 10건 통과(한 번에). `npm run check:i18n` 통과(9275 항목).
+- tools/·tests/ grep: 옛 값을 기대하는 시험·도구는 없습니다(CUTCLIP 시험이 잘라내기 切り取り·Ausschneiden을 고정 — CLIP과 가르는 근거). 바꾼 열쇠를 보는 307차 시험(정렬 치수 구속·각도 구속점 — 다른 열쇠에서 만든 꼴)과
+  308차 시험(QLEADER·Einschränkung)은 그대로 통과합니다. 300차 시험의 Winkelbeschränkung(QLEADER)은 바꾸지 않았습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(308차): 한 사전 안에서 갈린 CAD 낱말 통일 — 독일어 구속·중국어 외부 참조
 
 ### 근거와 표

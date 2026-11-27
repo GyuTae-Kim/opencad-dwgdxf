@@ -2275,6 +2275,22 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   QLEADER 지시선 각도 구속 입력 셋 Winkelbeschränkung(300차 시험이 고정)과 같은 흐름의 「0 = 구속 없음」 keine Einschränkungen(파라메트릭 구속이 아니라 세그먼트 각 제한 — 같은 흐름을 한 낱말로 함께).
   그래서 독일어 치수 구속 이름이 아직 「Abhängigkeit der Radiusbemaßung」·「Lineare Bemaßungsabhängigkeiten」 ↔ 「Horizontale Bemaßungsbeschränkung」으로 갈린다.
   (2) 통일만 한 차수라 307차 보고 (1)~(5)의 나머지 오역(중국어 구속 묶음 나머지, 독일어 Überbeanspruchung·optional·Unveränderte·다중 지시선·주석 축척 무리 등)은 그대로. 원어민 검토 없음
+  (**309차가 고침**: (1)의 파라메트릭 구속 14 열쇠를 리드 결정으로 Abhängigkeit로 — 동적 치수 구속도 Bemaßungsabhängigkeiten. QLEADER 지시선 각도 구속 셋과 「0 = 구속 없음」은 리드 결정대로 그대로)
+- [x] 독일어 파라메트릭 구속 통일과 이미지·PDF 언더레이·도면 비교·계산기 묶음의 번역 대조·빠진 번역(309차, 290~308차 꼴 — 308차 보고 (1)): 리드 결정으로 독일어 Beschränkung 가운데
+  파라메트릭 구속 14 열쇠(치수 구속 무리·각도 구속점·점 구속·참조 구속)를 Abhängigkeit로(QLEADER 각도 구속 셋·LIMITS 한계는 그대로).
+  IMAGECLIP·IMAGEADJUST·IMAGEQUALITY·TRANSPARENCY·PDFADJUST·PDFLAYERS·IMAGEFRAME·COMPARE·-COMPARE·XCOMPARE·QUICKCALC 대화 상자의 보이는 글(앞 차수가 본 글은 건너뜀)을 네 언어 대조.
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 15·독일어 28·일본어 18·중국어 30 — 흐리기 fade의 Blur·Weichzeichnen·ぼかし·模糊, 대비 comparison, 단색 Solid·实心, 높음 Height,
+  CLIP 切り取る·Ausschneiden·修剪, 비교의 핸들 Griff·手柄·맞추기 fit·拟合·저장한 사람 Speichern bis, 외부 참조 비교 요약의 뜻이 거꾸로 된 「없음」 등). 중국어는 30에서 한도가 참.
+  (나) 네 언어 모두 한국어로 보이던 25 열쇠 — -COMPARE 설정 조각·옵션·통째 열둘, PDFADJUST 단색 물음 둘, 반전 자르기 켜짐·꺼짐, -IMAGEADJUST 밝기·흐리기 값, 같은 계보 꼬리 둘,
+  비교 요약·다시 비교 넷, PDFLAYERS 제목 — 를 더함(9250 → 9275, 지운 틀 없음). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 309차 절
+- [ ] 309차에 보고 두 것 — (1) 근거가 서지 않음: 중국어 「저장한 사람」 保存(같은 사전에 保存者 꼴 낱말 없음 — 「작성자」 撰写人), 일본어 COMPARE 결과 「맞추기」 フィット(같은 사전에 照合·マッチ 없음),
+  「({0}쪽)」 네 언어 side·Seite·側·侧(쓰이는 곳을 찾지 못함 — PDFLAYERS 제목은 새 열쇠로 옮김), 중국어 「같은 계보」 血统(같은 사전에 다른 낱말 없음).
+  (2) 앞 차수가 대조한 열쇠라 건너뜀: 일본어 「구름형 리비전(R)」 雲マーク(R)·영어 「구름형 리비전 쉐이프」 Cloud revision shape(299차), 독일어 「비교 필터」 Filter vergleichen(291차),
+  「외부 참조 비교 끝내기」 독일어 beendet·중국어 结束(307차 보고), 독일어 「삼각 함수는 도 단위…」 Gradeinheiten umgewandelt·2 Fuß(299차).
+  (3) 묶음 밖: 독일어 LIMITS 「도면 공간 한계 재설정:」 Papierplatzbeschränkungen(한계 limits — 「모형 공간 한계」 Modellraumgrenzen), REFEDIT 「참조 편집 흐림 정도」 독일어 Weichzeichnen·중국어 模糊(fade),
+  중국어 「DWG 비교」 工程图比较, 일본어 TRIM 「자를 객체 선택 또는 …」 切り取る, 독일어 비교 도구 막대 「구름형 리비전 켜기」 명령꼴(Aktivieren Sie …).
+  (4) 공유 열쇠: 「닫기(C)」 중국어 闭合(PLINE 닫기와 같은 열쇠 — -COMPARE 통째는 关闭), 「기록」 영어 Record(QuickCalc 기록 ↔ 다른 기록). (5) 코드 변경: CAL 스냅 고르기 「>> {0} 선택:」(299차 보고 그대로).
+  (6) 307차 보고 (1)~(5)·308차 보고 (2)의 나머지 그대로. 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
