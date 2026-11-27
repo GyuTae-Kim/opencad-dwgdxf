@@ -196,7 +196,8 @@ describe('파일·저장·도면 정리 묶음의 번역과 302차가 남긴 것
     expect(de['이동']).toBe('Verschieben');
     expect(de['확대/축소 및 초점이동 명령을 결합하시겠습니까?']).toContain(`„${de['초점이동']}“`);
     const pan = Object.keys(de).filter((k) => /초점\s?이동/.test(k));
-    expect(pan.length).toBe(4);
+    // 323차: UNDO 「확대/축소 및 초점이동 명령을 결합하시겠습니까?」 명령행 물음의 앞 조각(… [)·통째(… [예(Y)/아니오(N)] <{0}>:) 열쇠 둘이 더해져 6(값도 „Pan“)
+    expect(pan.length).toBe(6);
     for (const k of pan) {
       expect(de[k], k).toMatch(/Pan|pannen/);
       expect(de[k], k).not.toMatch(/verschieb|Fokus/i);
