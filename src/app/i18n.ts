@@ -125,7 +125,6 @@ export async function installLocalization(root: HTMLElement): Promise<() => void
     mountSelector();
   });
   metadata(); update(presentationRoot); mountSelector();
-  root.dispatchEvent(new CustomEvent('languagechange',{detail:language}));
   const title = document.querySelector('title');
   const titleObserver = new MutationObserver(() => {
     const current = document.title;
@@ -138,5 +137,7 @@ export async function installLocalization(root: HTMLElement): Promise<() => void
   });
   if (title) titleObserver.observe(title,{childList:true,subtree:true,characterData:true});
   observer.observe(presentationRoot,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['title','aria-label','aria-description','placeholder','alt','href']});
+  // First notice after observing: listeners that redraw synchronously are translated too (327차).
+  root.dispatchEvent(new CustomEvent('languagechange',{detail:language}));
   return () => { observer.disconnect(); titleObserver.disconnect(); control.dispose(); };
 }
