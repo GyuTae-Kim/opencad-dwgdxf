@@ -3,6 +3,58 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(304차): 303차가 남긴 오역과 특성·선택(특성 팔레트·빠른 선택) 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+303차 「보고 두 것」 (1)의 한도 밖 오역(독일어 묶음 나머지·중국어 결합(bind) 등)과 특성·선택 묶음 — 특성 팔레트(`ui/palettes.ts` 제목·일반·형상·문자·치수·속성·정보 묶음, 칸 정의 `propedit.ts`,
+종류 이름·정보 행 `inquiry.ts`), QUICKPROPERTIES·QPMODE·빠른 특성 창(`editcmds2-query.ts`·`editcmds2-qp.ts`), GROUPEDIT, MATCHPROP(특성 일치·특성 설정 대화 상자 — `editcmds.ts`),
+GROUP·UNGROUP·PICKSTYLE·SELECT·QSELECT(신속 선택)·SELECTSIMILAR·FILTER(`util2-select.ts`, 모형 `edit/util/select.ts`·`groups.ts`), 선택 방식(`selmethod.ts`)·SELECTIONCYCLING·객체 선택 프롬프트(`app.ts`),
+옵션 › 선택 탭(PICKBOX·PICKFIRST·PICKADD·그립 — `options.ts`), Express 선택(SSX·GETSEL — `express-select.ts`) — 의 보이는 글 477개(290~303차가 본 글을 빼면 열쇠 324)를 네 사전과 견줬습니다.
+LIST는 299차가 봤습니다. 틀(`${…}`)·키워드·기록 줄·특성 팔레트·빠른 특성 제목을 펴서 명령행 조각·결과 줄로 넣어 봤습니다(고치기 전 언어마다 한국어로 남는 줄 78).
+「속성」·「메시」·「모양」·「여러 줄」·「핸들」·「수락」·「델타 X」·「확인란 크기」·「고른 객체」는 쓰는 곳을 코드로 갈라 모두 같은 뜻임을 확인했고, 「사이 각도」(호 사이각 ↔ 배열 항목 사이 각도)는 뜻이 갈려 두었습니다.
+중국어 「작성자」는 作者로 바꾸면 통계 「작성」(공유 열쇠 — 作者)과 같은 이름이 되어 두었습니다(撰写人도 author 뜻).
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 29·일본어 15·중국어 30·독일어 30곳). 독일어는 303차가 남긴 것만으로 30을 넘어(37), 278차 규칙대로 남은 것·묶음을 함께 견줘 뜻이 가장 크게 어긋난 30을 골랐습니다.
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 종류 이름(특성 팔레트·빠른 특성·LIST 제목) | 메시 Messi → Mesh·Netz, 여러 줄(MLINE — 리본 단추·명령 제목도) Multiple lines·複数行·多行文本(=「여러 줄 문자」 MTEXT와 같은 이름)·Mehrzeilig → Multiline·マルチライン·多线·Multilinie(「여러 줄 (ML)」 말풍선도 영어·일본어), 영어 모양 shape·속성 attribute → Shape·Attribute, 독일어 속성 -Attribut → Attribut | 「폴리곤 메시」 Polygon mesh·Polygonnetz, 「여러 줄 편집 도구」·「여러 줄 스타일」, 「쉐이프」 Shape, 「속성 정의」 |
+| 특성 팔레트 칸·정보 행 | 끝 X End·Ende, 델타 X Delta(X 빠짐) → End X·Ende X·Delta X, 핸들 控制柄·Griff(그립) → 句柄·Handle, 영어 선종류 생성(PLINEGEN) Create linetype·创建线型 → Linetype generation·线型生成, 세로좌표(X)·(Y) Vertical coordinate → Ordinate, 경계 수 Boundary number → Number of boundaries | 「끝 Y」·「델타 Y」, 「… 핸들 = {3}」, 「폴리선 선종류 생성 옵션 입력 [」, 「세로좌표(O)」, 「지시선 수」 |
+| 옵션 › 선택 탭(PICKBOX) | 확인란 크기·(P) Checkbox size·チェックボックス·复选框·Kontrollkästchengröße → Selection box size·選択ボックスのサイズ·选择框大小·Auswahlfeldgröße, 영어 선택·그립 설정 (Options › Select) → (Options › Selection), 중국어 「명령이 활성화되어 있지 않을 때(W)」 未激活时激活 → 未激活时 | 「선택 상자 크기(픽셀)」(sysvars PICKBOX 설명), 「선택」 Selection, 같은 칸의 (W) 없는 열쇠 |
+| GROUP·GROUPEDIT·MATCHPROP·QSELECT·SELECT | 수락 「Accept Enter the number」·「Akzeptieren Geben Sie die Nummer」 → Accept·Übernehmen, 영어 GROUPEDIT 「Name Rename (REN)」 → Rename (REN), 독일어 「Gruppennamen oder [?] ein:」(깨진 문장) → eingeben, 중국어 그룹 이름·고르기 프롬프트 꺾쇠 빠짐·组名名称 → [?]·[名称 (N)]·组名称, 원본 객체 original·元の → source·コピー元, 독일어 특성 일치 Attribute anpassen·특성을 고르십시오 Attribut → Eigenschaft(en), 중국어 고른 객체 相等对象(같은 객체)·현재(U) 当前图层·전체 도면 查找…区域·필터 리스트 遍历·{0}개 항목 어순, 영어 되돌릴 선택 option → selection, QPMODE 2 안내 call it·也称为 → open it with·可用…打开 | 「수락(A)」, 「이름 바꾸기(REN)」, 「그룹 이름 입력 또는 [」, 「고른 특성만 원본에서 대상 객체로 옮깁니다.」, 「특성」, 「선택한 객체는 …」 所选对象, 「모형 공간」 空间, 「{0}개를 찾음」 |
+| Express SSX·GETSEL·XLIST·NCOPY·GATTE | 영어 같은 특성 characteristics → properties, 중첩 Overlapping·重なっている → Nested·ネストされた, GATTE 속성 property → attribute, 일본어 찾음 「探します」(찾겠습니다)·1件の検索 → 見つかりました, SSX 필터 두께(T) 太さ → 厚さ | 「특성」 Properties, 「중첩된 객체 복사」, 「속성 태그」, 「{0}개를 찾음」, 「두께(T)」 |
+| ETRANSMIT 결합(bind — 303차 남은 것) | 영어 combined·일본어 結合(「…参照ラ」 남은 조각 포함)·중국어 组合·合并·连接·外部参考 → bound·バインド·绑定·外部参照(요약 「, 결합 {0}」·설정 상자·보고서 줄 둘·결합 메모·안내) | 「결합(B)」 Bind (B)·バインド(B)·绑定 (B) |
+| 303차 남은 중국어 | 옵션 「파일 저장」 正在保存文件(저장하는 중) → 文件保存, MVSETUP 「초점 이동할 점 지정:」 焦点移动 → 平移, 헤더 감사 「…错误。」 → 头部审核, 자동 저장본 안내 保持…功能 → 自动保存的文件存放在… | 「자동 저장」, 「초점이동」, 「감사」 |
+| 303차 남은 독일어 | 감사 Danke → Prüfung, 「{0} 특성」 Merkmal → Eigenschaften von {0}, -UNITS 1. 과학 Naturwissenschaften·4. 건축 Konstruktion·5. 분수 Fraktion·측량 단위 Maßeinheit → Wissenschaft·Architektur·Bruch·Vermessungseinheiten, 방향 남 「M 6 Uhr」·서 「9 Uhr」 → Süd 6:00·West 9:00, 넣지 못함 Eingabe → Einfügen, 「지금 화면을 {0}로 저장했습니다」 Speichere(1인칭) → gespeichert, 저장 안 함 단추 Nicht gespeichert → Nicht speichern, 대소문자 전환 Schaltergehäuse(스위치 상자) → Groß-/Kleinschreibung umschalten, 줄바꿈(W) Linie Trennen → Zeilenumbruch, 위치도 Positionsansicht → Position, X데이텀·행 데이텀 Datum(날짜) → Bezug | 「객체 감사」, 「{0}의 모든 특성」, 낱말 열쇠, 「미국 측량 피트」, 「동 3 시 = 0」, 「전송 보고서를 패키지에 넣기」, 「지금 화면 범위를 SVG로 저장했습니다.」, 「대소문자 전환(G)」, 「줄바꿈」, 「위치」, 「데이텀 1」(303차) |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 60):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| GROUP 목록 「{0} 객체 {1}개, 선택 불가」·이름 없는 그룹 「{0}(이름 없음) 객체 {1}개」(·, 선택 불가)·「그룹 {0}(이름 없음)이(가) 분해되었습니다.」·수락 물음 앞 조각 「그룹 {0}(이름 없음) [」와 통째 | 6 | {0}(unnamed) {1} objects, not selectable | groupLabel이 ft(이름) + 「(이름 없음)」 — 틀 {0}·{2}가 「(이름 없음)」·「, 선택 불가」를 잡음 |
+| PICKSTYLE 결과 「PICKSTYLE = {0} (그룹 선택 켜기)」·「… 끄기)」 | 2 | PICKSTYLE = {0} (Turn on group selection) | 틀이 없음 |
+| 특성 팔레트·정보 카드·빠른 특성 종류 목록의 치수 제목 「치수 (선형(수평))」 등 12와 개수 붙은 「치수 (선형(수평)) ({0})」 12 | 24 | Dimension (Linear (horizontal)) | 틀 「치수 ({0})」이 종류 낱말을 옮기지 않음(241·242차 보고 (1)) |
+| 같은 종류 여럿의 제목 「선 ({0})」·「원 ({0})」·「여러 줄 문자 ({0})」·「블록 참조 ({0})」 … 27과 「사용자 객체 ({0})」 | 28 | Line ({0}) | `${typeName} (${n})` — 종류 이름이 틀 자리에 들어 한국어로 남음 |
+
+지운 틀은 없습니다. 열쇠 9113 → 9173. 새 틀 「이름 ({0})」에 걸리는 리본 말풍선(「선 (L)」·「여러 줄 (ML)」 등 13)은 모두 통째 열쇠가 이미 있어 바뀌지 않습니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 104곳과 새 열쇠 60씩. 영어·일본어·중국어·독일어 화면의 특성 팔레트·빠른 특성 제목(같은 종류 여럿·치수 종류)·GROUP 목록·이름 없는 그룹·PICKSTYLE 결과가
+  한국어 대신 그 언어로, 종류 이름·옵션 › 선택 탭·GROUP 수락·MATCHPROP 글이 엉뚱한 낱말(축구 선수 이름·확인란·쓰레기 글·그립) 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「속성」(특성 팔레트·INSERT 대화 상자 속성 묶음·속성 탭·ATTRIB 종류 이름), 「여러 줄」(리본 MLINE 단추·MLINE 제목·데이터 추출 종류 이름), 「핸들」(LIST 행·하이퍼링크 목록 열 머리),
+  「델타 X」(정보 행·휴대폰 정보 카드), 중국어 「고른 객체」(COUNT). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「304차에 보고 두 것」): 독일어 한도 밖 오역(303차 남은 것 열아홉과 묶음 열셋), 중국어 묶음 나머지, 공유 열쇠 「사이 각도」·「작성(자)」, 같은 사전에 근거가 없는 일본어·독일어 선종류 생성 등,
+  FILTER 목록 줄(「객체 = 선」 — 종류 이름이 틀 자리)과 종류 + 개수 나머지 일곱.
+
+### 확인
+- `tests/i18n-select304.test.ts`(새 시험 3건 — 프롬프트·결과 줄 꼴은 소스 글에서 확인): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 9 프롬프트(이름 없는 그룹의 수락 물음 포함)의 입력 줄, 결과·제목 줄 59
+  (ft() 지킴 자리 포함)와 기록 줄 1에 네 언어 모두 한글 없음, 고친 낱말 = 같은 사전 근거, 새 열쇠 = 조각·틀 번역에서 만든 꼴.
+- 고치기 전 30건 가운데 3건 실패(한글 남은 입력 줄 4·결과·제목·기록 줄 240, 영어 「polygon mesh」에 메시 Messi 없음). 고친 뒤 `tests/i18n-select304.test.ts`·`tests/i18n-file303.test.ts`·`tests/i18n-prompts.test.ts`
+  3파일 30건 통과. `npm run check:i18n` 통과(9173 항목). 사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어·가리기 낱말)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험은 없습니다. 바꾼 열쇠를 보는 다른 시험(303 감사·-UNITS·결합·위치도 — 영어·일본어·중국어 또는 바꾸지 않은 언어만, 295 결합·속성 선택 독일어, 300 줄바꿈(W)·특성 일치 영어·일본어·중국어,
+  121 중국어 메시 网格, 295 영어 「경계」 border 훑기)은 기대 그대로 맞습니다. tools/에는 걸리는 것이 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(303차): 독일어 초점이동 Pan(리드 결정)·302차가 남긴 오역과 파일·저장·도면 정리 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
