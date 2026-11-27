@@ -3,6 +3,51 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(307차): 306차가 남긴 오역과 파라메트릭 구속 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+306차 「보고 두 것」 (1)의 한도 밖 오역(중국어·독일어)과 파라메트릭 구속(`app/constraints.ts` — GEOMCONSTRAINT·기하 구속 12종·AUTOCONSTRAIN과 설정 대화 상자·DIMCONSTRAINT·치수 구속 7종·DELCONSTRAINT·CONSTRAINTBAR·DCDISPLAY·PARAMETERS 매개변수 관리자,
+`constraints-pick.ts`·`constraints-hook.ts`, 그 오류를 내는 `edit/constraint/*`, AutoCAD 구속 안내)의 보이는 글 194개(앞 차수가 본 글을 뺀 149개 — 열쇠 140)를 네 언어 값 모두 대조했습니다. 리본 「파라메트릭」 탭은 306차가 봤습니다.
+대화 상자(form·modal) 글은 `data-i18n-ui-copy` 밖이라 번역층이 틀이 잡은 값을 옮기지 않습니다 — 자동 구속 설정 칸 「{0} 적용」, 매개변수 관리자 유형 칸 「{0}(참조)」·오류 줄 「이름: 오류」, AutoCAD 구속 안내 「참고: {0}」이 한국어로 남았고,
+GEOMCONSTRAINT 프롬프트는 `${label}(${key})`로 만들어 옵션 여덟과 통째가 한국어로 남았습니다. 명령 제목 「{0} 구속조건」은 명령 제안(ui-copy)이라 옮겨지지만 공유 낱말(대칭 Mirror·동일 Same·일치 匹配·직교 Ortho)을 끼웠습니다.
+「일치」·「동일」(홀로)·「정렬」·「수직(V)」은 쓰는 곳이 갈려 그대로 두고, 구속만 쓰는 새 통째 열쇠는 같은 명령의 리본 풍선 「X 구속」(306차가 본 열쇠)을 근거로 했습니다.
+일본어·중국어 「직교(P)」는 같은 프롬프트의 「수직(V)」 垂直과 같은 이름이 되지 않게 「직교」의 直交·正交로 했습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 5·일본어 6·중국어 30·독일어 30곳). 중국어·독일어는 30에서 한도가 찹니다.
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 306차 남은 중국어 | 외부 참조 비교 正在比较(진행 꼴) → 比较外部参照, DWG·PDF 부착 图纸附件·附上 → 附加, 구름형 리비전 켜기·표시·(R)·비교 云端·云类型·云版本 → 云状修订, 행·열로 배열한 블록 참조 引用…块 → 块参照, 「{0} 닫기」·「{0} 패널 펼치기」 어순, 이름 없는 그룹 “{0}个对象”, 참조 수·참조 이름 경로 参考文献 → 参照, 분해 拆卸 → 分解, 도넛 (DO) 甜甜圈 → 圆环, 그리기 경계의 호 拱形 → 圆弧 | 「외부 참조 비교 중…」, 「이미지 부착」 附加图像, 「구름형 리비전」 云状修订, 「블록 참조」 块参照, 「블록 팔레트 닫기」 关闭块面板, 「참조 이름」 参照名称, 「분해」 分解, 「도넛」 圆环, 「호」 圆弧 |
+| 306차 남은 독일어 | 「{0} 닫기」 Schließen·패널 어순, DDA Trennbemaßungen → Bemaßungszuordnung aufheben, XB integrieren → binden, 비교 결과를 새 도면으로 vergleichen, 정렬 치수 (DAL) ausrichten → Ausgerichtete Bemaßung, 「이름에 =」 꼬리 「Namen.」, QPMODE 안내 nennen → aufrufen, 선택 미리보기 Vorschauauswahl → Auswahlvorschau, 뷰포트 동기화 Viewport-, 고정 연결선 거리 Verbindungsabstand, 새로 그리기 Neu zeichnen(= 다시 그리기) → Neue Zeichnung | 「블록 팔레트 닫기」 Blockpalette schließen, 「연관 해제」 Zuordnung aufheben, 「결합(B)」 Binden, 「정렬 치수」, AutoLISP 줄 aufgerufen, 「선택」 Auswahl + 「미리보기」 Vorschau, 「뷰포트」 Ansichtsfenster, 「연결선 거리」 Anbindungsdistanz, 「새 도면」 |
+| 구속 낱말 | 영어 구속 {0}개 Restraint → {0} constraints, 독일어 Zurückhaltung·Randbedingungen·구속점 Fixierungspunkt(조각·통째 셋) → Einschränkung·Einschränkungspunkt, 일치 구속 匹配·Übereinstimmung → 重合·koinzidente, 일본어 구속조건 폼 制約 → 拘束, 직교 객체 Orthogonal·Ortho → Perpendicular·Senkrechte, GEOMCONSTRAINT 틀 기본값 <match>·<匹配> → 「일치(C)」 낱말 | 「구속 막대」 Constraint bar·拘束バー, 「구속점 선택」 Einschränkungspunkt, 「일치 구속」 重合约束·Koinzidente, 「직교 구속」 Perpendicular·Senkrechte |
+| 구속 프롬프트·오류 | 중국어 첫 번째(객체) 箭头 → 对象·독일어 Knoten → Objekt, 첫 번째 각도 구속점(점 빠짐·Beschränkung für den ersten Winkel), 필요합니다 绘制·添加를 더함 → 需要…, 원·호·타원 和·und → 或·oder, 「{0}개」 어순 「{0} 已…」 → 已… {0} 个, 「선은 선과…」 뒤엉킨 문장, 대칭 선 鏡像線·对称轴的对称轴 → 対称線·要对称的对象, 일본어 같은 종류 목록 깨짐·適用する → 適用しました, 영어 같은 종류 (lines, lines, …), 순환 참조 is a…·ist ein… → Circular reference·Zirkelverweis, 독일어 겹칩니다 überlappen → Doppelter Name | 「첫 번째 객체 선택」, 「두 번째 각도 구속점 지정」, 「원이나 호가 필요합니다」, 「매개변수를 적용했습니다」 个·適用しました, 「동일 구속」 相等, 「대칭 구속」 対称, 「(순환 참조)」, 「중복」 Doppelte |
+| 매개변수 식 | 중국어 「식에는 수, + − * / ^ …」 除号 (^)·π → 기호 그대로·pi, 독일어 식 Gleichungen·Formel·√ → Ausdrücke·Ausdruck·sqrt | 「식」 表达式·Ausdruck, 「값이 올바르지 않습니다」 falsch |
+
+(나) 빠진 번역 — 틀이 앱 낱말을 잡아 네 언어 모두 한국어로 보이던 것(언어마다 51):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| GEOMCONSTRAINT 옵션 직교(P)·평행(PA)·부드럽게(SM)·일치(C)·동심(CON)·동일선상(COL)·대칭(S)·고정(F)과 통째 프롬프트 | 9 | Perpendicular (P) | 「X 구속」 낱말 + 고를 글자(독일어 부드럽게는 「부드럽게(S)」 Glätten), 통째 = 틀 「구속조건 유형 입력 [{0}] <일치>:」 + 옵션 열둘. 명령행 끝 조각 「] <일치>:」은 기본값이 옵션 번역으로 바뀝니다(118차 꼴) |
+| 자동 구속 설정 칸 「일치 적용」 … 「동일 적용」 | 9 | Coincident applied | 「{0} 적용」 + 옵션 낱말 |
+| 명령 제목 「일치 구속조건」 … 「동일 구속조건」 | 12 | Symmetric constraint | 같은 명령의 리본 풍선 「X 구속」 |
+| 매개변수 관리자 유형 칸 「각도(참조)」 등 | 6 | Angle (reference) | 「{0}(참조)」 + 홀로 낱말 |
+| 매개변수 관리자 오류 줄 「{0}: 순환 참조입니다: {1}」 등과 「(빈 이름): 이름을 입력하십시오.」 | 11 | {0}: Circular reference: {1} | 「{0}: 식을 입력하십시오.」의 앞머리 + 그 오류의 번역 |
+| AutoCAD 구속 안내(한 문장짜리 줄 넷) | 4 | Note: Read {0} constraints from … | 「참고: {0}」 + 「AutoCAD 구속 그룹의 {0}를 …」 + 「구속 {0}개」·「사용자 매개변수 {0}개」(와 = 「점과 선」의 and·と·和·und) |
+
+지운 틀은 없습니다. 열쇠 9199 → 9250.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 71곳과 새 열쇠 51씩. GEOMCONSTRAINT 프롬프트·자동 구속 설정·매개변수 관리자·AutoCAD 구속 안내가 한국어 대신 화면 언어로, 구속 명령의 오류·프롬프트와 306차가 남긴 줄이 엉뚱한 낱말(억제·화살촉·매듭·방정식·도넛 과자·아치·참고 문헌 등) 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「외부 참조 비교」(리본 패널 제목·XCOMPARE), 「{0} 닫기」·「{0} 패널 펼치기」(닫기 단추·접힌 패널 풍선), 「첫 번째 구속점 지정 또는 [」(DCLINEAR·DCHORIZONTAL·DCVERTICAL·DCALIGNED·DIMCONSTRAINT), 「순환 참조입니다: {0}」(매개변수 값 칸 풍선).
+- 두는 것(ROADMAP 「307차에 보고 두 것」): 중국어 外部参考 22 열쇠(한 낱말 묶음)와 구속 묶음 나머지, 독일어 「DWG … 열기」 명령꼴 셋·다중 지시선·주석 축척 무리·과도하게 구속 Überbeanspruchung, AutoCAD 구속 안내의 여러 문장 이은 줄, 공유 열쇠 「일치」·「동일」·「정렬」·「수직(V)」.
+
+### 확인
+- `tests/i18n-constraint307.test.ts`(새 시험 3건 — 글 꼴은 소스에서 확인): GEOMCONSTRAINT 조각·통째·기본값, 자동 구속 설정 칸, 명령 제목, 매개변수 관리자 유형 칸·오류 줄(도면 글 표시 이름 포함), AutoCAD 구속 안내에 네 언어 모두 한글 없음과 대표 값,
+  고친 낱말 = 같은 사전 근거, 새 열쇠 = 조각·틀 번역에서 만든 꼴.
+- 고치기 전 12건 가운데 3건 실패(한글 남은 줄 208, 「Restraint {0}」, 「직교(P)」 열쇠 없음). 고친 뒤 `tests/i18n-constraint307.test.ts`·`tests/i18n-ribbon306.test.ts`·`tests/i18n.test.ts` 3파일 12건 통과(한 번에). `npm run check:i18n` 통과(9250 항목).
+- tools/·tests/ grep: 옛 번역을 기대하는 시험·도구는 없습니다. 바꾼 열쇠를 보는 다른 시험(306 「{0} 닫기」·DWG 부착·외부 참조 비교 패널, 300 구름형 리비전·고정 연결선, 298 도넛·구름형 리비전, 304 QUICKPROPERTIES, 303 이름에 =, 305 새로 그리기, 292 순환 참조 안내)은 바꾸지 않은 언어·열쇠를 보거나 한글 없음만 봅니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(306차): 305차가 남긴 오역과 리본(탭·패널·단추 이름·풍선) 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
