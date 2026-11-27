@@ -3,6 +3,35 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(325차): 명령행 물음 짝 맞추기 둘째 — 「옵션 입력 [」 통째 갈래와 자주 쓰는 명령의 남은 짝
+
+### 근거와 표
+324차가 「아직 둔 것」으로 남긴 짝(앞 조각 161·짝 366 — `tests/i18n-pair324.test.ts`)에서 「옵션 입력 [」 통째 26 갈래를 언어마다 한 꼴로 맞추고, 자주 쓰는 명령(치수·해치·간격띄우기·COPY·ROTATE·TRIM/EXTEND·-LAYER·문자)의 짝을 먼저 맞췄습니다. 판정 기준은 324차 그대로입니다(빈칸을 모두 지우고 전각 ［만 [로 맞춘 물음 부분이 같으면 같은 문장).
+- 맞출 쪽: 같은 사전의 다수 꼴 — 앞 조각·통째와 같은 앞 조각으로 시작하는 기본값 없는 꼴까지 셉니다. 명사꼴(일본어 「…の入力」·「…の指定」), 동사가 고를 것 뒤로 간 독일어 통째(「Geben Sie … […] <…> ein:」)는 입력 줄 꼴로.
+- 말투만 다른 짝(관사·단복수, 일본어 「、または」·「の」 하나, 중국어 「或使用」·「的」 하나)과 근거가 갈리는 낱말(일본어 関連·連想, 독일어 Schriftfeld, 중국어 双重·双向, 독일어 축척 Maßstab·Skalierung — 313차)은 324차 판단대로 둡니다.
+
+| 갈래 | 보기(전 → 후) | 맞춘 쪽·근거 |
+| --- | --- | --- |
+| 「옵션 입력 [」 통째 26 | 영어 「Enter an option [」 7, 일본어 앞 조각 「オプション入力 [」(통째 7·기본값 없는 꼴 2도), 중국어 「选项输入 [」 10, 독일어 「Option […] auswählen <」·「Option […] eingeben <」 10·「Optionen eingeben」 4·「Optionseingabe」 5·「Option Eingabe」 1 | 같은 사전 다수: 영어 Enter option(통째 19 + 앞 조각), 일본어 オプションを入力(통째 19·「옵션을 입력 [」), 중국어 输入选项(통째 16 + 앞 조각), 독일어 Option eingeben(통째 6 + 앞 조각) |
+| 치수 | 중국어 「指定第二条尺寸界线原点或」·「指定角度顶点或」·「指定要添加的标注点或」, 독일어 「Geben Sie den Ursprung der zweiten Hilfslinie an oder」·「… ersten Hilfslinie festlegen」·「Zuzufügende Bemaßungspunkte angeben」·「Streuungstyp」·「Geben Sie den Verteilungstyp […] <gleich> ein:」, 영어 「Specify first extension line origin」·「dimension edit」·「Specify dimension points to add,」·치수선 위치 「of」 | 같은 원문 열쇠(第二个 5곳·指定角的顶点), 제거 쪽 앞 조각(标记·markieren·Indicate), angeben(「첫 번째 치수보조선 원점 지정 또는 <객체 선택>:」), 「분산(D)」 Verteilen, 287차 시험이 고정한 「Specify location for dimension line or」 |
+| 해치·간격띄우기·TRIM | 일본어 「オフセット距離の指定または」·「…の選択または」·「…を選択するか、」·「…の入力」(도면층 옵션·원점 옵션·그라데이션 패턴·쉐이프·암시적 모서리)·「インターバルタイプの入力 [通常(N)/面取り(F)/面取り(C)]」, 독일어 「Geben Sie den Grenzobjekttyp […] <Polylinie> ein:」·「Geben Sie Layeroptionen für das Offset-Objekt […] ein:」·「Geben Sie Optionen für die Zeichnungsreihenfolge ein」·「Geben Sie eine Schraffur-Hintergrundfarbe ein」·「Erste Farbverlaufsfarbe festlegen」, 중국어 「指定第二渐变颜色」, 영어 「Enter spacing type」·「Enter layer for hatch creation」 | 앞 조각 꼴(입력 줄과 같게), 일본어 「모깎기(F)」 フィレット(F), 첫 번째 그라데이션 第一个·Verlaufsfarbe angeben, 영어 Gap Type(같은 사전 3곳) |
+| COPY·ROTATE·-LAYER·문자 | 중국어 COPY 「设置基点或」, 독일어 「Drehwinkel festlegen」·「[Punkt (P) auswählen]」·「Kopiermodus-Option […] aufrufen」·「Ersten Punkt angeben」([프레임/폴리선]), 로드된 선종류 일본어 「ロードする」·중국어 「输入加载线型名称」·영어 통째, 독일어 「<Kontinuierlich>」, 중국어 「材料」·「打印默认设置」·「行距」, 독일어 「Linienabstand」·「Plot-Standardeinstellung」, 영어 「plot default settings」·「text edit mode」 | 指定基点, 같은 물음 기본값 없는 꼴 둘의 angeben·「점 선택(P)」 Punkt auswählen (P), 같은 원문 「로드된 선종류 …」 열쇠(読み込まれた·已加载的, 영어는 296차 시험이 고정한 앞 조각), 선종류 이름 Continuous는 옮기지 않음, 材质 14 : 材料 5·首选项(「이 플롯 기본 설정에 대한」)·线间距 3 : 行距 2, 「선 간격두기」 Zeilenabstand, 앞 조각 꼴 |
+
+바꾼 값마다 네 사전에서 같은 값을 가진 열쇠를 jq로 찾았습니다 — 한글 0, `{n}` 짝 같음, 같은 값은 일본어 「옵션 입력 [」 = 「옵션을 입력 [」(같은 뜻)뿐입니다. 열쇠는 더하지 않았습니다(네 사전 9442 그대로).
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전의 값 영어 20·일본어 23·중국어 20·독일어 40. 어긋난 짝 영어 74 → 57·일본어 102 → 70·중국어 60 → 41·독일어 130 → 93(앞 조각 161 → 141). 같은 앞 조각으로 시작하는 열쇠 전체(기본값 없는 꼴 포함)의 어긋남도 늘어난 앞 조각 없이 영어 163 → 144·일본어 197 → 154·중국어 153 → 131·독일어 257 → 218.
+- `tests/i18n-pair324.test.ts`: 「아직 둔 것」 목록을 고친 만큼 줄임(지운 앞 조각 20·줄인 13), 325차 기대 하나(「옵션 입력 [」 통째 26이 네 언어에서 한 꼴, 같은 사전 근거 낱말 표본 — 第二个·标记·markieren·Verteilen·フィレット(F)·Punkt auswählen (P)·Zeilenabstand·材质·<Continuous>).
+- `tests/i18n-inquiry299.test.ts` 217줄: 독일어 그리기 순서 기록 줄 기대를 새 값 「Zeichnungsreihenfolgeoptionen eingeben […] <Hinter der Begrenzung>:」로(근거 주석).
+- 두는 것(ROADMAP 「325차에 보고 두 것」): 남은 짝 261(앞 조각 141), 「옵션 입력 [」 기본값 없는 꼴(영어 1·중국어 3·독일어 8), 독일어 같은 앞 조각의 기본값 없는 꼴·뜻을 고쳐야 하는 짝, 말투만 다른 짝.
+
+### 확인
+- `tests/i18n-pair324.test.ts` + `tests/i18n-inquiry299.test.ts`: 고치기 전 7건 가운데 3건 실패(목록·325차 기대·217줄 — 손셈대로), 고친 뒤 + `tests/i18n-ask323.test.ts` 3파일 11건 통과. `tsc --noEmit` 통과.
+- 앞 차수 시험과 닿는 곳(ci-guard 6 — 옛 값 물음 58·낱말 조각 52로 tests/·tools/ grep, 정규식 리터럴 줄 0): inquiry299 217줄(고침), drafting296 154줄(영어 로드된 선종류 앞 조각 — 앞 조각을 두고 통째·[?]를 맞춤), dim287 117줄(영어 치수선 위치 「for」 — 그 꼴로 맞춤). 바꾼 열쇠를 대조하는 i18n 시험 열 파일(dim287·drafting296·hatch294·ltcolor295·layer290·prompts·draw298·edit297·text293·arraykw286)을 끝에 한 번 돌림: layer290·text293이 일본어 기본값 없는 꼴 「옵션 입력 [?/만들기(M)/…]:」·「옵션 입력 [왼쪽(L)/…]:」 = 앞 조각 + 옵션(290·293차 규칙)으로 실패 — 그 둘도 앞 조각 꼴로 맞춰 다시 통과(옛 값 grep은 시험이 `${d[front]}${opts}`로 값을 이어 만들어 못 찾음).
+- 값 거르개(zh 进入·de ^Gibt·de 구속 Einschränkung·명령 취소 cancel/abbrechen)에 닿는 새 값 0, 열쇠 수 셈 시험은 열쇠를 더하지 않아 그대로(독일어 초점 이동 열쇠 6). 정적 첫 화면(`index.html`, 빈칸 모은 글)에 바꾼 열쇠 74 가운데 0 — static321에 닿지 않음.
+- `npm run check:seo`·`npm run check:i18n`은 콘텐츠 수정일을 고친 뒤 다시 빌드한 dist로 돌립니다(결과는 수정일 커밋 글).
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-28(324차): 명령행 물음의 앞 조각(입력 줄)과 통째(기록 줄)를 같은 문장으로 — 사전 전체 짝 대조와 재발 막기 시험
 
 ### 근거와 표
