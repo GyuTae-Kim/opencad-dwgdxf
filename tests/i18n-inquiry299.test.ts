@@ -214,7 +214,8 @@ describe('조회·측정 명령 묶음의 번역과 298차가 남긴 것(299차)
     expect(tr('de')('결합 유형 = 연장')).toBe('Verbindungstyp = Verlängern');
     expect(tr('zh-CN')('회전 수 = 3 비틀기=0')).toBe('旋转次数 = 3 扭转 = 0');
     expect(show(`${JOIN_TYPE} E`, 'de')).toBe('Verbindungstyp eingeben [Verlängern (E)/Hinzufügen (A)/Beide (B)] <Verlängern>: E');
-    expect(show(DR, 'de')).toBe('Geben Sie Optionen für die Zeichnungsreihenfolge ein [Nicht angegeben (N)/Hinten (B)/Vorne (F)/Hinter der Begrenzung (E)/Vor der Begrenzung (R)] <Hinter der Begrenzung>:');
+    // 325차: 기록 줄(통째)의 물음을 입력 줄 앞 조각 「Zeichnungsreihenfolgeoptionen eingeben [」과 같은 문장으로(i18n-pair324)
+    expect(show(DR, 'de')).toBe('Zeichnungsreihenfolgeoptionen eingeben [Nicht angegeben (N)/Hinten (B)/Vorne (F)/Hinter der Begrenzung (E)/Vor der Begrenzung (R)] <Hinter der Begrenzung>:');
     expect(show(MEA, 'en')).toBe('Specify first point or [Distance(D)/Radius(R)/Angle(A)/Area(AR)/Exit(X)] <Distance>:');
     expect(show(KNOTS, 'zh-CN')).toContain('[弦线(C)/平方根(S)/均匀(U)]');
   });
