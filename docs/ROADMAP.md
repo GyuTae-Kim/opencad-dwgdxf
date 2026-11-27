@@ -2320,6 +2320,22 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   (3) 공유 열쇠라 하지 않음: ALIASEDIT 구분 칸 값 「기본」(내장 별칭 — 영어 Basic·독일어 Grundlegend, 다른 화면의 「기본」과 같은 열쇠), 「사용자」(310차 보고와 같음).
   (4) 동의어 — 둠: 독일어 「블록 삽입(I)...」 Block (I) einfügen...(고를 글자 자리), 일본어 「함께 가져온 정의」 インポートされた定義, 영어 「멈춘 스크립트 이어서」 Continuing …, 중국어 「{0}에 객체가 없습니다.」 {0} 中,
   영어 「별칭이 하나도 없습니다. 기본값 복원을 누르십시오.」 Restore Defaults(단추 글 Restore defaults와 대소문자만 다름). (5) 310차 보고 (1)·(2)·(4)·(5) 그대로. 원어민 검토 없음
+  (**312차가 고침**: (2)의 「옮길 수 없는 객체」 무리 — 쓰는 곳이 모두 다른 도면·파일로 복사라 다섯 열쇠를 WBLOCK 열쇠 낱말 could not be copied·nicht übernommen werden konnten·移せない·无法复制로, 영어·독일어 「블록 안의 …」 목록 자리도 —
+  와 중국어 「추가할 축척」 缩放 → 要添加的比例（按住 Ctrl 或 Shift 键可多选）. (1)·(3)·(4)·(5)는 그대로)
+- [x] 311차가 남긴 「옮길 수 없는 객체」·중국어 「추가할 축척」과 주석 축척·축척 목록 묶음의 번역 대조·빠진 번역(312차, 290~311차 꼴 — 311차 보고 (2)): CANNOSCALE·SCALELISTEDIT·-SCALELISTEDIT·OBJECTSCALE·-OBJECTSCALE·
+  ANNORESET·ANNOUPDATE·ANNOALLVISIBLE·ANNOAUTOSCALE·HIDEXREFSCALES, 축척 목록·객체 축척 대화 상자, 축척 목록 검사 오류, 상태 막대 주석 축척 목록 메뉴, 특성 팔레트 주석 묶음의 보이는 글을 네 언어 대조
+  (SELECTSIMILAR에는 주석 축척 갈래가 없음, 305차 상태 막대 켜고 끄기 단추·306차 리본 패널은 건너뜀).
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 8·독일어 30·일본어 8·중국어 27 — 축척 목록 메뉴 「사용자...」 User → Custom(「사용자 정의」), 뷰포트 잠김 scaled·skaliert·缩放 → 축척 바꾸기,
+  축척 수 한도·이름 겹침 überschneidet·重叠 → 중복, 독일어 축척 Skalierung·Skala → Maßstab·Maßstabsliste, 305·307차 보고의 독일어 주석 축척 Anmerkung 무리 가운데 묶음 열쇠 → Beschriftungsmaßstab,
+  독일어 현재 주석 축척 값(현재 주석 축척과 같은 이름이던 것)·용지 단위 1·Zeicheneinheit·깨진 동기화 풍선, 일본어 재정의 オーバーライド → 再定義, 중국어 标注 → 注释·「{0} 已…」 → 「已… {0} 个…」·缩放 → 比例·图块 → 块·图纸 → 图形).
+  (나) 네 언어 모두 한국어로 보이던 13 열쇠 — -SCALELISTEDIT 삭제 막힘 둘·재설정·재정의 물음 앞 조각과 기록 줄 넷, -OBJECTSCALE 「추가할·삭제할 명명된 축척」 앞 조각과 기록 줄 여섯, 특성 팔레트 「*여러 개* …」 —
+  을 더함(9330 → 9343, 지운 틀 없음 — 쓰이지 않게 된 틀 둘은 둠). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 312차 절
+- [ ] 312차에 보고 두 것 — (1) 독일어 한도 밖(30으로 한도가 참): 주석 객체 Anmerkungsobjekt 무리(→ 같은 사전 Beschriftungsobjekt — 「주석 객체 선택:」·「주석 객체 선택 또는 [」·삭제 막힘 둘·「선택한 주석 객체 {0}개」·
+  「주석 객체 표시」와 그 풍선 — 풍선은 「현재 주석 축척」 Skalierung도), 리본 풍선 「고른 주석 객체에 현재 주석 축척 추가·…삭제」 Anmerkungsmaßstab·Anmerkungsskala, ANNOAUTOSCALE 풍선의 앞머리 Skalierung(305차 단추 — 제목 열쇠는 Maßstab으로 고침),
+  「뷰포트 축척 동기화」 Ansichtsfensterskala, 「외부 참조 축척 숨기기」 Externe Referenzskala, -SCALELISTEDIT 통째 기록 줄 「Option Eingabe […Hinzufügen(A)…]」(조각은 Option eingeben[·Hinzufügen (A)), 「위로 이동(U)」 Nach oben (U) verschieben(고를 글자 자리).
+  (2) 동의어 — 둠: 일본어 注釈スケール·縮尺·スケール(尺度와 같은 뜻)·注釈オブジェクト ↔ 異尺度対応オブジェクト·レイアウト空間 ↔ ペーパー空間, 중국어 注释对象 ↔ 注释性对象, 영어 「{0}비율 축척 백분율」 Ratio Scale Percentage.
+  (3) 묶음 밖: 독일어 HATCH 「주석 해치는 이 명령행 버전에서 …」·DIMSTYLE 「주석(축척은 주석 축척을 따름)」 Beschriftungsskalierung, 일본어 「주석 객체 선택 또는 [」 注記(→ 注釈).
+  (4) 311차 보고 (1)·(3)·(4)·(5) 그대로. 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
