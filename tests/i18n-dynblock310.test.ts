@@ -164,7 +164,7 @@ describe('동적 블록·블록 편집기·그룹 묶음의 번역과 309차가 
     expect(ja[UNSAVED]).toBe('ブロック - 保存されていない変更');
     expect(ja['저장하지 않은 변경이 있습니다.']).toContain('保存されていない変更');
     expect(de['· 저장하지 않은 변경 있음']).toContain('nicht gespeicherte Änderungen');
-    // 이름 글자 안내(GROUP·GROUPEDIT·블록·배치 등이 함께 쓰는 열쇠 — 같은 뜻): 「뷰 이름에 쓸 수 없는 문자가 있습니다.」 꼴(덧붙은 「Hinweise zu Namen:」 뺌)
+    // 이름 글자 안내(GROUP·GROUPEDIT·블록·외부 참조 이름 등이 함께 쓰는 열쇠 — 같은 뜻): 「뷰 이름에 쓸 수 없는 문자가 있습니다.」 꼴(덧붙은 「Hinweise zu Namen:」 뺌)
     expect(src('edit/util/groups.ts')).toContain("return '이름에 쓸 수 없는 문자가 있습니다.';");
     expect(de['이름에 쓸 수 없는 문자가 있습니다.']).toBe(de['뷰 이름에 쓸 수 없는 문자가 있습니다.']!.replace('Ansichtsname', 'Name'));
     // 거꾸로 찾기
