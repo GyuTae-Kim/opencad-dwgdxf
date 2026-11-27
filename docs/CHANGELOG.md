@@ -3,6 +3,50 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(319차): 클립보드·붙여넣기 묶음의 번역 대조와 빠진 번역
+
+### 근거와 표
+277~318차 제목이 다룬 묶음 밖에서 화면에 보이는 원문이 가장 많은 묶음을 `src/app` grep으로 셌습니다(묶음 코드 구간의 한국어 따옴표·템플릿 글, 고유):
+클립보드·붙여넣기 57, 시작 화면·ABOUT·앱 메뉴 약 43(F1 표 줄은 277차), 공통 질문 대화 상자 약 15(「하시겠습니까」 61 가운데 대부분이 앞 차수 묶음), 시각 스타일·렌더 6(314차 3D와 겹침), 작업 공간·사용자 지정 3.
+그래서 클립보드·붙여넣기 묶음 — COPYCLIP·CUTCLIP·COPYBASE·PASTECLIP·PASTEORIG·PASTEBLOCK(`app/modify.ts`), PASTESPEC(`app/blkcmds-misc.ts`), 오른쪽 클릭 「클립보드」·명령행 메뉴(`app/ctxmenu.ts`),
+문자 편집기 붙여넣기(`app/textedit/editor.ts`), 끌어 놓기 메뉴(`app/dragmove.ts`), 보기 링크 복사 실패(`app/viewlink-app.ts`) — 를 네 언어 대조했습니다.
+번역층은 코드로 읽었습니다: 공용 번역기는 틀({0})이 잡은 값을 화면 글 표지(data-i18n-ui-copy) 안에서만 옮기고, 명령행 입력 줄은 「앞 글 [」·옵션 「이름(글자)」·「] 뒤 글」 마디로, 기록 줄·휴대폰 카드·커서 옆은 통째로 옮깁니다(286차).
+PASTESPEC 상자 안내(`.form-note`)와 명령행 줄은 표지 밖이라, 틀 「원본: {0}{1}」·「…없습니다.{0}」이 잡은 한국어 조각이 그대로 남았습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 5·일본어 3·중국어 4·독일어 8 열쇠).
+
+| 열쇠(보이는 곳) | 전 → 후 | 같은 사전 근거 |
+| --- | --- | --- |
+| 「기록 복사」(명령행 오른쪽 클릭 — 명령 기록 복사) | Copy Record·記録をコピー·复制录制(녹화)·Datensatz kopieren(데이터 레코드) → Copy history·履歴をコピー·复制历史记录·Verlauf kopieren | 「도움말 · 명령 기록 펼치기 · …」 command history·コマンド履歴·命令历史记录·Befehlsverlauf |
+| PASTESPEC 상자 칸 「다음으로」(붙여넣을 형식 고르기) | Next Replace with·次へ·下一个·Weiter Durch → Format to paste·貼り付け形式·粘贴格式·Einzufügendes Format | 같은 고르기를 묻는 명령행 물음 「붙여넣을 형식 [」 |
+| 독일어 「붙여넣을 형식 [」·통째 | Format einfügen [(명령꼴)·Format zum Einfügen von [ → Einzufügendes Format [ | 「자를 객체 …」 Zu stutzendes Objekt·「연장할 객체 …」 Zu verlängerndes Objekt, 통째는 앞 조각으로 시작(285차) |
+| 중국어 PASTEBLOCK 결과 「블록 "{0}"(객체 {1}개)으로 붙여 넣었습니다.」 | 粘贴为块“{0}”（对象“{1}”）(개수를 이름처럼) → 已粘贴为块“{0}”（{1} 个对象）。 | 「이 앱 클립보드(객체 {0}개)」 （{0} 个对象） |
+| PASTESPEC 옵션 「이미지 개체(복사한 객체를 PNG 그림으로)」 | 중국어 已复制为 PNG 图片·독일어 als PNG-Bild kopiert(「PNG로 복사됨」) → 将复制的对象转换为 PNG 图片·kopierte Objekte als PNG-Bild | 「복사한 객체를 그림으로 만들 수 없습니다.」 将复制的对象转换为·Das kopierte Objekt |
+| 독일어 「이 브라우저에서는 시스템 클립보드를 읽을 수 없습니다.」·빈 클립보드 줄 | Zwischenablage(시스템 빠짐 — 이 앱 클립보드와 가르는 낱말) → Systemzwischenablage, Es wurden keine Inhalte in die Zwischenablage eingefügt(뜻 거꾸로) → Die Zwischenablage enthält nichts zum Einfügen. | 「, 시스템 클립보드」 Systemzwischenablage, 「클립보드가 비어 있습니다.」 Die Zwischenablage |
+| 영어·일본어 「클립보드의 글을 여러 줄 문자로 붙여 넣었습니다.」 | multi-line string·複数行の文字列 → multiline text·マルチテキスト | 「여러 줄 문자」 Multiline text·マルチテキスト |
+| 영어 「원본: {0}{1}」·영어·독일어 안내 조각 「이 앱 클립보드 비어 있음」 | Original → Source, 문장·마침표(App clipboard is empty.) → 조각 꼴(App clipboard empty·Zwischenablage dieser App leer) | 「원본 객체 선택:」 Select source object, 이웃 조각 「이 앱 클립보드(객체 {0}개)」 꼴(뒤에 「, 시스템 클립보드」가 붙는 자리) |
+
+(나) 빠진 번역 — 언어마다 새 열쇠 14(9394 → 9408).
+- PASTESPEC 명령행 물음(스크립트 중·CMDDIA 0 — `app/script.ts` commandLineMode)의 옵션 마디 「원래 객체(O)」·「그림(P)」. 독일어 「그림」 낱말 열쇠는 Bild라 같은 물음의 「이미지(I)」 Bild와 이름이 같아지므로,
+  같은 사전 「참고: 그림은 파일 …」의 Abbildung으로 했습니다.
+- 기록 줄·휴대폰 카드·커서 옆에 보이는 통째 물음 7(옵션 묶음마다 — 이 앱 클립보드 객체면 O·B·P, 시스템 클립보드 그림·글이면 I·T): 틀 「붙여넣을 형식 [{0}] <{1}>:」 번역 + 옵션 번역 + 기본값 낱말.
+- PASTESPEC 상자 안내 통째 3(「원본: 이 앱 클립보드(객체 {0}개)」·「…, 시스템 클립보드」·「원본: 이 앱 클립보드 비어 있음, 시스템 클립보드」), 빈 클립보드 오류 줄 통째 2(브라우저 오류 글·클립보드 API 없음).
+바꾼 값·새 값마다 같은 값 열쇠를 jq로 찾았습니다(네 사전): 다른 열쇠와 같은 값은 없고, 거꾸로 찾기(`sourceMessage`)가 제 원문으로 돌아옵니다.
+오른쪽 클릭 「클립보드」 일곱·명령행 메뉴 나머지·끌어 놓기 메뉴·COPYCLIP 계열 결과 줄은 네 언어가 맞습니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 20곳·새 열쇠 56(언어마다 14). 네 언어 화면에서 명령행 메뉴 「기록 복사」가 명령 기록 복사로, PASTESPEC 상자 칸이 붙여넣을 형식으로,
+  PASTESPEC 명령행 물음·기록 줄·상자 안내·빈 클립보드 오류 줄이 한국어 조각 없이 보입니다.
+- 두는 것(ROADMAP 「319차에 보고 두 것」): 「선택하여 붙여넣기」(같은 사전 근거 없음), 공유 열쇠(「확인」·「블록」·「그림」), 동의어, 남은 후보 묶음.
+
+### 확인
+- `tests/i18n-clip319.test.ts`(새 시험 5건 — 글 꼴은 소스에서 확인): PASTESPEC 명령행 입력 줄(가짜 DOM 진짜 명령행·번역층 — 옵션 묶음 일곱), 통째 물음·기록 줄(= 틀 + 옵션 번역, 앞 조각으로 시작, 그림·이미지 다른 이름),
+  상자 안내·빈 클립보드 줄(= 틀 + 조각 번역), 오역 열쇠의 같은 사전 낱말, 거꾸로 찾기(바꾼 20·새 56).
+- 고치기 전 2파일 11건 가운데 5건 실패(새 시험 다섯), 고친 뒤 `tests/i18n-clip319.test.ts`·`tests/i18n.test.ts`(사전 규칙 — 부정 낱말·괄호 짝·고를 글자) 2파일 11건 통과(한 번에). `npm run check:i18n` 통과(9408 항목).
+- tools/·tests/ grep(바꾼 열쇠·옛 값 — Select and paste·Copy Record·Next Replace with·Format einfügen·Weiter Durch·复制录制·Datensatz·als PNG-Bild kopiert·已复制为 PNG·multi-line string·複数行の文字列·App clipboard is empty·기록 복사·다음으로·붙여넣을 형식·이 앱 클립보드·시스템 클립보드):
+  기대하는 곳 없음(275차 `tests/direct/imgattach275.test.ts`는 한국어 화면의 PASTESPEC 상자, `tests/i18n-cmdline.test.ts`는 기록 복사 기능 설명뿐). tools/에는 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-28(318차): 317차가 남긴 핸들 낱말·쓰기 경고 도형·감사 대상 첫 글자와 단위·좌표 표시·각도 형식 묶음의 번역 대조
 
 ### 근거와 표
