@@ -3,6 +3,52 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(320차): 시작 화면·ABOUT·앱 메뉴 묶음과 공통 질문 일부의 번역 대조와 빠진 번역
+
+### 근거와 표
+319차가 센 남은 후보 묶음 가운데 시작 화면·ABOUT·앱 메뉴(약 43)를 `src`에서 grep으로 확정해 네 언어 대조했습니다:
+응용프로그램 메뉴·빠른 도구·제목 막대(`app/ui/shell.ts` buildTitle — 38), 시작 화면(같은 파일 buildStart·최근 문서·예제·?open= — 43), OpenCAD 정보(`editor.ts` ABOUT 문단 — 3),
+도움말 상자 머리(277차 표 밖 — 5), COLORTHEME·새 판 알림(`app/theme.ts`·`app/pwa-app.ts` — 9), 앱 메뉴 「도면 정보」 상자(10), 방문 통계 설정(사이트 도구 — 5). 한도가 남아 공통 질문 대화 상자의 앞 차수 묶음 밖 열셋도 봤습니다.
+번역층은 코드로 읽었습니다: 화면 글은 글 마디와 title·aria-label 등 속성마다 옮기고(`app/i18n.ts`), 틀({0})이 잡은 값은 화면 글 표지(data-i18n-ui-copy) 안에서만 옮깁니다.
+`ui/dom.ts`는 `html`을 innerHTML로 바로 넣으므로 ABOUT·시작 화면 바닥 글은 문단 글 마디 열쇠로 보입니다(사전의 통째 HTML 열쇠 둘은 화면에 쓰이지 않음).
+묶음 원문은 모두 네 사전에 있었고, 틀이 잡은 한국어 둘이 남았습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 2·일본어 3·중국어 4·독일어 5 열쇠).
+
+| 열쇠(보이는 곳) | 전 → 후 | 같은 사전 근거 |
+| --- | --- | --- |
+| 「김규태 포트폴리오로 돌아가기」(제목 막대 「← 포트폴리오」 풍선) | 영어·독일어 Sean Kim Return to portfolio·Sean Kim Zurück zum Portfolio(이름 뒤에 동사) → Return to Sean Kim Portfolio·Zurück zum Portfolio von Sean Kim | 「김규태 포트폴리오」 Sean Kim Portfolio, 「← 포트폴리오」 |
+| COLORTHEME 「0(어둡게) 또는 1(밝게)을 입력하십시오.」(0 어두운 테마·1 밝은 테마) | 영어·중국어·독일어 비교급 darker/lighter·较深/较亮·dunkler/heller → dark/light·深色/浅色·dunkel/hell | 「어두운·밝은 테마로 바꾸기」 dark theme·深色主题·dunklen Design |
+| ABOUT 둘째 문단(글꼴 이름) | 일본어 Noto Sans JP → Noto Sans KR | 이 앱이 싣는 글꼴은 Noto Sans KR뿐(`public/fonts/noto-sans-kr`) — 글꼴·라이선스 이름은 옮기지 않음 |
+| 빠른 도구 「PDF로 인쇄 (Ctrl+P)」 | 일본어 （Ctrl + P） → (Ctrl+P) | 같은 줄 「新規図面 (Ctrl+N)」 — 키 이름 꼴 그대로 |
+| 「계속하시겠습니까? [예(Y)/아니오(N)] <아니오>:」 통째(기록 줄) | 일본어 전각 괄호·콜론 → 続行しますか? [はい(Y)/いいえ(N)] <いいえ>: | 앞 조각 「계속하시겠습니까? [」 続行しますか? [ (통째는 앞 조각으로 시작 — 285차) |
+| 「도면 복구 관리자」·「도면 복구 관리자…」(DRAWINGRECOVERY 이름·앱 메뉴) | 중국어 恢复图纸管理器 → 图纸恢复管理器 | 「도면 복구 관리자 닫기」 关闭图纸恢复管理器·새 판 알림 — 같은 것이 두 이름이었음 |
+| 「플롯 스타일 변환」(CONVERTPSTYLES 물음 제목) | 중국어 切换(바꾸어 놓기) → 转换 | 같은 물음 본문 「…플롯 스타일로 변환하면」 将图形转换为… |
+| 시작 화면 「예제 도면으로 기능을 둘러볼 수 있습니다.」 | 독일어 예제 도면의 기능(뜻 바뀜) → Mit der Beispielzeichnung können Sie die Funktionen erkunden. | 영어 using an example drawing, 같은 사전 안내 글 「…über „Beispielzeichnung öffnen“ erkunden」 |
+| 지원 범위 「DWG R2.6~R2018 열기, R2000~R2018 저장」 | 독일어 명령꼴 Öffnen Sie …, speichern Sie … → DWG R2.6~R2018 öffnen, R2000~R2018 speichern | 이웃 줄 「DXF R12~R2018 öffnen/speichern」 |
+| 끌어 놓는 칸 「DXF·DWG 파일을 여기에 끌어다 놓으십시오」 | 독일어 hierher … dort ab(여기로 끌어 저기에 놓기) → Legen Sie DXF/DWG-Dateien per Drag & Drop hier ab | 같은 사전 안내 글 「eine Datei per Drag & Drop hinzufügen」 |
+
+(나) 빠진 번역 — 언어마다 새 열쇠 2(9408 → 9410).
+- 「DXF {0} 이진」: 앱 메뉴 「도면 정보」 상자의 「형식」 줄(`DXF AC1027 이진`)에서 「이진」이 틀에 잡혀 네 언어 모두 한국어였습니다. 이진은 DXF에만 붙어(DXF 리더만 binary를 채움) 고정 앞 글 틀로 두고,
+  낱말은 지원 범위 목록 「(ASCII·이진)」의 binary·バイナリ·二进制·binär를 썼습니다.
+- 「파일을 받지 못했습니다: https 주소만 열 수 있습니다.」: 주소 ?open=이 https가 아닐 때 알림·명령행 기록(281차)에서 거절 까닭이 한국어로 남았습니다. 통째 = 틀 「파일을 받지 못했습니다: {0}」 번역 + 조각 번역.
+바꾼 값·새 값마다 같은 값 열쇠를 jq로 찾았습니다(네 사전): 다른 열쇠와 같은 값은 없고, 거꾸로 찾기(`sourceMessage`)가 제 원문으로 돌아옵니다.
+공통 질문 열셋 가운데 나머지(UNDO 결합 둘·참조 편집 취소·블록 정렬·도면 공간·제목 블록·그래도 저장·블록 변경 저장·배열 편집 저장)와 방문 통계 설정은 네 언어가 맞습니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 14곳·새 열쇠 8(언어마다 2). 네 언어 화면에서 도면 정보 「형식」 줄과 https 거절 알림이 한국어 조각 없이, 포트폴리오 단추 풍선·COLORTHEME 오류 줄·ABOUT 글꼴 이름·
+  독일어 시작 화면 셋이 원문 뜻대로, 중국어 도면 복구 관리자가 한 이름으로 보입니다.
+- 두는 것(ROADMAP 「320차에 보고 두 것」): 같은 사전 근거가 없는 말투(영어 「옵션…」 Option…·독일어 「점 입력」 Eingabe Punkt 등), 공유 열쇠 「파일」, 동의어, 키 이름 Strg ↔ Ctrl, 화면에 쓰이지 않는 통째 HTML 열쇠, 정적 소개 글.
+
+### 확인
+- `tests/i18n-start320.test.ts`(새 시험 4건 — 글 꼴은 소스에서 확인): 묶음 원문(약 110 — 틀은 값을 넣은 꼴)이 네 언어 모두 한국어 없이 보임, 새 열쇠 = 같은 사전 낱말(통째 = 틀 + 조각, 「이진」 = 지원 범위 낱말),
+  오역 열쇠의 같은 사전 낱말, 거꾸로 찾기(바꾼 14·새 8).
+- 고치기 전 2파일 10건 가운데 4건 실패(새 시험 넷 — 한국어 줄은 두 글 × 네 언어뿐), 고친 뒤 `tests/i18n-start320.test.ts`·`tests/i18n.test.ts`(사전 규칙) 2파일 10건 통과(한 번에).
+- `npm run check:seo`·`npm run check:i18n`은 빌드된 dist를 읽으므로 콘텐츠 수정일을 고친 뒤 다시 빌드한 dist로 돌립니다(결과는 수정일 커밋 글). 사전만 고친 직후 옛 dist로 돌린 check:i18n 통과는 근거로 쓰지 않습니다.
+- tools/·tests/ grep(바꾼 열쇠·옛 값): 기대하는 곳 없음 — `tests/direct/menutype265.test.ts`는 한국어 「도면 복구 관리자…」·바꾸지 않은 영어 메뉴 이름, `tests/direct/fetcherr281.test.ts`는 한국어 화면의 https 거절 글,
+  `tests/i18n-file303.test.ts`는 다른 열쇠(저장 결과 줄의 「 이진」)입니다. tools/에는 없습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-28(319차): 클립보드·붙여넣기 묶음의 번역 대조와 빠진 번역
 
 ### 근거와 표
