@@ -22,6 +22,7 @@ import type { ViewportXf } from './scene';
 import { type PaperPick, paperProjection, projectedDelta } from './vpsnap';
 import { type LimitsRect, parseZoomFactor } from './vpzoom';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 import { polyArcOf } from './dimcmds';
 
 function pointOf(r: PointResult): Pt | null {
@@ -445,11 +446,13 @@ export function registerCommands(app: App): void {
       for (const hd of hs.slice(0, 200)) {
         const e = app.entity(hd);
         if (!e) continue;
-        // 도면 글(도면층·스타일 이름, 문자 내용)은 ft로 감싸 명령행 번역이 옮기지 않는다(104차)
-        ctx.print(`${typeName(e)}  도면층: "${ft(e.layer)}"  공간: ${st.isModel ? '모형 공간' : '도면 공간'}  핸들 = ${e.handle}`, 'res');
+        // 도면 글(도면층·스타일 이름, 문자 내용)은 ft로 감싸 명령행 번역이 옮기지 않는다(104차).
+        // 틀이 잡는 앱 낱말(객체 종류·공간·특성 이름·앱 값)은 번역층이 옮기지 않아 네 언어 모두 한국어였다 — 먼저 화면 언어로(327차, MATCHPROP 꼴 — 한국어는 그대로)
+        ctx.print(`${uiText(typeName(e))}  도면층: "${ft(e.layer)}"  공간: ${uiText(st.isModel ? '모형 공간' : '도면 공간')}  핸들 = ${e.handle}`, 'res');
         const [general, ...groups] = entityProperties(st.doc, e, st.units, frame);
-        for (const row of general!.rows) if (LIST_GENERAL.has(row.k) && !/^bylayer$/i.test(row.v)) ctx.print(`    ${row.k}: ${row.file ? ft(row.v) : row.v}`);
-        for (const g of groups) for (const row of g.rows) ctx.print(`    ${row.k}: ${row.file ? ft(row.v) : row.v}`);
+        const row = (r: { k: string; v: string; file?: boolean }) => ctx.print(`    ${uiText(r.k)}: ${r.file ? ft(r.v) : uiText(r.v)}`);
+        for (const r of general!.rows) if (LIST_GENERAL.has(r.k) && !/^bylayer$/i.test(r.v)) row(r);
+        for (const g of groups) for (const r of g.rows) row(r);
         const len = entityLength(e);
         if (len !== null) {
           total += len;
