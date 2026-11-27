@@ -16,6 +16,7 @@ import { SAVE_TYPES } from './save';
 import { askText, rememberErased } from './util2-ui';
 import type { Pt } from './view';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 const BAD_FILE = /[<>/\\":;?*|]/;
 
@@ -45,7 +46,8 @@ async function writeWblock(app: App, ctx: CommandContext, source: WblockSource, 
       const out = await app.engine.save(res.docId, target.format, target.version, false);
       download(new Blob([out.data as BlobPart], { type: target.format === 'dxf' ? 'application/dxf' : 'application/acad' }), target.fileName);
       ctx.print(`${ft(target.fileName)}을(를) 썼습니다(객체 ${built.entities}개, ${(out.data.byteLength / 1024).toFixed(0)} KB).${built.skipped ? ` 옮길 수 없는 객체 ${built.skipped}개는 뺐습니다.` : ''}`);
-      for (const w of out.warnings.slice(0, 3)) ctx.print(`참고: ${w.message}${w.count ? ` (${w.count})` : ''}`);
+      // 쓰기 경고 글은 먼저 화면 언어로(317차 — save.ts와 같음)
+      for (const w of out.warnings.slice(0, 3)) ctx.print(`참고: ${uiText(w.message)}${w.count ? ` (${w.count})` : ''}`);
       return true;
     } finally {
       app.engine.closeDoc(res.docId);

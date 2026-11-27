@@ -15,6 +15,8 @@ import type { SnapKind } from './view';
 import { h } from './ui/dom';
 import { askKeyword, askText, button, feedPrompt, isNested, listBox, loadPref, modal, padWide, savePref, select, takeErased, textInput, rememberErased, type ErasedItem } from './util2-ui';
 import { ft } from './filetext';
+import { guardedTranslate } from './fileguard';
+import { currentLanguage, translate } from '../../site/i18n-core.mjs';
 
 // ---------------------------------------------------------------------------
 // OOPS: ERASE를 감싸 지운 객체를 기억한다
@@ -289,12 +291,16 @@ export function registerUtil2MiscCommands(app: App): void {
       )) === 'Y';
       if (pre === 'Y' || pre === 'N') ctx.print(`검출된 오류를 수정하시겠습니까? [예(Y)/아니오(N)] <N>: ${pre}`);
       const rep = auditDocument(st.doc);
+      // 줄 틀 「  {대상}  {글}  → {고침}」은 사전에 없어 번역층이 줄을 통째로 두었다(317차) — 끼울 글을 먼저 화면 언어로 옮긴다(MATCHPROP 꼴).
+      // 글은 번역층 data-i18n-ui-copy 길처럼 자리 글(「현재 도면층」·「(없음)」)까지 옮기고 도면 이름(ft)은 지킨다. 한국어는 그대로
+      const lang = currentLanguage(typeof location === 'undefined' ? '/' : location.href);
+      const tr = (s: string, ui = false) => (lang === 'ko' ? s : (guardedTranslate(s, lang, undefined, ui) ?? translate(s, lang, ui)));
       let shown = 0;
       for (const ph of AUDIT_PHASES) {
         ctx.print(ph.label);
         for (const i of rep.issues.filter((x) => x.phase === ph.phase)) {
           if (shown++ >= 200) continue;
-          ctx.print(`  ${i.target}  ${i.message}  ${fix ? `→ ${i.fix}` : '수정 안 함'}`, 'err');
+          ctx.print(`  ${tr(i.target)}  ${tr(i.message, true)}  ${fix ? `→ ${tr(i.fix)}` : tr('수정 안 함')}`, 'err');
         }
       }
       if (shown > 200) ctx.print(`  … 외 ${shown - 200}개`);

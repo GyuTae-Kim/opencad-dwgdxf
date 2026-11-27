@@ -27,6 +27,7 @@ import { type AnnoStatus, annoStatus } from '../annoscale-status';
 import { DEGREE_UNITS, POLAR_COMMON_ANGLES, formatPolarAngle } from '../polar';
 import { foldCount, layoutClasses, revealX, ribbonOverlay, statusHidden, watchViewport, wheelToHorizontal } from './layout';
 import { ft } from '../filetext';
+import { uiText } from '../i18n-text';
 
 interface Btn {
   cmd?: string;
@@ -2239,7 +2240,8 @@ export class Shell implements UiHooks {
         h('h4', { style: 'margin:12px 0 6px' }, '객체 종류'),
         h('table', { class: 'grid' }, h('tbody', {}, ...rows.map(([t, n]) => h('tr', {}, h('td', {}, t), h('td', { style: 'text-align:right' }, n.toLocaleString()))))),
         st.warnings.length ? h('h4', { style: 'margin:12px 0 6px' }, '참고') : null,
-        ...st.warnings.map((w) => h('div', { style: 'color:var(--text-dim)' }, `· ${w.message}${w.count ? ` (${w.count})` : ''}`)),
+        // 「· {0}」 열쇠가 없어 줄이 통째로 한국어였다(317차) — 경고 글을 먼저 화면 언어로(MATCHPROP 꼴, 한국어는 그대로)
+        ...st.warnings.map((w) => h('div', { style: 'color:var(--text-dim)' }, `· ${uiText(w.message)}${w.count ? ` (${w.count})` : ''}`)),
       ),
     );
   }
