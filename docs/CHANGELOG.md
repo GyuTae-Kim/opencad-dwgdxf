@@ -3,6 +3,59 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(323차): 공통 질문(예/아니오·덮어쓰기·재정의·변경 내용 버리기) 묶음의 번역 대조와 빠진 번역
+
+### 근거와 표
+묶음은 셋이었습니다. (ㄴ) 작업 공간(WORKSPACE·WSCURRENT·「작업 공간」)은 이 앱에 화면 원문이 없고, (ㄷ) 시각 스타일(VSCURRENT·SHADEMODE)은 명령이 없으며 「비주얼 스타일」 원문은 -PLOT 음영 플롯(301차)·PURGE(291차)·3D 묶음(314차)뿐이라 할 것이 없었습니다.
+(ㄱ) 공통 질문은 대화 상자 `ask()`(`app/ui/dom.ts`)의 물음·단추와 명령행 예/아니오 물음입니다. 명령행 물음은 도우미 넷(`dashcmds-ask` askYN·`util2-ui` askYesNo·`modify2-util` yesNo·`undocmd` yn)이
+「물음 [예(Y)/아니오(N)] <예|아니오>:」를 붙이고, 번역층은 입력 줄을 「물음 [」 글 마디·옵션 마디·「] <예>:」(fileguard defaultWord)로, 기록 줄·휴대폰 카드·커서 옆을 통째 열쇠(「… <{n}>:」 틀)로 옮깁니다.
+도우미 물음 66·직접 물음 22의 앞 조각·통째를 사전과 맞대어 보니 **열여섯 물음은 둘 다 없어** 네 언어 모두 한국어로 보였습니다. 앞 차수가 대조한 열쇠(그 차수 시험·문서에 나온 것)는 건너뛰었습니다.
+
+(나) 빠진 번역 — 언어마다 새 열쇠 32(291차 꼴: 앞 조각 = 물음 번역 + 「[」, 통째 = 앞 조각 + 예(Y)·아니오(N) 번역 + 「] <{n}>:」).
+
+| 물음 | 쓰는 곳 |
+| --- | --- |
+| ByBlock을 ByLayer로 변경하시겠습니까?·블록을 포함하시겠습니까? | SETBYLAYER 설정 |
+| 기존 스타일 "{0}"을(를) 재정의하시겠습니까?·주석 치수 스타일을 작성하시겠습니까? | -DIMSTYLE |
+| 기존 치수 스타일({0})을 덮어쓰시겠습니까?·셀에 맞춰 자동 축척 | DIMIM(명령행)·TINSERT |
+| 끝과 끝이 정렬된 동일 선상의 객체 결합·부분 겹침 객체 결합·폴리선 내의 세그먼트 최적화 | -OVERKILL |
+| 도면의 블록 참조 수 = {0}. 모두 처리하겠습니까? | GATTE |
+| 도면층 상태 "{0}"이(가) 이미 있습니다. 덮어쓰시겠습니까? | -LAYERSTATE |
+| 도면층 특성 변경사항을 결합하시겠습니까?·확대/축소 및 초점이동 명령을 결합하시겠습니까? | UNDO 조정 |
+| 숨은선을 제거하겠습니까?·이어진 객체의 간격띄우기 결과를 한 폴리선으로 결합하겠습니까? | FLATTEN·EXOFFSET |
+| 페이지 설정 "{0}"이(가) 이미 있습니다. 재정의하시겠습니까? | -PSETUPIN |
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 7·일본어 4·중국어 11·독일어 14 값).
+
+| 열쇠(보이는 곳) | 전 → 후 | 같은 사전 근거 |
+| --- | --- | --- |
+| REVERT 「{0}의 변경 내용을 모두 버리고 … [」·통째 <예> | 앞 조각: 영어 「{0} Discard all changes…」(이름이 문장 앞에 홀로)·중국어 「放弃从 {0} 开始的」(「{0}부터」)·독일어 「Änderungen von {0}」 → 통째와 같은 문장, 통째: 영어·독일어 「Yes(Y)」 띄어쓰기·일본어 전각 「（Y）」·「：」와 다른 문장 → 앞 조각 + 예/아니오 | 같은 열쇠 통째(영어·중국어)·「Änderungen am Block {0}」, 통째는 앞 조각으로 시작(285차), 옵션 괄호 반각(320차) |
+| XCLIP 「기존 경계를 삭제하시겠습니까? [」·통째 <예> | 독일어 앞 조각 「Möchten Sie löschen? Bestehende Begrenzungen? [」(문장 깨짐) → 「…die vorhandene Begrenzung löschen? [」, 통째(영어 「Are you sure…」·독일어 「Sind Sie sicher… Grenze」·일본어 전각·중국어 「是否要」) → 앞 조각 + 예/아니오 | IMAGECLIP 「…die vorherige Begrenzung löschen?」 |
+| 「같은 이름의 치수 스타일 덮어쓰기」(DIMIM 상자 칸) | 영어 Overrides(재지정)·독일어 Überschreibt(3인칭) → Overwrite dimension styles with the same name·Bemaßungsstile mit demselben Namen überschreiben | 「덮어쓰기」 Overwrite·Überschreiben(「재지정」 Override는 다른 뜻) |
+| 「블록 "{0}"이(가) 이미 도면에 있습니다. {1}의 내용으로 재정의할까요?」(도면 파일 삽입 — {1}은 파일 이름)·상자 제목 「블록 - 재정의」 | 중국어 图块“{1}”(파일을 블록으로) → 使用 {1} 的内容, 독일어 「Sollen wir es」(Block은 남성) → 「Möchten Sie ihn」, 영어 제목 block - redefine → Block - redefine | 「블록 "{0}"이(가) 이미 있습니다. 재정의하시겠습니까?」 是否要重新定义它·Möchten Sie ihn neu definieren, 「블록 - 변경 사항이 저장되지 않음」 Block - … |
+| 「도면층 상태 "{0}"을(를) 가져왔습니다. 지금 복원하시겠습니까?」 | 중국어 已检索到(검색함) → 已导入 | 「도면층 상태 {0}개를 가져왔습니다: {1}」 已导入·「가져오기」 导入 |
+| 참조 편집 띠 단추 풍선 「변경 사항 저장(REFCLOSE 저장)」·「변경 사항 취소(REFCLOSE 취소)」 | 중국어 (REFCLOSE Save)·(REFCLOSE Cancel)(영어가 남음) → 保存·取消, 독일어 Änderungen abbrechen (REFCLOSE-Stornierung)(주문 취소) → Änderungen verwerfen (REFCLOSE verwerfen) | 「저장」 保存·「취소」 取消, 「변경 사항 취소」 Änderungen verwerfen |
+| 「블록을 포함하시겠습니까?」(SETBYLAYER) | Include the block?·是否包含此块？(「이 블록」)·Block einbinden?(XBIND binden 닮음) → Include blocks?·是否包含块？·Blöcke einschließen? | 「새 선택 세트에 포함」 Include in…·In neuen Auswahlsatz einschließen |
+| 「현재 스타일의 재지정을 버리시겠습니까?」(치수 스타일 관리자) | 독일어 Formatüberschreibung(서식) → Überschreibungen des aktuellen Stils | 「<스타일 재지정>」 <Stilüberschreibung>·「재지정 지우기」 Überschreibungen löschen |
+| 「외부 참조·이미지 {0}이(가) 이미 정의되어 있습니다. 기존 정의를 사용합니다.」 | 중국어 请使用(「쓰십시오」)·독일어 Verwenden Sie·Bestehende Definition verwenden(명령꼴) → 将使用现有定义。·Die vorhandene Definition wird verwendet. | 같은 열쇠 영어 will be used·일본어 使用します, 알림 꼴 「将保留隐藏线并展平。」·「… wird … nicht verwendet.」 |
+| OVERKILL 상자 칸·-OVERKILL 물음 「끝과 끝이 정렬된 동일 선상의 객체 결합」·「부분 겹침 객체 결합」 | 영어 Joins(3인칭) → Join, 중국어 端到端对齐共线对象(결합 빠짐)·合并零件重叠对象(零件 = 부품) → 连接端到端对齐的共线对象·合并部分重叠的对象, 독일어 Verbindet·Kombinieren Sie → 부정사 꼴 | 「끝과 끝 결합」 Join end to end·端到端连接·End-to-End verbinden, 「현재 설정 … 连接部分重叠」, 「부분 겹침 결합」 Teilweise Überlappung kombinieren |
+| 「도면의 블록 참조 수 = {0}. 모두 처리하겠습니까?」(GATTE) | 독일어 bewältigen(감당하다) → verarbeiten | 「… 이 기기에서 처리합니다」 verarbeitet |
+| 「페이지 설정 "{0}"이(가) (이 도면에) 이미 있습니다. 재정의하시겠습니까?」(-PSETUPIN·PSETUPIN 상자) | 일본어 上書きしますか(덮어쓰기) → 再定義しますか | 블록·선종류 재정의 물음 再定義しますか, 「덮어쓰기」 上書き(다른 뜻) |
+
+바꾼 값과 새 값마다 네 사전에서 같은 값을 가진 열쇠를 jq로 찾았습니다(모두 자기 하나뿐 — 한글 0, `{n}` 짝 같음). 거꾸로 찾기(`sourceMessage`)도 제 원문으로 돌아옵니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 새 열쇠 32씩(9410 → 9442)과 오역 36값. 영어·일본어·중국어·독일어 화면에서 위 물음이 명령행 입력 줄·기록 줄·휴대폰 카드·커서 옆에 한국어 없이 보이고, 입력 줄과 기록 줄이 같은 문장입니다.
+- 재발 막기: `tests/i18n-ask323.test.ts` — 소스에서 모은 도우미 물음 16(두 기본값)과 REVERT·XCLIP 물음이 진짜 명령행 입력 줄·통째 번역 길로 네 언어 모두 한국어 없이 보이는지, 앞 조각·통째 꼴, 위 오역 낱말, 거꾸로 찾기.
+- 두는 것(ROADMAP 「323차에 보고 두 것」): 뜻이 갈리는 공유 열쇠(「확인」·「계속」·「취소(D)」·「블록 재정의」), 앞 차수 묶음 안의 어긋남(IMAGECLIP·REFCLOSE 앞 조각과 통째, 선종류 다시 정의 독일어 es, AUDIT 일본어 전각, OVERKILL 「부분 겹침 결합」), 동의어·말투, 쓰이지 않는 시각 스타일 열쇠 둘.
+
+### 확인
+- `tests/i18n-ask323.test.ts`(새 시험 4건): 입력 줄 34 물음 × 네 언어, 통째·기록 줄, 고친 낱말, 거꾸로 찾기.
+- 고치기 전 2파일 10건 가운데 4건 실패(새 시험 넷 — 입력 줄 한국어 128 = 16 물음 × 기본값 둘 × 네 언어), 고친 뒤 `tests/i18n-ask323.test.ts`·`tests/i18n.test.ts`(사전 규칙) 2파일 10건 통과(한 번에). `tsc --noEmit` 통과.
+- `npm run check:seo`·`npm run check:i18n`은 콘텐츠 수정일을 고친 뒤 다시 빌드한 dist로 돌립니다(결과는 수정일 커밋 글).
+- tools/·tests/ grep(바꾼 열쇠·옛 값): 기대하는 곳 없음 — `tests/layerstate/commands.test.ts`·`tests/core`·`tests/annoscale`는 한국어 화면, 295차 시험은 선종류 다시 정의(바꾸지 않음), 302·303차 시험은 UNDO 결합 물음 본 열쇠(바꾸지 않음 — 새 앞 조각도 Pan·平移命令·画面移動). 정적 첫 화면(`index.html`, 빈칸 모은 글)에 바꾼 열쇠 0.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-28(322차): 도움말(F1) 대화 상자의 명령 표 — 명령 제목의 번역 대조
 
 ### 근거와 표
