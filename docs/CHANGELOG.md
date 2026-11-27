@@ -3,6 +3,37 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(308차): 한 사전 안에서 갈린 CAD 낱말 통일 — 독일어 구속·중국어 외부 참조
+
+### 근거와 표
+WCAG 3.2.4(일관된 식별 — 같은 기능은 같은 이름)에 맞춰, 한 사전 안에서 같은 CAD 낱말이 둘셋으로 갈린 것을 리드 결정으로 하나로 맞췄습니다(결정마다 한 규칙 — 열쇠 수가 30을 넘어도 이번 차수에 한해 됨).
+
+| 언어 | 원문 낱말 | 섞인 번역(307차 머리) | 맞춘 낱말과 근거 |
+| --- | --- | --- | --- |
+| 독일어 | 구속(원문에 「구속」이 든 열쇠) | Abhängigkeit 40곳·Einschränkung 52곳·Constraint 3곳 | **Abhängigkeit** — AutoCAD 독일어판 낱말. 같은 사전의 「X 구속」 이름 열둘·구속 매개변수 Abhängigkeitsparameter·AutoCAD 구속 안내의 Abhängigkeitsgruppe·Abhängigkeitsleiste |
+| 중국어 | 외부 참조(원문에 「외부 참조」가 든 열쇠) | 外部参照 153곳·外部参考 22곳 | **外部参照** — AutoCAD 중국어판 낱말. 같은 사전 153곳 |
+
+- 독일어는 둘 다 여성 명사라 관사·형용사 어미가 그대로입니다(die·eine·koinzidente·automatische·geometrische·dynamische). 복수 Einschränkungen → Abhängigkeiten, 합성어 앞머리 Einschränkungs- → Abhängigkeits-(Punkt·Gruppe·Typ·Knotenklasse·Parameter·Einstellungen),
+  Constraint 셋은 「in Abhängigkeiten」·「Bemaßungsabhängigkeiten」·「Abhängigkeitsform」. 「구속 막대」 둘은 같은 사전의 안내가 이미 부르는 Abhängigkeitsleiste로 맞췄습니다(낱말만 바꾼 Abhängigkeitsbalken이면 한 물건이 두 이름).
+- 그대로 둔 것: 원문에 구속이 없는 Einschränkung(「지원 범위와 확인할 점」 — 제한 뜻), QLEADER 지시선 각도 구속의 「0에서 360 사이의 각도를 입력하십시오(0 = 구속 없음).」(세그먼트 각을 묶는 제한 — 같은 흐름의 「각도 구속 입력」이 Winkelbeschränkung이라 이것만 바꾸면 한 흐름 안에서 갈림),
+  중국어 「참조」 단독·다른 뜻 参考(「DWG 참조」 图纸参考·「{0}(참조)」·「참조 도면」 参考图 등), 독일어 셋째 갈래 Beschränkung 17 열쇠(리드 결정이 이름을 대지 않은 낱말 — ROADMAP 「308차에 보고 두 것」).
+- 바꾼 값마다 같은 값 열쇠를 jq로 찾았습니다: 다른 일을 하는 칸과 같은 이름이 되는 것은 없습니다(바꾼 것끼리 같은 값 둘 — 「구속 삭제」 = 「구속조건 삭제」, 「{0}개의 구속조건을 제거했습니다.」 = 「구속조건 {0}개를 제거했습니다.」 — 같은 기능이고 전에도 같았음).
+  다른 언어 사전과 같은 글은 일본어 「외부 참조(X)」 하나(같은 열쇠)라 거꾸로 찾기(`sourceMessage`)가 제 원문으로 돌아옵니다.
+
+열쇠 수는 그대로(9250).
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- `site/locales/de.json` 51 열쇠(Einschränkung 49 열쇠 51곳·Constraint 2 열쇠 3곳), `site/locales/zh-CN.json` 22 열쇠. 독일어 화면의 기하·치수 구속 명령 프롬프트·오류·구속 막대·자동 구속 설정·AutoCAD 구속 안내가 한 낱말 Abhängigkeit로,
+  중국어 화면의 외부 참조 프롬프트·오류·목록 꼬리(「{0}（外部参照）」)·옵션(外部参照(X))이 한 낱말 外部参照로 보입니다.
+
+### 확인
+- `tests/i18n-unify308.test.ts`(새 시험 3건): 원문에 구속이 든 열쇠의 독일어 값에 Einschränkung·Constraint 없음(QLEADER 한 줄 빼고)과 대표 값·거꾸로 찾기, 원문에 외부 참조가 든 열쇠의 중국어 값(과 사전 전체)에 外部参考 없음과 대표 값·거꾸로 찾기,
+  구속 없는 Einschränkung·QLEADER 각도 구속(소스 글 확인)·「참조」 단독 参考는 그대로.
+- 고치기 전 9건 가운데 2건 실패(남은 열쇠 독일어 52·중국어 22). 고친 뒤 `tests/i18n-unify308.test.ts`·`tests/i18n-ribbon306.test.ts`·`tests/i18n-constraint307.test.ts` 3파일 9건 통과(한 번에). `npm run check:i18n` 통과(9250 항목).
+- tools/·tests/ grep: 옛 값(Einschränkung·外部参考)을 기대하는 시험·도구는 없습니다(304차 시험은 결합 열쇠에 外部参考가 없음을 봄). 바꾼 열쇠를 보는 306·307차 시험은 다른 열쇠에서 만든 꼴을 봐 그대로 통과하고, 두 시험의 「구속 Einschränkung」 주석을 308차 리드 결정 근거로 고쳤습니다.
+  300차 시험의 Winkelbeschränkung(QLEADER)은 바꾸지 않았습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(307차): 306차가 남긴 오역과 파라메트릭 구속 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
