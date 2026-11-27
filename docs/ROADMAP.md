@@ -2141,12 +2141,40 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   뷰 이름에 쓸 수 없는 문자 unbrauchbare), 독일어 301차 나머지(VPORTS 구성 입력 [ Konstruktionseingabe·도면 한계가 없어 … eingezeichnet·한 줄로 플롯 스탬프 darstellen.·자를 뷰포트 선택·자를 수 있는 객체 Ansichtsbereich·
   VPORTS Viewport-… 다섯·선 간격 Zeilenabstand·대소문자 Fall·300차 묶음 Mindestzutaten·Datum·Hitze·Pausengröße·Multileitung·Positionsansicht·Verbindung·Linie Trennen); 중국어 화면 그리는 중 绘图屏幕·
   300차 나머지(데이텀 식별자 둘 数据·작성 날짜 撰写·테이블 셀 <끝> 꺾쇠·Enter 아래 셀 输入·연결선 넷 连接·대칭도 등 「…度」 빠짐·필드 어순·UCS 객체(OB) 物体); 일본어·중국어 UNDO 뒤(B) 背面(근거 없음 — 301차와 같음).
+  (**303차가 고침**: 독일어 묶음 나머지 다섯 모두와 301차 나머지 가운데 VPORTS 구성 입력 [·한계 없음 eingezeichnet·한 줄 플롯 스탬프·자를 뷰포트 둘 Ansichtsbereich·
+  VPORTS Viewport-… 다섯·대소문자 셋 Fall·Ⓛ Mindestzutaten·데이텀 1~3·데이텀 식별자 둘 Datum·끊기 크기 Pausengröße·다중 지시선 Multileitung; 중국어 화면 그리는 중 绘图屏幕·
+  300차 나머지 가운데 데이텀 식별자 둘·작성 날짜·<끝> 꺾쇠·Enter 아래 셀·연결선 넷·대칭도·위치도·경사도 「…度」·필드 어순 둘·UCS 객체(OB) — 나머지는 「303차에 보고 두 것」)
   (2) 공유 열쇠라 하지 않음: 「표준」(UCS·PLAN·UCSMAN의 WCS ↔ TRIM·EXTEND 모드 표준 ↔ 제도 설정), 「범위」(ZOOM·플롯 extents ↔ AutoLISP range), 「평면도」(PLAN ↔ GD&T), 「가로·세로」(용지 방향 ↔ PLOTSTAMP 글 방향), 300차의 「계속」·「열기」·「머리글」.
   (3) 근거가 서지 않음: UCS 「표준(W)」·「*표준*」(WCS — 같은 사전에 World·ワールド·世界·Welt 좌표계 낱말이 없음; 「3D 월드 공간」은 다른 원문 낱말), 중국어·독일어 「30도 열기」(화살촉 「열기」가 파일 열기와 공유 — 근거 낱말 없음),
   중국어 Ⓜ/Ⓛ 재료 素材·마지막 저장자 时间(같은 사전에 실체·저장자 낱말 없음), 「밀」(301차와 같음). 소스에 보이는 자리가 없음: 「뷰{0}」(새 뷰 이름 칸의 값 — 입력 칸 값은 번역층이 옮기지 않음).
   (4) 열쇠 한도 밖·보지 않은 것: 301차 (4)의 플롯 축척 기록 줄·페이지 설정 관리자 설명 줄·LAYOUTWIZARD 뷰포트 줄·PLOTSTYLE 안내 줄, 기본값 없는 프롬프트에 친 입력을 붙인 기록 줄(292차 꼴 — 「UCS 이름 입력 또는 [?]: ?」·「저장할 뷰 이름 입력: V1」 등).
   (5) 코드 변경이 드는 것: 300차 (5)의 표 스타일 요약 줄·명령행 뒤 글 「]:」 그대로.
   (6) 동의어 — 둠: 영어 「재생성」 Regeneration·「빠른 줌을 원하십니까?」 Want a quick zoom?(같은 사전의 「Want a …?」 꼴), 일본어 뷰 관리자 ビュー管理, 독일어 ZOOM 범위(E) Bereich, 중국어 「축척」 缩放(SCALE 이름)·팔레트 调色板(사전 전체가 같은 낱말). 원어민 검토 없음
+- [x] 리드 결정(독일어 초점이동 PAN = Pan)과 302차가 남긴 것, 파일·저장·도면 정리 묶음의 번역 대조·빠진 번역(303차, 290~302차 꼴 — 302차 보고 (1)): 302차가 독일어 PAN을 Verschieben으로
+  고쳐 이동(MOVE)과 이름이 같아진 것을 AutoCAD 독일어판 낱말 Pan으로(초점이동·UNDO 결합 물음·도면층 탐색 안내·MVSETUP 「초점 이동할 점 지정:」 — MOVE는 그대로). 그 뒤 OPEN·CLOSE·SAVEAS(SAVE·DXFOUT)·
+  QSAVE·NEW(QNEW)·CLOSEALL·QQUIT·SAVEALL·REVERT·EXPORT·IMPORT·WMFOUT·PNGOUT·SVGOUT·PDFIMPORT·DRAWINGRECOVERY·SAVETIME·RECOVER·AUDIT·UNITS·-UNITS·DWGPROPS·ETRANSMIT(대화 상자·보고서)·RENAME·-RENAME·
+  응용프로그램 메뉴·닫기 물음·열기 오류 안내의 프롬프트·옵션·대화 상자 이름표·결과 줄·오류(PURGE·-PURGE는 291차가 봄, DXFIN·QUIT·EXIT·-ETRANSMIT는 이 앱에 없음).
+  (가) 오역을 같은 사전 안의 맞는 번역으로(영어 18·일본어 15·중국어 30·독일어 30곳 — 감사 AUDIT Thanks·ありがとう·谢谢, DWGPROPS 제목 「{0} 특성」 Trait·特点, -UNITS 목록 건축 Construction·構造·结构·
+  분수 噴水·방향 남 M·上午·서 SEO, ETRANSMIT 转账(송금)·일본어 結合(bind) → バインド, 영어 PDF 쪽 Strip·RECOVER Examine 명령꼴, 302차 출발점 독일어 Zeichenbildschirm·Viewport-·Fall·Datum 등·중국어 数据·连接·「…度」 등).
+  (나) 네 언어 모두 한국어로 보이던 36 열쇠(저장 확인·-UNITS 예/아니오 앞 조각과 통째, -RENAME 종류별 이전·새 이름 아홉, 배치 이름 바꾸기 결과·오류, 저장 결과 줄 일곱, IMPORT·WMFOUT·QQUIT 결과 줄,
+  ETRANSMIT 요약 줄 둘·보고서 설정 줄 여덟, PDFIMPORT 축척 이름표)를 더함(9077 → 9113, 지운 틀 없음). 원문·코드·번역층 규칙은 그대로. 표는 CHANGELOG 303차 절
+- [ ] 303차에 보고 두 것 — (1) 한도 밖 오역(중국어·독일어 — 30으로 한도가 참): 독일어 묶음 전부(감사 Danke·「{0} 특성」 Merkmal·-UNITS 1. 과학 Naturwissenschaften·4. 건축 Konstruktion·5. 분수 Fraktion·
+  측량 단위 Maßeinheit(→ 「미국 측량 피트」 Vermessung)·방향 남 「M 6 Uhr」·서 West 빠짐·「"{0}"을(를) 넣지 못했습니다」 Eingabe·「지금 화면을 {0}로 저장했습니다」 Speichere(1인칭)·저장 안 함 Nicht gespeichert·
+  전송 파일 작성 wird erstellt·추가·고치기 Reparieren·주제(S) Thema(→ 「주제」 Betreff)·하이퍼링크 기준 Referenz·옵션 「파일 저장」 wird gespeichert·예제 도면 열기 wird geöffnet·기존 파일 형식 유지 「… Stand」·
+  「= 를 쓸 수 없습니다」 「… Namen.」 남은 조각·RECOVER Untersuchen Sie(명령꼴)·ETRANSMIT Join-Block·Fasst … zusammen·대소문자 전환 Schaltergehäuse(스위치 상자)·이전 {0} 이름 입력 Vorherige(틀 — 이제 종류별 열쇠가 덮음)),
+  독일어 302차 나머지(줄바꿈(W) Linie Trennen(→ 「줄바꿈」 Zeilenumbruch)·위치도 Positionsansicht·연결선 넷 Verbindung(→ Anbindung)·해치 「선 간격 지정」 Zeilenabstand(글줄 간격)·X데이텀·「{0}행 데이텀」 Datum·
+  뷰포트 동기화·뷰포트 뷰 잠금·활성 모형 공간 뷰포트 Viewport-); 중국어 결합(bind) 组合·合并·连接 다섯(→ 「결합(B)」 绑定)·작성자(A) 撰写人·하이퍼링크 기준(H) 超链接引用·옵션 「파일 저장」 正在保存文件·
+  초점 이동할 점 焦点移动(→ 平移)·헤더 감사 「…错误。」·WMFOUT 결과 틀 「另存为 {1} 个对象」(화면·배치 용지 통째 열쇠는 더함)·자동 저장본 안내 保持…功能.
+  (2) 공유 열쇠라 하지 않음: 「작성」(DWGPROPS 통계 created ↔ 표제란 DRAWN ↔ MVSETUP·-LINETYPE 키워드 작성(C) create — 네 언어 Author·作成者·作者·Autor), 「수정」(DWGPROPS modified ↔ 리본 수정 패널),
+  「주석」(DWGPROPS 주석 칸 comments ↔ 주석 annotation), 302차의 「표준」·「범위」·「평면도」·「가로·세로」·「계속」·「열기」·「머리글」.
+  (3) 근거가 서지 않음: 그라디안 일본어 グラデーション·중국어 Gradian·「3. 그라디안」 梯度(같은 사전에 gradian 낱말이 영어 Gradian뿐), 영어 DWGPROPS 「주석(C)」 Annotative(같은 사전에 Comments 낱말 없음),
+  일본어 주제(S) トピック(件名 낱말 없음), 중국어 직각도 直角(垂直度 근거 없음)·마지막 저장자 时间, 302차의 UCS 「표준」·「밀」·30도 열기.
+  (4) 열쇠 한도 밖·보지 않은 것: ETRANSMIT 보고서 파일 줄(「a.dwg    외부 참조 — "…"에 저장된 경로 "…"」 — 종류 이름 꼴의 일반 틀을 더하면 다른 화면이 바뀔 수 있음)·요약 줄의 「, 찾을 수 없음 N」·「, 결합 N」 조합·
+  형식을 바꾼 메모 「모든 도면을 … 도면(*.dwg) 형식으로 바꿔 넣었습니다」, CMDDIA 0 저장 손실 줄 열(「… 도면 (*.dwg)(으)로 저장하면 …」·「원래 형식(…)으로 저장하면 남습니다」), IMPORT 꼬리 「옮길 수 없는 객체(… N개)」,
+  RENAME 「{0} → {1}: 바꿀 수 없습니다.」, AUDIT 줄 「… 수정 안 함」, VPORTS 「저장할·복원할·삭제할 뷰포트 구성의 이름 입력 또는 [?]:」(틀이 한국어 동사를 잡음), TCASE 기본값 「<문장 대소문자>」(옵션 이름이 아님),
+  기본값 없는 프롬프트의 기록 줄(292차 꼴 — -RENAME 「이름을 바꿀 객체 유형 입력 […]: LA」).
+  (5) 코드 변경이 드는 것: IMPORT 결과 줄 「… 블록 "{2}"을(를) 재정의습니다.」(한국어 원문이 깨짐 — 원문을 「재정의했습니다」로 고친 뒤 열쇠), ETRANSMIT 보고서 .txt 파일은 번역층 밖(한국어 그대로), 300차 (5) 그대로.
+  (6) 동의어 — 둠: 일본어 図面修復管理·중국어 恢复图纸管理器(도면 복구 관리자), 독일어 「Gespeichert {0} im Format …」 어순(틀 말투를 따름), 영어 「5. Fraction」(「분수」 Fractional), 일본어 「…を差し引いた」. 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다

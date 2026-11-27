@@ -198,7 +198,8 @@ describe('뷰·좌표계 묶음의 번역과 301차가 남긴 것(302차)', () =
     expect(ja['확대/축소 및 초점이동 명령을 결합하시겠습니까?']).toContain(ja['화면 이동']);
     expect(zh['초점이동']).toBe('平移');
     expect(zh['확대/축소 및 초점이동 명령을 결합하시겠습니까?']).toContain(`${zh['초점이동']}命令`);
-    expect(de['초점이동']).toBe('Verschieben');
+    // 303차 리드 결정: 독일어 초점이동은 Pan(AutoCAD 독일어판 낱말) — 이동(MOVE) Verschieben과 이름이 같던 것
+    expect(de['초점이동']).toBe('Pan');
     expect(de['확대/축소 및 초점이동 명령을 결합하시겠습니까?']).toContain(`„${de['초점이동']}“`);
     expect(en['범위 줌']).toBe('Zoom Extents');
     expect(en[ZOOM]).toContain('/Extents(E)/');

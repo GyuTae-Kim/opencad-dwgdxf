@@ -3,6 +3,62 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-27(303차): 독일어 초점이동 Pan(리드 결정)·302차가 남긴 오역과 파일·저장·도면 정리 묶음의 번역 대조·빠진 번역
+
+### 근거와 표
+맨 먼저 리드 결정: 302차가 독일어 「초점이동」(PAN)을 `Verschieben`으로 고쳐 「이동」(MOVE) `Verschieben`과 이름이 같아졌습니다(두 명령 단추·메뉴·화면 읽기 이름이 같음).
+독일어 PAN은 AutoCAD 독일어판 낱말 `Pan`으로 했습니다 — 「같은 사전 근거」 대신 이 리드 결정이 근거입니다. 「초점이동」·「확대/축소 및 초점이동 명령을 결합하시겠습니까?」의 „Pan“·
+도면층 탐색 안내(「…확대·초점이동할 수 있습니다」 — zoomen und pannen)·MVSETUP 정렬의 「초점 이동할 점 지정:」(Fokuspunkt — 초점)까지 독일어 값에서 초점이동이 든 열쇠 넷을 모두 바꿨고, MOVE는 그대로입니다.
+
+그 뒤 302차 「보고 두 것」 (1)의 한도 밖 오역과 파일·저장·도면 정리 묶음 — OPEN·CLOSE·PNGOUT·SVGOUT(`editor.ts`), SAVEAS(SAVE·DXFOUT 별칭)·QSAVE·NEW(QNEW)·저장 전 확인(`save.ts`),
+CLOSEALL·QQUIT·SAVEALL·REVERT(`filecmds.ts`), EXPORT·IMPORT·WMFOUT(`exportcmd.ts`·`filecmds-export.ts`), PDFIMPORT, DRAWINGRECOVERY·SAVETIME·RECOVER(`autosave.ts`), 열기 오류 안내(`openerror.ts`),
+UNITS·-UNITS, AUDIT·RENAME·-RENAME(`util2-misc.ts`), DWGPROPS, ETRANSMIT(`transmit.ts`·보고서 `edit/transmit/plan.ts`), 응용프로그램 메뉴·닫기 물음 — 의 보이는 글 383개
+(290~302차가 본 글을 빼면 열쇠 296)를 네 사전과 견줬습니다. PURGE·-PURGE는 291차가 봤고, DXFIN·QUIT·EXIT는 이 앱에 없습니다. 틀(`${…}`)·키워드·예/아니오 물음·기록 줄·전송 보고서 줄을 펴서
+명령행 조각·결과 줄로 넣어 봤습니다(고치기 전 언어마다 한국어로 남는 줄 56). 「감사」·「만들기」·「찾음」·「주제」·「대소문자」·「연결선」은 쓰는 곳을 코드로 갈라 모두 같은 뜻임을 확인했고,
+「작성」(DWGPROPS 작성 created ↔ 표제란 DRAWN ↔ 키워드 작성(C) create)·「수정」(modified ↔ 수정 패널)·「주석」(comments ↔ annotation)은 뜻이 갈려 두었습니다.
+
+(가) 오역 — 같은 사전 안의 맞는 번역으로 고쳤습니다(영어 18·일본어 15·중국어 30·독일어 30곳, 독일어 PAN 넷은 리드 결정).
+
+| 무리(보이는 곳) | 전 → 후(대표) | 같은 사전 근거 |
+| --- | --- | --- |
+| 독일어 PAN(리드 결정) | Verschieben(MOVE와 같은 이름)·„Verschieben“·hineinzoomen und sie verschieben·Fokuspunkt festlegen → Pan·„Pan“·zoomen und pannen·Punkt für Pan angeben: (영어·일본어 「초점 이동할 점」 focus shift·フォーカスを移動도 Pan·画面移動으로) | 리드 결정(AutoCAD 독일어판), 영어·일본어는 「초점이동」 Pan·画面移動 |
+| AUDIT·DWGPROPS(리본 단추·명령 제목·단계 이름·대화 상자 제목) | 감사 Thanks·ありがとう·谢谢 → Audit·監査·审核, 영어 테이블 감사 Audit Table → Table Audit, 일본어 헤더 감사 検証 → 監査, 「{0} 특성」 Trait·特性·特点 → Properties·プロパティ·特性 | 「객체 감사」 Object Audit·オブジェクト監査·审核对象, 「도면 특성…」 Drawing Properties…·図面プロパティ…·图形特性… |
+| -UNITS 목록·방향 제어 | 4. 건축 Construction·構造·结构 → Architectural·建築·建筑, 5. 분수 噴水(분수대) → 分数, 1. 과학 Science → Scientific, 측량 단위 Unit(s) of measurement → Survey units, 남 「M 6 o’clock」·上午(오전) → South 6:00·南, 서 「9 o'clock」·SEO → West 9:00·西, 북 北偏 … 度 → 北 | 낱말 열쇠 「건축」·「분수」·「과학」(UNITS 대화 상자), 「미국 측량 피트」 US Survey Feet, 이웃 줄 East 3:00·North 12:00, 「남서 등각」 西南·「북서 등각」 西北 |
+| ETRANSMIT·RENAME·PDFIMPORT·저장 | 중국어 전송 转账(송금) 셋 → 传输, 일본어 결합(bind) 結合·統合 다섯 → バインド, 영어 join block·combining → bound·binding, 넣지 못함 enter·输入 → include·放入, 영어 기존 파일 형식 유지 「… As of」 남은 조각, 중국어 「= 를 쓸 수 없습니다」 「…名称。」 남은 조각·이름 바꿈 결과 어순, 일본어 다음으로 이름 바꾸기 次に(다음 차례) → 変更後の名前·찾음 検索 → 見つかりました, 영어 PDF 쪽 Strip → Page | 「전송 설정」 传输设置, 「결합(B)」 Bind (B)·バインド(B), 「…를 패키지에 넣기」 Include·放入, 「이름 바꾸기(명령행)」 重命名, 291차 「다음으로 대치」 置換後の…, 「찾을 수 없음」 見つかりません, 「쪽 번호」 page number |
+| 메뉴·안내 | 일본어 플롯(PDF)… 印刷 → プロット, 영어·일본어 지금 자동 저장 Auto-saving·現在： → Auto-save now·今すぐ, 중국어 만들기 已创建(만들어짐) → 创建·예제 도면 열기 正在打开(여는 중) → 打开, 영어 RECOVER 「Examine the drawing.」(명령꼴) → Checking the drawing., 영어 주제 Topic → Subject | 「PDF (*.pdf) — 플롯」 プロット, 「…지금 복원하시겠습니까?」 今すぐ, 「전송 파일 작성」 创建…·「열기…」 打开…, 「복구(파일 열고 검사)」 check, 「주제(S)」 Subject (S) |
+| 302차 출발점 | 독일어 화면 그리는 중 Zeichenbildschirm·글꼴 받는 중 Empfangsschriftart → wird gezeichnet·wird heruntergeladen, 뷰 재정의 물음 ändern → ersetzen, 휠 안내 「… ziehen Zum」 → um zu vergrößern, 뷰 이름 unbrauchbare → nicht verwendet werden dürfen, 구성 입력 [ Konstruktionseingabe → Konfigurationseingabe, 한계 없음 eingezeichnet → geplottet, 한 줄 플롯 스탬프 「Stempel … darstellen.」 → Plotstempel in einer Zeile, 자를 뷰포트 둘 Ansichtsbereich·VPORTS 다섯 Viewport- → Ansichtsfenster, 대소문자 셋 Fall(경우) → Groß-/Kleinschreibung, Ⓛ Mindestzutaten(최소 음식 재료) → Minimales Material, 데이텀 1~3·식별자 둘 Datum(날짜) → Bezug, 끊기 크기 Pausengröße → Unterbrechungsgröße, 다중 지시선 Multileitung → Multileader; 중국어 화면 그리는 중 绘图屏幕 → 正在绘制屏幕, 데이텀 식별자 数据(데이터) → 基准, 작성 날짜 撰写 → 创建日期, <끝> 꺾쇠, Enter 아래 셀 输入 → Enter, 연결선 넷 连接 → 基线, 대칭도·위치도·경사도 「…度」 빠짐, 필드 어순 둘, UCS 객체(OB) 物体 → 对象 | 「{0} 재생성 중.」 wird regeneriert, 「내려받기」 Herunterladen, 「"{0}"을(를) 무엇으로 바꾸겠습니까」 Ersetzen, 「이름에 쓸 수 없는 문자」, 통째 「구성 입력 […]」 Konfigurationseingabe, 「{0}(으)로 플롯했습니다」 geplottet, 「플롯 스탬프」 Plotstempel, 「뷰포트 배열 입력 [」 Ansichtsfenster-, 「대소문자 일치」, 「Ⓜ 최대 재료」, 「데이텀 삼각형」 Bezugsdreieck, 「끊기」 Unterbrechung, 「다중 지시선」 Multileader; 「처리 중」 正在, 「데이텀 1」 基准, 「만든 날짜: {0}」 创建日期, 「<끝>:」 <结束>, 「지시선 연결선」 引线基线, 「동심도·평행도」·「기울기」 倾斜, UCS 통째 对象 (OB) |
+
+(나) 빠진 번역 — 사전에 열쇠가 없어(또는 틀이 앱 낱말을 잡아) 네 언어 모두 한국어로 보이던 것(언어마다 36):
+
+| 새 열쇠(보이는 곳) | 수 | 영어(대표) | 근거 |
+| --- | --- | --- | --- |
+| 저장 확인 「그래도 저장하시겠습니까? [」, -UNITS 「각도를 시계 방향으로 측정하시겠습니까? [」·통째 「… [예(Y)/아니오(N)] <{0}>:」 | 3 | Do you want to measure the angle clockwise? [Yes (Y)/No (N)] <{0}>: | 명령행 앞 조각 열쇠가 없음(302차 VIEWRES 꼴), 기록 줄 통째 |
+| -RENAME 「이전 블록 이름 입력:」(블록·치수 스타일·선종류·문자 스타일·배치)·「새 블록 이름 입력:」(블록·치수 스타일·선종류·문자 스타일) | 9 | Enter old block name: | 틀 「이전 {0} 이름 입력:」이 한국어 종류 이름을 잡음 — 이미 있는 「이전 도면층 이름 입력:」 꼴 |
+| RENAME 「배치 "{0}"을(를) 찾을 수 없습니다.」·「배치 {0} → {1}」 | 2 | Layout "{0}" not found. | 다른 종류는 열쇠가 있고 배치만 틀이 「배치」를 잡음 |
+| 저장 결과 줄 「{0}을(를) AutoCAD 2018/LT2018 도면 (*.dwg) 형식으로 저장했습니다(…)」(DWG 다섯·템플릿)·「{0}을(를) {1} 이진 형식으로 …」 | 7 | Saved {0} in format AutoCAD 2018/LT2018 drawings (*.dwg) ({1} KB, {2} ms). | 틀이 형식 이름 「… 도면 (*.dwg)」·「 이진」을 잡음 — 틀 번역 + 형식 이름 번역 |
+| IMPORT 「… 블록 "{2}"을(를) 만들었습니다.」, WMFOUT 「… 지금 화면·배치 용지 범위 …」, QQUIT 「도면 {0}개를 모두 닫았습니다. 브라우저에서는 …」 | 4 | All {0} drawings have been closed. Please close this tab directly in your browser. | 틀이 앱 낱말을 잡음 |
+| ETRANSMIT 요약 줄 「{0} — 파일 {1}개 (+ 보고서) (주 도면 {2})」 둘, 보고서 설정 줄 「폴더 유형: 트리 유지(…)」 등 일곱·「포함한 파일 ({0} + 이 보고서)」 | 10 | Folder type: Maintain tree (as per relative paths stored in the drawing) | 요약 줄은 파일 이름을 ft()로 감싸 「.zip」이 지킴 자리 안에 들어가 옛 열쇠 「{0}.zip — …」이 걸리지 않음, 보고서 줄은 틀이 한국어 값을 잡음 |
+| PDFIMPORT 「축척(1 = 실제 크기, 인치)」 | 1 | Scale (1 = actual size, inch) | 틀이 「인치」를 잡음 |
+
+지운 틀은 없습니다(-RENAME 틀 「이전·새 {0} 이름 입력:」은 이제 종류별 열쇠가 덮어 화면에 쓰이지 않지만 그대로 둠). 열쇠 9077 → 9113. 중국어 예/아니오 통째는 같은 사전 꼴대로 전각 「：」로 끝납니다.
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전(`site/locales/{en,ja,zh-CN,de}.json`)의 오역 93곳과 새 열쇠 36씩. 영어·일본어·중국어·독일어 화면의 저장 결과 줄·저장 확인·-UNITS 예/아니오·-RENAME 프롬프트·배치 이름 바꾸기·IMPORT·WMFOUT·QQUIT 결과 줄·
+  ETRANSMIT 요약·보고서 설정 줄·PDFIMPORT 축척 이름표가 한국어 대신 그 언어로, AUDIT·DWGPROPS·-UNITS 목록·ETRANSMIT 글이 엉뚱한 낱말(고맙다·특징·구조·분수대·오전·송금) 대신 CAD 낱말로 보입니다.
+  공유 열쇠라 함께 바뀌는 곳(모두 같은 뜻): 「감사」(AUDIT 명령 제목·리본 단추), 「만들기」(NEW 확인 단추·LAYER 키워드 M·리본 블록 만들기), 「주제」(DWGPROPS·FIELD 문서 특성), 독일어 「대소문자」(TCASE 리본·FIELD 형식),
+  중국어 「연결선」(MLEADERSTYLE 대화 상자·특성 팔레트). 번역층 규칙(코드)은 고치지 않았습니다.
+- 두는 것(ROADMAP 「303차에 보고 두 것」): 독일어 묶음 전부(한도 — 감사 Danke·{0} 특성 Merkmal·-UNITS 목록 등)와 중국어 결합(bind) 다섯 등 한도 밖 오역, 공유 열쇠 「작성」·「수정」·「주석」, 같은 사전에 근거가 없는 그라디안·「주석(C)」,
+  ETRANSMIT 보고서 파일 줄, 원문이 깨진 IMPORT 「…재정의습니다.」(코드 변경) 등.
+
+### 확인
+- `tests/i18n-file303.test.ts`(새 시험 3건 — 프롬프트·결과 줄 꼴은 소스 글에서 확인): 진짜 명령행(JSDOM·번역층·CommandLine)에 넣은 17 프롬프트의 입력 줄, 결과·이름표 줄 34(ft() 지킴 자리 포함)와 기록 줄 3에
+  네 언어 모두 한글 없음, 리드 결정(독일어 값에서 초점이동이 든 열쇠 넷에 Verschieben·Fokus 없음, MOVE는 Verschieben), 고친 낱말 = 같은 사전 근거, 새 열쇠 = 조각·틀 번역에서 만든 꼴.
+- 고치기 전 9건 가운데 4건 실패(한글 남은 입력 줄 44·결과·기록 줄 104, 독일어 초점이동 Verschieben ≠ Pan — 302차 시험의 같은 기대 포함). 고친 뒤 `tests/i18n-file303.test.ts`·`tests/i18n-view302.test.ts`(독일어 초점이동 기대를 Pan으로)·
+  `tests/i18n-leader300.test.ts` 3파일 9건 통과. `npm run check:i18n` 통과(9113 항목). 사전 규칙(i18n.test 101·102차, i18n-prompts 괄호 짝·앞 조각·중국어 규칙)은 바뀐·더한 열쇠에 jq로도 손셈(어긋남 0).
+- tools/·tests/ grep: 옛 번역을 기대하는 곳은 302차 시험의 독일어 초점이동 하나(기대를 고침). 바꾼 열쇠를 보는 다른 시험(284 「플롯(PDF)…」 중국어, 295 결합 독일어, 300 연결선 영어·중국어 「고정 연결선」,
+  301 구성 입력·한계·자를 뷰포트 영어·일본어·중국어, 293 「대소문자 일치」)은 바꾸지 않은 언어·열쇠만 봐 기대 그대로 맞습니다. tools/mobile-browser-check.js는 한국어 「예제 도면 열기」 이름만 찾습니다.
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-27(302차): 301차가 남긴 오역과 뷰·좌표계(화면 보기) 묶음의 번역 대조·빠진 번역
 
 ### 근거와 표
