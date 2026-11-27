@@ -3,6 +3,36 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(326차): 명령행 물음 짝 셋째 — 뜻이 틀린 짝 먼저, 그다음 기본값 없는 꼴과 남은 짝(앞 조각 갈래째)
+
+### 근거와 표
+325차가 남긴 짝(앞 조각 141·짝 261 — `tests/i18n-pair324.test.ts`)에서 뜻이 틀린 짝을 먼저 고치고, 「옵션 입력 [」 기본값 없는 꼴과 남은 짝은 **앞 조각으로 시작하는 열쇠 갈래째**(통째·기본값 없는 꼴) 앞 조각(입력 줄)과 같은 문장으로 맞췄습니다. 판정 기준·고칠 쪽은 324·325차 그대로입니다(같은 사전 다수 꼴·낱말, 명사꼴 → 동사꼴, 독일어 고를 것 뒤로 간 동사 꼬리를 뗌). 말투만 다른 짝(관사·단복수, 일본어 「、または」·「の」 하나, 중국어 「或使用」·「的」 하나)과 근거가 갈리는 낱말(関連·連想, Schriftfeld, 双重·双向)은 그대로 둡니다.
+
+| 갈래 | 보기(전 → 후) | 맞춘 쪽·근거 |
+| --- | --- | --- |
+| 뜻이 틀린 짝 | 독일어 DIM 도면층(L) 앞 조각 「Objekt auswählen, dem ein Layername zugewiesen werden soll」(도면층 이름을 줄 객체) → 「…, um dessen Layer zu verwenden, oder [」, 그라데이션 패턴 이름 「Eingabe des Farbverlaufsmusternamens」·「Geben Sie den Namen des Verlaufsmusters … ein:」, 경계 세트 「Begrenzungsgruppe festlegen」·「Grenzsatz angeben」·「Grenzen festlegen (B)」, 이중 해치 「Soll der Schraffurbereich doppelt schraffiert werden?」, 플롯 기본 설정 영어 「plot preset」·독일어 「Plot-Einstellungen」, 일본어 경계 세트 명사꼴 둘 | 코드(dimsmart.ts 도면층(L) — 고른 객체의 도면층 이름을 씀)와 같은 열쇠 통째의 맞는 뜻, 같은 사전 「패턴 이름 입력」 Musternamen eingeben·「경계 세트」 Umgrenzungssatz·「지정 [」 angeben 82·「하시겠습니까?」 Möchten 62 : Soll 15, 같은 물음 「Enter plot preference [」·「Für diese Ploteinstellung」, 「境界セットを指定 [」 |
+| 「옵션 입력 [」 기본값 없는 꼴 | 영어 「Enter an option [」 1, 중국어 「选项输入 [」 3, 독일어 「Option […] auswählen:」 6·「Option […] eingeben:」 1·「Optionen eingeben」 1 | 325차 통째 꼴(영어 Enter option·중국어 输入选项·독일어 Option eingeben) |
+| 같은 앞 조각의 기본값 없는 꼴·꼬리 | 독일어 「zweiten Verlängerungslinie」·「Bemaßungslinie platzieren」·「Ersten Punkt angeben … [Unsichtbar (I)]」·「Zeilentyps」·「<Kontinuierlich>」·「Geladener Linientyp: Kontinuierlich」, 중국어 「放置尺寸线」·「指定第一点」 | 앞 조각 꼴(Hilfslinie·Bemaßungslinienposition festlegen·festlegen·指定尺寸线位置·第一个点), 독일어 Linientyp 122 : Zeilentyp 4, 선종류 이름 Continuous는 옮기지 않음(325차·영어·일본어·중국어) |
+| 남은 짝 — 영어 | UNDO 「UNDO control」·「automatic mode」, REDIR 「Toggle object types to change」, -LAYERSTATE 「Enter property to turn on or off」, ISODRAFT 「isometric plane settings」, MVSETUP 「Would you like to externally reference …」, 「Would you like to make it?」, DIMREASSOC 「associated」, LIMITS 「lower-left」, WBLOCK·INSERT·ARRAY 레벨·열·행·MLEADER·대체 객체 | 같은 사전 「조정(C)」 Adjust·「Auto」, replace(324차 독일어 시험 「Zu ersetzende」), isoplane 18 : 3, 같은 명령 「Reset limits after inserting the title block?」 꼴, Bottom-left 7 : 3, 앞 조각 꼴 |
+| 남은 짝 — 일본어 | 명사꼴 「…入力」·「…の入力」·「…の指定」·「…の選択」·「セルの結合」(LAYERP·PDF 언더레이·UCS·UNDO·값 수정·값 입력·경로·구성·내용 유형·맞춤 데이터·매듭·바꿀 객체 유형·뷰포트 지정·셀 병합·속성 편집·열 수·투명 모드), 「螺旋」·「3点目」·「4点目」·「角」·「計測」·「全長」·「行間の距離」·「配列の」·「用紙空間」·「画像」·「点を指定」(점 선택) | 동사꼴(325차 규칙), 같은 사전 らせん 6 : 3·番目の点 24 : 21·コーナー 31 : 21·測定 22 : 11·全距離 4 : 2·行の間隔 5 : 1·配列内 3 : 2·ペーパー空間(324차 도면 공간)·イメージ 41 : 32, 選択 |
+| 남은 짝 — 중국어 | 「撤销自动模式」(UNDO)·「元素」·「分组」·「螺旋高度」·「扭曲」·「第四点」·「多引线」·「取消调整」·「开启对象类型更改」·「之前的边界」·「重置限制」·「重置范围」, 「请输入」·「，或」·「“…”」 | 명령 이름 UNDO, 같은 사전 项目(「항목(I)」)·组 94 : 7·螺旋线 7 : 3·扭转 5 : 2(298차 시험)·第四个·多重引线 44 : 3·撤销 85 : 4·替换(영어·독일어와 같은 뜻)·上一个 24 : 4·界限(「한계(LI)」), 앞 조각 꼴 |
+| 남은 짝 — 독일어 | 「Geben Sie den Blocknamen oder [?] <{0}> ein:」·「Geben Sie den Linientypnamen … an:」·「Geben Sie den Array-Typ […] ein:」(셋)·Fangtyp·Skizzentyp·Helixhöhe·OVERKILL 「… zum Ändern von […] ein:」·DSETTINGS 「Elemente zum Festlegen von」·블록의 삽입점, COPY 「Basispunkt festlegen」 | 앞 조각 꼴(고를 것 뒤로 간 동사·꼬리 없음 — 324·325차), 선종류 이름 앞 조각도 「Linientypnamen angeben oder [」, 「지정」 angeben 다수 |
+
+바꾼 값마다 네 사전에서 같은 값을 가진 열쇠를 jq로 찾았습니다 — 한글 0, `{n}` 짝 같음, 같은 값은 독일어 「기본점 지정 또는 [」 = 「기준점 지정 또는 [」(Basispunkt angeben — 같은 base point 뜻)뿐입니다. 열쇠는 더하지 않았습니다(네 사전 9442 그대로). 값 앞뒤 빈칸이 열쇠와 다른 열쇠 수는 네 언어 모두 0(HEAD와 같음).
+
+### 고친 것(보이는 글만 — 한국어 원문·코드는 그대로)
+- 네 사전의 값 영어 22·일본어 39·중국어 31·독일어 39. 어긋난 짝 영어 57 → 39·일본어 70 → 34·중국어 41 → 19·독일어 93 → 76(261 → 168, 앞 조각 141 → 120). 앞 조각으로 시작하는 열쇠 전체의 어긋남도 늘어난 앞 조각 없이 영어 144 → 125·일본어 154 → 118·중국어 131 → 102·독일어 218 → 188.
+- `tests/i18n-pair324.test.ts`: 「아직 둔 것」 목록 141 → 120줄(지운 21·줄인 44), 326차 기대 하나(고친 앞 조각 갈래 99개 — 영어 19·일본어 35·중국어 25·독일어 20 — 가 모두 앞 조각과 같은 문장, 뜻을 고친 값과 같은 사전 낱말 표본).
+- `tests/i18n-plot301.test.ts` 290줄: 일본어 「구성 입력 [수평(H)/…/오른쪽(R)] <오른쪽>:」 기대를 앞 조각과 같은 동사꼴 構成を入力으로(근거 주석).
+- 두는 것(ROADMAP 「326차에 보고 두 것」): 남은 짝 168(앞 조각 120), 중국어 「도면층 이름을 지정할 객체」 뜻 거꾸로(같은 사전 근거 없음), 일본어 플롯 기본 설정 낱말 갈림, 독일어 Zeilentyp·Kontinuierlich 짝 밖 넷.
+
+### 확인
+- `tests/i18n-pair324.test.ts` + `tests/i18n-plot301.test.ts`: 고치기 전 8건 가운데 3건 실패(목록·326차 기대·plot301 290줄 — 손셈대로).
+- 앞 차수 시험과 닿는 곳(ci-guard 6·8 — 옛 값 물음 114·손 조각 48로 tests/·tools/ grep, 정규식 리터럴 줄 0; 바꾼 열쇠 통째와 바꾼 앞 조각 열쇠로 tests grep): 바꾼 값을 기대하는 줄은 plot301 290줄 하나(고침), 닿는 시험 31파일을 끝에 공용 잠금 한 번으로 돌려 31파일 148건 통과(pair324·plot301 고친 뒤 포함). `tsc --noEmit` 통과.
+- 값 거르개(zh 进入·de ^Gibt·de 구속 Einschränkung·명령 취소 cancel/abbrechen·de Anmerkung·zh 外部参考·de 고도 Höhe)에 닿는 새 값 0, 열쇠 수 셈 시험은 열쇠를 더하지 않아 그대로. 정적 첫 화면(`index.html`, 빈칸 모은 글)에 바꾼 열쇠 0 — static321에 닿지 않음.
+- `npm run check:seo`·`npm run check:i18n`은 콘텐츠 수정일을 고친 뒤 다시 빌드한 dist로 돌립니다(결과는 수정일 커밋 글).
+- 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-28(325차): 명령행 물음 짝 맞추기 둘째 — 「옵션 입력 [」 통째 갈래와 자주 쓰는 명령의 남은 짝
 
 ### 근거와 표
