@@ -84,7 +84,9 @@ async function runTcase(app: App, ctx: CommandContext, dialogMode: boolean): Pro
   } else {
     const kws: Keyword[] = CASE_KEYS.map(([k, m]) => ({ key: k, label: CASE_LABEL[m] }));
     // 기본값은 모드 이름표(「문장 대소문자」 — 옵션 이름 「문장」과 달라 번역층이 옵션 번역으로 바꾸지 못하고 틀 {0}에 한국어로 남았다 — 338차): 앱 낱말이라 화면 언어로 옮겨 끼운다
-    const r = await ctx.getPoint(`대소문자 선택 [문장(S)/소문자(L)/대문자(U)/제목(T)/대소문자 전환(G)] <${uiText(CASE_LABEL[caseMode])}>:`, { keywords: kws });
+    // 끼운 낱말은 물음을 만든 때의 언어 글이라, 물음이 떠 있는 동안 화면 언어를 바꾸면 이 함수로 다시 만든다(341차 — App.relabelPrompt)
+    const caseAsk = () => `대소문자 선택 [문장(S)/소문자(L)/대문자(U)/제목(T)/대소문자 전환(G)] <${uiText(CASE_LABEL[caseMode])}>:`;
+    const r = await ctx.getPoint(caseAsk(), { keywords: kws, relabel: caseAsk });
     if ('keyword' in r) caseMode = CASE_KEYS.find(([k]) => k === r.keyword)![1];
   }
   const changed = list.map((e) => caseEntity(e, caseMode)).filter((e): e is Entity => !!e);

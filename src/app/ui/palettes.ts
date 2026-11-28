@@ -561,7 +561,8 @@ export class Palette {
           if (el.value === orig || (varies && !el.value.trim())) return;
           const r = parseValue(f, el.value, st.units);
           if ('error' in r) {
-            this.app.cmd.print(`${aria}: ${r.error}`, 'err');
+            // 틀 「{0}: 입력 오류 문장」의 {0} 자리 칸 이름(앱 낱말 — 도면에서 온 이름표는 ft 그대로)은 틀이 옮기지 않아 한국어로 남았다 — 화면 언어로 끼운다(341차)
+            this.app.cmd.print(`${f.fileLabel ? aria : uiText(aria)}: ${r.error}`, 'err');
             el.value = orig;
             return;
           }

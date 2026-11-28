@@ -168,14 +168,16 @@ describe('파일·저장·도면 정리 묶음의 번역과 302차가 남긴 것
       `${ft('a.dwg')}의 모형 객체 12개로 블록 "${ft('A')}"을(를) 재정의했습니다.`,
     ];
     const RECORDS =[`${UNITS_P} Y`, `${UNITS_Q} [예(Y)/아니오(N)] <예>: N`, `${VPARR} L`];
+    // 341차: 형식마다의 저장 틀 여섯은 지웠다 — 앱(340차 save.ts)처럼 형식 이름을 화면 언어로 끼운 줄을 일반 틀 「{0}을(를) {1}{2} 형식으로 …」가 옮긴다
+    const ui = (s: string, l: string) => DWG_LABELS.reduce((a, x) => a.replace(`을(를) ${x} 형식`, `을(를) ${translate(x, l)} 형식`), s);
     const left: string[] = [];
     for (const l of LANGS) {
-      for (const s of LINES) if (HANGUL.test(tr(l)(s))) left.push(`${l}: ${tr(l)(s)}`);
+      for (const s of LINES) if (HANGUL.test(tr(l)(ui(s, l)))) left.push(`${l}: ${tr(l)(ui(s, l))}`);
       for (const s of RECORDS) if (HANGUL.test(show(s, l))) left.push(`${l}: ${show(s, l)}`);
     }
     expect(left).toEqual([]);
-    expect(tr('en')(LINES[0]!)).toBe('Saved plan.dwg in format AutoCAD 2018/LT2018 drawings (*.dwg) (120 KB, 35 ms).');
-    expect(tr('zh-CN')(LINES[4]!)).toBe('plan.dwg 已保存为 AutoCAD 2000/LT2000 图纸 (*.dwg) 格式（120 KB，35 毫秒）。');
+    expect(tr('en')(ui(LINES[0]!, 'en'))).toBe('Saved plan.dwg in format AutoCAD 2018/LT2018 drawings (*.dwg) (120 KB, 35 ms).');
+    expect(tr('zh-CN')(ui(LINES[4]!, 'zh-CN'))).toBe('plan.dwg 已保存为 AutoCAD 2000/LT2000 图纸 (*.dwg) 格式（120 KB，35 毫秒）。');
     expect(tr('de')(LINES[6]!)).toBe('Gespeichert plan.dxf im Format AutoCAD 2018 DXF (*.dxf) binär (120 KB, 35 ms).');
     expect(tr('zh-CN')(LINES[7]!)).toBe('已用 a.dwg 的 12 个模型对象创建块“A”。');
     expect(tr('ja')(LINES[9]!)).toBe('オブジェクト 3 個を a.wmf として保存しました (1.2 KB、現在のレイアウト用紙範囲、ラスターイメージは抜けます)。');
@@ -328,7 +330,11 @@ describe('파일·저장·도면 정리 묶음의 번역과 302차가 남긴 것
       expect(d['배치 "{0}"을(를) 찾을 수 없습니다.'], l).toBe(d['도면층 "{0}"을(를) 찾을 수 없습니다.']!.replace(word[l] === 'layer' ? 'Layer' : word[l], d['배치']!));
       expect(d['배치 {0} → {1}'], l).toBe(`${d['배치']} {0} → {1}`);
       const saved = d['{0}을(를) {1}{2} 형식으로 저장했습니다({3} KB, {4}ms).']!;
-      for (const x of DWG_LABELS) expect(d[SAVED(x)], `${l}: ${x}`).toBe(saved.replace('{1}', d[x]!).replace('{2}', '').replace('{3}', '{1}').replace('{4}', '{2}'));
+      // 341차: 형식마다의 틀은 지웠다(쓰는 곳 0 — 340차부터 형식 이름을 화면 언어로 끼워 일반 틀 saved가 같은 문장을 만든다). 형식 이름 열쇠는 한글 없이
+      for (const x of DWG_LABELS) {
+        expect(d[SAVED(x)], `${l}: ${x}`).toBeUndefined();
+        expect(saved.replace('{1}', d[x]!), `${l}: ${x}`).not.toMatch(HANGUL);
+      }
       if (l !== 'zh-CN') expect(d[BINARY], l).toBe(saved.replace('{2}', ` ${{ en: 'binary', ja: 'バイナリ', de: 'binär' }[l]}`).replace('{3}', '{2}').replace('{4}', '{3}'));
       const sum = d['{0}.zip — 파일 {1}개{2}{3}{4} (주 도면 {5})']!.replace('{0}.zip', '{0}');
       expect(d[SUM_REP], l).toBe(sum.replace('{2}', ` ${d['+ 보고서']}`).replace('{3}', '').replace('{4}', '').replace('{5}', '{2}'));
