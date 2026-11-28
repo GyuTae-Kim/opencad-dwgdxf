@@ -20,6 +20,8 @@ import { sysvarInfo } from '../src/app/sysvars';
 import type { CadDocument } from '../src/core/model';
 import { createNewDocument } from '../src/core/newdoc';
 import { julianToLocal } from '../src/edit/field/evaluate';
+import { stampDate } from '../src/edit/filecmds/stamp';
+import { DEFAULT_TRANSLATE_SETTINGS, type TranslateResult, translateLog } from '../src/edit/layertools/translate';
 import type { Real } from '../src/edit/lisp/types';
 import { readDwg } from '../src/io/dwg/index';
 import { writeDwg } from '../src/io/dwg/writer/index';
@@ -252,5 +254,23 @@ describe('도면 머리말 율리우스일의 시간대(346차)', () => {
     // 부르는 곳이 없던 edit/field/format.ts julianToDate(UTC 순간으로 읽음 — 현지 시각 변수에 쓰면 시간대를 또 더하는 꼴)는 347차에 지움
     const conv = files(SRC).filter((f) => /-\s*2440587\.5/.test(readFileSync(f, 'utf8'))).map((f) => f.slice(SRC.length));
     expect(conv.sort()).toEqual(['app/datetext.ts', 'edit/field/evaluate.ts']);
+  });
+
+  it('(바) 348차 — 도면층 변환(LAYTRANS) 로그 「날짜:」는 다른 기록 글(플롯 스탬프 stampDate·전송 보고서·복구 목록)과 같은 현지 꼴: 시간대 셋에서 그 순간의 현지 벽시계(UTC ISO 꼴 T·Z가 아님)', () => {
+    // 로그는 사람이 읽는 내려받는 글 파일(app/laytrans.ts download 하나 — 앱이 다시 읽지 않음). 고치기 전 「날짜: 2026-11-28T15:00:00.000Z」(UTC)
+    /** 그 시간대에서 AT(15:00 UTC)의 벽시계 — 손셈: 서울 11-29 00:00, UTC 11-28 15:00, 뉴욕(겨울) 11-28 10:00 */
+    const WALL: Record<string, string> = { 'Asia/Seoul': '2026-11-29 00:00:00', UTC: '2026-11-28 15:00:00', 'America/New_York': '2026-11-28 10:00:00' };
+    const r: TranslateResult = { ops: [], moved: 0, counts: new Map(), created: [], updated: [], removed: [], kept: [] };
+    for (const [zone, offset] of Object.entries(ZONES)) {
+      setZone(zone);
+      expect(AT.getTimezoneOffset(), zone).toBe(offset);
+      const line = translateLog('a.dwg', [], DEFAULT_TRANSLATE_SETTINGS, r, AT).split('\r\n')[1];
+      expect(line, zone).toBe(`날짜: ${WALL[zone]}`);
+      expect(line, zone).toBe(`날짜: ${stampDate(AT)}`);
+    }
+    expect(src('app/laytrans.ts')).toContain("download(new Blob([text], { type: 'text/plain;charset=utf-8' }), `${baseName(st.name)}.log`);");
+    // 사람이 읽는 기록 글에 UTC ISO 꼴을 쓰는 자리: src 전체에서 0(새로 생기면 기록 글인지 기계가 읽는 값인지 보고 이 셈을 고친다)
+    const iso = files(SRC).filter((f) => /\.toISOString\(/.test(readFileSync(f, 'utf8'))).map((f) => f.slice(SRC.length));
+    expect(iso).toEqual([]);
   });
 });
