@@ -1980,7 +1980,7 @@ export class Shell implements UiHooks {
     if (st) {
       const abbr = unitAbbr(st.units.insunits);
       this.unitLabel.textContent = abbr ? `단위: ${abbr}` : '단위 없음';
-      this.selLabel.textContent = st.selection.size ? `선택 ${st.selection.size.toLocaleString()}개` : '';
+      this.selLabel.textContent = st.selection.size ? `선택 ${st.selection.size}개` : '';
     } else {
       this.unitLabel.textContent = '';
       this.selLabel.textContent = '';
@@ -2239,7 +2239,7 @@ export class Shell implements UiHooks {
         h('div', { class: 'form-row' }, h('span', {}, '배치'), h('b', {}, `${d.layouts.length - 1}개`)),
         h('div', { class: 'form-row' }, h('span', {}, '읽기 시간'), h('b', {}, `${Math.round(st.readMs)} ms`)),
         h('h4', { style: 'margin:12px 0 6px' }, '객체 종류'),
-        h('table', { class: 'grid' }, h('tbody', {}, ...rows.map(([t, n]) => h('tr', {}, h('td', {}, t), h('td', { style: 'text-align:right' }, n.toLocaleString()))))),
+        h('table', { class: 'grid' }, h('tbody', {}, ...rows.map(([t, n]) => h('tr', {}, h('td', {}, t), h('td', { style: 'text-align:right' }, String(n)))))),
         st.warnings.length ? h('h4', { style: 'margin:12px 0 6px' }, '참고') : null,
         // 「· {0}」 열쇠가 없어 줄이 통째로 한국어였다(317차) — 경고 글을 먼저 화면 언어로(MATCHPROP 꼴, 한국어는 그대로)
         ...st.warnings.map((w) => h('div', { style: 'color:var(--text-dim)' }, `· ${uiText(w.message)}${w.count ? ` (${w.count})` : ''}`)),

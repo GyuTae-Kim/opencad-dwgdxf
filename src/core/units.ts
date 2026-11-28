@@ -1,4 +1,9 @@
-/** 도면 단위·숫자 표시(LUNITS·LUPREC·AUNITS·AUPREC·INSUNITS) */
+/**
+ * 도면 단위·숫자 표시(LUNITS·LUPREC·AUNITS·AUPREC·INSUNITS).
+ * 화면 언어와 상관없이 「.」 소수점·천 단위 묶음 없음 — 명령행이 다시 읽는 꼴(parseLength·「x,y」 점 — 쉼표는 좌표 가름)과 같아야 하고
+ * AutoCAD도 도면 값을 언어마다 바꾸지 않는다. 화면 글의 셈 수(객체·항목·선택 수·바이트)도 묶음 없는 꼴 하나(344차 — 브라우저 지역 꼴
+ * toLocaleString()은 독일어 브라우저에서 「1.234」로 CAD 값 소수점과 같은 글자가 된다).
+ */
 import type { CadDocument } from './model';
 
 export const INSUNITS_NAMES: Record<number, { name: string; abbr: string; mm?: number }> = {

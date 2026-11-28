@@ -191,7 +191,7 @@ export function createAssocArray(app: App, ctx: CommandContext, req: AssocReques
   st.selection.clear();
   st.session.commit({ label, ops: r.ops, group: ctx.group, rebuildNow: true });
   app.refreshSelectionOverlay();
-  if (!opt.quiet) ctx.print(`항목 ${r.items.toLocaleString()}개의 연관 배열(${uiText(KIND_LABEL[req.kind])})을 만들었습니다.`);
+  if (!opt.quiet) ctx.print(`항목 ${r.items}개의 연관 배열(${uiText(KIND_LABEL[req.kind])})을 만들었습니다.`);
   return r.insert.handle;
 }
 
@@ -379,7 +379,7 @@ const KW: Record<ArrayKind, Keyword[]> = {
   ],
 };
 
-const tooMany = `배열 항목이 너무 많습니다(최대 ${MAX_ITEMS.toLocaleString()}개).`;
+const tooMany = `배열 항목이 너무 많습니다(최대 ${MAX_ITEMS}개).`;
 
 /** 행(수·간격·증분 고도). 바뀐 매개변수 또는 null */
 async function askRows(ctx: CommandContext, p: ArrayParams, fmt: (v: number) => string): Promise<ArrayParams | null> {
@@ -489,7 +489,7 @@ async function replaceItems(app: App, ctx: CommandContext, handle: string): Prom
     }
     if (applyArrayState(app, ctx, info, next, 'ARRAYEDIT', opt)) {
       created = true;
-      ctx.print(`항목 ${keys.length.toLocaleString()}개를 대체했습니다.`);
+      ctx.print(`항목 ${keys.length}개를 대체했습니다.`);
     }
     if ('keyword' in q) return;
   }

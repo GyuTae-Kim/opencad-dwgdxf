@@ -190,7 +190,7 @@ export class Interp {
 
   private async checkpoint(): Promise<void> {
     this.nextCheck = this.steps + 4096;
-    if (this.steps > this.maxSteps) throw new LispError(`반복 한도(${this.maxSteps.toLocaleString()}단계)를 넘었습니다`);
+    if (this.steps > this.maxSteps) throw new LispError(`반복 한도(${this.maxSteps}단계)를 넘었습니다`);
     const now = performance.now();
     if (now - this.sliceStart > this.sliceMs && this.opts.pause) {
       await this.opts.pause();
