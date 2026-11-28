@@ -180,7 +180,8 @@ describe('조회·측정 명령 묶음의 번역과 298차가 남긴 것(299차)
     for (const [f, s] of [
       ['app/util2-misc.ts', "ctx.print(e instanceof CalcError ? `CAL: ${e.message}` : `CAL: 식을 계산하지 못했습니다(${e instanceof Error ? e.message : String(e)}).`, 'err');"],
       ['app/util2-misc.ts', "h('span', { class: 'u2-note' }, `변수: ${Object.keys(qcState().vars ?? {}).join(', ') || '없음'}`)"],
-      ['app/editcmds2-query.ts', "ctx.print(`객체 ${total}개${total ? '' : ' — 도면이 비어 있습니다'}.`);"],
+      // 340차: 빈 도면은 통째 문장(같은 열쇠 「객체 0개 — 도면이 비어 있습니다.」)
+      ['app/editcmds2-query.ts', "ctx.print(total ? `객체 ${total}개.` : '객체 0개 — 도면이 비어 있습니다.');"],
       ['edit/util/calc.ts', 'if (isVec(v)) throw new CalcError(`${what}에는 점이 아니라 수가 필요합니다.`);'],
       ['edit/util/calc.ts', "return Math.pow(num(a, '거듭제곱'), num(b, '거듭제곱'));"],
       ['edit/util/calc.ts', "const d = num(b, '나누는 값');"],

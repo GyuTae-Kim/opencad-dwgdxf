@@ -17,6 +17,7 @@ import { ensureLayoutVariants } from './psltscale';
 import { paperInfo } from './scene';
 import { ask } from './ui/dom';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 /** 지금 화면(모형) 또는 배치 용지를 mm 단위 쪽으로 */
 async function screenPage(app: App, st: DocState): Promise<Page | null> {
@@ -164,8 +165,11 @@ async function importDrawing(app: App, ctx: CommandContext, file: File): Promise
     ops.unshift({ kind: 'blockRecord', key, before: null, after: record }, { kind: 'blockDef', key, before: null, after: def });
   }
   st.session.commit({ label: 'IMPORT', ops, group: ctx.group });
-  const skipped = [...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(', ');
-  ctx.print(`${ft(file.name)}의 모형 객체 ${ents.length}개로 블록 "${ft(name)}"을(를) ${have ? '재정의' : '만들었'}습니다.${skipped ? ` 옮길 수 없는 객체(${skipped})는 뺐습니다.` : ''}`);
+  // 옮기지 못한 객체 종류(DXF 이름)와 「n개」는 「{0} {1}개」 틀로 화면 언어로(340차)
+  const skipped = [...cp.skipped].map(([t, c]) => uiText(`${t} ${c}개`)).join(', ');
+  // 통째 문장 둘(340차 — 「재정의」·「만들었」 조각을 끼워 한국어부터 「재정의습니다」였고, 틀 {3}에 끼운 조각은 옮겨지지 않았다). 덧붙인 문장도 따로 옮긴다
+  const made = have ? `${ft(file.name)}의 모형 객체 ${ents.length}개로 블록 "${ft(name)}"을(를) 재정의했습니다.` : `${ft(file.name)}의 모형 객체 ${ents.length}개로 블록 "${ft(name)}"을(를) 만들었습니다.`;
+  ctx.print(`${uiText(made)}${skipped ? ` ${uiText(`옮길 수 없는 객체(${skipped})는 뺐습니다.`)}` : ''}`);
   // INSERT 흐름으로 삽입점·축척·회전을 받는다
   await app.run('INSERT', name);
 }

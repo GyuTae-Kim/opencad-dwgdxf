@@ -558,7 +558,8 @@ async function insertBlock(app: App, ctx: CommandContext, p: Pending): Promise<v
     }
     dstName = n;
     st.session.commit({ label: 'ADCENTER', ops: cp.finish(), group: ctx.group });
-    const skipped = [...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(', ');
+    // 옮기지 못한 객체 종류(DXF 이름)와 「n개」는 「{0} {1}개」 틀로 화면 언어로(340차 — 이은 목록은 틀 {0} 자리라 「개」가 한국어로 남았다)
+    const skipped = [...cp.skipped].map(([t, c]) => uiText(`${t} ${c}개`)).join(', ');
     if (skipped) ctx.print(`블록 안의 옮길 수 없는 객체(${skipped})는 뺐습니다.`);
   }
   const dstDef = doc.blocks.get(tableKey(dstName))!;
@@ -624,9 +625,9 @@ function addDefinitions(app: App, ctx: CommandContext, p: Pending): void {
   if (deps.length) {
     const byKind = new Map<DefKind, number>();
     for (const d of deps) byKind.set(d.kind, (byKind.get(d.kind) ?? 0) + 1);
-    ctx.print(`함께 가져온 정의: ${[...byKind].map(([k, c]) => `${DEF_KIND_LABEL[k]} ${c}개`).join(', ')}`);
+    ctx.print(`함께 가져온 정의: ${[...byKind].map(([k, c]) => uiText(`${uiText(DEF_KIND_LABEL[k])} ${c}개`)).join(', ')}`);
   }
-  const skipped = [...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(', ');
+  const skipped = [...cp.skipped].map(([t, c]) => uiText(`${t} ${c}개`)).join(', ');
   if (skipped) ctx.print(`옮길 수 없는 객체(${skipped})는 뺐습니다(파일을 가리키는 이미지·언더레이 등).`);
 }
 

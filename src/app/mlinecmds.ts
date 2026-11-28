@@ -423,7 +423,8 @@ async function runMLEdit(app: App, ctx: CommandContext, tool: ToolKey): Promise<
       else if (tool === 'CJ') res = cornerJoint(a.e, sa, a.point, b.e, sb, b.point);
       else res = teeJoint(a.e, sa, a.point, b.e, sb, tool === 'CT' ? 'closed' : tool === 'OT' ? 'open' : 'merged');
       if (!res) {
-        ctx.print(`${label}: 두 여러 줄이 만나지 않거나(평행) 닫힌 여러 줄입니다.`, 'err');
+        // 도구 이름(TOOLS label — 네 사전에 열쇠)은 틀 {0} 자리라 화면 언어로 끼운다(340차)
+        ctx.print(`${uiText(label)}: 두 여러 줄이 만나지 않거나(평행) 닫힌 여러 줄입니다.`, 'err');
         continue;
       }
       const ops: EditOp[] = [];

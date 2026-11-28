@@ -132,9 +132,11 @@ describe('파일·저장·도면 정리 묶음의 번역과 302차가 남긴 것
 
   it('결과·이름표 줄(저장·IMPORT·WMFOUT·QQUIT·RENAME·ETRANSMIT 요약·보고서·PDFIMPORT)과 기록 줄(-UNITS 예/아니오·VPORTS 배열)이 네 언어 모두 한국어 없이 보인다', () => {
     for (const [f, s] of [
-      ['app/save.ts', "ctx.print(`${ft(name)}을(를) ${label}${t.binary ? ' 이진' : ''} 형식으로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB, ${Math.round(res.ms)}ms).`);"],
+      // 340차: 형식 이름을 화면 언어로 끼움(uiText) · IMPORT는 통째 문장 둘(재정의했습니다/만들었습니다)과 덧붙인 문장을 따로 옮김
+      ['app/save.ts', "ctx.print(`${ft(name)}을(를) ${uiText(label)}${t.binary ? ' 이진' : ''} 형식으로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB, ${Math.round(res.ms)}ms).`);"],
       ...DWG_LABELS.map((x) => ['app/save.ts', `label: '${x}'`]),
-      ['app/filecmds-export.ts', "을(를) ${have ? '재정의' : '만들었'}습니다.${skipped ? ` 옮길 수 없는 객체(${skipped})는 뺐습니다.` : ''}`);"],
+      ['app/filecmds-export.ts', "개로 블록 \"${ft(name)}\"을(를) 재정의했습니다.` : `"],
+      ['app/filecmds-export.ts', "ctx.print(`${uiText(made)}${skipped ? ` ${uiText(`옮길 수 없는 객체(${skipped})는 뺐습니다.`)}` : ''}`);"],
       ['app/filecmds-export.ts', "KB, 지금 ${st.onLayout ? '배치 용지' : '화면'} 범위, 래스터 이미지는 빠집니다).`);"],
       ['app/filecmds.ts', "ctx.print(`${n ? `도면 ${n}개를 모두 닫았습니다. ` : ''}브라우저에서는 이 탭을 직접 닫으십시오.`);"],
       ['app/util2-misc.ts', 'ctx.print(`${kd.label} "${ft(oldName)}"을(를) 찾을 수 없습니다.`, \'err\');'],
@@ -162,8 +164,10 @@ describe('파일·저장·도면 정리 묶음의 번역과 302차가 남긴 것
       `${ft('plan.zip')} — 파일 3개 (주 도면 ${ft('plan.dwg')})`,
       ...REPORT,
       '축척(1 = 실제 크기, 인치)',
+      // 340차: IMPORT로 있던 블록을 다시 정의(통째 문장 — 차례 번호 단언 밖이라 끝에)
+      `${ft('a.dwg')}의 모형 객체 12개로 블록 "${ft('A')}"을(를) 재정의했습니다.`,
     ];
-    const RECORDS = [`${UNITS_P} Y`, `${UNITS_Q} [예(Y)/아니오(N)] <예>: N`, `${VPARR} L`];
+    const RECORDS =[`${UNITS_P} Y`, `${UNITS_Q} [예(Y)/아니오(N)] <예>: N`, `${VPARR} L`];
     const left: string[] = [];
     for (const l of LANGS) {
       for (const s of LINES) if (HANGUL.test(tr(l)(s))) left.push(`${l}: ${tr(l)(s)}`);

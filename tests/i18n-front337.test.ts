@@ -340,20 +340,21 @@ const FILL: Record<string, Fill> = {
 const unresolved: string[] = [];
 
 /** 모듈 상수 표(const NAME … = { k: '값', … } 또는 ['값', …])의 문자열 값 — 그 파일에 없으면 그 이름을 가져온 상대 경로 파일에서 */
-function tableValues(file: string, name: string, depth = 0): string[] {
+function tableValues(file: string, name: string, depth = 0, prop?: string): string[] {
   const lines = SOURCES.get(file);
   if (!lines) return [];
   const at = lines.findIndex((l) => new RegExp(`\\b(?:const|let)\\s+${name}\\b[^=]*=`).test(l));
   if (at < 0) {
     const spec = depth ? undefined : lines.map((l) => new RegExp(`^import\\b.*\\b${name}\\b.*from\\s+'(\\.[^']+)'`).exec(l)?.[1]).find(Boolean);
-    return spec ? tableValues(new URL(`${spec}.ts`, new URL(file, 'file:///s/')).pathname.slice(3), name, depth + 1) : [];
+    return spec ? tableValues(new URL(`${spec}.ts`, new URL(file, 'file:///s/')).pathname.slice(3), name, depth + 1, prop) : [];
   }
   let text = '';
   for (let k = at; k < Math.min(lines.length, at + 60); k++) {
     text += `${lines[k]}\n`;
     if (/;\s*$/.test(lines[k]!)) break;
   }
-  const lits = [...text.slice(text.indexOf('=', text.indexOf(name)) + 1).matchAll(/(:\s*)?'((?:\\.|[^'\\])*)'/g)];
+  // prop(340차 — 「TABLE.find(…)?.label」 꼴): 표 항목의 그 특성 값만
+  const lits = [...text.slice(text.indexOf('=', text.indexOf(name)) + 1).matchAll(prop ? new RegExp(`\\b${prop}:\\s*()'((?:\\\\.|[^'\\\\])*)'`, 'g') : /(:\s*)?'((?:\\.|[^'\\])*)'/g)];
   const keyed = lits.filter((x) => x[1]);
   return [...new Set((keyed.length ? keyed : lits).map((x) => unescapeJs(x[2]!)))];
 }
@@ -474,8 +475,18 @@ const promptLine = (q: string, l: string): string => {
 };
 /** 친 좌표(도면 글 표시 — app.ts 기록 줄) */
 const TYPED = '⁨10,20⁩';
-/** uiText로 끼운 낱말(\u0001…\u0002)을 그 화면 언어 번역으로(물음을 만드는 때의 언어 — i18n-text.ts uiText와 같은 translate) */
-const inLang = (q: string, l: string): string => q.replace(/\u0001([^\u0002]*)\u0002/g, (_m, s: string) => translate(s, l));
+/**
+ * uiText로 끼운 낱말(\u0001…\u0002)을 그 화면 언어 번역으로(물음을 만드는 때의 언어 — i18n-text.ts uiText와 같은 translate).
+ * 340차: 두 겹(「uiText(`${uiText(낱말)} ${n}개`)」 — 안쪽 낱말을 옮긴 글을 바깥 틀이 받음)은 앱과 같은 차례로 안쪽 표시부터
+ */
+const inLang = (q: string, l: string): string => {
+  let s = q;
+  for (let prev = ''; prev !== s; ) {
+    prev = s;
+    s = s.replace(/\u0001([^\u0001\u0002]*)\u0002/g, (_m, t: string) => translate(t, l));
+  }
+  return s;
+};
 
 describe('코드가 낱말을 끼워 만드는 물음(338차)', () => {
   it('(가) 소스의 물음 꼴을 모두 뽑고, 앞 조각·옵션 자리에 끼우는 식은 모두 대표 값이 있다(FILL 표 — 값을 옮겨 적은 소스 글이 그대로)', () => {
@@ -662,6 +673,8 @@ const FN_FILL: Record<string, Fill & { file: string }> = {
     values: ['\u0001스타일\u0002 \u0001외부 참조\u0002 \u0001이미지\u0002 RTEXT', '\u0001(없음)\u0002'],
     pins: ["if (m.xrefs) p.push(tr('외부 참조'));", "if (m.rtext) p.push('RTEXT');", "return p.join(' ') || tr('(없음)');"],
   },
+  // -PLOT 배치 목록의 이름(340차 — 템플릿 글에 한글이 없는 결과 줄 「  ${shownName(l)}」): 모형은 앱 낱말, 배치는 도면 글
+  'app/dashcmds-plot.ts|shownName': { file: 'app/dashcmds-plot.ts', kind: '앱 낱말', values: ['모형', DRAWING], pins: ["const shownName = (l: Layout) => (tableKey(l.blockName) === MODEL_SPACE ? '모형' : ft(l.name));"] },
 };
 /** 이름 목록 함수에 uiText를 넘겨 부르는 곳(339차 — FN_FILL의 「부르는 파일|이름」 값은 이 꼴로 부를 때만 맞다) */
 const TR_CALLERS: readonly (readonly [string, string])[] = [
@@ -679,18 +692,47 @@ Object.assign(FILL, {
     values: ['반대로, 거꾸로', '수직'],
     pins: ["[s.generation & 2 ? '반대로' : '', s.generation & 4 ? '거꾸로' : '', s.flags & 4 ? '수직' : ''].filter(Boolean).join(', ') || '보통'"],
   },
-  // 옮기지 못한 객체 종류(DXF 이름 — edit/layertools/clone.ts skipped) + 수 낱말 「개」
-  'app/designcenter.ts|[...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(\', \')': { kind: '앱 낱말', values: ['IMAGE 1개'], pins: ['[...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(\', \')'] },
-  'app/filecmds-export.ts|[...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(\', \')': { kind: '앱 낱말', values: ['IMAGE 1개'], pins: ['[...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(\', \')'] },
-  // 함께 가져온 정의 종류(DEF_KIND_LABEL) + 수
-  'app/designcenter.ts|[...byKind].map(([k, c]) => `${DEF_KIND_LABEL[k]} ${c}개`).join(\', \')': { kind: '앱 낱말', values: ['블록 1개, 도면층 1개'], pins: ['[...byKind].map(([k, c]) => `${DEF_KIND_LABEL[k]} ${c}개`).join(\', \')'] },
-  // 평면화하지 못한 까닭(edit/express/flatten.ts skip) + 수
-  'app/express-draw.ts|[...skipped].map(([k, n]) => `${k} ${n}개`).join(\', \')': { kind: '앱 낱말', values: ['3D 솔리드·표면·메시 1개'], pins: ['[...skipped].map(([k, n]) => `${k} ${n}개`).join(\', \')'] },
+  // 옮기지 못한 객체 종류(DXF 이름 — edit/layertools/clone.ts skipped) + 수 낱말 「개」(340차 — 항목마다 「{0} {1}개」 틀로 화면 언어)
+  'app/designcenter.ts|[...cp.skipped].map(([t, c]) => uiText(`${t} ${c}개`)).join(\', \')': { kind: '앱 낱말', values: ['\u0001IMAGE 1개\u0002', '\u0001IMAGE 1개\u0002, \u0001MULTILEADER 2개\u0002'], pins: ['[...cp.skipped].map(([t, c]) => uiText(`${t} ${c}개`)).join(\', \')'] },
+  'app/filecmds-export.ts|[...cp.skipped].map(([t, c]) => uiText(`${t} ${c}개`)).join(\', \')': { kind: '앱 낱말', values: ['\u0001IMAGE 1개\u0002'], pins: ['[...cp.skipped].map(([t, c]) => uiText(`${t} ${c}개`)).join(\', \')'] },
+  // 함께 가져온 정의 종류(DEF_KIND_LABEL) + 수(340차 — 낱말을 옮긴 뒤 「{0} {1}개」 틀로: 두 겹)
+  'app/designcenter.ts|[...byKind].map(([k, c]) => uiText(`${uiText(DEF_KIND_LABEL[k])} ${c}개`)).join(\', \')': {
+    kind: '앱 낱말',
+    values: tableValues('edit/layertools/clone.ts', 'DEF_KIND_LABEL').map((v) => `\u0001\u0001${v}\u0002 1개\u0002`),
+    pins: ['[...byKind].map(([k, c]) => uiText(`${uiText(DEF_KIND_LABEL[k])} ${c}개`)).join(\', \')'],
+  },
+  // 평면화하지 못한 까닭(edit/express/flatten.ts skip — 소스의 글 모두) + 수(340차 — 두 겹)
+  'app/express-draw.ts|[...skipped].map(([k, n]) => uiText(`${uiText(k)} ${n}개`)).join(\', \')': {
+    kind: '앱 낱말',
+    values: [...new Set([...SOURCES.get('edit/express/flatten.ts')!.join('\n').matchAll(/\{ skip: '([^']+)' \}/g)].map((m) => `\u0001\u0001${m[1]}\u0002 1개\u0002`))],
+    pins: ['[...skipped].map(([k, n]) => uiText(`${uiText(k)} ${n}개`)).join(\', \')'],
+  },
   // 빠진 SHX 글꼴 파일 이름(도면 자료) + 「외 n개」(339차 — 앱 낱말이라 화면 언어로)
   "app/shxfonts.ts|miss.slice(0, 4).join(', ') + (miss.length > 4 ? ` ${uiText(`외 ${miss.length - 4}개`)}` : '')": {
     kind: '도면 글',
     values: ['TXT.SHX', 'A.SHX, B.SHX, C.SHX, D.SHX \u0001외 1개\u0002'],
     pins: ["miss.slice(0, 4).join(', ') + (miss.length > 4 ? ` ${uiText(`외 ${miss.length - 4}개`)}` : '')"],
+  },
+  // -PURGE가 지원하지 않는 종류 이름(340차 — PURGE_KINDS·PURGE_EXTRA·Z·E·A 밖은 MA·P·SH·V·O 다섯이고, 다섯 문장 모두 네 사전에 통째 열쇠가 있다.
+  // 339차는 이 식을 수 「1」로 채워 「1 소거는 …」을 남는 줄로 셌다)
+  'app/dashcmds-tables.ts|PURGE_KW.find((x) => x.key === k)?.label ?? k': {
+    kind: '앱 낱말',
+    values: ['재료', '플롯 스타일', '형태', '비주얼 스타일', '고립된 데이터'],
+    pins: [
+      "{ key: 'MA', label: '재료' }",
+      "{ key: 'P', label: '플롯 스타일' }",
+      "{ key: 'SH', label: '형태' }",
+      "{ key: 'V', label: '비주얼 스타일' }",
+      "{ key: 'O', label: '고립된 데이터' }",
+      "{ kind: 'groups', key: 'G', noun: '그룹' }",
+      "{ kind: 'regApps', key: 'R', noun: '등록된 응용프로그램' }",
+    ],
+  },
+  // 저장 형식 이름(340차 — SAVE_TYPES label, 표 밖 판은 판 이름 그대로)
+  'app/save.ts|SAVE_TYPES.find((x) => x.format === t.format && x.version === t.version)?.label ?? t.version': {
+    kind: '앱 낱말',
+    values: [...tableValues('app/save.ts', 'SAVE_TYPES').filter((v) => /[가-힣]/.test(v)), 'AC1015'],
+    pins: ["label: 'AutoCAD 2018/LT2018 도면 (*.dwg)'", 'SAVE_TYPES.find((x) => x.format === t.format && x.version === t.version)?.label ?? t.version'],
   },
 } satisfies Record<string, Fill>);
 const unresolved339 = new Set<string>();
@@ -743,8 +785,104 @@ function callers339(name: string, params: string, param: string, file: string, e
   }
   return out;
 }
+/*
+ * 340차(339차에 보고 두 것 (3)): 스캐너가 수 「1」로 채우던 소문자 이름 표 찾기(`names[mode]`)·멤버 값(`row.k`).
+ * - 소문자 표: 같은 파일에서 그 줄 위 가장 가까운 `const 이름 = { … }`·`[ … ]`의 문자열 값(한글이 있으면 그 값들 — 그립 모드 이름 꼴).
+ * - 멤버: 그 멤버 이름에 한글 글을 넣는 객체 글자(`k: '…'`)가 그 파일이나 가져온 상대 경로 파일에 있으면 MEMBER_FILL 표 — 없으면 실패(새 꼴).
+ */
+const importsOf = (file: string): string[] =>
+  SOURCES.get(file)!.flatMap((l) => {
+    const m = /\bfrom\s+'(\.[^']+)'/.exec(l);
+    const p = m ? new URL(`${m[1]}.ts`, new URL(file, 'file:///s/')).pathname.slice(3) : '';
+    return SOURCES.has(p) ? [p] : [];
+  });
+const koreanMember = (file: string, prop: string): boolean => {
+  const re = new RegExp(`(?:[{,]|^)\\s*${prop}:\\s*(?:'[^']*[가-힣]|"[^"]*[가-힣]|\`[^\`]*[가-힣])`);
+  return [file, ...importsOf(file)].some((f) => SOURCES.get(f)!.some((l) => re.test(l)));
+};
+/** 같은 파일에서 at 줄 위 가장 가까운 소문자 표 정의의 문자열 값(객체 값 — 없으면 배열 항목) */
+function localTable(file: string, name: string, at: number): string[] {
+  const lines = SOURCES.get(file)!;
+  for (let k = at; k >= 0; k--) {
+    if (!new RegExp(`\\b(?:const|let)\\s+${name}\\b[^=]*=\\s*[{[]`).test(lines[k]!)) continue;
+    let text = '';
+    for (let j = k; j < Math.min(lines.length, k + 60); j++) {
+      text += `${lines[j]}\n`;
+      if (/;\s*$/.test(lines[j]!)) break;
+    }
+    const lits = [...text.slice(text.indexOf('=', text.indexOf(name)) + 1).matchAll(/(:\s*)?'((?:\\.|[^'\\])*)'/g)];
+    const keyed = lits.filter((x) => x[1]);
+    return [...new Set((keyed.length ? keyed : lits).map((x) => unescapeJs(x[2]!)))];
+  }
+  return [];
+}
+/** DBLIST 특성 줄(inquiry.ts entityProperties)의 특성 이름 k·값 v에 넣는 한글 글(함수 본문에서) */
+const INQUIRY = SOURCES.get('app/inquiry.ts')!;
+const PROPS_AT = INQUIRY.findIndex((l) => l.startsWith('export function entityProperties('));
+const PROPS = INQUIRY.slice(PROPS_AT, INQUIRY.findIndex((l, i) => i > PROPS_AT && l === '}'));
+const ROW_K = [...new Set(PROPS.flatMap((l) => [...l.matchAll(/\bk: '([^']+)'|fileRow\('([^']+)'/g)].map((m) => (m[1] ?? m[2])!)))];
+const ROW_V = [...new Set(PROPS.flatMap((l) => [...l.matchAll(/\bv: ([^}]*)/g)].flatMap((m) => [...m[1]!.matchAll(/'([^']*[가-힣][^']*)'/g)].map((x) => x[1]!))))];
+/** 그 파일의 `label: '…'` 글(이름표 표·객체 글자) */
+const labelsIn = (file: string): string[] => [...new Set([...SOURCES.get(file)!.join('\n').matchAll(/\blabel: '((?:\\.|[^'\\])+)'/g)].map((m) => unescapeJs(m[1]!)))];
+/** 결과 줄의 멤버 값(파일|식 → 값·그 값을 옮겨 적은 소스 글(file 안)) */
+const MEMBER_FILL: Record<string, Fill & { file: string }> = {
+  'app/editcmds2-query.ts|row.k': { file: 'app/inquiry.ts', kind: '앱 낱말', values: ROW_K, pins: ["{ k: '닫힘', v: e.closed ? '예' : '아니요' }", "fileRow('도면층', e.layer)"] },
+  'app/editcmds2-query.ts|row.v': { file: 'app/inquiry.ts', kind: '앱 낱말', values: ['1', ...ROW_V], pins: ["{ k: '문자 재지정', v: '없음' }", "'2d': '2D 폴리선'", "{ k: '폭', v: e.width ? L(e.width) : '줄바꿈 없음' }"] },
+  // 명령 이름(등록된 명령 — 라틴 글자)
+  'app/app.ts|c.name': { file: 'app/app.ts', kind: '수', values: ['LINE'], pins: ['this.lastCommand = c.name;'] },
+  'app/util2-misc.ts|c.name': { file: 'app/util2-misc.ts', kind: '수', values: ['LINE'], pins: ['await app.run(c.name);'] },
+  // 되돌린 기록의 이름(session.commit label — 명령 이름)
+  'app/draw.ts|tx.label': { file: 'app/draw.ts', kind: '수', values: ['LINE'], pins: ['const tx = s.undo();', 'const tx = app.active!.session.redo();'] },
+  // 저장 형식 이름(파일 형식 고르기의 항목 — 앱 낱말)
+  'app/save.ts|TEMPLATE_TYPE.label': { file: 'app/save.ts', kind: '앱 낱말', values: ['AutoCAD 도면 템플릿 (*.dwt)'], pins: ["label: 'AutoCAD 도면 템플릿 (*.dwt)'"] },
+  'app/save.ts|orig.label': { file: 'app/save.ts', kind: '앱 낱말', values: tableValues('app/save.ts', 'SAVE_TYPES').filter((v) => /[가-힣]/.test(v)), pins: ["label: 'AutoCAD 2018/LT2018 도면 (*.dwg)'"] },
+  // 이름 바꾸기 종류 이름(RENAME_KINDS label)
+  'app/util2-misc.ts|kd.label': { file: 'edit/util/rename.ts', kind: '앱 낱말', values: tableValues('edit/util/rename.ts', 'RENAME_KINDS').filter((v) => /[가-힣]/.test(v)), pins: ['export const RENAME_KINDS'] },
+  // LIST 특성 줄(DBLIST와 같은 entityProperties — 이미 낱말마다 uiText)
+  'app/commands.ts|r.k': { file: 'app/inquiry.ts', kind: '앱 낱말', values: ROW_K, pins: ["fileRow('도면층', e.layer)"] },
+  'app/commands.ts|r.v': { file: 'app/inquiry.ts', kind: '앱 낱말', values: ['1', ...ROW_V], pins: ["{ k: '문자 재지정', v: '없음' }"] },
+  // -PLOT 용지 목록(PAPERS)
+  'app/dashcmds-plot.ts|p.label': { file: 'app/papers.ts', kind: '앱 낱말', values: tableValues('app/papers.ts', 'PAPERS'), pins: ['export const PAPERS: Paper[] = ['] },
+  // XLIST 줄 이름표(xlistRows label)
+  'app/express-select.ts|x.label': { file: 'edit/express/xlist.ts', kind: '앱 낱말', values: labelsIn('edit/express/xlist.ts'), pins: ['export function xlistRows('] },
+  // 다기능 그립 옵션 이름(gripOptions label)
+  'app/modify.ts|o.label': { file: 'app/gripmenu.ts', kind: '앱 낱말', values: labelsIn('app/gripmenu.ts'), pins: ['export interface GripOption {'] },
+  // 특성 팔레트 항목 이름표(propedit Field label)
+  'app/ui/palettes.ts|f.label': { file: 'app/propedit.ts', kind: '앱 낱말', values: labelsIn('app/propedit.ts'), pins: ['export interface Field {'] },
+};
+/** 결과 줄에서 본 소문자 표 찾기·멤버 값(자리 식 → 값 종류) — 전수 셈 */
+const LOW340 = new Map<string, string>();
+const MEMBER340 = new Map<string, string>();
 /** 결과·알림 줄 자리의 식 가운데 338차 규칙으로 값을 뽑지 못한 것 */
 function lineValues(e: string, file: string, at: number, depth: number): string[] {
+  const low = /^([a-z_]\w*)\[[^\]]+\]$/.exec(e);
+  if (low) {
+    const tv = localTable(file, low[1]!, at);
+    const korean = tv.some((v) => /[가-힣]/.test(v));
+    LOW340.set(`${file}:${at + 1} ${e}`, korean ? `앱 낱말 표 ${tv.length}` : tv.length ? '한글 없는 표' : '표 정의 없음(수·도면 자료)');
+    if (korean) return tv;
+  }
+  // 상수 표 항목 찾기의 특성(「RENAME_KINDS.find((y) => …)!.label」 — 339차는 수 「1」): 그 표 항목들의 그 특성 값
+  const found = /^([A-Z][A-Z0-9_]*)\.find\(.*\)\??\.(\w+)$/.exec(e);
+  if (found) {
+    const tv = tableValues(file, found[1]!, 0, found[2]!);
+    const korean = tv.some((v) => /[가-힣]/.test(v));
+    LOW340.set(`${file}:${at + 1} ${e}`, korean ? `앱 낱말 표 ${tv.length}` : tv.length ? '한글 없는 표' : '표 정의 없음(수·도면 자료)');
+    if (korean) return tv;
+  }
+  const mem = /^[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*\??\.([A-Za-z_$][\w$]*)$/.exec(e);
+  // 오류 글(e.message·sys.error — 339차 규칙: 수 「1」, 종류는 오류 글)은 멤버 표 밖
+  if (mem && /^(?:message|error)$/.test(mem[1]!)) MEMBER340.set(`${file}:${at + 1} ${e}`, '오류 글');
+  else if (mem) {
+    const f = MEMBER_FILL[`${file}|${e}`];
+    const korean = koreanMember(file, mem[1]!);
+    MEMBER340.set(`${file}:${at + 1} ${e}`, f ? `MEMBER_FILL ${f.values.length}` : korean ? '한글 값 멤버 — 표 없음' : '한글 값을 넣는 곳 없음');
+    if (f) return f.values;
+    if (korean) {
+      unresolved339.add(`${file}:${at + 1} ${e} — 멤버 ${mem[1]}에 한글 글을 넣는 곳이 있음(MEMBER_FILL)`);
+      return [];
+    }
+  }
   // 친 입력·고른 값(await ask…·pick… — 도면 글·수)
   if (/^await\b/.test(e)) return ['1'];
   const pad = /^(.+?)\.(?:padStart|padEnd|trim|trimStart|trimEnd)\([^()]*\)$/.exec(e);
@@ -774,7 +912,7 @@ const LINES339 = [...SOURCES]
     lines.flatMap((line, k) =>
       PRINTS.test(line) || (k > 0 && /\b(?:print|say|toast|warn)\(\s*$/.test(lines[k - 1]!))
         ? templatesIn(line)
-            .filter((b) => /[가-힣]/.test(b) && b.includes('${') && !/\[[^\]`]*\([A-Z]{1,3}\)/.test(b))
+            .filter((b) => b.includes('${') && !/\[[^\]`]*\([A-Z]{1,3}\)/.test(b))
             .map((body) => ({
               at: `${file}:${k + 1}`,
               file,
@@ -782,6 +920,8 @@ const LINES339 = [...SOURCES]
               kinds: tokens(body).flatMap((t) => ('expr' in t ? [slotKind(t.expr, values(t.expr, file, k, 'line', 0))] : [])),
               lines: fill(body, file, k, 'line', 0),
             }))
+            // 340차: 템플릿 글에 한글이 없어도 끼우는 값이 앱 낱말이면(DBLIST 「    ${row.k}: …」 꼴 — 339차 거르개 밖이었다)
+            .filter((f) => /[가-힣]/.test(f.body) || f.kinds.includes('앱 낱말'))
         : [],
     ),
   );
@@ -790,20 +930,8 @@ const LINES339 = [...SOURCES]
  * 아직 둔 것(339차에 보고 두 것 — 파일 · 템플릿 본문 조각 · 까닭): 앱 낱말을 화면 언어로 끼우는 것(uiText)만으로는 옮겨지지 않는 꼴.
  * 그 꼴이 옮겨지게 되면(한글 0) 이 목록에서 뺀다 — 남은 항목이 한글을 남기지 않으면 실패
  */
-const PENDING339: readonly (readonly [string, string, string])[] = [
-  ['app/blkcmds-xref.ts', '은(는) 이미 이 도면의 블록 이름이라', '틀 열쇠 없음'],
-  ['app/blkcmds-xref.ts', '은(는) 이미 블록 이름이라', '틀 열쇠 없음'],
-  ['app/cadstandards.ts', '표준 검사 완료 — ', '끼운 요약 문장(검사한 문제 …) 열쇠 없음'],
-  ['app/dashcmds-tables.ts', ' 소거는 이 웹 버전에서 지원하지 않습니다', '틀 열쇠 없음'],
-  ['app/dashcmds-tables.ts', "을(를) ${before ? '재정의했습니다' : '저장했습니다'}", '동사 조각을 끼움(통째 문장 둘로 나눠야 함)'],
-  ['app/editcmds2-query.ts', ' — 도면이 비어 있습니다', '조각 열쇠 없음'],
-  ['app/express-draw.ts', ' 파일을 내려받았습니다.', '틀 열쇠 없음'],
-  ['app/filecmds-export.ts', '의 모형 객체 ', '동사 조각(재정의/만들었)·종류 목록의 「개」'],
-  ['app/designcenter.ts', '블록 안의 옮길 수 없는 객체(', '종류 목록의 「개」'],
-  ['app/designcenter.ts', '함께 가져온 정의: ', '종류 목록'],
-  ['app/designcenter.ts', '는 뺐습니다(파일을 가리키는', '종류 목록의 「개」'],
-  ['app/express-draw.ts', '건너뜀: ', '까닭 목록'],
-];
+// 340차가 열둘을 모두 풀었다(가둠 범위를 사전 틀과 맞춤 셋 · 끼운 문장·목록 낱말을 uiText 다섯 · 통째 문장 둘로 나눔 둘(틀 열쇠 셋) · 스캐너 대표 값 바로잡음 둘) — 빈 목록
+const PENDING339: readonly (readonly [string, string, string])[] = [];
 const pendingOf = (f: { file: string; body: string }) => PENDING339.find(([file, frag]) => f.file === file && f.body.includes(frag));
 
 /** 한 언어 화면에서 결과 줄마다 진짜 명령행 기록 줄·휴대폰 결과 카드(.mv-res)를 번역층으로 옮긴 글 */
@@ -834,6 +962,10 @@ async function printed(l: Lang | 'ko', lines: readonly string[]): Promise<{ q: s
 
 describe('코드가 낱말을 끼워 만드는 결과·알림 줄(339차)', () => {
   it('(가) 소스의 결과·알림 줄 꼴을 모두 뽑고, 한글이 들어올 수 있는 식은 모두 대표 값이 있다(FILL·FN_FILL 표 — 값을 옮겨 적은 소스 글이 그대로)', () => {
+    // 340차: 소문자 표 찾기·멤버 값 전수(자리 식 → 값 종류)
+    const count = (m: Map<string, string>) => [...m.values()].reduce((o, v) => o.set(v.replace(/ \d+$/, ''), (o.get(v.replace(/ \d+$/, '')) ?? 0) + 1), new Map<string, number>());
+    console.log(`소문자 표 찾기 ${LOW340.size} · ${[...count(LOW340)].map(([k, n]) => `${k} ${n}`).join(' · ')}\n  ${[...LOW340].map(([k, v]) => `${k} → ${v}`).join('\n  ')}`);
+    console.log(`멤버 값 ${MEMBER340.size} · ${[...count(MEMBER340)].map(([k, n]) => `${k} ${n}`).join(' · ')}\n  ${[...MEMBER340].filter(([, v]) => !v.startsWith('한글 값을 넣는 곳 없음')).map(([k, v]) => `${k} → ${v}`).join('\n  ')}`);
     // 339차 grep(src/app — print(·say(·toast(·warn( 줄 · 한글 · ${): 746줄
     expect(LINES339.length).toBeGreaterThan(700);
     expect([...unresolved339]).toEqual([]);
@@ -842,6 +974,11 @@ describe('코드가 낱말을 끼워 만드는 결과·알림 줄(339차)', () =
       for (const p of f.pins) expect(src.includes(p), `${name} ${p}`).toBe(true);
     }
     for (const [file, call] of TR_CALLERS) expect(SOURCES.get(file)!.join('\n').includes(call), `${file} ${call}`).toBe(true);
+    // 340차: 멤버 값 표의 근거 글
+    for (const [name, f] of Object.entries(MEMBER_FILL)) {
+      const src = SOURCES.get(f.file)!.join('\n');
+      for (const p of f.pins) expect(src.includes(p), `${name} ${p}`).toBe(true);
+    }
   });
 
   it('(나) 고친 꼴 — 진짜 명령행 기록 줄·휴대폰 결과 카드(번역층·도면 글 지킴)에서 네 언어 한글 0, 한국어 화면은 원문 그대로', async () => {
@@ -853,6 +990,10 @@ describe('코드가 낱말을 끼워 만드는 결과·알림 줄(339차)', () =
       '속성 1개를 바꿨습니다. \u0001(1개는 이미 같은 값)\u0002 \u0001잠긴 도면층의 참조 1개는 건너뛰었습니다.\u0002',
       `\u0001외부 참조 "${DRAWING}" 안의 블록 "${DRAWING}"\u0002을(를) 내부 편집합니다. 작업 세트 1개(나머지는 XFADECTL 1%로 흐리게). 끝내려면 REFCLOSE 또는 띠의 "변경 사항 저장"·"변경 사항 취소"를 쓰십시오.`,
       '현재 설정: 자동 = \u0001켜기\u0002, 조정 = \u0001전체\u0002, 결합 = \u0001예\u0002, 도면층 = \u0001예\u0002',
+      // 340차: 그립 모드 이름(통째 열쇠)·외부 참조 이름 안내(가둠 범위를 틀과 맞춤)·치수 스타일 재정의(통째 문장)
+      '** 신축 (다중) **',
+      `"${DRAWING}"은(는) 이미 이 도면의 블록 이름이라 외부 참조 이름을 ${DRAWING}_1(으)로 합니다.`,
+      `치수 스타일 "${DRAWING}"을(를) 재정의했습니다. 현재 치수 스타일입니다.`,
     ];
     // 모두 소스의 결과 줄 꼴에서 채운 줄이다
     const made = new Set(LINES339.flatMap((f) => f.lines));
@@ -896,5 +1037,27 @@ describe('코드가 낱말을 끼워 만드는 결과·알림 줄(339차)', () =
     console.log(head339);
     const report = [head339, ...stale, ...[...bad].map(([k, v]) => `${k}\n    ${v.join('\n    ')}`)].join('\n');
     expect([...stale, ...bad.keys()], report).toEqual([]);
+  });
+});
+
+/*
+ * 340차(339차에 보고 두 것 (4)): 「(주석)」은 -DIMSTYLE 「?」 이름 목록에서 주석(annotative) 치수 스타일 뒤에 붙는 표시(dashcmds-tables.ts annotativeFlag) 하나에만 쓴다.
+ * 네 값이 메모 뜻(Note·注釈·注·Hinweis)이었다 — 같은 사전의 주석 치수 스타일 물음·주석 객체 값과 같은 annotative 낱말로(괄호 꼴은 그 값 그대로).
+ */
+describe('「(주석)」은 주석(annotative) 뜻(340차)', () => {
+  it('쓰는 곳은 주석 치수 스타일 표시 하나이고, 네 값이 같은 사전의 주석 치수 스타일·주석 객체 낱말과 같다', () => {
+    const uses = [...SOURCES].flatMap(([f, lines]) => lines.filter((l) => l.includes('(주석)')).map((l) => `${f} ${l.trim()}`));
+    expect(uses).toEqual(["app/dashcmds-tables.ts for (const n of names) ctx.print(`  ${n}${annotativeFlag(doc.dimStyles.get(tableKey(n))?.xdata) ? ` ${uiText('(주석)')}` : ''}`);"]);
+    const WORD: Record<Lang, readonly [string, readonly string[]]> = {
+      en: ['Annotative', ['주석(A)', '주석 치수 스타일을 작성하시겠습니까?']],
+      ja: ['異尺度対応', ['주석 치수 스타일을 작성하시겠습니까?', '주석 객체 축척']],
+      'zh-CN': ['注释性', ['주석 치수 스타일을 작성하시겠습니까?', '주석 객체 축척']],
+      de: ['Beschriftung', ['주석(A)', '주석 치수 스타일을 작성하시겠습니까?']],
+    };
+    for (const l of LANGS) {
+      const [word, near] = WORD[l];
+      for (const k of near) expect(dict[l][k]!.toLowerCase(), `${l} ${k}`).toContain(word.toLowerCase());
+      expect(dict[l]['(주석)'], l).toBe(`(${word})`);
+    }
   });
 });

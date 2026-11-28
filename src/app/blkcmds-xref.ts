@@ -111,7 +111,8 @@ async function runXattach(app: App, ctx: CommandContext): Promise<void> {
   if (exist && !(exist.flags & 4)) {
     let n = 1;
     while (doc.blocks.has(tableKey(`${name}_${n}`))) n++;
-    ctx.print(`"${ft(exist.name)}"은(는) 이미 이 도면의 블록 이름이라 외부 참조 이름을 ${ft(`${name}_${n}`)}(으)로 합니다.`);
+    // 사전 틀 「…{1}_{2}(으)로 합니다.」와 같이 이름만 가둔다(340차 — 「이름_n」 통째를 가두면 틀의 「_」 자리가 없어 네 언어에서 한국어로 남았다)
+    ctx.print(`"${ft(exist.name)}"은(는) 이미 이 도면의 블록 이름이라 외부 참조 이름을 ${ft(name)}_${n}(으)로 합니다.`);
     name = `${name}_${n}`;
   } else if (exist) ctx.print(`외부 참조 ${ft(exist.name)}이(가) 이미 정의되어 있습니다. 기존 정의를 사용합니다.`);
   const insunits = Number(doc.header.get('$INSUNITS') ?? 0) || 0;
@@ -648,7 +649,7 @@ async function runBlockToXref(app: App, ctx: CommandContext): Promise<void> {
   if (ex && !(ex.flags & 4) && tableKey(ex.name) !== tableKey(block)) {
     let n = 1;
     while (doc.blocks.has(tableKey(`${name}_${n}`))) n++;
-    ctx.print(`"${ft(ex.name)}"은(는) 이미 블록 이름이라 외부 참조 이름을 ${ft(`${name}_${n}`)}(으)로 합니다.`);
+    ctx.print(`"${ft(ex.name)}"은(는) 이미 블록 이름이라 외부 참조 이름을 ${ft(name)}_${n}(으)로 합니다.`);
     name = `${name}_${n}`;
   }
   // 같은 이름이면 블록 정의를 소거해야 외부 참조 정의가 그 자리에 들어간다

@@ -48,7 +48,8 @@ describe('주석 축척·축척 목록 묶음의 번역과 311차가 남긴 「�
       expect(dc, s).toContain(s);
     const fx = src('app/filecmds-export.ts');
     expect(fx).toContain('const cp = new DefinitionCopier(src, doc, () => s.newHandle());');
-    expect(fx).toContain("${skipped ? ` 옮길 수 없는 객체(${skipped})는 뺐습니다.` : ''}");
+    // 340차: 덧붙인 문장을 따로 화면 언어로 옮김(앞 문장은 통째 문장 둘)
+    expect(fx).toContain("${skipped ? ` ${uiText(`옮길 수 없는 객체(${skipped})는 뺐습니다.`)}` : ''}");
     expect(src('app/wblockcmd.ts')).toContain("${built.skipped ? ` 옮길 수 없는 객체 ${built.skipped}개는 뺐습니다.` : ''}");
     // 복사 = WBLOCK 열쇠의 낱말(could not be copied·nicht übernommen·移せない·无法复制), 뺐습니다 = 빼놓음(left out·ausgelassen·除外·已排除)
     const COPY: Record<Lang, string> = { en: 'could not be copied', de: 'nicht übernommen werden konnten', ja: '移せない', 'zh-CN': '无法复制' };

@@ -122,7 +122,8 @@ async function write(app: App, ctx: CommandContext, st: DocState, t: SaveTarget,
   app.ui.refreshTabs();
   document.title = `${st.saveName} - OpenCAD DWG·DXF`;
   const label = t.ext === 'dwt' ? TEMPLATE_TYPE.label : (SAVE_TYPES.find((x) => x.format === t.format && x.version === t.version)?.label ?? t.version);
-  ctx.print(`${ft(name)}을(를) ${label}${t.binary ? ' 이진' : ''} 형식으로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB, ${Math.round(res.ms)}ms).`);
+  // 형식 이름(파일 형식 고르기 항목 — 네 사전에 열쇠)은 틀 {1} 자리라 화면 언어로 끼운다(340차)
+  ctx.print(`${ft(name)}을(를) ${uiText(label)}${t.binary ? ' 이진' : ''} 형식으로 저장했습니다(${(res.data.byteLength / 1024).toFixed(0)} KB, ${Math.round(res.ms)}ms).`);
   // 「참고: {0}」 틀은 「글 (개수)」를 통째로 잡아 옮기지 않는다(317차) — 쓰기 경고 글을 먼저 화면 언어로(MATCHPROP 꼴, 한국어는 그대로)
   for (const w of res.warnings.slice(0, 5)) ctx.print(`참고: ${uiText(w.message)}${w.count ? ` (${w.count})` : ''}`);
   return true;
@@ -142,9 +143,9 @@ async function confirmSaveLosses(app: App, ctx: CommandContext, st: DocState, t:
     return true;
   }
   if (commandLineMode(app)) {
-    ctx.print(`${label}(으)로 저장하면 다음이 빠지거나 바뀝니다:`);
+    ctx.print(`${uiText(label)}(으)로 저장하면 다음이 빠지거나 바뀝니다:`);
     for (const l of lines) ctx.print(`  ${l}`);
-    if (hint) ctx.print(`원래 형식(${hint})으로 저장하면 남습니다.`);
+    if (hint) ctx.print(`원래 형식(${uiText(hint)})으로 저장하면 남습니다.`);
     const r = await ctx.getPoint('그래도 저장하시겠습니까? [예(Y)/아니요(N)] <아니요>:', { keywords: [{ key: 'Y', label: '예' }, { key: 'N', label: '아니요' }] });
     return 'keyword' in r && r.keyword === 'Y';
   }

@@ -34,6 +34,7 @@ import { PickList, wideDialog } from './layertools-ui';
 import { commitResults } from './modify';
 import { ask, form, h } from './ui/dom';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 interface StdFile {
   name: string;
@@ -339,7 +340,8 @@ async function checkFlow(app: App, ctx: CommandContext, st: DocState): Promise<v
   }
   const left = checkStandards(st.doc, sources, kinds, s.ignored).length;
   const summary = `검사한 문제 ${total}개: 자동 수정 ${autoFixed}개, 수정 ${fixed}개, 무시된 것으로 표시 ${ignoredCount}개. 남은 문제 ${left}개.`;
-  ctx.print(`표준 검사 완료 — ${summary}`);
+  // 끼운 요약 문장은 틀 {0} 자리라 번역층이 옮기지 않는다 — 화면 언어로 끼운다(340차, 틀 「검사한 문제 {0}개: …」는 네 사전에 있다)
+  ctx.print(`표준 검사 완료 — ${uiText(summary)}`);
   await ask('검사 완료', total ? summary : '표준 위반이 없습니다.', [{ label: '닫기', value: 'ok', primary: true }]);
 }
 
