@@ -560,7 +560,8 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
           const regen = regenDims(app, dimsUsing(app, after.name), after.name);
           if (regen.length) st.session.commit({ label: 'DIMSTYLE', ops: regen, group: ctx.group, rebuildNow: true });
         }
-        ctx.print(`치수 스타일 "${ft(after.name)}"을(를) ${before ? '재정의했습니다' : '저장했습니다'}. 현재 치수 스타일입니다.`);
+        // 통째 문장 둘(340차 — 동사 조각을 틀 {1}에 끼우면 ja·zh·de 틀 꼴(「を{1}に設定しました」 등)에서 문장이 깨지고 조각도 옮겨지지 않았다)
+        ctx.print(before ? `치수 스타일 "${ft(after.name)}"을(를) 재정의했습니다. 현재 치수 스타일입니다.` : `치수 스타일 "${ft(after.name)}"을(를) 저장했습니다. 현재 치수 스타일입니다.`);
         return;
       }
     }

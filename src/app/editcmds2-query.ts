@@ -179,11 +179,13 @@ export function registerEditCmds2Query(app: App): void {
           if (n >= DBLIST_MAX) continue;
           n++;
           ctx.print(`${uiText(typeName(e))}  도면층: "${ft(e.layer)}"  공간: ${space}  핸들 = ${e.handle}`, 'res');
-          for (const g of entityProperties(st.doc, e as Entity, st.units).slice(1)) for (const row of g.rows) ctx.print(`    ${row.k}: ${row.file ? ft(row.v) : row.v}`);
+          // 특성 이름·값(예/아니요·폴리선 종류·부착 위치 등)은 LIST(commands.ts)처럼 화면 언어로 끼운다(340차 — 기록 줄 번역은 「이름:」 앞만 옮겨 값이 한국어로 남았다)
+          for (const g of entityProperties(st.doc, e as Entity, st.units).slice(1)) for (const row of g.rows) ctx.print(`    ${uiText(row.k)}: ${row.file ? ft(row.v) : uiText(row.v)}`);
         }
       }
       if (total > n) ctx.print(`… ${total - n}개는 생략했습니다(처음 ${DBLIST_MAX}개만 보입니다).`);
-      ctx.print(`객체 ${total}개${total ? '' : ' — 도면이 비어 있습니다'}.`);
+      // 빈 도면은 통째 문장(네 사전에 열쇠 — 340차: 덧붙인 조각을 틀 {1}에 끼우던 꼴을 소스에서도 한 문장으로)
+      ctx.print(total ? `객체 ${total}개.` : '객체 0개 — 도면이 비어 있습니다.');
     },
   });
 

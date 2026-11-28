@@ -2206,7 +2206,8 @@ export function registerModifyCommands(app: App): void {
         const refd = ref !== null && (mode === 'rotate' || mode === 'scale');
         const what = mode === 'stretch' ? '신축점' : mode === 'move' ? '이동점' : mode === 'rotate' ? (refd ? '새 각도' : '회전 각도') : mode === 'scale' ? (refd ? '새 길이' : '축척 비율') : '두 번째 점';
         const refKw = mode === 'rotate' || mode === 'scale';
-        ctx.print(`** ${names[mode]}${copy ? ` ${uiText('(다중)')}` : ''} **`);
+        // 모드마다 통째 열쇠(「** 신축 **」·「** 신축 (다중) **」 — 네 사전 다섯 모드 모두)가 있다. 「(다중)」만 옮겨 끼우면 통째 열쇠를 잃어 모드 이름이 한국어로 남는다(340차)
+        ctx.print(`** ${names[mode]}${copy ? ' (다중)' : ''} **`);
         const r = await ctx.getPoint(`${what} 지정 또는 [기준점(B)/복사(C)/명령 취소(U)/${refKw ? '참조(R)/' : ''}종료(X)]:`, {
           base,
           // 회전·축척은 숫자가 각도·비율(참조가 있으면 새 각도·새 길이), 값을 받는 그립의 신축은 결과 길이(그 밖은 숫자 = 직접 거리)

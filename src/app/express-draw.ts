@@ -290,7 +290,8 @@ async function runFlatten(app: App, ctx: CommandContext): Promise<void> {
   if (replace.length) commitResults(app, ctx, [{ replace }], 'FLATTEN', { quiet: true });
   app.clearSelection();
   ctx.print(replace.length ? `객체 ${replace.length}개를 평면화했습니다(Z·고도·두께 = 0).` : '바꿀 객체가 없습니다(이미 평면입니다).');
-  if (skipped.size) ctx.print(`건너뜀: ${[...skipped].map(([k, n]) => `${k} ${n}개`).join(', ')}`, 'err');
+  // 까닭(flatten.ts skip — 네 사전에 열쇠)을 옮긴 뒤 「{0} {1}개」 틀로(340차 — 이은 목록은 틀 {0} 자리라 옮겨지지 않았다)
+  if (skipped.size) ctx.print(`건너뜀: ${[...skipped].map(([k, n]) => uiText(`${uiText(k)} ${n}개`)).join(', ')}`, 'err');
 }
 
 // ---------------------------------------------------------------------------
@@ -448,7 +449,8 @@ async function runMkltype(app: App, ctx: CommandContext): Promise<void> {
   const text = linFileText(rec.name, description, r.pattern);
   download(new Blob([text], { type: 'text/plain' }), `${rec.name}.lin`);
   ctx.print(`선종류 "${ft(rec.name)}"을(를) ${existing ? '다시 정의했습니다' : '만들었습니다'}: ${r.pattern}`);
-  ctx.print(`${ft(`${rec.name}.lin`)} 파일을 내려받았습니다.`);
+  // 사전 틀 「{0}.lin 파일을 내려받았습니다.」와 같이 이름만 가둔다(340차)
+  ctx.print(`${ft(rec.name)}.lin 파일을 내려받았습니다.`);
 }
 
 // ---------------------------------------------------------------------------
