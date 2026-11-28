@@ -215,6 +215,10 @@ export function installFileGuard(src: NameSource): void {
     const log = !!el.closest(LOG);
     // 물음 줄 끝 마디 「]:」(334차 — closeTail): 그냥 넘기면 번역층이 거꾸로 찾기로 다른 열쇠(「] 입력:」)를 되찾는다. 그 언어 끝 꼴로 정해 돌려준다
     if (log && t === ']:' && el.hasAttribute('data-kw')) return text.replace(t, closeTail(t, (s) => s, language));
+    // 글자 없는 마디(335차 — 기호·숫자뿐: 「]:」·「: 」·「(」·「%」): 사전 열쇠는 모두 한글이나 {n}을 품어(공용 규칙 9번) 옮길 것이 없는데, 그냥 넘기면 번역층이
+    // 거꾸로 찾기로 값이 같은 다른 열쇠를 되찾아 그 번역으로 바꾼다(「]:」 → 「] 입력:」 → ja 「] を入力:」·한국어 「] 입력:」, 「{0}」 → 「{0}할」) — 원문 그대로.
+    // 라틴 글은 막지 않는다(언어 쪽 HTML은 빌드가 옮겨 두어 번역층이 옮긴 글을 거꾸로 찾기로 원문에 되돌려야 언어를 바꿀 수 있다)
+    if (!/\p{L}/u.test(text) && !text.includes('⁨')) return text;
     if (!log && !text.includes('⁨')) return undefined;
     const ui = !!el.closest('[data-i18n-ui-copy]');
     const r = guardedTranslate(text, language, log ? isName : undefined, ui);
