@@ -43,7 +43,8 @@ describe('리본 묶음의 번역과 305차가 남긴 것(306차)', () => {
   it('펼침 메뉴 끝 항목과 접힌 패널 단추가 네 언어 모두 한국어 없이 보인다', () => {
     expect(shell).toContain('{ label: `${b.label} (${b.cmd})`, icon: b.icon, run: () => go(b.cmd!) }');
     expect(shell).toContain("'data-i18n-ui-copy': '', title: `${p.title} 패널 펼치기`");
-    expect(shell).toContain("h('span', {}, `${p.title} ▾`)");
+    // 329차: 제목과 「 ▾」는 다른 글 마디(한 마디 「뷰·좌표 ▾」는 틀 「뷰{0}」에 잡혀 「View·좌표 ▾」로 남았다 — i18n-screens327 접힌 리본 패널 걸음)
+    expect(shell).toContain("h('span', {}, p.title, ' ▾')");
     for (const [n, c] of MENU) expect(shell, c).toMatch(new RegExp(`cmd: '${c}',\\n\\s+label: '${n}',`));
     for (const t of PANELS) expect(shell, t).toContain(`title: '${t}'`);
     const left: string[] = [];

@@ -10,6 +10,9 @@
  *   지금 고치지 못한 자리는 「아직 둔 것」(PENDING) — 목록에 있는데 이제 한글이 없으면 실패.
  * - 328차: 그리지 않던 화면 넷을 더했다 — 배치 공간(배치 탭·MVIEW 맞춤 뷰포트의 특성·LIST·배치 탭 메뉴), 바로 가기 메뉴(그리기 영역 오른쪽 누름 —
  *   기본·편집·명령 모드), 리본 펼친 메뉴(탭마다 펼침 메뉴 단추), 대화 상자(문자 스타일·치수 스타일·페이지 설정 관리자·플롯).
+ * - 329차: 그리지 않던 화면 다섯을 더했다 — 접힌 리본 패널 팝업(jsdom은 폭이 0이라 접히지 않아 리본 넘침·패널 폭·여백을 흉내 냄), 옵션 대화 상자,
+ *   도면층 상태 관리자, 치수 스타일 「수정…」 하위 대화 상자(7탭), 문자 편집기(MTEXT). 배치 마법사 「방향」 쪽 라디오가 용지 방향 낱말인지도 본다
+ *   (홀로 쓴 「가로」·「세로」는 PLOTSTAMP 글 방향(수평·수직) 뜻으로 옮긴다 — 용지 방향 자리는 뜻을 품은 원문 「가로 방향」·「세로 방향」으로 나눴다).
  * - 화면·엔진·글꼴은 가짜(i18n-mobileview·infocard241·menutype265 꼴), 홈 화면 앱(서비스 워커·새 판 알림)은 화면이 아니라 가짜.
  */
 import { readFileSync } from 'node:fs';
@@ -28,6 +31,7 @@ import { EditSession } from '../src/edit/session';
 import { installLocalization } from '../src/app/i18n';
 import type { Shell } from '../src/app/ui/shell';
 import { closeMenu } from '../src/app/ui/dom';
+import { activeEditor } from '../src/app/textedit';
 import { startEditor } from '../src/editor';
 import { translate } from '../site/i18n.mjs';
 import { settle } from './polish/real-app';
@@ -76,10 +80,28 @@ const FILE_TEXT = ['한빛벽체', '두레설비', '한빛 주택 평면도', '�
  * 목록에 있는데 이제 한글이 없으면 실패한다(고쳤으면 목록에서 지운다).
  * 328차가 모두 고쳤다 — 327차의 둘(도면층 창 색 견본 title 「흰색」·필터 상태 줄 「모두」)과 새 걸음이 찾은 둘
  * (명령 모드 바로 가기 메뉴 「객체 스냅 재지정 ▸」의 「스냅 재지정」·페이지 설정 관리자 설명 줄의 방향 「가로」·「없음」).
+ * 329차도 새 걸음이 찾은 다섯을 모두 고쳤다 — 접힌 리본 패널 단추 「뷰·좌표 ▾」(틀 「뷰{0}」에 잡혀 「좌표」가 남음 — 제목과 「 ▾」를 다른 글 마디로),
+ * MTEXT 둘째 구석 기록 줄(기록 줄 틀 「…[높이(H)/…/열(C)]: {0}」), 편집기 글꼴 고르기의 앱 글꼴 이름 「맑은 고딕」·「굴림」·「바탕」(값 = 글인 항목은
+ * 도면 글로 보아 옮기지 않으므로 이름표를 먼저 옮김 — 사전의 글꼴 이름 오역 「Roll」·「Background」 등도 로마자 고유 이름으로).
  */
 const PENDING: string[] = [];
-/** 328차 새 걸음 — 한국어 화면에서 걸음마다 새 앱 글(한글)이 보여야 그 화면을 실제로 그린 것이다 */
-const NEW_STEPS = ['배치 공간(MVIEW)', '배치 탭 메뉴', '바로 가기 메뉴(기본)', '바로 가기 메뉴(명령)', '리본 펼친 메뉴', '대화 상자(STYLE)', '대화 상자(DIMSTYLE)', '대화 상자(PAGESETUP)', '대화 상자(PLOT)'];
+/** 328·329차 새 걸음 — 한국어 화면에서 걸음마다 새 앱 글(한글)이 보여야 그 화면을 실제로 그린 것이다 */
+const NEW_STEPS = [
+  '배치 공간(MVIEW)',
+  '배치 탭 메뉴',
+  '바로 가기 메뉴(기본)',
+  '바로 가기 메뉴(명령)',
+  '리본 펼친 메뉴',
+  '대화 상자(STYLE)',
+  '대화 상자(DIMSTYLE)',
+  '대화 상자(PAGESETUP)',
+  '대화 상자(PLOT)',
+  '접힌 리본 패널',
+  '대화 상자(OPTIONS)',
+  '대화 상자(LAYERSTATE)',
+  '대화 상자(DIMSTYLE 수정)',
+  '문자 편집기(MTEXT)',
+];
 
 const realSetInterval = globalThis.setInterval;
 const realClearInterval = globalThis.clearInterval;
@@ -92,7 +114,8 @@ const stubDom = (lang: string) => {
   const w = dom.window as unknown as Record<string, unknown>;
   // 대화 상자의 미리보기 캔버스는 jsdom에 그리기가 없다(tabkeys260 꼴 — 그리기 없이 글만 본다)
   dom.window.HTMLCanvasElement.prototype.getContext = (() => null) as never;
-  for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'HTMLInputElement', 'HTMLAnchorElement', 'MouseEvent', 'KeyboardEvent', 'MutationObserver', 'location', 'history', 'localStorage', 'CustomEvent'])
+  // NodeFilter: 문자 편집기가 커서를 놓을 때 쓴다(textedit/dom.ts pointAt — createTreeWalker, 329차)
+  for (const name of ['window', 'document', 'Node', 'NodeFilter', 'Element', 'HTMLElement', 'HTMLButtonElement', 'HTMLInputElement', 'HTMLAnchorElement', 'MouseEvent', 'KeyboardEvent', 'MutationObserver', 'location', 'history', 'localStorage', 'CustomEvent'])
     vi.stubGlobal(name, w[name]);
   vi.stubGlobal('getComputedStyle', (el: Element, pseudo?: string) => dom.window.getComputedStyle(el, pseudo));
   vi.stubGlobal('matchMedia', (media: string) => ({ matches: false, media, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
@@ -185,7 +208,7 @@ const HOUSE = synth('한빛벽체', [line('한빛벽체', [0, 0], [100, 0]), cir
 const PLAN = synth('두레설비', [arc('두레설비', 40), line('두레설비', [0, 0], [0, 80]), mtext('두레설비', '두레 메모 글')], { off: true, frozen: true, locked: true });
 
 /** 한 언어로 주요 화면을 차례로 그리며 단계마다 새로 보인 남은 한글을 모은다 */
-async function screens(lang: string): Promise<{ steps: [string, string][]; fileTextShown: boolean }> {
+async function screens(lang: string): Promise<{ steps: [string, string][]; fileTextShown: boolean; orient: string[] }> {
   const dom = stubDom(lang);
   for (const n of ['AUTOSNAP', 'POLARMODE', 'POLARANG', 'POLARADDANG', 'COORDS']) prefSet(`opencad.sysvar.${n}`, null);
   const root = document.getElementById('app')!;
@@ -317,6 +340,42 @@ async function screens(lang: string): Promise<{ steps: [string, string][]; fileT
         closeMenu();
       }
     }
+    // 329차 ⑤ 접힌 리본 패널 팝업(282차): buildRibbon(shell.ts)은 리본이 넘칠 때(scrollWidth > clientWidth) 패널 폭(getBoundingClientRect)·여백(getComputedStyle)으로
+    // foldCount(layout.ts)를 셈해 오른쪽부터 접는다. jsdom은 폭이 모두 0이라 접히지 않으므로 셋을 흉내 낸다 — 펼친 패널 300 · 접은 단추 60 · 쓸 수 있는 폭 200이면
+    // 모든 탭의 모든 패널이 접힌다. 탭마다 접힌 단추를 눌러 팝업(role=dialog — 패널 내용·제목)을 열고, 같은 단추를 다시 눌러 닫는다(closeFoldedPop)
+    const ribbonEl = (shell as unknown as { ribbon: HTMLElement }).ribbon;
+    const proto = dom.window.Element.prototype;
+    const rectOf = proto.getBoundingClientRect;
+    const domStyle = (el: Element, pseudo?: string) => dom.window.getComputedStyle(el, pseudo);
+    Object.defineProperty(ribbonEl, 'scrollWidth', { configurable: true, get: () => 5000 });
+    Object.defineProperty(ribbonEl, 'clientWidth', { configurable: true, get: () => 200 });
+    proto.getBoundingClientRect = function (this: Element): DOMRect {
+      if (!this.classList.contains('rpanel')) return rectOf.call(this);
+      const width = this.querySelector('button.folded') ? 60 : 300;
+      return { x: 0, y: 0, left: 0, top: 0, right: width, bottom: 80, width, height: 80, toJSON: () => ({}) };
+    };
+    vi.stubGlobal('getComputedStyle', (el: Element, pseudo?: string) => (el === ribbonEl ? ({ paddingLeft: '0px', paddingRight: '0px' } as unknown as CSSStyleDeclaration) : domStyle(el, pseudo)));
+    try {
+      for (const i of [...ribbonTabs().keys()].slice(1).concat(0)) {
+        ribbonTabs()[i]!.click();
+        await settle();
+        const folded = Array.from(document.querySelectorAll<HTMLButtonElement>('button.folded'));
+        expect(folded.length, `접힌 패널(리본 탭 ${i})`).toBeGreaterThan(0);
+        for (const b of folded) {
+          b.click();
+          await settle();
+          expect(document.querySelector('.ribbon-pop'), '접힌 패널 팝업').not.toBeNull();
+          look('접힌 리본 패널');
+          b.click();
+          await settle();
+        }
+      }
+    } finally {
+      Reflect.deleteProperty(ribbonEl, 'scrollWidth');
+      Reflect.deleteProperty(ribbonEl, 'clientWidth');
+      proto.getBoundingClientRect = rectOf;
+      vi.stubGlobal('getComputedStyle', domStyle);
+    }
     // ④ 자주 쓰는 대화 상자: 문자 스타일·치수 스타일·페이지 설정 관리자·플롯(배치에서)
     for (const name of ['STYLE', 'DIMSTYLE', 'PAGESETUP', 'PLOT']) {
       void app.run(name);
@@ -327,7 +386,64 @@ async function screens(lang: string): Promise<{ steps: [string, string][]; fileT
       app.cancel(true);
       await settle();
     }
-    return { steps, fileTextShown };
+    // 329차 ⑥ 옵션 대화 상자(mgr-ui tabs — 다섯 쪽을 모두 그려 두고 고른 쪽만 보인다: 훑기·번역층은 숨은 쪽까지 본다)·도면층 상태 관리자
+    for (const name of ['OPTIONS', 'LAYERSTATE']) {
+      void app.run(name);
+      await vi.waitFor(() => expect(document.querySelector('[role="dialog"][aria-modal="true"]'), name).not.toBeNull(), { timeout: 5000 });
+      await settle();
+      look(`대화 상자(${name})`);
+      closeDialogs();
+      app.cancel(true);
+      await settle();
+    }
+    // ⑦ 치수 스타일 「수정…」 하위 대화 상자(dimstyle.ts editDialog — 7탭, 고른 탭의 칸만 그린다): 관리자 오른쪽 단추 줄(현재로 설정·새로 만들기·수정·재지정·비교 —
+    // 바닥 「닫기」 밖의 button.btn 다섯)의 셋째. 탭을 누르면 탭 줄을 다시 그리므로 매번 다시 찾는다
+    void app.run('DIMSTYLE');
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"][aria-modal="true"]'), 'DIMSTYLE').not.toBeNull(), { timeout: 5000 });
+    await settle();
+    const side = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button.btn')).filter((b) => !b.closest('footer'));
+    expect(side.length, '치수 스타일 관리자 단추 줄').toBe(5);
+    side[2]!.click();
+    const editTabs = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] [role="tablist"] [role="tab"]'));
+    await vi.waitFor(() => expect(editTabs().length, '치수 스타일 수정 탭').toBe(7), { timeout: 5000 });
+    await settle();
+    for (let i = 0; i < 7; i++) {
+      editTabs()[i]!.click();
+      await settle();
+      look('대화 상자(DIMSTYLE 수정)');
+    }
+    closeDialogs();
+    app.cancel(true);
+    await settle();
+    // ⑧ 문자 편집기(MTEXT — 두 구석을 진짜 명령행 입력 칸에 쳐서 연다: textedit/editor.ts의 상자·도구 모음)
+    const typeLine = async (s: string) => {
+      app.cmd.input.value = s;
+      app.cmd.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await settle();
+    };
+    void app.run('MTEXT');
+    await settle();
+    await typeLine('10,10');
+    await typeLine('90,40');
+    await vi.waitFor(() => expect(document.querySelector('.te-bar'), 'MTEXT 편집기').not.toBeNull(), { timeout: 5000 });
+    await settle();
+    look('문자 편집기(MTEXT)');
+    activeEditor()?.cancel();
+    app.cancel(true);
+    await settle();
+    // ⑨ 배치 마법사 「방향」 쪽(filecmds-layout.ts runWizard 넷째 쪽 — 바닥 「< 뒤로」·「다음 >」·「취소」의 둘째를 세 번): 라디오 이름표 글(한글 0 훑기 밖 — 뜻만 본다)
+    void app.run('LAYOUTWIZARD');
+    const wizard = () => Array.from(document.querySelectorAll<HTMLElement>('.dialog-back')).pop();
+    await vi.waitFor(() => expect(wizard()?.querySelectorAll('footer .btn').length, 'LAYOUTWIZARD').toBe(3), { timeout: 5000 });
+    for (let i = 0; i < 3; i++) {
+      wizard()!.querySelectorAll<HTMLButtonElement>('footer .btn')[1]!.click();
+      await settle();
+    }
+    const orient = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="wz-orient"]')).map((r) => r.parentElement!.textContent!.trim());
+    closeDialogs();
+    app.cancel(true);
+    await settle();
+    return { steps, fileTextShown, orient };
   } finally {
     app.cancel(true);
     app.cmd.watchers.clear();
@@ -370,18 +486,24 @@ describe('번역층의 첫 언어 알림 차례(327차, SKP 214차 꼴)', () => 
   });
 });
 
+type Screens = Awaited<ReturnType<typeof screens>>;
+let runs: Promise<Map<string, Screens>> | undefined;
+/** 한국어와 네 언어를 한 번만 그린다(아래 두 시험이 함께 쓴다 — 329차) */
+const allScreens = () =>
+  (runs ??= (async () => {
+    const m = new Map<string, Screens>();
+    for (const lang of ['ko', ...LANGS]) m.set(lang, await screens(lang));
+    return m;
+  })());
+
 describe('다섯 언어 주요 화면의 한글 0(327차)', () => {
   it(
-    '처음 화면·명령행·도면층/특성 창·정보 카드·상태 막대·도움말(F1)·배치 공간·바로 가기 메뉴·리본 펼친 메뉴·대화 상자(합성 DXF 둘) — 파일 글 칸 밖에 한글이 없다(아직 둔 것 빼고)',
+    '처음 화면·명령행·도면층/특성 창·정보 카드·상태 막대·도움말(F1)·배치 공간·바로 가기 메뉴·리본 펼친 메뉴·접힌 리본 패널·대화 상자·문자 편집기(합성 DXF 둘) — 파일 글 칸 밖에 한글이 없다(아직 둔 것 빼고)',
     async () => {
-      // 한국어 화면: 같은 훑기가 앱 글의 한글을 찾는다(시험이 눈멀지 않음)
-      const ko = await screens('ko');
-      expect(ko.steps.length).toBeGreaterThan(20);
-      expect(ko.fileTextShown).toBe(true);
-      for (const step of NEW_STEPS) expect(ko.steps.some(([s]) => s === step), step).toBe(true);
+      const all = await allScreens();
       const left = new Map<string, string[]>();
       for (const lang of LANGS) {
-        const r = await screens(lang);
+        const r = all.get(lang)!;
         // 도면 글(도면층 이름)·파일 이름은 번역층 밖이라 그대로 보인다
         expect(r.fileTextShown, lang).toBe(true);
         for (const [step, k] of r.steps) {
@@ -391,7 +513,22 @@ describe('다섯 언어 주요 화면의 한글 0(327차)', () => {
       }
       expect([...left].map(([k, langs]) => `${k} (${langs.join(', ')})`)).toEqual(PENDING);
       for (const p of PENDING) expect(p).toMatch(HANGUL);
+      // 한국어 화면: 같은 훑기가 앱 글의 한글을 찾는다(시험이 눈멀지 않음 — 새 걸음마다 새 앱 글이 보여야 그 화면을 그린 것)
+      const ko = all.get('ko')!;
+      expect(ko.steps.length).toBeGreaterThan(20);
+      expect(ko.fileTextShown).toBe(true);
+      for (const step of NEW_STEPS) expect(ko.steps.some(([s]) => s === step), step).toBe(true);
     },
-    120_000,
+    240_000,
+  );
+  it(
+    '배치 마법사 「방향」 쪽 라디오는 용지 방향 낱말이다(329차 — 홀로 쓴 「가로」·「세로」는 PLOTSTAMP 글 방향인 수평·수직 뜻)',
+    async () => {
+      const all = await allScreens();
+      expect(all.get('ko')!.orient).toEqual(['세로 방향', '가로 방향']);
+      // 같은 사전의 용지 방향 낱말: -PLOT 옵션 「세로(P)」·「가로(L)」의 번역에서 옵션 글자를 뗀 것(Portrait·縦·纵向·Hochformat 꼴)
+      for (const lang of LANGS) expect(all.get(lang)!.orient, lang).toEqual(['세로(P)', '가로(L)'].map((k) => translate(k, lang).replace(/\s*\([A-Z]\)$/, '')));
+    },
+    240_000,
   );
 });

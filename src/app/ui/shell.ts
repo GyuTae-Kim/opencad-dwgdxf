@@ -1347,7 +1347,8 @@ export class Shell implements UiHooks {
    */
   private foldedPanel(p: Panel): HTMLDivElement {
     const ic = p.large?.[0]?.icon ?? p.cols?.[0]?.[0]?.icon ?? 'menu';
-    const btn = h('button', { class: 'rbtn-lg folded', 'data-i18n-ui-copy': '', title: `${p.title} 패널 펼치기`, 'aria-haspopup': 'dialog', 'aria-expanded': 'false' }, iconSpan(ic), h('span', {}, `${p.title} ▾`));
+    // 제목과 「 ▾」는 다른 글 마디로(329차): 한 마디 「뷰·좌표 ▾」는 번역층이 틀 「뷰{0}」로 잡아 「View·좌표 ▾」처럼 한국어가 남았다
+    const btn = h('button', { class: 'rbtn-lg folded', 'data-i18n-ui-copy': '', title: `${p.title} 패널 펼치기`, 'aria-haspopup': 'dialog', 'aria-expanded': 'false' }, iconSpan(ic), h('span', {}, p.title, ' ▾'));
     btn.addEventListener('click', () => {
       if (this.foldedPop?.btn === btn) {
         this.closeFoldedPop(true);
