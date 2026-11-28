@@ -76,6 +76,9 @@ export function translateTail(text: string, whole: string, tr: (s: string) => st
   const rest = m[3] ? unmark(m[3]) : '';
   // 기록 줄(프롬프트 + 친 입력)은 프롬프트 통째 열쇠를 먼저 본다
   const tries = m[3] ? [tr(body + tail) + rest, tr(body) + unmark(tail) + rest] : [tr(body) + unmark(tail)];
+  // 338차: 코드가 낱말·옵션을 끼워 만든 물음(「(출력 ${인치|밀리미터}=도면 단위)」·「[…${'/현재 제외(X)'}]」·「${ft(이름)}이(가) …」)은 통째 열쇠가 없어
+  // 틀이 끼운 한국어가 남았다(물음 줄은 앞 조각 열쇠로 옮겨짐) — 물음 줄처럼 조각마다(앞 글 「… [」·옵션·「] <기본값>:」)도 견준다
+  if (OPTS.test(unmark(body))) tries.push(asPrompt(body + tail, tr, language) + rest);
   // 기본값이 옵션 이름이면 그 옵션의 번역으로(통째 번역의 문장을 먼저 — 118차)
   const opts = OPTS.exec(unmark(body))?.[1]?.split('/');
   const dw = opts ? defaultWord(tail, opts, tr) : null;
@@ -98,12 +101,14 @@ const PROMPT_PARTS = /^(.*?)\[(.*?)\](.*)$/;
 /**
  * 물음 줄처럼 조각마다 옮긴 물음(331차): 명령행 물음 줄은 앞 글 「… [」·옵션 하나씩·「]」 뒤 글을 다른 글 마디로 두어 마디마다 옮긴다. 기록 줄은 한 마디라
  * 통째 열쇠가 없으면 틀(「{0} 지정 또는 [양쪽(B)]:」·「정렬 입력 [{0}]:」 등)이 앞 낱말·옵션 목록을 옮기지 않고 끼웠다(틀이 잡은 값은 그대로).
- * 도면 글 표시가 든 물음은 나누지 않는다(표시가 조각 사이에 걸칠 수 있다) — 그대로 돌려줘 쓰이지 않게 한다.
+ * 도면 글 표시가 조각 사이에 걸치는 물음은 나누지 않는다 — 그대로 돌려줘 쓰이지 않게 한다(338차: 표시가 조각마다 닫혀 있으면 나눈다 — 물음 줄도 그 마디로 지킨다).
  * 334차: q는 쌍점까지 받고 「]」 뒤 마디(「]」 + 뒤 글 + 쌍점)를 물음 줄처럼 한 마디로 옮긴다(closeTail — 뒤 글이 있는 「] 입력:」 꼴도 두 줄이 같은 꼬리)
  */
 const asPrompt = (q: string, tr: (s: string) => string, language: string): string => {
-  const m = q.includes('⁨') ? null : PROMPT_PARTS.exec(q);
-  return m ? tr(`${m[1]}[`) + m[2]!.split('/').map(tr).join('/') + closeTail(`]${m[3]}`, tr, language) : q;
+  const m = PROMPT_PARTS.exec(q);
+  const opts = m ? m[2]!.split('/') : [];
+  if (!m || ![m[1]!, m[3]!, ...opts].every((p) => p.split('⁨').length === p.split('⁩').length)) return q;
+  return tr(`${m[1]}[`) + opts.map(tr).join('/') + closeTail(`]${m[3]}`, tr, language);
 };
 
 /**
