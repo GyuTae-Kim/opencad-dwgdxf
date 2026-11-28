@@ -70,7 +70,7 @@ const swapDefault = (s: string, d: { from: string; to: string }): string => {
 export function translateTail(text: string, whole: string, tr: (s: string) => string): string {
   const k = hangul(whole);
   const m = k ? TAIL.exec(text) : null;
-  if (!m) return whole;
+  if (!m) return k ? askedLine(text, whole, tr) : whole;
   const body = m[1]!;
   const tail = m[2]!;
   const rest = m[3] ? unmark(m[3]) : '';
@@ -83,6 +83,30 @@ export function translateTail(text: string, whole: string, tr: (s: string) => st
   let best = whole;
   for (const c of tries) if (hangul(c) < hangul(best)) best = c;
   return best;
+}
+
+/** 쌍점 + 빈칸(기록 줄의 물음과 친 입력 사이 — 330차) */
+const ASKED = /[:：](?=[ \t])/g;
+
+/**
+ * 기본값 없는 물음의 기록 줄(330차): 명령행은 「물음 + 빈칸 + 친 입력」을 한 글 마디로 적는다(app.ts promptOf). 물음이 「… [높이(H)/…/열(C)]:」·
+ * 「첫 번째 점 지정:」처럼 쌍점으로 끝나면 기본값 꼬리(TAIL)가 없어 기록 줄 틀(「…]: {0}」 — 329차 MTEXT 하나)이 있어야 옮겨졌다.
+ * 쌍점 + 빈칸 자리를 뒤에서부터 보며 앞이 물음 통째 열쇠(쌍점까지 — 없으면 쌍점 앞까지 + 원문 쌍점)로 한국어 없이 옮겨지는 첫 자리에서 나누고,
+ * 뒤(친 입력 — 좌표·수·옵션 글자·도면 글)는 친 그대로 붙여 한국어가 줄어들 때만 쓴다. 친 입력은 사전 낱말이어도 옮기지 않는다(명령행이 받은 글
+ * 그대로 — 옵션은 글자나 한국어 원문 이름으로만 받는다: dashcmds-ask.ts keywordLabelIs). 도면 글 표시(⁨…⁩) 안의 쌍점에서는 나누지 않는다
+ */
+function askedLine(text: string, whole: string, tr: (s: string) => string): string {
+  const cuts = [...text.matchAll(ASKED)].map((c) => (c.index ?? 0) + 1).reverse();
+  for (const i of cuts) {
+    const body = text.slice(0, i);
+    if (!hangul(body) || body.split('⁨').length !== body.split('⁩').length) continue;
+    for (const head of [tr(body), tr(body.slice(0, -1)) + body.slice(-1)]) {
+      if (hangul(head)) continue;
+      const out = head + unmark(text.slice(i));
+      return hangul(out) < hangul(whole) ? out : whole;
+    }
+  }
+  return whole;
 }
 
 /**
