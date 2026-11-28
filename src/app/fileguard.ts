@@ -98,12 +98,22 @@ const PROMPT_PARTS = /^(.*?)\[(.*?)\](.*)$/;
 /**
  * 물음 줄처럼 조각마다 옮긴 물음(331차): 명령행 물음 줄은 앞 글 「… [」·옵션 하나씩·「]」 뒤 글을 다른 글 마디로 두어 마디마다 옮긴다. 기록 줄은 한 마디라
  * 통째 열쇠가 없으면 틀(「{0} 지정 또는 [양쪽(B)]:」·「정렬 입력 [{0}]:」 등)이 앞 낱말·옵션 목록을 옮기지 않고 끼웠다(틀이 잡은 값은 그대로).
- * 도면 글 표시가 든 물음은 나누지 않는다(표시가 조각 사이에 걸칠 수 있다) — 그대로 돌려줘 쓰이지 않게 한다
+ * 도면 글 표시가 든 물음은 나누지 않는다(표시가 조각 사이에 걸칠 수 있다) — 그대로 돌려줘 쓰이지 않게 한다.
+ * 334차: q는 쌍점까지 받고 「]」 뒤 마디(「]」 + 뒤 글 + 쌍점)를 물음 줄처럼 한 마디로 옮긴다(closeTail — 뒤 글이 있는 「] 입력:」 꼴도 두 줄이 같은 꼬리)
  */
-const asPrompt = (q: string, tr: (s: string) => string): string => {
+const asPrompt = (q: string, tr: (s: string) => string, language: string): string => {
   const m = q.includes('⁨') ? null : PROMPT_PARTS.exec(q);
-  return m ? tr(`${m[1]}[`) + m[2]!.split('/').map(tr).join('/') + ']' + (m[3] ? tr(m[3]) : '') : q;
+  return m ? tr(`${m[1]}[`) + m[2]!.split('/').map(tr).join('/') + closeTail(`]${m[3]}`, tr, language) : q;
 };
+
+/**
+ * 물음 줄 끝 마디(334차): 뒤 글이 없는 「]:」은 한글이 없어 번역층이 거꾸로 찾기(sourceMessage — 등록된 사전의 값 → 열쇠)로 en 값이 「]:」인
+ * 열쇠 「] 입력:」을 되찾아 ja 「] を入力:」·de 「] ein:」·한국어 「] 입력:」(언어를 바꾼 뒤)로 보였다(zh 사전만이면 「]:」 — 기록 줄 「]：」와 갈림).
+ * 기본값 없는 「…[…]:」 물음 값의 끝 꼴 다수(jq, 334차 고치기 전 네 사전 207씩 — en 「]:」 207, ja 「]:」 198, zh 「]：」 159, de 「]:」 169)는 「]」 + 그 언어 쌍점이라
+ * ASK_COLON으로 정한다(한국어는 원문 그대로). 뒤 글이 있는 마디(「] 입력:」·「] <예>:」)는 사전 열쇠로
+ */
+const closeTail = (piece: string, tr: (s: string) => string, language: string): string =>
+  /^\][:：]$/.test(piece) ? (language === 'ko' ? piece : `]${ASK_COLON[language] ?? ':'}`) : tr(piece);
 
 /**
  * 기본값 없는 물음의 기록 줄(330차): 명령행은 「물음 + 빈칸 + 친 입력」을 한 글 마디로 적는다(app.ts promptOf). 물음이 「… [높이(H)/…/열(C)]:」·
@@ -111,16 +121,19 @@ const asPrompt = (q: string, tr: (s: string) => string): string => {
  * 쌍점 + 빈칸 자리를 뒤에서부터 보며 앞이 물음 통째 열쇠(쌍점까지 — 없으면 쌍점 앞까지 + 원문 쌍점)로 한국어 없이 옮겨지는 첫 자리에서 나누고,
  * 뒤(친 입력 — 좌표·수·옵션 글자·도면 글)는 친 그대로 붙여 한국어가 줄어들 때만 쓴다. 친 입력은 사전 낱말이어도 옮기지 않는다(명령행이 받은 글
  * 그대로 — 옵션은 글자나 한국어 원문 이름으로만 받는다: dashcmds-ask.ts keywordLabelIs). 도면 글 표시(⁨…⁩) 안의 쌍점에서는 나누지 않는다.
- * 331차: 쌍점 앞까지만 옮길 때 붙이는 쌍점은 화면 언어 사전의 물음 꼴(ASK_COLON), 두 통째 시도가 한국어를 남기면 물음 줄처럼 조각마다(asPrompt)
+ * 331차: 쌍점 앞까지만 옮길 때 붙이는 쌍점은 화면 언어 사전의 물음 꼴(ASK_COLON), 두 통째 시도가 한국어를 남기면 물음 줄처럼 조각마다(asPrompt).
+ * 334차: 친 입력이 없는 「…]:」 물음 통째(휴대폰 카드 물음 .mv-prompt·커서 옆 물음 — 한 마디)는 쌍점 + 빈칸 자리가 없어 나누지 못했다 —
+ * 끝 쌍점에서도(맨 나중에) 나눠 물음 줄과 같은 조각 번역으로
  */
 function askedLine(text: string, whole: string, tr: (s: string) => string, language: string): string {
   const cuts = [...text.matchAll(ASKED)].map((c) => (c.index ?? 0) + 1).reverse();
+  if (/\][:：]$/.test(text)) cuts.push(text.length);
   for (const i of cuts) {
     const body = text.slice(0, i);
     if (!hangul(body) || body.split('⁨').length !== body.split('⁩').length) continue;
     const q = body.slice(0, -1);
     const colon = ASK_COLON[language] ?? body.slice(-1);
-    for (const head of [tr(body), tr(q) + colon, asPrompt(q, tr) + colon]) {
+    for (const head of [tr(body), tr(q) + colon, asPrompt(body, tr, language)]) {
       if (hangul(head)) continue;
       const out = head + unmark(text.slice(i));
       return hangul(out) < hangul(whole) ? out : whole;
@@ -200,6 +213,8 @@ export function installFileGuard(src: NameSource): void {
     const up = t.toUpperCase();
     if (el.tagName === 'OPTION' && t && el.getAttribute('value')?.toUpperCase() === up && (el.textContent ?? '').trim().toUpperCase() === up) return text;
     const log = !!el.closest(LOG);
+    // 물음 줄 끝 마디 「]:」(334차 — closeTail): 그냥 넘기면 번역층이 거꾸로 찾기로 다른 열쇠(「] 입력:」)를 되찾는다. 그 언어 끝 꼴로 정해 돌려준다
+    if (log && t === ']:' && el.hasAttribute('data-kw')) return text.replace(t, closeTail(t, (s) => s, language));
     if (!log && !text.includes('⁨')) return undefined;
     const ui = !!el.closest('[data-i18n-ui-copy]');
     const r = guardedTranslate(text, language, log ? isName : undefined, ui);
