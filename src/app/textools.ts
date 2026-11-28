@@ -13,6 +13,7 @@ import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { form } from './ui/dom';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 import type { Pt } from './view';
 
 // ---------------------------------------------------------------------------
@@ -150,7 +151,7 @@ async function pickPoints(ctx: CommandContext): Promise<[Pt, Pt] | null> {
 async function runTextAlign(app: App, ctx: CommandContext): Promise<void> {
   const st = app.active!;
   const doc = st.doc;
-  ctx.print(`현재 설정: 간격 모드 = ${SPACING_LABEL[spacingMode]}`);
+  ctx.print(`현재 설정: 간격 모드 = ${uiText(SPACING_LABEL[spacingMode])}`);
   const kws: Keyword[] = [
     { key: 'O', label: '옵션' },
     { key: 'P', label: '점' },

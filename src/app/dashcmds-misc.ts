@@ -18,6 +18,7 @@ import { commitResults } from './modify';
 import { memOf, selectEditable } from './modify2-util';
 import { xrefOfDoc } from './refs';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 // ---------------------------------------------------------------------------
 // -OVERKILL
@@ -67,7 +68,7 @@ async function runDashOverkill(app: App, ctx: CommandContext): Promise<void> {
   let end = saved.end !== false;
   for (;;) {
     const names = IGNORE_KW.filter(([, p]) => p && ign.has(p)).map(([, , l]) => l);
-    ctx.print(`현재 설정: 공차=${tol}, 무시=${names.length ? names.join(',') : '없음'}, 폴리선 최적화=${yn(opt)}, 부분 겹침 결합=${yn(overlap)}, 끝과 끝 결합=${yn(end)}`);
+    ctx.print(`현재 설정: 공차=${tol}, 무시=${names.length ? names.join(',') : uiText('없음')}, 폴리선 최적화=${uiText(yn(opt))}, 부분 겹침 결합=${uiText(yn(overlap))}, 끝과 끝 결합=${uiText(yn(end))}`);
     const k = await askOption(
       ctx,
       '변경할 옵션 입력 [무시(I)/공차(O)/폴리선 최적화(P)/부분 겹침 결합(T)/끝과 끝 결합(E)] <완료>:',
@@ -182,7 +183,7 @@ async function runDashXref(app: App, ctx: CommandContext): Promise<void> {
       ).names.map(tableKey),
     );
     ctx.print('참조 이름               경로');
-    for (const b of all) if (names.has(tableKey(b.name))) ctx.print(`${ft(b.name.padEnd(24))}${ft(b.xrefPath ?? '')}${b.flags & 8 ? '  (중첩)' : ''}`);
+    for (const b of all) if (names.has(tableKey(b.name))) ctx.print(`${ft(b.name.padEnd(24))}${ft(b.xrefPath ?? '')}${b.flags & 8 ? `  ${uiText('(중첩)')}` : ''}`);
     ctx.print(`총 외부 참조: ${all.length}개`);
     return;
   }
@@ -314,7 +315,7 @@ async function runDashImage(app: App, ctx: CommandContext): Promise<void> {
   if (k === '?') {
     const hit = pick((await askWord(ctx, '나열할 이미지 입력 <*>:')) ?? '*');
     ctx.print('이미지 이름             로드됨   경로');
-    for (const x of hit) ctx.print(`${ft(x.name.padEnd(24))}${(x.def.loaded ? '예' : '아니오').padEnd(9)}${ft(x.def.fileName)}`);
+    for (const x of hit) ctx.print(`${ft(x.name.padEnd(24))}${uiText(x.def.loaded ? '예' : '아니오').padEnd(9)}${ft(x.def.fileName)}`);
     ctx.print(`총 이미지 정의: ${all.length}개`);
     return;
   }

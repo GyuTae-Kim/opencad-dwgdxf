@@ -28,6 +28,7 @@ import { dialog, form, h } from './ui/dom';
 import { askString, whenClosed } from './express-util';
 import type { Pt } from './view';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 // ---------------------------------------------------------------------------
 // BREAKLINE
@@ -124,7 +125,7 @@ async function runExoffset(app: App, ctx: CommandContext): Promise<void> {
   let fuzz = typeof m.exoFuzz === 'number' ? m.exoFuzz : 0;
   const L = (v: number) => formatLength(v, st.units);
   for (;;) {
-    ctx.print(`현재 설정: 거리 = ${through ? '통과점' : L(distance)}, 도면층 = ${layerCurrent ? '현재' : '원본'}, 간격 유형 = ${GAP_LABEL[gap]}, 결합 = ${join ? '예' : '아니오'}, 원본 지우기 = ${erase ? '예' : '아니오'}, 틈 허용 = ${L(fuzz)}`);
+    ctx.print(`현재 설정: 거리 = ${through ? uiText('통과점') : L(distance)}, 도면층 = ${uiText(layerCurrent ? '현재' : '원본')}, 간격 유형 = ${uiText(GAP_LABEL[gap])}, 결합 = ${uiText(join ? '예' : '아니오')}, 원본 지우기 = ${uiText(erase ? '예' : '아니오')}, 틈 허용 = ${L(fuzz)}`);
     const r = await ctx.getPoint(`간격띄우기 거리 지정 또는 [통과점(T)/지우기(E)/도면층(L)/간격 유형(G)/결합(J)/틈 허용(F)] <${through ? '통과점' : L(distance)}>:`, {
       preferNumber: true,
       keywords: [
@@ -398,7 +399,7 @@ async function runCdorder(app: App, ctx: CommandContext): Promise<void> {
   }
   if (ops.length) st.session.commit({ label: 'CDORDER', ops, group: ctx.group, rebuildNow: true });
   app.clearSelection();
-  ctx.print(moved ? `객체 ${moved}개를 색상 순서(${v.order.map(colorKeyLabel).join(' > ')})로 ${v.place === 'F' ? '맨 앞에' : '맨 뒤에'} 놓았습니다.` : '바꿀 것이 없습니다.');
+  ctx.print(moved ? `객체 ${moved}개를 색상 순서(${v.order.map(colorKeyLabel).join(' > ')})로 ${uiText(v.place === 'F' ? '맨 앞에' : '맨 뒤에')} 놓았습니다.` : '바꿀 것이 없습니다.');
 }
 
 // ---------------------------------------------------------------------------
@@ -604,7 +605,7 @@ async function runRedir(app: App, ctx: CommandContext): Promise<void> {
   const doc = st.doc;
   let oldDir = '';
   for (;;) {
-    ctx.print(`현재 REDIRMODE: ${redirModeText(redirMode)}`);
+    ctx.print(`현재 REDIRMODE: ${redirModeText(redirMode, uiText)}`);
     ctx.print('폴더 이름 찾아 바꾸기');
     const o = await askString(ctx, "옛 폴더 입력(모두는 '*') 또는 ?(옵션):");
     if (typeof o !== 'string') continue;
@@ -623,12 +624,12 @@ async function runRedir(app: App, ctx: CommandContext): Promise<void> {
         if (k === 'L') {
           const list = redirList(doc, redirMode);
           if (!list.length) ctx.print('바꿀 수 있는 경로가 없습니다.');
-          for (const x of list) ctx.print(`  ${x.kind === 'xref' ? '외부 참조' : x.kind === 'image' ? '이미지' : '스타일'} ${ft(x.name)}: ${ft(x.before)}`);
+          for (const x of list) ctx.print(`  ${uiText(x.kind === 'xref' ? '외부 참조' : x.kind === 'image' ? '이미지' : '스타일')} ${ft(x.name)}: ${ft(x.before)}`);
           continue;
         }
         const key = ({ S: 'styles', X: 'xrefs', I: 'images', R: 'rtext' } as const)[k as 'S' | 'X' | 'I' | 'R'];
         redirMode = { ...redirMode, [key]: !redirMode[key] };
-        ctx.print(`현재 REDIRMODE: ${redirModeText(redirMode)}`);
+        ctx.print(`현재 REDIRMODE: ${redirModeText(redirMode, uiText)}`);
       }
       continue;
     }
@@ -644,7 +645,7 @@ async function runRedir(app: App, ctx: CommandContext): Promise<void> {
     return;
   }
   st.session.commit({ label: 'REDIR', ops, group: ctx.group });
-  for (const c of changes) ctx.print(`  ${c.kind === 'xref' ? '외부 참조' : c.kind === 'image' ? '이미지' : '스타일'} ${ft(c.name)}: ${ft(c.before)} → ${ft(c.after)}`);
+  for (const c of changes) ctx.print(`  ${uiText(c.kind === 'xref' ? '외부 참조' : c.kind === 'image' ? '이미지' : '스타일')} ${ft(c.name)}: ${ft(c.before)} → ${ft(c.after)}`);
   const cnt = (k: string) => changes.filter((c) => c.kind === k).length;
   ctx.print(`외부 참조 ${cnt('xref')}개, 이미지 ${cnt('image')}개, 스타일 글꼴 ${cnt('style')}개의 경로를 바꿨습니다. 브라우저는 파일을 이름으로 다시 연결하므로 화면은 그대로입니다.`);
 }

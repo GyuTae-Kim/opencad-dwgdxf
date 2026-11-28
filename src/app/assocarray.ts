@@ -24,6 +24,7 @@ import { currentProps } from './draw';
 import { applyArrayState, arrayAssociativity, arrayOf, arrayPreview, arrayToWorld, askNumber, askYesNo, buildEnv, degText, itemAt, setArrayAssociativity } from './assocarray-core';
 import type { Pt } from './view';
 import { installArrayGrips } from './assocarray-grips';
+import { uiText } from './i18n-text';
 
 export { arrayAssociativity, setArrayAssociativity } from './assocarray-core';
 
@@ -190,7 +191,7 @@ export function createAssocArray(app: App, ctx: CommandContext, req: AssocReques
   st.selection.clear();
   st.session.commit({ label, ops: r.ops, group: ctx.group, rebuildNow: true });
   app.refreshSelectionOverlay();
-  if (!opt.quiet) ctx.print(`항목 ${r.items.toLocaleString()}개의 연관 배열(${KIND_LABEL[req.kind]})을 만들었습니다.`);
+  if (!opt.quiet) ctx.print(`항목 ${r.items.toLocaleString()}개의 연관 배열(${uiText(KIND_LABEL[req.kind])})을 만들었습니다.`);
   return r.insert.handle;
 }
 
@@ -218,11 +219,12 @@ export function arrayEditState(app: App): boolean {
   return !!(app.active && editing.has(app.active));
 }
 
+/** 배열 항목 이름표(명령행 결과 줄 — 339차: 화면 언어로. 틀 「열 {0}, 행 {1}{2}」은 {2} 자리를 옮기지 않아 레벨 조각은 따로 옮겨 붙인다) */
 function itemLabel(kind: ArrayKind, key: string): string {
   const k = parseKey(key);
   if (!k) return key;
-  const lv = k.level ? `, 레벨 ${k.level + 1}` : '';
-  return kind === 'rect' ? `열 ${k.index + 1}, 행 ${k.row + 1}${lv}` : `항목 ${k.index + 1}, 행 ${k.row + 1}${lv}`;
+  const lv = k.level ? uiText(`, 레벨 ${k.level + 1}`) : '';
+  return (kind === 'rect' ? uiText(`열 ${k.index + 1}, 행 ${k.row + 1}`) : uiText(`항목 ${k.index + 1}, 행 ${k.row + 1}`)) + lv;
 }
 
 /** 지우기 작업(블록마다 뒤에서부터) */
@@ -764,7 +766,8 @@ export function registerAssocArrayCommands(app: App): void {
         if (!noted) {
           noted = true;
           const p = info.state.params;
-          ctx.print(`유형 = ${KIND_LABEL[p.kind]}  연관 = 예`);
+          // 339차: 「연관 = 예」를 그대로 쓰면 더 긴 틀 「유형 = 직사각형  연관 = {0}」이 먼저 잡아 「예」가 한국어로 남았다 — 낱말을 화면 언어로
+          ctx.print(`유형 = ${KIND_LABEL[p.kind]}  연관 = ${uiText('예')}`);
           if (info.origin === 'infer') ctx.print('이 배열은 AutoCAD 연관 배열인데 연관 객체를 풀지 못했습니다. 매개변수는 항목 배치에서 짐작했고, 고치면 이 앱 기록으로 저장합니다(AutoCAD 배열 기록은 고쳐 쓰지 못합니다).');
           if (info.stale) {
             ctx.print('경로 곡선이 바뀌어 배열을 새 경로로 다시 계산합니다.');

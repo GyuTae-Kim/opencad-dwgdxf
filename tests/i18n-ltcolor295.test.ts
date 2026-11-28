@@ -125,7 +125,8 @@ describe('선종류·선가중치·색·그리기 순서 묶음의 번역과 294
     for (const [f, s] of [
       ['app/dashcmds-tables.ts', "ctx.print(`선종류 \"${ft(name)}\"이(가) ${before ? '다시 로드되었습니다' : '로드되었습니다'}.`);"],
       ['app/express-draw.ts', "ctx.print(`선종류 \"${ft(rec.name)}\"을(를) ${existing ? '다시 정의했습니다' : '만들었습니다'}: ${r.pattern}`);"],
-      ['app/dashcmds-tables.ts', "ctx.print(`  ${d.name.padEnd(18)}${doc.linetypes.has(tableKey(d.name)) ? '(로드됨) ' : ''}${d.description}`);"],
+      // 339차: 「(로드됨)」은 명령행에서 틀 {n} 자리라 uiText로 끼운다(front337 339차 절)
+      ['app/dashcmds-tables.ts', "ctx.print(`  ${d.name.padEnd(18)}${doc.linetypes.has(tableKey(d.name)) ? `${uiText('(로드됨)')} ` : ''}${d.description}`);"],
       ['app/util2-misc.ts', "const ACI_NAMES: Record<number, string> = { 1: '빨간색', 2: '노란색', 3: '초록색', 4: '하늘색', 5: '파란색', 6: '선홍색', 7: '흰색' };"],
       ['app/util2-misc.ts', "return `${aci}${ACI_NAMES[aci] ? ` (${ACI_NAMES[aci]})` : ''}`;"],
       ['app/util2-misc.ts', "out(`${padWide('현재 색상:', 16)} ${colorName(typeof cecolor === 'number' ? cecolor : 256)}${(typeof cecolor !== 'number' || cecolor === 256) && cl ? ` -- ${colorName(cl.color)}` : ''}`);"],

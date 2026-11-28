@@ -99,7 +99,8 @@ describe('블록·속성·외부 참조 묶음의 번역(292차)', () => {
     for (const [f, s] of [
       ['blkcmds-xref.ts', "ctx.print(`외부 참조 \"${ft(r.insert.block)}\"을(를) ${overlay ? '중첩' : '부착'}했습니다(${ft(file.name)}).`);"],
       ['blkcmds-xref.ts', 'ctx.print(`${SYM_LABEL[b.kind]} ${ft(b.from)} → ${ft(b.to)}`);'],
-      ['blkcmds-xref.ts', "ctx.print(`${SYM_LABEL[f.kind]} ${ft(f.name)}은(는) 결합할 수 없습니다${f.kind === 'block' && !x.xdoc ? '(참조 파일이 연결되지 않음)' : ''}.`, 'err');"],
+      // 339차: 종류 이름표·덧붙인 까닭은 명령행에서 틀 {n} 자리라 옮겨지지 않아 uiText로 끼운다(front337 339차 절)
+      ['blkcmds-xref.ts', "ctx.print(`${uiText(SYM_LABEL[f.kind])} ${ft(f.name)}은(는) 결합할 수 없습니다${f.kind === 'block' && !x.xdoc ? uiText('(참조 파일이 연결되지 않음)') : ''}.`, 'err');"],
       ['blkcmds-xref.ts', 'ctx.print(`종속 ${SYM_LABEL[kind]} "${ft(u)}"을(를) 찾을 수 없습니다.`, \'err\');'],
       ['blkcmds-xref.ts', "ctx.print(`기본 이미지 크기: 폭: ${fmt4(scale)}, 높이: ${fmt4((scale * hgt) / w)}${defaultWidth === 1 ? ', 단위 없음' : ''}`);"],
       ['blkcmds-xref.ts', "note: `축척 1 = 실제 용지 크기(도면 단위 INSUNITS ${insunits || '없음'}${insunits ? '' : ' — 1인치 = 1 단위'}). 삽입점은 화면에서 지정합니다.`,"],

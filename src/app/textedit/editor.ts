@@ -1536,7 +1536,7 @@ export class TextEditor {
         i.addEventListener('change', () => {
           const v = Number(i.value.trim());
           if (!Number.isFinite(v) || v < lo || v > hi2) {
-            this.app?.cmd.print(`${title}: ${lo}에서 ${hi2} 사이의 값을 입력하십시오.`, 'err');
+            this.app?.cmd.print(`${uiText(title)}: ${lo}에서 ${hi2} 사이의 값을 입력하십시오.`, 'err');
             return;
           }
           this.applyFmt((f) => set(f, v));

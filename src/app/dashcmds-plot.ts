@@ -21,6 +21,7 @@ import { plotViewRect } from './pagesetup-ui';
 import { fileNameMode } from './script';
 import { ask, form } from './ui/dom';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 export const PLOT_DEVICES = ['DWG To PDF.pc3', 'AutoCAD PDF (General Documentation).pc3', 'AutoCAD PDF (High Quality Print).pc3', 'AutoCAD PDF (Smallest File).pc3', 'AutoCAD PDF (Web and Mobile).pc3', 'SVG', '없음'];
 
@@ -483,7 +484,7 @@ async function runDashPsetupin(app: App, ctx: CommandContext): Promise<void> {
     const spec = await askWord(ctx, '가져올 사용자 정의 페이지 설정 입력 또는 [?]:');
     if (spec === null) return;
     if (spec === '?') {
-      for (const it of items) ctx.print(`  ${ft(it.name.padEnd(24))}${it.model ? '모형' : '배치'}`);
+      for (const it of items) ctx.print(`  ${ft(it.name.padEnd(24))}${uiText(it.model ? '모형' : '배치')}`);
       continue;
     }
     const m = matchNameList(

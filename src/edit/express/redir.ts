@@ -17,13 +17,14 @@ export interface RedirMode {
 
 export const REDIR_DEFAULT: RedirMode = { styles: true, xrefs: true, images: true, rtext: true };
 
-export function redirModeText(m: RedirMode): string {
+/** REDIRMODE 글(낱말을 빈칸으로 이음). tr은 낱말마다 화면 언어로 옮기는 함수(339차 — 이은 글은 사전 열쇠가 아니라 낱말마다 옮긴다) */
+export function redirModeText(m: RedirMode, tr: (s: string) => string = (s) => s): string {
   const p: string[] = [];
-  if (m.styles) p.push('스타일');
-  if (m.xrefs) p.push('외부 참조');
-  if (m.images) p.push('이미지');
+  if (m.styles) p.push(tr('스타일'));
+  if (m.xrefs) p.push(tr('외부 참조'));
+  if (m.images) p.push(tr('이미지'));
   if (m.rtext) p.push('RTEXT');
-  return p.join(' ') || '(없음)';
+  return p.join(' ') || tr('(없음)');
 }
 
 const sep = (s: string) => (s.includes('\\') && !s.includes('/') ? '\\' : '/');

@@ -22,6 +22,7 @@ import { askAngleDeg, askLine, askOption, askReal, askWord, askYN, fmt4, matchKe
 import { attReq } from './sysvars';
 import type { Pt } from './view';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 /** 문서별 직전 블록 이름 */
 const lastBlock = new WeakMap<object, string>();
@@ -113,7 +114,7 @@ export function registerDashInsertCommands(app: App): void {
       const rec = doc.blockRecords.get(tableKey(def.name));
       const bu = rec?.insertUnits ?? 0;
       const f = insertUnitFactor(bu, Number(doc.header.get('$INSUNITS') ?? 0));
-      ctx.print(`단위: ${UNIT_NAMES[bu] ?? '단위 없음'}   변환:   ${fmt4(f)}`);
+      ctx.print(`단위: ${uiText(UNIT_NAMES[bu] ?? '단위 없음')}   변환:   ${fmt4(f)}`);
       // 삽입점 전에 정할 수 있는 축척·회전·기준점
       const pre: { sx?: number; sy?: number; sz?: number; rot?: number } = {};
       let base: Vec3 = { ...def.basePoint };

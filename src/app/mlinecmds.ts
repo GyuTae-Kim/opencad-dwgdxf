@@ -15,6 +15,7 @@ import { type MLineStyleEntry, MAX_ELEMENTS, ML_END_INNER, ML_END_LINE, ML_END_O
 import { addMLineStyleOps, deleteMLineStyleOps, updateMLineStyleOps } from '../edit/mline/ops';
 import { addVertex, cornerJoint, crossJoint, cutAll, cutSingle, deleteVertex, mlineGeometry, nearestElement, nearestSegment, teeJoint, weldAll } from '../edit/mline/geom';
 import { mlineDrawing } from '../edit/mline/draw';
+import { uiText } from './i18n-text';
 
 const JUST_LABEL = ['맨 위', '0', '맨 아래'];
 
@@ -469,7 +470,7 @@ export function registerMLineCommands(app: App): void {
       let just = Math.min(2, Math.max(0, Math.round(headerNum(doc, '$CMLJUST', 0))));
       let scale = headerNum(doc, '$CMLSCALE', metric ? 20 : 1);
       let style = currentMLineStyle(doc);
-      const status = () => ctx.print(`현재 설정: 자리맞추기 = ${JUST_LABEL[just]}, 축척 = ${fmtNum(scale)}, 스타일 = ${ft((style?.name ?? 'STANDARD').toUpperCase())}`);
+      const status = () => ctx.print(`현재 설정: 자리맞추기 = ${uiText(JUST_LABEL[just])}, 축척 = ${fmtNum(scale)}, 스타일 = ${ft((style?.name ?? 'STANDARD').toUpperCase())}`);
       status();
       const pts: Pt[] = [];
       let handle: string | null = null;

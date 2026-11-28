@@ -90,7 +90,7 @@ async function runTcase(app: App, ctx: CommandContext, dialogMode: boolean): Pro
   const changed = list.map((e) => caseEntity(e, caseMode)).filter((e): e is Entity => !!e);
   const n = commitReplace(app, ctx, changed, 'TCASE');
   app.clearSelection();
-  ctx.print(n ? `객체 ${n}개를 ${CASE_LABEL[caseMode]}(으)로 바꿨습니다.` : '바뀐 문자가 없습니다.');
+  ctx.print(n ? `객체 ${n}개를 ${uiText(CASE_LABEL[caseMode])}(으)로 바꿨습니다.` : '바뀐 문자가 없습니다.');
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ async function runTorient(app: App, ctx: CommandContext): Promise<void> {
   const changed = list.map((e) => orientEntity(e, target, doc)).filter((e): e is Entity => !!e);
   const n = commitReplace(app, ctx, changed, 'TORIENT');
   app.clearSelection();
-  ctx.print(n ? `객체 ${n}개의 방향을 ${target === 'readable' ? '가장 읽기 쉽게' : `${degText(target)}°로`} 바꿨습니다.` : '바뀐 객체가 없습니다(이미 그 방향입니다).');
+  ctx.print(n ? `객체 ${n}개의 방향을 ${uiText(target === 'readable' ? '가장 읽기 쉽게' : `${degText(target)}°로`)} 바꿨습니다.` : '바뀐 객체가 없습니다(이미 그 방향입니다).');
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +282,7 @@ async function runTextmask(app: App, ctx: CommandContext): Promise<void> {
   let hs: string[] = [];
   let first = true;
   for (;;) {
-    ctx.print(`현재 설정: 간격띄우기 비율 = ${numText(maskOffset)}, 가리기 유형 = ${MASK_LABEL[maskType]}${maskType === 'solid' ? ` (색상 ${maskColor.aci})` : ''}`);
+    ctx.print(`현재 설정: 간격띄우기 비율 = ${numText(maskOffset)}, 가리기 유형 = ${uiText(MASK_LABEL[maskType])}${maskType === 'solid' ? ` ${uiText(`(색상 ${maskColor.aci})`)}` : ''}`);
     try {
       hs = await ctx.getSelection('가릴 문자 객체 선택 또는 [가리기 유형(M)/간격띄우기(O)]:', {
         keywords: [
@@ -423,7 +423,7 @@ async function runTcircle(app: App, ctx: CommandContext): Promise<void> {
   }
   const a = commitResults(app, ctx, [{ add }], 'TCIRCLE', { quiet: true });
   app.clearSelection();
-  ctx.print(`${SHAPE_LABEL[encShape]} ${a.added.length}개를 만들었습니다.`);
+  ctx.print(`${uiText(SHAPE_LABEL[encShape])} ${a.added.length}개를 만들었습니다.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -464,7 +464,7 @@ async function runTxtexp(app: App, ctx: CommandContext): Promise<void> {
   }
   const a = commitResults(app, ctx, [{ remove, add }], 'TXTEXP', { quiet: true });
   app.clearSelection();
-  ctx.print(`문자 객체 ${list.length}개를 분해했습니다(폴리선·선 ${a.added.length}개).${skipped ? ` 문자가 아니거나 잠긴 객체 ${skipped}개는 건너뛰었습니다.` : ''}`);
+  ctx.print(`문자 객체 ${list.length}개를 분해했습니다(폴리선·선 ${a.added.length}개).${skipped ? ` ${uiText(`문자가 아니거나 잠긴 객체 ${skipped}개는 건너뛰었습니다.`)}` : ''}`);
 }
 
 // ---------------------------------------------------------------------------

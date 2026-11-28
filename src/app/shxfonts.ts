@@ -10,6 +10,7 @@ import type { DocState } from './docstate';
 import { clearFonts, loadFonts, saveFonts } from './fontstore';
 import { dialog, h, toast } from './ui/dom';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 /** 도면의 문자 스타일이 쓰는 SHX 글꼴 이름(소문자, .shx 붙임) */
 export function usedShxFonts(doc: CadDocument): string[] {
@@ -84,7 +85,7 @@ export async function readShx(files: File[]): Promise<{ name: string; data: Uint
 export function noteMissingShx(app: App, st: DocState): void {
   const miss = missingShxFonts(app, st.doc);
   if (!miss.length) return;
-  const list = miss.slice(0, 4).join(', ') + (miss.length > 4 ? ` 외 ${miss.length - 4}개` : '');
+  const list = miss.slice(0, 4).join(', ') + (miss.length > 4 ? ` ${uiText(`외 ${miss.length - 4}개`)}` : '');
   app.cmd.print(`참고: SHX 글꼴 ${list}이(가) 없어 비슷한 단선 글꼴로 그렸습니다. SHXFONTS로 이 컴퓨터의 SHX 글꼴을 불러올 수 있습니다.`);
 }
 

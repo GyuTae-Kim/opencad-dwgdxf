@@ -23,6 +23,7 @@ import { h } from './ui/dom';
 import { areaIn, checkIn, fail, group, numIn, numOf, pickList, resultDialog, row, selectIn, tabs, textIn } from './mgr-ui';
 import type { Pt } from './view';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 type MakeAttribs = (def: BlockDef, ins: Vec3, scale: Vec3, rot: number, values: Map<string, string>, handle: string) => AttribEntity[];
 
@@ -245,7 +246,7 @@ export async function runInsert(app: App, ctx: CommandContext, arg: string | und
   }
   const rec = st.doc.blockRecords.get(tableKey(def.name));
   const f = insertUnitFactor(rec?.insertUnits ?? 0, Number(st.doc.header.get('$INSUNITS') ?? 0) || 0);
-  if (f !== 1) ctx.print(`단위: ${INSUNITS_NAMES[rec?.insertUnits ?? 0]?.name ?? '단위 없음'}   변환:   ${fmt4(f)}`);
+  if (f !== 1) ctx.print(`단위: ${uiText(INSUNITS_NAMES[rec?.insertUnits ?? 0]?.name ?? '단위 없음')}   변환:   ${fmt4(f)}`);
   for (;;) {
     let scale: Vec3 = { x: v.scale.x * f, y: v.scale.y * f, z: v.scale.z * f };
     let rot = v.rotDeg * D2R;

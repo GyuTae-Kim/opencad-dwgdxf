@@ -100,7 +100,8 @@ describe('소거·블록 대치·객체 격리 묶음의 번역(291차)', () => 
     const tr = (l: string) => (x: string) => guardedTranslate(x, l) ?? translate(x, l);
     const show = (s: string, l: string) => translateTail(s, tr(l)(s), tr(l));
     for (const s of [
-      'ctx.print(`블록 ${ft(from)}의 참조 ${r.count}개를 ${ft(to)}(으)로 대치했습니다.${r.skipped ? ` ${r.skipped}개는 자기 참조가 되어 건너뛰었습니다.` : \'\'}${purged ? ` 블록 ${ft(from)}을(를) 소거했습니다.` : \'\'}`);',
+      // 339차: 덧붙인 두 문장은 명령행에서 틀 {n} 자리라 uiText로 끼운다(front337 339차 절)
+      'ctx.print(`블록 ${ft(from)}의 참조 ${r.count}개를 ${ft(to)}(으)로 대치했습니다.${r.skipped ? ` ${uiText(`${r.skipped}개는 자기 참조가 되어 건너뛰었습니다.`)}` : \'\'}${purged ? ` ${uiText(`블록 ${ft(from)}을(를) 소거했습니다.`)}` : \'\'}`);',
     ])
       expect(src('util2-blocks.ts')).toContain(s);
     expect(src('blkcmds-xref.ts')).toContain(

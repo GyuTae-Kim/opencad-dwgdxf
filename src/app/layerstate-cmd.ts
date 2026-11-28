@@ -54,6 +54,7 @@ import {
 } from './layerstate-core';
 import { askYesNo, padWide } from './util2-ui';
 import { ft, unmark } from './filetext';
+import { uiText } from './i18n-text';
 
 export const STATE_OPTIONS: Keyword[] = [
   { key: '?', label: '?' },
@@ -161,7 +162,7 @@ async function chooseMask(ctx: CommandContext, start: number): Promise<number | 
   const kw: Keyword[] = PROP_KEYS.map((p) => ({ key: p.key, label: p.label }));
   const prompt = `켜거나 끌 복원 특성 입력 [${PROP_KEYS.map((p) => `${p.label}(${p.key})`).join('/')}] <종료>:`;
   for (;;) {
-    ctx.print(`복원할 특성: ${maskText(mask)}`);
+    ctx.print(`복원할 특성: ${maskText(mask, uiText)}`);
     const r = await ctx.getPoint(prompt, { keywords: kw, allowText: true });
     if ('enter' in r) return mask;
     const k = 'keyword' in r ? r.keyword : 'text' in r ? PROP_KEYS.find((p) => p.key === r.text.trim().toUpperCase() || p.label === r.text.trim())?.key : undefined;

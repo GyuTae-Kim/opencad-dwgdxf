@@ -27,6 +27,7 @@ import { checkbox, modal, select, textInput } from './util2-ui';
 import { outputName, pickOneFile, readTextFile, registerOnce, saveText } from './blkcmds-io';
 import { attachImageFile } from './blkcmds-xref';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 // ---------------------------------------------------------------------------
 // UNDEFINE·REDEFINE
@@ -99,7 +100,7 @@ function registerRedefine(app: App): void {
       }
       und.set(n, builtin);
       if (!lispOwned) app.commands.delete(n);
-      ctx.print(`${n} 명령의 정의를 해제했습니다. 원래 명령은 .${n}(으)로 부르고, REDEFINE으로 되돌립니다.${lispOwned ? ` AutoLISP 명령 C:${n}이(가) 계속 실행됩니다.` : ' (defun c:…)로 같은 이름의 명령을 만들 수 있습니다.'}`);
+      ctx.print(`${n} 명령의 정의를 해제했습니다. 원래 명령은 .${n}(으)로 부르고, REDEFINE으로 되돌립니다. ${uiText(lispOwned ? `AutoLISP 명령 C:${n}이(가) 계속 실행됩니다.` : '(defun c:…)로 같은 이름의 명령을 만들 수 있습니다.')}`);
     },
   });
   registerOnce(app, {

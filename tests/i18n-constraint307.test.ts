@@ -93,7 +93,8 @@ describe('파라메트릭 구속 묶음의 번역과 306차가 남긴 것(307차
       "return `${r.name || '(빈 이름)'}: ${why}`;",
       'return `${r.name}: ${e instanceof Error ? e.message : String(e)}`;',
       'err.textContent = `${ft(r.name)}: ${e}`;',
-      'app.cmd.print(`참고: ${msg}`)',
+      // 339차: 안내 문장은 명령행에서 틀 「참고: {0}」의 {0} 자리라 uiText로 끼운다(front337 339차 절)
+      'app.cmd.print(`참고: ${uiText(msg)}`)',
       ...GC.map(([n, k]) => `{ key: '${k}', label: '${n}',`),
     ])
       expect(c, s).toContain(s);

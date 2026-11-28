@@ -304,7 +304,8 @@ function leaves(expr: string): string[] {
   return c < 0 ? [e] : [...leaves(rest.slice(0, c)), ...leaves(rest.slice(c + 1))];
 }
 
-type Pos = 'front' | 'opts' | 'tail';
+/** 끼우는 자리: 물음의 앞 조각·옵션 목록·꼬리(338차), 결과·알림 줄(339차 — 물음이 아닌 줄) */
+type Pos = 'front' | 'opts' | 'tail' | 'line';
 /** 도면 글 자리(ft — 라틴 이름이라 한글 셈에 들지 않는다) */
 const DRAWING = '⁨A-1⁩';
 interface Fill {
@@ -365,10 +366,12 @@ function leafValues(leaf: string, file: string, at: number, pos: Pos, depth: num
   const lit = /^(['"])((?:\\.|(?!\1)[^\\])*)\1$/.exec(e);
   if (lit) return [unescapeJs(lit[2]!)];
   if (e.startsWith('`') && e.endsWith('`')) return fill(e.slice(1, -1), file, at, pos, depth + 1);
-  if (/\bft\(|\.map\(ft\)/.test(e)) return [DRAWING];
   // 앱 낱말을 화면 언어로 옮겨 끼우는 자리(uiText — 언어마다 그 번역으로 바꿔 본다: inLang)
   const ui = /^uiText\((.+)\)$/.exec(e);
-  if (ui) return values(ui[1]!, file, at, pos, depth).map((v) => `\u0001${v}\u0002`);
+  // 괄호가 식 끝까지 한 짝일 때만(339차 — 「uiText(…).padEnd(9)」는 결과 줄 규칙이 안의 식을 본다).
+  // 도면 글(ft)보다 먼저 본다(339차 — 「uiText(`블록 "${ft(…)}"`)」을 통째 도면 글로 셈하면 끼운 앱 낱말을 보지 못한다)
+  if (ui && balanced(ui[1]!)) return values(ui[1]!, file, at, pos, depth).map((v) => `\u0001${v}\u0002`);
+  if (/\bft\(|\.map\(ft\)/.test(e)) return [DRAWING];
   const m = FILL[`${file}|${e}`];
   if (m) return m.values;
   // 모듈 상수 표 찾기(GAP_LABEL[gap]·ISO_PLANE_NAMES[s.pair] — 그 파일이나 가져온 파일의 객체 값·배열 항목)
@@ -380,12 +383,14 @@ function leafValues(leaf: string, file: string, at: number, pos: Pos, depth: num
     for (let k = at; k >= 0; k--) {
       // 그 식을 매개변수로 받는 함수 → 부르는 곳의 문자열
       const fn = /(?:function\s+(\w+)\s*\(([^)]*)|const\s+(\w+)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*(?::[^=]*)?=>)/.exec(lines[k]!);
-      if (fn && new RegExp(`(?:^|[(,\\s])${e}\\s*[:,)]`).test(fn[2] ?? fn[4] ?? '')) return callers(fn[1] ?? fn[3]!, pos, depth);
+      if (fn && new RegExp(`(?:^|[(,\\s])${e}\\s*[:,)]`).test(fn[2] ?? fn[4] ?? ''))
+        return pos === 'line' ? callers339(fn[1] ?? fn[3]!, fn[2] ?? fn[4]!, e, file, /^\s*export\b/.test(lines[k]!), depth) : callers(fn[1] ?? fn[3]!, pos, depth);
       // 같은 파일의 const·let
       const def = new RegExp(`\\b(?:const|let)\\s+${e}\\s*(?::[^=]+)?=\\s*(.+?);?\\s*$`).exec(lines[k]!);
       if (def) return values(def[1]!, file, k, pos, depth + 1);
     }
   }
+  if (pos === 'line') return lineValues(e, file, at, depth);
   if (pos === 'tail') return ['1'];
   unresolved.push(`${file}:${at + 1} ${e}`);
   return [];
@@ -395,6 +400,8 @@ function callers(name: string, pos: Pos, depth: number): string[] {
   const re = new RegExp(`\\b${name}\\(\\s*(?:(?:ctx|c)\\s*,\\s*)?('(?:\\\\.|[^'\\\\])*'|\`[^\`]*\`)`, 'g');
   const out: string[] = [];
   for (const [file, lines] of SOURCES) lines.forEach((line, k) => {
+    // 339차: 결과 줄의 매개변수마다 src 전체를 훑으므로 그 이름을 부르지 않는 줄은 정규식 앞에서 건너뜀(결과 같음)
+    if (!line.includes(`${name}(`)) return;
     for (const m of line.matchAll(re)) out.push(...leafValues(m[1]!, file, k, pos, depth + 1));
   });
   return out;
@@ -537,5 +544,357 @@ describe('코드가 낱말을 끼워 만드는 물음(338차)', () => {
     }
     const report = [`꼴 ${FORMS.length} · 채운 물음 ${asks} · 한글이 남는 물음 ${bad.size}`, ...[...bad].map(([k, v]) => `${k}\n    ${v.join('\n    ')}`)].join('\n');
     expect([...bad.keys()], report).toEqual([]);
+  });
+});
+
+/*
+ * 339차: 코드가 낱말을 끼워 만드는 결과·알림 줄(338차에 보고 두 것 (1)). 338차 절은 옵션 목록이 있는 물음만 소스에서 뽑았다 —
+ * 명령이 끝나며 명령행 기록(·휴대폰 결과 카드·알림)에 찍는 줄(print·say·toast·warn)도 템플릿 리터럴로 앱 낱말·수·도면 글을 끼운다.
+ * - 원문 꼴: src/app 아래 .ts의 한 줄 템플릿 리터럴 가운데 한글·`${`가 있고, 그 줄(또는 바로 앞 줄 끝)에서 print(·say(·toast(·warn(에 넘기는 것
+ *   (옵션 목록 「[…(X)…]」이 든 것은 뺀다 — 338차 절이 본다).
+ * - 끼우는 값: 338차 규칙(문자열·삼항 잎·ft·uiText·FILL·상수 표·const·매개변수) 뒤에, 결과 줄 자리는 .padEnd(…) 꼴은 안의 식, 「??」·「||」는 두 쪽 모두,
+ *   이름만 부르는 함수는 그 함수 본문(src)에 한글 글이 있으면 FN_FILL 표, 식 안에 한글 글이나 한글 값을 가진 상수 표가 있으면 FILL 표 — 표에 없으면 실패(새 꼴).
+ *   그 밖(한글이 들어올 수 없는 식 — 수·길이·도면 자료·오류 글)은 수 「1」.
+ * - 번역층 value()와 같은 길(fileGuard.fn → 거꾸로 찾기 + 통째 번역 — 명령행 기록·휴대폰 결과 카드·알림은 모두 LOG 안)로 사전만으로 옮겨
+ *   네 언어 한글 0·한국어 원문 그대로인지 본다.
+ */
+const PRINTS = /\b(?:print|say|toast|warn)\(/;
+const KEYWORDS = new Set(['if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'constructor', 'super']);
+/** 주석을 뺀 줄에 한글이 든 문자열·템플릿 글이 있는지 */
+const koreanLiteral = (line: string): boolean => {
+  const t = line.trimStart();
+  if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return false;
+  return /'(?:\\.|[^'\\])*[가-힣](?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*[가-힣](?:\\.|[^"\\])*"|`[^`]*[가-힣]/.test(line.replace(/\s\/\/\s.*$/, ''));
+};
+/** src의 함수 정의(이름 → 본문 줄): 함수 선언·화살표 const·클래스 메서드 */
+const FUNCS = new Map<string, { file: string; body: string[] }[]>();
+for (const [file, lines] of SOURCES)
+  lines.forEach((line, k) => {
+    const m =
+      /^\s*(?:export\s+)?(?:async\s+)?function\s*\*?\s*(\w+)\s*[<(]/.exec(line) ??
+      /^\s*(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*(?::[^=]+)?=>/.exec(line) ??
+      /^\s*(?:(?:private|public|protected|static|async|override)\s+)*(\w+)\s*\([^)]*\)\s*(?::[^{]+)?\{\s*$/.exec(line);
+    if (!m || KEYWORDS.has(m[1]!)) return;
+    const body: string[] = [];
+    let depth = 0;
+    let opened = false;
+    for (let j = k; j < Math.min(lines.length, k + 80); j++) {
+      const l = lines[j]!;
+      body.push(l);
+      for (const c of l) {
+        if (c === '{') {
+          depth++;
+          opened = true;
+        } else if (c === '}') depth--;
+      }
+      if (opened ? depth <= 0 : /[;,]\s*$/.test(l) || j >= k + 3) break;
+    }
+    FUNCS.set(m[1]!, [...(FUNCS.get(m[1]!) ?? []), { file, body }]);
+  });
+/** 이름만 부르는 함수가 한글 글을 돌려줄 수 있는지(같은 파일의 정의가 있으면 그것, 없으면 src의 같은 이름 정의 모두) */
+const wordFn = (name: string, file: string): boolean => {
+  const defs = FUNCS.get(name) ?? [];
+  const own = defs.filter((d) => d.file === file);
+  return (own.length ? own : defs).some((d) => d.body.some(koreanLiteral));
+};
+/**
+ * 한글 글을 돌려주는 함수(이름 — 같은 이름이 파일마다 다르면 「파일|이름」 → 값·그 값을 옮겨 적은 소스 글(file 안)).
+ * typeName은 TYPE_NAMES 값과 나선만 — 치수의 「치수 (${dimTypeName(e)})」·UNKNOWN 꼴은 함수 안에서 낱말을 한 번 더 끼우는 두 걸음이라 뺐다(339차에 보고 두 것)
+ */
+const FN_FILL: Record<string, Fill & { file: string }> = {
+  // 그룹 이름(도면 글) — 이름 없는 그룹은 앱 낱말 「(이름 없음)」을 붙인다(util2-select.ts·editcmds2-query.ts 같은 본문)
+  groupLabel: { file: 'app/util2-select.ts', kind: '도면 글', values: [DRAWING, `${DRAWING}(이름 없음)`], pins: ['`${ft(g.name)}(이름 없음)`'] },
+  // 배열 항목 이름표 — 틀 「열 {0}, 행 {1}{2}」는 {2}(레벨 조각)를 옮기지 않아 조각마다 uiText로 옮긴다(함수 안에서 — 그래서 값에 끼운 표시가 둘)
+  itemLabel: {
+    file: 'app/assocarray.ts',
+    kind: '앱 낱말',
+    values: ['\u0001열 1, 행 1\u0002', '\u0001항목 1, 행 1\u0002\u0001, 레벨 2\u0002'],
+    pins: ['uiText(`열 ${k.index + 1}, 행 ${k.row + 1}`)', 'uiText(`항목 ${k.index + 1}, 행 ${k.row + 1}`)', 'uiText(`, 레벨 ${k.level + 1}`)'],
+  },
+  typeName: {
+    file: 'app/inquiry.ts',
+    kind: '앱 낱말',
+    values: [...tableValues('app/inquiry.ts', 'TYPE_NAMES'), '나선'],
+    pins: ["if (e.type === 'SPLINE' && e.helix) return '나선';", 'return TYPE_NAMES[e.type] ?? e.type;'],
+  },
+  'app/modify2.ts|typeName': { file: 'app/modify2.ts', kind: '앱 낱말', values: ['직사각형', '폴리곤', '프리핸드'], pins: ["const typeName = () => (type === 'R' ? '직사각형' : type === 'P' ? '폴리곤' : '프리핸드');"] },
+  'app/compare.ts|summary': {
+    file: 'app/compare.ts',
+    kind: '앱 낱말',
+    values: ['현재 도면에서만 1개, 비교 도면에서만 1개, 차이 없음 1개, 변경 세트 1개.', '현재 도면에서만 1개, 비교 도면에서만 1개, 차이 없음 1개, 변경 세트 1개 (비교하지 않은 문자·해치 1개).'],
+    pins: ['`현재 도면에서만 ${r.onlyCurrent.length}개, 비교 도면에서만 ${r.onlyCompare.length}개, 차이 없음 ${r.common}개, 변경 세트 ${s.sets.length}개${f ? ` (비교하지 않은 문자·해치 ${f}개)` : \'\'}.`'],
+  },
+  foreignConstraintNotice: {
+    file: 'edit/constraint/store.ts',
+    kind: '앱 낱말',
+    values: ['옮기지 못한 구속 1개는 원본에 남아 있지만 이 앱에서는 보이지 않습니다.', '이 도면에는 AutoCAD가 만든 구속 정보(구속 그룹 1개)가 있지만 읽을 구속이 없습니다. 원본 그대로 저장됩니다.'],
+    pins: ['`옮기지 못한 구속 ${i.skipped}개는 원본에 남아 있지만 이 앱에서는 보이지 않습니다.`', '`이 도면에는 AutoCAD가 만든 구속 정보(구속 그룹 ${i.groups}개)가 있지만 읽을 구속이 없습니다. 원본 그대로 저장됩니다.`'],
+  },
+  'app/dashcmds-misc.ts|yn': { file: 'app/dashcmds-misc.ts', kind: '앱 낱말', values: ['예', '아니오'], pins: ["const yn = (b: unknown) => (b ? '예' : '아니오');"] },
+  // 이은 이름 목록(339차 — 앱은 tr에 uiText를 넘겨 이름마다 옮긴다: 이은 글은 사전 열쇠가 아님). 부르는 파일로 열쇠를 둬
+  // tr 없이 부르는 새 자리는 값을 뽑지 못해 (가)가 실패하고, 부르는 곳이 uiText를 넘기는지는 TR_CALLERS가 본다
+  'app/layerstate-cmd.ts|maskText': {
+    file: 'edit/layerstate/record.ts',
+    kind: '앱 낱말',
+    values: ['\u0001켜기/끄기\u0002, \u0001동결/동결 해제\u0002', '\u0001없음\u0002'],
+    pins: ["{ bit: LSM_ON, label: '켜기/끄기' }", "{ bit: LSM_FROZEN, label: '동결/동결 해제' }", "map((p) => tr(p.label));", "return parts.length ? parts.join(', ') : tr('없음');"],
+  },
+  'app/layerstate-tools.ts|activeSettingsText': {
+    file: 'edit/layerstate/setbylayer.ts',
+    kind: '앱 낱말',
+    values: ['\u0001색상\u0002 \u0001선종류\u0002', '\u0001없음\u0002'],
+    pins: ["{ bit: SBL_COLOR, label: '색상' }", "{ bit: SBL_LINETYPE, label: '선종류' }", "map((p) => tr(p.label));", "return s.length ? s.join(' ') : tr('없음');"],
+  },
+  'app/modify.ts|projLabel': { file: 'app/modify.ts', kind: '앱 낱말', values: ['없음', '뷰', 'UCS'], pins: ["const projLabel = () => (proj === 0 ? '없음' : proj === 2 ? '뷰' : 'UCS');"] },
+  'app/propcmds.ts|days': { file: 'app/propcmds.ts', kind: '앱 낱말', values: ['1일 00:00:00', '-'], pins: ['return `${Math.floor(s / 86400)}일 ', "return '-';"] },
+  // 동기화한 참조 수(본문의 한글은 명령행 글 — 돌려주는 것은 수)
+  'app/util2-blocks.ts|commit': { file: 'app/util2-blocks.ts', kind: '수', values: ['1'], pins: ['const commit = (keys: string[], sync: boolean): number => {'] },
+  renameProblem: {
+    file: 'edit/util/rename.ts',
+    kind: '앱 낱말',
+    values: [`${DRAWING}은(는) 이미 있는 이름입니다.`, '블록 이름은 *로 시작할 수 없습니다.'],
+    pins: ['return `${newName}은(는) 이미 있는 이름입니다.`;', "return '블록 이름은 *로 시작할 수 없습니다.';"],
+  },
+  xcompareSummary: { file: 'edit/viewtools/xcompare.ts', kind: '앱 낱말', values: ['현재 외부 참조에서만 1개, 현재 외부 참조에 없음 1개, 변경 세트 1개.'], pins: ['return `현재 외부 참조에서만 ${d.onlyNew.length}개, 현재 외부 참조에 없음 ${d.onlyOld.length}개, 변경 세트 ${sets}개.`;'] },
+  'app/express-draw.ts|redirModeText': {
+    file: 'edit/express/redir.ts',
+    kind: '앱 낱말',
+    values: ['\u0001스타일\u0002 \u0001외부 참조\u0002 \u0001이미지\u0002 RTEXT', '\u0001(없음)\u0002'],
+    pins: ["if (m.xrefs) p.push(tr('외부 참조'));", "if (m.rtext) p.push('RTEXT');", "return p.join(' ') || tr('(없음)');"],
+  },
+};
+/** 이름 목록 함수에 uiText를 넘겨 부르는 곳(339차 — FN_FILL의 「부르는 파일|이름」 값은 이 꼴로 부를 때만 맞다) */
+const TR_CALLERS: readonly (readonly [string, string])[] = [
+  ['app/layerstate-cmd.ts', '${maskText(mask, uiText)}'],
+  ['app/layerstate-tools.ts', '${activeSettingsText(getSetByLayerMode(), uiText)}'],
+  ['app/express-draw.ts', '${redirModeText(redirMode, uiText)}'],
+];
+// 결과 줄의 식 가운데 소스 글로 값을 뽑지 못하는 것(338차 FILL 표에 더함 — 파일|식)
+Object.assign(FILL, {
+  // 블록 삽입 단위 이름(core/units.ts INSUNITS_NAMES의 name)
+  'app/blockinsert.ts|INSUNITS_NAMES[rec?.insertUnits ?? 0]?.name': { kind: '앱 낱말', values: ['밀리미터', '인치'], pins: ['INSUNITS_NAMES[rec?.insertUnits ?? 0]?.name'] },
+  // 문자 스타일 생성 플래그 낱말 목록
+  "app/dashcmds-tables.ts|[s.generation & 2 ? '반대로' : '', s.generation & 4 ? '거꾸로' : '', s.flags & 4 ? '수직' : ''].filter(Boolean).join(', ')": {
+    kind: '앱 낱말',
+    values: ['반대로, 거꾸로', '수직'],
+    pins: ["[s.generation & 2 ? '반대로' : '', s.generation & 4 ? '거꾸로' : '', s.flags & 4 ? '수직' : ''].filter(Boolean).join(', ') || '보통'"],
+  },
+  // 옮기지 못한 객체 종류(DXF 이름 — edit/layertools/clone.ts skipped) + 수 낱말 「개」
+  'app/designcenter.ts|[...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(\', \')': { kind: '앱 낱말', values: ['IMAGE 1개'], pins: ['[...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(\', \')'] },
+  'app/filecmds-export.ts|[...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(\', \')': { kind: '앱 낱말', values: ['IMAGE 1개'], pins: ['[...cp.skipped].map(([t, c]) => `${t} ${c}개`).join(\', \')'] },
+  // 함께 가져온 정의 종류(DEF_KIND_LABEL) + 수
+  'app/designcenter.ts|[...byKind].map(([k, c]) => `${DEF_KIND_LABEL[k]} ${c}개`).join(\', \')': { kind: '앱 낱말', values: ['블록 1개, 도면층 1개'], pins: ['[...byKind].map(([k, c]) => `${DEF_KIND_LABEL[k]} ${c}개`).join(\', \')'] },
+  // 평면화하지 못한 까닭(edit/express/flatten.ts skip) + 수
+  'app/express-draw.ts|[...skipped].map(([k, n]) => `${k} ${n}개`).join(\', \')': { kind: '앱 낱말', values: ['3D 솔리드·표면·메시 1개'], pins: ['[...skipped].map(([k, n]) => `${k} ${n}개`).join(\', \')'] },
+  // 빠진 SHX 글꼴 파일 이름(도면 자료) + 「외 n개」(339차 — 앱 낱말이라 화면 언어로)
+  "app/shxfonts.ts|miss.slice(0, 4).join(', ') + (miss.length > 4 ? ` ${uiText(`외 ${miss.length - 4}개`)}` : '')": {
+    kind: '도면 글',
+    values: ['TXT.SHX', 'A.SHX, B.SHX, C.SHX, D.SHX \u0001외 1개\u0002'],
+    pins: ["miss.slice(0, 4).join(', ') + (miss.length > 4 ? ` ${uiText(`외 ${miss.length - 4}개`)}` : '')"],
+  },
+} satisfies Record<string, Fill>);
+const unresolved339 = new Set<string>();
+/** 괄호·문자열 밖의 쉼표로 나눔 */
+function splitTop(s: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let j = 0; j < s.length; j++) {
+    const c = s[j]!;
+    if (c === "'" || c === '"') j = quoteEnd(s, j);
+    else if (c === '`') j = templateEnd(s, j);
+    else if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+    else if (c === ',' && depth === 0) {
+      out.push(s.slice(from, j));
+      from = j + 1;
+    }
+    if (j < 0) break;
+  }
+  return [...out, s.slice(from)];
+}
+/** s[open]의 「(」부터 짝 맞는 「)」까지의 인자 글(줄 안에서 닫히지 않으면 줄 끝까지) */
+function argsAt(s: string, open: number): string {
+  let depth = 0;
+  for (let j = open; j < s.length; j++) {
+    const c = s[j]!;
+    if (c === "'" || c === '"') j = quoteEnd(s, j);
+    else if (c === '`') j = templateEnd(s, j);
+    else if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c) && --depth === 0) return s.slice(open + 1, j);
+    if (j < 0) break;
+  }
+  return s.slice(open + 1);
+}
+/** 결과 줄 자리의 매개변수 값(339차): 부르는 곳에서 그 매개변수 차례의 인자(내보내지 않은 함수는 같은 파일만 — 338차 callers는 첫 글 인자만 봄) */
+function callers339(name: string, params: string, param: string, file: string, exported: boolean, depth: number): string[] {
+  const idx = splitTop(params).findIndex((p) => new RegExp(`^${param}\\b`).test(p.trim()));
+  const out: string[] = [];
+  if (idx < 0 || depth >= 6) return out;
+  for (const [f, lines] of SOURCES) {
+    if (!exported && f !== file) continue;
+    lines.forEach((line, k) => {
+      for (let i = line.indexOf(`${name}(`); i >= 0; i = line.indexOf(`${name}(`, i + 1)) {
+        if ((i > 0 && /[\w.$]/.test(line[i - 1]!)) || /\b(?:function|const|let)\s+$/.test(line.slice(0, i))) continue;
+        const arg = splitTop(argsAt(line, i + name.length))[idx]?.trim();
+        if (arg) out.push(...values(arg, f, k, 'line', depth + 1));
+      }
+    });
+  }
+  return out;
+}
+/** 결과·알림 줄 자리의 식 가운데 338차 규칙으로 값을 뽑지 못한 것 */
+function lineValues(e: string, file: string, at: number, depth: number): string[] {
+  // 친 입력·고른 값(await ask…·pick… — 도면 글·수)
+  if (/^await\b/.test(e)) return ['1'];
+  const pad = /^(.+?)\.(?:padStart|padEnd|trim|trimStart|trimEnd)\([^()]*\)$/.exec(e);
+  if (pad && depth < 8) return values(pad[1]!, file, at, 'line', depth + 1);
+  const alt = topIndex(e, (j) => (e[j] === '?' && e[j + 1] === '?') || (e[j] === '|' && e[j + 1] === '|'));
+  if (alt > 0 && depth < 8) return [...values(e.slice(0, alt), file, at, 'line', depth + 1), ...values(e.slice(alt + 2), file, at, 'line', depth + 1)];
+  const call = /^(\w+)\(/.exec(e);
+  if (call && !KEYWORDS.has(call[1]!) && wrapped(e.slice(call[1]!.length))) {
+    const f = FN_FILL[`${file}|${call[1]}`] ?? FN_FILL[call[1]!];
+    if (f) return f.values;
+    if (!wordFn(call[1]!, file)) return ['1'];
+    unresolved339.add(`${file}:${at + 1} ${e} — 함수 ${call[1]} 본문에 한글 글`);
+    return [];
+  }
+  const tables = [...e.matchAll(/\b([A-Z][A-Z0-9_]*)\[/g)].filter((t) => tableValues(file, t[1]!).some((v) => /[가-힣]/.test(v)));
+  if (!koreanLiteral(e) && !tables.length) return ['1'];
+  unresolved339.add(`${file}:${at + 1} ${e}`);
+  return [];
+}
+type Kind = '앱 낱말' | '도면 글' | '오류 글' | '수·값';
+const slotKind = (expr: string, vs: string[]): Kind =>
+  vs.some((v) => /[가-힣]/.test(v)) ? '앱 낱말' : vs.some((v) => v.includes('⁨')) ? '도면 글' : /\.message\b|String\(e\w*\)/.test(expr) ? '오류 글' : '수·값';
+/** 결과·알림 줄 꼴(자리 · 끼우는 식의 값 종류 · 채운 줄) */
+const LINES339 = [...SOURCES]
+  .filter(([file]) => file.startsWith('app/'))
+  .flatMap(([file, lines]) =>
+    lines.flatMap((line, k) =>
+      PRINTS.test(line) || (k > 0 && /\b(?:print|say|toast|warn)\(\s*$/.test(lines[k - 1]!))
+        ? templatesIn(line)
+            .filter((b) => /[가-힣]/.test(b) && b.includes('${') && !/\[[^\]`]*\([A-Z]{1,3}\)/.test(b))
+            .map((body) => ({
+              at: `${file}:${k + 1}`,
+              file,
+              body,
+              kinds: tokens(body).flatMap((t) => ('expr' in t ? [slotKind(t.expr, values(t.expr, file, k, 'line', 0))] : [])),
+              lines: fill(body, file, k, 'line', 0),
+            }))
+        : [],
+    ),
+  );
+
+/**
+ * 아직 둔 것(339차에 보고 두 것 — 파일 · 템플릿 본문 조각 · 까닭): 앱 낱말을 화면 언어로 끼우는 것(uiText)만으로는 옮겨지지 않는 꼴.
+ * 그 꼴이 옮겨지게 되면(한글 0) 이 목록에서 뺀다 — 남은 항목이 한글을 남기지 않으면 실패
+ */
+const PENDING339: readonly (readonly [string, string, string])[] = [
+  ['app/blkcmds-xref.ts', '은(는) 이미 이 도면의 블록 이름이라', '틀 열쇠 없음'],
+  ['app/blkcmds-xref.ts', '은(는) 이미 블록 이름이라', '틀 열쇠 없음'],
+  ['app/cadstandards.ts', '표준 검사 완료 — ', '끼운 요약 문장(검사한 문제 …) 열쇠 없음'],
+  ['app/dashcmds-tables.ts', ' 소거는 이 웹 버전에서 지원하지 않습니다', '틀 열쇠 없음'],
+  ['app/dashcmds-tables.ts', "을(를) ${before ? '재정의했습니다' : '저장했습니다'}", '동사 조각을 끼움(통째 문장 둘로 나눠야 함)'],
+  ['app/editcmds2-query.ts', ' — 도면이 비어 있습니다', '조각 열쇠 없음'],
+  ['app/express-draw.ts', ' 파일을 내려받았습니다.', '틀 열쇠 없음'],
+  ['app/filecmds-export.ts', '의 모형 객체 ', '동사 조각(재정의/만들었)·종류 목록의 「개」'],
+  ['app/designcenter.ts', '블록 안의 옮길 수 없는 객체(', '종류 목록의 「개」'],
+  ['app/designcenter.ts', '함께 가져온 정의: ', '종류 목록'],
+  ['app/designcenter.ts', '는 뺐습니다(파일을 가리키는', '종류 목록의 「개」'],
+  ['app/express-draw.ts', '건너뜀: ', '까닭 목록'],
+];
+const pendingOf = (f: { file: string; body: string }) => PENDING339.find(([file, frag]) => f.file === file && f.body.includes(frag));
+
+/** 한 언어 화면에서 결과 줄마다 진짜 명령행 기록 줄·휴대폰 결과 카드(.mv-res)를 번역층으로 옮긴 글 */
+async function printed(l: Lang | 'ko', lines: readonly string[]): Promise<{ q: string; rec: string; mobile: string }[]> {
+  const dom = new JSDOM('<!doctype html><html><head><title>OpenCAD</title></head><body><div id="app"><header class="titlebar"></header><div id="cmd"></div><div class="mv-card"></div></div></body></html>', {
+    url: `https://gyutae-kim.github.io/opencad-dwgdxf/${l === 'ko' ? '' : `${l}/`}`,
+  });
+  for (const name of ['window', 'document', 'Node', 'Element', 'HTMLAnchorElement', 'MutationObserver', 'location', 'history', 'localStorage', 'CustomEvent'])
+    vi.stubGlobal(name, (dom.window as unknown as Record<string, unknown>)[name]);
+  installFileGuard({ docs: [{ doc: createNewDocument('metric') }] });
+  dispose = await installLocalization(document.getElementById('app')!);
+  const cmd = new CommandLine(document.getElementById('cmd')!, { submit() {}, cancel() {}, suggest: () => [], keyword() {}, repeat() {} });
+  const app = document.getElementById('app')!;
+  const card = document.querySelector('.mv-card')!;
+  const out: { q: string; rec: string; mobile: string }[] = [];
+  for (const q of lines) {
+    cmd.print(q);
+    card.replaceChildren(Object.assign(document.createElement('div'), { className: 'mv-res', textContent: q }));
+    await quiet(app);
+    out.push({ q, rec: document.querySelector('.cmd-history')!.lastElementChild!.textContent!, mobile: card.textContent! });
+  }
+  dispose();
+  dispose = undefined;
+  vi.unstubAllGlobals();
+  dom.window.close();
+  return out;
+}
+
+describe('코드가 낱말을 끼워 만드는 결과·알림 줄(339차)', () => {
+  it('(가) 소스의 결과·알림 줄 꼴을 모두 뽑고, 한글이 들어올 수 있는 식은 모두 대표 값이 있다(FILL·FN_FILL 표 — 값을 옮겨 적은 소스 글이 그대로)', () => {
+    // 339차 grep(src/app — print(·say(·toast(·warn( 줄 · 한글 · ${): 746줄
+    expect(LINES339.length).toBeGreaterThan(700);
+    expect([...unresolved339]).toEqual([]);
+    for (const [name, f] of Object.entries(FN_FILL)) {
+      const src = SOURCES.get(f.file)!.join('\n');
+      for (const p of f.pins) expect(src.includes(p), `${name} ${p}`).toBe(true);
+    }
+    for (const [file, call] of TR_CALLERS) expect(SOURCES.get(file)!.join('\n').includes(call), `${file} ${call}`).toBe(true);
+  });
+
+  it('(나) 고친 꼴 — 진짜 명령행 기록 줄·휴대폰 결과 카드(번역층·도면 글 지킴)에서 네 언어 한글 0, 한국어 화면은 원문 그대로', async () => {
+    // 고치기 전: 틀이 끼운 앱 낱말(배열 유형·예/아니오·대소문자 모드·설정 값)과 덧붙인 문장 조각이 네 언어 모두 한국어로 남음 — 이제 그 자리를 uiText로 화면 언어로 끼운다
+    const lines = [
+      '항목 1개의 연관 배열(\u0001직사각형\u0002)을 만들었습니다.',
+      '유형 = 직사각형  연관 = \u0001예\u0002',
+      '객체 1개를 \u0001문장 대소문자\u0002(으)로 바꿨습니다.',
+      '속성 1개를 바꿨습니다. \u0001(1개는 이미 같은 값)\u0002 \u0001잠긴 도면층의 참조 1개는 건너뛰었습니다.\u0002',
+      `\u0001외부 참조 "${DRAWING}" 안의 블록 "${DRAWING}"\u0002을(를) 내부 편집합니다. 작업 세트 1개(나머지는 XFADECTL 1%로 흐리게). 끝내려면 REFCLOSE 또는 띠의 "변경 사항 저장"·"변경 사항 취소"를 쓰십시오.`,
+      '현재 설정: 자동 = \u0001켜기\u0002, 조정 = \u0001전체\u0002, 결합 = \u0001예\u0002, 도면층 = \u0001예\u0002',
+    ];
+    // 모두 소스의 결과 줄 꼴에서 채운 줄이다
+    const made = new Set(LINES339.flatMap((f) => f.lines));
+    expect(lines.filter((q) => !made.has(q))).toEqual([]);
+    const bad: string[] = [];
+    for (const l of [...LANGS, 'ko'] as const) {
+      for (const { q, rec, mobile } of await printed(l, lines.map((q) => inLang(q, l)))) {
+        if (l === 'ko' ? rec !== unmark(q) : hangul(rec)) bad.push(`${l} 기록 줄: ${rec}`);
+        if (l === 'ko' ? mobile !== unmark(q) : hangul(mobile)) bad.push(`${l} 휴대폰: ${mobile}`);
+      }
+    }
+    expect(bad, bad.join('\n')).toEqual([]);
+  });
+
+  it('(다) 꼴마다 대표 값으로 만든 결과·알림 줄이 네 언어 한글 0, 한국어는 원문 그대로(도면 글 자리는 옮기지 않음 — 아직 둔 것은 PENDING339)', () => {
+    installFileGuard({ docs: [{ doc: createNewDocument('metric') }] });
+    const bad = new Map<string, string[]>();
+    const kinds = new Map<Kind, number>();
+    const held = new Set<(typeof PENDING339)[number]>();
+    let made = 0;
+    for (const f of LINES339) {
+      for (const k of new Set(f.kinds)) kinds.set(k, (kinds.get(k) ?? 0) + 1);
+      const pending = pendingOf(f);
+      for (const line of f.lines) {
+        made++;
+        const q = inLang(line, 'ko');
+        const plain = unmark(q);
+        const key = `${f.at} ${plain}`;
+        const add = (s: string) => (pending ? held.add(pending) : bad.set(key, [...(bad.get(key) ?? []), s]));
+        const ko = shownText(q, 'ko', elOf());
+        if (unmark(ko) !== plain) bad.set(key, [...(bad.get(key) ?? []), `ko: ${ko}`]);
+        for (const l of LANGS) {
+          const out = shownText(inLang(line, l), l, elOf());
+          if (hangul(out)) add(`${l}: ${out}`);
+        }
+      }
+    }
+    // 아직 둔 것이 이제 옮겨지면(한글 0) 목록에서 뺀다
+    const stale = PENDING339.filter((p) => !held.has(p)).map((p) => `이제 옮겨짐(목록에서 뺄 것): ${p.join(' · ')}`);
+    const head339 = `꼴 ${LINES339.length} · 채운 줄 ${made} · 끼우는 값 종류(그 종류가 든 꼴 수) ${[...kinds].map(([k, n]) => `${k} ${n}`).join(' · ')} · 아직 둔 것 ${held.size} · 한글이 남는 줄 ${bad.size}`;
+    console.log(head339);
+    const report = [head339, ...stale, ...[...bad].map(([k, v]) => `${k}\n    ${v.join('\n    ')}`)].join('\n');
+    expect([...stale, ...bad.keys()], report).toEqual([]);
   });
 });

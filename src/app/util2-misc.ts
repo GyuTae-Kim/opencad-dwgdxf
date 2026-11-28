@@ -17,6 +17,7 @@ import { askKeyword, askText, button, feedPrompt, isNested, listBox, loadPref, m
 import { ft } from './filetext';
 import { guardedTranslate } from './fileguard';
 import { currentLanguage, translate } from '../../site/i18n-core.mjs';
+import { uiText } from './i18n-text';
 
 // ---------------------------------------------------------------------------
 // OOPS: ERASE를 감싸 지운 객체를 기억한다
@@ -222,7 +223,7 @@ export function registerUtil2MiscCommands(app: App): void {
           // 객체 바꾸기에 훑은 자리 짐작(109차 — 바꿀 객체가 있을 때만 판정한다)
           const ops = renameOps(st.doc, k, x.orig, x.now, () => st.session.scanHints());
           if (!ops.length) {
-            ctx.print(`${ft(x.orig)} → ${ft(x.now)}: ${renameProblem(st.doc, k, x.orig, x.now) ?? '바꿀 수 없습니다.'}`, 'err');
+            ctx.print(`${ft(x.orig)} → ${ft(x.now)}: ${uiText(renameProblem(st.doc, k, x.orig, x.now) ?? '바꿀 수 없습니다.')}`, 'err');
             continue;
           }
           st.session.commit({ label: 'RENAME', ops, group: ctx.group });

@@ -9,6 +9,7 @@ import { addTableOps } from '../edit/table/ops';
 import { currentTableStyle, defaultTableStyle, isMetric } from '../edit/table/style';
 import type { App, CommandContext } from './app';
 import { currentElevation, currentProps } from './draw';
+import { uiText } from './i18n-text';
 import { dialog, h } from './ui/dom';
 
 function scopeRows(app: App, handles: string[] | null): CountRow[] {
@@ -59,11 +60,11 @@ export function registerCountCommands(app: App): void {
       const picked = st.selection.size ? [...st.selection] : null;
       const rows = scopeRows(app, picked);
       if (!rows.length) {
-        ctx.print(`${picked ? '고른 객체' : '지금 공간'}에 셀 블록 참조가 없습니다.`);
+        ctx.print(`${uiText(picked ? '고른 객체' : '지금 공간')}에 셀 블록 참조가 없습니다.`);
         return;
       }
       const total = rows.reduce((n, r) => n + r.count, 0);
-      ctx.print(`블록 ${rows.length}종, 참조 ${total}개(${picked ? '고른 객체' : '지금 공간 전체'}).`);
+      ctx.print(`블록 ${rows.length}종, 참조 ${total}개(${uiText(picked ? '고른 객체' : '지금 공간 전체')}).`);
       let want: 'table' | null = null;
       await new Promise<void>((resolve) => {
         const list = h(

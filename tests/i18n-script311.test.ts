@@ -177,7 +177,8 @@ describe('스크립트·명령 별칭·디자인센터 묶음의 번역과 310�
       "h('div', { class: 'dc-empty' }, `${DEF_KIND_LABEL[kind]}이(가) 없습니다.`)",
       '`${ft(s.label)} — ${DEF_KIND_LABEL[kind]} ${this.items.length}개`',
       "ctx.print(`${label} ${added.length}개가 추가되었습니다(${added.map(ft).join(', ')}).`);",
-      "else ctx.print(`중복된 정의는 무시됩니다(이 도면에 이미 있는 ${label}: ${dup.map(ft).join(', ')}).`);",
+      // 339차: 종류 이름표는 명령행에서 틀 {n} 자리라 uiText로 끼운다(front337 339차 절)
+      "else ctx.print(`중복된 정의는 무시됩니다(이 도면에 이미 있는 ${uiText(label)}: ${dup.map(ft).join(', ')}).`);",
       "if (miss.length) ctx.print(`${label} ${miss.map(ft).join(', ')}을(를) 가져올 수 없습니다.`, 'err');",
       "${s.height ? ` · 높이 ${s.height}` : ''}",
     ])
