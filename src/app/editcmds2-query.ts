@@ -23,6 +23,7 @@ import { entityProperties, typeName } from './inquiry';
 import { loadPref, savePref } from './util2-ui';
 import { formatLength } from '../core/units';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 const TPY_KEY = 'opencad.transparencydisplay';
 
@@ -172,12 +173,12 @@ export function registerEditCmds2Query(app: App): void {
       let n = 0;
       let total = 0;
       for (const key of spaceOrder(st.doc)) {
-        const space = /^\*MODEL_SPACE$/i.test(key) ? '모형 공간' : '도면 공간';
+        const space = uiText(/^\*MODEL_SPACE$/i.test(key) ? '모형 공간' : '도면 공간');
         for (const e of st.doc.blocks.get(key)!.entities) {
           total++;
           if (n >= DBLIST_MAX) continue;
           n++;
-          ctx.print(`${typeName(e)}  도면층: "${ft(e.layer)}"  공간: ${space}  핸들 = ${e.handle}`, 'res');
+          ctx.print(`${uiText(typeName(e))}  도면층: "${ft(e.layer)}"  공간: ${space}  핸들 = ${e.handle}`, 'res');
           for (const g of entityProperties(st.doc, e as Entity, st.units).slice(1)) for (const row of g.rows) ctx.print(`    ${row.k}: ${row.file ? ft(row.v) : row.v}`);
         }
       }

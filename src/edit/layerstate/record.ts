@@ -297,8 +297,8 @@ export function layerStateNameProblem(name: string): string | null {
   return null;
 }
 
-/** 마스크 글(켜진 특성 이름) */
-export function maskText(mask: number): string {
-  const parts = RESTORE_PROPS.filter((p) => mask & p.bit).map((p) => p.label);
-  return parts.length ? parts.join(', ') : '없음';
+/** 마스크 글(켜진 특성 이름). tr은 이름마다 화면 언어로 옮기는 함수(339차 — 이은 글은 사전 열쇠가 아니라 이름마다 옮긴다) */
+export function maskText(mask: number, tr: (s: string) => string = (s) => s): string {
+  const parts = RESTORE_PROPS.filter((p) => mask & p.bit).map((p) => tr(p.label));
+  return parts.length ? parts.join(', ') : tr('없음');
 }

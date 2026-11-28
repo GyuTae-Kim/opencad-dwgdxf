@@ -17,6 +17,7 @@ import { unlockedOnly } from './layers';
 import { form } from './ui/dom';
 import { askInt, askKeyword, askYesNo, loadPref, savePref, selectWithKeywords } from './util2-ui';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 // ---------------------------------------------------------------------------
 // LAYERP 기록
@@ -179,7 +180,7 @@ export function registerLayerToolCommands(app: App): void {
       let handles: string[] = [];
       let first = true;
       for (;;) {
-        ctx.print(`현재 활성 설정: ${activeSettingsText(getSetByLayerMode())}`);
+        ctx.print(`현재 활성 설정: ${activeSettingsText(getSetByLayerMode(), uiText)}`);
         const r = await selectWithKeywords(ctx, '객체 선택 또는 [설정(S)]:', [{ key: 'S', label: '설정' }], first);
         first = false;
         if (Array.isArray(r)) {

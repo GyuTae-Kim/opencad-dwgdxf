@@ -23,6 +23,7 @@ import { applyArrayState, arrayOf, askNumber, askYesNo } from './assocarray-core
 import { arrayGripEdit, arrayGripPoints } from './assocarray-grips';
 import { commitResults } from './modify';
 import { runArrayPath } from './arraypath';
+import { uiText } from './i18n-text';
 import type { Pt } from './view';
 
 const RECT_KW: Keyword[] = [
@@ -251,7 +252,7 @@ async function editLoop(app: App, ctx: CommandContext, s: Session, kind: 'rect' 
   const info = arrayOf(st, s.handle);
   if (info) {
     const n = expectedItems(st.doc, info.ins, info.def, info.state.params).length - info.state.removed.size;
-    ctx.print(`항목 ${n.toLocaleString()}개의 연관 배열(${kind === 'rect' ? '직사각형' : '원형'})을 만들었습니다.`);
+    ctx.print(`항목 ${n.toLocaleString()}개의 연관 배열(${uiText(kind === 'rect' ? '직사각형' : '원형')})을 만들었습니다.`);
   }
   app.refreshSelectionOverlay();
 }
@@ -273,7 +274,7 @@ export async function runArrayRect(app: App, ctx: CommandContext, hs: string[]):
   const st = app.active!;
   if (!hs.length) return;
   const assoc = arrayAssociativity();
-  ctx.print(`유형 = 직사각형  연관 = ${assoc ? '예' : '아니오'}`);
+  ctx.print(`유형 = 직사각형  연관 = ${uiText(assoc ? '예' : '아니오')}`);
   const ext = extentsOf(app, hs) ?? [0, 0, 1, 1];
   const w = Math.max(ext[2] - ext[0], 1e-6);
   const hgt = Math.max(ext[3] - ext[1], 1e-6);
@@ -291,7 +292,7 @@ export async function runArrayPolar(app: App, ctx: CommandContext, hs: string[])
   const st = app.active!;
   if (!hs.length) return;
   const assoc = arrayAssociativity();
-  ctx.print(`유형 = 원형  연관 = ${assoc ? '예' : '아니오'}`);
+  ctx.print(`유형 = 원형  연관 = ${uiText(assoc ? '예' : '아니오')}`);
   let base: Pt | undefined;
   let center: Pt | null = null;
   while (!center) {

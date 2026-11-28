@@ -349,7 +349,7 @@ export function registerUtil2BlockCommands(app: App): void {
         return;
       }
       const w = Math.max(16, ...rows.map((r) => textWidth(r.name) + 2));
-      ctx.print(`블록${'.'.repeat(Math.max(2, w - 4))}${'개수'.padStart(4)} (${scope}, 중첩 포함)`, 'res');
+      ctx.print(`블록${'.'.repeat(Math.max(2, w - 4))}${uiText('개수').padStart(4)} (${uiText(scope)}, 중첩 포함)`, 'res');
       ctx.print('-'.repeat(w + 6), 'res');
       for (const r of rows) ctx.print(`${padWide(ft(r.name), w)}${String(r.count).padStart(6)}`, 'res');
     },
@@ -433,7 +433,7 @@ export function registerUtil2BlockCommands(app: App): void {
           purged = true;
         }
       }
-      ctx.print(`블록 ${ft(from)}의 참조 ${r.count}개를 ${ft(to)}(으)로 대치했습니다.${r.skipped ? ` ${r.skipped}개는 자기 참조가 되어 건너뛰었습니다.` : ''}${purged ? ` 블록 ${ft(from)}을(를) 소거했습니다.` : ''}`);
+      ctx.print(`블록 ${ft(from)}의 참조 ${r.count}개를 ${ft(to)}(으)로 대치했습니다.${r.skipped ? ` ${uiText(`${r.skipped}개는 자기 참조가 되어 건너뛰었습니다.`)}` : ''}${purged ? ` ${uiText(`블록 ${ft(from)}을(를) 소거했습니다.`)}` : ''}`);
     },
   });
 

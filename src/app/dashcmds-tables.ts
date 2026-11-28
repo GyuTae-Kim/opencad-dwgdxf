@@ -20,6 +20,7 @@ import { purgeable } from './editcmds';
 import { fileNameMode } from './script';
 import { type NamedKind, emptyText, purgeNamedOps, purgeRegAppOps, purgeableNamed, purgeableRegApps, removeWhereOps, zeroLength } from '../edit/purge';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 function headerOps(doc: { header: Map<string, HeaderValue> }, values: Record<string, HeaderValue>): EditOp[] {
   const ops: EditOp[] = [];
@@ -309,7 +310,7 @@ async function runDashLinetype(app: App, ctx: CommandContext): Promise<void> {
     if (!k) return;
     if (k === '?') {
       ctx.print('표준 선종류(acad.lin·acadiso.lin에 해당하는 이 앱의 정의):');
-      for (const d of STANDARD_LINETYPES) ctx.print(`  ${d.name.padEnd(18)}${doc.linetypes.has(tableKey(d.name)) ? '(로드됨) ' : ''}${d.description}`);
+      for (const d of STANDARD_LINETYPES) ctx.print(`  ${d.name.padEnd(18)}${doc.linetypes.has(tableKey(d.name)) ? `${uiText('(로드됨)')} ` : ''}${d.description}`);
       continue;
     }
     if (k === 'C') {
@@ -406,7 +407,7 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
   const doc = st.doc;
   const curName = () => String(doc.header.get('$DIMSTYLE') ?? 'Standard') || 'Standard';
   const cur = () => doc.dimStyles.get(tableKey(curName()));
-  ctx.print(`현재 치수 스타일: ${ft(curName())}  주석: ${annotativeFlag(cur()?.xdata) ? '예' : '아니오'}`);
+  ctx.print(`현재 치수 스타일: ${ft(curName())}  주석: ${uiText(annotativeFlag(cur()?.xdata) ? '예' : '아니오')}`);
   const k = await askOption(
     ctx,
     '치수 스타일 옵션 입력 [주석(AN)/저장(S)/복원(R)/상태(ST)/변수(V)/적용(A)/?] <복원>:',
@@ -427,7 +428,7 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
       pattern,
     ).names;
     ctx.print('명명된 치수 스타일:');
-    for (const n of names) ctx.print(`  ${n}${annotativeFlag(doc.dimStyles.get(tableKey(n))?.xdata) ? ' (주석)' : ''}`);
+    for (const n of names) ctx.print(`  ${n}${annotativeFlag(doc.dimStyles.get(tableKey(n))?.xdata) ? ` ${uiText('(주석)')}` : ''}`);
   };
   const printVars = (s: DimStyle, against?: DimStyle) => {
     for (const v of Object.keys(DIM_VAR_DEFAULTS).sort()) {
@@ -481,7 +482,7 @@ async function runDashDimstyle(app: App, ctx: CommandContext): Promise<void> {
       const base = cur();
       if (p.compare && base) {
         ctx.print(`"${ft(p.style.name)}"과(와) 현재 설정의 차이:`);
-        ctx.print(`${'변수'.padEnd(10)} ${ft(p.style.name.padEnd(14))} 현재 설정`);
+        ctx.print(`${uiText('변수').padEnd(10)} ${ft(p.style.name.padEnd(14))} 현재 설정`);
         printVars(base, p.style);
       } else {
         ctx.print(`치수 스타일: ${ft(p.style.name)}`);

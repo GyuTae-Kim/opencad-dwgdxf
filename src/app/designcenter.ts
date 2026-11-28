@@ -26,6 +26,7 @@ import type { Affine } from './modify';
 import { form, h, showMenu, tabKeyTarget } from './ui/dom';
 import { icon } from './ui/icons';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 const STYLE = `
 .dc-panel{position:fixed;right:12px;top:120px;width:min(700px,calc(100vw - 24px));height:min(480px,calc(100vh - 140px));z-index:60;display:flex;flex-direction:column;
@@ -615,7 +616,7 @@ function addDefinitions(app: App, ctx: CommandContext, p: Pending): void {
   if (added.length) ctx.print(`${label} ${added.length}개가 추가되었습니다(${added.map(ft).join(', ')}).`);
   if (dup.length) {
     if (p.kind === 'block') for (const n of dup) ctx.print(`블록 "${n}"의 중복 정의는 무시됩니다.`);
-    else ctx.print(`중복된 정의는 무시됩니다(이 도면에 이미 있는 ${label}: ${dup.map(ft).join(', ')}).`);
+    else ctx.print(`중복된 정의는 무시됩니다(이 도면에 이미 있는 ${uiText(label)}: ${dup.map(ft).join(', ')}).`);
   }
   if (miss.length) ctx.print(`${label} ${miss.map(ft).join(', ')}을(를) 가져올 수 없습니다.`, 'err');
   const req = new Set(added.map((n) => `${p.kind}:${tableKey(n)}`));

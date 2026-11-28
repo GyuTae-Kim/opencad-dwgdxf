@@ -17,6 +17,7 @@ import type { App, CommandContext, Keyword } from './app';
 import { unlockedOnly } from './layers';
 import { Ghost, commitResults } from './modify';
 import { arrayAssociativity, createAssocArray, setArrayAssociativity } from './assocarray';
+import { uiText } from './i18n-text';
 import type { OverlayGeom, Pt } from './view';
 
 /** 이 모듈의 프롬프트에 쓰는 옵션 */
@@ -127,7 +128,7 @@ export async function runArrayPath(app: App, ctx: CommandContext, hs: string[]):
   const doc = st.doc;
   if (!hs.length) return;
   let assoc = arrayAssociativity();
-  ctx.print(`유형 = 경로  연관 = ${assoc ? '예' : '아니오'}`);
+  ctx.print(`유형 = 경로  연관 = ${uiText(assoc ? '예' : '아니오')}`);
   let path: Path | null = null;
   let pathHandle = '';
   while (!path) {
@@ -319,5 +320,5 @@ export async function runArrayPath(app: App, ctx: CommandContext, hs: string[]):
   st.selection.clear();
   const res = commitResults(app, ctx, results, 'ARRAYPATH');
   app.refreshSelectionOverlay();
-  ctx.print(`항목 ${n}개(새 객체 ${res.added.length}개)를 만들었습니다.${spec.align ? '' : ' 항목은 돌리지 않았습니다.'}`);
+  ctx.print(`항목 ${n}개(새 객체 ${res.added.length}개)를 만들었습니다.${spec.align ? '' : ` ${uiText('항목은 돌리지 않았습니다.')}`}`);
 }

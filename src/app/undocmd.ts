@@ -7,6 +7,7 @@
  */
 import type { EditSession, Transaction } from '../edit/session';
 import type { App, CommandContext } from './app';
+import { uiText } from './i18n-text';
 
 interface UndoState {
   /** 표식 자리(그때의 맨 위 항목, 목록이 비었으면 null) */
@@ -67,7 +68,7 @@ export function registerUndoCommand(app: App): void {
     async run(ctx: CommandContext, arg?: string) {
       const s = app.active!.session;
       const st = stateOf(s);
-      ctx.print(`현재 설정: 자동 = ${st.auto ? '켜기' : '끄기'}, 조정 = ${CONTROL_LABEL[s.undoControl]}, 결합 = ${st.combineZoom ? '예' : '아니오'}, 도면층 = ${st.combineLayer ? '예' : '아니오'}`);
+      ctx.print(`현재 설정: 자동 = ${uiText(st.auto ? '켜기' : '끄기')}, 조정 = ${uiText(CONTROL_LABEL[s.undoControl])}, 결합 = ${uiText(st.combineZoom ? '예' : '아니오')}, 도면층 = ${uiText(st.combineLayer ? '예' : '아니오')}`);
       let answer: string | null = arg?.trim() ? arg.trim() : null;
       for (;;) {
         let key: string | null = null;

@@ -30,6 +30,7 @@ import { ask, toast } from './ui/dom';
 import { type LevelView, RefEditBar, type RefEditSettings, refEditDialog } from './refedit-ui';
 import { rememberFile } from './sessionfiles';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 type XrefFile = NonNullable<ReturnType<typeof xrefOfDoc>>;
 
@@ -576,7 +577,8 @@ async function openSession(app: App, ctx: CommandContext, st: DocState, lv: Leve
   }
   refreshBar(app);
   app.view.requestRender();
-  const what = lv.kind === 'xref' ? (lv.depth && lv.xrefName ? `외부 참조 "${ft(lv.xrefName)}" 안의 블록 "${ft(lv.label)}"` : `외부 참조 "${ft(lv.label)}"`) : `블록 "${ft(lv.label)}"`;
+  // 339차: 앞 조각(무엇을 편집하는지)은 틀 「{0}을(를) 내부 편집합니다. …」의 {0}이라 옮겨지지 않았다 — 화면 언어로 끼운다
+  const what = lv.kind === 'xref' ? (lv.depth && lv.xrefName ? uiText(`외부 참조 "${ft(lv.xrefName)}" 안의 블록 "${ft(lv.label)}"`) : uiText(`외부 참조 "${ft(lv.label)}"`)) : uiText(`블록 "${ft(lv.label)}"`);
   ctx.print(`${what}을(를) 내부 편집합니다. 작업 세트 ${sess.working().length}개(나머지는 XFADECTL ${xfadectl()}%로 흐리게). 끝내려면 REFCLOSE 또는 띠의 "변경 사항 저장"·"변경 사항 취소"를 쓰십시오.`);
   if (res.skipped) ctx.print(`${res.skipped}개 객체는 작업 세트로 가져올 수 없어 참조에 그대로 둡니다.`);
   if (res.hiddenAttdefs) ctx.print(`속성 정의 ${res.hiddenAttdefs}개는 작업 세트에 넣지 않았습니다(설정 탭의 "편집을 위한 속성 정의 표시"로 넣을 수 있습니다).`);

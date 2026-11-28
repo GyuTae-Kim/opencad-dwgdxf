@@ -24,6 +24,7 @@ import { dialog, h } from './ui/dom';
 import { askString, pickTolerance, visibleInSpace } from './express-util';
 import type { OverlayGeom, Pt } from './view';
 import { ft, unmark } from './filetext';
+import { uiText } from './i18n-text';
 
 // ---------------------------------------------------------------------------
 // 중첩 객체 고르기
@@ -490,7 +491,7 @@ async function runGatte(app: App, ctx: CommandContext): Promise<void> {
   const ops: EditOp[] = changes.map((c) => ({ kind: 'modify', block: c.block, before: c.before, after: c.after }));
   if (ops.length) st.session.commit({ label: 'GATTE', ops, group: ctx.group });
   app.clearSelection();
-  ctx.print(`속성 ${changes.length}개를 바꿨습니다.${found > changes.length ? ` (${found - changes.length}개는 이미 같은 값)` : ''}${locked ? ` 잠긴 도면층의 참조 ${locked}개는 건너뛰었습니다.` : ''}`);
+  ctx.print(`속성 ${changes.length}개를 바꿨습니다.${found > changes.length ? ` ${uiText(`(${found - changes.length}개는 이미 같은 값)`)}` : ''}${locked ? ` ${uiText(`잠긴 도면층의 참조 ${locked}개는 건너뛰었습니다.`)}` : ''}`);
 }
 
 // ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ import { dialog, form, h } from './ui/dom';
 import { pickOneFile, registerOnce } from './blkcmds-io';
 import type { Pt } from './view';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 const DWG_ACCEPT = '.dwg,.dxf,.DWG,.DXF';
 const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.gif,.bmp,.webp,.PNG,.JPG,.JPEG,.GIF,.BMP,.WEBP';
@@ -426,7 +427,7 @@ function commitXbind(app: App, ctx: CommandContext, picks: Map<string, { kind: S
       counts.set(b.kind, (counts.get(b.kind) ?? 0) + 1);
       ctx.print(`${SYM_LABEL[b.kind]} ${ft(b.from)} → ${ft(b.to)}`);
     }
-    for (const f of r.failed) ctx.print(`${SYM_LABEL[f.kind]} ${ft(f.name)}은(는) 결합할 수 없습니다${f.kind === 'block' && !x.xdoc ? '(참조 파일이 연결되지 않음)' : ''}.`, 'err');
+    for (const f of r.failed) ctx.print(`${uiText(SYM_LABEL[f.kind])} ${ft(f.name)}은(는) 결합할 수 없습니다${f.kind === 'block' && !x.xdoc ? uiText('(참조 파일이 연결되지 않음)') : ''}.`, 'err');
     failed += r.failed.length;
   }
   const parts = SYM_KINDS.filter((k) => counts.get(k)).map((k) => `${SYM_LABEL[k]} ${counts.get(k)}개`);

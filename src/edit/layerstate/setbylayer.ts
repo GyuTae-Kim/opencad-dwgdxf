@@ -31,10 +31,10 @@ export const SBL_PROPS: readonly { bit: number; label: string }[] = [
   { bit: SBL_PLOTSTYLE, label: '플롯 스타일' },
 ];
 
-/** `현재 활성 설정:` 뒤의 글 */
-export function activeSettingsText(mode: number): string {
-  const s = SBL_PROPS.filter((p) => mode & p.bit).map((p) => p.label);
-  return s.length ? s.join(' ') : '없음';
+/** `현재 활성 설정:` 뒤의 글. tr은 특성 이름마다 화면 언어로 옮기는 함수(339차 — 이은 글은 사전 열쇠가 아니라 이름마다 옮긴다) */
+export function activeSettingsText(mode: number, tr: (s: string) => string = (s) => s): string {
+  const s = SBL_PROPS.filter((p) => mode & p.bit).map((p) => tr(p.label));
+  return s.length ? s.join(' ') : tr('없음');
 }
 
 export interface SetByLayerOptions {

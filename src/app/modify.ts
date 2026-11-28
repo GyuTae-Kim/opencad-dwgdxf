@@ -72,6 +72,7 @@ import { columnGripEdit } from './mtextcols-grips';
 import { ft } from './filetext';
 import { ScaleIndex, explodeView } from '../edit/annoscale/represent';
 import { scaleForSpace } from './annoscale-core';
+import { uiText } from './i18n-text';
 
 // ---------------------------------------------------------------------------
 // 변환 행렬(x' = a·x + c·y + e, y' = b·x + d·y + f)
@@ -1605,7 +1606,7 @@ export function registerModifyCommands(app: App): void {
       const ext = extentsOf(app, hs) ?? [0, 0, 1, 1];
       const w = Math.max(ext[2] - ext[0], 1e-6);
       const hgt = Math.max(ext[3] - ext[1], 1e-6);
-      ctx.print(`유형 = 직사각형  연관 = ${arrayAssociativity() ? '예' : '아니오'}`);
+      ctx.print(`유형 = 직사각형  연관 = ${uiText(arrayAssociativity() ? '예' : '아니오')}`);
       const v = await form(
         '직사각형 배열',
         [
@@ -1652,7 +1653,7 @@ export function registerModifyCommands(app: App): void {
   const classicPolar = async (ctx: CommandContext, hs: string[]) => {
     {
       const st = app.active!;
-      ctx.print(`유형 = 원형  연관 = ${arrayAssociativity() ? '예' : '아니오'}`);
+      ctx.print(`유형 = 원형  연관 = ${uiText(arrayAssociativity() ? '예' : '아니오')}`);
       const c = await ctx.getPoint('배열의 중심점 지정:');
       if (!('point' in c)) return;
       const center = c.point;
@@ -2205,7 +2206,7 @@ export function registerModifyCommands(app: App): void {
         const refd = ref !== null && (mode === 'rotate' || mode === 'scale');
         const what = mode === 'stretch' ? '신축점' : mode === 'move' ? '이동점' : mode === 'rotate' ? (refd ? '새 각도' : '회전 각도') : mode === 'scale' ? (refd ? '새 길이' : '축척 비율') : '두 번째 점';
         const refKw = mode === 'rotate' || mode === 'scale';
-        ctx.print(`** ${names[mode]}${copy ? ' (다중)' : ''} **`);
+        ctx.print(`** ${names[mode]}${copy ? ` ${uiText('(다중)')}` : ''} **`);
         const r = await ctx.getPoint(`${what} 지정 또는 [기준점(B)/복사(C)/명령 취소(U)/${refKw ? '참조(R)/' : ''}종료(X)]:`, {
           base,
           // 회전·축척은 숫자가 각도·비율(참조가 있으면 새 각도·새 길이), 값을 받는 그립의 신축은 결과 길이(그 밖은 숫자 = 직접 거리)

@@ -27,6 +27,7 @@ import { installAcadConstraintSync } from './constraints-acad';
 import { lwCount } from '../core/lwpoly';
 import { polyCount } from '../core/polyverts';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 const kw = (key: string, label: string): Keyword => ({ key, label });
 
@@ -980,7 +981,7 @@ export function registerConstraintCommands(app: App): void {
 /** 도면을 열 때 AutoCAD가 만든 구속을 읽은 결과 안내(있으면 명령행에 한 줄). main.ts의 onOpened에서 부른다 */
 export function noteForeignConstraints(app: App, st: DocState): void {
   const msg = foreignConstraintNotice(st.doc);
-  if (msg) app.cmd.print(`참고: ${msg}`);
+  if (msg) app.cmd.print(`참고: ${uiText(msg)}`);
 }
 
 /** 지금 도면의 구속 표시 상태 */

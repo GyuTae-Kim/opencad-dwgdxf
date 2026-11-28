@@ -15,6 +15,7 @@ import type { DocState } from './docstate';
 import { addEntities, currentElevation, currentProps } from './draw';
 import { form } from './ui/dom';
 import { ft } from './filetext';
+import { uiText } from './i18n-text';
 
 type Pt = { x: number; y: number };
 
@@ -445,8 +446,8 @@ export function registerPropCommands(app: App): void {
       ctx.print(`이 도면의 시간:`);
       ctx.print(`  작성:                 ${julian(hd.get('$TDCREATE'))}`);
       ctx.print(`  마지막 업데이트:      ${julian(hd.get('$TDUPDATE'))}`);
-      ctx.print(`  총 편집 시간:         ${days(hd.get('$TDINDWG'))}`);
-      ctx.print(`  경과 타이머(켜기):    ${days(hd.get('$TDUSRTIMER'))}`);
+      ctx.print(`  총 편집 시간:         ${uiText(days(hd.get('$TDINDWG')))}`);
+      ctx.print(`  경과 타이머(켜기):    ${uiText(days(hd.get('$TDUSRTIMER')))}`);
     },
   });
 }
