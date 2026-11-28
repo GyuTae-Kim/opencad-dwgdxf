@@ -3,6 +3,35 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-29(346차): 도면의 만든·고친 때 시간대, DWGPROPS 통계 날짜 이름표
+
+### 근거와 표
+- 도면 머리말의 날짜 변수는 두 갈래입니다(AutoCAD 시스템 변수 정의): TDCREATE·TDUPDATE는 저장한 곳의 현지 시각(벽시계 값), TDUCREATE·TDUUPDATE는 UTC 시각, TDINDWG·TDUSRTIMER는 기간(날 수).
+  율리우스일을 읽어 보이는 자리를 src에서 전수로 모았습니다(11 — 화면 글 셋, TIME 지금·기간, 필드, SETVAR·LISP 값, DWGPROPS 쓰기, 작성기).
+
+| 자리 | 읽는 변수 | 고치기 전 보이던 시간대 | 판정 |
+| --- | --- | --- | --- |
+| 도면 비교 정보 「마지막 수정」(대화 상자·도면에 삽입·클립보드 글) | TDUPDATE | 값 그대로 | 맞음 — 공용 길로 옮김(글 그대로) |
+| DWGPROPS 통계 만든 때·고친 때 | TDCREATE·TDUPDATE | 보는 사람의 시간대를 또 더함(한국 +9시간·뉴욕 겨울 −5시간) | 그대로 보이게 |
+| TIME 「작성」「마지막 업데이트」 | TDCREATE·TDUPDATE | 같음 | 그대로 보이게 |
+| TIME 「현재 시간」·총 편집 시간·경과 타이머 | 지금·TDINDWG·TDUSRTIMER | 보는 사람의 현지 시각·기간 | 둠 |
+| 필드 CreateDate·SaveDate(도면 글) | TDCREATE·TDUPDATE | 값 그대로 | 둠(맞음) |
+| DWGPROPS XRECORD 시간 태그·DXF/DWG 작성기 | 네 변수 | (쓰는 값) | 둠 — 고친 길을 거치지 않음 |
+
+- 고친 것: `src/app/datetext.ts` drawingTimeText 한 길(도면 비교·DWGPROPS·TIME) — 현지 시각 변수는 UTC로 읽어 칸을 그대로, UTC 변수는 보는 사람의 현지 시각으로 바꿉니다(같은 도면의 TDCREATE·TDUCREATE가 같은 때).
+  율리우스일을 ms로 반올림해 10:00:00이 끝자리 오차로 「9:59:59」로 보이지 않게 했고, 값 문턱은 도면 비교·TIME이 쓰던 2000000 하나입니다.
+- DWGPROPS 통계 이름표 「작성」「수정」은 표제란·옵션·리본 탭과 함께 쓰는 열쇠라 값이 지은이·편집 뜻(Author·Edit, Autor·Bearbeiten, 作成者·修正, 作者·修订)이었습니다.
+  같은 변수의 다른 화면 이름표로 갈랐습니다 — 「작성 날짜」(필드 CreateDate: Creation date·Datum der Erstellung·作成日·创建日期), 「마지막 수정」(도면 비교 정보: Last modified·Zuletzt geändert·最終修正·上次修改时间).
+  사전은 바꾸지 않았습니다(열쇠 9463 그대로, 앞뒤 빈칸 값 0).
+- 재발 막기: `tests/i18n-julian346.test.ts`(시간대 셋 Asia/Seoul·UTC·America/New_York에서 같은 순간의 TDCREATE·TDUCREATE가 DWGPROPS·TIME·공용 길에서 같은 때, XRECORD 시간 태그는 머리말 값 그대로,
+  율리우스일을 글로 바꾸는 화면 길은 datetext.ts 하나 — 새로 생기면 실패, 이름표 다섯 언어), `tests/i18n-datefmt345.test.ts`·`tests/i18n-inquiry299.test.ts`(고정 줄).
+- 남은 것: 이 앱의 작성기는 현지 시각 변수에도 UTC 시각을 씁니다(새 도면·템플릿 새 도면·작성기의 빈 값) — 이 앱에서 만든 도면의 만든 때는 UTC 벽시계로 보입니다(쓰는 값 몫이라 둠).
+
+### 확인
+- 고치기 전(한 잠금): 새 시험 셋 실패(서울 시간대 DWGPROPS 「오전 9:00:00」 — 9시간 더함, 이름표 「작성」). 고친 뒤 통과, 타입 검사 통과.
+- 한 잠금 222파일(345차 끝 묶음 221 + 새 시험): 1770 통과·94 건너뜀·실패 0(처음 돌림에서 TIME 소스 줄을 고정한 inquiry299가 잡혀 고정 줄을 고친 뒤 전체를 다시).
+- 결과 같음 묶음·전체 시험·휴대폰 검사는 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-29(345차): 날짜·시각 글을 화면 언어 꼴로, 총 편집 시간 기간 낱말, 셈 소수 소수점 셈
 
 ### 근거와 표
