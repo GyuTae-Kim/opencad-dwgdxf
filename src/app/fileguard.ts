@@ -65,12 +65,12 @@ const swapDefault = (s: string, d: { from: string; to: string }): string => {
 /**
  * 기본값을 붙인 프롬프트(117차): 도우미가 "간격 거리 지정"에 " <1>:"을 붙이면 그 꼴의 사전 열쇠가 없어 일반 틀("{0} 입력 <{1}>:")에
  * 걸리거나 통째로 한국어로 남았다. 통째 번역(whole)이 한국어를 남기면 프롬프트(본문 + 꼬리)나 본문만 옮기고 기본값·친 입력은 그대로 붙여,
- * 한국어가 줄어들 때만 그것을 쓴다(사전·도면 이름 지킴은 tr이 한다).
+ * 한국어가 줄어들 때만 그것을 쓴다(사전·도면 이름 지킴은 tr이 한다). language는 화면 언어(기본값 없는 물음의 기록 줄에 붙일 쌍점 — 331차 askedLine)
  */
-export function translateTail(text: string, whole: string, tr: (s: string) => string): string {
+export function translateTail(text: string, whole: string, tr: (s: string) => string, language = ''): string {
   const k = hangul(whole);
   const m = k ? TAIL.exec(text) : null;
-  if (!m) return k ? askedLine(text, whole, tr) : whole;
+  if (!m) return k ? askedLine(text, whole, tr, language) : whole;
   const body = m[1]!;
   const tail = m[2]!;
   const rest = m[3] ? unmark(m[3]) : '';
@@ -87,20 +87,40 @@ export function translateTail(text: string, whole: string, tr: (s: string) => st
 
 /** 쌍점 + 빈칸(기록 줄의 물음과 친 입력 사이 — 330차) */
 const ASKED = /[:：](?=[ \t])/g;
+/**
+ * 기록 줄에 원문 쌍점 대신 붙일 쌍점(331차): 그 언어 사전에서 기본값 없는 물음 값이 끝에 쓰는 쌍점의 다수 꼴(jq — zh-CN 「：」 566 · 「:」 79,
+ * ja 「:」 590 · 「：」 49, en·de 「:」뿐). 사전 열쇠로 두지 않는다(기호 열쇠는 조각을 이어 옮길 때 빈칸을 잃는다 — 공용 규칙 9번). 표에 없으면 원문 쌍점
+ */
+const ASK_COLON: Readonly<Record<string, string>> = { 'zh-CN': '：' };
+/** 물음 줄의 조각(commandline.ts setPrompt와 같은 나눔): 앞 글 「… [」 · 옵션 목록 · 「]」 뒤 글 */
+const PROMPT_PARTS = /^(.*?)\[(.*?)\](.*)$/;
+
+/**
+ * 물음 줄처럼 조각마다 옮긴 물음(331차): 명령행 물음 줄은 앞 글 「… [」·옵션 하나씩·「]」 뒤 글을 다른 글 마디로 두어 마디마다 옮긴다. 기록 줄은 한 마디라
+ * 통째 열쇠가 없으면 틀(「{0} 지정 또는 [양쪽(B)]:」·「정렬 입력 [{0}]:」 등)이 앞 낱말·옵션 목록을 옮기지 않고 끼웠다(틀이 잡은 값은 그대로).
+ * 도면 글 표시가 든 물음은 나누지 않는다(표시가 조각 사이에 걸칠 수 있다) — 그대로 돌려줘 쓰이지 않게 한다
+ */
+const asPrompt = (q: string, tr: (s: string) => string): string => {
+  const m = q.includes('⁨') ? null : PROMPT_PARTS.exec(q);
+  return m ? tr(`${m[1]}[`) + m[2]!.split('/').map(tr).join('/') + ']' + (m[3] ? tr(m[3]) : '') : q;
+};
 
 /**
  * 기본값 없는 물음의 기록 줄(330차): 명령행은 「물음 + 빈칸 + 친 입력」을 한 글 마디로 적는다(app.ts promptOf). 물음이 「… [높이(H)/…/열(C)]:」·
  * 「첫 번째 점 지정:」처럼 쌍점으로 끝나면 기본값 꼬리(TAIL)가 없어 기록 줄 틀(「…]: {0}」 — 329차 MTEXT 하나)이 있어야 옮겨졌다.
  * 쌍점 + 빈칸 자리를 뒤에서부터 보며 앞이 물음 통째 열쇠(쌍점까지 — 없으면 쌍점 앞까지 + 원문 쌍점)로 한국어 없이 옮겨지는 첫 자리에서 나누고,
  * 뒤(친 입력 — 좌표·수·옵션 글자·도면 글)는 친 그대로 붙여 한국어가 줄어들 때만 쓴다. 친 입력은 사전 낱말이어도 옮기지 않는다(명령행이 받은 글
- * 그대로 — 옵션은 글자나 한국어 원문 이름으로만 받는다: dashcmds-ask.ts keywordLabelIs). 도면 글 표시(⁨…⁩) 안의 쌍점에서는 나누지 않는다
+ * 그대로 — 옵션은 글자나 한국어 원문 이름으로만 받는다: dashcmds-ask.ts keywordLabelIs). 도면 글 표시(⁨…⁩) 안의 쌍점에서는 나누지 않는다.
+ * 331차: 쌍점 앞까지만 옮길 때 붙이는 쌍점은 화면 언어 사전의 물음 꼴(ASK_COLON), 두 통째 시도가 한국어를 남기면 물음 줄처럼 조각마다(asPrompt)
  */
-function askedLine(text: string, whole: string, tr: (s: string) => string): string {
+function askedLine(text: string, whole: string, tr: (s: string) => string, language: string): string {
   const cuts = [...text.matchAll(ASKED)].map((c) => (c.index ?? 0) + 1).reverse();
   for (const i of cuts) {
     const body = text.slice(0, i);
     if (!hangul(body) || body.split('⁨').length !== body.split('⁩').length) continue;
-    for (const head of [tr(body), tr(body.slice(0, -1)) + body.slice(-1)]) {
+    const q = body.slice(0, -1);
+    const colon = ASK_COLON[language] ?? body.slice(-1);
+    for (const head of [tr(body), tr(q) + colon, asPrompt(q, tr) + colon]) {
       if (hangul(head)) continue;
       const out = head + unmark(text.slice(i));
       return hangul(out) < hangul(whole) ? out : whole;
@@ -165,7 +185,7 @@ let names: ((s: string) => boolean) | undefined;
 export function uiTextGuarded(text: string): string {
   const language = currentLanguage(typeof location === 'undefined' ? '/' : location.href);
   const tr = (s: string) => guardedTranslate(s, language, names) ?? translate(s, language);
-  return language === 'ko' ? tr(text) : translateTail(text, tr(text), tr);
+  return language === 'ko' ? tr(text) : translateTail(text, tr(text), tr, language);
 }
 
 /** 화면 번역층에 도면 글 지킴을 붙인다(편집기가 앱을 만든 뒤 한 번) */
@@ -187,7 +207,7 @@ export function installFileGuard(src: NameSource): void {
     // 명령행·휴대폰 카드의 기본값 붙은 프롬프트(117차): 통째 번역이 한국어를 남기면 본문만 옮긴다
     const whole = r ?? translate(text, language, ui);
     const tr = (s: string) => guardedTranslate(s, language, isName, ui) ?? translate(s, language, ui);
-    const out = translateTail(text, whole, tr);
+    const out = translateTail(text, whole, tr, language);
     // 명령행 프롬프트의 마지막 조각("] <예>:")은 옵션이 다른 마디라, 명령행이 적어 둔 옵션 목록(data-kw)으로 기본값을 옮긴다(118차)
     const kw = el.getAttribute('data-kw');
     if (kw && t.startsWith(']')) {
