@@ -141,7 +141,7 @@ describe('해치 묶음의 번역과 293차 한도 밖 기준점 오역(294차)'
     }
     expect(left).toEqual([]);
     expect(show(yn('경계를 유지하시겠습니까?', false), 'en')).toBe('Retain boundaries? [Yes (Y)/No (N)] <No>:');
-    expect(show(`${yn('섬 검출 여부', true)} N`, 'zh-CN')).toBe('是否检测岛屿 [是(Y)/否(N)] <是>： N');
+    expect(show(`${yn('섬 검출 여부', true)} N`, 'zh-CN')).toBe('是否检测岛屿 [是(Y)/否(N)] <是>：N');
     expect(show(yn('가운데 맞춤', true), 'ja')).toBe('中央揃え [はい(Y)/いいえ(N)] <はい>:');
     expect(show(yn('폴리선 경계를 유지하시겠습니까?', false), 'de')).toBe('Soll die Polylinienbegrenzung erhalten bleiben? [Ja (Y)/Nein (N)] <Nein>:');
     expect(tr('en')(STATUS[0]!)).toBe('Current settings: Pattern = ANSI31, Scale = 1, Angle = 45, Islands = Normal, Associative = Yes');

@@ -75,10 +75,10 @@ export function translateTail(text: string, whole: string, tr: (s: string) => st
   const tail = m[2]!;
   const rest = m[3] ? unmark(m[3]) : '';
   // 기록 줄(프롬프트 + 친 입력)은 프롬프트 통째 열쇠를 먼저 본다
-  const tries = m[3] ? [tr(body + tail) + rest, tr(body) + unmark(tail) + rest] : [tr(body) + unmark(tail)];
+  const tries = m[3] ? [glue(tr(body + tail), rest), tr(body) + unmark(tail) + rest] : [tr(body) + unmark(tail)];
   // 338차: 코드가 낱말·옵션을 끼워 만든 물음(「(출력 ${인치|밀리미터}=도면 단위)」·「[…${'/현재 제외(X)'}]」·「${ft(이름)}이(가) …」)은 통째 열쇠가 없어
   // 틀이 끼운 한국어가 남았다(물음 줄은 앞 조각 열쇠로 옮겨짐) — 물음 줄처럼 조각마다(앞 글 「… [」·옵션·「] <기본값>:」)도 견준다
-  if (OPTS.test(unmark(body))) tries.push(asPrompt(body + tail, tr, language) + rest);
+  if (OPTS.test(unmark(body))) tries.push(glue(asPrompt(body + tail, tr, language), rest));
   // 기본값이 옵션 이름이면 그 옵션의 번역으로(통째 번역의 문장을 먼저 — 118차)
   const opts = OPTS.exec(unmark(body))?.[1]?.split('/');
   const dw = opts ? defaultWord(tail, opts, tr) : null;
@@ -95,6 +95,11 @@ const ASKED = /[:：](?=[ \t])/g;
  * ja 「:」 590 · 「：」 49, en·de 「:」뿐). 사전 열쇠로 두지 않는다(기호 열쇠는 조각을 이어 옮길 때 빈칸을 잃는다 — 공용 규칙 9번). 표에 없으면 원문 쌍점
  */
 const ASK_COLON: Readonly<Record<string, string>> = { 'zh-CN': '：' };
+/**
+ * 옮긴 물음 + 친 입력(343차 — 331차에 보고 두 것 (5)): 전각 쌍점 뒤에는 빈칸을 두지 않는다(같은 사전 다수 꼴 — jq, zh-CN 값의 「：」 뒤가 글자 652·빈칸 7
+ * (343차가 일곱을 고침), ja 179·0, 기록 줄 틀 「…]：{0}」도 빈칸 없음). 물음 끝이 「：」이면 친 입력 앞 빈칸을 뗀다(한국어·반각 쌍점은 원문 빈칸 그대로)
+ */
+const glue = (head: string, rest: string): string => (head.endsWith('：') ? head + rest.replace(/^[ \t]+/, '') : head + rest);
 /** 물음 줄의 조각(commandline.ts setPrompt와 같은 나눔): 앞 글 「… [」 · 옵션 목록 · 「]」 뒤 글 */
 const PROMPT_PARTS = /^(.*?)\[(.*?)\](.*)$/;
 
@@ -140,7 +145,7 @@ function askedLine(text: string, whole: string, tr: (s: string) => string, langu
     const colon = ASK_COLON[language] ?? body.slice(-1);
     for (const head of [tr(body), tr(q) + colon, asPrompt(body, tr, language)]) {
       if (hangul(head)) continue;
-      const out = head + unmark(text.slice(i));
+      const out = glue(head, unmark(text.slice(i)));
       return hangul(out) < hangul(whole) ? out : whole;
     }
   }

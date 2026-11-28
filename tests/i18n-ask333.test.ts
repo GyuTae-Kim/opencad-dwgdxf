@@ -144,7 +144,9 @@ describe('331차가 보고 둔 물음 둘 — -VPORTS 이름 물음 앞 조각·
         const rec = record(`${q} ${vp ? '⁨A⁩' : 'O'}`, l);
         const opts = (s: string): string => s.slice(s.indexOf('['), s.lastIndexOf(']') + 1);
         const same = squash(shown.split('[')[0]!) === squash(rec.split('[')[0]!) && opts(shown) === opts(rec);
-        if (hangul(shown) || hangul(rec) || !same || !rec.endsWith(vp ? ' A' : ' O')) bad.push(`${l}: ${shown} ≠ ${rec}`);
+        // 343차: 전각 쌍점 뒤에는 친 입력 앞 빈칸이 없다(fileguard.ts glue — 같은 사전 다수 꼴)
+        const end = `${shown.endsWith('：') ? '：' : ' '}${vp ? 'A' : 'O'}`;
+        if (hangul(shown) || hangul(rec) || !same || !rec.endsWith(end)) bad.push(`${l}: ${shown} ≠ ${rec}`);
       }
       dispose();
       dispose = undefined;

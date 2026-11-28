@@ -33,7 +33,9 @@ const firstOption = (k: string): [string, string] | null => {
   return m ? [m[1]!, m[2]!] : null;
 };
 /** 기록 줄이 보일 글: 기록 줄 틀(「물음 {0}」 — 329차 MTEXT)이 있으면 그 틀, 없으면 물음 통째 번역 + 빈칸 + 친 입력 */
-const want = (k: string, input: string, l: (typeof LANGS)[number]): string => dict[l][`${k} {0}`]?.replace('{0}', input) ?? `${translate(k, l)} ${input}`;
+// 343차: 전각 쌍점 「：」 뒤에는 친 입력 앞 빈칸이 없다(fileguard.ts glue — 같은 사전 다수 꼴, 기록 줄 틀 「…]：{0}」과 같음)
+const want = (k: string, input: string, l: (typeof LANGS)[number]): string =>
+  dict[l][`${k} {0}`]?.replace('{0}', input) ?? `${translate(k, l)}${translate(k, l).endsWith('：') ? '' : ' '}${input}`;
 const MTEXT = '반대 구석 지정 또는 [높이(H)/자리맞추기(J)/선 간격두기(L)/회전(R)/스타일(S)/폭(W)/열(C)]:';
 
 describe('명령행 기록 줄 — 기본값 없는 물음 + 친 입력(330차)', () => {

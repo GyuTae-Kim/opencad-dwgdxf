@@ -14,6 +14,7 @@ import { HATCH_CREATE_LIMIT } from '../render/hatch';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { currentProps } from './draw';
+import { uiText } from './i18n-text';
 import { form } from './ui/dom';
 import type { OverlayGeom } from './view';
 import { MSG } from '../edit/geom/types';
@@ -260,7 +261,8 @@ async function runHatch(app: App, ctx: CommandContext, gradient: boolean): Promi
   const status = () =>
     ctx.print(
       gradient
-        ? `현재 설정: 그라데이션 = ${GRADIENTS.find(([n]) => n === g.name)?.[1] ?? g.name}, 색 = ${colorText(g.color1)}${g.singleColor ? ` (색조 ${g.tint})` : ` → ${colorText(g.color2)}`}, 각도 = ${((g.angle * 180) / Math.PI).toFixed(0)}, 가운데 = ${g.shift === 0 ? '예' : '아니오'}, 연관 = ${s.associative ? '예' : '아니오'}`
+        ? // 343차: 틀 「현재 설정: 그라데이션 = {0}, 색 = {1}{2}, … 가운데 = {4}, 연관 = {5}」은 끼운 글을 옮기지 않아 앱 낱말(종류 이름표·색조·예/아니오)을 화면 언어로 끼운다
+          `현재 설정: 그라데이션 = ${uiText(GRADIENTS.find(([n]) => n === g.name)?.[1] ?? g.name)}, 색 = ${colorText(g.color1)}${g.singleColor ? ` ${uiText(`(색조 ${g.tint})`)}` : ` → ${colorText(g.color2)}`}, 각도 = ${((g.angle * 180) / Math.PI).toFixed(0)}, 가운데 = ${uiText(g.shift === 0 ? '예' : '아니오')}, 연관 = ${uiText(s.associative ? '예' : '아니오')}`
         : `현재 설정: 무늬 = ${s.pattern === '_USER' ? '사용자 정의' : s.pattern}, 축척 = ${s.pattern === '_USER' ? formatLength(s.userSpacing, st.units) : s.scale}, 각도 = ${((s.angle * 180) / Math.PI).toFixed(0)}, 섬 = ${s.islands === 'normal' ? '일반' : s.islands === 'outer' ? '외부' : '무시'}, 연관 = ${s.associative ? '예' : '아니오'}`,
     );
   status();

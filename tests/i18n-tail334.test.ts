@@ -123,7 +123,9 @@ describe('333차가 보고 둔 다국어 꼴 셋 — 물음 줄 끝 마디·PEDI
     for (const l of LANGS) {
       for (const { q, shown, rec, mobile, input } of await render(l)) {
         if (hangul(shown) || !shown.endsWith(tailOf(l))) bad.push(`${l} 물음 줄: ${shown}`);
-        if (rec !== `${shown} ${input}`) bad.push(`${l} 기록 줄: ${rec} ≠ ${shown} ${input}`);
+        // 343차: 전각 쌍점 뒤에는 친 입력 앞 빈칸이 없다(fileguard.ts glue — 같은 사전 다수 꼴)
+        const want = `${shown}${shown.endsWith('：') ? '' : ' '}${input}`;
+        if (rec !== want) bad.push(`${l} 기록 줄: ${rec} ≠ ${want}`);
         if (mobile !== shown) bad.push(`${l} 휴대폰: ${mobile} ≠ ${shown} (${q})`);
       }
     }

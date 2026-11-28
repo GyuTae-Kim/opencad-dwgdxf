@@ -130,7 +130,8 @@ describe('물음 줄 앞 조각이 틀로 잡혀 한국어가 남는 것(337차)
     for (const l of LANGS) {
       for (const { q, shown, rec, mobile } of await render(l, asks)) {
         if (hangul(shown) || head(shown) !== head(dict[l][q]!)) bad.push(`${l} 물음 줄: ${shown}`);
-        if (rec !== `${dict[l][q]} 10,20`) bad.push(`${l} 기록 줄: ${rec}`);
+        // 343차: 전각 쌍점 뒤에는 친 입력 앞 빈칸이 없다(fileguard.ts glue — 같은 사전 다수 꼴)
+        if (rec !== `${dict[l][q]}${dict[l][q]!.endsWith('：') ? '' : ' '}10,20`) bad.push(`${l} 기록 줄: ${rec}`);
         if (mobile !== dict[l][q]) bad.push(`${l} 휴대폰: ${mobile}`);
       }
     }
@@ -1059,5 +1060,275 @@ describe('「(주석)」은 주석(annotative) 뜻(340차)', () => {
       for (const k of near) expect(dict[l][k]!.toLowerCase(), `${l} ${k}`).toContain(word.toLowerCase());
       expect(dict[l]['(주석)'], l).toBe(`(${word})`);
     }
+  });
+});
+
+/*
+ * 343차(342차에 보고 두 것 — 338차 (3)·340차 (4)의 여러 줄 몫): 338·339차 스캐너(templatesIn)는 줄마다 템플릿을 찾아 한 줄 템플릿 리터럴만 본다 —
+ * 줄을 넘는 템플릿은 닫는 「`」를 그 줄에서 찾지 못해 버리고, 「+」로 이은 글은 템플릿이 아니라 보지 않았다. 여러 줄 꼴:
+ * (ㄱ) 줄바꿈이 든 템플릿 리터럴, (ㄴ) 339차 줄 규칙(그 줄에 print( 이 있거나 앞 줄이 print( 로 끝남) 밖 줄에 놓인 print(·say(·toast(·warn( 인자의
+ * 템플릿(인자가 여러 줄 — 삼항 갈래 등), (ㄷ) 「'…' + 식 + '…'」 이음(줄을 넘는 것과 한 줄 것 모두 — 338·339차가 보지 않음).
+ * - 파일 글 전체를 한 번 훑어(주석·따옴표 글·정규식 리터럴·템플릿 가름) 바깥 글 자리를 모으고, 이음은 「+」 둘레 식의 경계까지 넓혀 템플릿 본문 꼴
+ *   (따옴표 글은 글 조각, 그 밖 식은 ${식} — 원문 모양)으로 바꿔 338·339차 채움(fill)에 넘긴다. 식 안의 줄바꿈은 빈칸 하나로(표 열쇠·정규식이 한 줄 식을 봄).
+ * - 옵션 목록 「[…(X)…]」이 든 것은 물음 꼴(338차 규칙 — 물음 줄·기록 줄·휴대폰 카드), 그 밖에 src/app의 print(·say(·toast(·warn( 인자 안의 것은
+ *   결과·알림 줄 꼴(339차 규칙). 한글이 들어올 수 있는 식에 대표 값이 없으면 실패(새 꼴), 꼴마다 대표 값으로 만든 줄이 네 언어 한글 0.
+ * - 둘 다 아닌 것(대화 상자 글·HTML·변수에 담았다 찍는 글 — 「한 줄 밖」)은 셈만(자리 밖).
+ */
+type MlForm = { at: string; how: '줄바꿈 템플릿' | '줄을 넘는 인자' | '이음'; role: '물음' | '결과·알림 줄' | '자리 밖'; body: string; lines: string[] };
+const isSpace = (c: number): boolean => c === 32 || c === 9 || c === 10 || c === 13;
+const isWord = (c: number): boolean => (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95 || c === 36 || c > 127;
+/** 정규식 리터럴이 올 수 있는 앞 글자·낱말(그 밖의 「/」는 나눗셈) */
+const REGEX_AFTER = '(,=:[!&|?{};+-*%<>~^';
+const REGEX_WORDS = new Set(['return', 'typeof', 'case', 'in', 'of', 'void', 'delete', 'throw', 'yield', 'await', 'else', 'do']);
+type Lit = { start: number; end: number; tpl: boolean };
+/** 파일 글의 바깥 글 자리(따옴표 글·템플릿 — 주석·정규식 리터럴 밖, end는 닫는 글자)와, 글·주석·정규식 속을 「_」로 덮은 같은 길이의 코드 */
+function lexFile(text: string): { lits: Lit[]; code: string } {
+  const lits: Lit[] = [];
+  const parts: string[] = [];
+  let last = 0;
+  const blank = (a: number, b: number) => {
+    parts.push(text.slice(last, a), text.slice(a, b).replace(/[^\n]/g, '_'));
+    last = b;
+  };
+  let prev = 0;
+  let word = '';
+  let gap = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    const ch = text[i]!;
+    if (ch === '/' && text[i + 1] === '/') {
+      const e = text.indexOf('\n', i);
+      const end = e < 0 ? text.length : e;
+      blank(i, end);
+      i = end - 1;
+    } else if (ch === '/' && text[i + 1] === '*') {
+      const e = text.indexOf('*/', i + 2);
+      const end = e < 0 ? text.length : e + 2;
+      blank(i, end);
+      i = end - 1;
+    } else if (ch === "'" || ch === '"' || ch === '`') {
+      const end = ch === '`' ? templateEnd(text, i) : quoteEnd(text, i);
+      if (end < 0) break;
+      lits.push({ start: i, end, tpl: ch === '`' });
+      blank(i + 1, end);
+      i = end;
+      prev = c;
+      word = '';
+      gap = false;
+    } else if (ch === '/' && (prev === 0 || REGEX_AFTER.includes(String.fromCharCode(prev)) || REGEX_WORDS.has(word))) {
+      let j = i + 1;
+      for (let cls = false; j < text.length && text[j] !== '\n'; j++) {
+        if (text[j] === '\\') j++;
+        else if (text[j] === '[') cls = true;
+        else if (text[j] === ']') cls = false;
+        else if (text[j] === '/' && !cls) break;
+      }
+      blank(i + 1, j);
+      i = j;
+      // 정규식 뒤의 「/」는 나눗셈(「)」 뒤와 같음)
+      prev = 41;
+      word = '';
+      gap = false;
+    } else if (isSpace(c)) gap = true;
+    else {
+      word = isWord(c) ? (isWord(prev) && !gap ? word + ch : ch) : '';
+      prev = c;
+      gap = false;
+    }
+  }
+  parts.push(text.slice(last));
+  return { lits, code: parts.join('') };
+}
+/** off가 든 줄(0부터) */
+const lineOf = (starts: readonly number[], off: number): number => {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid]! <= off) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+};
+/** 코드(글이 덮인)의 code[open] 괄호와 짝 맞는 닫는 괄호 자리 */
+const closeAt = (code: string, open: number): number => {
+  let depth = 0;
+  for (let j = open; j < code.length; j++) {
+    const c = code[j]!;
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if ((c === ')' || c === ']' || c === '}') && --depth === 0) return j;
+  }
+  return code.length;
+};
+/** 「+」보다 약한 연산자·구분(이음 식의 경계 — 선택 사슬 「?.」는 뺌) */
+const isBound = (code: string, j: number): boolean => (code[j] === '?' ? code[j + 1] !== '.' : ',;:=&|<>'.includes(code[j]!));
+const isPlus = (code: string, j: number): boolean => code[j] === '+' && code[j - 1] !== '+' && code[j + 1] !== '+' && code[j + 1] !== '=';
+/** code[p]의 「+」가 든 이음 식 [처음, 끝) — 같은 괄호 깊이에서 경계까지 */
+function chainAt(code: string, p: number): [number, number] {
+  let l = p - 1;
+  for (let depth = 0; l >= 0; l--) {
+    const c = code[l]!;
+    if (c === ')' || c === ']' || c === '}') depth++;
+    else if (c === '(' || c === '[' || c === '{') {
+      if (!depth) break;
+      depth--;
+    } else if (!depth && isBound(code, l)) break;
+  }
+  let r = p + 1;
+  for (let depth = 0; r < code.length; r++) {
+    const c = code[r]!;
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') {
+      if (!depth) break;
+      depth--;
+    } else if (!depth && isBound(code, r)) break;
+  }
+  return [l + 1, r];
+}
+/** 템플릿 본문의 ${식} 안 줄바꿈을 빈칸 하나로 */
+const flatExprs = (body: string): string => {
+  let out = '';
+  for (let j = 0; j < body.length; j++) {
+    if (body[j] === '\\') {
+      out += body.slice(j, j + 2);
+      j++;
+    } else if (body[j] === '$' && body[j + 1] === '{') {
+      const e = exprEnd(body, j + 2);
+      if (e < 0) return out + body.slice(j);
+      out += `\${${body.slice(j + 2, e).replace(/\s*\n\s*/g, ' ')}}`;
+      j = e;
+    } else out += body[j];
+  }
+  return out;
+};
+/** 이음의 한 조각 → 템플릿 본문 꼴(따옴표 글은 글 조각, 템플릿은 그 본문, 그 밖은 ${식}) */
+const asBody = (op: string): string => {
+  const t = op.trim();
+  const q = /^(['"])((?:\\.|(?!\1)[^\\])*)\1$/.exec(t);
+  if (q) return q[2]!.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  if (t.startsWith('`') && templateEnd(t, 0) === t.length - 1) return t.slice(1, -1);
+  return `\${${t.replace(/\s*\n\s*/g, ' ')}}`;
+};
+const promptForm = (b: string): boolean => /[가-힣]/.test(b) && /\[[^\]`]*\([A-Z]{1,3}\)/.test(b);
+// 여러 줄 꼴의 식 가운데 소스 글로 값을 뽑지 못하는 것(338차 FILL 표에 더함 — 파일|식, 식 안 줄바꿈은 빈칸 하나)
+Object.assign(FILL, {
+  // 표 셀 정렬 옵션 목록(「+」 이음 물음 — ALIGN_KEYS의 이름표(글자))
+  "app/tablecmds.ts|ALIGN_KEYS.map((k) => `${k.label}(${k.key})`).join('/')": {
+    kind: '앱 낱말',
+    values: [tableValues('app/tablecmds.ts', 'ALIGN_KEYS', 0, 'label').map((l, i) => `${l}(${tableValues('app/tablecmds.ts', 'ALIGN_KEYS', 0, 'key')[i]})`).join('/')],
+    pins: ["{ key: 'TL', label: '맨 위 왼쪽' }", "{ key: 'S', label: '스타일 따름' }", "ctx.getPoint('정렬 입력 [' + ALIGN_KEYS.map((k) => `${k.label}(${k.key})`).join('/') + ']:'"],
+  },
+  // 그라데이션 종류 이름표(GRADIENTS [이름, 이름표] — 표 밖 이름은 도면의 라틴 이름 그대로)
+  'app/hatchcmd.ts|GRADIENTS.find(([n]) => n === g.name)?.[1] ?? g.name': {
+    kind: '앱 낱말',
+    values: [...tableValues('app/hatchcmd.ts', 'GRADIENTS').filter((v) => /[가-힣]/.test(v)), 'LINEAR'],
+    pins: ["['LINEAR', '선형'],", "['INVCURVED', '반전 곡선'],", 'GRADIENTS.find(([n]) => n === g.name)?.[1] ?? g.name'],
+  },
+} satisfies Record<string, Fill>);
+const ML: MlForm[] = [];
+const ML_FROM = unresolved.length;
+const U339_BEFORE = new Set(unresolved339);
+for (const [file, lines] of SOURCES) {
+  const text = lines.join('\n');
+  if (!/[가-힣]/.test(text)) continue;
+  const { lits, code } = lexFile(text);
+  const starts = [0];
+  for (let j = text.indexOf('\n'); j >= 0; j = text.indexOf('\n', j + 1)) starts.push(j + 1);
+  const app = file.startsWith('app/');
+  const calls = app ? [...code.matchAll(/\b(?:print|say|toast|warn)\(/g)].map((m) => [m.index! + m[0].length - 1, closeAt(code, m.index! + m[0].length - 1)] as const) : [];
+  const inCall = (a: number, b: number) => calls.some(([o, c]) => o < a && b < c);
+  const add = (start: number, last: number, how: MlForm['how'], raw: string) => {
+    const k = lineOf(starts, start);
+    const body = flatExprs(raw);
+    // 옵션 목록을 식으로 끼우는 물음(「정렬 입력 [${…}]:」 — 채운 글에 옵션 목록 「[…(X)…]」이 생기면 물음 꼴)
+    const built = !promptForm(body) && /[가-힣]/.test(body) && /\[\$\{/.test(body) && /\](?:\s*<[^<>]*>)?\s*[:：]$/.test(body.trim()) ? fill(body, file, k, null, 0) : [];
+    const role: MlForm['role'] = promptForm(body) || built.some(promptForm) ? '물음' : inCall(start, last) ? '결과·알림 줄' : '자리 밖';
+    if (role === '결과·알림 줄') {
+      const kinds = tokens(body).flatMap((t) => ('expr' in t ? [slotKind(t.expr, values(t.expr, file, k, 'line', 0))] : []));
+      if (!/[가-힣]/.test(body) && !kinds.includes('앱 낱말')) return;
+    } else if (!/[가-힣]/.test(body)) return;
+    ML.push({ at: `${file}:${k + 1}`, how, role, body, lines: role === '자리 밖' ? [] : built.some(promptForm) ? built : fill(body, file, k, role === '물음' ? null : 'line', 0) });
+  };
+  // (ㄷ) 「+」 이음: 한글이 든 따옴표 글·템플릿 바로 옆의 「+」에서 식 경계까지
+  const chains: (readonly [number, number])[] = [];
+  const litAt = new Map(lits.map((x) => [x.start, x]));
+  const litEnd = new Map(lits.map((x) => [x.end, x]));
+  for (let p = code.indexOf('+'); p >= 0; p = code.indexOf('+', p + 1)) {
+    if (!isPlus(code, p)) continue;
+    let a = p - 1;
+    while (a >= 0 && isSpace(code.charCodeAt(a))) a--;
+    let b = p + 1;
+    while (b < code.length && isSpace(code.charCodeAt(b))) b++;
+    if (![litEnd.get(a), litAt.get(b)].some((x) => x && /[가-힣]/.test(text.slice(x.start, x.end + 1)))) continue;
+    const [s, e] = chainAt(code, p);
+    if (chains.some(([x, y]) => x === s && y === e)) continue;
+    chains.push([s, e]);
+    const cuts: number[] = [];
+    for (let j = s, depth = 0; j < e; j++) {
+      const c = code[j]!;
+      if (c === '(' || c === '[' || c === '{') depth++;
+      else if (c === ')' || c === ']' || c === '}') depth--;
+      else if (!depth && isPlus(code, j)) cuts.push(j);
+    }
+    const ops = [s, ...cuts.map((j) => j + 1)].map((from, i) => text.slice(from, i < cuts.length ? cuts[i] : e));
+    ops[0] = ops[0]!.replace(/^\s*(?:return|throw|case|else|do)\s+/, '');
+    add(s, e - 1, '이음', ops.map(asBody).join(''));
+  }
+  // (ㄱ) 줄바꿈이 든 템플릿 · (ㄴ) 339차 줄 규칙 밖 줄의 print( 인자 템플릿(이음의 조각은 이음으로 셈)
+  for (const x of lits) {
+    if (!x.tpl || chains.some(([s, e]) => s <= x.start && x.end < e)) continue;
+    const raw = text.slice(x.start + 1, x.end);
+    if (raw.includes('\n')) add(x.start, x.end, '줄바꿈 템플릿', raw);
+    else if (app && raw.includes('${') && !promptForm(raw) && inCall(x.start, x.end)) {
+      const k = lineOf(starts, x.start);
+      if (!PRINTS.test(lines[k]!) && !(k > 0 && /\b(?:print|say|toast|warn)\(\s*$/.test(lines[k - 1]!))) add(x.start, x.end, '줄을 넘는 인자', raw);
+    }
+  }
+}
+// 여러 줄 꼴에서 대표 값을 뽑지 못한 식(338·339차 표에 없는 새 꼴) — 338·339차 절의 셈과 섞지 않는다
+const mlUnresolved = unresolved.splice(ML_FROM);
+const mlUnresolved339 = [...unresolved339].filter((x) => !U339_BEFORE.has(x));
+for (const x of mlUnresolved339) unresolved339.delete(x);
+const squashWs = (s: string): string => s.replace(/\s+/g, ' ').trim();
+
+describe('여러 줄 꼴 — 줄바꿈이 든 템플릿·줄을 넘는 인자·「+」 이음(343차)', () => {
+  it('(가) 소스의 여러 줄 꼴을 모두 뽑고, 한글이 들어올 수 있는 식은 모두 대표 값이 있다(새 꼴이 생겨 대표 값이 없으면 실패)', () => {
+    const by = (r: MlForm['role']) => ML.filter((f) => f.role === r);
+    const hows = (fs: MlForm[]) => (['줄바꿈 템플릿', '줄을 넘는 인자', '이음'] as const).map((h) => `${h} ${fs.filter((f) => f.how === h).length}`).join(' · ');
+    console.log(
+      `여러 줄 꼴 ${ML.length} — 물음 ${by('물음').length}(${hows(by('물음'))}) · 결과·알림 줄 ${by('결과·알림 줄').length}(${hows(by('결과·알림 줄'))}) · 자리 밖 ${by('자리 밖').length}(${hows(by('자리 밖'))})\n  ${ML.map((f) => `${f.at} [${f.role}·${f.how}] ${squashWs(f.body).slice(0, 100)}`).join('\n  ')}`,
+    );
+    // 343차 셈: 물음 1(이음 — TABLEDIT 정렬) · 결과·알림 줄 4(줄을 넘는 인자 — IMAGE 로드·언로드, HATCH 현재 설정 둘) · 자리 밖 7
+    expect(by('물음').length + by('결과·알림 줄').length).toBeGreaterThan(3);
+    expect(mlUnresolved).toEqual([]);
+    expect(mlUnresolved339).toEqual([]);
+  });
+
+  it('(다) 꼴마다 대표 값으로 만든 물음 줄·기록 줄·휴대폰 카드·결과 줄이 네 언어 한글 0, 한국어는 원문 그대로(도면 글 자리는 옮기지 않음)', () => {
+    installFileGuard({ docs: [{ doc: createNewDocument('metric') }] });
+    const bad = new Map<string, string[]>();
+    let made = 0;
+    for (const f of ML) {
+      for (const line of f.lines) {
+        made++;
+        const q = inLang(line, 'ko');
+        const plain = squashWs(unmark(q));
+        const key = `${f.at} ${plain}`;
+        const add = (s: string) => bad.set(key, [...(bad.get(key) ?? []), s]);
+        if (f.role === '물음') {
+          if (squashWs(unmark(promptLine(q, 'ko'))) !== plain) add(`ko 물음 줄: ${promptLine(q, 'ko')}`);
+          if (squashWs(unmark(shownText(`${q} ${TYPED}`, 'ko', elOf()))) !== `${plain} 10,20`) add('ko 기록 줄');
+        } else if (squashWs(unmark(shownText(q, 'ko', elOf()))) !== plain) add(`ko: ${shownText(q, 'ko', elOf())}`);
+        for (const l of LANGS) {
+          const ql = inLang(line, l);
+          const outs: [string, string][] =
+            f.role === '물음' ? [['물음 줄', promptLine(ql, l)], ['기록 줄', shownText(`${ql} ${TYPED}`, l, elOf())], ['휴대폰', shownText(ql, l, elOf())]] : [['결과 줄', shownText(ql, l, elOf())]];
+          for (const [w, o] of outs) if (hangul(o)) add(`${l} ${w}: ${squashWs(o)}`);
+        }
+      }
+    }
+    const head343 = `여러 줄 꼴(물음·결과 줄) ${ML.filter((f) => f.role !== '자리 밖').length} · 채운 줄 ${made} · 한글이 남는 줄 ${bad.size}`;
+    console.log(head343);
+    expect([...bad.keys()], [head343, ...[...bad].map(([k, v]) => `${k}\n    ${v.join('\n    ')}`)].join('\n')).toEqual([]);
   });
 });

@@ -221,7 +221,7 @@ describe('주석 축척·축척 목록 묶음의 번역과 311차가 남긴 「�
     expect(show('en')(`축척 ${ft('1:50')}은(는) 사용 중이므로 삭제할 수 없습니다.`)).toBe('Scale 1:50 cannot be deleted because it is in use.');
     expect(show('de')('추가할 명명된 축척 입력 또는 [?] <종료>: 1:50')).toBe('Geben Sie einen hinzuzufügenden benannten Maßstab ein oder [?] <Beenden>: 1:50');
     expect(show('ja')(`삭제할 명명된 축척 입력 또는 [?] <${ft('1:1')}>: 1:50`)).toBe('削除する名前付き尺度を入力、または [?] <1:1>: 1:50');
-    expect(show('zh-CN')(`${ft('1:50')}이(가) 이미 있습니다.  축척을 재정의하시겠습니까? [예(Y)/아니오(N)] <아니오>: N`)).toBe('1:50 已存在。是否要重新定义比例？ [是(Y)/否(N)] <否>： N');
+    expect(show('zh-CN')(`${ft('1:50')}이(가) 이미 있습니다.  축척을 재정의하시겠습니까? [예(Y)/아니오(N)] <아니오>: N`)).toBe('1:50 已存在。是否要重新定义比例？ [是(Y)/否(N)] <否>：N');
     expect(show('en')('축척 리스트를 기본값으로 재설정하시겠습니까? [예(Y)/아니오(N)] <아니오>: Y')).toBe('Reset the scale list to default values? [Yes (Y)/No (N)] <No>: Y');
     expect(show('ja')('*여러 개* …')).toBe('*複数* …');
     // 새 열쇠 = 같은 사전 낱말: 삭제 막힘 = 「{0}은(는) 현재 주석 축척이므로 …」·「축척 {0}을(를) 찾지 못했습니다」 꼴, 통째 = 앞 조각 + 옵션 + 뒤 조각(286차 꼴), 물음 앞 조각 = 물음 + [

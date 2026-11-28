@@ -346,7 +346,8 @@ async function runDashImage(app: App, ctx: CommandContext): Promise<void> {
     const found = app.imageKeys.has(x.def.fileName.replace(/^.*[\\/]/, '').toLowerCase());
     ctx.print(
       loaded
-        ? `이미지 "${ft(x.name)}"을(를) 로드됨으로 표시했습니다.${found ? '' : ' 파일이 연결되지 않아 테두리만 보입니다. EXTERNALREFERENCES(XR)에서 파일을 연결하십시오.'}`
+        ? // 343차: 틀 「이미지 "{0}"을(를) 로드됨으로 표시했습니다.{1}」은 {1}에 끼운 문장을 옮기지 않아 덧붙인 문장을 화면 언어로 끼운다
+          `이미지 "${ft(x.name)}"을(를) 로드됨으로 표시했습니다.${found ? '' : ` ${uiText('파일이 연결되지 않아 테두리만 보입니다. EXTERNALREFERENCES(XR)에서 파일을 연결하십시오.')}`}`
         : `이미지 "${ft(x.name)}"을(를) 언로드됨으로 표시했습니다(저장하면 AutoCAD에서 언로드 상태로 열립니다).`,
     );
   }
