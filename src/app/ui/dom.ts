@@ -1,6 +1,7 @@
 /** DOM 도우미: 요소 만들기, 알림, 메뉴, 대화상자 */
 import { icon } from './icons';
 import { SHORT_HEIGHT, clampBox } from './layout';
+import { uiText } from '../i18n-text';
 
 export function h<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -548,7 +549,8 @@ export function form(title: string, fields: FormField[], opt: { ok?: string; not
       const v = read();
       for (const f of fields) {
         if (f.type === 'number' && !Number.isFinite(v[f.key] as number)) {
-          err.textContent = `${f.label}: 숫자를 입력하십시오.`;
+          // 칸 이름표는 앱 낱말: 틀 「{0}: 숫자를 입력하십시오.」의 {0}은 번역층이 옮기지 않아 네 언어에서 한국어로 남았다 — 화면 언어로 끼운다(342차)
+          err.textContent = `${uiText(f.label)}: 숫자를 입력하십시오.`;
           return;
         }
       }

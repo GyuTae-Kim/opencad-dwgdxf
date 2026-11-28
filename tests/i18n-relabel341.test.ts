@@ -362,3 +362,114 @@ describe('오류 글 멤버를 끼우는 줄과 저장 손실 확인 창(341차 
     expect(bad, bad.join('\n')).toEqual([]);
   });
 });
+
+describe('TCASE 옵션 낱말 한 낱말(342차 — 341차가 보고 둔 것 (1))', () => {
+  /** 휴대폰 카드·기록 줄은 통째 값, 물음 줄 단추는 옵션 조각 값으로 옮긴다(324차 짝 꼴) — 같은 옵션이면 같은 낱말이어야 한다 */
+  const WHOLE = '대소문자 선택 [문장(S)/소문자(L)/대문자(U)/제목(T)/대소문자 전환(G)] <{0}>:';
+  const PIECES = ['문장(S)', '소문자(L)', '대문자(U)', '제목(T)', '대소문자 전환(G)'];
+
+  it('네 사전에서 통째 값의 옵션 낱말이 옵션 조각 값과 같고, 모드 이름표 「대소문자 전환」(기본값·대화 상자·결과 줄)도 그 옵션 낱말이다', () => {
+    expect(src('app/express-text.ts')).toContain('`대소문자 선택 [문장(S)/소문자(L)/대문자(U)/제목(T)/대소문자 전환(G)] <${uiText(CASE_LABEL[caseMode])}>:`');
+    expect(src('edit/express/tcase.ts')).toContain("toggle: '대소문자 전환',");
+    const bad: string[] = [];
+    for (const l of LANGS) {
+      const opts = /\[([^\]]*)\]/.exec(dict[l][WHOLE] ?? '')?.[1]?.split('/') ?? [];
+      const pieces = PIECES.map((p) => dict[l][p] ?? p);
+      if (opts.join('/') !== pieces.join('/')) bad.push(`${l} 통째 ${opts.join('/')} ↔ 조각 ${pieces.join('/')}`);
+      const toggle = (dict[l]['대소문자 전환(G)'] ?? '').replace(/\s*\(G\)$/, '');
+      if (toggle !== dict[l]['대소문자 전환']) bad.push(`${l} 이름표 ${dict[l]['대소문자 전환']} ↔ 옵션 ${toggle}`);
+    }
+    expect(bad, bad.join('\n')).toEqual([]);
+  });
+});
+
+/** 한 언어 화면의 대화 상자 확인 글 칸(.dialog .form-error)에 글을 넣어 진짜 번역층(도면 글 지킴 포함)이 옮긴 글 */
+async function inDialog(lang: Lang, lines: readonly string[]): Promise<string[]> {
+  const dom = stubDom(lang);
+  installFileGuard({ docs: [] });
+  const off = await installLocalization(document.getElementById('app')!);
+  const box = document.createElement('div');
+  box.className = 'dialog';
+  document.body.append(box);
+  for (const t of lines) {
+    const d = document.createElement('div');
+    d.className = 'form-error';
+    d.textContent = t;
+    box.append(d);
+  }
+  await quiet(document.body);
+  const out = [...box.children].map((d) => d.textContent ?? '');
+  off();
+  vi.unstubAllGlobals();
+  dom.window.close();
+  return out;
+}
+
+describe('대화 상자 확인 글 「이름: 문장」(342차 — 341차가 보고 둔 것 (2))', () => {
+  /** 소스 줄(조각 frag가 든 첫 줄)의 첫 한 줄 템플릿 */
+  const templateAt = (f: string, frag: string): string => {
+    const line = src(f).split('\n').find((x) => x.includes(frag));
+    const t = line ? /`([^`]*)`/.exec(line)?.[1] : undefined;
+    if (!t) throw new Error(`${f}: 「${frag}」 줄이 없음 — 시험 바로잡기`);
+    return t;
+  };
+  /** 템플릿을 채운다: 식 → 한국어 화면 값(uiText(식)은 그 언어 번역 · ft(식)은 도면 글 가둠 — 표에 없는 식은 새 꼴이라 실패) */
+  const fill = (tpl: string, s: Record<string, string>, l: Lang): string =>
+    tpl.replace(/\$\{([^}]+)\}/g, (_m, e: string) => {
+      const w = /^(uiText|ft)\((.+)\)$/.exec(e);
+      const v = s[w ? w[2]! : e];
+      if (v === undefined) throw new Error(`표에 없는 식(새 꼴): ${e} — ${tpl}`);
+      return w?.[1] === 'uiText' ? (l === 'ko' ? v : translate(v, l)) : w ? ft(v) : v;
+    });
+  const unescape = (s: string): string => s.replace(/\\u\{([0-9a-fA-F]+)\}/g, (_m, h: string) => String.fromCodePoint(parseInt(h, 16)));
+  /** 폼(ui/dom.ts form)의 숫자 칸 이름표 — 리터럴로 쓴 것 */
+  const NUMBER_LABELS = [...new Set(SRC_FILES.filter((f) => f.startsWith('app/')).flatMap((f) => [...src(f).matchAll(/label: '([^']+)', type: 'number'/g)].map((m) => unescape(m[1]!))))];
+  const ARC_LABELS = [...(/for \(const \[k, label\] of \[([\s\S]*?)\] as const\)/.exec(src('app/arctext.ts'))?.[1] ?? '').matchAll(/'\w+', '([^']+)'/g)].map((m) => m[1]!);
+  const INTS = [...src('app/options.ts').matchAll(/intIn\(\w+, (-?\d+), (-?\d+), '([^']+)'\)/g)].map((m) => ({ lo: m[1]!, hi: m[2]!, label: m[3]! }));
+  /** 도면 글(이름표·이름·파일 — 옮기지 않음, 한글 셈에서 뺌) */
+  const DRAWN = ['거리1', '갑', '을', '상태1', '설명글', '표준.dws', '표준.dwg'];
+  const WHY = ['이름이 너무 깁니다.', '이름은 글자나 _로 시작하고 글자·숫자·_만 쓸 수 있습니다.'];
+  /** 한 줄 템플릿 자리: [파일, 줄 조각, 채울 값들] */
+  const SITES: [string, string, Record<string, string>[]][] = [
+    ['app/ui/dom.ts', ': 숫자를 입력하십시오.`', NUMBER_LABELS.map((label) => ({ 'f.label': label }))],
+    ['app/arctext.ts', ': 숫자를 입력하십시오.`', ARC_LABELS.map((label) => ({ label }))],
+    ['app/options.ts', ' 사이의 정수가 필요합니다.`', INTS],
+    ['app/dynblock.ts', "if ('error' in c) return `", [...new Set([...src('app/dynblock.ts').matchAll(/\berror: '([^']+)'/g)].map((m) => m[1]!))].map((e) => ({ 'p.label': '거리1', 'c.error': e }))],
+    ['app/constraints.ts', 'if (why) return `', [{ "r.name || '(빈 이름)'": '(빈 이름)', why: '이름을 입력하십시오.' }, ...WHY.map((why) => ({ "r.name || '(빈 이름)'": 'd1', why }))]],
+    ['app/constraints.ts', ': 식을 입력하십시오.`', [{ 'r.name': 'd1' }]],
+    ['app/cadstandards.ts', ': 이 도면에 연결되어 있지만', [{ 'f.name': '표준.dws' }]],
+  ];
+  const ui = (s: string, l: Lang): string => (l === 'ko' ? s : translate(s, l));
+  /** 이름 바꾸기 확인 글(rename.ts renameProblem — 잠금 까닭 · 이미 있는 이름 · 블록 *): 앞에 「이름: 」을 붙이면 통째 열쇠가 잡히지 않는다 */
+  const RENAME = ['외부 참조 도면층은 이름을 바꿀 수 없습니다.', '도면층 0의 이름은 바꿀 수 없습니다.', '을은(는) 이미 있는 이름입니다.', '블록 이름은 *로 시작할 수 없습니다.'];
+  /** 템플릿 안에 템플릿을 둔 줄(소스 줄 그대로 고정 + 그 줄이 그 언어 화면에서 만드는 글) */
+  const NESTED: [string, string, (l: Lang) => string[]][] = [
+    ['app/util2-misc.ts', 'err.textContent = `${ft(t.now)}: ${bad ? uiText(bad) : `${ft(t.next)}은(는) 이미 있는 이름입니다.`}`;', (l) => [`${ft('갑')}: ${ft('을')}은(는) 이미 있는 이름입니다.`, ...RENAME.map((b) => `${ft('갑')}: ${ui(b, l)}`)]],
+    ['app/layerstate-ui.ts', "`${sel.key}: 도면층 ${sel.state.layers.filter((l) => l.name).length}개${sel.state.description ? ` — ${sel.state.description}` : ''}`", () => ['상태1: 도면층 3개', '상태1: 도면층 3개 — 설명글']],
+    ['app/blkcmds-misc.ts', "note: `${ft(f.name)}: 치수 스타일 ${content.styles.length}개(${content.styles.map((s) => ft(s.name)).join(', ')}). 이 도면에 이미 있는 것: ${dup.map(ft).join(', ')}`", () => [`${ft('표준.dwg')}: 치수 스타일 2개(${ft('갑')}, ${ft('을')}). 이 도면에 이미 있는 것: ${ft('갑')}`]],
+  ];
+
+  it('자리마다 다섯 언어로 그려 네 언어 한글 0(도면 글은 그대로) — 앱 낱말 이름표(폼 숫자 칸·ARCTEXT 칸)는 화면 언어로 끼운다', async () => {
+    // 셈의 바탕: 숫자 칸 이름표(리터럴)·ARCTEXT 여섯·OPTIONS 정수 일곱·동적 블록 입력 오류 문장, 이름 확인 글(params.ts)·이름 바꾸기 확인 글(rename.ts)
+    expect(NUMBER_LABELS.length).toBeGreaterThan(40);
+    expect(ARC_LABELS).toHaveLength(6);
+    expect(INTS).toHaveLength(7);
+    for (const w of ["return '이름을 입력하십시오.';", ...WHY.map((w) => `return '${w}';`)]) expect(src('edit/constraint/params.ts')).toContain(w);
+    for (const w of ['return `${newName}은(는) 이미 있는 이름입니다.`;', "return '외부 참조 도면층은 이름을 바꿀 수 없습니다.';", 'return `도면층 ${l.name}의 이름은 바꿀 수 없습니다.`;', "return '블록 이름은 *로 시작할 수 없습니다.';"])
+      expect(src('edit/util/rename.ts')).toContain(w);
+    for (const [f, pin] of NESTED) expect(src(f), f).toContain(pin);
+    const bad: string[] = [];
+    for (const l of ['ko', ...LANGS] as const) {
+      const rows = [
+        ...SITES.flatMap(([f, frag, vals]) => vals.map((s) => ({ at: f, text: fill(templateAt(f, frag), s, l) }))),
+        ...NESTED.flatMap(([f, , lines]) => lines(l).map((text) => ({ at: f, text }))),
+      ];
+      const out = await inDialog(l, rows.map((r) => r.text));
+      out.forEach((t, i) => {
+        const left = DRAWN.reduce((x, d) => x.split(d).join(''), t);
+        if (l === 'ko' ? t !== rows[i]!.text.replace(/[⁨⁩]/g, '') : hangul(left)) bad.push(`${l} ${rows[i]!.at}: ${t}`);
+      });
+    }
+    expect(bad, bad.join('\n')).toEqual([]);
+  });
+});
