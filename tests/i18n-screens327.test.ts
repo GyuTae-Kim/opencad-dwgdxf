@@ -13,6 +13,8 @@
  * - 329차: 그리지 않던 화면 다섯을 더했다 — 접힌 리본 패널 팝업(jsdom은 폭이 0이라 접히지 않아 리본 넘침·패널 폭·여백을 흉내 냄), 옵션 대화 상자,
  *   도면층 상태 관리자, 치수 스타일 「수정…」 하위 대화 상자(7탭), 문자 편집기(MTEXT). 배치 마법사 「방향」 쪽 라디오가 용지 방향 낱말인지도 본다
  *   (홀로 쓴 「가로」·「세로」는 PLOTSTAMP 글 방향(수평·수직) 뜻으로 옮긴다 — 용지 방향 자리는 뜻을 품은 원문 「가로 방향」·「세로 방향」으로 나눴다).
+ * - 330차: 명령행 기록 줄(물음 + 친 입력 — app.ts 한 글 마디)을 더했다 — LINE·RECTANG을 진짜 입력 칸에 쳐서(좌표·옵션 글자) 기본값 없는 물음
+ *   「…:」·「… [닫기(C)/명령 취소(U)]:」 뒤에 입력이 붙은 줄이 옮겨지는지 본다(물음마다 사전으로 본 것은 i18n-asked330).
  * - 화면·엔진·글꼴은 가짜(i18n-mobileview·infocard241·menutype265 꼴), 홈 화면 앱(서비스 워커·새 판 알림)은 화면이 아니라 가짜.
  */
 import { readFileSync } from 'node:fs';
@@ -101,6 +103,7 @@ const NEW_STEPS = [
   '대화 상자(LAYERSTATE)',
   '대화 상자(DIMSTYLE 수정)',
   '문자 편집기(MTEXT)',
+  '명령행 기록 줄(LINE·RECTANG)',
 ];
 
 const realSetInterval = globalThis.setInterval;
@@ -429,6 +432,18 @@ async function screens(lang: string): Promise<{ steps: [string, string][]; fileT
     await settle();
     look('문자 편집기(MTEXT)');
     activeEditor()?.cancel();
+    app.cancel(true);
+    await settle();
+    // 330차 ⑩ 명령행 기록 줄(app.ts — 「물음 + 빈칸 + 친 입력」 한 글 마디): 기본값 없는 물음에 좌표·옵션 글자를 진짜 입력 칸에 친다.
+    // LINE: 「첫 번째 점 지정:」·「다음 점 지정 또는 [명령 취소(U)]:」 두 번(선분 둘)·「… [닫기(C)/명령 취소(U)]:」에 옵션 글자 C(닫고 끝남).
+    // RECTANG: 「첫 번째 구석점 지정 또는 [모따기(C)/…/폭(W)]:」에 W → 선 폭(기본값 꼬리 「<0>:」)은 Enter → 다시 첫 물음에 구석 → 「다른 구석점 지정 또는 […]:」에 구석
+    void app.run('LINE');
+    await settle();
+    for (const s of ['0,0', '50,0', '50,40', 'C']) await typeLine(s);
+    void app.run('RECTANG');
+    await settle();
+    for (const s of ['W', '', '0,0', '40,30']) await typeLine(s);
+    look('명령행 기록 줄(LINE·RECTANG)');
     app.cancel(true);
     await settle();
     // ⑨ 배치 마법사 「방향」 쪽(filecmds-layout.ts runWizard 넷째 쪽 — 바닥 「< 뒤로」·「다음 >」·「취소」의 둘째를 세 번): 라디오 이름표 글(한글 0 훑기 밖 — 뜻만 본다)
