@@ -2664,6 +2664,12 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
 - [ ] 346차에 보고 두 것 — (1) DXF 작성기는 UTC 변수(TDUCREATE·TDUUPDATE)가 없고 현지 변수만 있으면(DWG에서 읽은 도면 등) 그 현지 값을 옮겨 쓴다 — 저장한 곳의 시간대를 몰라 둠.
   (2) LISP DATE(app/lisp-host.ts)는 UTC 율리우스일(AutoCAD는 현지 — 같은 곳의 CDATE는 현지 꼴) — LISP 값이라 둠. (3) edit/field/format.ts julianToDate는 부르는 곳이 없다(FIELD는 julianToLocal — 맞음).
   (4) 345차 (3)·344차 (2)(4) 그대로. 원어민 검토 없음
+  **347차가 풀었다**((2) — DATE가 core/julian.ts julianLocal(명령줄 보기·SETVAR 목록·SYSVDLG도 같은 함수), (3) — 지움). (1)(4)는 남음.
+- [x] 시스템 변수 DATE의 시간대(347차): LISP `(getvar "DATE")`·명령줄 시스템 변수 보기·SETVAR 목록·SYSVDLG(같은 getSysVar)의 DATE가 UTC 율리우스일이라 같은 순간의 CDATE(현지)와 한국 시간에서 9시간 갈렸다.
+  AutoCAD DATE·CDATE는 그 컴퓨터의 현지 시계 — `src/core/julian.ts` julianLocal로(지금을 율리우스일로 바꾸는 자리는 이제 julian.ts 하나). 지금 때를 내는 자리 14를 전수로 보고 나머지는 맞음·둠(표는 CHANGELOG 347차 절).
+  부르는 곳이 없던 `src/edit/field/format.ts` julianToDate(UTC 순간으로 읽는 꼴)를 지움. `tests/i18n-julian346.test.ts` (마)(시간대 셋 — DATE·CDATE가 같은 벽시계, TDUCREATE와 시간대 차이만큼)
+- [ ] 347차에 보고 두 것 — (1) 도면층 변환 로그 「날짜:」만 UTC ISO 꼴(끝에 Z — UTC라고 밝힘)이고 다른 기록 글(플롯 스탬프·전송 보고서·복구 목록·표제란 DATE)은 현지 꼴 — 로그 꼴이라 둠.
+  (2) 346차 (1)(DXF 작성기가 UTC 변수 없이 현지 값만 있으면 옮겨 씀)·345차 (3)·344차 (2)(4)·343·342차 코드 몫 그대로. 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
 - [x] EXPLODE한 주석 객체(120차, Autodesk EXPLODE 도움말: 지금 축척 표현만 분해하고 결과는 주석이 아니다): 분해 결과가 편집 고리에서 다시 주석이 되거나(주석 MTEXT의 TEXT 6,559개 원본)
   주석 스타일 문자로 보여 축척 배율만큼 커지던 것(주석 치수 4,231·다중 지시선 3,661개 등)을 막고, EXPLODE·BURST는 그 공간 주석 축척의 표현을 분해한다
