@@ -9,6 +9,7 @@ import { WmfSink, WmfWriter, wmfScale } from '../edit/filecmds/wmf';
 import { DefinitionCopier } from '../edit/layertools/clone';
 import type { EditOp } from '../edit/session';
 import type { App, Command, CommandContext } from './app';
+import { decimalText } from './datetext';
 import type { DocState } from './docstate';
 import { pickFiles, readDrawingFile } from './drawingfiles';
 import { type Page, baseName, download, layoutPage, modelPage, walk } from './export';
@@ -198,7 +199,7 @@ export function registerFileExportCommands(app: App, reg: (c: Command) => void):
       const data = pageToWmf(sel);
       const name = `${baseName(st.saveName)}.wmf`;
       download(new Blob([data], { type: 'image/wmf' }), name);
-      ctx.print(`객체 ${handles.length}개를 ${ft(name)}(으)로 저장했습니다(${(data.length / 1024).toFixed(1)} KB, 지금 ${st.onLayout ? '배치 용지' : '화면'} 범위, 래스터 이미지는 빠집니다).`);
+      ctx.print(`객체 ${handles.length}개를 ${ft(name)}(으)로 저장했습니다(${decimalText(data.length / 1024, 1)} KB, 지금 ${st.onLayout ? '배치 용지' : '화면'} 범위, 래스터 이미지는 빠집니다).`);
     },
   });
 

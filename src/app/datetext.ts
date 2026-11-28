@@ -1,5 +1,5 @@
 /**
- * 화면에 보이는 날짜·시각 글을 만드는 한 곳(345차): 화면 언어 꼴로 Intl에 맡긴다.
+ * 화면에 보이는 날짜·시각 글을 만드는 한 곳(345차): 화면 언어 꼴로 Intl에 맡긴다. 셈 소수의 소수점(348차 decimalText)도 같은 화면 언어를 따른다.
  * 화면 언어는 html lang(i18n.ts가 언어를 바꿀 때 맞춘다 — 최근 문서 목록 recent.ts가 쓰던 길을 여기로 꺼냈다).
  * 고치기 전 넷(도면 비교 정보 「마지막 수정」·DWGPROPS 통계 「작성」「수정」·TIME)은 ko-KR 고정이라 다섯 언어 화면 모두
  * 「2026. 11. 28. 오후 3:00:00」 꼴이었다(다른 언어 화면에 한국어 — WCAG 3.1.2). 브라우저 지역(인자 없는 지역 꼴)도 쓰지 않는다:
@@ -10,6 +10,27 @@
 /** 지금 화면 언어의 Intl 지역(ko·en·ja·zh-CN·de — 비었으면 한국어) */
 export function screenLocale(): string {
   return (typeof document !== 'undefined' && document.documentElement.lang) || 'ko';
+}
+
+/** 지역마다 소수점 글자(한 번 읽어 둔다) */
+const DECIMAL = new Map<string, string>();
+
+/**
+ * 셈 소수(파일 크기 「1.5 KB」처럼 사람이 읽는 셈 수의 소수 — 348차) → 화면 언어 꼴 소수점: 독일어 「1,5」, 한국어·영어·일본어·중국어 「1.5」.
+ * 자릿수 반올림은 toFixed 그대로(소수점 글자만 바꾼다)이고 천 단위 묶음은 넣지 않는다(344차 — 셈 수는 묶음 없는 꼴).
+ * CAD 단위 값(core/units.ts — 명령줄이 다시 읽는 꼴)·명령줄 입력·LISP·파일에 쓰는 값은 이 길을 쓰지 않는다(AutoCAD처럼 「.」 그대로).
+ */
+export function decimalText(v: number, digits: number, locale = screenLocale()): string {
+  let sep = DECIMAL.get(locale);
+  if (sep === undefined) {
+    try {
+      sep = new Intl.NumberFormat(locale).formatToParts(1.5).find((p) => p.type === 'decimal')?.value ?? '.';
+    } catch {
+      sep = '.';
+    }
+    DECIMAL.set(locale, sep);
+  }
+  return v.toFixed(digits).replace('.', sep);
 }
 
 /**

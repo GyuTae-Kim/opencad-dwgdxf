@@ -1,6 +1,7 @@
 /** DOM 도우미: 요소 만들기, 알림, 메뉴, 대화상자 */
 import { icon } from './icons';
 import { SHORT_HEIGHT, clampBox } from './layout';
+import { decimalText } from '../datetext';
 import { uiText } from '../i18n-text';
 
 export function h<K extends keyof HTMLElementTagNameMap>(
@@ -438,10 +439,11 @@ export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
+/** 파일 크기 글(셈 소수 — 소수점은 화면 언어 꼴: 독일어 「1,5 KB」, 348차) */
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  if (n < 1024 * 1024) return `${decimalText(n / 1024, 1)} KB`;
+  return `${decimalText(n / 1024 / 1024, 1)} MB`;
 }
 
 /** 버튼을 고르게 하는 질문 상자(닫으면 null) */

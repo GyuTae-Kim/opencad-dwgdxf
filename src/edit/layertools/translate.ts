@@ -13,6 +13,7 @@
 import type { CadDocument, Entity, Layer } from '../../core/model';
 import { BYLAYER, TRANSPARENCY_BYLAYER, tableKey } from '../../core/model';
 import { createNewDocument } from '../../core/newdoc';
+import { stampDate } from '../filecmds/stamp';
 import type { EditOp, ScanHint } from '../session';
 import { applyOps, hintOnce, isLayoutBlock, modifyOp } from '../session';
 import { maxHandle } from '../util/audit';
@@ -211,12 +212,15 @@ export function translateLayersOps(
   return res;
 }
 
-/** 변환 로그(이 앱의 문장 형식) */
+/**
+ * 변환 로그(이 앱의 문장 형식 — 사람이 읽는 내려받는 글 파일, 앱이 다시 읽지 않는다).
+ * 날짜는 다른 기록 글(플롯 스탬프·전송 보고서·복구 목록)과 같은 현지 꼴 「YYYY-MM-DD hh:mm:ss」(348차 — 전에는 UTC ISO 꼴이라 이 로그만 갈렸다)
+ */
 export function translateLog(drawing: string, mappings: readonly LayerMapping[], settings: TranslateSettings, r: TranslateResult, when = new Date()): string {
   const yn = (b: boolean) => (b ? '예' : '아니오');
   const lines = [
     `도면층 변환 로그 — ${drawing}`,
-    `날짜: ${when.toISOString()}`,
+    `날짜: ${stampDate(when)}`,
     '',
     '[설정]',
     `객체 색상을 BYLAYER로 강제: ${yn(settings.forceColor)}`,
