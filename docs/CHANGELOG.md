@@ -3,6 +3,32 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-29(347차): 시스템 변수 DATE의 시간대, 쓰지 않던 율리우스일 함수
+
+### 근거와 표
+- 시스템 변수 DATE(율리우스일)·CDATE(YYYYMMDD.HHMMSSmsec 꼴 실수)는 그 컴퓨터의 현지 시계입니다(AutoCAD 시스템 변수 정의 — 346차의 TDCREATE·TDUPDATE와 같은 뜻, TDUCREATE·TDUUPDATE는 UTC).
+  지금 때를 내는 자리를 src에서 전수로 모았습니다(14 — 시간 예산·id에 쓰는 ms 수는 뺌).
+
+| 자리 | 지금 쓰는 시계 | 판정 |
+| --- | --- | --- |
+| LISP `(getvar "DATE")`, 명령줄 시스템 변수 보기·SETVAR 목록·SYSVDLG(같은 함수) | UTC 율리우스일(같은 순간의 CDATE는 현지 — 한국 시간에서 9시간 갈림) | 현지로 |
+| 같은 곳 CDATE | 현지 | 둠(맞음) |
+| 필드 지금 날짜·TIME 「현재 시간」·표제란 DATE 속성·플롯 스탬프·전송 보고서와 ZIP 항목 때·붙여 넣은 그림 이름·복구 목록·최근 파일·VL-FILE-SYSTIME | 현지 | 둠(맞음) |
+| 도면층 변환 로그 「날짜:」 | UTC(ISO 꼴 끝에 Z — UTC라고 밝힘) | 둠 |
+| 새 도면·템플릿·DWG/DXF 작성기 빈 값(346차) | TDCREATE·TDUPDATE 현지, TDU* UTC | 둠 |
+| DXF 작성기 — UTC 변수가 없고 현지 변수만 있으면 그 값을 옮김 | 현지 값(저장한 곳의 시간대를 모름) | 둠(346차 남은 위험 그대로) |
+
+- 고친 것: `src/app/lisp-host.ts` DATE가 `src/core/julian.ts` julianLocal(346차 — 그 순간의 UTC 율리우스일 + 시간대 차, 여름 시간 포함)을 부릅니다. CDATE와 같은 순간·같은 시계라 두 값이 같은 벽시계를 가리킵니다.
+  이제 지금을 율리우스일로 바꾸는 자리는 core/julian.ts 하나입니다.
+- 지운 것: `src/edit/field/format.ts` julianToDate — src·시험·도구 어디서도 부르지 않았고(다시 내보내기·문자열 참조 0), 율리우스일을 UTC 순간으로 읽는 꼴이라 현지 시각 변수에 쓰면 346차가 고친 「시간대를 또 더함」과 같아집니다. 필드는 evaluate.ts julianToLocal(칸 그대로)을 씁니다.
+- 재발 막기: `tests/i18n-julian346.test.ts` (마) — 시간대 셋(Asia/Seoul·UTC·America/New_York)에서 Date를 한 순간에 고정해 DATE·CDATE(getSysVar·sysvarInfo)가 그 순간의 현지 벽시계, DATE를 칸으로 풀면 CDATE와 같은 날짜·시각,
+  같은 순간 새 도면의 TDCREATE와 같고 TDUCREATE와는 시간대 차이만큼 갈림. 율리우스일 → 1970 기준 ms 꼴은 src 전체에서 datetext.ts(화면)·evaluate.ts(필드) 둘(새로 생기면 실패). (라)의 「지금을 율리우스일로 바꾸는 자리」 고정 줄은 core/julian.ts 하나로.
+
+### 확인
+- 고치기 전(한 잠금): (마) 실패(서울 DATE 2461373.125 — 바랄 값 2461373.5, 0.375일 = 9시간)·(라) 고정 줄 실패. 고친 뒤 julian346·field 시험 통과, 타입 검사 통과.
+- 한 잠금 238파일(346차 끝 묶음 222 + LISP·시스템 변수·필드 형식 시험): 1923 통과·94 건너뜀·실패 0. 사전은 그대로(열쇠 9463).
+- 결과 같음 묶음·전체 시험·휴대폰 검사는 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함).
+
 ## 2026-11-29(346차): 도면의 만든·고친 때 시간대, DWGPROPS 통계 날짜 이름표
 
 ### 근거와 표

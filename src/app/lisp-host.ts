@@ -6,6 +6,7 @@
  */
 import type { Entity, HeaderValue } from '../core/model';
 import { tableKey } from '../core/model';
+import { julianLocal } from '../core/julian';
 import { HEADER_VARS } from '../io/dxf/headervars';
 import type { AskOptions, AskResult, LispDrawing, LispHost } from '../edit/lisp/host';
 import { isPoint, point } from '../edit/lisp/core';
@@ -275,8 +276,9 @@ function sessionVar(app: App, n: string): Value | undefined {
       const s = `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}.${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}${p(Math.floor(now.getMilliseconds() / 10))}`;
       return new Real(Number(s));
     }
+    // DATE는 CDATE와 같은 현지 시계의 율리우스일(AutoCAD 시스템 변수 정의 — TDCREATE와 같은 뜻). 346차까지는 UTC 율리우스일이라 한국 시간에서 CDATE와 9시간 갈렸다(347차)
     case 'DATE':
-      return new Real(now.getTime() / 86400000 + 2440587.5);
+      return new Real(julianLocal(now));
     case 'MILLISECS':
       return Math.floor(performance.now()) | 0;
     case 'ACADVER':
