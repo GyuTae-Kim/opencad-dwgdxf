@@ -58,7 +58,9 @@ ACAD_PLOTSETTINGS·ACAD_PLOTSTYLENAME(기본값 Normal 자리 표시), R2007+는
 - 늘 쓰는 값: `$ACADVER`(대상 버전), `$ACADMAINTVER`, `$DWGCODEPAGE`(문서 값, 없으면 ANSI_1252), `$HANDSEED`, `$HANDLING` 1.
 - `$CLAYER`·`$CELTYPE`·`$TEXTSTYLE`·`$DIMSTYLE`·`$CMLSTYLE`·`$DIMTXSTY`는 쓰는 표에 있는 이름일 때만, 아니면 기본값.
   핸들 변수(320~369·390~399)는 가리키는 객체를 쓸 때만 쓴다.
-- `$INSUNITS`가 없는 문서는 0(단위 없음)으로 쓴다. 날짜($TDCREATE …)·GUID가 없으면 지금 시각·새 GUID를 쓴다.
+- `$INSUNITS`가 없는 문서는 0(단위 없음)으로 쓴다. 날짜($TDCREATE …)·GUID가 없으면 지금 시각·새 GUID를 쓴다
+  (`$TDCREATE`·`$TDUPDATE`는 쓰는 곳의 현지 벽시계, `$TDUCREATE`·`$TDUUPDATE`는 UTC — `src/core/julian.ts`, 346차.
+  UTC 변수만 없고 현지 변수가 있으면 그 값을 옮긴다 — 저장한 곳의 시간대를 몰라 바꾸지 않는다).
   `$TDUPDATE`는 문서 값을 그대로 쓴다(저장 시각으로 바꾸려면 쓰기 전에 헤더를 고친다).
 
 ## 문자열

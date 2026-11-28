@@ -2658,8 +2658,10 @@ AutoCAD 2D 제도 기능과 하나씩 맞대어 본 결과(틀린 도면·자료
   도면 비교 정보만 그대로). `src/app/datetext.ts` drawingTimeText 한 길로 — 현지 시각 변수는 칸 그대로, TDUCREATE·TDUUPDATE(UTC)는 보는 사람의 현지 시각으로(같은 도면의 두 값이 같은 때).
   ms로 반올림(율리우스일 끝자리 오차로 10:00:00이 9:59:59로 보이지 않게). DWGPROPS 통계 이름표 「작성」「수정」(공유 열쇠 — Author·Edit)을 「작성 날짜」(FIELD)·「마지막 수정」(도면 비교)으로.
   도면에 쓰는 값·사전 그대로(열쇠 9463). `tests/i18n-julian346.test.ts`(시간대 셋)·`tests/i18n-datefmt345.test.ts`. 표는 CHANGELOG 346차 절
-- [ ] 346차에 보고 두 것 — (1) 작성기가 현지 시각 변수에 UTC 시각을 쓴다: 새 도면(core/newdoc.ts)·템플릿 새 도면(save.ts)·DWG 작성기의 빈 값·DXF 작성기의 TDUCREATE·TDUUPDATE 빈 값(TD* 값을 옮김)이
-  모두 Date.now() 율리우스일(UTC) — 이 앱에서 만든 도면의 만든 때는 이제 UTC 벽시계로 보인다(한국 시간이면 9시간 앞). 쓰는 값 몫이라 둠(AutoCAD 도면은 맞게 보임).
+- [x] 새 도면·저장의 만든·고친 때(346차 — 같은 차수 둘째 고침): 새 도면·템플릿 새 도면·DWG/DXF 작성기 빈 값이 현지 시각 변수 TDCREATE·TDUPDATE에도 UTC 율리우스일을 써,
+  위 고침 뒤 이 앱에서 만든 도면의 만든 때가 UTC 벽시계(한국 시간이면 9시간 앞)로 보였다. `src/core/julian.ts` 한 곳 — 현지 변수는 그 순간의 현지 벽시계(여름 시간 포함), UTC 변수는 UTC.
+  FIELD CreateDate·SaveDate는 이미 칸 그대로(같은 뜻). `tests/i18n-julian346.test.ts` (라)
+- [ ] 346차에 보고 두 것 — (1) DXF 작성기는 UTC 변수(TDUCREATE·TDUUPDATE)가 없고 현지 변수만 있으면(DWG에서 읽은 도면 등) 그 현지 값을 옮겨 쓴다 — 저장한 곳의 시간대를 몰라 둠.
   (2) LISP DATE(app/lisp-host.ts)는 UTC 율리우스일(AutoCAD는 현지 — 같은 곳의 CDATE는 현지 꼴) — LISP 값이라 둠. (3) edit/field/format.ts julianToDate는 부르는 곳이 없다(FIELD는 julianToLocal — 맞음).
   (4) 345차 (3)·344차 (2)(4) 그대로. 원어민 검토 없음
 - [x] MATCHPROP·특성 팔레트로 치수를 주석으로 바꾸면 축척 배율로 다시 그린 새 `*D` 블록을 쓰고 원래 그림 블록이 쓰이지 않은 채 남던 것(120차 — 다른 치수·레코드가 쓰지 않으면 같은 명령 취소 단계에서 지운다)
