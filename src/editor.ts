@@ -100,6 +100,8 @@ export function startEditor(root: HTMLElement): EditorActions {
     throw e;
   }
   root.addEventListener('languagechange', () => app.view.requestRender());
+  // 떠 있는 물음에 화면 언어로 끼운 앱 낱말이 있으면 새 언어로 다시 만든다(341차 — App.relabelPrompt)
+  root.addEventListener('languagechange', () => app.relabelPrompt());
   // 도면에서 온 글은 화면 번역층이 바꾸지 않는다(104차)
   installFileGuard(app);
   app.ui = shell;

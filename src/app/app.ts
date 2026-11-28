@@ -136,6 +136,8 @@ interface PointRequest {
   freeText: boolean;
   /** 숫자만 입력하면 직접 거리 입력 대신 문자로 돌려준다(각도·축척 입력) */
   preferNumber: boolean;
+  /** 물음을 지금 화면 언어로 다시 만드는 함수(PointOptions.relabel — 341차) */
+  relabel?: () => string;
   /** 이 입력을 기다리는 명령(실행의 취소 신호). 명령이 끝날 때 자기 요청만 치운다 */
   signal: AbortSignal;
   resolve: (r: PointResult) => void;
@@ -226,6 +228,11 @@ export interface PointOptions {
    * 도면 공간에서 객체 스냅으로 모형 공간 점에 스냅한다). 결과 snap.viewport에 그 뷰포트와 모형 좌표를 싣는다(DIST의 투영 거리)
    */
   viewportSnaps?: boolean;
+  /**
+   * 물음을 지금 화면 언어로 다시 만드는 함수(341차): 물음에 앱 낱말을 화면 언어로 옮겨 끼웠으면(uiText — 물음을 만든 때의 언어 글) 함께 준다.
+   * 물음이 떠 있는 동안 언어를 바꾸면 App.relabelPrompt가 이 함수로 물음을 새 언어로 다시 만든다(한국어 원문만으로 된 물음은 번역층이 다시 옮겨 필요 없다)
+   */
+  relabel?: () => string;
 }
 
 export interface CommandContext {
@@ -635,6 +642,8 @@ export class App {
         // 바깥 명령이 아직 그 입력을 기다리면 되돌린다(그 사이 취소·이어받기로 끝났으면 되돌리지 않는다)
         if (!this.request && saved && !saved.signal.aborted && this.running === outer) {
           this.request = saved;
+          // 투명 명령이 도는 동안 화면 언어를 바꿨으면 바깥 물음도 지금 언어로(341차)
+          if (saved.kind === 'point' && saved.relabel) saved.prompt = saved.relabel();
           this.cmd.setPrompt(this.promptOf(saved));
           // 커서 옆 안내도 바깥 명령의 것으로(25차 헤드리스에서 찾음: 투명 명령의 안내가 커서를 움직일 때까지 남았다 — 휴대폰은 다음 터치까지)
           this.view.overlay.tip = saved.kind === 'select' ? saved.prompt.replace(/:\s*$/, '') : saved.prompt.replace(/\[.*$/, '').replace(/:\s*$/, '');
@@ -759,6 +768,20 @@ export class App {
     return r.prompt.replace(/:$/, '') + ` [${kw}]:`;
   }
 
+  /**
+   * 화면 언어를 바꾼 뒤(341차 — editor.ts가 languagechange에서 부른다): 떠 있는 점 물음이 다시 만드는 함수(PointOptions.relabel)를 주었으면
+   * 새 언어로 다시 만들어 물음 줄·휴대폰 카드(지켜보는 쪽)·커서 옆 안내를 다시 그린다. 친 입력을 붙여 찍는 기록 줄도 새 물음으로 찍힌다.
+   * 한국어 원문만으로 된 물음은 번역층이 글 마디의 원문으로 다시 옮기므로 그대로 두고, 이미 찍힌 기록 줄은 찍은 때의 글 그대로다
+   */
+  relabelPrompt(): void {
+    const r = this.request;
+    if (r?.kind !== 'point' || !r.relabel) return;
+    r.prompt = r.relabel();
+    this.cmd.setPrompt(this.promptOf(r));
+    this.view.overlay.tip = r.prompt.replace(/\[.*$/, '').replace(/:\s*$/, '');
+    this.view.requestOverlay();
+  }
+
   private requestPoint(prompt: string, opt: Parameters<CommandContext['getPoint']>[1] = {}, signal: AbortSignal): Promise<PointResult> {
     return new Promise((resolve, reject) => {
       if (signal.aborted) return reject(new CancelError());
@@ -779,6 +802,7 @@ export class App {
         allowText: !!opt.allowText || !!opt.preferNumber,
         freeText: !!opt.allowText,
         preferNumber: !!opt.preferNumber,
+        relabel: opt.relabel,
         signal,
         resolve: (r) => {
           if (this.request === req) this.request = null;
