@@ -191,7 +191,7 @@ describe('파일·저장·도면 정리 묶음의 번역과 302차가 남긴 것
     expect(tr('zh-CN')(REPORT[7]!)).toBe('嵌入式文件 (3 + 本报告)');
     expect(tr('en')('축척(1 = 실제 크기, 인치)')).toBe('Scale (1 = actual size, inch)');
     expect(show(RECORDS[0]!, 'en')).toBe('Do you want to measure the angle clockwise? [Yes (Y)/No (N)] <No>: Y');
-    expect(show(RECORDS[1]!, 'zh-CN')).toBe('您想顺时针测量角度吗？ [是(Y)/否(N)] <是>： N');
+    expect(show(RECORDS[1]!, 'zh-CN')).toBe('您想顺时针测量角度吗？ [是(Y)/否(N)] <是>：N');
     expect(show(RECORDS[2]!, 'de')).toBe('Ansichtsfenster-Layout eingeben [Horizontal (H)/Vertikal (V)/Oben (A)/Unten (B)/Links (L)/Rechts (R)] <Rechts>: L');
   });
 

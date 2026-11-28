@@ -250,7 +250,8 @@ describe('334차가 보고 둔 다국어 꼴 둘 — 글자 없는 마디의 거
         const rec = document.getElementById('cmd')!.querySelector('.cmd-history')!.lastElementChild!.textContent!;
         const mobile = card.textContent!;
         if (tail(shown) !== ']：') bad.push(`물음 줄: ${shown}`);
-        if (rec !== `${zh[q]} 1` || tail(rec.slice(0, -2)) !== tail(shown)) bad.push(`기록 줄: ${rec} ↔ ${shown}`);
+        // 343차: 전각 쌍점 뒤에는 친 입력 앞 빈칸이 없다(fileguard.ts glue — 같은 사전 다수 꼴): 기록 줄 = 통째 값 + 「1」
+        if (rec !== `${zh[q]}1` || tail(rec.slice(0, -1)) !== tail(shown)) bad.push(`기록 줄: ${rec} ↔ ${shown}`);
         if (mobile !== zh[q] || tail(mobile) !== tail(shown)) bad.push(`휴대폰: ${mobile} ↔ ${shown}`);
       }
     });

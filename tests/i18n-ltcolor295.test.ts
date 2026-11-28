@@ -145,7 +145,7 @@ describe('선종류·선가중치·색·그리기 순서 묶음의 번역과 294
     expect(left).toEqual([]);
     expect(show(RELOAD, 'en')).toBe('Linetype "CENTER" is already loaded. Would you like to reload? [Yes (Y)/No (N)] <Yes>:');
     expect(show(`${REDEF} Y`, 'ja')).toBe('線種「DASH2」は既に存在します。再定義しますか？[はい(Y)/いいえ(N)] <いいえ>: Y');
-    expect(show(`${DRAW} F`, 'zh-CN')).toBe('输入对象顺序选项 [对象上移 (A)/对象下移 (U)/前置(F)/置于底层(B)] <置于底层>： F');
+    expect(show(`${DRAW} F`, 'zh-CN')).toBe('输入对象顺序选项 [对象上移 (A)/对象下移 (U)/前置(F)/置于底层(B)] <置于底层>：F');
     expect(show(DRAW, 'en')).toBe('Enter object order option [Above Object (A)/Below Object (U)/Bring to Front (F)/Send to Back (B)] <Send to Back>:');
     expect(tr('en')(RESULTS[1]!)).toBe('Linetype "CENTER" reloaded.');
     expect(tr('de')(RESULTS[2]!)).toBe('Linientyp „DASH2“ wurde erstellt: A,.5,-.25');

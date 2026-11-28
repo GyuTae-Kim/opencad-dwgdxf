@@ -25,6 +25,8 @@ const load = (lang: string): Record<string, string> => JSON.parse(readFileSync(n
 const dict = Object.fromEntries(LANGS.map((l) => [l, load(l)])) as Record<Lang, Record<string, string>>;
 /** 기록 줄을 번역층처럼(fileguard.ts installFileGuard — 통째 번역이 한국어를 남기면 translateTail, 화면 언어도 넘김) 옮기고 도면 글 표시를 뗀다 */
 const show = (line: string, l: Lang): string => unmark(translateTail(line, translate(line, l), (s) => translate(s, l), l));
+/** 옮긴 물음 + 친 입력(343차 — fileguard.ts glue): 전각 쌍점 뒤에는 빈칸을 두지 않는다(같은 사전 다수 꼴), 그 밖은 원문 빈칸 하나 */
+const typed = (head: string, input: string): string => `${head}${head.endsWith('：') ? '' : ' '}${input}`;
 /** 그 언어 사전에서 기본값 없는 물음(쌍점으로 끝나고 기본값 꼬리 「>:」가 아닌 열쇠) 값의 끝 쌍점 다수 꼴 */
 const colonOf = (l: Lang): string => {
   const ends = Object.keys(dict[l]).filter((k) => /[^>]:$/.test(k)).map((k) => dict[l][k]!.slice(-1));
@@ -72,15 +74,15 @@ describe('330·329차가 보고 둔 다국어 꼴 넷(331차)', () => {
     const k = '직사각형의 길이 지정';
     for (const l of LANGS) {
       expect(dict[l][`${k}:`], l).toBeUndefined();
-      expect(show(`${k}: ⁨40⁩`, l), l).toBe(`${dict[l][k]}${colonOf(l)} 40`);
+      expect(show(`${k}: ⁨40⁩`, l), l).toBe(typed(`${dict[l][k]}${colonOf(l)}`, '40'));
     }
-    expect(show(`${k}: ⁨40⁩`, 'zh-CN')).toBe('指定矩形的长度： 40');
+    expect(show(`${k}: ⁨40⁩`, 'zh-CN')).toBe('指定矩形的长度：40');
     // 통째 열쇠가 있으면 그 값의 쌍점(중국어 반각 값·일본어 전각 값도 그대로 — 사전 몫)
     const zhHalf = '(추가 모드) 객체 선택:';
     const jaFull = '2D 폴리선 선택:';
     expect([dict['zh-CN'][zhHalf]!.slice(-1), dict.ja[jaFull]!.slice(-1)]).toEqual([':', '：']);
     expect(show(`${zhHalf} ⁨10,20⁩`, 'zh-CN')).toBe(`${dict['zh-CN'][zhHalf]} 10,20`);
-    expect(show(`${jaFull} ⁨10,20⁩`, 'ja')).toBe(`${dict.ja[jaFull]} 10,20`);
+    expect(show(`${jaFull} ⁨10,20⁩`, 'ja')).toBe(typed(dict.ja[jaFull]!, '10,20'));
     // 한국어 화면은 번역층이 그대로 둔다
     expect(translate(`${k}: ⁨40⁩`, 'ko')).toBe(`${k}: ⁨40⁩`);
   });
@@ -111,7 +113,7 @@ describe('330·329차가 보고 둔 다국어 꼴 넷(331차)', () => {
               if (!hangul(out)) still.push(`${l}: ${out}`);
               continue;
             }
-            const want = `${dict[l][k] ?? asPrompt(k, l)} ${unmark(input)}`;
+            const want = typed(dict[l][k] ?? asPrompt(k, l), unmark(input));
             if (out !== want || hangul(out)) left.push(`${l}: ${out} ≠ ${want}`);
           }
       }
@@ -123,7 +125,7 @@ describe('330·329차가 보고 둔 다국어 꼴 넷(331차)', () => {
     // 표본: 간격띄우기 면의 점(express-draw.ts) + 옵션 글자
     const OFF = '통과점 지정 또는 [양쪽(B)]:';
     expect(show(`${OFF} B`, 'en')).toBe(`${dict.en['통과점 지정 또는 [']}${dict.en['양쪽(B)']}]: B`);
-    expect(show(`${OFF} B`, 'zh-CN')).toBe(`${dict['zh-CN']['통과점 지정 또는 [']}${dict['zh-CN']['양쪽(B)']}]： B`);
+    expect(show(`${OFF} B`, 'zh-CN')).toBe(`${dict['zh-CN']['통과점 지정 또는 [']}${dict['zh-CN']['양쪽(B)']}]：B`);
     expect(translate(`${OFF} B`, 'ko')).toBe(`${OFF} B`);
     // 조각 기록 줄·물음 줄 단추가 보이는 옵션 「양쪽(B)」은 같은 물음 틀의 옵션 낱말(zh 仅显示 「보이기만」·de Nur 「만」이 아니다 — 331차 고치기 전 실행이 찾음)
     for (const l of ['en', 'zh-CN', 'de'] as const) expect(dict[l]['{0} 지정 또는 [양쪽(B)]:'], l).toContain(`[${dict[l]['양쪽(B)']}]`);
@@ -160,5 +162,49 @@ describe('330·329차가 보고 둔 다국어 꼴 넷(331차)', () => {
       // 지운 틀: 새 뷰·BLOCK·새 페이지 설정 기본 이름(입력 칸 값 — 도면 이름이 된다)
       for (const n of ['뷰1', '블록1', '설정1']) expect(translate(n, l), `${l} ${n}`).toBe(n);
     }
+  });
+});
+
+/*
+ * 343차(342차에 보고 둔 값 몫): (1) 같은 옵션의 통째 물음 값(기록 줄·휴대폰 카드)과 옵션 조각 값(물음 줄 단추·칩)이 한 낱말 — 「연관해제됨(D)」는
+ * ja 関連付け解除(D) ↔ 関連解除済み(D)·zh 未关联 (D) ↔ 非关联(D)로 갈렸다. 같은 사전 어간(jq — ja 関連付け解除 6·関連解除 2, zh 未关联 6·非关联 2: 2는 조각 열쇠 둘)으로,
+ * 같은 어간의 「연관 해제(DI)」(-HATCHEDIT) 조각도 통째 값 낱말로. zh 통째 옵션 「(X)」 앞 빈칸은 같은 사전 다수 꼴(없음 3,057 · 있음 203)로.
+ * (2) 전각 쌍점 뒤 빈칸: zh 값 7(「创建日期： {0}」 등 — 같은 사전 「：」 뒤가 글자 652)과 기록 줄(옮긴 물음 + 빈칸 + 친 입력 — 331차에 보고 두 것 (5))을
+ * 같은 사전 다수 꼴(빈칸 없음 — 기록 줄 틀 「…]：{0}」과 같음)로.
+ */
+describe('342차가 보고 둔 값 몫 — 옵션 낱말 하나·전각 쌍점 뒤 빈칸(343차)', () => {
+  it('(1) 「연관해제됨(D)」 통째 물음 값의 옵션 = 옵션 조각 값(네 언어), ja·zh는 같은 사전 어간 하나(関連解除·非关联 0), 「연관 해제(DI)」도 ja·zh 한 낱말', () => {
+    const optOf = (v: string): string => /\[([^\]]*)\]/.exec(v)![1]!.split('/')[0]!;
+    const WHOLE = '객체 선택 또는 [연관해제됨(D)]:';
+    for (const l of LANGS) expect(optOf(dict[l][WHOLE]!), l).toBe(dict[l]['연관해제됨(D)']);
+    for (const l of ['ja', 'zh-CN'] as const) expect(optOf(dict[l]['해치 옵션 입력 [연관 해제(DI)/스타일(S)/특성(P)] <특성>:']!), l).toBe(dict[l]['연관 해제(DI)']);
+    expect(Object.values(dict.ja).filter((v) => v.includes('関連解除'))).toEqual([]);
+    expect(Object.values(dict['zh-CN']).filter((v) => v.includes('非关联'))).toEqual([]);
+    expect(dict['zh-CN']['연관해제됨(D)']).toBe(`${dict['zh-CN']['연관해제됨']}(D)`);
+    // 기록 줄(통째 값 + 친 옵션 글자)
+    for (const l of LANGS) expect(show(`${WHOLE} D`, l), l).toBe(typed(dict[l][WHOLE]!, 'D'));
+  });
+
+  it('(2) 전각 쌍점 뒤 빈칸 없음 — ja·zh 사전 값 0, 「：」로 끝나는 물음(기본값 있는·없는 것)의 기록 줄은 「：」 + 친 입력(반각 쌍점·한국어는 원문 빈칸 그대로)', () => {
+    for (const l of ['ja', 'zh-CN'] as const)
+      expect(
+        Object.entries(dict[l])
+          .filter(([, v]) => /： /.test(v))
+          .map(([k]) => k),
+        l,
+      ).toEqual([]);
+    expect(dict['zh-CN']['만든 날짜: {0}']).toBe('创建日期：{0}');
+    const bad: string[] = [];
+    let seen = 0;
+    for (const l of ['ja', 'zh-CN'] as const)
+      for (const k of Object.keys(dict[l]).filter((x) => /[가-힣]/.test(x) && /:$/.test(x) && !/\{\d+\}/.test(x) && dict[l][x]!.endsWith('：'))) {
+        seen++;
+        const out = show(`${k} ⁨1⁩`, l);
+        if (out.includes('： ')) bad.push(`${l}: ${out}`);
+      }
+    expect(seen).toBeGreaterThan(500);
+    expect(bad.length, bad.slice(0, 6).join('\n')).toBe(0);
+    expect(show('직사각형의 길이 지정: ⁨40⁩', 'en')).toBe(`${dict.en['직사각형의 길이 지정']}: 40`);
+    expect(translate('직사각형의 길이 지정: ⁨40⁩', 'ko')).toBe('직사각형의 길이 지정: ⁨40⁩');
   });
 });
