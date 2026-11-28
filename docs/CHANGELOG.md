@@ -3,6 +3,42 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(340차): 남은 결과 줄 열둘·시험이 수로 채우던 이름 표와 멤버 값·「(주석)」의 뜻
+
+### 근거와 표
+- 339차가 둔 결과 줄 열둘(ROADMAP 「339차에 보고 두 것」 (1))을 줄마다 다시 보았습니다. 다섯은 이미 네 사전에 열쇠가 있었습니다 —
+  외부 참조 이름 안내 둘과 MKLTYPE의 .lin 내려받음은 사전 틀이 이름과 「_n」·「.lin」을 따로 끼우는 꼴인데 105차가 둘을 함께 도면 글로 가둬 틀이 잡지 못했고,
+  -PURGE 미지원 안내(이 줄에 오는 재료·플롯 스타일·형태·비주얼 스타일·고립된 데이터 다섯)와 빈 도면의 DBLIST 끝 줄은 통째 열쇠가 있어 실제로는 옮겨졌습니다(시험이 끼우는 값을 수로 채운 탓).
+  나머지 일곱은 끼운 요약 문장(CHECKSTANDARDS)·종류 목록(「IMAGE 1개」의 「개」·함께 가져온 정의 종류·평면화하지 못한 까닭)·동사 조각(-DIMSTYLE 「재정의했습니다/저장했습니다」,
+  IMPORT 「재정의/만들었」 — 한국어부터 「재정의습니다」로 틀림)이었습니다.
+- 시험이 수 「1」로 채우던 식을 따라가게 했습니다(339차에 보고 두 것 (3)): 소문자 이름 표(그립 모드 `names[mode]`)·상수 표 항목 찾기의 특성(`RENAME_KINDS.find(…)!.label`)·
+  한글 글을 넣는 멤버 값(DBLIST `row.k`·`row.v`, 저장 형식·이름 바꾸기 종류·그립 옵션·XLIST·용지·특성 팔레트 이름표 — 그 파일이나 가져온 파일에 그 멤버로 한글 글을 넣는 곳이 있으면 대표 값 표가 있어야 합니다.
+  오류 글 멤버 41은 339차 규칙 그대로), 템플릿 글에 한글이 없어도 끼우는 값이 앱 낱말인 줄(DBLIST 특성 줄 꼴 — 339차 거르개 밖). 결과·알림 줄 꼴 774 · 채운 줄 1415에서 **한국어가 남던 줄 101**을 더 찾았습니다.
+
+| 꼴 | 보기(src/app) | 고치기 전(영어) | 고친 뒤(영어) |
+| --- | --- | --- | --- |
+| 그립 모드 이름 + 「(다중)」 | modify 그립 편집(339차가 「(다중)」만 옮겨 통째 열쇠를 잃음) | ** 신축 (multiple) ** | ** STRETCH (multiple) ** |
+| 다기능 그립 옵션 머리 | modify(gripmenu 옵션 셋) | ** 맞춤점 신축 ** | ** STRETCH FIT POINT ** |
+| DBLIST 특성 값 | editcmds2-query | Closed: 아니요 | Closed: No |
+| 저장 형식 이름 | save 저장 결과·손실 안내 | Saving as AutoCAD 2013/LT2013 도면 (*.dwg) drops or converts the following: | Saving as AutoCAD 2013/LT2013 drawings (*.dwg) drops or converts the following: |
+| 도구 이름 | mlinecmds MLEDIT | 닫힌 십자형: Two multilines do not meet (parallel) or are closed multilines. | Closed cross: Two multilines do not meet … |
+| 도면 글 가둠이 틀과 다름 | blkcmds-xref 둘 · express-draw MKLTYPE | (통째 한국어) | "A-1" is already a block name in this drawing, so the external reference name is A-1_1. |
+| 끼운 요약 문장·종류 목록 | cadstandards · designcenter 셋 · express-draw FLATTEN · filecmds-export IMPORT | Skipped: 3D 솔리드·표면·메시 1개 | Skipped: 3D solid/surface/mesh 1 |
+| 동사 조각 | dashcmds-tables -DIMSTYLE · filecmds-export IMPORT | Dimension style "A-1" is 재정의했습니다. It is the current dimension style. | Redefined dimension style "A-1". It is the current dimension style. |
+
+- 고친 것: 가둠을 사전 틀과 같게(이름만 도면 글), 끼운 문장·이름·값을 화면 언어로 끼움(uiText — 종류 목록은 낱말을 옮긴 뒤 「{0} {1}개」 틀로), 동사 조각을 끼우던 두 줄은 통째 문장 둘로,
+  그립 모드 줄은 「(다중)」을 원문 그대로 되돌려 통째 열쇠(네 사전 다섯 모드)가 잡히게 했습니다. src/app 10파일. 한국어 화면 글은 IMPORT 「재정의습니다」 → 「재정의했습니다」 하나만 바뀝니다.
+- 사전: 새 열쇠 여섯 × 네 사전(9463 → 9469) — 다기능 그립 머리 셋(「** 맞춤점 신축 **」·「** 정점 신축 **」·「** 화살표 반전 **」: 같은 사전의 「** 맞춤점 추가 **」 꼴과 옵션 이름 값),
+  통째 문장 셋(-DIMSTYLE 재정의·저장, IMPORT 재정의: 같은 사전의 「…을(를) 만들었습니다.」·「선종류 "{0}"을(를) 다시 정의했습니다」·「저장했습니다」 값). 지운 열쇠 없음.
+- 「(주석)」(339차에 보고 두 것 (4)): -DIMSTYLE 「?」 이름 목록에서 주석 치수 스타일 뒤에 붙는 표시 하나에만 쓰는데 네 값이 메모 뜻(Note·注釈·注·Hinweis)이었습니다 —
+  같은 사전의 주석 치수 스타일 물음·주석 객체 값의 annotative 낱말로 고쳤습니다(Annotative·異尺度対応·注释性·Beschriftung — 독일어는 313차 통일 낱말).
+- 재발 막기: 위 스캐너 확장(멤버·표 찾기에 대표 값이 없으면 실패, 값을 옮겨 적은 소스 글도 고정), 고친 줄 셋은 진짜 명령행 기록 줄·휴대폰 결과 카드로도 봅니다. 339차 「아직 둔 것」은 비었습니다. 「(주석)」은 쓰는 곳 하나와 네 값·근거 이웃 값을 고정합니다.
+
+### 확인
+- 고치기 전(한 잠금): `tests/i18n-front337.test.ts` — 처음 실행에서 (가)(대표 값 없는 멤버 13)·(다)(그립 모드 줄 셋)·「(주석)」 실패, 스캐너를 넓힌 뒤 (다)(남는 줄 101)·「(주석)」 실패. 고친 뒤 10시험 통과(남는 줄 0, 둔 것 0).
+- 타입 검사 통과. 한 잠금 119파일(339차 끝 묶음 106 + 바꾼 파일을 소스 글로 읽는 시험·바꾼 명령을 부르는 시험) 711시험 통과·1 건너뜀(소스 줄을 고정한 file303·annoscale312·inquiry299는 고정 줄을 새 줄로 고친 뒤).
+- 결과 같음 묶음·전체 시험·휴대폰 검사는 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-28(339차): 코드가 낱말을 끼워 만드는 결과·알림 줄 — 설정 값·종류 이름·모드 이름·덧붙인 문장
 
 ### 근거와 표
