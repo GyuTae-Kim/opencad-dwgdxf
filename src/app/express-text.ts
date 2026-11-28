@@ -20,6 +20,7 @@ import { type EncloseShape, SHAPE_LABEL, circleRadius, encloseText, isEncloseTar
 import { explodeTextGeometry, isExplodableText } from '../edit/express/txtexp';
 import type { App, Command, CommandContext, Keyword } from './app';
 import { currentProps } from './draw';
+import { uiText } from './i18n-text';
 import { unlockedOnly } from './layers';
 import { commitResults } from './modify';
 import { askNumber, choose, previewOf } from './modify2-util';
@@ -82,7 +83,8 @@ async function runTcase(app: App, ctx: CommandContext, dialogMode: boolean): Pro
     caseMode = v.mode as CaseMode;
   } else {
     const kws: Keyword[] = CASE_KEYS.map(([k, m]) => ({ key: k, label: CASE_LABEL[m] }));
-    const r = await ctx.getPoint(`대소문자 선택 [문장(S)/소문자(L)/대문자(U)/제목(T)/대소문자 전환(G)] <${CASE_LABEL[caseMode]}>:`, { keywords: kws });
+    // 기본값은 모드 이름표(「문장 대소문자」 — 옵션 이름 「문장」과 달라 번역층이 옵션 번역으로 바꾸지 못하고 틀 {0}에 한국어로 남았다 — 338차): 앱 낱말이라 화면 언어로 옮겨 끼운다
+    const r = await ctx.getPoint(`대소문자 선택 [문장(S)/소문자(L)/대문자(U)/제목(T)/대소문자 전환(G)] <${uiText(CASE_LABEL[caseMode])}>:`, { keywords: kws });
     if ('keyword' in r) caseMode = CASE_KEYS.find(([k]) => k === r.keyword)![1];
   }
   const changed = list.map((e) => caseEntity(e, caseMode)).filter((e): e is Entity => !!e);
