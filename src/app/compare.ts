@@ -15,6 +15,7 @@ import { buildSnapshot, planImport, stripEntity } from '../edit/compare';
 import { CLOUD_ACI, type CompareSource, CompareSession } from './compare-session';
 import { CompareToolbar, chooseDrawing, pickDrawingFile, showInfo } from './compare-ui';
 import { askCompareVar, getCompareVar, onCompareVarsChange, registerCompareVarCommands, setCompareVars } from './compare-vars';
+import { dateTimeText } from './datetext';
 import { Picker } from './pick';
 import { commitResults } from './modify';
 import { type EditResult, copyEntity } from '../edit/geom';
@@ -175,8 +176,8 @@ function formatOf(doc: CadDocument): string {
 
 function julian(v: HeaderValue | undefined): string {
   if (typeof v !== 'number' || !(v > 2000000)) return '-';
-  // 율리우스일은 저장한 곳의 현지 시각이다: 시간대를 더하지 않고 그대로 보인다
-  return new Date((v - 2440587.5) * 86400000).toLocaleString('ko-KR', { timeZone: 'UTC' });
+  // 율리우스일은 저장한 곳의 현지 시각이다: 시간대를 더하지 않고 그대로 보인다(꼴은 화면 언어 — 345차, 전에는 ko-KR 고정)
+  return dateTimeText(new Date((v - 2440587.5) * 86400000), { timeZone: 'UTC' });
 }
 
 function text(v: HeaderValue | undefined): string {

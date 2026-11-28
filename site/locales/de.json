@@ -1124,7 +1124,7 @@
   "{0}이(가) 이미 있습니다. 축척을 재정의하시겠습니까?": "{0} existiert bereits. Möchten Sie den Maßstab neu definieren?",
   "{0}이(가) 이제 현재 도면층입니다.": "{0} ist jetzt der aktuelle Layer.",
   "{0}일": "{0} Tage",
-  "{0}일 {1}:{2}:{3}": "Tag {0} {1}:{2}:{3}",
+  "{0}일 {1}:{2}:{3}": "{0} Tage {1}:{2}:{3}",
   "{0}직교(끄기)": "{0}Orthogonal (aus)",
   "{0}할": "{0}",
   "{0}할 명명된 축척 입력 또는 [": "Benannten Maßstab für {0} eingeben oder [",

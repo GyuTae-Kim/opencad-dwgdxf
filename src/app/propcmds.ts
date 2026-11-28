@@ -11,6 +11,7 @@ import { planProj } from '../edit/geom/ocs';
 import { nearestLineweight } from '../edit/layercmd';
 import { STANDARD_LINETYPES, makeLinetype } from '../edit/linetypes';
 import type { App, CommandContext } from './app';
+import { dateTimeText } from './datetext';
 import type { DocState } from './docstate';
 import { addEntities, currentElevation, currentProps } from './draw';
 import { form } from './ui/dom';
@@ -292,11 +293,11 @@ const PDMODES: [number, string][] = [
   [100, '원과 사각형 안의 세로선'],
 ];
 
-/** 율리우스일 → 날짜 문자열 */
+/** 율리우스일 → 화면 언어 꼴 날짜 문자열(345차 — 전에는 ko-KR 고정) */
 function julian(v: HeaderValue | undefined): string {
   if (typeof v !== 'number' || !(v > 2000000)) return '-';
   const d = new Date((v - 2440587.5) * 86400000);
-  return d.toLocaleString('ko-KR');
+  return dateTimeText(d);
 }
 
 function days(v: HeaderValue | undefined): string {
@@ -442,7 +443,7 @@ export function registerPropCommands(app: App): void {
     run(ctx) {
       const st = app.active!;
       const hd = st.doc.header;
-      ctx.print(`현재 시간:              ${new Date().toLocaleString('ko-KR')}`);
+      ctx.print(`현재 시간:              ${dateTimeText(new Date())}`);
       ctx.print(`이 도면의 시간:`);
       ctx.print(`  작성:                 ${julian(hd.get('$TDCREATE'))}`);
       ctx.print(`  마지막 업데이트:      ${julian(hd.get('$TDUPDATE'))}`);

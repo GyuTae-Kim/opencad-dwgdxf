@@ -1124,7 +1124,7 @@
   "{0}이(가) 이미 있습니다. 축척을 재정의하시겠습니까?": "{0} already exists. Would you like to redefine scale?",
   "{0}이(가) 이제 현재 도면층입니다.": "{0} is now the current layer.",
   "{0}일": "{0} days",
-  "{0}일 {1}:{2}:{3}": "Day {0} {1}:{2}:{3}",
+  "{0}일 {1}:{2}:{3}": "{0} days {1}:{2}:{3}",
   "{0}직교(끄기)": "{0}Orthogonal (off)",
   "{0}할": "{0}",
   "{0}할 명명된 축척 입력 또는 [": "Enter a named scale to {0} or [",

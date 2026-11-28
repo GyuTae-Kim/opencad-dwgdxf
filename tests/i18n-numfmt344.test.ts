@@ -5,7 +5,7 @@
  * - 사람이 읽는 셈 수(객체·항목·선택 수·바이트·반복 한도)도 앱 다수 꼴(「…${n}개」 템플릿 357 — 묶음 없음) 하나로. 고치기 전 18자리(16줄)는
  *   toLocaleString()(브라우저 지역 꼴 — 화면 언어가 아니라 브라우저 설정을 따라 독일어 브라우저면 「1.234」: CAD 값 소수점과 같은 글자)이거나
  *   toLocaleString('ko-KR')(쉼표 고정 — DWGPROPS 크기·객체 수, 같은 창의 배치 수는 묶음 없음)였다.
- * - 날짜·시각(DATES — 율리우스일·TIME·도면 비교)은 수 꼴이 아니라 두었다(344차에 보고 둠).
+ * - 날짜·시각(DATES — 율리우스일·TIME·도면 비교·최근 파일 목록)은 수 꼴이 아니다 — 345차에 화면 언어 꼴 한 곳(datetext.ts)으로 모았다.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -38,17 +38,14 @@ const LINES = files(SRC).flatMap((f) =>
 );
 const LOCALE = /\.toLocale(?:Date|Time)?String\(|Intl\.(?:NumberFormat|DateTimeFormat|PluralRules)/;
 /**
- * 지역 꼴로 남긴 날짜·시각 일곱 줄(수 꼴이 아니다 — 344차에 보고 둠): ko-KR 고정 넷(율리우스일·DWGPROPS·날짜 특성·TIME)과
- * 최근 파일 목록(recent.ts — 화면 언어 꼴, 한국어 화면은 'ko') 셋
+ * 지역 꼴로 만드는 날짜·시각 넷 줄(수 꼴이 아니다): 344차의 일곱 줄(ko-KR 고정 넷 — 율리우스일·DWGPROPS·날짜 특성·TIME, 최근 파일 목록 recent.ts 셋)을
+ * 345차가 화면 언어 꼴 한 곳(datetext.ts dateTimeText — 옵션 형식 줄·지역 꼴 둘)으로 모았다. recent.ts에는 칸을 고르는 옵션 줄만 남는다(tests/i18n-datefmt345.test.ts)
  */
 const DATES: [string, string][] = [
-  ['app/compare.ts', "new Date((v - 2440587.5) * 86400000).toLocaleString('ko-KR', { timeZone: 'UTC' })"],
-  ['app/dwgprops.ts', "d.toLocaleString('ko-KR') : ''"],
-  ['app/propcmds.ts', "return d.toLocaleString('ko-KR');"],
-  ['app/propcmds.ts', "${new Date().toLocaleString('ko-KR')}"],
+  ['app/datetext.ts', 'opts?: Intl.DateTimeFormatOptions'],
+  ['app/datetext.ts', 'return d.toLocaleString(locale, opts);'],
+  ['app/datetext.ts', "return d.toLocaleString('ko', opts);"],
   ['app/recent.ts', 'const opts: Intl.DateTimeFormatOptions = sameDay'],
-  ['app/recent.ts', 'new Intl.DateTimeFormat(locale, opts).format(t)'],
-  ['app/recent.ts', "new Intl.DateTimeFormat('ko', opts).format(t)"],
 ];
 
 /** 독일어 브라우저(지역 de-DE)처럼: 인자 없는 수의 toLocaleString이 「1.234」 꼴 */
