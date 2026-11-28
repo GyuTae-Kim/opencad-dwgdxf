@@ -136,6 +136,14 @@ describe('명령의 객체 선택 프롬프트에서 WP·CP·F(App 대화)', () 
     const h = setup();
     void h.app.run('ERASE');
     const type = (t: string) => h.app.submitInput(t);
+    /**
+     * 명령이 다음 입력을 기다릴 때까지(받은 입력을 풀면 요청이 비고, 명령이 다음 물음을 걸면 다시 생긴다 — 기다리지 않을 때 친 글은 새 명령이 된다:
+     * tests/script/app.ts onInput). 마감 3초 — 마이크로태스크 3·5번 횟수 대신(333차, 공용 규칙 13번)
+     */
+    const asked = async (): Promise<void> => {
+      const end = Date.now() + 3000;
+      while (!h.app.pendingInput && Date.now() < end) await new Promise((r) => setTimeout(r, 0));
+    };
     await Promise.resolve();
     type('WP');
     await Promise.resolve();
@@ -147,17 +155,17 @@ describe('명령의 객체 선택 프롬프트에서 WP·CP·F(App 대화)', () 
     }
     expect(h.prompts[h.prompts.length - 1]).toBe('선의 끝점 지정 또는 [명령 취소(U)]:');
     type('');
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    await asked();
     expect(h.out()).toContain('1개를 찾음');
     type('F');
-    for (let i = 0; i < 3; i++) await Promise.resolve();
+    await asked();
     type('105,90');
-    for (let i = 0; i < 3; i++) await Promise.resolve();
+    await asked();
     expect(h.prompts[h.prompts.length - 1]).toBe('다음 울타리 점 지정 또는 [명령 취소(U)]:');
     type('105,120');
-    for (let i = 0; i < 3; i++) await Promise.resolve();
+    await asked();
     type('');
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    await asked();
     type('');
     await new Promise((r) => setTimeout(r, 0));
     expect(lines(h)).toEqual([[10, 30]]);

@@ -75,6 +75,24 @@ describe('화면 번역층 + 도면 글 지킴(jsdom)', () => {
     return dom;
   };
   const tick = () => new Promise((r) => setTimeout(r, 0));
+  /**
+   * 화면 언어를 바꾼 뒤 번역층이 다시 옮기기를 마칠 때까지: 문서 언어가 lang이 되고 DOM이 타이머 세 바퀴 잇달아 조용하면(MutationObserver — STEP 218차
+   * switchTo 꼴). 마감 3초(333차 — 타이머 네 바퀴 횟수 대신: 공용 규칙 13번)
+   */
+  const switched = async (lang: string): Promise<void> => {
+    let seen = 0;
+    const mo = new MutationObserver(() => {
+      seen++;
+    });
+    mo.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true });
+    const end = Date.now() + 3000;
+    for (let calm = 0; calm < 3 && Date.now() < end; ) {
+      const before = seen;
+      await tick();
+      calm = document.documentElement.lang === lang && seen === before ? calm + 1 : 0;
+    }
+    mo.disconnect();
+  };
 
   it('지킴이 없으면(103차까지) 같은 화면에서 도면 글이 바뀐다 — 아래 시험이 실제 결함을 보는지 확인', async () => {
     await setup('https://gyutae-kim.github.io/opencad-dwgdxf/en/', '');
@@ -116,7 +134,7 @@ describe('화면 번역층 + 도면 글 지킴(jsdom)', () => {
     await setup('https://gyutae-kim.github.io/opencad-dwgdxf/en/', '<select id="s"><option value="Standard">Standard</option><option value="Dimension">Dimension</option></select><div class="cmd-history"><div id="l">Dimension</div></div><p id="p">치수</p>');
     expect(document.getElementById('p')!.textContent).toBe('Dimension');
     (document.querySelector('.language-list [data-language="ko"]') as HTMLButtonElement).click();
-    for (let i = 0; i < 4; i++) await tick();
+    await switched('ko');
     expect(document.documentElement.lang).toBe('ko');
     expect([...document.querySelectorAll('#s option')].map((o) => o.textContent)).toEqual(['Standard', 'Dimension']);
     expect(document.getElementById('l')!.textContent).toBe('Dimension');
