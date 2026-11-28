@@ -71,7 +71,7 @@ import { registerLispCommands } from './app/lisp';
 import { registerManageCommands } from './app/manage';
 import { handleLaunchQuery, installPwa } from './app/pwa-app';
 import { Shell } from './app/ui/shell';
-import { dialog, formatBytes, h, toast } from './app/ui/dom';
+import { dialog, h, toast } from './app/ui/dom';
 import { openErrorInfo } from './app/openerror';
 import { takeInterruptedOpens } from './app/openmarker';
 import { installViewLinks } from './app/viewlink-app';
@@ -312,7 +312,8 @@ export function startEditor(root: HTMLElement): EditorActions {
   const interrupted = takeInterruptedOpens();
   if (interrupted.length)
     setTimeout(() => {
-      for (const m of interrupted) app.reportOpenError(`${m.name} (${formatBytes(m.size)})`, openErrorInfo('interrupted'));
+      // 크기는 따로 넘긴다 — 안내 상자의 「이름 (1.5 KB)」를 언어를 바꿀 때 새 언어 꼴로 다시 쓴다(349차)
+      for (const m of interrupted) app.reportOpenError(m.name, openErrorInfo('interrupted'), m.size);
     }, 0);
 
   // 홈 화면 앱: 오프라인(서비스 워커)과 새 판 알림, 데스크톱에서 연결 프로그램으로 연 파일, 공유 받은 도면(?recent=)

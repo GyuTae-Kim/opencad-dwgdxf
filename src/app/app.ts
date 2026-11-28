@@ -34,7 +34,7 @@ import { gripPoints } from '../edit/geom';
 import { columnGripsFor } from './mtextcols-grips';
 import { dynGrips, isDynamicReference } from '../edit/dynblock';
 import { spaceTolerance } from '../render/build';
-import { ask, closeMenu, keyboardControl, showMenu, toast } from './ui/dom';
+import { ask, closeMenu, formatBytes, keyboardControl, showMenu, toast } from './ui/dom';
 import { VIEW_COMMANDS } from './ui/mobileview';
 import { ft } from './filetext';
 import { kindName as entityKindName } from '../edit/extract';
@@ -280,8 +280,8 @@ export interface UiHooks {
   setBusySeeThrough?(on: boolean): void;
   setCoords(text: string): void;
   openPalette(tab: string): void;
-  /** 시작 화면에 열기 실패 안내를 남긴다(없으면 알림으로) */
-  showOpenError?(name: string, info: OpenErrorInfo): void;
+  /** 시작 화면에 열기 실패 안내를 남긴다(없으면 알림으로). size가 있으면 이름 뒤에 크기(화면 언어 꼴 — 언어를 바꾸면 새 꼴로, 349차) */
+  showOpenError?(name: string, info: OpenErrorInfo, size?: number): void;
 }
 
 export class App {
@@ -1344,19 +1344,22 @@ export class App {
 
   /**
    * 열지 못한 까닭과 할 일을 알린다: 명령행에 남기고, 시작 화면이면 그 위의 안내 상자에, 도면을 보는 중이면 알림으로.
-   * 알림은 화면 읽기 프로그램이 바로 읽는다(role="alert")
+   * 알림은 화면 읽기 프로그램이 바로 읽는다(role="alert").
+   * size를 받으면(지난번 열기가 끝나지 못한 도면 — 349차) 이름 뒤에 「(1.5 KB)」(화면 언어 꼴 소수점): 안내 상자·알림은 떠 있는 채 언어를 바꾸면
+   * 새 꼴로 다시 쓰고(Shell.relang), 명령행 기록 줄은 찍은 때 글 그대로(339차)
    */
-  reportOpenError(name: string, info: OpenErrorInfo): void {
-    const text = openErrorText(name, info);
+  reportOpenError(name: string, info: OpenErrorInfo, size?: number): void {
+    const label = () => (size === undefined ? name : `${name} (${formatBytes(size)})`);
+    const text = openErrorText(label(), info);
     this.errorNoticed = true;
     try {
-      this.cmd.print(`${ft(name)} — ${info.message}`, 'err');
+      this.cmd.print(`${ft(label())} — ${info.message}`, 'err');
     } finally {
       this.errorNoticed = false;
     }
     this.cmd.print(info.hint);
-    if (!this.active && this.ui.showOpenError) this.ui.showOpenError(name, info);
-    else toast(text, 'error', 9000);
+    if (!this.active && this.ui.showOpenError) this.ui.showOpenError(name, info, size);
+    else toast(size === undefined ? text : () => openErrorText(label(), info), 'error', 9000);
   }
 
   /**

@@ -17,7 +17,7 @@ import { loadLispFile } from '../lisp';
 import { isoState, setIso } from '../viewtools-iso';
 import { maximized, maximizedLabel } from '../viewtools-vpmax';
 import { pickColor } from './colorpick';
-import { type MenuItem, dialog, focusables, formatBytes, h, iconSpan, moveMenuOpener, refocusStuck, showMenu, tabKeyTarget, toast } from './dom';
+import { type MenuItem, dialog, focusables, formatBytes, h, iconSpan, moveMenuOpener, refocusStuck, relangToasts, showMenu, tabKeyTarget, toast } from './dom';
 import { icon } from './icons';
 import { MobileView, isCoarse, readMobileMode, startInViewMode } from './mobileview';
 import { RECENT_MAX_SIZE, RecentStore, recentTimeLabel } from '../recent';
@@ -1053,8 +1053,9 @@ export class Shell implements UiHooks {
         await loadLispFile(this.app, f);
         continue;
       }
-      // 크기로 막지 않고 기기가 잡을 수 있는 만큼 연다. 아주 큰 파일은 미리 알린다(휴대폰은 메모리가 모자라면 탭째 닫힐 수 있다)
-      if (f.size > BIG_FILE_BYTES) toast(`큰 파일(${formatBytes(f.size)})이라 여는 데 시간이 걸리고 메모리를 많이 씁니다. 다른 탭을 닫아 두면 좋습니다.`, 'warn', 8000);
+      // 크기로 막지 않고 기기가 잡을 수 있는 만큼 연다. 아주 큰 파일은 미리 알린다(휴대폰은 메모리가 모자라면 탭째 닫힐 수 있다).
+      // 글은 함수로 — 떠 있는 채 언어를 바꾸면 크기를 새 언어 꼴로 다시 쓴다(349차 — relangToasts)
+      if (f.size > BIG_FILE_BYTES) toast(() => `큰 파일(${formatBytes(f.size)})이라 여는 데 시간이 걸리고 메모리를 많이 씁니다. 다른 탭을 닫아 두면 좋습니다.`, 'warn', 8000);
       const attempt = beginOpen('local', f.name.split('.').pop() ?? 'other');
       let buf: ArrayBuffer;
       try {
@@ -2037,11 +2038,15 @@ export class Shell implements UiHooks {
   }
 
   /** 시작 화면에 열기 실패 안내를 남긴다: 파일 이름, 무엇이 문제인지, 무엇을 하면 되는지 */
-  showOpenError(name: string, info: OpenErrorInfo): void {
+  /** 안내 상자 이름 줄을 만드는 함수 — 크기를 붙인 이름(열기 중단 「이름 (1.5 KB)」)만: 언어를 바꾸면 relang이 새 언어 꼴로 다시 쓴다(349차) */
+  private startErrorName: (() => string) | null = null;
+
+  showOpenError(name: string, info: OpenErrorInfo, size?: number): void {
+    this.startErrorName = size === undefined ? null : () => `${name} (${formatBytes(size)})`;
     const close = h('button', { type: 'button', class: 'icon-btn start-error-close', title: '안내 닫기', 'aria-label': '안내 닫기', html: icon('close2') });
     close.addEventListener('click', () => (this.startError.hidden = true));
     this.startError.replaceChildren(
-      h('div', { class: 'start-error-body' }, h('strong', { class: 'start-error-name', translate: 'no' }, name), h('p', { class: 'start-error-msg' }, info.message), h('p', { class: 'start-error-hint' }, info.hint)),
+      h('div', { class: 'start-error-body' }, h('strong', { class: 'start-error-name', translate: 'no' }, this.startErrorName?.() ?? name), h('p', { class: 'start-error-msg' }, info.message), h('p', { class: 'start-error-hint' }, info.hint)),
       close,
     );
     this.startError.hidden = false;
@@ -2132,8 +2137,23 @@ export class Shell implements UiHooks {
         .then(() => this.refreshRecent())
         .then(() => refocusStuck(held, [this.recentClear], [this.recentList.querySelector<HTMLElement>('.recent-empty')]));
     });
-    // 날짜 표기(10월 27일 ↔ Oct 27)를 새 언어로
-    this.root.addEventListener('languagechange', () => void this.refreshRecent());
+    // 화면 언어 꼴 수·날짜(날짜 표기 10월 27일 ↔ Oct 27·파일 크기 1.5 KB ↔ 1,5 KB)를 넣은 칸을 새 언어로(349차 — relang)
+    this.root.addEventListener('languagechange', () => this.relang());
+  }
+
+  /**
+   * 화면 언어를 바꾼 뒤(languagechange — 349차): 화면 언어 꼴 수·날짜를 넣은 칸 가운데 떠 있는 채 언어를 바꿀 수 있는 것을 새 꼴로 다시 그린다.
+   * 번역층은 글 마디·속성을 원문으로 다시 옮기지만 틀 {0}에 넣은 수(파일 크기 「1.5 KB」 ↔ 독일어 「1,5 KB」 — 348차 decimalText)는 넣은 때 꼴 그대로라서:
+   * 시작 화면 최근 문서 목록(날짜 표기도)·파일 탭 풀이 글·시작 화면 안내 상자의 이름 줄(열기 중단 「이름 (크기)」 — 번역하지 않는 칸)·떠 있는 알림(큰 파일·열기 중단).
+   * 대화 상자(도면 정보·DWGPROPS·도면 비교 정보)는 뒤 막이 머리줄의 언어 메뉴를 덮어 열린 동안 바꿀 수 없고, 명령행 기록 줄(TIME·ETRANSMIT·WMFOUT 결과)은 찍은 때 글 그대로(339차)
+   */
+  private relang(): void {
+    void this.refreshRecent();
+    // 앱을 붙이기 전(attach)에는 탭이 없다
+    if (this.app) this.refreshTabs();
+    const name = this.startError.querySelector('.start-error-name');
+    if (name && this.startErrorName) name.textContent = this.startErrorName();
+    relangToasts();
   }
 
   private async refreshRecent(): Promise<void> {
