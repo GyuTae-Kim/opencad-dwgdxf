@@ -657,7 +657,8 @@ function runWizard(st: DocState): Promise<WizardState | null> {
           );
           break;
         case 3:
-          pane.append(para('용지에서 도면의 방향을 선택하십시오.'), radio('wz-orient', [{ value: 'P', label: '세로' }, { value: 'L', label: '가로' }], s.landscape ? 'L' : 'P', (v) => (s.landscape = v === 'L')));
+          // 용지 방향은 뜻을 품은 원문으로(329차): 홀로 쓴 「세로」·「가로」 열쇠는 PLOTSTAMP 글 방향(수평·수직) 뜻이라 Vertical·Horizontal로 읽혔다
+          pane.append(para('용지에서 도면의 방향을 선택하십시오.'), radio('wz-orient', [{ value: 'P', label: '세로 방향' }, { value: 'L', label: '가로 방향' }], s.landscape ? 'L' : 'P', (v) => (s.landscape = v === 'L')));
           break;
         case 4:
           pane.append(

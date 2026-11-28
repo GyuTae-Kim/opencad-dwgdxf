@@ -15,6 +15,7 @@ import { evaluateTemplate } from '../../edit/field/evaluate';
 import { isShxFont } from '../../text/layout';
 import * as M from '../../text/mtextedit';
 import type { App, CommandContext } from '../app';
+import { uiText } from '../i18n-text';
 import { pickColor } from '../ui/colorpick';
 import { form, h, showMenu, type MenuItem } from '../ui/dom';
 import type { Pt } from '../view';
@@ -1406,7 +1407,8 @@ export class TextEditor {
       // 형식 지정
       const fonts = new Set<string>(FONTS);
       if (doc) for (const t of doc.textStyles.values()) if (t.fontFamily || t.font) fonts.add(t.fontFamily || t.font);
-      const fontSel = h('select', { title: '글꼴', 'aria-label': '글꼴' }, h('option', { value: '' }, '(스타일 글꼴)'), ...[...fonts].map((f) => h('option', { value: f }, f))) as HTMLSelectElement;
+      // 값 = 글인 고르기 항목은 번역층이 도면 글로 보고 옮기지 않는다(fileguard.ts) — 앱 글꼴 목록(FONTS)의 이름표만 먼저 화면 언어로(329차, 값은 그대로)
+      const fontSel = h('select', { title: '글꼴', 'aria-label': '글꼴' }, h('option', { value: '' }, '(스타일 글꼴)'), ...[...fonts].map((f) => h('option', { value: f }, FONTS.includes(f) ? uiText(f) : f))) as HTMLSelectElement;
       fontSel.addEventListener('change', () => this.setFont(fontSel.value));
       this.controls.font = fontSel;
       const color = h('select', { title: '색상', 'aria-label': '색상' }, h('option', { value: '' }, '색상'), ...COLORS.map((c) => h('option', { value: c.value }, c.label)), h('option', { value: 'more' }, '색상 선택...')) as HTMLSelectElement;

@@ -151,8 +151,10 @@ export function installFileGuard(src: NameSource): void {
   // el은 글 마디면 부모 요소, 속성이면 그 요소(고르기 항목·명령행 줄에는 번역할 속성을 두지 않는다)
   fileGuard.fn = (text, language, el) => {
     const t = text.trim();
-    // 값이 글 그대로이거나 표 열쇠(대문자)인 고르기 항목
-    if (el.tagName === 'OPTION' && t && el.getAttribute('value')?.toUpperCase() === t.toUpperCase()) return text;
+    // 값이 글 그대로이거나 표 열쇠(대문자)인 고르기 항목. 보이는 글도 값과 같을 때만(329차): 다시 훑을 때 text는 기록해 둔 원문이라,
+    // 앱이 이름표를 먼저 옮긴 항목(편집기 글꼴 「Malgun Gothic」 — 값 「맑은 고딕」)이 원문 = 값으로 보여 한국어로 되돌아갔다
+    const up = t.toUpperCase();
+    if (el.tagName === 'OPTION' && t && el.getAttribute('value')?.toUpperCase() === up && (el.textContent ?? '').trim().toUpperCase() === up) return text;
     const log = !!el.closest(LOG);
     if (!log && !text.includes('⁨')) return undefined;
     const ui = !!el.closest('[data-i18n-ui-copy]');
