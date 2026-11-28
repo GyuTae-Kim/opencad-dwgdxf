@@ -3,6 +3,41 @@
 OpenCAD DWG·DXF(2026-10-16까지 이름은 2D 뷰어, 저장소 `2dcad-viewer`)를 만들어 온 과정을 단계별로 정리했습니다. 커밋 하나하나는 `git log`에, 남은 일은 [ROADMAP.md](ROADMAP.md)에 있습니다.
 모든 기능은 브라우저 안에서만 동작하며, 연 파일은 사용자 컴퓨터 밖으로 나가지 않습니다.
 
+## 2026-11-28(339차): 코드가 낱말을 끼워 만드는 결과·알림 줄 — 설정 값·종류 이름·모드 이름·덧붙인 문장
+
+### 근거와 표
+- 338차는 옵션 목록이 있는 물음만 소스에서 모았습니다. 명령이 끝나며 명령행 기록(·휴대폰 결과 카드·알림)에 찍는 줄(print·say·toast·warn)도
+  템플릿 리터럴로 앱 낱말·수·도면 글을 끼웁니다. 명령행의 번역층은 틀(「현재 설정: 자동 = {0}, …」 꼴)이 잡은 {n} 자리를 옮기지 않아, 끼운 앱 낱말은 다른 언어에서도 한국어로 남았습니다.
+- 소스(src/app 아래 한 줄 템플릿 — 한글·`${`가 있고 그 줄에서 결과·알림 함수에 넘기는 것, 옵션 목록 꼴은 338차 몫이라 뺌)에서 결과·알림 줄 꼴 763을 모으고,
+  끼우는 값(338차 규칙 + `.padEnd(…)` 안의 식·「??」「||」 두 쪽·한글을 돌려주는 함수 값 표)을 코드에서 뽑아 채운 줄 1149를 명령행과 같은 길(도면 글 지킴 → 거꾸로 찾기 + 통째 번역)로 네 언어에 옮겨 보았습니다.
+  끼우는 값 종류(그 종류가 든 꼴 수): 수·값 439 · 도면 글 338 · 앱 낱말 127 · 오류 글 38. **한국어가 남던 줄 129**.
+
+| 꼴 | 보기(src/app) | 고치기 전(영어) | 고친 뒤(영어) |
+| --- | --- | --- | --- |
+| 설정 줄의 값(예/아니오·켜기/끄기·모드 이름) | undocmd UNDO · express-draw EXOFFSET · mlinecmds · textools · dashcmds-misc -OVERKILL · 배열 셋 | Current settings: Automatic = 켜기, Adjust = 전체, Join = 예, Layer = 예 | … Automatic = Enable, Adjust = All, Join = Yes, Layer = Yes |
+| 객체 종류·공간 이름 | editcmds2-query DBLIST | 선 Layer: "A-1" Space: 모형 공간 Handle = 1 | Line Layer: "A-1" Space: model space Handle = 1 |
+| 모드·모양 이름 | express-text TCASE·TORIENT·TCIRCLE·TEXTMASK | Replaced 1 objects with 문장 대소문자. | Replaced 1 objects with Sentence case. |
+| 편집 대상 | refedit REFEDIT | Editing 외부 참조 "A-1" 안의 블록 "A-1" in place. … | Editing Block "A-1" within External Reference "A-1" in place. … |
+| 덧붙인 문장 조각 | express-select GATTE · express-text TXTEXP · util2-blocks BLOCKREPLACE · arraypath · blkcmds-misc UNDEFINE | Changed 1 properties. (1개는 이미 같은 값) 잠긴 도면층의 참조 1개는 건너뛰었습니다. | Changed 1 properties. (1 are already the same value) Skipped 1 reference(s) on locked layer(s). |
+| 이은 이름 목록 | layerstate 복원 특성 · SETBYLAYER 활성 설정 · REDIRMODE | Properties to restore: 켜기/끄기, 동결/동결 해제 | Properties to restore: On/Off, Freeze/Unfreeze |
+| 틀의 덧붙임 자리 | assocarray 배열 항목(레벨) · propcmds TIME(일 수) · shxfonts(외 n개) | Array item (Item 1, row 1, 레벨 2) was selected. … | Array item (Item 1, row 1, level 2) was selected. … |
+
+- 고친 것: 끼운 앱 낱말·조각을 화면 언어로 옮겨 끼웁니다(328·338차 꼴 — 한국어 화면 글은 그대로, 도면 글은 지킴 표시 그대로). src/app 29파일.
+  낱말을 이어 돌려주는 함수 셋(REDIRMODE·복원 특성·SETBYLAYER 활성 설정 — src/edit)은 낱말마다 옮기는 함수를 받게 하고(기본은 그대로) 명령이 화면 언어 번역을 넘깁니다(이은 글은 사전 열쇠가 아님).
+  틀이 끝 {n} 자리를 옮기지 않는 배열 항목 이름표(「열 {0}, 행 {1}{2}」)는 레벨 조각을 따로 옮겨 붙입니다. 사전은 바꾸지 않았습니다(끼운 낱말·틀 열쇠 115개가 네 사전에 모두 있음).
+- 둔 것 열둘(틀·조각 열쇠가 없거나 동사 조각·종류 목록을 끼우는 꼴 — ROADMAP 「339차에 보고 두 것」): 외부 참조 이름 바꿈 안내 둘·표준 검사 요약·소거 미지원·내려받음·빈 도면 안내·-STYLE 재정의/저장·모형 객체 내보내기·디자인센터 셋·평면화 건너뜀.
+- 재발 막기: 결과·알림 줄 꼴마다 대표 값으로 채운 줄이 네 언어에 한글이 없고 한국어는 원문 그대로여야 하며, 한글이 들어올 수 있는 식은 모두 대표 값이 있어야 합니다(새 꼴이면 실패 — 값을 옮겨 적은 소스 글도 고정).
+  둔 것이 옮겨지면 목록에서 빼라고 실패합니다. 낱말 목록 함수는 부르는 곳이 화면 언어 번역을 넘기는지도 봅니다. 고친 꼴 여섯은 진짜 명령행 기록 줄·휴대폰 결과 카드로도 봅니다.
+  시험 스캐너는 화면 언어로 끼우는 자리를 도면 글 표시보다 먼저 봅니다(「블록 "${도면 글}"」 꼴을 통째 도면 글로 세어 끼운 앱 낱말을 놓치던 것).
+- 언어를 바꿀 때 떠 있는 물음을 다시 그리는 길(338차 보고 (2))은 표로만 보았습니다 — 명령행은 언어 바뀜 사건을 듣지 않고, 다시 그려도 물음을 만들 때 끼운 낱말은 앞 언어 글이라 거꾸로 찾기가 원문을 찾지 못합니다.
+  물음 함수를 다시 부르거나 끼운 낱말에 원문을 함께 다는 길이 필요해 작지 않아 보고 두었습니다.
+
+### 확인
+- 고치기 전(한 잠금): `tests/i18n-front337.test.ts` 339차 절 (가)(값을 뽑지 못한 식 38)·(다)(남는 줄 129) 실패. 고친 뒤 9시험 통과(남는 줄 0, 둔 것 12).
+- 타입 검사 통과. 한 잠금 106파일(338차 끝 묶음 86 + 결과 줄 원문을 쓰는 시험·바꾼 파일을 소스 글로 읽는 시험·바꾼 함수를 부르는 시험) 611시험 가운데 605 통과·1 건너뜀,
+  실패 다섯은 모두 바꾼 소스 줄을 고정한 앞 차수 번역 시험(291·292·295·307·311차)이라 고정 줄을 새 줄로 고친 뒤 다섯 + front337 24시험 통과.
+- 사전 바꿈 없음(열쇠 9463 그대로). 결과 같음 묶음·전체 시험·휴대폰 검사는 부하로 생략 — CI가 시험·빌드 검사를 한다(휴대폰 검사 포함). 원어민 검토 없음.
+
 ## 2026-11-28(338차): 코드가 낱말을 끼워 만드는 물음 — PEDIT 점 걷기 앞 조각·꼬리 있는 물음의 기록 줄·TCASE 기본값
 
 ### 근거와 표
