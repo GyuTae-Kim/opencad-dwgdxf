@@ -192,7 +192,8 @@ describe('조회·측정 명령 묶음의 번역과 298차가 남긴 것(299차)
       ['app/modify2-pedit.ts', 'ctx.print(`결합 유형 = ${JOIN_TYPE_LABEL[jm.type]}`);'],
       ['app/imageclip.ts', "ctx.print('경계의 폭과 높이가 0보다 커야 합니다.', 'err');"],
       ['app/modify2.ts', "ctx.print('점이 잘 보이지 않으면 SETVAR로 PDMODE(예: 3)를 바꾸십시오.');"],
-      ['app/propcmds.ts', 'ctx.print(`  작성:                 ${julian(hd.get(\'$TDCREATE\'))}`);'],
+      // 346차: 날짜는 도면 비교·DWGPROPS와 같은 길(datetext.ts drawingTimeText — 현지 시각 변수에 시간대를 더하지 않음)
+      ['app/propcmds.ts', "ctx.print(`  작성:                 ${drawingTimeText(hd, '$TDCREATE') || '-'}`);"],
     ])
       expect(src(f!), s).toContain(s);
     const tr = (l: string) => (x: string) => guardedTranslate(x, l) ?? translate(x, l);
