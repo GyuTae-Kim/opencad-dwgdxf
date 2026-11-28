@@ -510,10 +510,9 @@ button {
 }
 .cmd-prompt {
   color: var(--text);
-  white-space: nowrap;
   max-width: 60%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* 긴 물음은 말줄임 대신 줄을 바꿔 뒤 옵션 낱말까지 다 보이고 누를 수 있게(350차 — 글 간격을 넓혀도 잘리지 않게, 좁은 화면 규칙과 같은 꼴) */
+  overflow-wrap: anywhere;
 }
 .cmd-prompt .kw {
   color: var(--accent);
@@ -1898,10 +1897,9 @@ button.aci.on {
   padding: 2px 8px;
   font-family: var(--mono);
   font-size: 12px;
-  line-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* 18px(12px × 1.5)와 같은 줄 높이를 글자 크기 배수로, 긴 각도 글은 말줄임 대신 줄을 바꿔 다 보이게(350차 — 글 간격) */
+  line-height: 1.5;
+  overflow-wrap: anywhere;
   cursor: default;
 }
 .polar-add-item:hover {
@@ -1957,9 +1955,8 @@ button.aci.on {
 .lt-row span {
   color: var(--text-dim);
   font-family: var(--mono);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* 긴 설명은 말줄임 대신 줄을 바꿔 다 보이게(350차 — 글 간격, 잘린 글을 얻을 다른 길(title)이 없었다) */
+  overflow-wrap: anywhere;
 }
 
 /* 블록 편집기 표시 */
