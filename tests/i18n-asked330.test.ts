@@ -8,7 +8,7 @@
  * - 친 입력은 옮기지 않는다 — 옵션 이름 「높이」(사전 낱말)를 친 기록도 「높이」. 명령행이 옵션으로 받는 글은 옵션 글자와 한국어 원문 이름뿐이라
  *   (dashcmds-ask.ts keywordLabelIs) 옮긴 이름을 보이면 그 화면에서 다시 쳐도 받지 않는 글을 친 것처럼 보인다. 단추·메뉴·칩은 옵션 글자를 넘긴다.
  *   그래서 다른 언어에서 기록 줄에 남는 한글은 사람이 한국어를 친 그 입력뿐이다.
- * 진짜 명령행에 LINE·RECTANG·MTEXT를 쳐 본 기록 줄은 i18n-screens327이 본다.
+ * 진짜 명령행에 LINE·RECTANG·MTEXT를 쳐 본 기록 줄은 i18n-screens327-<언어>(332차에 언어마다 나눔 — 그리는 길은 i18n-screens327-shared)가 본다.
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';

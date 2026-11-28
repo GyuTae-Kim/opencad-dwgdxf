@@ -4,7 +4,7 @@
  *   홀로 쓴 사전 열쇠 「가로」·「세로」는 이 뜻(Horizontal·Vertical 꼴)이다.
  * - 용지 방향: -PLOT 옵션 「세로(P)」·「가로(L)」(옵션 글자가 붙은 열쇠 — 바로 가기 메뉴도 `이름(글자)`로 보인다), 페이지 설정 「세로(A)」·「가로(N)」,
  *   배치 만들기 결과 줄·마법사 요약·328차 페이지 설정 설명 틀(통째 열쇠). 배치 마법사(LAYOUTWIZARD) 「방향」 쪽 라디오만 홀로 「세로」·「가로」를 써
- *   수평·수직으로 읽혔다(en Vertical·Horizontal) → 뜻을 품은 원문 「세로 방향」·「가로 방향」으로 나눴다(화면은 i18n-screens327이 본다).
+ *   수평·수직으로 읽혔다(en Vertical·Horizontal) → 뜻을 품은 원문 「세로 방향」·「가로 방향」으로 나눴다(화면은 i18n-screens327-<언어>가 본다 — 332차에 언어마다 나눔).
  * - 글꼴 패밀리 이름(같은 차수 — 문자 편집기 글꼴 고르기를 옮기며 찾음): 문자 스타일 대화 상자(textedit/styledlg.ts TTF_FONTS)·편집기 글꼴 목록
  *   (textedit/editor.ts FONTS)의 한국어 트루타입 글꼴 이름은 고유 이름인데 사전이 낱말 뜻으로 옮겨 두었다(굴림 Roll·바탕 Background·궁서 Palace·
  *   맑은 고딕 Clear Gothic 등). 같은 사전에 이미 있던 로마자 이름(ja·zh Malgun Gothic, zh Gulim, en·zh·de Dotum, ja DotumChe)대로 네 언어 모두
