@@ -1,4 +1,5 @@
 /** AcDb:Header 쓰기(사양 9장, header.ts의 짝) */
+import { julianLocal } from '../../../core/julian';
 import type { HeaderValue, Vec2, Vec3 } from '../../../core/model';
 import { crc8 } from '../crc';
 import { R2000, R2004, R2007, R2010, R2013, R2018 } from '../version';
@@ -155,11 +156,6 @@ const D: Record<string, HeaderValue> = {
   $INTERFERECOLOR: 1,
 };
 
-/** 오늘 날짜(율리우스일) */
-function julianNow(): number {
-  return Date.now() / 86400000 + 2440587.5;
-}
-
 function guid(): string {
   const b = new Uint8Array(16);
   globalThis.crypto?.getRandomValues?.(b);
@@ -214,7 +210,8 @@ export function writeHeader(ver: number, maintVer: number, enc: TextEncoderCp, i
   const CMC = (n: string) => dat.CMC({ index: num(n) });
   const JD = (n: string) => {
     let v = vars.get(n);
-    if (typeof v !== 'number' || !Number.isFinite(v)) v = n === '$TDCREATE' || n === '$TDUPDATE' ? julianNow() : 0;
+    // 빈 만든·고친 때는 지금의 현지 벽시계(TDCREATE·TDUPDATE는 현지 시각 변수 — 346차, 전에는 UTC)
+    if (typeof v !== 'number' || !Number.isFinite(v)) v = n === '$TDCREATE' || n === '$TDUPDATE' ? julianLocal() : 0;
     const day = Math.floor(v);
     const ms = Math.round((v - day) * 86400000);
     dat.BL(day);

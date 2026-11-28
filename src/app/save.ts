@@ -7,6 +7,7 @@ import { syncActiveVports } from './vports';
 import { trackExport } from 'opencad-site-kit/analytics';
 import { forgetRecovery } from './autosave';
 import { createNewDocument } from '../core/newdoc';
+import { julianLocal, julianUtc } from '../core/julian';
 import type { CadDocument } from '../core/model';
 import { pickFiles, readDrawingFile } from './drawingfiles';
 import type { SaveFormat } from '../worker/protocol';
@@ -288,8 +289,10 @@ export function registerSaveCommands(app: App): void {
         }
         const fresh = structuredClone(doc);
         fresh.format = 'new';
-        const now = Date.now() / 86400000 + 2440587.5;
-        for (const k of ['$TDCREATE', '$TDUCREATE', '$TDUPDATE', '$TDUUPDATE']) fresh.header.set(k, now);
+        // 만든 때: TDCREATE·TDUPDATE는 현지 벽시계, TDUCREATE·TDUUPDATE는 UTC(같은 순간 — 346차, 전에는 넷 모두 UTC)
+        const at = new Date(Date.now());
+        for (const k of ['$TDCREATE', '$TDUPDATE']) fresh.header.set(k, julianLocal(at));
+        for (const k of ['$TDUCREATE', '$TDUUPDATE']) fresh.header.set(k, julianUtc(at));
         fresh.header.set('$TDINDWG', 0);
         const res = await app.engine.adopt(name, fresh);
         app.addDocument(res, name, 0);

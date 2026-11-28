@@ -16,6 +16,12 @@ import { registerDwgProps } from '../src/app/dwgprops';
 import { installLocalization } from '../src/app/i18n';
 import { registerPropCommands } from '../src/app/propcmds';
 import type { CadDocument } from '../src/core/model';
+import { createNewDocument } from '../src/core/newdoc';
+import { julianToLocal } from '../src/edit/field/evaluate';
+import { readDwg } from '../src/io/dwg/index';
+import { writeDwg } from '../src/io/dwg/writer/index';
+import { readDxf } from '../src/io/dxf/reader';
+import { writeDxf } from '../src/io/dxf/writer';
 import { drawingProps, propTimes, tagsFromProps } from '../src/io/dwgprops';
 import { makeHarness } from './cmds2/harness';
 
@@ -163,5 +169,41 @@ describe('도면 머리말 율리우스일의 시간대(346차)', () => {
       dispose = undefined;
       document.body.replaceChildren();
     }
+  });
+
+  it('(라) 작성기 — 시간대 셋에서 새 도면·DXF·DWG 저장의 빈 때 값: TDCREATE·TDUPDATE는 그 순간의 현지 벽시계, TDUCREATE·TDUUPDATE는 UTC(src/core/julian.ts 한 곳)', () => {
+    // 고치기 전 작성기 넷(새 도면·템플릿 새 도면·DWG·DXF 작성기 빈 값)은 모두 UTC 율리우스일 — 위 (가)의 길로 보이면 서울에서 9시간 앞
+    const FOUR = ['$TDCREATE', '$TDUPDATE', '$TDUCREATE', '$TDUUPDATE'];
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      for (const [zone, offset] of Object.entries(ZONES)) {
+        setZone(zone);
+        vi.setSystemTime(AT);
+        expect(new Date().getTimezoneOffset(), zone).toBe(offset);
+        const local = JD - offset / 1440;
+        const want = AT.toLocaleString('ko');
+        const check = (H: { get(n: string): unknown }, what: string, names = FOUR) => {
+          for (const n of names) {
+            expect(H.get(n), `${zone} ${what} ${n}`).toBeCloseTo(n === '$TDUCREATE' || n === '$TDUUPDATE' ? JD : local, 7);
+            expect(drawingTimeText(H, n), `${zone} ${what} ${n}`).toBe(want);
+          }
+        };
+        const doc = createNewDocument('metric');
+        check(doc.header, '새 도면');
+        for (const n of FOUR) doc.header.delete(n);
+        check(readDxf(writeDxf(doc).data).header, 'DXF 빈 값');
+        // DWG 머리말에는 현지 시각 둘만 있다(TDCREATE·TDUPDATE)
+        check(readDwg(writeDwg(doc).data).header, 'DWG 빈 값', ['$TDCREATE', '$TDUPDATE']);
+        // FIELD CreateDate·SaveDate(julianToLocal)도 같은 뜻 — 현지 시각 변수의 칸 그대로(시간대를 더하지 않음)
+        const f = julianToLocal(local)!;
+        expect([f.getFullYear(), f.getMonth(), f.getDate(), f.getHours(), f.getMinutes()], zone).toEqual([AT.getFullYear(), AT.getMonth(), AT.getDate(), AT.getHours(), AT.getMinutes()]);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+    // 템플릿 새 도면도 같은 함수, 지금을 율리우스일로 바꾸는 자리는 core/julian.ts 하나(LISP DATE는 UTC 값 그대로 — ROADMAP 346차에 보고 둠)
+    expect(src('app/save.ts')).toContain("for (const k of ['$TDCREATE', '$TDUPDATE']) fresh.header.set(k, julianLocal(at));");
+    const nowJd = files(SRC).filter((f) => /86400000\s*\+\s*2440587\.5/.test(readFileSync(f, 'utf8'))).map((f) => f.slice(SRC.length));
+    expect(nowJd.sort()).toEqual(['app/lisp-host.ts', 'core/julian.ts']);
   });
 });
