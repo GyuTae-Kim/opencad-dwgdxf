@@ -56,7 +56,9 @@ jobs:
         with:
           name: content-history
           path: site/content-history.json
-      - run: npm run build
+      # CI 15차: tsc·두 검사(check:seo·check:i18n)는 같은 PR의 SEO validation(seo-check.yml validate — npm run build)이 돌린다. 여기는 휴대폰 견주기에 쓸
+      # dist만 만들면 되므로 vite build만(전에는 npm run build — tsc 약 10초·두 검사 약 2초가 겹쳤다). 두 검사는 dist를 읽기만 해 dist는 npm run build와 같다
+      - run: npx vite build
       - name: Set the candidate build aside
         run: |
           mkdir -p .runtime/performance
@@ -84,7 +86,8 @@ jobs:
           if git diff --quiet "$BASE_SHA" "$GITHUB_SHA" -- package.json package-lock.json; then same_deps=1; fi
           git checkout --detach "$BASE_SHA"
           if [ "$same_deps" = 0 ]; then npm ci; fi
-          npm run build
+          # CI 15차: 기준 커밋은 main에서 이미 tsc·두 검사를 거친 판이고 견주기에는 dist만 쓴다 — vite build만(두 검사는 dist를 읽기만 해 npm run build와 같은 dist)
+          npx vite build
           mv dist .runtime/performance/baseline
           git checkout --detach "$GITHUB_SHA"
           # 기준 커밋의 node_modules를 이 커밋의 것으로 되돌린다(성능 명령은 공용 사이트 도구 opencad-site-kit에 있다)
