@@ -1,8 +1,13 @@
 /**
+ * 327차 「한글 0」 시험의 도움 모듈 — 그리는 길·DOM 흉내·걸음·「아직 둔 것」(시험 파일이 아니다: vitest include — tests 아래 `.test.ts`로 끝나는 파일 — 에 걸리지 않는 이름).
+ * - 332차(CI 13차): 한 시험 파일(옛 tests/i18n-screens327.test.ts)이 다섯 언어를 한 일꾼에서 차례로 그려 CI 93.6초(#380)로 시험 조각의 바닥을 정했다.
+ *   언어마다 `tests/i18n-screens327-<언어>.test.ts`(ko·en·ja·zh-CN·de) 다섯으로 나눠 조각에 흩는다 — 다섯이 이 모듈을 함께 쓰고, 한 파일은 제 언어를 한 번만 그린다.
+ *   모듈 바꿔 끼우기(vi.mock 넷)는 vitest가 그 시험 파일 안에서만 끌어올리므로 언어 파일마다 같은 넷을 둔다(polish/fakes.ts 주석 꼴).
+ *
  * 327차: 다섯 언어 화면의 「한글 0」 재발 막기(NC 199·STEP 209·SKP 214차와 같은 꼴).
  * - 번역층(src/app/i18n.ts installLocalization)은 첫 `languagechange` 알림을 화면 보기(MutationObserver.observe) **전에** 보냈다.
  *   알림을 받아 같은 차례에 동기로 다시 그린 앱 글은 번역층이 보지 못해 다른 언어에서 한국어로 남는다(SKP 214차가 처음 화면 상태 막대에서 찾은 꼴).
- *   이 앱의 받는 쪽 셋(editor.ts 다시 그리기·mobileview.ts 단추 맞추기·shell.ts 최근 문서)은 모두 미뤄 그려 지금은 남지 않았다 — 차례는 첫 시험이 보인다.
+ *   이 앱의 받는 쪽 셋(editor.ts 다시 그리기·mobileview.ts 단추 맞추기·shell.ts 최근 문서)은 모두 미뤄 그려 지금은 남지 않았다 — 차례는 첫 시험(en 파일)이 보인다.
  * - 진짜 시작 길(src/editor.ts startEditor — 셸·앱·명령행·모든 명령)과 번역층으로 주요 화면(처음 화면·제목 막대·리본·파일/배치 탭·상태 막대·
  *   명령행·도면층 창·특성 창·정보 카드·도움말(F1))을 jsdom에 그리고 합성 DXF 둘(이 앱의 쓰기 → 읽기)을 열어, 다섯 언어에서 파일 글 칸
  *   (번역층이 옮기지 않는 칸 — i18n.ts의 SKIP·translate="no"와 같은 규칙) 밖의 글 마디·title·aria-label에 한글이 남지 않는지 본다.
@@ -19,7 +24,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import type { ArcEntity, CircleEntity, Entity, LineEntity, MTextEntity } from '../src/core/model';
 import { MODEL_SPACE, entityDefaults } from '../src/core/model';
 import { createNewDocument } from '../src/core/newdoc';
@@ -35,42 +40,20 @@ import type { Shell } from '../src/app/ui/shell';
 import { closeMenu } from '../src/app/ui/dom';
 import { activeEditor } from '../src/app/textedit';
 import { startEditor } from '../src/editor';
-import { translate } from '../site/i18n.mjs';
 import { settle } from './polish/real-app';
 const { JSDOM } = createRequire(import.meta.url)('jsdom');
 
-vi.mock('../src/app/view', async (orig) => ({ ...(await orig<object>()), CadView: (await import('./polish/fakes')).FakeView }));
-// 시작 길은 엔진의 save를 감싼다(refedit.ts installSaveGuard) — 가짜 엔진에 EngineClient의 나머지 메서드도 둔다(부르면 거절·무시)
-vi.mock('../src/app/engine', async (orig) => {
-  const { FakeEngine } = await import('./polish/fakes');
-  class StartEngine extends FakeEngine {
-    async open(): Promise<never> {
-      throw new Error('open');
-    }
-    async adopt(): Promise<never> {
-      throw new Error('adopt');
-    }
-    async save(): Promise<never> {
-      throw new Error('save');
-    }
-    images(): void {}
-    shx(): void {}
-    replace(): void {}
-  }
-  return { ...(await orig<object>()), EngineClient: StartEngine };
-});
-vi.mock('../src/text/fonts', async (orig) => ({ ...(await orig<object>()), OutlineLibrary: (await import('./polish/fakes')).FakeFonts }));
-// 메뉴(showMenu)는 진짜를 쓴다(328차 — 리본 펼친 메뉴·바로 가기 메뉴·배치 탭 메뉴를 그려 본다). 알림(toast)만 가짜
-vi.mock('../src/app/ui/dom', async (orig) => ({ ...(await orig<object>()), toast: vi.fn() }));
-vi.mock('../src/app/pwa-app', () => ({ installPwa: vi.fn(), handleLaunchQuery: vi.fn(async () => {}) }));
+/** 나누기 전 describe·it 이름 그대로(언어 파일마다 같은 이름 — 파일 이름이 언어를 가른다) */
+export const NAMES = {
+  order: '번역층의 첫 언어 알림 차례(327차, SKP 214차 꼴)',
+  orderIt: '첫 알림을 받아 곧바로(같은 차례에) 그린 앱 글도 옮긴다 — 화면 보기를 알림보다 먼저 시작한다',
+  screens: '다섯 언어 주요 화면의 한글 0(327차)',
+  zero: '처음 화면·명령행·도면층/특성 창·정보 카드·상태 막대·도움말(F1)·배치 공간·바로 가기 메뉴·리본 펼친 메뉴·접힌 리본 패널·대화 상자·문자 편집기(합성 DXF 둘) — 파일 글 칸 밖에 한글이 없다(아직 둔 것 빼고)',
+  orient: '배치 마법사 「방향」 쪽 라디오는 용지 방향 낱말이다(329차 — 홀로 쓴 「가로」·「세로」는 PLOTSTAMP 글 방향인 수평·수직 뜻)',
+} as const;
 
-// 보기 모드 안내(renderNotice)가 기다리지 않고 나눠 받는 모듈을 미리 받아 둔다(공용 규칙 5번 — 시험 파일이 끝난 뒤 모듈을 평가하지 않게)
-beforeAll(async () => {
-  await Promise.all([import('../src/app/refs'), import('../src/app/shxfonts')]);
-});
-
-const LANGS = ['en', 'ja', 'zh-CN', 'de'] as const;
-const HANGUL = /[ㄱ-ㆎ가-힣]/;
+const LANGS: readonly string[] = ['en', 'ja', 'zh-CN', 'de'];
+export const HANGUL = /[ㄱ-ㆎ가-힣]/;
 const RUN = /[ㄱ-ㆎ가-힣]+(?:[\s·,.:()/]+[ㄱ-ㆎ가-힣]+)*/g;
 /** 번역층이 옮기지 않는 칸(src/app/i18n.ts의 SKIP 그대로 읽는다 — 규칙이 바뀌면 시험도 따라간다) */
 const SKIP = readFileSync(new URL('../src/app/i18n.ts', import.meta.url), 'utf8').match(/const SKIP = '([^']+)'/)![1]!;
@@ -78,17 +61,17 @@ const SKIP = readFileSync(new URL('../src/app/i18n.ts', import.meta.url), 'utf8'
 const FILE_TEXT = ['한빛벽체', '두레설비', '한빛 주택 평면도', '두레 메모 글'];
 
 /**
- * 아직 둔 것: 이 시험이 찾았는데 그 차수에 고치지 않은 자리 — 「단계 · 칸: 남은 한글 (언어)」.
- * 목록에 있는데 이제 한글이 없으면 실패한다(고쳤으면 목록에서 지운다).
+ * 아직 둔 것: 이 시험이 찾았는데 그 차수에 고치지 않은 자리 — 「단계 · 칸: 남은 한글 (언어)」(여러 언어면 「(en, ja)」).
+ * 목록에 있는데 이제 한글이 없으면 실패한다(고쳤으면 목록에서 지운다). 언어 파일마다 제 언어가 든 항목만 본다(pendingFor).
  * 328차가 모두 고쳤다 — 327차의 둘(도면층 창 색 견본 title 「흰색」·필터 상태 줄 「모두」)과 새 걸음이 찾은 둘
  * (명령 모드 바로 가기 메뉴 「객체 스냅 재지정 ▸」의 「스냅 재지정」·페이지 설정 관리자 설명 줄의 방향 「가로」·「없음」).
  * 329차도 새 걸음이 찾은 다섯을 모두 고쳤다 — 접힌 리본 패널 단추 「뷰·좌표 ▾」(틀 「뷰{0}」에 잡혀 「좌표」가 남음 — 제목과 「 ▾」를 다른 글 마디로),
  * MTEXT 둘째 구석 기록 줄(기록 줄 틀 「…[높이(H)/…/열(C)]: {0}」), 편집기 글꼴 고르기의 앱 글꼴 이름 「맑은 고딕」·「굴림」·「바탕」(값 = 글인 항목은
  * 도면 글로 보아 옮기지 않으므로 이름표를 먼저 옮김 — 사전의 글꼴 이름 오역 「Roll」·「Background」 등도 로마자 고유 이름으로).
  */
-const PENDING: string[] = [];
+export const PENDING: string[] = [];
 /** 328·329차 새 걸음 — 한국어 화면에서 걸음마다 새 앱 글(한글)이 보여야 그 화면을 실제로 그린 것이다 */
-const NEW_STEPS = [
+export const NEW_STEPS = [
   '배치 공간(MVIEW)',
   '배치 탭 메뉴',
   '바로 가기 메뉴(기본)',
@@ -106,11 +89,24 @@ const NEW_STEPS = [
   '명령행 기록 줄(LINE·RECTANG)',
 ];
 
+/**
+ * 이 언어의 「아직 둔 것」 — PENDING 항목 가운데 이 언어가 든 것을 「단계 · 칸: 남은 한글 (언어)」로(언어 파일의 남은 한글과 같은 꼴).
+ * 꼴이 틀리거나 네 언어 밖 이름이 든 항목은 어느 언어 파일에도 들지 않고 지나가지 않게 던진다(나누기 전 한 비교 toEqual(PENDING)과 같은 엄격함).
+ */
+export function pendingFor(lang: string): string[] {
+  return PENDING.flatMap((p) => {
+    const m = /^(.+) \(([^()]+)\)$/.exec(p);
+    const langs = m ? m[2]!.split(', ') : [];
+    if (!m || !langs.every((l) => LANGS.includes(l))) throw new Error(`아직 둔 것의 꼴(「… (en, ja)」)이 아니다: ${p}`);
+    return langs.includes(lang) ? [`${m[1]} (${lang})`] : [];
+  });
+}
+
 const realSetInterval = globalThis.setInterval;
 const realClearInterval = globalThis.clearInterval;
 let intervals: ReturnType<typeof setInterval>[] = [];
 
-const stubDom = (lang: string) => {
+export const stubDom = (lang: string) => {
   const dom = new JSDOM('<!doctype html><html lang="ko"><head><title>OpenCAD</title></head><body><div id="app"></div></body></html>', {
     url: `https://gyutae-kim.github.io/opencad-dwgdxf/${lang === 'ko' ? '' : `${lang}/`}`,
   });
@@ -472,78 +468,11 @@ async function screens(lang: string): Promise<{ steps: [string, string][]; fileT
   }
 }
 
-describe('번역층의 첫 언어 알림 차례(327차, SKP 214차 꼴)', () => {
-  it('첫 알림을 받아 곧바로(같은 차례에) 그린 앱 글도 옮긴다 — 화면 보기를 알림보다 먼저 시작한다', async () => {
-    for (const s of ['도면 공간', '특성', '도면층']) expect(translate(s, 'en')).not.toBe(s);
-    const dom = stubDom('en');
-    const root = document.getElementById('app')!;
-    root.innerHTML = '<header class="titlebar"></header><div class="statusbar"><span class="status-text">모형</span></div>';
-    // 상태 막대 글을 새 언어로 다시 쓰고 줄을 하나 더하는 받는 쪽(알림 안에서 동기로)
-    root.addEventListener('languagechange', () => {
-      root.querySelector('.status-text')!.textContent = '도면 공간';
-      const late = document.createElement('span');
-      late.className = 'late';
-      late.title = '도면층';
-      late.textContent = '특성';
-      root.append(late);
-    });
-    const dispose = await installLocalization(root);
-    await settle();
-    try {
-      expect(root.querySelector('.status-text')!.textContent).toBe(translate('도면 공간', 'en'));
-      expect(root.querySelector('.late')!.textContent).toBe(translate('특성', 'en'));
-      expect(root.querySelector('.late')!.getAttribute('title')).toBe(translate('도면층', 'en'));
-    } finally {
-      dispose();
-      vi.unstubAllGlobals();
-      dom.window.close();
-    }
-  });
-});
-
-type Screens = Awaited<ReturnType<typeof screens>>;
-let runs: Promise<Map<string, Screens>> | undefined;
-/** 한국어와 네 언어를 한 번만 그린다(아래 두 시험이 함께 쓴다 — 329차) */
-const allScreens = () =>
-  (runs ??= (async () => {
-    const m = new Map<string, Screens>();
-    for (const lang of ['ko', ...LANGS]) m.set(lang, await screens(lang));
-    return m;
-  })());
-
-describe('다섯 언어 주요 화면의 한글 0(327차)', () => {
-  it(
-    '처음 화면·명령행·도면층/특성 창·정보 카드·상태 막대·도움말(F1)·배치 공간·바로 가기 메뉴·리본 펼친 메뉴·접힌 리본 패널·대화 상자·문자 편집기(합성 DXF 둘) — 파일 글 칸 밖에 한글이 없다(아직 둔 것 빼고)',
-    async () => {
-      const all = await allScreens();
-      const left = new Map<string, string[]>();
-      for (const lang of LANGS) {
-        const r = all.get(lang)!;
-        // 도면 글(도면층 이름)·파일 이름은 번역층 밖이라 그대로 보인다
-        expect(r.fileTextShown, lang).toBe(true);
-        for (const [step, k] of r.steps) {
-          const key = `${step} · ${k}`;
-          left.set(key, [...(left.get(key) ?? []), lang]);
-        }
-      }
-      expect([...left].map(([k, langs]) => `${k} (${langs.join(', ')})`)).toEqual(PENDING);
-      for (const p of PENDING) expect(p).toMatch(HANGUL);
-      // 한국어 화면: 같은 훑기가 앱 글의 한글을 찾는다(시험이 눈멀지 않음 — 새 걸음마다 새 앱 글이 보여야 그 화면을 그린 것)
-      const ko = all.get('ko')!;
-      expect(ko.steps.length).toBeGreaterThan(20);
-      expect(ko.fileTextShown).toBe(true);
-      for (const step of NEW_STEPS) expect(ko.steps.some(([s]) => s === step), step).toBe(true);
-    },
-    240_000,
-  );
-  it(
-    '배치 마법사 「방향」 쪽 라디오는 용지 방향 낱말이다(329차 — 홀로 쓴 「가로」·「세로」는 PLOTSTAMP 글 방향인 수평·수직 뜻)',
-    async () => {
-      const all = await allScreens();
-      expect(all.get('ko')!.orient).toEqual(['세로 방향', '가로 방향']);
-      // 같은 사전의 용지 방향 낱말: -PLOT 옵션 「세로(P)」·「가로(L)」의 번역에서 옵션 글자를 뗀 것(Portrait·縦·纵向·Hochformat 꼴)
-      for (const lang of LANGS) expect(all.get(lang)!.orient, lang).toEqual(['세로(P)', '가로(L)'].map((k) => translate(k, lang).replace(/\s*\([A-Z]\)$/, '')));
-    },
-    240_000,
-  );
-});
+export type Screens = Awaited<ReturnType<typeof screens>>;
+const runs = new Map<string, Promise<Screens>>();
+/** 이 시험 파일의 언어를 한 번만 그린다(파일 안 두 시험이 함께 쓴다 — 329차 allScreens를 언어 하나로) */
+export function screensOnce(lang: string): Promise<Screens> {
+  let run = runs.get(lang);
+  if (!run) runs.set(lang, (run = screens(lang)));
+  return run;
+}
