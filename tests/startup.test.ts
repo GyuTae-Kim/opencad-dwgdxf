@@ -2,7 +2,15 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountEditor, type EditorActions } from '../src/app/startup';
-const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+/**
+ * 시작 고리가 끝날 때까지 — load가 풀리거나 거절되면 aria-busy를 뗀다(mountEditor). 타이머 바퀴로 보고(한 바퀴는 마이크로태스크 줄이 빈 뒤라 늘
+ * 12번보다 같거나 길다) 마감 3초(333차 — 마이크로태스크 12번 횟수 대신: 공용 규칙 13번). 끝 표시가 없는 갈래(시작 전에 닫음)는 done으로 한 바퀴만
+ */
+const flush = async (done = () => !root.hasAttribute('aria-busy')) => {
+  const end = Date.now() + 3000;
+  do await new Promise((r) => setTimeout(r, 0));
+  while (!done() && Date.now() < end);
+};
 let dispose: (() => void) | undefined;
 let root: HTMLElement;
 let ready: EditorActions;
@@ -53,7 +61,7 @@ describe('direct CAD workspace startup', () => {
   it('does not start CAD after the startup was disposed', async () => {
     const load = vi.fn().mockResolvedValue(ready);
     dispose = mountEditor(root, load);
-    dispose(); await flush();
+    dispose(); await flush(() => true);
     expect(load).not.toHaveBeenCalled();
   });
   it.each([['en','Preparing the editor…','Reload'],['ja','エディターを準備しています…','再読み込み'],['zh-CN','正在准备编辑器…','重新加载'],['de','Editor wird vorbereitet…','Neu laden']])('shows native loading and retry copy before the %s catalog loads', async (code, loading, retry) => {
