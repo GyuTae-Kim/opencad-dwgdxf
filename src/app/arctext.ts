@@ -13,6 +13,7 @@ import { followArcTextsOnCommit, newArcText } from '../edit/textools/arctext';
 import type { App, CommandContext } from './app';
 import type { DocState } from './docstate';
 import { addEntities, currentProps } from './draw';
+import { uiText } from './i18n-text';
 import { colorText } from './inquiry';
 import { unlockedOnly } from './layers';
 import { pickColor } from './ui/colorpick';
@@ -147,7 +148,8 @@ function workshop(app: App, title: string, base: ArcTextEntity): Promise<ArcText
         ['leftOffset', '왼쪽에서 간격띄우기'],
         ['rightOffset', '오른쪽에서 간격띄우기'],
       ] as const)
-        if (!Number.isFinite(out[k])) return `${label}: 숫자를 입력하십시오.`;
+        // 칸 이름표(앱 낱말)는 화면 언어로 끼운다 — 틀 {0} 자리라 번역층이 옮기지 않는다(342차)
+        if (!Number.isFinite(out[k])) return `${uiText(label)}: 숫자를 입력하십시오.`;
       return arcTextError(out) ?? out;
     };
     const showGhost = (ents: Entity[]) => {

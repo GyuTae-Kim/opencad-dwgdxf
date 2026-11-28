@@ -184,7 +184,8 @@ export function registerUtil2MiscCommands(app: App): void {
         for (const t of targets) {
           const bad = renameProblem(st.doc, kind, t.orig, t.next, takenFor(t.orig));
           if (bad || nextKeys.has(tableKey(t.next))) {
-            err.textContent = `${ft(t.now)}: ${bad ?? `${ft(t.next)}은(는) 이미 있는 이름입니다.`}`;
+            // 까닭 글(잠금·이름 규칙·블록 *)은 앞에 「이름: 」이 붙으면 통째 열쇠가 잡히지 않아 네 언어에서 한국어로 남았다 — 화면 언어로 끼운다(342차)
+            err.textContent = `${ft(t.now)}: ${bad ? uiText(bad) : `${ft(t.next)}은(는) 이미 있는 이름입니다.`}`;
             return;
           }
           nextKeys.add(tableKey(t.next));
