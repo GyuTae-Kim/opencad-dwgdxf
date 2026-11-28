@@ -23,3 +23,22 @@ export function dateTimeText(d: Date, opts?: Intl.DateTimeFormatOptions, locale 
     return d.toLocaleString('ko', opts);
   }
 }
+
+/** UTC 시각을 적는 머리말 변수(AutoCAD 시스템 변수 정의 — 나머지 TDCREATE·TDUPDATE는 저장한 곳의 현지 시각) */
+const UTC_TIMES = new Set(['$TDUCREATE', '$TDUUPDATE']);
+
+/**
+ * 도면 머리말의 때(율리우스일) → 화면 언어 꼴 날짜·시각 글(346차 — 도면 비교 정보·DWGPROPS 통계·TIME이 이 길 하나).
+ * $TDCREATE·$TDUPDATE는 저장한 곳의 벽시계 값이라 시간대를 더하지 않는다: UTC로 읽어 칸을 그대로 보인다(고치기 전 DWGPROPS·TIME은
+ * 보는 사람의 시간대를 또 더해 한국 시간이면 9시간 뒤로 보였고, 도면 비교만 그대로였다). $TDUCREATE·$TDUUPDATE는 UTC 시각이라
+ * 보는 사람의 현지 시각으로 바꾼다 — 같은 도면의 두 값이 같은 때로 보인다.
+ * 값이 없거나 날짜가 아니면(2000000 — 8세기 — 밑, 날짜 범위 밖) 빈 글. 도면에 쓰는 값은 이 길을 거치지 않는다(머리말 값 그대로).
+ */
+export function drawingTimeText(header: { get(name: string): unknown }, name: string): string {
+  const jd = header.get(name);
+  if (typeof jd !== 'number' || !(jd > 2000000)) return '';
+  // ms로 반올림: 율리우스일(날 수 double)의 끝자리 오차로 10:00:00이 9:59:59.999 → 「9:59:59」로 보이지 않게(FIELD julianToLocal과 같음)
+  const d = new Date(Math.round((jd - 2440587.5) * 86400000));
+  if (!Number.isFinite(d.getTime())) return '';
+  return dateTimeText(d, UTC_TIMES.has(name) ? undefined : { timeZone: 'UTC' });
+}

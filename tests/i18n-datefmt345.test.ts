@@ -24,6 +24,8 @@ const TIMED = /\d:\d\d/;
 /** 2026-11-28 15:00 UTC의 율리우스일(2451545.0 = 2000-01-01 12:00 UTC에 9828.125일 — 0.125는 2진수로 딱 떨어져 ms가 정수) */
 const JD = 2461373.125;
 const AT = new Date((JD - 2440587.5) * 86400000);
+/** 머리말 현지 시각 변수의 칸을 그대로 읽는 꼴(346차 — datetext.ts drawingTimeText) */
+const UTC = { timeZone: 'UTC' } as const;
 /** 총 편집 시간 1.5일 → 「1일 12:00:00」 */
 const EDIT = 1.5;
 const DURATION: Record<string, string> = { ko: '1일 12:00:00', en: '1 days 12:00:00', de: '1 Tage 12:00:00', ja: '1日12:00:00', 'zh-CN': '1 天 12:00:00' };
@@ -89,22 +91,25 @@ describe('화면에 보이는 날짜·시각 글은 화면 언어 꼴(345차)', 
     expect(koKR, koKR.join('\n')).toEqual([]);
     const calls = LINES.filter((x) => /\.toLocale(?:Date|Time)?String\(|new Intl\.DateTimeFormat\(/.test(x.s)).map((x) => x.f);
     expect(calls).toEqual(['app/datetext.ts', 'app/datetext.ts']);
+    // 346차: 도면 머리말 율리우스일 셋(도면 비교·DWGPROPS·TIME)은 datetext.ts drawingTimeText 한 길(시간대 — tests/i18n-julian346.test.ts)
     for (const [f, s] of [
-      ['app/compare.ts', "dateTimeText(new Date((v - 2440587.5) * 86400000), { timeZone: 'UTC' })"],
-      ['app/dwgprops.ts', "dateTimeText(d) : ''"],
-      ['app/propcmds.ts', 'return dateTimeText(d);'],
+      ['app/datetext.ts', "dateTimeText(d, UTC_TIMES.has(name) ? undefined : { timeZone: 'UTC' })"],
+      ['app/compare.ts', "drawingTimeText(d.header, '$TDUPDATE')"],
+      ['app/dwgprops.ts', "drawingTimeText(H, '$TDCREATE')"],
+      ['app/propcmds.ts', "drawingTimeText(hd, '$TDCREATE')"],
       ['app/propcmds.ts', '${dateTimeText(new Date())}'],
       ['app/recent.ts', 'return dateTimeText(t, opts, locale);'],
       ['app/ui/shell.ts', 'recentTimeLabel(r.time, now)'],
     ])
       expect(src(f!), `${f} ${s}`).toContain(s);
-    expect(LINES.filter((x) => /\bdateTimeText\(/.test(x.s) && !/export function/.test(x.s))).toHaveLength(5);
+    expect(LINES.filter((x) => /\bdateTimeText\(/.test(x.s) && !/export function/.test(x.s))).toHaveLength(3);
   });
 
   it('(나) 다섯 언어 화면의 DWGPROPS 통계 「작성」「수정」「총 편집 시간」·TIME 결과 줄 — 날짜·시각은 그 화면 언어 꼴, 한국어 화면 밖 한글 0', async () => {
     for (const l of ['ko', ...LANGS]) {
       await screen(l);
-      const date = AT.toLocaleString(l);
+      // TDCREATE·TDUPDATE는 저장한 곳의 현지 시각 — 시간대를 더하지 않고 그대로(346차, 전에는 보는 사람의 시간대를 더한 AT.toLocaleString(l))
+      const date = AT.toLocaleString(l, UTC);
       expect(HANGUL.test(date), `${l}: ${date}`).toBe(l === 'ko');
       const cells = await propsCells((c) => c.filter((x) => x === date).length === 2 && c.includes(DURATION[l]!));
       expect(cells.filter((x) => x === date), l).toHaveLength(2);
@@ -139,14 +144,14 @@ describe('화면에 보이는 날짜·시각 글은 화면 언어 꼴(345차)', 
 
   it('(다) 언어 메뉴로 바꾸면 다음에 여는 DWGPROPS·최근 문서 때가 새 언어 꼴(html lang을 따른다)', async () => {
     const root = await screen('en');
-    const en = AT.toLocaleString('en');
+    const en = AT.toLocaleString('en', UTC);
     expect((await propsCells((c) => c.includes(en))).filter((x) => x === en)).toHaveLength(2);
     const clock = { hour: 'numeric', minute: '2-digit' } as const;
     expect(recentTimeLabel(AT.getTime(), AT.getTime())).toBe(AT.toLocaleString('en', clock));
     root.querySelector<HTMLButtonElement>('.language-trigger')!.click();
     document.querySelector<HTMLButtonElement>('.language-list [data-language=de]')!.click();
     await vi.waitFor(() => expect(document.documentElement.lang).toBe('de'), { timeout: 3000 });
-    const de = AT.toLocaleString('de');
+    const de = AT.toLocaleString('de', UTC);
     expect(de).not.toBe(en);
     const cells = await propsCells((c) => c.includes(de));
     expect(cells.filter((x) => x === de)).toHaveLength(2);

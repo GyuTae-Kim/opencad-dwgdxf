@@ -11,7 +11,7 @@ import { planProj } from '../edit/geom/ocs';
 import { nearestLineweight } from '../edit/layercmd';
 import { STANDARD_LINETYPES, makeLinetype } from '../edit/linetypes';
 import type { App, CommandContext } from './app';
-import { dateTimeText } from './datetext';
+import { dateTimeText, drawingTimeText } from './datetext';
 import type { DocState } from './docstate';
 import { addEntities, currentElevation, currentProps } from './draw';
 import { form } from './ui/dom';
@@ -293,13 +293,6 @@ const PDMODES: [number, string][] = [
   [100, '원과 사각형 안의 세로선'],
 ];
 
-/** 율리우스일 → 화면 언어 꼴 날짜 문자열(345차 — 전에는 ko-KR 고정) */
-function julian(v: HeaderValue | undefined): string {
-  if (typeof v !== 'number' || !(v > 2000000)) return '-';
-  const d = new Date((v - 2440587.5) * 86400000);
-  return dateTimeText(d);
-}
-
 function days(v: HeaderValue | undefined): string {
   if (typeof v !== 'number' || !(v >= 0)) return '-';
   const s = Math.round(v * 86400);
@@ -445,8 +438,9 @@ export function registerPropCommands(app: App): void {
       const hd = st.doc.header;
       ctx.print(`현재 시간:              ${dateTimeText(new Date())}`);
       ctx.print(`이 도면의 시간:`);
-      ctx.print(`  작성:                 ${julian(hd.get('$TDCREATE'))}`);
-      ctx.print(`  마지막 업데이트:      ${julian(hd.get('$TDUPDATE'))}`);
+      // 저장한 곳의 현지 시각 그대로(시간대를 더하지 않음 — 도면 비교·DWGPROPS와 같은 길 datetext.ts, 346차)
+      ctx.print(`  작성:                 ${drawingTimeText(hd, '$TDCREATE') || '-'}`);
+      ctx.print(`  마지막 업데이트:      ${drawingTimeText(hd, '$TDUPDATE') || '-'}`);
       ctx.print(`  총 편집 시간:         ${uiText(days(hd.get('$TDINDWG')))}`);
       ctx.print(`  경과 타이머(켜기):    ${uiText(days(hd.get('$TDUSRTIMER')))}`);
     },

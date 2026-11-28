@@ -5,6 +5,7 @@
  * ACDSDATA 등, 그 구역을 담을 수 있는 버전일 때). 무엇을 어떻게 쓰는지는 WRITER_NOTES.md에 정리했다.
  */
 import { pushAll } from '../../core/arrays';
+import { julianLocal, julianUtc } from '../../core/julian';
 import type { BlockDef, CadDocument, HeaderValue, RawTag, ReadWarning, Vec3 } from '../../core/model';
 import { tableKey } from '../../core/model';
 import { STANDARD_CLASSES } from './classes';
@@ -37,11 +38,6 @@ function isHandleHeaderCode(code: number): boolean {
   return (code >= 320 && code <= 369) || (code >= 390 && code <= 399);
 }
 
-/** 1970-01-01 기준 율리우스일 */
-function julianNow(): number {
-  return Date.now() / 86400000 + 2440587.5;
-}
-
 function guid(): string {
   const b = new Uint8Array(16);
   const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } }).crypto;
@@ -60,7 +56,10 @@ function writeHeader(s: TagSink, ctx: WriteContext, codepage: string): void {
   const ver = ctx.ver;
   const w = new TagOut(s, ctx);
   const H = doc.header;
-  const now = julianNow();
+  // 빈 때 값: TDCREATE·TDUPDATE는 지금의 현지 벽시계, TDUCREATE·TDUUPDATE는 UTC(같은 순간 — 346차, 전에는 넷 모두 UTC)
+  const at = new Date(Date.now());
+  const local = julianLocal(at);
+  const utc = julianUtc(at);
   const has = (name: string) => H.has(name);
   const nameIn = (v: HeaderValue | undefined, map: Map<string, string>, def: string) => (typeof v === 'string' && map.has(tableKey(v)) ? v : def);
   const special = (name: string): HeaderValue | undefined => {
@@ -98,11 +97,12 @@ function writeHeader(s: TagSink, ctx: WriteContext, codepage: string): void {
         return nameIn(H.get(name), ctx.ltypeH, '');
       case '$TDCREATE':
       case '$TDUPDATE':
-        return typeof H.get(name) === 'number' ? H.get(name) : now;
+        return typeof H.get(name) === 'number' ? H.get(name) : local;
+      // UTC 변수가 없고 현지 변수만 있으면(DWG에서 읽은 도면 등) 그 값을 옮긴다 — 저장한 곳의 시간대를 몰라 바꾸지 않음(그대로)
       case '$TDUCREATE':
-        return typeof H.get(name) === 'number' ? H.get(name) : typeof H.get('$TDCREATE') === 'number' ? H.get('$TDCREATE') : now;
+        return typeof H.get(name) === 'number' ? H.get(name) : typeof H.get('$TDCREATE') === 'number' ? H.get('$TDCREATE') : utc;
       case '$TDUUPDATE':
-        return typeof H.get(name) === 'number' ? H.get(name) : typeof H.get('$TDUPDATE') === 'number' ? H.get('$TDUPDATE') : now;
+        return typeof H.get(name) === 'number' ? H.get(name) : typeof H.get('$TDUPDATE') === 'number' ? H.get('$TDUPDATE') : utc;
       case '$TDINDWG':
       case '$TDUSRTIMER':
         return typeof H.get(name) === 'number' ? H.get(name) : 0;

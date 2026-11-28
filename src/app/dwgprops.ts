@@ -8,7 +8,7 @@ import { normalizeHandle } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { DWGPROPS_KEY, MAX_CUSTOM_PROPS, type DrawingProps, drawingProps, dwgPropsObject, propTimes, tagsFromProps } from '../io/dwgprops';
 import type { App, CommandContext } from './app';
-import { dateTimeText } from './datetext';
+import { drawingTimeText } from './datetext';
 import { h } from './ui/dom';
 import { areaIn, btn, fail, pickList, resultDialog, row, tabs, textIn } from './mgr-ui';
 
@@ -46,14 +46,6 @@ export function drawingPropsOps(doc: CadDocument, next: DrawingProps, newHandle:
     if (v !== undefined) ops.push({ kind: 'header', name: k, before: v, after: undefined });
   }
   return ops;
-}
-
-/** 율리우스일 → 화면 언어 꼴 날짜·시각 글(345차 — 전에는 ko-KR 고정이라 다섯 언어에 「오후」) */
-export function julianText(jd: unknown): string {
-  if (typeof jd !== 'number' || !Number.isFinite(jd) || jd <= 0) return '';
-  const ms = (jd - 2440587.5) * 86400000;
-  const d = new Date(ms);
-  return Number.isFinite(d.getTime()) ? dateTimeText(d) : '';
 }
 
 /** 일 수 → "n일 h:mm:ss" */
@@ -110,8 +102,11 @@ async function dwgPropsDialog(app: App, ctx: CommandContext): Promise<void> {
   const stats = h(
     'div',
     { class: 'mgr-dlg' },
-    kv('작성', julianText(H.get('$TDCREATE'))),
-    kv('수정', julianText(H.get('$TDUPDATE'))),
+    // 날짜 둘은 저장한 곳의 현지 시각 그대로(도면 비교·TIME과 같은 길 — 346차, 전에는 보는 사람의 시간대를 또 더함).
+    // 이름표는 같은 변수의 다른 화면 이름표(FIELD CreateDate 「작성 날짜」·도면 비교 정보 「마지막 수정」) — 「작성」「수정」은
+    // 표제란·옵션·리본 탭과 함께 쓰는 열쇠라 값이 지은이·편집 뜻이었다(Author·Edit)
+    kv('작성 날짜', drawingTimeText(H, '$TDCREATE')),
+    kv('마지막 수정', drawingTimeText(H, '$TDUPDATE')),
     kv('마지막 저장자', cur.lastSavedBy),
     row('수정 번호', revision),
     kv('총 편집 시간', durationText(H.get('$TDINDWG'))),

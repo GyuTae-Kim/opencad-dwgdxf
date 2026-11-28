@@ -29,6 +29,7 @@ import type {
 } from './model';
 import { createDocument, tableKey, v2, v3 } from './model';
 import { finalizeDocument } from './finalize';
+import { julianLocal, julianUtc } from './julian';
 import { DEFAULT_HEADER, METRIC_HEADER } from '../io/dxf/headervars';
 import { STANDARD_CLASSES } from '../io/dxf/classes';
 
@@ -174,11 +175,6 @@ const IMPERIAL_SCALES: [string, number, number][] = [
   ['6" = 1\'-0"', 6, 12],
   ['1\'-0" = 1\'-0"', 12, 12],
 ];
-
-/** 1970-01-01 기준 율리우스일 */
-function julianNow(): number {
-  return Date.now() / 86400000 + 2440587.5;
-}
 
 function plotSettings(metric: boolean, model: boolean): PlotSettings {
   // 미터: ISO A3(420 × 297 mm), 인치: ANSI A(11 × 8.5 in). 여백 없는 용지, 1:1.
@@ -454,7 +450,8 @@ export function createNewDocument(units: NewDocumentUnits): CadDocument {
   const H = doc.header;
   for (const [k, v] of Object.entries(DEFAULT_HEADER)) H.set(k, cloneValue(v));
   if (metric) for (const [k, v] of Object.entries(METRIC_HEADER)) H.set(k, cloneValue(v));
-  const now = julianNow();
+  // 만든 때: TDCREATE·TDUPDATE는 현지 벽시계, TDUCREATE·TDUUPDATE는 UTC(같은 순간 — 346차, 전에는 넷 모두 UTC)
+  const at = new Date(Date.now());
   const set = (k: string, v: HeaderValue) => H.set(k, v);
   set('$ACADVER', 'AC1032');
   set('$DWGCODEPAGE', 'ANSI_1252');
@@ -480,10 +477,10 @@ export function createNewDocument(units: NewDocumentUnits): CadDocument {
   set('$PLIMMAX', metric ? v2(420, 297) : v2(11, 8.5));
   set('$EXTMIN', v3(1e20, 1e20, 1e20));
   set('$EXTMAX', v3(-1e20, -1e20, -1e20));
-  set('$TDCREATE', now);
-  set('$TDUCREATE', now);
-  set('$TDUPDATE', now);
-  set('$TDUUPDATE', now);
+  set('$TDCREATE', julianLocal(at));
+  set('$TDUCREATE', julianUtc(at));
+  set('$TDUPDATE', julianLocal(at));
+  set('$TDUUPDATE', julianUtc(at));
   set('$TDINDWG', 0);
   set('$TDUSRTIMER', 0);
   set('$HANDSEED', next());

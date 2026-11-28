@@ -3,6 +3,7 @@
  * 쓰는 버전: AC1015(R2000)·AC1018(R2004)·AC1024(R2010)·AC1027(R2013)·AC1032(R2018).
  * AC1021(R2007)을 달라고 하면 AC1018로, AC1012·AC1014는 AC1015로 쓰고 경고를 남긴다.
  */
+import { julianLocal } from '../../../core/julian';
 import type { CadDocument, ReadWarning } from '../../../core/model';
 import { R2000, R2004, R2007, R2010, R2013, R2018, versionNumber } from '../version';
 import { ObjectWriter } from './objects';
@@ -38,10 +39,6 @@ export interface DwgWriteResult {
 
 /** 파일 머리의 유지보수 버전(AutoCAD가 쓰는 값) */
 const MAINT: Record<number, number> = { [R2000]: 15, [R2004]: 104, [R2010]: 226, [R2013]: 125, [R2018]: 0 };
-
-function julianNow(): number {
-  return Date.now() / 86400000 + 2440587.5;
-}
 
 export function writeDwg(doc: CadDocument, options: DwgWriteOptions = {}): DwgWriteResult {
   const warnings: ReadWarning[] = [];
@@ -188,7 +185,8 @@ export function writeDwg(doc: CadDocument, options: DwgWriteOptions = {}): DwgWr
     const v = hv.get(k);
     return typeof v === 'number' && Number.isFinite(v) ? v : def;
   };
-  const now = julianNow();
+  // 빈 만든·고친 때(보조 머리·요약 정보·빈 공간 구역)는 지금의 현지 벽시계 — 머리말 TDCREATE·TDUPDATE와 같은 꼴(346차, 전에는 UTC)
+  const now = julianLocal();
   const aux = auxHeader(ver, maint, num('$TDCREATE', now), num('$TDUPDATE', now), handseed);
   const measurement = num('$MEASUREMENT', 0) ? 1 : 0;
   progress?.(0.9);

@@ -235,10 +235,16 @@ describe('폴리선 정점의 공통 자료를 폴리선마다 한 번 구하기
   const hashOf = (make: () => CadDocument, version: 'AC1032' | 'AC1027' | 'AC1024' | 'AC1018' | 'AC1015') => {
     vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(((a: unknown) => a) as never);
+    // 346차: 새 도면·빈 값의 TDCREATE·TDUPDATE를 현지 벽시계로 쓴다(src/core/julian.ts) — 바이트가 시간대를 따르므로 UTC로 고정
+    // (UTC에서는 현지 = UTC라 고치기 전과 같은 바이트 — 정답 해시 그대로)
+    const tz = process.env.TZ;
+    process.env.TZ = 'UTC';
     try {
       return createHash('sha256').update(writeDwg(make(), { version }).data).digest('hex').slice(0, 16);
     } finally {
       vi.restoreAllMocks();
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
     }
   };
   it('AC1015: 트루컬러 폴리선의 RGB를 빼면 125차 바이트와 같다(바뀐 것은 RTTcAl 확장 자료뿐 — 138차)', () => {

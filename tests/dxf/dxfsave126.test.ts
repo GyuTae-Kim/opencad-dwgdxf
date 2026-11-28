@@ -177,11 +177,17 @@ describe('DXF 쓰기 바이트·경고가 125차 판과 같다', () => {
           vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
           vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(((a: unknown) => a) as never);
           vi.spyOn(Math, 'random').mockReturnValue(0.25);
+          // 346차: 새 도면·빈 값의 TDCREATE·TDUPDATE를 현지 벽시계로 쓴다(src/core/julian.ts) — 바이트가 시간대를 따르므로 UTC로 고정
+          // (UTC에서는 현지 = UTC라 고치기 전과 같은 바이트 — 정답 해시 그대로)
+          const tz = process.env.TZ;
+          process.env.TZ = 'UTC';
           try {
             const r = writeDxf(mk(), { version, binary });
             expect(`${sha(r.data, 16)}:${sha(JSON.stringify(r.warnings), 8)}`).toBe(GOLDEN[key]);
           } finally {
             vi.restoreAllMocks();
+            if (tz === undefined) delete process.env.TZ;
+            else process.env.TZ = tz;
           }
         });
       }
