@@ -55,9 +55,11 @@ export interface ToastAction {
  * 잠깐 보이는 알림. 오류는 화면 읽기 프로그램이 바로 읽게 role="alert"로 둔다.
  * action이 있으면 단추와 닫기 단추를 붙인다. ms가 0이면 닫을 때까지 남는다.
  * 단추 없는 알림은 같은 종류·같은 글의 단추 없는 알림이 떠 있으면 그것을 지우고 새로 붙인다(271차 — 쌓이지 않고 하나만, 시간은 마지막 알림부터).
- * 글이 다른 단추 없는 알림이 TOAST_LIMIT(낮은 화면은 TOAST_LIMIT_SHORT)를 넘으면 가장 오래된 것부터 지운다(280차)
+ * 글이 다른 단추 없는 알림이 TOAST_LIMIT(낮은 화면은 TOAST_LIMIT_SHORT)를 넘으면 가장 오래된 것부터 지운다(280차).
+ * text가 글을 만드는 함수면(349차 — 파일 크기 「1.5 KB」처럼 화면 언어 꼴 수가 든 알림) 떠 있는 채 언어를 바꿀 때 relangToasts가 그 함수로 새 꼴 글을 다시 쓴다
  */
-export function toast(text: string, kind: 'info' | 'warn' | 'error' = 'info', ms = 4200, action?: ToastAction): HTMLDivElement {
+export function toast(source: string | (() => string), kind: 'info' | 'warn' | 'error' = 'info', ms = 4200, action?: ToastAction): HTMLDivElement {
+  const text = typeof source === 'function' ? source() : source;
   if (!toastWrap || !toastWrap.isConnected) {
     toastWrap = h('div', { class: 'toast-wrap', role: 'status', 'aria-live': 'polite' });
     document.body.append(toastWrap);
@@ -90,8 +92,29 @@ export function toast(text: string, kind: 'info' | 'warn' | 'error' = 'info', ms
     const limit = window.innerHeight < SHORT_HEIGHT ? TOAST_LIMIT_SHORT : TOAST_LIMIT;
     for (const old of plain.slice(0, Math.max(0, plain.length - limit))) old.remove();
   }
+  if (typeof source === 'function') toastSources.set(t, { kind, make: source });
   if (ms > 0) setTimeout(() => t.remove(), ms);
   return t;
+}
+
+/** 글을 만드는 함수로 띄운 알림(349차) — 빠진 알림은 relangToasts가 지운다 */
+const toastSources = new Map<HTMLElement, { kind: string; make: () => string }>();
+
+/**
+ * 화면 언어를 바꾼 뒤(349차 — Shell.relang이 languagechange에서 부른다): 함수로 띄운 알림 가운데 떠 있는 것의 글을 새 꼴로 다시 쓴다.
+ * 번역층은 글 마디를 원문으로 다시 옮기지만 틀 {0}에 넣은 수(「1.5 KB」 ↔ 독일어 「1,5 KB」)는 넣은 때 꼴 그대로라서. 다시 쓴 한국어 글은 번역층이 새 언어로 옮긴다
+ */
+export function relangToasts(): void {
+  for (const [t, { kind, make }] of toastSources) {
+    if (!t.isConnected) {
+      toastSources.delete(t);
+      continue;
+    }
+    const text = make();
+    t.querySelector('.toast-text')!.textContent = text;
+    // 같은 글 알림 묶기(271차)도 새 글로
+    if (toastKeys.has(t)) toastKeys.set(t, `${kind}\n${text}`);
+  }
 }
 
 /** 키보드로 초점을 옮겨 온 요소인지(:focus-visible — 마우스로 누른 단추는 아니다). 이 판별을 못 하는 환경은 false */
