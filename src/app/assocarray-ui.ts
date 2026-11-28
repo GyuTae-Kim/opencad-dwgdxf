@@ -111,8 +111,8 @@ export function arrayPaletteGroup(app: App, handle: string): HTMLElement | null 
     }
     out.push(h('label', { class: 'prop-row edit' }, h('span', { class: 'k' }, row.label), ctl));
   }
-  if (info.state.removed.size) out.push(ro('지운 항목', info.state.removed.size.toLocaleString()));
-  if (info.state.replaced.size) out.push(ro('대체한 항목', info.state.replaced.size.toLocaleString()));
+  if (info.state.removed.size) out.push(ro('지운 항목', String(info.state.removed.size)));
+  if (info.state.replaced.size) out.push(ro('대체한 항목', String(info.state.replaced.size)));
   if (info.origin === 'infer') out.push(ro('기록', 'AutoCAD 배열(연관 객체를 풀지 못해 짐작한 값)'));
   return h('div', { class: 'prop-group' }, h('h4', {}, `배열(${KIND_LABEL[p.kind]})`), ...out);
 }

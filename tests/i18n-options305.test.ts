@@ -50,10 +50,10 @@ describe('옵션 대화 상자·상태 막대 묶음의 번역과 304차가 남�
       ['app/options.ts', "intIn(duration, 100, 10000, '길게 누르는 시간')"],
       ['app/annoscale-status.ts', "`뷰포트 주석 축척: ${ft(s?.name ?? '')}${sh.locked ? ' (잠긴 뷰포트)' : ''}`"],
       ['app/ui/shell.ts', 'vpm.title = label ? `${label} · 누르면 복원 (VPMIN), Ctrl+R 다음 뷰포트`'],
-      ['app/ui/shell.ts', '`선택 ${st.selection.size.toLocaleString()}개`'],
+      ['app/ui/shell.ts', '`선택 ${st.selection.size}개`'],
       ['app/viewtools-vpmax.ts', "if (m.kind === 'tiles') return '최대화된 타일 뷰포트';"],
       ['app/viewtools-vpmax.ts', "return vp ? `최대화된 뷰포트 ${vp.id}` : '최대화된 뷰포트';"],
-      ['app/ui/palettes.ts', '`${typeName(sel[0]!)} (${sel.length.toLocaleString()})`'],
+      ['app/ui/palettes.ts', '`${typeName(sel[0]!)} (${sel.length})`'],
       ...TYPES.map((x) => ['app/inquiry.ts', `'${x}'`]),
     ])
       expect(src(f!), s).toContain(s);

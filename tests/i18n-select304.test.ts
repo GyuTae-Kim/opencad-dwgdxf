@@ -109,7 +109,7 @@ describe('특성·선택 묶음의 번역과 303차가 남긴 것(304차)', () =
       ['app/util2-select.ts', "ctx.print(`${groupLabel(g).padEnd(22)} 객체 ${g.group.entities.length}개${g.group.selectable ? '' : ', 선택 불가'}"],
       ['app/util2-select.ts', 'ctx.print(`그룹 ${groupLabel(g)}이(가) 분해되었습니다.`)'],
       ['app/util2-select.ts', "ctx.print(`PICKSTYLE = ${v} (${v & 1 ? '그룹 선택 켜기' : '그룹 선택 끄기'})`);"],
-      ['app/ui/palettes.ts', '`${typeName(sel[0]!)} (${sel.length.toLocaleString()})`'],
+      ['app/ui/palettes.ts', '`${typeName(sel[0]!)} (${sel.length})`'],
       ['app/editcmds2-qp.ts', '`${typeName(l[0]!)} (${l.length})`'],
       ['app/inquiry.ts', "if (e.type === 'DIMENSION') return `치수 (${dimTypeName(e)})`;"],
       ['app/inquiry.ts', 'return `${TYPE_NAMES.UNKNOWN} (${e.originalType})`;'],

@@ -208,3 +208,34 @@ describe('342차가 보고 둔 값 몫 — 옵션 낱말 하나·전각 쌍점 �
     expect(translate('직사각형의 길이 지정: ⁨40⁩', 'ko')).toBe('직사각형의 길이 지정: ⁨40⁩');
   });
 });
+
+/*
+ * 344차(343차에 보고 둔 값 몫): (1) -HATCHEDIT 통째 물음 「해치 옵션 입력 [연관 해제(DI)/스타일(S)/특성(P)] <특성>:」의 옵션 셋·기본값 = 옵션 조각·이름표 값.
+ * en 통째는 붙임 꼴(Disassociate(DI)/Style(S)/Properties(P))이었다 — 같은 사전 옵션 「(X)」 앞은 빈칸이 다수(조각 788/831·통째 옵션 1,210/1,639 — jq)라
+ * 통째와 조각 「특성(P)」을 빈칸 꼴로, zh 조각 「属性 (P)」는 zh 다수 꼴(빈칸 없음 — 343차 셈)로, de 조각 「Aufheben der Assoziation (DI)」·통째 「Eigenschaft (P)」는
+ * 이름표 「연관 해제」 Zuordnung aufheben·「특성」 Eigenschaften으로. 칩 이름표도 옵션 낱말(en 「연관 해제」 Remove associativity → Disassociate —
+ * 같은 사전 Disassociate 4 : 1, de 「연관해제됨」 Nicht zugeordnet → Nicht assoziiert — 3 : 1). (2) TABLEDIT 정렬 틀 「정렬 입력 [{0}]:」 = 앞 조각
+ * 「정렬 입력 [」(정렬 = 맞춤 — leader300) — en Sort input·de Eingabe sortieren·zh 排序输入·ja 整列入力이 앞 조각과 갈렸다.
+ */
+describe('343차가 보고 둔 값 몫 — 해치 옵션·연관해제됨 이름표·정렬 틀(344차)', () => {
+  it('(1) -HATCHEDIT 통째 물음의 옵션 셋·기본값 = 옵션 조각·이름표 값(네 언어), 칩 이름표 = 옵션 낱말(en·de·zh)', () => {
+    const W = '해치 옵션 입력 [연관 해제(DI)/스타일(S)/특성(P)] <특성>:';
+    for (const l of LANGS) {
+      const v = dict[l][W]!;
+      expect(/\[([^\]]*)\]/.exec(v)![1]!.split('/'), l).toEqual(['연관 해제(DI)', '스타일(S)', '특성(P)'].map((k) => dict[l][k]));
+      expect(/<([^<>]*)>/.exec(v)![1], l).toBe(dict[l]['특성']);
+      expect(show(`${W} DI`, l), l).toBe(typed(v, 'DI'));
+    }
+    for (const l of ['en', 'de', 'zh-CN'] as const) {
+      expect(dict[l]['연관 해제(DI)']!.replace(/\s?\(DI\)$/, ''), l).toBe(dict[l]['연관 해제']);
+      expect(dict[l]['연관해제됨(D)']!.replace(/\s?\(D\)$/, ''), l).toBe(dict[l]['연관해제됨']);
+    }
+    expect([dict.en['연관 해제'], dict.de['연관해제됨']]).toEqual(['Disassociate', 'Nicht assoziiert']);
+  });
+
+  it('(2) TABLEDIT 정렬 틀 = 앞 조각 「정렬 입력 [」 + {0} + 「]」 + 그 언어 쌍점 — 「정렬 입력」 열쇠 값에 Sort·sortieren·排序 없음', () => {
+    for (const l of LANGS) expect(dict[l]['정렬 입력 [{0}]:'], l).toBe(`${dict[l]['정렬 입력 [']}{0}]${l === 'zh-CN' ? '：' : ':'}`);
+    for (const l of LANGS)
+      for (const k of Object.keys(dict[l]).filter((x) => x.startsWith('정렬 입력'))) expect(dict[l][k], `${l} ${k}`).not.toMatch(/sort|排序/i);
+  });
+});

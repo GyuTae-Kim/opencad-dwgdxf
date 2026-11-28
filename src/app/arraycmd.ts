@@ -49,7 +49,7 @@ const POLAR_KW: Keyword[] = [
   { key: 'X', label: '종료' },
 ];
 
-const tooMany = `배열 항목이 너무 많습니다(최대 ${MAX_ITEMS.toLocaleString()}개).`;
+const tooMany = `배열 항목이 너무 많습니다(최대 ${MAX_ITEMS}개).`;
 
 /** 선택 범위(화면 고르기 상자) */
 function extentsOf(app: App, hs: readonly string[]): [number, number, number, number] | null {
@@ -113,7 +113,7 @@ function convertToCopies(app: App, ctx: CommandContext, s: Session, label: strin
   st.selection.clear();
   const res = commitResults(app, ctx, results, label, { quiet: true });
   app.refreshSelectionOverlay();
-  ctx.print(`항목 ${mats.length.toLocaleString()}개(새 객체 ${res.added.length.toLocaleString()}개)를 만들었습니다.`);
+  ctx.print(`항목 ${mats.length}개(새 객체 ${res.added.length}개)를 만들었습니다.`);
   return mats.length;
 }
 
@@ -252,7 +252,7 @@ async function editLoop(app: App, ctx: CommandContext, s: Session, kind: 'rect' 
   const info = arrayOf(st, s.handle);
   if (info) {
     const n = expectedItems(st.doc, info.ins, info.def, info.state.params).length - info.state.removed.size;
-    ctx.print(`항목 ${n.toLocaleString()}개의 연관 배열(${uiText(kind === 'rect' ? '직사각형' : '원형')})을 만들었습니다.`);
+    ctx.print(`항목 ${n}개의 연관 배열(${uiText(kind === 'rect' ? '직사각형' : '원형')})을 만들었습니다.`);
   }
   app.refreshSelectionOverlay();
 }

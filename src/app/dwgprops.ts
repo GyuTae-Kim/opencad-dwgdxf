@@ -92,8 +92,8 @@ async function dwgPropsDialog(app: App, ctx: CommandContext): Promise<void> {
     { class: 'mgr-dlg' },
     kv('파일 이름', st.name),
     kv('형식', fmt),
-    kv('크기', st.size ? `${st.size.toLocaleString('ko-KR')}바이트` : ''),
-    kv('객체 수', doc.entityIndex.size.toLocaleString('ko-KR')),
+    kv('크기', st.size ? `${st.size}바이트` : ''),
+    kv('객체 수', String(doc.entityIndex.size)),
     kv('배치 수', String(doc.layouts.filter((l) => !/^\*MODEL_SPACE$/i.test(l.blockName)).length)),
   );
   // 요약

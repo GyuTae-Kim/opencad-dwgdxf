@@ -397,7 +397,7 @@ export class Palette {
     }
     const handles = sel.map((e) => e.handle);
     const types = new Set(sel.map((e) => e.type));
-    const title = sel.length === 1 ? typeName(sel[0]!) : types.size === 1 ? `${typeName(sel[0]!)} (${sel.length.toLocaleString()})` : `전체 (${sel.length.toLocaleString()})`;
+    const title = sel.length === 1 ? typeName(sel[0]!) : types.size === 1 ? `${typeName(sel[0]!)} (${sel.length})` : `전체 (${sel.length})`;
     this.body.append(h('div', { class: 'prop-title' }, title));
     this.editGroup('일반', GENERAL_FIELDS, sel, handles);
     const anno = annoPaletteGroup(this.app, sel);
@@ -442,7 +442,7 @@ export class Palette {
       }
     }
     this.group('종류별', [
-      ...[...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ k, v: v.toLocaleString() })),
+      ...[...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ k, v: String(v) })),
       ...(lenCount ? [{ k: `길이 합계(${lenCount})`, v: formatLength(total, st.units) }] : []),
     ]);
   }
