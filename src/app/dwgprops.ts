@@ -8,6 +8,7 @@ import { normalizeHandle } from '../core/model';
 import type { EditOp } from '../edit/session';
 import { DWGPROPS_KEY, MAX_CUSTOM_PROPS, type DrawingProps, drawingProps, dwgPropsObject, propTimes, tagsFromProps } from '../io/dwgprops';
 import type { App, CommandContext } from './app';
+import { dateTimeText } from './datetext';
 import { h } from './ui/dom';
 import { areaIn, btn, fail, pickList, resultDialog, row, tabs, textIn } from './mgr-ui';
 
@@ -47,12 +48,12 @@ export function drawingPropsOps(doc: CadDocument, next: DrawingProps, newHandle:
   return ops;
 }
 
-/** 율리우스일 → 지역 날짜·시각 글 */
+/** 율리우스일 → 화면 언어 꼴 날짜·시각 글(345차 — 전에는 ko-KR 고정이라 다섯 언어에 「오후」) */
 export function julianText(jd: unknown): string {
   if (typeof jd !== 'number' || !Number.isFinite(jd) || jd <= 0) return '';
   const ms = (jd - 2440587.5) * 86400000;
   const d = new Date(ms);
-  return Number.isFinite(d.getTime()) ? d.toLocaleString('ko-KR') : '';
+  return Number.isFinite(d.getTime()) ? dateTimeText(d) : '';
 }
 
 /** 일 수 → "n일 h:mm:ss" */

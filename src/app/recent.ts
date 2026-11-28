@@ -2,6 +2,8 @@
  * 최근 문서: 이 브라우저의 IndexedDB(opencad-2d, recent)에만 저장한다(서버로 보내지 않는다).
  * 항목 꼴 { id: '이름:크기', name, size, time, data: ArrayBuffer }은 서비스 워커의 공유 받기(tools/sw-template.js)도 같이 쓴다.
  */
+import { dateTimeText, screenLocale } from './datetext';
+
 export interface RecentEntry {
   id: string;
   name: string;
@@ -43,18 +45,14 @@ function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T
   );
 }
 
-/** 최근 문서의 때: 오늘이면 시각, 올해면 월·일·시각, 그 전이면 연·월·일(지금 언어로) */
-export function recentTimeLabel(time: number, now: number, locale = 'ko'): string {
+/** 최근 문서의 때: 오늘이면 시각, 올해면 월·일·시각, 그 전이면 연·월·일(지금 화면 언어로 — 345차부터 datetext.ts 한 곳) */
+export function recentTimeLabel(time: number, now: number, locale = screenLocale()): string {
   const t = new Date(time);
   const n = new Date(now);
   const sameYear = t.getFullYear() === n.getFullYear();
   const sameDay = sameYear && t.getMonth() === n.getMonth() && t.getDate() === n.getDate();
   const opts: Intl.DateTimeFormatOptions = sameDay ? { hour: 'numeric', minute: '2-digit' } : sameYear ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' } : { year: 'numeric', month: 'short', day: 'numeric' };
-  try {
-    return new Intl.DateTimeFormat(locale, opts).format(t);
-  } catch {
-    return new Intl.DateTimeFormat('ko', opts).format(t);
-  }
+  return dateTimeText(t, opts, locale);
 }
 
 export class RecentStore {

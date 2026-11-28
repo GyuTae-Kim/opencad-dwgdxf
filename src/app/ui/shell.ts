@@ -2147,11 +2147,10 @@ export class Shell implements UiHooks {
       return;
     }
     const now = Date.now();
-    const locale = document.documentElement.lang || 'ko';
     this.recentList.replaceChildren(
       ...list.map((r) => {
-        // 파일 이름과 날짜(지금 언어로 적는다)는 번역하지 않는다
-        const open = h('button', { type: 'button', class: 'recent-open' }, h('span', { class: 'recent-name', translate: 'no' }, r.name), h('small', { translate: 'no' }, `${formatBytes(r.size)} · ${recentTimeLabel(r.time, now, locale)}`));
+        // 파일 이름과 날짜(지금 화면 언어로 적는다 — datetext.ts)는 번역하지 않는다
+        const open = h('button', { type: 'button', class: 'recent-open' }, h('span', { class: 'recent-name', translate: 'no' }, r.name), h('small', { translate: 'no' }, `${formatBytes(r.size)} · ${recentTimeLabel(r.time, now)}`));
         open.addEventListener('click', () => void this.openRecent(r.id));
         const del = h('button', { type: 'button', class: 'icon-btn recent-del', title: '목록에서 지우기', 'aria-label': `최근 문서에서 지우기: ${ft(r.name)}`, html: icon('close2') });
         del.addEventListener('click', () => {
