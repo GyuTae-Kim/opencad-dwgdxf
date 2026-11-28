@@ -61,12 +61,6 @@ export function formatDate(d: Date, fmt: string): string {
   return out;
 }
 
-/** 율리우스 날짜($TDCREATE 등) → Date */
-export function julianToDate(jd: number): Date | null {
-  if (!(Number.isFinite(jd) && jd > 0)) return null;
-  return new Date((jd - 2440587.5) * 86400000);
-}
-
 export function textCase(s: string, fmt: string): string {
   const m = /%tc(\d)/.exec(fmt);
   if (!m) return s;

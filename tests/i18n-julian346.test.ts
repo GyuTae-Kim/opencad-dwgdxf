@@ -14,10 +14,13 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { drawingTimeText } from '../src/app/datetext';
 import { registerDwgProps } from '../src/app/dwgprops';
 import { installLocalization } from '../src/app/i18n';
+import { getSysVar } from '../src/app/lisp-host';
 import { registerPropCommands } from '../src/app/propcmds';
+import { sysvarInfo } from '../src/app/sysvars';
 import type { CadDocument } from '../src/core/model';
 import { createNewDocument } from '../src/core/newdoc';
 import { julianToLocal } from '../src/edit/field/evaluate';
+import type { Real } from '../src/edit/lisp/types';
 import { readDwg } from '../src/io/dwg/index';
 import { writeDwg } from '../src/io/dwg/writer/index';
 import { readDxf } from '../src/io/dxf/reader';
@@ -201,9 +204,53 @@ describe('도면 머리말 율리우스일의 시간대(346차)', () => {
     } finally {
       vi.useRealTimers();
     }
-    // 템플릿 새 도면도 같은 함수, 지금을 율리우스일로 바꾸는 자리는 core/julian.ts 하나(LISP DATE는 UTC 값 그대로 — ROADMAP 346차에 보고 둠)
+    // 템플릿 새 도면도 같은 함수, 지금을 율리우스일로 바꾸는 자리는 core/julian.ts 하나
+    // (346차까지 LISP DATE(app/lisp-host.ts)가 따로 UTC 율리우스일을 만들었다 — 347차부터 julianLocal을 불러 빠짐, 아래 (마))
     expect(src('app/save.ts')).toContain("for (const k of ['$TDCREATE', '$TDUPDATE']) fresh.header.set(k, julianLocal(at));");
     const nowJd = files(SRC).filter((f) => /86400000\s*\+\s*2440587\.5/.test(readFileSync(f, 'utf8'))).map((f) => f.slice(SRC.length));
-    expect(nowJd.sort()).toEqual(['app/lisp-host.ts', 'core/julian.ts']);
+    expect(nowJd.sort()).toEqual(['core/julian.ts']);
+  });
+
+  it('(마) 347차 — 시간대 셋에서 시스템 변수 DATE·CDATE(LISP getvar·명령줄 보기·SETVAR 목록이 함께 쓰는 getSysVar)는 그 순간의 현지 벽시계, 같은 순간 새 도면의 TDUCREATE(UTC)와는 시간대 차이만큼 갈림', () => {
+    // AutoCAD DATE(율리우스일)·CDATE(YYYYMMDD.HHMMSSmsec)는 그 컴퓨터의 현지 시계(TDCREATE와 같은 뜻). 고치기 전 DATE는 UTC 율리우스일 —
+    // 같은 now의 CDATE는 현지라 서울에서 둘이 9시간 갈렸다
+    /** 그 시간대에서 AT(15:00 UTC)의 CDATE — 손셈: 서울 11-29 00:00, UTC 11-28 15:00, 뉴욕(겨울) 11-28 10:00 */
+    const CDATE: Record<string, number> = { 'Asia/Seoul': 20261129, UTC: 20261128.15, 'America/New_York': 20261128.1 };
+    const FOUR = ['$TDCREATE', '$TDUPDATE', '$TDUCREATE', '$TDUUPDATE'];
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      for (const [zone, offset] of Object.entries(ZONES)) {
+        setZone(zone);
+        vi.setSystemTime(AT);
+        expect(new Date().getTimezoneOffset(), zone).toBe(offset);
+        const local = JD - offset / 1440;
+        // 같은 순간에 만든 새 도면의 때 넷(346차 작성기 — TDCREATE 현지, TDUCREATE UTC)
+        const fresh = createNewDocument('metric');
+        const h = makeHarness((d) => {
+          for (const n of FOUR) d.header.set(n, fresh.header.get(n)!);
+        });
+        const num = (n: string) => (getSysVar(h.app, n) as Real).v;
+        const date = num('DATE');
+        expect(date, `${zone} DATE`).toBeCloseTo(local, 7);
+        expect(num('CDATE'), `${zone} CDATE`).toBeCloseTo(CDATE[zone]!, 7);
+        // DATE를 칸으로 풀면 CDATE와 같은 벽시계(같은 now — 날짜와 시·분)
+        const w = new Date(Math.round((date - 2440587.5) * 86400000));
+        const wall = w.getUTCFullYear() * 10000 + (w.getUTCMonth() + 1) * 100 + w.getUTCDate() + (w.getUTCHours() * 100 + w.getUTCMinutes()) / 10000;
+        expect(wall, `${zone} DATE 칸`).toBeCloseTo(CDATE[zone]!, 7);
+        // 같은 순간의 TDCREATE(현지)와 같은 값, TDUCREATE(UTC)와는 시간대 차이(분 / 1440)만큼
+        expect(num('TDCREATE'), `${zone} TDCREATE`).toBeCloseTo(date, 7);
+        expect(num('TDUCREATE'), `${zone} TDUCREATE`).toBeCloseTo(JD, 7);
+        expect(date - num('TDUCREATE'), `${zone} DATE − TDUCREATE`).toBeCloseTo(-offset / 1440, 7);
+        // 명령줄 시스템 변수 보기·SETVAR 목록·SYSVDLG(sysvarInfo — 세션 변수는 getSysVar 값)
+        expect(sysvarInfo(h.app, 'DATE')?.value as number, `${zone} sysvarInfo DATE`).toBeCloseTo(local, 7);
+        expect(sysvarInfo(h.app, 'CDATE')?.value as number, `${zone} sysvarInfo CDATE`).toBeCloseTo(CDATE[zone]!, 7);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+    // 율리우스일 → 1970 기준 ms(「- 2440587.5」) 꼴은 src 전체에서 화면 길(app/datetext.ts)·FIELD(edit/field/evaluate.ts julianToLocal) 둘.
+    // 부르는 곳이 없던 edit/field/format.ts julianToDate(UTC 순간으로 읽음 — 현지 시각 변수에 쓰면 시간대를 또 더하는 꼴)는 347차에 지움
+    const conv = files(SRC).filter((f) => /-\s*2440587\.5/.test(readFileSync(f, 'utf8'))).map((f) => f.slice(SRC.length));
+    expect(conv.sort()).toEqual(['app/datetext.ts', 'edit/field/evaluate.ts']);
   });
 });
